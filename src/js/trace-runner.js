@@ -25,6 +25,7 @@
  */
 
 import { filterForegroundPaths } from './image-import.js';
+import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
 /** Thrown (as a rejection reason) when a job is cancelled or superseded. */
 export class TraceCancelled extends Error {
@@ -131,8 +132,8 @@ export function createTraceRunner(options = {}) {
    * @param {object} [opts]
    * @param {Function} [opts.onStage] - Called with {stage, index, total}
    * @param {object} [opts.tracerOverrides]
-   * @param {string} [opts.engine] - 'imagetracer' (the default) or
-   *   'potrace'. Potrace draws in one colour, so it can only answer for
+   * @param {string} [opts.engine] - 'potrace' (the default, DEFAULT_TRACE_ENGINE)
+   *   or 'imagetracer'. Potrace draws in one colour, so it can only answer for
    *   the ink modes; the result says which engine actually ran.
    * @param {object} [opts.potraceOverrides]
    * @returns {Promise<{svg: string, summary: object|null, engine: string}>}
@@ -174,7 +175,7 @@ export function createTraceRunner(options = {}) {
         },
         ink: ink || null,
         tracerOverrides: opts.tracerOverrides || null,
-        engine: opts.engine || 'imagetracer',
+        engine: opts.engine || DEFAULT_TRACE_ENGINE,
         potraceOverrides: opts.potraceOverrides || null,
       },
       [buffer]

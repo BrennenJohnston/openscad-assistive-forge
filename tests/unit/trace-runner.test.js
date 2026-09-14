@@ -20,6 +20,9 @@ vi.mock('../../src/js/image-import.js', () => ({
 const { createTraceRunner, TraceCancelled } = await import(
   '../../src/js/trace-runner.js'
 )
+const { DEFAULT_TRACE_ENGINE } = await import(
+  '../../src/js/trace-engines.js'
+)
 
 /** A worker that does nothing until the test tells it to answer. */
 class FakeWorker {
@@ -142,10 +145,11 @@ describe('the trace runner (DP-34)', () => {
     await expect(promise).resolves.toMatchObject({ engine: 'imagetracer' })
   })
 
-  it('asks for imagetracer when the caller does not choose', () => {
+  it('★ asks for Potrace when the caller does not choose (DP-Q43)', () => {
     const r = runner()
     const promise = r.start(picture(), { mode: 'lineart' })
-    expect(latest().posted[0].engine).toBe('imagetracer')
+    expect(latest().posted[0].engine).toBe('potrace')
+    expect(DEFAULT_TRACE_ENGINE).toBe('potrace')
     r.cancel()
     return expect(promise).rejects.toBeInstanceOf(TraceCancelled)
   })

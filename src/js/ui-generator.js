@@ -13,6 +13,7 @@ import {
   prepareSvg,
   needsPreparation,
   analyzeSvg,
+  countTracedShapes,
   measureSvgAspect,
   parseSvgElements,
   classifyElements,
@@ -3089,7 +3090,7 @@ function createFileControl(
       const processedSvg = processSvgForOpenScad(svg);
       const svgDataUrl = svgToDataUrl(processedSvg);
 
-      const pathCount = (svg.match(/<path/g) || []).length;
+      const pathCount = countTracedShapes(svg);
       if (inkControls) {
         // The Colours mode has its own sentence: the ink summary is about how
         // much of a picture counted as a line, which is not a question this

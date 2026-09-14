@@ -1673,7 +1673,11 @@ describe('compound-path mode (Include/Exclude)', () => {
     ws.destroy();
   });
 
-  it('labels rows "Subpath N" in compound mode', () => {
+  it('labels rows "Shape N" in compound mode (DP-Q45)', () => {
+    // Signed wording: a person is choosing whether a shape is in the drawing,
+    // not about a `d` attribute. It matters more since DP-Q43 made Potrace the
+    // default - Potrace returns one compound path, so this is what a screen
+    // reader says about every traced picture now, not the occasional one.
     const { svg, analysis } = makeCompoundAnalysis();
     const ws = createSvgPrepWorkspace(container);
     ws.open(svg, analysis);
@@ -1681,7 +1685,12 @@ describe('compound-path mode (Include/Exclude)', () => {
     const names = Array.from(
       ws._root.querySelectorAll('.svg-prep-object-name')
     ).map((n) => n.textContent);
-    expect(names).toEqual(['Subpath 1', 'Subpath 2']);
+    expect(names).toEqual(['Shape 1', 'Shape 2']);
+
+    const labels = Array.from(
+      ws._root.querySelectorAll('.svg-prep-object')
+    ).map((el) => el.getAttribute('aria-label'));
+    expect(labels[0]).toBe('Shape 1, role: foreground');
 
     ws.destroy();
   });

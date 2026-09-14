@@ -34,6 +34,7 @@ import {
   prepareSvg,
   needsPreparation,
   analyzeSvg,
+  countTracedShapes,
   strokeToFill,
   applyPerPathOffsets,
   getEffectivePaint,
@@ -2591,5 +2592,66 @@ describe('flattenLayers - the stacked-mask law', () => {
     // Everything defaulted to layer 1, so layer 2 has nothing to build.
     expect(out[0]).toBeTruthy();
     expect(out[1]).toBeNull();
+  });
+});
+
+describe('countTracedShapes (DP-43)', () => {
+  // ★ The number a person hears after a conversion has to be the number the
+  // editor lists beside it. Counting <path> elements did not: imagetracerjs
+  // folds a shape's holes into that shape's element, and Potrace returns the
+  // whole drawing as one. Both engines' output is checked here, against
+  // analyzeSvg - the thing the editor's own table is built from.
+  const analysed = (svg) => (analyzeSvg(svg).elements || []).length;
+
+  it('agrees with the analyser on a drawing with holes in one element', () => {
+    // imagetracerjs's shape: one element, its hole folded in as a subpath.
+    const svg =
+      '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">' +
+      '<path fill="rgb(0,0,0)" d="M0 0L8 0L8 8L0 8ZM2 2L6 2L6 6L2 6Z"/>' +
+      '</svg>';
+    expect(countTracedShapes(svg)).toBe(2);
+    expect(countTracedShapes(svg)).toBe(analysed(svg));
+  });
+
+  it('agrees on a drawing that is all one compound path', () => {
+    // Potrace's shape: every closed shape in a single element, even-odd.
+    const svg =
+      '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">' +
+      '<path fill="rgb(0,0,0)" fill-rule="evenodd" ' +
+      'd="M0 0L4 0L4 4L0 4ZM1 1L3 1L3 3L1 3ZM6 6L9 6L9 9L6 9Z"/>' +
+      '</svg>';
+    expect(countTracedShapes(svg)).toBe(3);
+    expect(countTracedShapes(svg)).toBe(analysed(svg));
+  });
+
+  it('agrees on separate elements, the way it always did', () => {
+    const svg =
+      '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">' +
+      '<path fill="rgb(0,0,0)" d="M0 0L4 0L4 4Z"/>' +
+      '<path fill="rgb(0,0,0)" d="M6 6L9 6L9 9Z"/>' +
+      '</svg>';
+    expect(countTracedShapes(svg)).toBe(2);
+    expect(countTracedShapes(svg)).toBe(analysed(svg));
+  });
+
+  it('counts relative moves too, because a tracer may write either', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<path d="M0 0L4 0Zm6 6l3 0Z"/></svg>';
+    expect(countTracedShapes(svg)).toBe(2);
+  });
+
+  it('says nothing about a picture with nothing in it', () => {
+    expect(countTracedShapes('<svg xmlns="http://www.w3.org/2000/svg"/>')).toBe(0);
+    expect(countTracedShapes('')).toBe(0);
+    expect(countTracedShapes(null)).toBe(0);
+  });
+
+  it('does not mistake an M elsewhere in the document for a shape', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<desc>Made by M. Someone</desc>' +
+      '<path id="MMM" fill="#000" d="M0 0L1 0Z"/></svg>';
+    expect(countTracedShapes(svg)).toBe(1);
   });
 });

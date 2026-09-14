@@ -217,9 +217,20 @@ test.describe('The drawing editor door', () => {
     expect(rowCount).toBeGreaterThan(1)
 
     // Every shape reads as a named row with its role spoken.
+    //
+    // RE-PINNED at DP-43: a traced picture now arrives from Potrace as one
+    // compound path, so the editor opens in its compound mode - the same mode
+    // that has always handled a single-path drawing, which the Harley fixture
+    // reaches too. Two things follow, both signed at DP-Q45: the rows are
+    // named "Shape N" (not "Subpath N", which is SVG's word for a detail of a
+    // `d` attribute), and the role choice is Include/Exclude rather than
+    // Foreground/Hole/Ignore, because Potrace draws in one colour and its
+    // holes are already holes by even-odd nesting - there is nothing for a
+    // person to re-judge. The element flow is walked by "an SVG goes in
+    // directly" below.
     await expect(rows.first()).toHaveAttribute(
       'aria-label',
-      /Path 1, role: foreground/
+      /Shape 1, role: foreground/
     )
 
     // With no model behind the editor, Apply and Keep original would have
@@ -238,8 +249,8 @@ test.describe('The drawing editor door', () => {
         (s) => s?.type === 'radio' && s?.row === String(i),
         { max: 6, label: `shape ${i + 1}` }
       )
-      // A radio group moves AND selects on arrow: foreground -> hole -> ignore.
-      await page.keyboard.press('ArrowRight')
+      // A radio group moves AND selects on arrow. Compound mode offers two:
+      // Include -> Exclude, so one press is the whole distance.
       await page.keyboard.press('ArrowRight')
       await expect(
         page.locator(`.svg-prep-object[data-index="${i}"]`)
@@ -267,8 +278,11 @@ test.describe('The drawing editor door', () => {
     const pathCount = (saved.match(/<path/g) || []).length
     console.log('[svg-edit] saved', saved.length, 'bytes,', pathCount, 'paths')
 
-    // The kept subset is one shape, so the file holds one shape.
+    // Compound mode writes what it keeps as a single even-odd path, so the
+    // file holds one <path> whatever the subset - and the subset here is the
+    // one shape that was left included.
     expect(pathCount).toBe(1)
+    expect(saved).toContain('evenodd')
     expect(saved.startsWith('<svg')).toBe(true)
     expect(saved).toContain('viewBox')
 
@@ -278,12 +292,33 @@ test.describe('The drawing editor door', () => {
     })
   })
 
-  test('an SVG goes in directly, with no tracing step', async ({ page }) => {
+  test('an SVG goes in directly, with no tracing step, and keeps the element flow', async ({
+    page,
+  }) => {
     test.setTimeout(120000)
     await openApp(page)
     await openEditorByKeyboard(page, BIRD_SVG)
 
     await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+
+    // ★ The OTHER mode, kept walked. A drawing that arrives as several DOM
+    // elements opens in element mode, which is what the bird walk above tested
+    // until DP-43 made Potrace the default and traced pictures started
+    // arriving as one compound path. Both flows ship; both are walked.
+    const rows = page.locator('.svg-prep-object')
+    expect(await rows.count()).toBeGreaterThan(1)
+    const firstLabel = await rows.first().getAttribute('aria-label')
+    // Element mode names a row for what the element IS, not by position.
+    expect(firstLabel).not.toMatch(/^Shape \d/)
+    expect(firstLabel).toMatch(/role: (foreground|hole|ignore)/)
+
+    // And it offers the full role choice, which compound mode cannot. Read off
+    // the radios themselves: a fallback here would be a test that cannot fail.
+    const roleValues = await page
+      .locator('.svg-prep-object[data-index="0"] .svg-prep-role-group input')
+      .evaluateAll((els) => els.map((el) => el.value))
+    expect(roleValues).toEqual(['foreground', 'hole', 'ignore'])
+
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 60000 }),
       page.locator('button[data-action="save"]').click(),

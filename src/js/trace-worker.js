@@ -48,12 +48,10 @@ import {
   TRACER_OPTIONS,
 } from './image-import.js';
 import { extractInk } from './ink-extraction.js';
+import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
 /** The stages a caller can be told about, in the order they happen. */
 export const TRACE_STAGES = Object.freeze(['reading', 'ink', 'tracing']);
-
-/** The engines a caller can ask for. */
-export const TRACE_ENGINES = Object.freeze(['imagetracer', 'potrace']);
 
 /**
  * Rebuild the plain object a structured-clone transfer leaves behind into
@@ -186,19 +184,19 @@ self.onmessage = async (event) => {
     // Potrace needs the one-bit mask, which only the ink modes produce. Asked
     // for without one, it is not silently swapped: the reply names the engine
     // that actually ran, so a census or a person can tell.
-    const usePotrace = data.engine === 'potrace' && !!inkMask;
+    const engine = data.engine || DEFAULT_TRACE_ENGINE;
+    const usePotrace = engine === 'potrace' && !!inkMask;
     let svg;
     let filterForeground;
     if (usePotrace) {
       // Loaded only when it is used, so a visitor who never asks for it never
       // fetches the wasm.
-      const { trace, pathDataToSvg } = await import('./potrace-trace.js');
-      const pathData = await trace(
-        inkMask,
-        pixels.width,
-        pixels.height,
-        potraceOverrides || {}
-      );
+      const { trace, pathDataToSvg, FORGE_POTRACE_SETTINGS } =
+        await import('./potrace-trace.js');
+      const pathData = await trace(inkMask, pixels.width, pixels.height, {
+        ...FORGE_POTRACE_SETTINGS,
+        ...(potraceOverrides || {}),
+      });
       svg = pathDataToSvg(pathData, pixels.width, pixels.height);
       // One colour: there is no lightest layer to drop, and dropping the only
       // path there is would erase the drawing.

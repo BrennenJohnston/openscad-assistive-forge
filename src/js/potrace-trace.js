@@ -40,6 +40,25 @@ export const POTRACE_DEFAULTS = Object.freeze({
   opttolerance: 0.2,
 });
 
+/**
+ * What Forge asks Potrace for, where it differs from the library's own answer.
+ *
+ * SIGNED BY THE OWNER at gate DP-Q43 (2026-09-14). Potrace's own
+ * opttolerance is 0.2, which follows a boundary so closely that the ring
+ * flatten - which turns every curve into a fixed number of points - is handed
+ * 2.4x as many points as the other engine produces, and gives back the whole
+ * of Potrace's speed and a little more.
+ *
+ * MEASURED over twelve pictures, Line art: at 0.2 the trace and the flatten
+ * together cost 4,671 ms against imagetracerjs's 4,071; at 1.0 they cost
+ * 3,978. The drawing does not change - same shape count, same overlap, same
+ * line width to a hundredth of a millimetre - so this buys the difference for
+ * nothing.
+ */
+export const FORGE_POTRACE_SETTINGS = Object.freeze({
+  opttolerance: 1.0,
+});
+
 let modulePromise = null;
 
 /**

@@ -74,10 +74,14 @@ describe('the trace worker (DP-34)', () => {
   })
 
   it('traces a picture and reports its stages in order', async () => {
+    // Engine named on purpose: the hand-off this checks is imagetracerjs's,
+    // where the caller still has a filtering step to do. DP-Q43 made Potrace
+    // the default, and its hand-off is pinned in "choosing an engine" below.
     const out = await run({
       id: 7,
       image: picture(40, 40),
       ink: { mode: 'lineart' },
+      engine: 'imagetracer',
     })
     expect(stages(out)).toEqual(['reading', 'ink', 'tracing'])
     const result = done(out)
@@ -157,11 +161,22 @@ describe('choosing an engine (DP-43)', () => {
     potraceTrace.mockClear()
   })
 
-  it('uses imagetracer when nobody chooses', async () => {
+  it('★ uses Potrace when nobody chooses, as signed at DP-Q43', async () => {
     const out = await run({
       id: 1,
       image: picture(40, 40),
       ink: { mode: 'lineart' },
+    })
+    expect(done(out).engine).toBe('potrace')
+    expect(potraceTrace).toHaveBeenCalledTimes(1)
+  })
+
+  it('still takes imagetracer when it is asked for by name', async () => {
+    const out = await run({
+      id: 1,
+      image: picture(40, 40),
+      ink: { mode: 'lineart' },
+      engine: 'imagetracer',
     })
     expect(done(out).engine).toBe('imagetracer')
     expect(potraceTrace).not.toHaveBeenCalled()
@@ -231,7 +246,10 @@ describe('choosing an engine (DP-43)', () => {
     expect(done(out).engine).toBe('colours')
   })
 
-  it('passes the caller’s Potrace settings through', async () => {
+  it('★ applies the signed curve tolerance, and lets a caller beat it', async () => {
+    // DP-Q43 signed opttolerance 1.0 as what Forge asks Potrace for. It is
+    // applied by default and overridden by name, in that order - a setting
+    // nobody can override is a constant wearing a setting's clothes.
     await run({
       id: 6,
       image: picture(40, 40),
@@ -239,7 +257,21 @@ describe('choosing an engine (DP-43)', () => {
       engine: 'potrace',
       potraceOverrides: { turdsize: 12, alphamax: 0 },
     })
-    expect(potraceTrace.mock.calls[0][3]).toEqual({ turdsize: 12, alphamax: 0 })
+    expect(potraceTrace.mock.calls[0][3]).toEqual({
+      opttolerance: 1.0,
+      turdsize: 12,
+      alphamax: 0,
+    })
+
+    potraceTrace.mockClear()
+    await run({
+      id: 7,
+      image: picture(40, 40),
+      ink: { mode: 'lineart' },
+      engine: 'potrace',
+      potraceOverrides: { opttolerance: 0.2 },
+    })
+    expect(potraceTrace.mock.calls[0][3]).toEqual({ opttolerance: 0.2 })
   })
 
   it('a Potrace failure comes back as a message, not a silence', async () => {

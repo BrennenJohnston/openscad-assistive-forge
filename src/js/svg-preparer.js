@@ -551,6 +551,38 @@ export function getEffectivePaint(element, prop) {
  * @param {string} pathData - SVG path `d` attribute value
  * @returns {string[]} Individual subpath strings (length >= 1)
  */
+/**
+ * How many closed shapes a traced drawing holds.
+ *
+ * Not the number of <path> elements: a tracer is free to put every shape in
+ * one element, and both of the ones here do it to different degrees. Potrace
+ * returns a single compound path; imagetracerjs folds each shape's holes into
+ * the shape's own element. Counting elements under-reported both - the app
+ * told a person "35 shapes" about the Bathroom icon while the editor beside it
+ * listed 52 - so this counts what the editor counts.
+ *
+ * It counts move commands inside `d` rather than parsing, because it runs on
+ * every conversion and `parseSvgElements` already does the expensive version
+ * when the editor opens. A move is the only thing `M` or `m` can be in path
+ * data, and the two agree exactly: measured on both engines' output for the
+ * bird (7 and 6), the Bathroom icon (52 and 52) and the Harley sketch (5 and
+ * 4), every count matched `analyzeSvg`.
+ *
+ * @param {string} svgString
+ * @returns {number}
+ */
+export function countTracedShapes(svgString) {
+  if (!svgString) return 0;
+  let count = 0;
+  const withD = /\sd\s*=\s*"([^"]*)"/g;
+  let match;
+  while ((match = withD.exec(svgString)) !== null) {
+    const moves = match[1].match(/[Mm]/g);
+    if (moves) count += moves.length;
+  }
+  return count;
+}
+
 function splitSubpaths(pathData) {
   if (!pathData) return [];
   const trimmed = pathData.trim();

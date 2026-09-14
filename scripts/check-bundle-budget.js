@@ -32,6 +32,12 @@ import { gzipSync } from 'zlib';
 // Entries are dist-relative path prefixes (POSIX separators).
 const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
 
+// The OpenSCAD engine, which is 3.26 MB gzipped of vendored WebAssembly and
+// the one thing the app cannot work without. It is not code anybody here is
+// going to shrink, and weighing it would make the wasm line so loose it could
+// never catch anything. Kept out by name rather than by accident of extension.
+const WASM_EXCLUDED_DIRS = ['wasm/openscad-official'];
+
 // Budget definitions (in bytes)
 const BUDGETS = {
   // Core app bundle - the one chunk every visitor downloads before anything
@@ -66,6 +72,28 @@ const BUDGETS = {
     critical: false,
   },
   // Total assets (excluding WASM and external Monaco)
+  // ★ SIGNED BY THE OWNER at gate DP-Q43 (2026-09-14): "Weigh .wasm, with its
+  // own line." D-121 had this file class invisible since round 1 - the checker
+  // weighed .js, .css, .html and .json only - so a WebAssembly binary could
+  // double without a word. It cannot now.
+  //
+  // MEASURED when the line went in: potrace.wasm 18,357 B gzipped, the only
+  // wasm this weighs. 30,000 leaves room for a rebuild to grow a little and
+  // fails loudly if one doubles.
+  //
+  // One correction to what was in front of the owner when they signed: the
+  // gate's note said the OpenSCAD engine's wasm is downloaded rather than
+  // committed and so absent at check time. That was wrong - only
+  // public/wasm/openscad.* is gitignored; public/wasm/openscad-official/ is
+  // tracked and lands in dist at 3.26 MB gzipped. The decision is unaffected,
+  // and the engine is excluded by name above with its reason.
+  wasmAssets: {
+    name: 'WebAssembly (excluding the OpenSCAD engine)',
+    budget: 30000,
+    pattern: null,
+    pool: 'wasm',
+    critical: true,
+  },
   totalAssets: {
     name: 'Total Assets',
     // 1,200,000 B, signed by the owner at the design round's close gate.
@@ -159,38 +187,51 @@ function checkBudgets(distPath) {
     return results;
   }
 
-  // Filter to assets (JS, CSS, HTML), excluding lazy-loaded static dirs
-  const assetExtensions = ['.js', '.css', '.html', '.json'];
-  const assets = allFiles.filter((f) => {
-    if (!assetExtensions.includes(extname(f))) return false;
-    const relPath = relative(distPath, f).split(sep).join('/');
-    return !EXCLUDED_DIRS.some(
+  const under = (filePath, dirs) => {
+    const relPath = relative(distPath, filePath).split(sep).join('/');
+    return dirs.some(
       (dir) => relPath === dir || relPath.startsWith(`${dir}/`)
     );
-  });
+  };
 
-  // Calculate sizes
-  const fileSizes = assets.map((filePath) => ({
+  // Filter to assets (JS, CSS, HTML), excluding lazy-loaded static dirs
+  const assetExtensions = ['.js', '.css', '.html', '.json'];
+  const assets = allFiles.filter(
+    (f) => assetExtensions.includes(extname(f)) && !under(f, EXCLUDED_DIRS)
+  );
+
+  // WebAssembly is weighed on its own line (DP-Q43), not folded into the code
+  // total: "Total Assets" has always meant code the browser parses, and the
+  // OpenSCAD engine would drown both numbers.
+  const wasmFiles = allFiles.filter(
+    (f) => extname(f) === '.wasm' && !under(f, WASM_EXCLUDED_DIRS)
+  );
+
+  const measure = (filePath) => ({
     path: filePath,
     name: basename(filePath),
     raw: getRawSize(filePath),
     gzipped: getGzippedSize(filePath),
-  }));
+  });
+
+  // Calculate sizes
+  const fileSizes = assets.map(measure);
+  const pools = { code: fileSizes, wasm: wasmFiles.map(measure) };
 
   // Check each budget
   for (const [key, budget] of Object.entries(BUDGETS)) {
     let matchedFiles;
     let totalGzipped;
 
+    const pool = pools[budget.pool || 'code'];
     if (budget.pattern) {
       // Match specific pattern
-      matchedFiles = fileSizes.filter((f) => budget.pattern.test(f.name));
-      totalGzipped = matchedFiles.reduce((sum, f) => sum + f.gzipped, 0);
+      matchedFiles = pool.filter((f) => budget.pattern.test(f.name));
     } else {
-      // Sum all assets
-      matchedFiles = fileSizes;
-      totalGzipped = fileSizes.reduce((sum, f) => sum + f.gzipped, 0);
+      // Sum everything in the pool
+      matchedFiles = pool;
     }
+    totalGzipped = matchedFiles.reduce((sum, f) => sum + f.gzipped, 0);
 
     const passed = totalGzipped <= budget.budget;
     const percentOfBudget = ((totalGzipped / budget.budget) * 100).toFixed(1);
