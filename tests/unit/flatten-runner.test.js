@@ -1,0 +1,220 @@
+import { describe, it, expect, beforeEach } from 'vitest'
+
+/**
+ * DP-37 P2: the runner that owns the flatten worker.
+ *
+ * The worker is faked here so cancelling, superseding and a dead worker can be
+ * driven at will. What is pinned is not that a flatten returns an SVG - the
+ * flatten itself is tested in relief-flatten.test.js against the real ring
+ * engine - but that a person who presses Cancel gets the page back, that a
+ * second press never delivers the answer to a question nobody is asking any
+ * more, and that the caller's own shapes come back untouched so a re-run does
+ * not have to re-read anything.
+ */
+
+const { createFlattenRunner, FlattenCancelled } = await import(
+  '../../src/js/flatten-runner.js'
+)
+
+/** A worker that does nothing until the test tells it to answer. */
+class FakeWorker {
+  constructor() {
+    this.posted = []
+    this.terminated = false
+    this.onmessage = null
+    this.onerror = null
+    FakeWorker.instances.push(this)
+  }
+
+  postMessage(message) {
+    this.posted.push(message)
+  }
+
+  terminate() {
+    this.terminated = true
+  }
+
+  reply(data) {
+    if (this.onmessage) this.onmessage({ data })
+  }
+
+  fail(message) {
+    if (this.onerror) this.onerror({ message })
+  }
+
+  get jobId() {
+    return this.posted[0]?.id
+  }
+}
+FakeWorker.instances = []
+
+const runner = () =>
+  createFlattenRunner({ createWorker: () => new FakeWorker() })
+
+const latest = () => FakeWorker.instances[FakeWorker.instances.length - 1]
+
+const shapes = (n = 3) =>
+  Array.from({ length: n }, (_, i) => ({
+    pathData: `M${i} 0L${i + 1} 0L${i + 1} 1Z`,
+    role: i === 0 ? 'foreground' : 'hole',
+    element: { tagName: 'path' },
+    luminance: 0,
+  }))
+
+const META = { viewBox: '0 0 10 10', width: '10', height: '10' }
+
+describe('the flatten runner (DP-37 P2)', () => {
+  beforeEach(() => {
+    FakeWorker.instances = []
+  })
+
+  it('resolves with the combined drawing and whatever it had to warn about', async () => {
+    const r = runner()
+    const promise = r.start(shapes(), META)
+    const w = latest()
+    w.reply({
+      id: w.jobId,
+      type: 'done',
+      svg: '<svg/>',
+      warnings: ['1 cut-out(s) would have erased the whole drawing'],
+    })
+    await expect(promise).resolves.toEqual({
+      svg: '<svg/>',
+      warnings: ['1 cut-out(s) would have erased the whole drawing'],
+    })
+  })
+
+  it('★ sends only what the flatten reads, because the rest cannot be cloned', () => {
+    // A classified element carries its DOM node. structuredClone throws on one,
+    // so posting the elements whole would fail at the boundary rather than in
+    // any test that stubs the worker - which is exactly the kind of defect that
+    // only shows up in a browser.
+    const r = runner()
+    // Every promise this file creates is CLAIMED. A cancelled job rejects, and
+    // a rejection nobody is holding is an unhandled rejection - which passes
+    // locally and fails the whole file on CI, where the timing differs. DP-34
+    // learned this the hard way in the trace runner's tests.
+    const promise = r.start(shapes(2), META)
+    const settled = expect(promise).rejects.toMatchObject({
+      reason: 'cancelled',
+    })
+    const sent = latest().posted[0]
+    expect(sent.elements).toEqual([
+      { pathData: 'M0 0L1 0L1 1Z', role: 'foreground' },
+      { pathData: 'M1 0L2 0L2 1Z', role: 'hole' },
+    ])
+    expect(sent.svgMeta).toEqual(META)
+    r.cancel()
+    return settled
+  })
+
+  it("★ leaves the caller's own shapes alone, so a re-run needs no re-read", () => {
+    const els = shapes(2)
+    const before = els.map((el) => ({ ...el }))
+    const r = runner()
+    const promise = r.start(els, META)
+    expect(els).toEqual(before)
+    r.cancel()
+    return expect(promise).rejects.toBeInstanceOf(FlattenCancelled)
+  })
+
+  it('reports the one stage it has', async () => {
+    const seen = []
+    const r = runner()
+    const promise = r.start(shapes(), META, { onStage: (s) => seen.push(s.stage) })
+    const w = latest()
+    w.reply({ id: w.jobId, type: 'stage', stage: 'combining' })
+    w.reply({ id: w.jobId, type: 'done', svg: '<svg/>' })
+    await promise
+    expect(seen).toEqual(['combining'])
+  })
+
+  it('★ cancel terminates the worker and rejects, at any moment', async () => {
+    const r = runner()
+    const promise = r.start(shapes(), META)
+    const w = latest()
+    w.reply({ id: w.jobId, type: 'stage', stage: 'combining' })
+    expect(r.isRunning()).toBe(true)
+
+    r.cancel()
+
+    expect(w.terminated).toBe(true)
+    expect(r.isRunning()).toBe(false)
+    await expect(promise).rejects.toBeInstanceOf(FlattenCancelled)
+    await expect(promise).rejects.toMatchObject({ reason: 'cancelled' })
+  })
+
+  it('cancel on an idle runner does nothing and does not throw', () => {
+    const r = runner()
+    expect(() => r.cancel()).not.toThrow()
+    expect(r.isRunning()).toBe(false)
+  })
+
+  it('★ a new start supersedes the one in flight rather than queueing behind it', async () => {
+    const r = runner()
+    const first = r.start(shapes(), META)
+    const firstWorker = latest()
+    const second = r.start(shapes(), META)
+    const secondWorker = latest()
+
+    expect(firstWorker).not.toBe(secondWorker)
+    expect(firstWorker.terminated).toBe(true)
+    await expect(first).rejects.toMatchObject({ reason: 'superseded' })
+
+    secondWorker.reply({ id: secondWorker.jobId, type: 'done', svg: '<svg/>' })
+    await expect(second).resolves.toMatchObject({ svg: '<svg/>' })
+  })
+
+  it('★ drops a reply from a job that is no longer the one in flight', async () => {
+    const r = runner()
+    const first = r.start(shapes(), META)
+    const firstId = latest().jobId
+    const second = r.start(shapes(), META)
+    const w = latest()
+    await expect(first).rejects.toBeInstanceOf(FlattenCancelled)
+
+    // The ghost: the superseded job answers late.
+    w.reply({ id: firstId, type: 'done', svg: '<ghost/>' })
+    expect(r.isRunning()).toBe(true)
+
+    w.reply({ id: w.jobId, type: 'done', svg: '<real/>' })
+    await expect(second).resolves.toMatchObject({ svg: '<real/>' })
+  })
+
+  it('a drawing with nothing to combine comes back as null, not as a failure', async () => {
+    // flattenWithRings returns null when there is no foreground. That is an
+    // answer about the drawing, not an error, and the caller tells the person
+    // so in its own words.
+    const r = runner()
+    const promise = r.start(shapes(), META)
+    const w = latest()
+    w.reply({ id: w.jobId, type: 'done', svg: null, warnings: [] })
+    await expect(promise).resolves.toEqual({ svg: null, warnings: [] })
+  })
+
+  it('a worker error rejects with the message and drops the worker', async () => {
+    const r = runner()
+    const promise = r.start(shapes(), META)
+    const w = latest()
+    w.reply({ id: w.jobId, type: 'error', message: 'the engine would not load' })
+    await expect(promise).rejects.toThrow('the engine would not load')
+    expect(w.terminated).toBe(true)
+    expect(r.isRunning()).toBe(false)
+  })
+
+  it('a worker that dies outright rejects rather than hanging', async () => {
+    const r = runner()
+    const promise = r.start(shapes(), META)
+    latest().fail('worker died')
+    await expect(promise).rejects.toThrow('worker died')
+  })
+
+  it('destroy lets the worker go without rejecting into nowhere', () => {
+    const r = runner()
+    r.start(shapes(), META)
+    const w = latest()
+    r.destroy()
+    expect(w.terminated).toBe(true)
+    expect(r.isRunning()).toBe(false)
+  })
+})

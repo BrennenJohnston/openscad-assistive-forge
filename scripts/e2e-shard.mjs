@@ -273,6 +273,11 @@ export const MEASURED_SECONDS = {
   // 13 and from about 33 s to 42 s. Unlisted it was booked at DEFAULT_WEIGHT_S,
   // 60, which was already close; 70 keeps the same slack the measurement had.
   'ink-modes.spec.js': 70.0,
+  // DP-37 added layout, ordering and worker cases to the editor's door spec.
+  // MEASURED locally: 15 cases to 24, about 32 s to 114 s, and two of the new
+  // ones combine a 210-shape drawing for real. Unlisted it was booked at
+  // DEFAULT_WEIGHT_S, 60, which is now less than the measurement.
+  'svg-edit-door.spec.js': 200.0,
   // DP-43. One case: a ring traced through the real worker on both engines,
   // which is also the only place the wasm is proved to load under COOP/COEP.
   // MEASURED locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on Firefox.

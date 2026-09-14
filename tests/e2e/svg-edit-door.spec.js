@@ -478,11 +478,15 @@ test.describe('The drawing editor door', () => {
         const t = (el.textContent || '').trim()
         if (t) window.__live.push(t)
       }).observe(el, { childList: true, characterData: true, subtree: true })
+      // RE-PINNED at DP-37 P2: the button used to be DISABLED while the
+      // combine ran on this thread. The combine is in a worker now, so the
+      // button is replaced by a bar and a Cancel and comes back when the work
+      // is done. The transition to watch is hidden, not disabled.
       window.__busy = []
       const renderBtn = document.querySelector('.svg-prep-render-btn')
       new MutationObserver(() => {
-        window.__busy.push(renderBtn.disabled)
-      }).observe(renderBtn, { attributes: true, attributeFilter: ['disabled'] })
+        window.__busy.push(renderBtn.hidden)
+      }).observe(renderBtn, { attributes: true, attributeFilter: ['hidden'] })
     })
 
     // The editor opens fullscreen and its focus trap takes focus as it
@@ -502,14 +506,18 @@ test.describe('The drawing editor door', () => {
 
     // Busy first, then done - asserted from the RECORD, because the live
     // state can close the window faster than one poll.
-    await expect(btn).toBeEnabled({ timeout: 300000 })
+    await expect(btn).toBeVisible({ timeout: 300000 })
+    await expect(btn).toBeEnabled()
 
     await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
     const busy = await page.evaluate(() => window.__busy)
     expect(
       busy[0] === true && busy[busy.length - 1] === false,
-      `disabled transitions recorded: ${busy.join(' -> ')}`
+      `hidden transitions recorded: ${busy.join(' -> ')}`
     ).toBe(true)
+    // And the bar and its Cancel are gone with it.
+    await expect(page.locator('.svg-prep-render-progress')).toBeHidden()
+    await expect(page.locator('.svg-prep-render-cancel')).toBeHidden()
     const said = await page.evaluate(() => window.__live)
     expect(said.some((t) => /Combining 210 shapes/.test(t)), said.join(' | ')).toBe(true)
     expect(said.some((t) => /Preview ready/.test(t)), said.join(' | ')).toBe(true)
@@ -882,5 +890,82 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
     await openEditorByKeyboard(page, RING_PNG)
     await expect(page.locator('.drawing-editor-panel')).toBeVisible()
     await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+  })
+})
+
+test.describe('the combine runs off the main thread (DP-37 P2)', () => {
+  // ★ MEASURED before this, in Chromium, on the same drawing: the flatten took
+  // 3,818 ms on the main thread and the page rendered TWO frames in all of it.
+  // Through the worker the same drawing takes about the same wall time and the
+  // page renders about 250 frames. DP-34 moved the trace off this thread; this
+  // is the same defect one stage later.
+
+  test('★ the page keeps answering while a big drawing is combined', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+
+    const render = page.locator('.svg-prep-render-btn')
+    await expect(render).toBeVisible()
+
+    await page.evaluate(() => {
+      window.__answered = null
+      const el = document.querySelector('.svg-prep-render-cancel')
+      new MutationObserver(async () => {
+        if (el.hidden || window.__answered !== null) return
+        // The work is running. Can the page still do anything?
+        const t0 = performance.now()
+        await new Promise((r) => requestAnimationFrame(r))
+        window.__answered = Math.round(performance.now() - t0)
+      }).observe(el, { attributes: true, attributeFilter: ['hidden'] })
+    })
+
+    await render.click({ noWaitAfter: true })
+    // While it runs there is a bar, and a way to stop it.
+    await expect(page.locator('.svg-prep-render-progress')).toBeVisible()
+    await expect(page.locator('.svg-prep-render-cancel')).toBeVisible()
+    // The bar is named, because a <label for> does not name a <progress>.
+    await expect(page.locator('.svg-prep-render-progress')).toHaveAttribute(
+      'aria-labelledby',
+      /render/i
+    )
+    // And the drawing is still on screen: nothing goes blank while it works.
+    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
+
+    await expect(page.locator('.svg-prep-render-cancel')).toBeHidden({
+      timeout: 300000,
+    })
+    const answered = await page.evaluate(() => window.__answered)
+    expect(answered, `a frame took ${answered} ms mid-combine`).not.toBeNull()
+    expect(answered).toBeLessThan(1000)
+  })
+
+  test('★ Cancel stops a combine and leaves the drawing where it was', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+
+    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
+    const cancel = page.locator('.svg-prep-render-cancel')
+    await expect(cancel).toBeVisible()
+    await cancel.click()
+
+    await expect(cancel).toBeHidden()
+    await expect(page.locator('.svg-prep-render-btn')).toBeVisible()
+    await expect(page.locator('.svg-prep-render-note')).toHaveText(
+      'Combining cancelled.'
+    )
+    // Nothing is left claiming to be busy, and the drawing is still there.
+    await expect(page.locator('.svg-prep-result-pane')).toHaveAttribute(
+      'aria-busy',
+      'false'
+    )
+    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
+    // A cancelled combine is not a result: saving is still refused.
+    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
   })
 })
