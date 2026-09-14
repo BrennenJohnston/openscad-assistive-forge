@@ -397,12 +397,17 @@ describe('createSvgPrepWorkspace', () => {
       ws.destroy();
     });
 
-    it('aria-label includes element name and role', () => {
+    it('aria-label includes element name and role, in the words on screen', () => {
+      // RE-PINNED at DP-39 P2. It used to read the role VALUE - "role:
+      // foreground" - which was the same word a sighted person read right up
+      // until DP-Q40 made the visible word "Raised". Blind and sighted people
+      // reading the same thing is the whole point of the row this release
+      // signs, so the name reads the label.
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));
 
       const item = ws._root.querySelector('.svg-prep-object');
-      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*foreground/);
+      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*Raised/);
 
       ws.destroy();
     });
@@ -453,7 +458,7 @@ describe('createSvgPrepWorkspace', () => {
       holeRadio.checked = true;
       holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
 
-      expect(item.getAttribute('aria-label')).toMatch(/hole/);
+      expect(item.getAttribute('aria-label')).toMatch(/Hole/);
 
       ws.destroy();
     });
@@ -1699,7 +1704,10 @@ describe('compound-path mode (Include/Exclude)', () => {
     const labels = Array.from(
       ws._root.querySelectorAll('.svg-prep-object')
     ).map((el) => el.getAttribute('aria-label'));
-    expect(labels[0]).toBe('Shape 1, role: foreground');
+    // Compound mode has its own two words: a subpath is included or excluded,
+    // and "Hole" would be a lie because subpaths are concatenated, not
+    // subtracted. The name reads whichever table is in force.
+    expect(labels[0]).toBe('Shape 1, Include');
 
     ws.destroy();
   });

@@ -245,7 +245,9 @@ test.describe('The drawing editor door', () => {
     // directly" below.
     await expect(rows.first()).toHaveAttribute(
       'aria-label',
-      /Shape 1, role: foreground/
+      // RE-PINNED at DP-39 P2: the name reads the word a sighted person reads,
+      // and in compound mode that word is Include.
+      /Shape 1, Include/
     )
 
     // With no model behind the editor, Apply and Keep original would have
@@ -269,7 +271,7 @@ test.describe('The drawing editor door', () => {
       await page.keyboard.press('ArrowRight')
       await expect(
         page.locator(`.svg-prep-object[data-index="${i}"]`)
-      ).toHaveAttribute('aria-label', /role: ignore/)
+      ).toHaveAttribute('aria-label', /Exclude$/)
     }
 
     await tabUntil(
@@ -325,7 +327,9 @@ test.describe('The drawing editor door', () => {
     const firstLabel = await rows.first().getAttribute('aria-label')
     // Element mode names a row for what the element IS, not by position.
     expect(firstLabel).not.toMatch(/^Shape \d/)
-    expect(firstLabel).toMatch(/role: (foreground|hole|ignore)/)
+    // RE-PINNED at DP-39 P2: the word, not the value. DP-Q40 made the visible
+    // word "Raised" and the accessible name has to say the same thing.
+    expect(firstLabel).toMatch(/(Raised|Hole|Ignore)$/)
 
     // And it offers the full role choice, which compound mode cannot. Read off
     // the radios themselves: a fallback here would be a test that cannot fail.
@@ -636,6 +640,15 @@ test.describe('The drawing editor door', () => {
     await openApp(page)
     await openEditorByKeyboard(page, CLASS_STYLED)
     await expect(page.locator('.svg-prep-object')).toHaveCount(3)
+
+    // DP-39 P2 (row model A, signed at DP-Q36): Delete lives behind the row's
+    // own More menu now, so the walk has one more step - which is the cost of
+    // the row holding one line down to the drawer's 280 px floor. The menu is
+    // opened the way a keyboard opens it.
+    const firstMore = page.locator('.svg-prep-more-btn').first()
+    await firstMore.focus()
+    await page.keyboard.press('Enter')
+    await expect(firstMore).toHaveAttribute('aria-expanded', 'true')
 
     const firstDelete = page.locator('.svg-prep-object-delete').first()
     await expect
@@ -1005,6 +1018,168 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
     await expect(note).toContainText('300 shapes')
     await expect(note).toContainText(/may take about \d+ seconds, so Forge waits until you ask\./)
     await expect(note).not.toContainText('here')
+  })
+})
+
+test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
+  // DP-Q36 was asked with the three candidates drawn at this panel's real
+  // widths and A was confirmed: colour tag, name, a role control with the
+  // words on it, and one More menu holding offset, Layer and Delete.
+  //
+  // What A buys is the line P1 had to give up. MEASURED after building it,
+  // standalone door, bird, first row: the role control went from 199 px to
+  // 138 and the offset box and Delete left the line entirely, so at 1280 the
+  // name goes from 72 px to 210 - which is the whole of "Rectangle 1
+  // (600x450)" rather than six characters of it.
+
+  async function openRows(page, width) {
+    await page.setViewportSize({ width, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    const toggle = page.locator('.drawing-editor-panel-toggle')
+    if (await toggle.isVisible().catch(() => false)) {
+      if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+        await toggle.click()
+      }
+    }
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+      timeout: 30000,
+    })
+  }
+
+  for (const width of [1280, 768, 412]) {
+    test(`★ at ${width} every row is one line`, async ({ page }) => {
+      test.setTimeout(180000)
+      await openRows(page, width)
+
+      const lines = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('.svg-prep-object')]
+        return rows.map((row) => {
+          // One line means every child that is on screen shares it. Read the
+          // CENTRES, not the tops: this row centres its children, so a 14 px
+          // swatch beside a 44 px control has tops 15 px apart while sitting
+          // on the same line. Reading the row's HEIGHT instead would have to
+          // know this app's padding and be a different number at every width.
+          const centres = [...row.children]
+            .filter((c) => !c.hidden && c.getBoundingClientRect().height > 0)
+            .map((c) => {
+              const b = c.getBoundingClientRect()
+              return Math.round(b.top + b.height / 2)
+            })
+          return Math.max(...centres) - Math.min(...centres)
+        })
+      })
+      for (const [i, spread] of lines.entries()) {
+        expect(spread, `row ${i} spans ${spread} px of lines`).toBeLessThan(6)
+      }
+    })
+  }
+
+  test('★ the whole name fits where it never used to', async ({ page }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const name = page.locator('.svg-prep-object-name').first()
+    await expect(name).toHaveText('Rectangle 1 (600×450)')
+    const cut = await name.evaluate((el) => el.scrollWidth > el.clientWidth + 1)
+    expect(cut, 'the name is still being cut off').toBe(false)
+  })
+
+  test('★ the role control says the same three words to everybody', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const row = page.locator('.svg-prep-object').first()
+
+    // Still a radio group: DP-Q36 signed a control drawn as a switch, not a
+    // different control. Arrow keys walk it because it never stopped being
+    // three radios in a fieldset.
+    await expect(row.getByRole('radio', { name: 'Raised' })).toBeVisible()
+    await expect(row.getByRole('radio', { name: 'Hole' })).toBeVisible()
+    await expect(row.getByRole('radio', { name: 'Ignore' })).toBeVisible()
+    await expect(row.locator('text=Foreground')).toHaveCount(0)
+
+    // And the row's own accessible name reads the word on screen, so a
+    // screen reader and an eye get the same answer to "what is this shape".
+    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Hole/)
+    await row.getByRole('radio', { name: 'Ignore' }).check()
+    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Ignore/)
+  })
+
+  test('★ More holds what left the line, and gives the row back', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const more = page.locator('.svg-prep-more-btn').first()
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    // The visible word is the same on every row, so the name says which row.
+    await expect(more).toHaveAttribute('aria-label', /More for Rectangle 1/)
+
+    const panel = page.locator('.svg-prep-more-panel').first()
+    await expect(panel).toBeHidden()
+
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    await expect(panel).toBeVisible()
+    await expect(panel.locator('.svg-prep-object-delete')).toBeVisible()
+    await expect(panel.locator('.svg-prep-offset-input')).toBeVisible()
+
+    // Escape shuts the menu and NOT the editor, and puts focus back where the
+    // person left it.
+    await panel.locator('.svg-prep-offset-input').focus()
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+    await expect(more).toBeFocused()
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+  })
+
+  test('only one row opens its menu at a time', async ({ page }) => {
+    // Two open menus on a long list is two rows' worth of controls with
+    // nothing saying which row each belongs to.
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const buttons = page.locator('.svg-prep-more-btn')
+    await buttons.nth(0).click()
+    await expect(buttons.nth(0)).toHaveAttribute('aria-expanded', 'true')
+    await buttons.nth(2).click()
+    await expect(buttons.nth(2)).toHaveAttribute('aria-expanded', 'true')
+    await expect(buttons.nth(0)).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('every control in the row clears the 44px floor', async ({ page }) => {
+    test.setTimeout(180000)
+    await openRows(page, 412)
+    const row = page.locator('.svg-prep-object').first()
+    const targets = [
+      row.getByRole('radio', { name: 'Raised' }),
+      row.getByRole('radio', { name: 'Hole' }),
+      row.getByRole('radio', { name: 'Ignore' }),
+      row.locator('.svg-prep-more-btn'),
+    ]
+    for (const t of targets) {
+      const box = await t.boundingBox()
+      const name = await t.getAttribute('aria-label')
+      expect(box.height, `${name || 'control'} is ${box.height} px tall`).toBeGreaterThanOrEqual(44)
+      expect(box.width, `${name || 'control'} is ${box.width} px wide`).toBeGreaterThanOrEqual(44)
+    }
+  })
+
+  test('the row passes an accessibility scan, menu open and shut', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    for (const open of [false, true]) {
+      if (open) await page.locator('.svg-prep-more-btn').first().click()
+      const results = await new AxeBuilder({ page })
+        .include('.svg-prep-objects')
+        .analyze()
+      expect(
+        results.violations,
+        `menu ${open ? 'open' : 'shut'}: ${JSON.stringify(results.violations, null, 2)}`
+      ).toEqual([])
+    }
   })
 })
 

@@ -15679,27 +15679,129 @@ body.tutorial-body-locked {
   min-width: 6ch;
 }
 
+/* ── DP-39 P2: the role control, drawn as a switch ───────────────────────
+   Three radios with the words beside them cost 199 px. Drawn as one
+   segmented control with "Raised" in place of "Foreground" they cost about
+   145, which is what lets the row hold one line down to the drawer's 280 px
+   floor.
+
+   NOT ONE TAG OF MARKUP CHANGES. It is the same fieldset, the same legend and
+   the same three radios it has always been, so arrow keys still walk the
+   group, the legend still names it, and what a screen reader reads is what it
+   read before. Only the paint is different. */
 .svg-prep-role-group {
   display: inline-flex;
-  gap: var(--space-sm);
-  border: 0;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
   padding: 0;
   margin: 0 0 0 auto;
+  overflow: hidden;
 }
 
 .svg-prep-role-group label {
+  /* The radio is laid over its own label at full size rather than left as a
+     circle beside it: the control itself is then the 44 px target, which is
+     the thing a finger and a switch device both aim at. */
+  position: relative;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2xs);
+  justify-content: center;
+  padding: 0 var(--space-xs);
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
+  /* Both ways. MEASURED at 412 with height alone: "Hole" came to 37.75 px
+     wide, because it is a short word and padding is all that was holding it
+     out. A 44 px floor that only applies to one axis is not a 44 px floor. */
   min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  white-space: nowrap;
+}
+
+/* An inset shadow, not a border: a border takes its pixel out of the label's
+   padding box, and the radio laid over that box then measures 43 px against a
+   44 px floor. MEASURED. The divider is drawn, the box stays whole. */
+.svg-prep-role-group label + label {
+  box-shadow: inset 1px 0 0 var(--color-border);
 }
 
 .svg-prep-role-group input[type='radio'] {
-  flex-shrink: 0;
-  accent-color: var(--color-accent);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.svg-prep-role-group label:has(input:checked) {
+  /* The same pair .btn-primary uses, so the contrast is one this app has
+     already answered for. */
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+/* The ring goes on the label: the input it names is invisible, and a ring
+   nobody can see is not a focus indicator. */
+.svg-prep-role-group label:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+/* A role that cannot be chosen still has to say so rather than just fail. */
+.svg-prep-role-group label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── DP-39 P2: the row's own menu ────────────────────────────────────────
+   Offset, Layer and Delete stop competing with the name for the one line.
+   The panel takes the row's full width when it opens and pushes nothing off
+   the edge, which an absolutely positioned menu would have done on the last
+   row of a drawer that scrolls. */
+.svg-prep-more-btn {
+  flex: 0 0 auto;
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.svg-prep-more-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.svg-prep-more-btn:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.svg-prep-more-btn[aria-expanded='true'] {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border-strong, var(--color-border));
+}
+
+.svg-prep-more-panel {
+  /* Its own line, the width of the row. */
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-sm);
+  padding-top: var(--space-2xs);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.svg-prep-more-panel[hidden] {
+  display: none;
 }
 
 .svg-prep-object-warning {

@@ -42,8 +42,17 @@ export { flattenWithRings };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/**
+ * The three things a shape can be, in the words a person reads.
+ *
+ * "Raised", not "Foreground" (DP-Q40, 2026-09-14). Foreground is a word about
+ * drawing programs; what this control decides is whether the shape STANDS UP
+ * off the charm's face, which is the thing a finger will find. The value
+ * underneath stays `foreground`, because that is the model's parameter and
+ * changing a parameter is a different decision from changing a label.
+ */
 const ROLE_OPTIONS = [
-  { value: 'foreground', label: 'Foreground' },
+  { value: 'foreground', label: 'Raised' },
   { value: 'hole', label: 'Hole' },
   { value: 'ignore', label: 'Ignore' },
 ];
@@ -54,6 +63,24 @@ const COMPOUND_ROLE_OPTIONS = [
   { value: 'foreground', label: 'Include' },
   { value: 'ignore', label: 'Exclude' },
 ];
+
+/**
+ * The word for a role, from whichever table is in force.
+ *
+ * The row's accessible name used to carry the VALUE - "role: foreground" -
+ * which was the same word a sighted person read, right up until DP-Q40 made
+ * the visible word "Raised". Blind and sighted people reading the same thing
+ * is the whole point of the row this release signs, so the name reads the
+ * label and nothing has to be kept in step by hand.
+ *
+ * @param {string} value
+ * @param {Array<{value: string, label: string}>} options
+ * @returns {string}
+ */
+function roleWord(value, options) {
+  const found = (options || ROLE_OPTIONS).find((o) => o.value === value);
+  return found ? found.label : value;
+}
 
 /** Viewport width below which the editor opens fullscreen automatically. */
 const AUTO_FULLSCREEN_MAX_WIDTH = 768;
@@ -632,7 +659,7 @@ function populateObjectList(
     item.setAttribute('role', 'listitem');
     item.tabIndex = 0;
     item.dataset.index = String(i);
-    item.setAttribute('aria-label', `${name}, role: ${role}`);
+    item.setAttribute('aria-label', `${name}, ${roleWord(role, roleOptions)}`);
 
     // Color swatch
     const swatch = document.createElement('span');
@@ -667,6 +694,35 @@ function populateObjectList(
 
     item.append(swatch, nameSpan, fieldset);
 
+    // DP-39 P2, row model A (DP-Q36): offset, Layer and Delete stop competing
+    // with the name for the one line and live behind one control instead.
+    //
+    // A button and a panel it names, not a <details>: the panel has to take
+    // the row's full width when it opens, and a <details> keeps its summary
+    // and its panel in one box, so the row would either grow a narrow column
+    // or need `display: contents` to escape it. An absolutely positioned menu
+    // was the other way and would be clipped by the drawer that scrolls these
+    // rows, on the row that most needs it - the last one.
+    const moreId = `svg-prep-more-${i}`;
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'svg-prep-more-btn';
+    moreBtn.dataset.moreIndex = String(i);
+    moreBtn.textContent = 'More';
+    // The visible word is the same on every row, so the accessible name says
+    // which row it belongs to - and it CONTAINS the visible word, which is
+    // what anybody driving this by voice will say.
+    moreBtn.setAttribute('aria-label', `More for ${name}`);
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.setAttribute('aria-controls', moreId);
+
+    const morePanel = document.createElement('div');
+    morePanel.className = 'svg-prep-more-panel';
+    morePanel.id = moreId;
+    morePanel.hidden = true;
+
+    item.append(moreBtn, morePanel);
+
     if (offsetEnabled) {
       const offsetInput = document.createElement('input');
       offsetInput.type = 'number';
@@ -678,7 +734,7 @@ function populateObjectList(
       offsetInput.value = '0';
       offsetInput.setAttribute('aria-label', `Offset for ${name} (mm)`);
       if (role === 'ignore') offsetInput.disabled = true;
-      item.appendChild(offsetInput);
+      morePanel.appendChild(offsetInput);
     }
 
     if (layerCount > 0) {
@@ -702,14 +758,14 @@ function populateObjectList(
         layerSelect.appendChild(opt);
       }
       if (role === 'ignore') layerSelect.disabled = true;
-      item.appendChild(layerSelect);
+      morePanel.appendChild(layerSelect);
 
       // Filled in by validateAndMarkLayers(); an empty node keeps the row's
       // layout from jumping when a warning appears under it.
       const layerNote = document.createElement('span');
       layerNote.className = 'svg-prep-layer-note';
       layerNote.hidden = true;
-      item.appendChild(layerNote);
+      morePanel.appendChild(layerNote);
     } else {
       layers.push(1);
     }
@@ -719,7 +775,10 @@ function populateObjectList(
       warning.className = 'svg-prep-object-warning';
       warning.setAttribute('aria-label', el.warnings.join('; '));
       warning.textContent = '\u26A0';
-      item.appendChild(warning);
+      // Beside the NAME, not after the menu button. It is an advisory about
+      // this shape, and appended at the end it read as though it belonged to
+      // More - which is a control, not a shape.
+      nameSpan.after(warning);
     }
 
     // DP-4. Ignore already removes a shape from the OUTPUT; this removes it
@@ -731,7 +790,7 @@ function populateObjectList(
     deleteBtn.dataset.deleteIndex = String(i);
     deleteBtn.textContent = 'Delete';
     deleteBtn.setAttribute('aria-label', `Delete ${name}`);
-    item.appendChild(deleteBtn);
+    morePanel.appendChild(deleteBtn);
 
     listEl.appendChild(item);
   });
@@ -1652,15 +1711,53 @@ export function createSvgPrepWorkspace(containerEl) {
 
   // ── Event handlers ─────────────────────────────────────────────────────
 
+  /**
+   * Escape, innermost thing first.
+   *
+   * A row's menu is the smallest thing open, so it is the first thing Escape
+   * shuts - anything else and one press with a menu open would close the whole
+   * editor, which is a long way further than anybody meant to go.
+   *
+   * This has to live HERE rather than on the list, where it started. The focus
+   * trap listens on the document in the CAPTURE phase, so it reaches Escape
+   * before any bubbling listener inside the editor could: MEASURED, the menu
+   * stayed open and the editor closed under it. One Escape policy, one place.
+   *
+   * @returns {boolean} whether the press was spent
+   */
+  function closeOpenMenu() {
+    const open = refs.objects.querySelector(
+      '.svg-prep-more-btn[aria-expanded="true"]'
+    );
+    if (!open) return false;
+    setMoreOpen(open, false);
+    open.focus();
+    return true;
+  }
+
   function handleKeydown(e) {
     if (e.key === 'Escape') {
+      // Somebody upstream has already spent this press. The surface's focus
+      // trap listens on the document in the capture phase and calls
+      // preventDefault before its own handler runs, and it does NOT stop the
+      // event - so without this, one Escape shut the row's menu on the way
+      // down and then closed the whole editor on the way up. MEASURED.
+      if (e.defaultPrevented) return;
       e.preventDefault();
+      if (closeOpenMenu()) return;
       if (isFullscreen) {
         closeFullscreen();
       } else {
         close();
       }
     }
+  }
+
+  /** Which role table this drawing is using. */
+  function currentRoleOptions() {
+    return currentAnalysis?.isCompoundPathOnly
+      ? COMPOUND_ROLE_OPTIONS
+      : ROLE_OPTIONS;
   }
 
   function handleRoleChange(e) {
@@ -1676,7 +1773,10 @@ export function createSvgPrepWorkspace(containerEl) {
     if (item) {
       const nameSpan = item.querySelector('.svg-prep-object-name');
       const nameText = nameSpan ? nameSpan.textContent : `Element ${idx + 1}`;
-      item.setAttribute('aria-label', `${nameText}, role: ${e.target.value}`);
+      item.setAttribute(
+        'aria-label',
+        `${nameText}, ${roleWord(e.target.value, currentRoleOptions())}`
+      );
 
       const offsetInput = item.querySelector('.svg-prep-offset-input');
       if (offsetInput) {
@@ -2105,6 +2205,35 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /** A click on a row's Delete, or on one of the bulk controls. */
+  /** Open or shut one row's menu. */
+  function setMoreOpen(btn, open) {
+    if (!btn) return;
+    const panel = refs.objects.querySelector(
+      `#${CSS.escape(btn.getAttribute('aria-controls'))}`
+    );
+    btn.setAttribute('aria-expanded', String(open === true));
+    if (panel) panel.hidden = open !== true;
+  }
+
+  /** Shut every row's menu except the one named. */
+  function closeOtherMenus(keep) {
+    refs.objects
+      .querySelectorAll('.svg-prep-more-btn[aria-expanded="true"]')
+      .forEach((btn) => {
+        if (btn !== keep) setMoreOpen(btn, false);
+      });
+  }
+
+  function handleMoreClick(e) {
+    const btn = e.target.closest('.svg-prep-more-btn');
+    if (!btn || !refs.objects.contains(btn)) return;
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    // One at a time: two open menus on a long list is two rows' worth of
+    // controls with nothing saying which row each belongs to.
+    closeOtherMenus(open ? btn : null);
+    setMoreOpen(btn, open);
+  }
+
   function handleDeleteClick(e) {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -2468,6 +2597,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // the footer's delegated handler cannot see it.
     refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
     refs.renderCancelBtn.addEventListener('click', cancelRender);
+    refs.objects.addEventListener('click', handleMoreClick);
     refs.objects.addEventListener('click', handleDeleteClick);
     refs.bulkBar.addEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
@@ -2553,6 +2683,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.renderBtn.removeEventListener('click', renderPreviewOnDemand);
+    refs.objects.removeEventListener('click', handleMoreClick);
     refs.objects.removeEventListener('click', handleDeleteClick);
     refs.bulkBar.removeEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
@@ -2583,7 +2714,11 @@ export function createSvgPrepWorkspace(containerEl) {
     fullscreenTrap = createDocumentFocusTrap(root, {
       // In file mode there is nothing behind the editor: Escape must close it
       // outright rather than strand it inline at the foot of the page.
-      onEscape: hostMode === 'file' ? close : closeFullscreen,
+      onEscape: () => {
+        if (closeOpenMenu()) return;
+        if (hostMode === 'file') close();
+        else closeFullscreen();
+      },
     });
     fullscreenTrap.activate({
       initialFocus: initialFocus || refs.closeBtn,
@@ -2675,6 +2810,19 @@ export function createSvgPrepWorkspace(containerEl) {
      * pulling clipper into the core bundle.
      */
     getRingEngine: () => ringEngine,
+    /**
+     * Shut a row's open menu, and say whether there was one.
+     *
+     * Escape belongs to whoever is hosting this editor - the standalone door
+     * traps focus and uses Escape as the way out, and the surface's trap
+     * listens on the document in the CAPTURE phase, so nothing inside the
+     * workspace can reach the press first. MEASURED: the workspace's own
+     * keydown handler never ran at all. So the host asks this before it acts,
+     * and the innermost open thing is the first thing Escape shuts.
+     *
+     * @returns {boolean} true if a menu was open and is now shut
+     */
+    closeOpenMenu,
     destroy,
     openFullscreen,
     closeFullscreen,
