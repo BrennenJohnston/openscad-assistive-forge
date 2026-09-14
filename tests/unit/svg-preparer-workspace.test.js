@@ -3372,3 +3372,89 @@ describe('the thin-line advisory (DP-36 P3)', () => {
     expect(said).toContain('or make the design bigger');
   });
 });
+
+describe('the result pane is never empty (DP-37 P1)', () => {
+  // ★ "One picture" was built by HIDING rather than by showing. Above the auto
+  // budget markPreviewStale removed the drawing from the result pane, and
+  // DP-24 had already put the source pane behind Compare, so somebody who
+  // opened a 210-shape drawing was shown "Will print as", an empty rectangle,
+  // two zoom buttons floating in it, and a sentence telling them to press a
+  // button. MEASURED in the browser at 1268 x 160 with no svg in it at all.
+  //
+  // It was walked on the bird - tier A, the one class of drawing that could
+  // not show it.
+
+  // 60 elements is above ELEMENT_TIERS.autoRenderMax, which is the band the
+  // blank lived in. Below it the editor combines on its own and the pane holds
+  // a real result.
+  const ABOVE_BUDGET = 60;
+
+  it('★ shows the drawing where the combined result will go', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const picture = pane.querySelector('svg');
+    expect(picture).not.toBeNull();
+    expect(picture.classList.contains('svg-prep-standin')).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('★ says what it is, so nobody mistakes it for the result', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    const picture = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(picture.getAttribute('role')).toBe('img');
+    expect(picture.getAttribute('aria-label')).toBe(
+      'The drawing as it is now, not yet combined'
+    );
+
+    ws.destroy();
+  });
+
+  it('★ a picture in the pane is still not a result: Apply stays refused', () => {
+    // The pane having something in it must not be mistaken for having a
+    // result. currentResult === null IS the staleness flag, and Apply and Save
+    // read it, not the pane.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    expect(ws._root.querySelector('.svg-prep-result-pane svg')).not.toBeNull();
+    expect(ws._refs.applyBtn.disabled).toBe(true);
+    expect(ws._refs.saveBtn.disabled).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('carries the role tints, so the two panes agree about every shape', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    const layers = ws._root.querySelectorAll('.svg-prep-role-layer');
+    expect(layers.length).toBeGreaterThanOrEqual(2);
+    for (const layer of layers) {
+      expect(layer.querySelectorAll('.svg-prep-role-path').length).toBe(
+        ABOVE_BUDGET
+      );
+    }
+
+    ws.destroy();
+  });
+
+  it('the stand-in is redrawn when a change makes the result stale again', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+    const first = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(first).not.toBeNull();
+
+    // Re-opening is what a re-trace does.
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET + 1));
+    const second = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(second).not.toBeNull();
+    expect(second.classList.contains('svg-prep-standin')).toBe(true);
+
+    ws.destroy();
+  });
+});

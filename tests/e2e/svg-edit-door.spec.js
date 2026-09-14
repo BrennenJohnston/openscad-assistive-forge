@@ -427,8 +427,17 @@ test.describe('The drawing editor door', () => {
     // The whole table is there. It used to be nothing.
     await expect(page.locator('.svg-prep-object')).toHaveCount(210)
 
-    // And the boolean has NOT run: the result pane is empty and says why.
-    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(0)
+    // And the boolean has NOT run.
+    //
+    // RE-PINNED at DP-37: this used to assert the pane was EMPTY, which pinned
+    // the defect as if it were the behaviour. An empty pane was never the
+    // point - it was the symptom. What matters is that no combined result
+    // exists, and that is now evidenced by what the pane holds: the drawing
+    // itself, marked as not yet combined, with the Render row still offered
+    // and Save still refused.
+    const standIn = page.locator('.svg-prep-result-pane svg.svg-prep-standin')
+    await expect(standIn).toHaveCount(1)
+    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
     const row = page.locator('.svg-prep-render-row')
     await expect(row).toBeVisible()
     await expect(page.locator('.svg-prep-render-note')).toContainText('210 shapes')
@@ -654,5 +663,50 @@ test.describe('The drawing editor door', () => {
       results.violations.map((v) => v.id),
       `unexpected axe violations in the drawing editor:\n${detail}`
     ).toEqual([])
+  })
+})
+
+test.describe('the preview is never blank (DP-37 P1)', () => {
+  test('★ a drawing above the auto budget shows itself where its result will go', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+
+    // MEASURED before this release: the pane was 1268 x 160 with no svg in it
+    // at all. "Will print as", an empty rectangle, two zoom buttons floating
+    // in it, and a sentence telling you to press a button.
+    const pane = page.locator('.svg-prep-result-pane')
+    const picture = pane.locator('svg').first()
+    await expect(picture).toBeVisible()
+    await expect(picture).toHaveClass(/svg-prep-standin/)
+    await expect(picture).toHaveAttribute(
+      'aria-label',
+      'The drawing as it is now, not yet combined'
+    )
+
+    // It is a picture of what you HAVE, not of what you will get, and nothing
+    // about the pane holding something says otherwise: the Render row is still
+    // offered and Save is still refused, because there is no result yet.
+    await expect(page.locator('.svg-prep-render-row')).toBeVisible()
+    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
+
+    // And it is the drawing, not an empty frame: the tints are on it.
+    const tinted = await picture.locator('.svg-prep-role-path').count()
+    expect(tinted).toBe(210)
+  })
+
+  test('a drawing under the budget still shows its combined result', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    const picture = page.locator('.svg-prep-result-pane svg').first()
+    await expect(picture).toBeVisible()
+    // Not a stand-in: this one was actually combined.
+    await expect(picture).not.toHaveClass(/svg-prep-standin/)
   })
 })
