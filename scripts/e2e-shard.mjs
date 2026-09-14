@@ -266,6 +266,13 @@ export const MEASURED_SECONDS = {
   // files above carry. Chromium only (PROJECT_IGNORES): CPU throttling is a CDP
   // feature, and the other lanes have no headroom (see the note below).
   'trace-start-cancel.spec.js': 70.0,
+  // DP-43. One case: a ring traced through the real worker on both engines,
+  // which is also the only place the wasm is proved to load under COOP/COEP.
+  // MEASURED locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on Firefox.
+  // Booked at 10 rather than scaled up like the three files above - it is a
+  // tenth of their size, and rounding 7.8 to 10 is already the whole margin
+  // those ratios exist to buy.
+  'potrace-engine.spec.js': 10.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
@@ -288,14 +295,25 @@ export const DEFAULT_WEIGHT_S = 60;
  * (on the owner ledger). The editor's walk is DOM and keyboard behaviour the
  * Chromium lane covers on three shards; the door's twelve cases still run
  * everywhere. Reverse: delete the two entries once the lanes are re-split.
+ *
+ * ★ potrace-engine.spec.js (DP-43) is out of Edge and Firefox for the same
+ * arithmetic and runs on Chromium and WebKit instead. WebKit is the lane that
+ * matters for it: a module worker importing a module under COEP is the exact
+ * shape of D-31 and D-133, and WebKit is where both of those bit. It passes
+ * there in 3.6 s. Reverse with the others.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
-  msedge: ['drawing-editor.spec.js', 'trace-start-cancel.spec.js'],
+  msedge: [
+    'drawing-editor.spec.js',
+    'trace-start-cancel.spec.js',
+    'potrace-engine.spec.js',
+  ],
   firefox: [
     'wasm-smoke.spec.js',
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
+    'potrace-engine.spec.js',
   ],
 });
 

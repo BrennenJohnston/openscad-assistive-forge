@@ -15,7 +15,14 @@
 #
 #   ./scripts/build-potrace-wasm.sh
 #
-# Output: public/wasm/potrace/{potrace.mjs,potrace.wasm,README.txt}
+# Output, in two places on purpose:
+#   vendor/potrace/potrace.mjs        the loader, which is JavaScript and has to
+#                                     be importable as a module. Vite refuses to
+#                                     let a module import a .js file out of
+#                                     public/, and as a bundled chunk it is also
+#                                     a payload the bundle budget can see.
+#   public/wasm/potrace/potrace.wasm  the binary, at a stable unhashed URL, with
+#   ...{README.txt,COPYING.potrace}   the licence and the recipe beside it.
 
 set -euo pipefail
 
@@ -31,6 +38,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="${ROOT}/build/potrace"
 SRC="${WORK}/potrace-${POTRACE_VERSION}/src"
 OUT="${ROOT}/public/wasm/potrace"
+LOADER_OUT="${ROOT}/vendor/potrace"
 
 if ! command -v emcc >/dev/null 2>&1; then
   echo "emcc is not on PATH." >&2
@@ -47,7 +55,7 @@ sha256_of() {
   fi
 }
 
-mkdir -p "${WORK}" "${OUT}"
+mkdir -p "${WORK}" "${OUT}" "${LOADER_OUT}"
 
 # ── 1. Fetch and verify ──────────────────────────────────────────────────────
 if [ ! -f "${WORK}/${POTRACE_TARBALL}" ]; then
@@ -116,7 +124,10 @@ emcc "${EMCC_FLAGS[@]}" \
   "${SRC}/trace.c" \
   "${SRC}/decompose.c" \
   "${SRC}/forge-glue.c" \
-  -o "${OUT}/potrace.mjs"
+  -o "${LOADER_OUT}/potrace.mjs"
+
+# The binary stays where it is served from; the loader is asked to look there.
+mv "${LOADER_OUT}/potrace.wasm" "${OUT}/potrace.wasm"
 
 # ── 4. Measure and record ────────────────────────────────────────────────────
 size_of() { wc -c < "$1" | tr -d ' '; }
@@ -124,8 +135,8 @@ gzip_size_of() { gzip -9 -c "$1" | wc -c | tr -d ' '; }
 
 WASM_RAW="$(size_of "${OUT}/potrace.wasm")"
 WASM_GZ="$(gzip_size_of "${OUT}/potrace.wasm")"
-JS_RAW="$(size_of "${OUT}/potrace.mjs")"
-JS_GZ="$(gzip_size_of "${OUT}/potrace.mjs")"
+JS_RAW="$(size_of "${LOADER_OUT}/potrace.mjs")"
+JS_GZ="$(gzip_size_of "${LOADER_OUT}/potrace.mjs")"
 EMCC_VERSION="$(emcc --version | head -1)"
 # Recorded relative to the repository, so the recipe reads the same whether it
 # was built on a runner or on someone's laptop.
@@ -134,9 +145,13 @@ EMCC_FLAGS_RECORDED="${EMCC_FLAGS[*]//${ROOT}\//}"
 cat > "${OUT}/README.txt" <<README
 Potrace, compiled to WebAssembly for OpenSCAD Assistive Forge.
 
-Everything in this folder is build output. Do not edit it by hand: rerun
-scripts/build-potrace-wasm.sh, or the "Build Potrace wasm" GitHub Actions
-workflow, and commit what comes out.
+Everything in this folder is build output, and so is vendor/potrace/potrace.mjs
+beside it. Do not edit any of it by hand: rerun scripts/build-potrace-wasm.sh,
+or the "Build Potrace wasm" GitHub Actions workflow, and commit what comes out.
+
+The loader lives apart from the binary because it is JavaScript and a bundler
+has to treat it as code, while the binary keeps a stable address so the
+checksum below can be checked against the file actually served.
 
 Source
   ${POTRACE_URL}
@@ -160,8 +175,8 @@ Built with
   ${EMCC_FLAGS_RECORDED}
 
 Size, as built
-  potrace.wasm  ${WASM_RAW} bytes raw, ${WASM_GZ} bytes gzipped
-  potrace.mjs   ${JS_RAW} bytes raw, ${JS_GZ} bytes gzipped
+  public/wasm/potrace/potrace.wasm  ${WASM_RAW} bytes raw, ${WASM_GZ} gzipped
+  vendor/potrace/potrace.mjs        ${JS_RAW} bytes raw, ${JS_GZ} gzipped
 
 Getting the source
   The tarball above is the complete corresponding source for the potrace part
@@ -170,6 +185,6 @@ Getting the source
 README
 
 echo
-echo "Built into ${OUT}:"
-echo "  potrace.wasm  ${WASM_RAW} bytes raw, ${WASM_GZ} gzipped"
-echo "  potrace.mjs   ${JS_RAW} bytes raw, ${JS_GZ} gzipped"
+echo "Built:"
+echo "  ${OUT}/potrace.wasm        ${WASM_RAW} bytes raw, ${WASM_GZ} gzipped"
+echo "  ${LOADER_OUT}/potrace.mjs  ${JS_RAW} bytes raw, ${JS_GZ} gzipped"

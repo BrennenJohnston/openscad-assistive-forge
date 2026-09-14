@@ -138,6 +138,10 @@ export default defineConfig({
         '**/theme-switching.spec.js',
         '**/first-visit-choice.spec.js',
         '**/basic-workflow.spec.js',
+        // A module worker importing a module is the exact shape of D-31 and
+        // D-133, and both of those were WebKit refusing it under COEP where no
+        // other browser did. The one lane that has to run this runs it.
+        '**/potrace-engine.spec.js',
       ],
     },
     // Mobile & tablet projects — scoped to responsive audit spec to avoid

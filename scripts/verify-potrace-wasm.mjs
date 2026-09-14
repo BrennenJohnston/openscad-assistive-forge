@@ -20,12 +20,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { trace, countSubpaths, resetPotrace } from '../src/js/potrace-trace.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const BUILT = path.join(ROOT, 'public', 'wasm', 'potrace', 'potrace.mjs');
+const BUILT = path.join(ROOT, 'vendor', 'potrace', 'potrace.mjs');
+const WASM = path.join(ROOT, 'public', 'wasm', 'potrace', 'potrace.wasm');
 
-if (!existsSync(BUILT)) {
-  console.error(`No build to verify at ${BUILT}.`);
-  console.error('Run ./scripts/build-potrace-wasm.sh first.');
-  process.exit(1);
+for (const file of [BUILT, WASM]) {
+  if (!existsSync(file)) {
+    console.error(`No build to verify at ${file}.`);
+    console.error('Run ./scripts/build-potrace-wasm.sh first.');
+    process.exit(1);
+  }
 }
 
 const loader = () => import(pathToFileURL(BUILT).href);
@@ -78,9 +81,10 @@ const check = (name, condition, detail) => {
   }
 };
 
-const run = (m, options) => trace(m.data, m.width, m.height, { loader, ...options });
+const run = (m, options) =>
+  trace(m.data, m.width, m.height, { loader, wasmUrl: WASM, ...options });
 
-console.log('Verifying public/wasm/potrace/potrace.mjs\n');
+console.log('Verifying vendor/potrace/potrace.mjs and the binary beside it\n');
 
 // A picture with no ink in it is not a failure: it is a picture with no ink in
 // it, and the caller has to be able to tell the two apart.
@@ -173,7 +177,7 @@ check('a disc traced normally uses curves', rounded.includes('C'), 'no curve seg
 check('alphamax 0 makes every corner sharp', !sharp.includes('C'), 'curves survived');
 
 const { default: createPotrace } = await import(pathToFileURL(BUILT).href);
-const mod = await createPotrace();
+const mod = await createPotrace({ locateFile: () => WASM });
 const version = mod.UTF8ToString(mod._potrace_build_version());
 check('the wasm reports the pinned potrace version', /1\.16/.test(version), version);
 console.log(`\n  potrace_version(): ${version}`);

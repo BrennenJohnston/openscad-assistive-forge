@@ -6,16 +6,24 @@
  * with the drawing afterwards, belongs to the code that already does it.
  *
  * The wasm and its loader are build output, written by
- * scripts/build-potrace-wasm.sh and committed under public/wasm/potrace/ with
- * a README naming the source tarball, its checksum and the compiler. This file
- * is the only hand-written part, which is why it lives in src/ where the tests
- * can reach it rather than beside the binary.
+ * scripts/build-potrace-wasm.sh, and they live apart on purpose:
+ *
+ *   - `vendor/potrace/potrace.mjs` is JavaScript, so the bundler treats it as
+ *     code. Vite refuses to let a module import a .js file out of public/
+ *     ("copied as-is on build, can only be referenced via <script src>"), and
+ *     as a lazy chunk it is also a payload the bundle budget can see.
+ *   - `public/wasm/potrace/potrace.wasm` keeps a stable, unhashed URL, with
+ *     the upstream COPYING and the build's README beside it. The GPL asks the
+ *     source of a distributed binary to be findable, and a fixed address is
+ *     how a person checks the checksum of the thing actually served.
+ *
+ * This file is the only hand-written part of it.
  *
  * @license GPL-3.0-or-later
  */
 
-/** Where the built loader sits once it has been fetched by the page. */
-export const POTRACE_MODULE_URL = '/wasm/potrace/potrace.mjs';
+/** Where the binary is served from. Given to emscripten as its locateFile. */
+export const POTRACE_WASM_URL = '/wasm/potrace/potrace.wasm';
 
 /**
  * Potrace's own defaults, copied from potracelib.c so that "leave it alone"
@@ -38,14 +46,18 @@ let modulePromise = null;
  * Load the Potrace module, once per page.
  *
  * @param {() => Promise<object>} [loader] where the module comes from. The
- *   default fetches the built loader from the site; tests and the build's own
- *   verification pass their own so they can point at a local file.
+ *   default is the built loader; tests and the build's own verification pass
+ *   their own so they can point at a file on disk.
+ * @param {object} [options]
+ * @param {string} [options.wasmUrl] where the binary is, if not the served
+ *   one. Node has no site to fetch from, so the tests give it a path.
  * @returns {Promise<object>} the instantiated emscripten module
  */
-export function loadPotrace(loader) {
+export function loadPotrace(loader, options = {}) {
   if (!modulePromise) {
     const importModule =
-      loader || (() => import(/* @vite-ignore */ POTRACE_MODULE_URL));
+      loader || (() => import('../../vendor/potrace/potrace.mjs'));
+    const wasmUrl = options.wasmUrl || POTRACE_WASM_URL;
     modulePromise = Promise.resolve()
       .then(importModule)
       .then((mod) => {
@@ -53,7 +65,9 @@ export function loadPotrace(loader) {
         if (typeof factory !== 'function') {
           throw new Error('The Potrace module did not export a loader.');
         }
-        return factory();
+        // Told outright rather than left to be worked out from the chunk's own
+        // URL, which a bundler is free to rename and move.
+        return factory({ locateFile: () => wasmUrl });
       })
       .catch((error) => {
         // A failed load must not poison every later attempt: a person who
@@ -77,7 +91,8 @@ export function resetPotrace() {
  *   ink, row 0 at the top
  * @param {number} width pixels
  * @param {number} height pixels
- * @param {object} [options] any of POTRACE_DEFAULTS, plus `loader`
+ * @param {object} [options] any of POTRACE_DEFAULTS, plus `loader` and
+ *   `wasmUrl`
  * @returns {Promise<string>} SVG path data, to be filled EVEN-ODD. Empty when
  *   the picture held no ink.
  */
@@ -92,7 +107,7 @@ export async function trace(mask, width, height, options = {}) {
   }
 
   const settings = { ...POTRACE_DEFAULTS, ...options };
-  const mod = await loadPotrace(options.loader);
+  const mod = await loadPotrace(options.loader, { wasmUrl: options.wasmUrl });
 
   const ptr = mod._malloc(mask.length);
   if (!ptr) throw new Error('Potrace ran out of memory reading the picture.');
@@ -123,6 +138,29 @@ export async function trace(mask, width, height, options = {}) {
   }
 
   return pathData;
+}
+
+/**
+ * Wrap path data in the same envelope the other engine writes, so everything
+ * downstream reads one shape of document whichever engine drew it.
+ *
+ * Potrace answers in one colour, and its boundaries and holes only make a
+ * drawing when they are filled EVEN-ODD, so the rule is written on the path
+ * rather than left to a default.
+ *
+ * @param {string} pathData from trace(); empty means the picture held no ink
+ * @param {number} width pixels
+ * @param {number} height pixels
+ * @returns {string}
+ */
+export function pathDataToSvg(pathData, width, height) {
+  const shape = pathData
+    ? `<path fill="rgb(0,0,0)" fill-rule="evenodd" d="${pathData}"/>`
+    : '';
+  return (
+    `<svg width="${width}" height="${height}" version="1.1" ` +
+    `xmlns="http://www.w3.org/2000/svg">${shape}</svg>`
+  );
 }
 
 /**

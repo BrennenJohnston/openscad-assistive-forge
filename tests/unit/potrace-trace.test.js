@@ -24,8 +24,9 @@ import {
   loadPotrace,
   resetPotrace,
   countSubpaths,
+  pathDataToSvg,
   POTRACE_DEFAULTS,
-  POTRACE_MODULE_URL,
+  POTRACE_WASM_URL,
 } from '../../src/js/potrace-trace.js'
 
 const ROOT = path.resolve(
@@ -33,7 +34,8 @@ const ROOT = path.resolve(
   '..',
   '..'
 )
-const BUILT = path.join(ROOT, 'public', 'wasm', 'potrace', 'potrace.mjs')
+const BUILT = path.join(ROOT, 'vendor', 'potrace', 'potrace.mjs')
+const WASM = path.join(ROOT, 'public', 'wasm', 'potrace', 'potrace.wasm')
 const loader = () => import(pathToFileURL(BUILT).href)
 
 /** A blank mask, one byte per pixel, row 0 at the top. */
@@ -49,7 +51,7 @@ function fill(m, x0, y0, x1, y1, value = 1) {
 }
 
 const run = (m, options) =>
-  trace(m.data, m.width, m.height, { loader, ...options })
+  trace(m.data, m.width, m.height, { loader, wasmUrl: WASM, ...options })
 
 /** Every coordinate in a piece of path data. */
 function box(pathData) {
@@ -72,12 +74,13 @@ describe('the Potrace engine (DP-43)', () => {
   beforeEach(() => resetPotrace())
   afterEach(() => resetPotrace())
 
-  it('the built wasm is committed where the page will look for it', () => {
+  it('the built files are committed where the page will look for them', () => {
+    // The loader is JavaScript and the bundler has to treat it as code; the
+    // binary keeps a stable URL so the checksum in the README beside it can be
+    // checked against what is actually served. Both halves have to be there.
     expect(existsSync(BUILT)).toBe(true)
-    expect(POTRACE_MODULE_URL).toBe('/wasm/potrace/potrace.mjs')
-    expect(
-      existsSync(path.join(ROOT, 'public', 'wasm', 'potrace', 'potrace.wasm'))
-    ).toBe(true)
+    expect(existsSync(WASM)).toBe(true)
+    expect(POTRACE_WASM_URL).toBe('/wasm/potrace/potrace.wasm')
     // The licence and the recipe travel with the binary or the binary should
     // not be there at all.
     expect(
@@ -109,7 +112,7 @@ describe('the Potrace engine (DP-43)', () => {
     // the whole engine sits behind this one string.
     const m = new Uint8Array(16)
     for (let y = 1; y < 3; y++) for (let x = 1; x < 3; x++) m[y * 4 + x] = 1
-    await expect(trace(m, 4, 4, { loader, turdsize: 0 })).resolves.toBe(
+    await expect(trace(m, 4, 4, { loader, wasmUrl: WASM, turdsize: 0 })).resolves.toBe(
       'M1 2C1 2.55 1.45 3 2 3C2.55 3 3 2.55 3 2C3 1.45 2.55 1 2 1C1.45 1 1 1.45 1 2Z'
     )
   })
@@ -119,7 +122,7 @@ describe('the Potrace engine (DP-43)', () => {
     // is one pixel, and it has exactly one right answer.
     const m = new Uint8Array(16)
     m[0] = 1
-    const only = await trace(m, 4, 4, { loader, turdsize: 0 })
+    const only = await trace(m, 4, 4, { loader, wasmUrl: WASM, turdsize: 0 })
     expect(box(only)).toEqual({ minX: 0, maxX: 1, minY: 0, maxY: 1 })
   })
 
@@ -178,20 +181,20 @@ describe('the Potrace engine (DP-43)', () => {
   })
 
   it('says so when the mask does not match the size it was given', async () => {
-    await expect(trace(new Uint8Array(10), 4, 4, { loader })).rejects.toThrow(
+    await expect(trace(new Uint8Array(10), 4, 4, { loader, wasmUrl: WASM })).rejects.toThrow(
       /needs 16 bytes, got 10/
     )
   })
 
   it('refuses a picture with no size at all', async () => {
-    await expect(trace(new Uint8Array(0), 0, 0, { loader })).rejects.toThrow(
+    await expect(trace(new Uint8Array(0), 0, 0, { loader, wasmUrl: WASM })).rejects.toThrow(
       /Cannot trace a 0x0 picture/
     )
   })
 
   it('loads the module once and hands the same one back', async () => {
-    const first = loadPotrace(loader)
-    const second = loadPotrace(loader)
+    const first = loadPotrace(loader, { wasmUrl: WASM })
+    const second = loadPotrace(loader, { wasmUrl: WASM })
     expect(first).toBe(second)
     await expect(first).resolves.toBe(await second)
   })
@@ -201,13 +204,48 @@ describe('the Potrace engine (DP-43)', () => {
     // again, rather than being told no for the rest of the visit.
     const broken = () => Promise.reject(new Error('offline'))
     await expect(loadPotrace(broken)).rejects.toThrow('offline')
-    await expect(loadPotrace(loader)).resolves.toBeTruthy()
+    await expect(loadPotrace(loader, { wasmUrl: WASM })).resolves.toBeTruthy()
   })
 
   it('refuses a module that is not a loader, rather than failing later', async () => {
     await expect(loadPotrace(async () => ({ default: 42 }))).rejects.toThrow(
       /did not export a loader/
     )
+  })
+
+  describe('pathDataToSvg', () => {
+    it('wraps a drawing in the envelope the other engine writes', () => {
+      expect(pathDataToSvg('M0 0L1 0L1 1Z', 40, 25)).toBe(
+        '<svg width="40" height="25" version="1.1" ' +
+          'xmlns="http://www.w3.org/2000/svg">' +
+          '<path fill="rgb(0,0,0)" fill-rule="evenodd" d="M0 0L1 0L1 1Z"/>' +
+          '</svg>'
+      )
+    })
+
+    it('★ says even-odd on the path, never by default', () => {
+      // SVG fills nonzero unless told otherwise, and a hole drawn as a second
+      // subpath only becomes a hole under even-odd. This is the whole
+      // agreement between the two halves of the tracer.
+      expect(pathDataToSvg('M0 0Z', 4, 4)).toContain('fill-rule="evenodd"')
+    })
+
+    it('a picture with no ink is an empty drawing, not a broken one', () => {
+      const svg = pathDataToSvg('', 16, 16)
+      expect(svg).toContain('<svg width="16" height="16"')
+      expect(svg).not.toContain('<path')
+    })
+
+    it('round trips a real drawing, holes and all', async () => {
+      // Parsing it as a document belongs where a DOMParser exists; this checks
+      // the one path really carries the ring's two closed shapes.
+      const ring = fill(fill(mask(24, 24), 4, 4, 20, 20), 9, 9, 15, 15, 0)
+      const pathData = await run(ring)
+      const svg = pathDataToSvg(pathData, ring.width, ring.height)
+      expect(svg).toContain(`d="${pathData}"`)
+      expect(countSubpaths(pathData)).toBe(2)
+      expect(svg.match(/<path /g)).toHaveLength(1)
+    })
   })
 
   describe('countSubpaths', () => {

@@ -21,6 +21,16 @@ const fakeSelf = {
 }
 vi.stubGlobal('self', fakeSelf)
 
+// The Potrace engine is stood in for here, because this file is about the
+// wiring: which engine is asked for, what it is handed, and what the reply
+// says. The engine itself runs for real in tests/unit/potrace-trace.test.js,
+// against the wasm that actually ships.
+const potraceTrace = vi.fn(async () => 'M0 0L1 0L1 1Z')
+vi.mock('../../src/js/potrace-trace.js', async (importActual) => {
+  const actual = await importActual()
+  return { ...actual, trace: (...args) => potraceTrace(...args) }
+})
+
 await import('../../src/js/trace-worker.js')
 const { IMAGE_IMPORT_LIMITS } = await import('../../src/js/image-import.js')
 
@@ -138,5 +148,109 @@ describe('the trace worker (DP-34)', () => {
     expect(error.id).toBe(6)
     expect(typeof error.message).toBe('string')
     expect(error.message.length).toBeGreaterThan(0)
+  })
+})
+
+describe('choosing an engine (DP-43)', () => {
+  beforeEach(() => {
+    posted.length = 0
+    potraceTrace.mockClear()
+  })
+
+  it('uses imagetracer when nobody chooses', async () => {
+    const out = await run({
+      id: 1,
+      image: picture(40, 40),
+      ink: { mode: 'lineart' },
+    })
+    expect(done(out).engine).toBe('imagetracer')
+    expect(potraceTrace).not.toHaveBeenCalled()
+  })
+
+  it('★ hands Potrace the one-bit ink mask, not a picture of it', async () => {
+    // The mask is what extractInk already computed. Painting it black on white
+    // and reading the pixels back would be the same answer by a longer road,
+    // and a lossier one.
+    const out = await run({
+      id: 2,
+      image: picture(40, 40),
+      ink: { mode: 'lineart' },
+      engine: 'potrace',
+    })
+    expect(potraceTrace).toHaveBeenCalledTimes(1)
+    const [mask, width, height] = potraceTrace.mock.calls[0]
+    expect(mask).toBeInstanceOf(Uint8Array)
+    expect(mask.length).toBe(40 * 40)
+    expect(width).toBe(40)
+    expect(height).toBe(40)
+    // The blob is in there, and so is the paper around it.
+    expect(mask.some((v) => v !== 0)).toBe(true)
+    expect(mask.some((v) => v === 0)).toBe(true)
+    expect(done(out).engine).toBe('potrace')
+  })
+
+  it('wraps the path data as one even-odd shape, and asks for no filtering', async () => {
+    // filterForegroundPaths drops the lightest path. Potrace answers in one
+    // colour, so the lightest path is the only path, and running it would
+    // erase the drawing.
+    const out = await run({
+      id: 3,
+      image: picture(40, 40),
+      ink: { mode: 'silhouette' },
+      engine: 'potrace',
+    })
+    const reply = done(out)
+    expect(reply.filterForeground).toBe(false)
+    expect(reply.svg).toContain('fill-rule="evenodd"')
+    expect(reply.svg).toContain('d="M0 0L1 0L1 1Z"')
+    expect(reply.svg).toContain('width="40" height="40"')
+  })
+
+  it('★ falls back for Standard, and says so instead of pretending', async () => {
+    // Standard keeps the picture's own colours and produces no mask. Potrace
+    // draws in one colour and cannot answer that question at all.
+    const out = await run({
+      id: 4,
+      image: picture(40, 40),
+      ink: { mode: 'standard' },
+      engine: 'potrace',
+    })
+    expect(potraceTrace).not.toHaveBeenCalled()
+    expect(done(out).engine).toBe('imagetracer')
+    expect(done(out).filterForeground).toBe(true)
+  })
+
+  it('leaves Colours on its own road', async () => {
+    const out = await run({
+      id: 5,
+      image: picture(40, 40),
+      ink: { mode: 'colours', colourCount: 3 },
+      engine: 'potrace',
+    })
+    expect(potraceTrace).not.toHaveBeenCalled()
+    expect(done(out).engine).toBe('colours')
+  })
+
+  it('passes the caller’s Potrace settings through', async () => {
+    await run({
+      id: 6,
+      image: picture(40, 40),
+      ink: { mode: 'lineart' },
+      engine: 'potrace',
+      potraceOverrides: { turdsize: 12, alphamax: 0 },
+    })
+    expect(potraceTrace.mock.calls[0][3]).toEqual({ turdsize: 12, alphamax: 0 })
+  })
+
+  it('a Potrace failure comes back as a message, not a silence', async () => {
+    potraceTrace.mockRejectedValueOnce(new Error('wasm did not load'))
+    const out = await run({
+      id: 7,
+      image: picture(40, 40),
+      ink: { mode: 'lineart' },
+      engine: 'potrace',
+    })
+    expect(failed(out).message).toBe('wasm did not load')
+    expect(done(out)).toBeUndefined()
   })
 })

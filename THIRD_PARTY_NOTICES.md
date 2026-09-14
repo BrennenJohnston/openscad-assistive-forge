@@ -145,7 +145,7 @@ app can be traced back to one tarball and one checksum.
 **Copyright**: (C) 2001-2019 Peter Selinger
 **Source Tarball**: https://potrace.sourceforge.net/download/1.16/potrace-1.16.tar.gz
 **sha256**: `be8248a17dedd6ccbaab2fcc45835bb0502d062e40fbded3bc56028ce5eb7acc`
-**Vendored Location**: `public/wasm/potrace/` (build output, with the upstream `COPYING` beside it)
+**Vendored Location**: `public/wasm/potrace/` (the binary, with the upstream `COPYING` and the build's `README.txt` beside it) and `vendor/potrace/potrace.mjs` (the loader)
 **Build Recipe**: `scripts/build-potrace-wasm.sh`, run by the "Build Potrace wasm" workflow
 **Usage**: `src/js/potrace-trace.js`, called from the picture tracing worker
 

@@ -93,7 +93,11 @@ export function createTraceRunner(options = {}) {
       const svg = message.filterForeground
         ? filterForegroundPaths(message.svg)
         : message.svg;
-      job.resolve({ svg, summary: message.summary ?? null });
+      job.resolve({
+        svg,
+        summary: message.summary ?? null,
+        engine: message.engine ?? 'imagetracer',
+      });
       return;
     }
 
@@ -127,7 +131,11 @@ export function createTraceRunner(options = {}) {
    * @param {object} [opts]
    * @param {Function} [opts.onStage] - Called with {stage, index, total}
    * @param {object} [opts.tracerOverrides]
-   * @returns {Promise<{svg: string, summary: object|null}>}
+   * @param {string} [opts.engine] - 'imagetracer' (the default) or
+   *   'potrace'. Potrace draws in one colour, so it can only answer for
+   *   the ink modes; the result says which engine actually ran.
+   * @param {object} [opts.potraceOverrides]
+   * @returns {Promise<{svg: string, summary: object|null, engine: string}>}
    */
   function start(imageData, ink, opts = {}) {
     if (current) settleCancelled('superseded');
@@ -166,6 +174,8 @@ export function createTraceRunner(options = {}) {
         },
         ink: ink || null,
         tracerOverrides: opts.tracerOverrides || null,
+        engine: opts.engine || 'imagetracer',
+        potraceOverrides: opts.potraceOverrides || null,
       },
       [buffer]
     );
