@@ -1291,6 +1291,23 @@ async function initApp() {
     canonicalProjectFiles = cloneProjectFiles(files);
   }
   let previewQualityMode = PREVIEW_QUALITY_DEFAULT;
+  /**
+   * DP-38 P2: true while a drawing-editor session is open.
+   *
+   * The charm behind the editor is a thing somebody is GLANCING at while they
+   * work on the drawing in front of it, not the thing they are judging, and
+   * MEASURED on the traced Bathroom icon the charm's own `$fn = 64` puts the
+   * app's default quality at 65,288 triangles and 0.31 s a render. DRAFT is
+   * 26,120 and 0.16 s for a charm that is identical except for the clip's
+   * rounded edges.
+   *
+   * It never UPGRADES anybody: DRAFT is the cheapest of the fixed presets, so
+   * taking it can only cost less. The one mode it leaves alone is 'auto',
+   * which chooses per model and can legitimately pick something coarser than
+   * DRAFT for a complex one - forcing DRAFT there would be making somebody's
+   * preview slower in the name of speed.
+   */
+  let editorDraftQuality = false;
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
   // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
@@ -5350,9 +5367,32 @@ async function initApp() {
     document.getElementById('drawingEditorSurface');
   window.addEventListener('drawing-editor:open', () => {
     previewManager?.showEditorSurface?.(drawingEditorSurface());
+    // DP-38 P2: cheaper previews for as long as the session lasts.
+    editorDraftQuality = true;
+    applyPreviewQualityMode();
   });
   window.addEventListener('drawing-editor:close', () => {
     previewManager?.hideEditorSurface?.(drawingEditorSurface());
+    editorDraftQuality = false;
+    applyPreviewQualityMode();
+    // Changing the quality marks the preview stale, which is honest and, on
+    // its own, useless: the person gets their own quality back as a LABEL on
+    // a picture still drawn at draft, and has to ask for it again. The same
+    // pair the quality select itself uses - apply the mode, then redraw.
+    if (autoPreviewController) {
+      const state = stateManager.getState();
+      if (state?.uploadedFile) {
+        autoPreviewController.onParameterChange(state.parameters);
+      }
+    }
+  });
+  // DP-38: the editor's Charm view is this preview, seen through an editor
+  // that has stopped painting over it.
+  window.addEventListener('drawing-editor:view', (event) => {
+    previewManager?.setEditorCharmVisible?.(
+      event.detail?.view === 'charm',
+      event.detail?.host || null
+    );
   });
 
   // Declare format selector elements
@@ -6508,6 +6548,20 @@ async function initApp() {
   const applyPreviewQualityMode = () => {
     previewQualityMode = getSelectedPreviewQualityMode();
     adaptivePreviewMemo = { key: null, info: null };
+
+    // DP-38 P2. Read here rather than written into the select, so the
+    // person's own choice is untouched and comes back by itself the moment
+    // the session ends.
+    if (editorDraftQuality && previewQualityMode !== 'auto') {
+      previewQuality = RENDER_QUALITY.DRAFT;
+      if (autoPreviewController) {
+        autoPreviewController.setPreviewQualityResolver(null);
+        autoPreviewController.setPreviewCacheKeyResolver(null);
+        autoPreviewController.setPreviewParametersResolver(null);
+        autoPreviewController.setPreviewQuality(previewQuality);
+      }
+      return;
+    }
 
     if (previewQualityMode === 'auto') {
       previewQuality = null;

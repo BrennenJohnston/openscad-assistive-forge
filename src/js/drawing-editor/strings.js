@@ -51,6 +51,34 @@ export const EDITOR_STRINGS = Object.freeze({
    */
   panelToggle: 'Regions',
 
+  /**
+   * DP-38: the two-state switch between the drawing and the thing it makes.
+   *
+   * A real radio group, not a button that toggles: there are two named
+   * choices and only one can be true, which is what a radio group IS. The
+   * legend is the question and the labels are the answers, so a screen
+   * reader says "View, Drawing, radio button, 1 of 2" without any ARIA
+   * standing in for markup that already exists.
+   *
+   * It appears only when there is a model behind the editor. Through the
+   * standalone door there is no charm to show, and a control offering a view
+   * that cannot exist is worse than no control.
+   *
+   * STRINGS: owner review pending.
+   */
+  viewLegend: 'View',
+  viewDrawing: 'Drawing',
+  viewCharm: 'Charm',
+  viewShowingDrawing: 'Showing the drawing.',
+  viewShowingCharm: 'Showing the charm.',
+
+  /**
+   * DP-38 P2. Said once, in the editor, because the person will SEE the
+   * difference and should not have to wonder whether their model changed.
+   * A11Y.
+   */
+  draftNote: 'Previews are drawn at draft quality while you edit.',
+
   sectionColours: 'Colours',
   sectionRegions: 'Regions',
   sectionPlates: 'Plates and paint order',

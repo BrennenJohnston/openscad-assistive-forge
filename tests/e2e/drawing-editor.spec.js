@@ -541,3 +541,325 @@ test.describe('The drawing editor takes the preview area', () => {
     await expect(page.locator('.svg-prep-status-plan')).toHaveText('6 colours, 6 plates.')
   })
 })
+
+/**
+ * DP-38: the Drawing / Charm switch, and draft quality while editing.
+ *
+ * The switch belongs to the CHARM, so it is walked on the charm and not on
+ * the stencil tile the rest of this file uses: what sits behind the stencil
+ * editor is a tile of plates, and a control labelled Charm would be naming
+ * something that is not there.
+ */
+test.describe('the Drawing / Charm switch (DP-38)', () => {
+  const NESTED = path.join(
+    process.cwd(),
+    'tests',
+    'fixtures',
+    'svg-edit',
+    'nested-squares.svg'
+  )
+
+  async function openCharmEditor(page) {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.selectOption('#charmVariantSelect', 'q-charm')
+    await page.click('#openCharmMakerBtn')
+    await page.waitForFunction(
+      () =>
+        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+        0,
+      null,
+      { timeout: 120000 }
+    )
+    for (let i = 0; i < 2; i++) {
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click()
+        await page.waitForTimeout(300)
+      }
+    }
+    await page.setInputFiles('#param-design_file', NESTED)
+    await page.evaluate(() => {
+      let d = document.querySelector('#param-design_file')?.closest('details')
+      while (d) {
+        d.open = true
+        d = d.parentElement?.closest('details')
+      }
+    })
+    const door = page
+      .getByRole('button', { name: 'Open the drawing editor' })
+      .first()
+    await door.waitFor({ state: 'visible', timeout: 60000 })
+    await door.scrollIntoViewIfNeeded()
+    await door.click({ timeout: 30000 })
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible({ timeout: 90000 })
+  }
+
+  const charm = (page) => page.getByRole('radio', { name: 'Charm' })
+  const drawing = (page) => page.getByRole('radio', { name: 'Drawing' })
+
+  test('★ it is a real radio group, and the drawing is what it opens on', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    // Two named choices where only one can be true: the markup says so, so
+    // nothing has to say it again in ARIA.
+    await expect(page.locator('.drawing-editor-view-switch')).toBeVisible()
+    await expect(drawing(page)).toBeChecked()
+    await expect(charm(page)).not.toBeChecked()
+
+    // Both are real targets, not labels standing in front of a clipped input.
+    for (const radio of [drawing(page), charm(page)]) {
+      const box = await radio.boundingBox()
+      expect(box.width, 'radio width').toBeGreaterThanOrEqual(44)
+      expect(box.height, 'radio height').toBeGreaterThanOrEqual(44)
+    }
+  })
+
+  test('★ Charm shows the model behind the editor, and Drawing puts it back', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    // The drawing is what is on screen, and the canvas behind is out of sight.
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
+    await expect(canvas(page)).toBeHidden()
+
+    await charm(page).click()
+    // The canvas comes back WITHOUT the editor giving up the area: the toolbar
+    // is still there and so is the way back.
+    await expect(canvas(page)).toBeVisible()
+    await expect(page.locator('.drawing-editor-toolbar')).toBeVisible()
+    await expect(charm(page)).toBeChecked()
+    // The drawing is not merely covered: it is out of the accessibility tree
+    // too, because a picture nobody can see must not still be read out.
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeHidden()
+    await expect(page.locator('.drawing-editor-status')).toHaveText(
+      'Showing the charm.'
+    )
+
+    await drawing(page).click()
+    await expect(canvas(page)).toBeHidden()
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
+    await expect(page.locator('.drawing-editor-status')).toHaveText(
+      'Showing the drawing.'
+    )
+  })
+
+  test('★ the drawer gets out of the charm\'s way, and comes back as it was', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    // MEASURED at 1280: the drawer covers 310 px of the canvas and the charm
+    // is 515 px wide, so leaving it open hides 206 px of the thing the switch
+    // exists to show.
+    const panel = page.locator('.drawing-editor-panel')
+    await expect(panel).toBeVisible()
+
+    await charm(page).click()
+    await expect(panel).toBeHidden()
+
+    // Closing it was the switch's doing, so the switch gives it back.
+    await drawing(page).click()
+    await expect(panel).toBeVisible()
+  })
+
+  test('★ the charm is framed in the window it is SEEN through', async ({
+    page,
+  }) => {
+    // The editor is laid OVER this canvas and covers a great deal of it.
+    // MEASURED with the charm view open, visible area against canvas area:
+    // 66 per cent at 1280, 57 at 900, 39 at 412 - and the shapes differ as
+    // much as the sizes, because at 900 the canvas is 476 by 761 while the
+    // window left over is 460 by 445. Framed for the canvas, the charm is
+    // drawn to fill a tall box and the near-square window shows a band across
+    // its middle: a slab, not a charm.
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+    await charm(page).click()
+    await expect(canvas(page)).toBeVisible()
+
+    const boxes = await page.evaluate(() => {
+      const r = (el) => {
+        const b = el.getBoundingClientRect()
+        return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]
+      }
+      return {
+        canvas: r(document.querySelector('#previewContainer canvas')),
+        stage: r(document.querySelector('.drawing-editor-stage')),
+        container: r(document.getElementById('previewContainer')),
+      }
+    })
+    // The canvas sits on the window, not on the whole area behind the editor.
+    for (let i = 0; i < 4; i++) {
+      expect(
+        Math.abs(boxes.canvas[i] - boxes.stage[i]),
+        `canvas ${JSON.stringify(boxes.canvas)} vs stage ${JSON.stringify(boxes.stage)}`
+      ).toBeLessThanOrEqual(2)
+    }
+    // And it is really a different box from the one it would otherwise have.
+    expect(boxes.stage[3]).toBeLessThan(boxes.container[3] - 50)
+
+    // Leaving the charm view gives the whole area back. Read from the INLINE
+    // size, not from the box: the canvas is display:none again in the drawing
+    // view, so its box is 0 by 0 and says nothing. And 'no inline size' was
+    // never the resting state either - three.js writes a CSS width and height
+    // of its own on every setSize.
+    await drawing(page).click()
+    const after = await page.evaluate(() => {
+      const el = document.querySelector('#previewContainer canvas')
+      // clientWidth, not the bounding box: that is what the resize handler
+      // reads, and the box includes the container's own border.
+      const c = document.getElementById('previewContainer')
+      return {
+        position: el.style.position,
+        width: parseInt(el.style.width, 10),
+        height: parseInt(el.style.height, 10),
+        container: [c.clientWidth, c.clientHeight],
+      }
+    })
+    expect(after.position).toBe('')
+    expect(Math.abs(after.width - after.container[0])).toBeLessThanOrEqual(2)
+    expect(Math.abs(after.height - after.container[1])).toBeLessThanOrEqual(2)
+  })
+
+  test('the switch keeps every choice the editor had', async ({ page }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    const rows = page.locator('.svg-prep-object')
+    const before = await rows.count()
+    await page
+      .locator(
+        '.svg-prep-object[data-index="1"] .svg-prep-role-group input[value="ignore"]'
+      )
+      .check()
+
+    await charm(page).click()
+    await drawing(page).click()
+
+    // Nothing was rebuilt, so nothing was lost.
+    await expect(rows).toHaveCount(before)
+    await expect(
+      page.locator(
+        '.svg-prep-object[data-index="1"] .svg-prep-role-group input[value="ignore"]'
+      )
+    ).toBeChecked()
+  })
+
+  test('the open editor still passes an accessibility scan in the charm view', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+    await charm(page).click()
+    await expect(canvas(page)).toBeVisible()
+
+    const results = await new AxeBuilder({ page })
+      .include('#drawingEditorSurface')
+      .analyze()
+    expect(
+      results.violations,
+      JSON.stringify(results.violations, null, 2)
+    ).toEqual([])
+  })
+
+  test('★ a preview drawn while you edit costs a quarter of what it did', async ({
+    page,
+  }) => {
+    // DP-38 P2, and the whole point of it. The charm behind the editor is a
+    // thing somebody GLANCES at while they work on the drawing in front of
+    // it, and MEASURED on this charm it was costing 29,372 triangles and
+    // 1.2 MB a render because q_charm sets its own $fn = 64.
+    test.setTimeout(600000)
+    await openCharmEditor(page)
+
+    const triangles = async () => {
+      await expect(page.locator('text=Preview ready').first()).toBeVisible({
+        timeout: 240000,
+      })
+      const text = await page
+        .locator('[class*="status"]')
+        .filter({ hasText: /triangles/ })
+        .first()
+        .textContent()
+      const found = /([\d,]+)\s+triangles/.exec(text || '')
+      return found ? Number(found[1].replace(/,/g, '')) : null
+    }
+    // Something has to CHANGE for a preview to be drawn at all.
+    const nudge = async (value) => {
+      await page.evaluate((v) => {
+        const el =
+          document.querySelector('#param-engrave_depth') ||
+          document.querySelector('input[name="engrave_depth"]')
+        if (!el) return
+        el.value = String(v)
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+        el.dispatchEvent(new Event('change', { bubbles: true }))
+      }, value)
+      await page.waitForTimeout(1500)
+    }
+
+    await nudge(1.0)
+    const whileEditing = await triangles()
+    expect(whileEditing, 'triangles while the editor is open').toBeGreaterThan(
+      0
+    )
+
+    await page.getByRole('button', { name: 'Keep original' }).click()
+    await page.waitForTimeout(1000)
+    await nudge(1.1)
+    const afterClosing = await triangles()
+
+    // The session is cheaper, and the person's own setting comes back the
+    // moment it ends. MEASURED 2026-09-14: 7,500 while editing against 29,388
+    // after, a quarter of the work for a charm that differs only in how round
+    // the clip's edges are. Pinned as a RATIO, not as two counts: the numbers
+    // belong to this charm and this model, and the rule is that editing is
+    // cheaper than not editing.
+    expect(
+      whileEditing,
+      `${whileEditing} while editing vs ${afterClosing} after`
+    ).toBeLessThan(afterClosing * 0.6);
+    expect(afterClosing).toBeGreaterThan(20000)
+  })
+
+  test('★ the switch is not offered where there is no charm to switch to', async ({
+    page,
+  }) => {
+    // Through the standalone door there is no model behind the editor at all.
+    test.setTimeout(300000)
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.locator('summary.spotlights-summary').click()
+    await page.locator('#editDrawingSpotlightBtn').click()
+    await page
+      .locator('#svgEditFileInput')
+      .setInputFiles(
+        path.join(process.cwd(), 'tests', 'fixtures', 'svg-edit', 'nested-squares.svg')
+      )
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible({ timeout: 90000 })
+    await expect(page.locator('.drawing-editor-view-switch')).toBeHidden()
+  })
+})
