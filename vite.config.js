@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import path from 'path';
 import { injectSwVersion } from './scripts/inject-sw-version.js';
 
 const APP_VERSION_TOKEN = '__APP_VERSION__';
@@ -98,17 +99,82 @@ function readProductionHeaders() {
  * rather than global so the rest of dev keeps its caching, and `apply: 'serve'`
  * leaves the build untouched.
  *
+ * D-133: the same failure, one directory over. The render worker also imports
+ * four modules the main thread uses - file-param-resolver.js, font-manifest.js,
+ * scad-param-formatter.js and the color-utils.js the last of those pulls in -
+ * and those live in /src/js/, which this scope never covered. The main document
+ * loads them first, WebKit caches them, and the worker's import of the same URL
+ * is then refused against that cached entry, so the engine never starts:
+ *
+ *   Refused to load '/src/js/scad-param-formatter.js' worker because of
+ *   Cross-Origin-Embedder-Policy
+ *   [RenderController] Init failed: Error: Worker error
+ *
+ * MEASURED on local WebKit at fbf52e2: every preview failed with "Preview
+ * failed: Something Went Wrong", which is what the DP-32 announcement test was
+ * really reporting. The built app is again unaffected - measured on WebKit
+ * against dist behind these same headers, WASM ready in 855ms and a worker
+ * restart succeeded - so this never reached a user either.
+ *
+ * The covered set is READ FROM THE WORKER'S OWN IMPORTS rather than listed by
+ * hand, because a hand-written list is exactly what let the failure move one
+ * step along last time. Add an import to the worker and it is covered.
+ *
  * This is NOT a relaxation of COOP/COEP. Those headers are unchanged and
  * cross-origin isolation stays on - `crossOriginIsolated` is true and
  * SharedArrayBuffer is available before and after, measured.
  */
+export function devWorkerModuleGraph(entry = 'src/worker/openscad-worker.js') {
+  const root = process.cwd();
+  const seen = new Set();
+  const stack = [path.resolve(root, entry)];
+  const fromRe =
+    /(?:^|\n)\s*(?:import|export)[\s\S]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g;
+
+  while (stack.length) {
+    const file = stack.pop();
+    if (seen.has(file) || !existsSync(file)) continue;
+    seen.add(file);
+    const source = readFileSync(file, 'utf-8');
+    fromRe.lastIndex = 0;
+    let match;
+    while ((match = fromRe.exec(source))) {
+      const spec = match[1] || match[2] || match[3];
+      if (!spec || !spec.startsWith('.')) continue;
+      let resolved = path.resolve(path.dirname(file), spec);
+      if (!existsSync(resolved) && existsSync(`${resolved}.js`)) resolved += '.js';
+      stack.push(resolved);
+    }
+  }
+
+  const urls = new Set(
+    [...seen].map((file) => `/${path.relative(root, file).split(path.sep).join('/')}`)
+  );
+  // Vite injects its HMR client into every module it transforms, the worker's
+  // included, so those two URLs are part of the worker's graph even though no
+  // source file names them. Measured: with only the app modules covered, WebKit
+  // moved the refusal onto /@vite/client and the client's own env.mjs and the
+  // first two worker inits still died.
+  urls.add('/@vite/client');
+  urls.add('/node_modules/vite/dist/client/env.mjs');
+  urls.add('/node_modules/vite/dist/client/client.mjs');
+  return urls;
+}
+
 function devWorkerNoStore() {
+  const workerModules = devWorkerModuleGraph();
+
   return {
     name: 'd31-dev-worker-no-store',
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (!req.url || !/worker_file|\/src\/worker\//.test(req.url)) {
+        const pathname = req.url ? req.url.split('?')[0] : '';
+        const covered =
+          !!req.url &&
+          (/worker_file|\/src\/worker\//.test(req.url) ||
+            workerModules.has(pathname));
+        if (!covered) {
           next();
           return;
         }
