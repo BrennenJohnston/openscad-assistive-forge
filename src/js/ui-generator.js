@@ -3347,13 +3347,25 @@ function createFileControl(
 
           const pixelCount =
             inkSourceImageData.width * inkSourceImageData.height;
+          // ★ Somewhere else has already asked for this. The contract is
+          // `dataset.forgeStartConversion` on the input, set by the overlay
+          // panel's "Use as design" button just before it dispatches the
+          // change. That button is not choosing a file - it is asking for the
+          // thing the conversion produces - so making the person press Start
+          // afterwards made it look broken. Read once and cleared, so it can
+          // never leak into the next file the person picks by hand.
+          const askedForElsewhere =
+            fileInput.dataset.forgeStartConversion === '1';
+          delete fileInput.dataset.forgeStartConversion;
+
           // DP-Q32, the owner's rule: at most 0.5 MP AND the quick look calls
           // it quick. Both, because a small picture on a very slow phone is not
           // quick, and the whole point is not to start work nobody asked for on
           // a device that cannot afford it.
           if (
-            pixelCount <= AUTO_START_MAX_PIXELS &&
-            currentQuickLook.costBand === 'quick'
+            askedForElsewhere ||
+            (pixelCount <= AUTO_START_MAX_PIXELS &&
+              currentQuickLook.costBand === 'quick')
           ) {
             // Small enough to start itself, and it still goes through the same
             // bar and the same Cancel - there is no second, invisible path.

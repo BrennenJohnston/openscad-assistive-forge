@@ -1156,6 +1156,19 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const transfer = new DataTransfer();
       transfer.items.add(file);
       input.files = transfer.files;
+      // ★ A CONTRACT with createFileControl in ui-generator.js: this flag says
+      // "the person has already asked for this picture to become the design".
+      //
+      // DP-34 stopped a chosen picture converting on its own, and rightly - but
+      // "Use as design" is not choosing a file, it is asking for the thing the
+      // conversion produces. Without this the button appeared to do nothing:
+      // the design parameter stayed empty until the person found the Start
+      // button in a control they may not even have open. MEASURED on CI, where
+      // the quick look is slower to call a picture quick and the auto-start
+      // rule therefore did not fire: design_file was still "" after 120
+      // seconds. It still goes through the same bar and the same Cancel, so
+      // nothing happens invisibly.
+      input.dataset.forgeStartConversion = '1';
       input.dispatchEvent(new Event('change', { bubbles: true }));
       announceImmediate(
         `${rec.name} sent to ${fileParamLabel(input)}. Forge is preparing it.`
