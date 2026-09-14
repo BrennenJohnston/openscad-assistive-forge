@@ -20,6 +20,9 @@ vi.mock('../../src/js/image-import.js', () => ({
 const { createTraceRunner, TraceCancelled } = await import(
   '../../src/js/trace-runner.js'
 )
+const { DEFAULT_TRACE_ENGINE } = await import(
+  '../../src/js/trace-engines.js'
+)
 
 /** A worker that does nothing until the test tells it to answer. */
 class FakeWorker {
@@ -88,6 +91,7 @@ describe('the trace runner (DP-34)', () => {
     await expect(promise).resolves.toEqual({
       svg: 'filtered:<svg/>',
       summary: { mode: 'lineart' },
+      engine: 'imagetracer',
     })
   })
 
@@ -115,8 +119,39 @@ describe('the trace runner (DP-34)', () => {
     await expect(promise).resolves.toEqual({
       svg: '<svg id="colours"/>',
       summary: null,
+      engine: 'imagetracer',
     })
     expect(filterForegroundPaths).not.toHaveBeenCalled()
+  })
+
+  it('★ asks for the engine the caller chose, and says which one answered', async () => {
+    // Potrace can only answer for the ink modes, so the worker is allowed to
+    // fall back - but never silently. The engine in the reply is the engine
+    // that ran, not the engine that was asked for.
+    const r = runner()
+    const promise = r.start(picture(), { mode: 'lineart' }, {
+      engine: 'potrace',
+    })
+    const w = latest()
+    expect(w.posted[0].engine).toBe('potrace')
+
+    w.reply({
+      id: w.jobId,
+      type: 'done',
+      svg: '<svg/>',
+      filterForeground: false,
+      engine: 'imagetracer',
+    })
+    await expect(promise).resolves.toMatchObject({ engine: 'imagetracer' })
+  })
+
+  it('★ asks for Potrace when the caller does not choose (DP-Q43)', () => {
+    const r = runner()
+    const promise = r.start(picture(), { mode: 'lineart' })
+    expect(latest().posted[0].engine).toBe('potrace')
+    expect(DEFAULT_TRACE_ENGINE).toBe('potrace')
+    r.cancel()
+    return expect(promise).rejects.toBeInstanceOf(TraceCancelled)
   })
 
   it('reports each stage as it is reached', async () => {

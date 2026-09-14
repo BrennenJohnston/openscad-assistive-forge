@@ -676,9 +676,16 @@ function populateObjectList(
   const layers = [];
 
   elements.forEach((el, i) => {
-    const name = isCompound
-      ? `Subpath ${i + 1}`
-      : describeElement(el.element, i);
+    // SIGNED BY THE OWNER at DP-Q45 (2026-09-14): "Shape", not "Subpath".
+    // A subpath is SVG's word for an internal detail of a path's `d`
+    // attribute, and nobody in this editor is choosing about a `d` attribute -
+    // they are choosing whether a shape is part of the drawing. It became
+    // worth saying when DP-Q43 made Potrace the default: Potrace returns one
+    // compound path, so this branch went from occasional to usual and the word
+    // is now what a screen reader says about every traced picture. Element
+    // mode keeps describeElement's richer names, which say something true
+    // about the shape ("Circle 3 (r=12)").
+    const name = isCompound ? `Shape ${i + 1}` : describeElement(el.element, i);
     const color = swatchColor(el);
     let role = el.autoRole || 'ignore';
     // Compound subpaths are either included or excluded

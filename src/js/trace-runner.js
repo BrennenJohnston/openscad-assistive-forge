@@ -25,6 +25,7 @@
  */
 
 import { filterForegroundPaths } from './image-import.js';
+import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
 /** Thrown (as a rejection reason) when a job is cancelled or superseded. */
 export class TraceCancelled extends Error {
@@ -93,7 +94,11 @@ export function createTraceRunner(options = {}) {
       const svg = message.filterForeground
         ? filterForegroundPaths(message.svg)
         : message.svg;
-      job.resolve({ svg, summary: message.summary ?? null });
+      job.resolve({
+        svg,
+        summary: message.summary ?? null,
+        engine: message.engine ?? 'imagetracer',
+      });
       return;
     }
 
@@ -127,7 +132,11 @@ export function createTraceRunner(options = {}) {
    * @param {object} [opts]
    * @param {Function} [opts.onStage] - Called with {stage, index, total}
    * @param {object} [opts.tracerOverrides]
-   * @returns {Promise<{svg: string, summary: object|null}>}
+   * @param {string} [opts.engine] - 'potrace' (the default, DEFAULT_TRACE_ENGINE)
+   *   or 'imagetracer'. Potrace draws in one colour, so it can only answer for
+   *   the ink modes; the result says which engine actually ran.
+   * @param {object} [opts.potraceOverrides]
+   * @returns {Promise<{svg: string, summary: object|null, engine: string}>}
    */
   function start(imageData, ink, opts = {}) {
     if (current) settleCancelled('superseded');
@@ -166,6 +175,8 @@ export function createTraceRunner(options = {}) {
         },
         ink: ink || null,
         tracerOverrides: opts.tracerOverrides || null,
+        engine: opts.engine || DEFAULT_TRACE_ENGINE,
+        potraceOverrides: opts.potraceOverrides || null,
       },
       [buffer]
     );

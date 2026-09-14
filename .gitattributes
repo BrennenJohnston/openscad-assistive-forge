@@ -9,3 +9,8 @@
 *.3mf binary
 *.zip binary
 *.gz binary
+
+# Built by scripts/build-potrace-wasm.sh. The README beside these files
+# records their checksums, so nothing may rewrite a byte of them.
+public/wasm/potrace/** -text
+vendor/potrace/** -text

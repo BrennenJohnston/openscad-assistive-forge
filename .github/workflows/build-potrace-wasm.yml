@@ -1,0 +1,83 @@
+name: Build Potrace wasm
+
+# Potrace is compiled here, not taken as a pre-built binary, so the app can say
+# exactly what went into it: one pinned tarball, one checked sum, one recorded
+# set of flags. Nothing installs a compiler on anyone's machine and anybody can
+# reproduce the result by running this workflow.
+#
+# It runs on request only. The output is an artifact; a session downloads it,
+# checks the numbers against the run log, and commits it with the recipe.
+
+on:
+  workflow_dispatch:
+  # Touching the recipe is the one case worth building automatically: a change
+  # to the glue or the script that does not compile should be visible here and
+  # not two weeks later.
+  pull_request:
+    paths:
+      - 'scripts/build-potrace-wasm.sh'
+      - 'scripts/potrace-glue.c'
+      - 'scripts/verify-potrace-wasm.mjs'
+      - '.github/workflows/build-potrace-wasm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Pinned, because an unpinned toolchain makes "reproducible" a word
+      # rather than a fact. The exact emcc version is also written into the
+      # README beside the wasm by the build script.
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.9
+          actions-cache-folder: emsdk-cache
+
+      - name: Build
+        run: ./scripts/build-potrace-wasm.sh
+
+      # A wasm that loads but traces the picture upside down would sail past a
+      # build that only checks for a file. This traces shapes whose answers are
+      # known and fails the run if any of them comes back wrong.
+      - name: Verify the build traces correctly
+        run: node scripts/verify-potrace-wasm.mjs
+
+      - name: Record what was built
+        run: |
+          {
+            echo '## Potrace wasm'
+            echo
+            echo '```'
+            cat public/wasm/potrace/README.txt
+            echo '```'
+            echo
+            echo '### Checksums of the files to commit'
+            echo
+            echo '```'
+            sha256sum public/wasm/potrace/potrace.wasm vendor/potrace/potrace.mjs
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: potrace-wasm
+          path: |
+            public/wasm/potrace/
+            vendor/potrace/
+          retention-days: 30
+          if-no-files-found: error

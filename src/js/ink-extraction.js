@@ -457,7 +457,7 @@ export function dominantRejectedColor(imageData, mask, minChroma = 25) {
  * @param {boolean} [options.denoise] - Run a 3x3 median first. For photographs
  *   only: it erases strokes thinner than two pixels. See medianFilter3x3.
  * @param {Function} [options.makeImageData] - (w, h) => ImageData, for tests
- * @returns {{imageData: ImageData, summary: Object}}
+ * @returns {{imageData: ImageData, mask: Uint8Array|null, summary: Object}}
  */
 export function extractInk(imageData, options = {}) {
   const {
@@ -470,6 +470,9 @@ export function extractInk(imageData, options = {}) {
   if (mode === 'standard') {
     return {
       imageData,
+      // Standard keeps the picture's own colours, so there is no one-bit mask
+      // to hand anybody. Said with a null rather than left absent.
+      mask: null,
       summary: {
         mode,
         applied: false,
@@ -520,6 +523,11 @@ export function extractInk(imageData, options = {}) {
 
   return {
     imageData: maskToImageData(mask, width, height, makeImageData),
+    // The mask itself, one byte per pixel, non-zero for ink. The picture above
+    // is the same thing painted black on white for a tracer that wants pixels;
+    // an engine that wants a bitmap should have the bitmap, not a round trip
+    // through it.
+    mask,
     summary: {
       mode,
       applied: true,

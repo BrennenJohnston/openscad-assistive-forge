@@ -30,6 +30,14 @@
  * new job has started is dropped by the runner rather than mistaken for the new
  * one.
  *
+ * There are two tracing engines behind one message shape. `engine: 'potrace'`
+ * takes the one-bit ink mask straight to the Forge-built Potrace wasm;
+ * anything else goes to imagetracerjs. Potrace draws in one colour, so it can
+ * only answer for the ink modes - Standard keeps the picture's colours and
+ * Colours is a different road entirely, and both stay with imagetracerjs. When
+ * Potrace is asked for and cannot answer, the reply SAYS which engine ran
+ * rather than quietly substituting one.
+ *
  * @license GPL-3.0-or-later
  */
 
@@ -40,6 +48,7 @@ import {
   TRACER_OPTIONS,
 } from './image-import.js';
 import { extractInk } from './ink-extraction.js';
+import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
 /** The stages a caller can be told about, in the order they happen. */
 export const TRACE_STAGES = Object.freeze(['reading', 'ink', 'tracing']);
@@ -75,7 +84,7 @@ function post(message, transfer) {
 
 self.onmessage = async (event) => {
   const data = event.data || {};
-  const { id, ink, tracerOverrides } = data;
+  const { id, ink, tracerOverrides, potraceOverrides } = data;
   if (!id) return;
 
   try {
@@ -136,6 +145,8 @@ self.onmessage = async (event) => {
         type: 'done',
         svg: result.svg,
         filterForeground: false,
+        // Colours is its own separator, not either tracing engine.
+        engine: 'colours',
         summary: {
           mode: 'colours',
           colours: result.colours,
@@ -147,6 +158,7 @@ self.onmessage = async (event) => {
     }
 
     let summary = null;
+    let inkMask = null;
     if (ink && ink.mode && ink.mode !== 'standard') {
       post({
         id,
@@ -158,6 +170,7 @@ self.onmessage = async (event) => {
       const extracted = extractInk(pixels, { ...ink, makeImageData });
       pixels = extracted.imageData;
       summary = extracted.summary;
+      inkMask = extracted.mask;
     }
 
     post({
@@ -167,17 +180,42 @@ self.onmessage = async (event) => {
       index: 2,
       total: TRACE_STAGES.length,
     });
-    const svg = ImageTracer.imagedataToSVG(pixels, {
-      ...TRACER_OPTIONS,
-      ...(tracerOverrides || {}),
-    });
+
+    // Potrace needs the one-bit mask, which only the ink modes produce. Asked
+    // for without one, it is not silently swapped: the reply names the engine
+    // that actually ran, so a census or a person can tell.
+    const engine = data.engine || DEFAULT_TRACE_ENGINE;
+    const usePotrace = engine === 'potrace' && !!inkMask;
+    let svg;
+    let filterForeground;
+    if (usePotrace) {
+      // Loaded only when it is used, so a visitor who never asks for it never
+      // fetches the wasm.
+      const { trace, pathDataToSvg, FORGE_POTRACE_SETTINGS } =
+        await import('./potrace-trace.js');
+      const pathData = await trace(inkMask, pixels.width, pixels.height, {
+        ...FORGE_POTRACE_SETTINGS,
+        ...(potraceOverrides || {}),
+      });
+      svg = pathDataToSvg(pathData, pixels.width, pixels.height);
+      // One colour: there is no lightest layer to drop, and dropping the only
+      // path there is would erase the drawing.
+      filterForeground = false;
+    } else {
+      svg = ImageTracer.imagedataToSVG(pixels, {
+        ...TRACER_OPTIONS,
+        ...(tracerOverrides || {}),
+      });
+      // The caller runs filterForegroundPaths, because DOMParser lives there.
+      filterForeground = true;
+    }
 
     post({
       id,
       type: 'done',
       svg,
-      // The caller runs filterForegroundPaths, because DOMParser lives there.
-      filterForeground: true,
+      filterForeground,
+      engine: usePotrace ? 'potrace' : 'imagetracer',
       summary:
         downscale && summary
           ? { ...summary, downscale: { factor: downscale.factor } }
