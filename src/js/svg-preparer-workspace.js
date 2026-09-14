@@ -912,6 +912,48 @@ export function createSvgPrepWorkspace(containerEl) {
   // in Chromium over traced curves: 50 shapes 485 ms, 200 shapes 14.7 s, 800
   // shapes eight and a half minutes - every one of them with the page frozen.
   let flattenRunner = null;
+  /** Where the measured constant is kept between visits. */
+  const FLATTEN_COST_KEY = 'openscad-forge-flatten-cost';
+
+  /**
+   * The bounds a stored constant has to be inside to be believed.
+   *
+   * The whole measured range is 1.6e-4 (synthetic shapes) to 1.5e-3 (real
+   * prepped artwork). These are two orders either side of that, which is wide
+   * enough for a machine far slower or faster than any measured here and
+   * narrow enough that a corrupted value cannot teach the app that a
+   * thousand-shape drawing is free.
+   */
+  const FLATTEN_COST_MIN = 1e-6;
+  const FLATTEN_COST_MAX = 1e-1;
+
+  /** @returns {number} the remembered constant, or the default */
+  function readFlattenCost() {
+    try {
+      const raw = localStorage.getItem(FLATTEN_COST_KEY);
+      if (!raw) return FLATTEN_COST_DEFAULT;
+      const value = Number(raw);
+      if (!Number.isFinite(value)) return FLATTEN_COST_DEFAULT;
+      if (value < FLATTEN_COST_MIN || value > FLATTEN_COST_MAX) {
+        return FLATTEN_COST_DEFAULT;
+      }
+      return value;
+    } catch {
+      // A private window, or storage the person has turned off. The default
+      // is a working answer, so there is nothing to report and nothing to fix.
+      return FLATTEN_COST_DEFAULT;
+    }
+  }
+
+  /** Keep what a real flatten just proved, for the next visit. */
+  function writeFlattenCost(value) {
+    try {
+      localStorage.setItem(FLATTEN_COST_KEY, String(value));
+    } catch {
+      // Same: the session still has the number in hand.
+    }
+  }
+
   function getFlattenRunner() {
     if (!flattenRunner) flattenRunner = createFlattenRunner();
     return flattenRunner;
@@ -926,7 +968,7 @@ export function createSvgPrepWorkspace(containerEl) {
   const canUseWorker = () => typeof Worker !== 'undefined';
   let previewWaitingForEngine = false;
   /**
-   * Milliseconds per (shape x ring point), as this session has measured it.
+   * Milliseconds per (shape x ring point), as this machine has measured it.
    *
    * DP-Q33 signed the calibration as well as the predictor because the
    * constant belongs to the artwork and the machine, not to the formula:
@@ -934,12 +976,12 @@ export function createSvgPrepWorkspace(containerEl) {
    * five-fold between classes. It starts at the default and is replaced by
    * the first real flatten big enough to have measured anything.
    *
-   * It lives for as long as the editor does, and no longer. Keeping it across
-   * sessions would predict better on the second visit; it would also be a new
-   * thing stored about a person's drawings, which is the owner's call and not
-   * mine.
+   * The owner signed remembering it (2026-09-14): without that, the first
+   * drawing of every visit is judged by the cautious default and some quick
+   * drawings are handed a button they did not need. What is kept is ONE
+   * number about this machine's speed - never a drawing, never a file name.
    */
-  let flattenCost = FLATTEN_COST_DEFAULT;
+  let flattenCost = readFlattenCost();
   function loadRingEngine() {
     if (!ringEnginePromise) {
       ringEnginePromise = import('./ring-geometry.js')
@@ -1277,9 +1319,12 @@ export function createSvgPrepWorkspace(containerEl) {
     // wait for 300.
     const { shapes, points } = flattenSizeOf();
     const ms = predictFlattenMs(shapes, points, flattenCost);
+    // "here" is gone (the owner, 2026-09-14): it wrapped the sentence to a
+    // fourth line and overran the charm host's panel by 6 px, MEASURED at
+    // 1280x900, and "may take" already says the number is an estimate.
     return (
       `This drawing has ${shapes} shapes. Combining them may take ` +
-      `${waitInWords(ms)} here, so Forge waits until you ask.`
+      `${waitInWords(ms)}, so Forge waits until you ask.`
     );
   }
 
@@ -1365,7 +1410,10 @@ export function createSvgPrepWorkspace(containerEl) {
           // DP-Q33's calibration: what this drawing really cost, on this
           // machine, replaces the default for every prediction after it.
           const measured = flattenCostFrom(size.shapes, size.points, out.ms);
-          if (measured !== null) flattenCost = measured;
+          if (measured !== null) {
+            flattenCost = measured;
+            writeFlattenCost(measured);
+          }
         } catch (error) {
           // None of the three is a failure and none may be reported as one:
           // the person stopped this combine, a newer one replaced it, or the
@@ -1810,7 +1858,12 @@ export function createSvgPrepWorkspace(containerEl) {
 
   function handleDesignWidthChange() {
     clearTimeout(offsetDebounceTimer);
-    offsetDebounceTimer = setTimeout(updateResultPreview, 300);
+    // Through the GATE, not straight at the combine (the owner, 2026-09-14).
+    // This called `updateResultPreview` directly and so obeyed no budget at
+    // all: typing in the width box on a thousand-shape drawing started a
+    // flatten nobody had asked for. Every other change in this editor asks
+    // first; this one now asks too.
+    offsetDebounceTimer = setTimeout(requestResultPreview, 300);
   }
 
   /**

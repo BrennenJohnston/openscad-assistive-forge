@@ -927,6 +927,87 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
   })
 })
 
+test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () => {
+  test('★ the Design width box asks before it combines, like everything else', async ({
+    page,
+  }) => {
+    // It called the combine straight, with no budget in the way at all, so
+    // typing in this box on a thousand-shape drawing started a flatten nobody
+    // had asked for. Every other change in this editor asks first.
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    await expect(page.locator('.svg-prep-render-btn')).toBeVisible()
+
+    // Watch for a combine rather than sampling for one: this drawing's
+    // combine is 923 ms and would begin and end inside a naive wait.
+    await page.evaluate(() => {
+      window.__combineStarted = false
+      const pane = document.querySelector('.svg-prep-result-pane')
+      new MutationObserver(() => {
+        if (pane.getAttribute('aria-busy') === 'true') {
+          window.__combineStarted = true
+        }
+      }).observe(pane, { attributes: true, attributeFilter: ['aria-busy'] })
+    })
+
+    await page.locator('.svg-prep-design-width-input').fill('20')
+    // Well past the 300 ms the box waits on.
+    await page.waitForTimeout(2500)
+
+    expect(
+      await page.evaluate(() => window.__combineStarted),
+      'a combine started from a width change'
+    ).toBe(false)
+    // And the pane says what it is: out of date, with the way to fix it.
+    await expect(page.locator('.svg-prep-render-row')).toBeVisible()
+    await expect(page.locator('.svg-prep-render-btn')).toBeEnabled()
+    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
+  })
+
+  test('★ what a real combine measured is remembered for the next visit', async ({
+    page,
+  }) => {
+    // DP-Q33 signed a calibration because the cost per (shape x ring point)
+    // spans five-fold between classes of drawing. Forgetting it at the end of
+    // every session means the first drawing of every visit is judged by the
+    // cautious default.
+    test.setTimeout(300000)
+    await openApp(page)
+    const KEY = 'openscad-forge-flatten-cost'
+    await page.evaluate((k) => localStorage.removeItem(k), KEY)
+
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
+    await expect(page.locator('.svg-prep-render-cancel')).toBeHidden({
+      timeout: 300000,
+    })
+
+    const stored = await page.evaluate((k) => localStorage.getItem(k), KEY)
+    expect(stored, 'nothing was remembered').not.toBeNull()
+    const value = Number(stored)
+    // A millisecond-per-unit constant, inside the bounds a stored value has to
+    // be in to be believed. MEASURED range across every class of drawing:
+    // 1.6e-4 to 1.5e-3.
+    expect(Number.isFinite(value)).toBe(true)
+    expect(value).toBeGreaterThan(1e-6)
+    expect(value).toBeLessThan(1e-1)
+  })
+
+  test('the waiting sentence gives the wait without the extra word', async ({
+    page,
+  }) => {
+    // It wrapped to a fourth line and overran the charm host's panel by 6 px.
+    test.setTimeout(180000)
+    await openApp(page)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    const note = page.locator('.svg-prep-render-note')
+    await expect(note).toContainText('300 shapes')
+    await expect(note).toContainText(/may take about \d+ seconds, so Forge waits until you ask\./)
+    await expect(note).not.toContainText('here')
+  })
+})
+
 test.describe('the shapes row keeps its name and its Delete (DP-39 P1)', () => {
   // ★ The row could not fit on one line and had no way to say so, so it took
   // the space out of the NAME and then out of Delete. MEASURED in this door on
