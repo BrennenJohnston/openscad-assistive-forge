@@ -15045,6 +15045,18 @@ body.tutorial-body-locked {
   min-height: 1.4em;
 }
 
+.ink-controls-credit {
+  margin: 0;
+}
+
+/* 44px is the floor every target in this app meets, and a ghost button is 38
+   by default. An e2e caught this one at 38 rather than a person catching it
+   with a fingertip. */
+.ink-controls-credit-undo {
+  min-height: 44px;
+  padding-inline: var(--space-md);
+}
+
 .ink-controls-warnings {
   margin: 0;
   padding-left: 1.2em;

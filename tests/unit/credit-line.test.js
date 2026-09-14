@@ -20,6 +20,7 @@ import {
   removeCreditLine,
   CREDIT_LINE_RULE,
 } from '../../src/js/credit-line.js'
+import { creditLineSentence } from '../../src/js/ink-controls.js'
 
 const SIZE = 700
 
@@ -240,5 +241,26 @@ describe('the credit line (DP-36)', () => {
         true
       )
     })
+  })
+})
+
+describe('what the person is told (DP-36)', () => {
+  it('names the count and what it thinks it was', () => {
+    expect(creditLineSentence({ removed: 46 })).toBe(
+      'Removed 46 small shapes from the bottom edge, most likely a credit line.'
+    )
+  })
+
+  it('★ says "most likely", because it is a guess', () => {
+    // The rule is a heuristic on shapes and positions. It cannot read, so it
+    // cannot know. Undo exists for the same reason, and the sentence should
+    // not claim more certainty than the button implies.
+    expect(creditLineSentence({ removed: 12 })).toContain('most likely')
+  })
+
+  it('says nothing when nothing was removed', () => {
+    expect(creditLineSentence({ removed: 0 })).toBe('')
+    expect(creditLineSentence(null)).toBe('')
+    expect(creditLineSentence(undefined)).toBe('')
   })
 })

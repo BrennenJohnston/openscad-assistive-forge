@@ -11,6 +11,7 @@ import {
   maskToImageData,
   dominantRejectedColor,
   extractInk,
+  compositeOntoWhite,
   INK_DEFAULTS,
   MEANINGFUL_ALPHA_SHARE,
 } from '../../src/js/ink-extraction.js'
@@ -408,5 +409,60 @@ describe('extractInk', () => {
     })
     expect(summary.lightnessMax).toBeGreaterThan(0)
     expect(summary.lightnessMax).toBeLessThan(100)
+  })
+})
+
+describe('compositeOntoWhite (DP-36, audit 15)', () => {
+  const PALETTE = {
+    '#': [0, 0, 0, 255],
+    '.': [255, 255, 255, 255],
+    ' ': [0, 0, 0, 0],
+    'h': [0, 0, 0, 128],
+    'r': [255, 0, 0, 0],
+  }
+
+  it('★ a fully see-through pixel becomes white, not black', () => {
+    // The defect this fixes: Standard mode handed the tracer a picture with
+    // alpha and the tracer decided what a see-through pixel was. A logo saved
+    // on a transparent background came back with a field around it that nobody
+    // drew.
+    const out = compositeOntoWhite(
+      imageFrom(['#. ', ' .#'], PALETTE),
+      makeImageData
+    )
+    expect(out.composited).toBe(true)
+    const px = (x, y) => {
+      const i = (y * 3 + x) * 4
+      return [...out.imageData.data.slice(i, i + 4)]
+    }
+    expect(px(0, 0)).toEqual([0, 0, 0, 255])
+    expect(px(2, 0)).toEqual([255, 255, 255, 255])
+    expect(px(0, 1)).toEqual([255, 255, 255, 255])
+  })
+
+  it('★ a see-through RED pixel becomes white, not red', () => {
+    // Alpha zero means the colour underneath it was never shown to anybody.
+    // Keeping the colour and dropping the alpha would invent a pixel.
+    const out = compositeOntoWhite(imageFrom(['r'], PALETTE), makeImageData)
+    expect([...out.imageData.data]).toEqual([255, 255, 255, 255])
+  })
+
+  it('blends a half-transparent pixel rather than rounding it off', () => {
+    const out = compositeOntoWhite(imageFrom(['h'], PALETTE), makeImageData)
+    const [r, g, b, a] = out.imageData.data
+    expect(a).toBe(255)
+    // Black at alpha 128 of 255 over white is 255 x (127/255) = 127, not 128.
+    // Alpha 128 is not half: half of 255 is 127.5, and the byte below it is
+    // the one that arrives.
+    expect([r, g, b]).toEqual([127, 127, 127])
+  })
+
+  it('★ a picture with no transparency is handed back untouched', () => {
+    // Not a copy: the same object. Copying eight megabytes to change nothing
+    // is the kind of cost this round spent a release removing.
+    const opaque = imageFrom(['#.', '.#'], PALETTE)
+    const out = compositeOntoWhite(opaque, makeImageData)
+    expect(out.composited).toBe(false)
+    expect(out.imageData).toBe(opaque)
   })
 })

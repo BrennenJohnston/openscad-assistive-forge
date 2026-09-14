@@ -80,6 +80,22 @@ export function colourSentence(colours, notes = {}) {
 }
 
 /**
+ * What was taken off the picture, when a credit line was found.
+ *
+ * Always plural: the rule that finds one needs at least eight shapes, so
+ * "1 small shape" is a sentence this can never produce and writing the
+ * grammar for it would be writing for a case that does not exist.
+ *
+ * @param {{removed: number}|null} creditLine
+ * @returns {string} empty when nothing was removed
+ */
+export function creditLineSentence(creditLine) {
+  const removed = creditLine && creditLine.removed;
+  if (!removed) return '';
+  return `Removed ${removed} small shapes from the bottom edge, most likely a credit line.`;
+}
+
+/**
  * A sentence describing what the extraction did, for the live region.
  * @param {Object|null} summary - From extractInk
  * @param {number} pathCount - Shapes the tracer produced
@@ -115,6 +131,9 @@ export function warningSentences(summary) {
     }
     if (code === 'near-full') {
       return 'Almost everything was kept, so the result may print as one solid block. Try moving "How dark counts as a line" to the left.';
+    }
+    if (code === 'composited-onto-white') {
+      return 'See-through parts were treated as white.';
     }
     return code;
   });
@@ -298,10 +317,40 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   warningsEl.setAttribute('aria-label', 'Things to know about this picture');
   warningsEl.hidden = true;
 
+  // The Undo sits OUTSIDE the live region on purpose. A control inside a
+  // role="status" element is re-announced every time the sentence changes, and
+  // a button that keeps introducing itself is worse than one that waits. It
+  // points at the sentence with aria-describedby instead, so "Undo" arrives
+  // with the thing it would undo rather than on its own.
+  const creditRow = document.createElement('p');
+  creditRow.className = 'ink-controls-credit';
+  creditRow.hidden = true;
+  const creditUndo = document.createElement('button');
+  creditUndo.type = 'button';
+  creditUndo.className = 'btn btn-ghost ink-controls-credit-undo';
+  creditUndo.textContent = 'Undo';
+  creditUndo.setAttribute('aria-describedby', summaryEl.id);
+  creditRow.appendChild(creditUndo);
+  let onCreditUndo = null;
+  creditUndo.addEventListener('click', () => {
+    const act = onCreditUndo;
+    // Cleared before the call: the handler re-runs the conversion, and a second
+    // click while that is in flight would undo an undo.
+    onCreditUndo = null;
+    creditRow.hidden = true;
+    if (act) act();
+  });
+
   const notice = document.createElement('p');
   notice.className = 'ink-controls-notice';
+  // The third sentence stands with the other two rather than appearing when a
+  // credit line is removed: it is a statement about what this app does and does
+  // not do, and somebody deciding whether to bring an icon here needs it before
+  // they bring one, not after.
   notice.textContent =
-    'Your picture is processed entirely in your browser and never uploaded. You are responsible for having the right to use any image you bring here.';
+    'Your picture is processed entirely in your browser and never uploaded. ' +
+    'You are responsible for having the right to use any image you bring here. ' +
+    "Removing a credit line from the picture does not remove any credit the icon's licence asks of you.";
 
   const signpost = document.createElement('p');
   signpost.className = 'ink-controls-signpost';
@@ -325,7 +374,15 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     )
   );
 
-  root.append(fieldset, sliders, summaryEl, warningsEl, notice, signpost);
+  root.append(
+    fieldset,
+    sliders,
+    summaryEl,
+    creditRow,
+    warningsEl,
+    notice,
+    signpost
+  );
 
   const say = (message) => {
     if (typeof announce === 'function' && message) announce(message);
@@ -434,7 +491,13 @@ export function createInkControls({ idPrefix, onChange, announce }) {
       // waiting line rather than treat a change as an answer - a test that did
       // exactly that passed for years and only failed once the work stopped
       // blocking the page.
-      if (busy) summaryEl.textContent = 'Re-reading the picture…';
+      if (busy) {
+        summaryEl.textContent = 'Re-reading the picture…';
+        // The run that is starting has not removed anything yet, and the one
+        // before it is being replaced.
+        onCreditUndo = null;
+        creditRow.hidden = true;
+      }
     },
     /**
      * Replace the waiting line when a trace did not finish.
@@ -450,16 +513,31 @@ export function createInkControls({ idPrefix, onChange, announce }) {
       summaryEl.textContent = text;
       warningsEl.replaceChildren();
       warningsEl.hidden = true;
+      // A run that did not finish has nothing to undo, and leaving the button
+      // there would offer to undo the run before it.
+      onCreditUndo = null;
+      creditRow.hidden = true;
     },
     /**
      * Report what the extraction did.
      * @param {Object|null} summary
      * @param {number} pathCount
      */
-    setSummary(summary, pathCount) {
+    setSummary(summary, pathCount, extras = {}) {
       const sentence = summarySentence(summary, pathCount);
       const filament = filamentSentence(summary);
-      summaryEl.textContent = filament ? `${sentence} ${filament}` : sentence;
+      // DP-32's law: one action, one announcement. Choosing a picture and
+      // converting it is one action, so what was traced and what was taken off
+      // it are one sentence - not a second announcement arriving behind the
+      // first and interrupting it.
+      const credit = creditLineSentence(extras.creditLine);
+      summaryEl.textContent = [sentence, filament, credit]
+        .filter(Boolean)
+        .join(' ');
+
+      const removed = (extras.creditLine && extras.creditLine.removed) || 0;
+      onCreditUndo = removed > 0 ? extras.creditLine.onUndo || null : null;
+      creditRow.hidden = removed === 0;
 
       const warnings = warningSentences(summary);
       warningsEl.replaceChildren();
@@ -469,7 +547,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
         item.textContent = text;
         warningsEl.appendChild(item);
       }
-      say([sentence, ...warnings].join(' '));
+      say([sentence, credit, ...warnings].filter(Boolean).join(' '));
     },
   };
 }

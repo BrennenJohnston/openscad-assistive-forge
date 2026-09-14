@@ -47,7 +47,7 @@ import {
   IMAGE_IMPORT_LIMITS,
   TRACER_OPTIONS,
 } from './image-import.js';
-import { extractInk } from './ink-extraction.js';
+import { compositeOntoWhite, extractInk } from './ink-extraction.js';
 import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
 /** The stages a caller can be told about, in the order they happen. */
@@ -171,6 +171,21 @@ self.onmessage = async (event) => {
       pixels = extracted.imageData;
       summary = extracted.summary;
       inkMask = extracted.mask;
+    } else {
+      // Standard keeps the picture's own colours and builds no mask, so a
+      // see-through picture used to reach the tracer with its alpha and the
+      // tracer decided what that meant. It is put on white first now, which is
+      // what the person has already seen in every viewer they opened it in.
+      const flat = compositeOntoWhite(pixels, makeImageData);
+      pixels = flat.imageData;
+      if (flat.composited) {
+        summary = {
+          mode: 'standard',
+          applied: false,
+          composited: true,
+          warnings: ['composited-onto-white'],
+        };
+      }
     }
 
     post({

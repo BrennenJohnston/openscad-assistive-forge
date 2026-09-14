@@ -21,6 +21,7 @@ const FIXTURES = path.join(process.cwd(), 'tests', 'fixtures');
 const BLUE_FIELD = path.join(FIXTURES, 'aac', 'blue-field-glyph.png');
 const FITZGERALD = path.join(FIXTURES, 'aac', 'fitzgerald-card.png');
 const BIRD = path.join(FIXTURES, 'svg-edit', 'bird-drawing.png');
+const RING_WITH_CAPTION = path.join(FIXTURES, 'icons', 'outline-ring.png');
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -387,6 +388,90 @@ test.describe('A model that takes an image', () => {
     // The model took the traced SVG as its parameter value.
     await expect(page.locator('.file-info')).toContainText(
       'blue-field-glyph.svg'
+    );
+  });
+});
+
+test.describe('the credit line a stock icon carries (DP-36)', () => {
+  // The fixture is drawn by scripts/make-icon-fixtures.mjs: an outline under a
+  // two-line caption of letter-sized marks, which is the shape measured across
+  // nine real stock icons. No stock icon is in this repository.
+
+  test('★ the icon converts to the icon, and the panel says what it took off', async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await openPicture(page, RING_WITH_CAPTION);
+
+    // The sentence is one sentence: what was traced and what was removed.
+    // DP-32's law - choosing a picture is one action, so it gets one
+    // announcement, not a second arriving behind the first.
+    await expect
+      .poll(async () => summaryText(page), { timeout: 60000 })
+      .toMatch(/small shapes from the bottom edge, most likely a credit line/);
+
+    const said = await summaryText(page);
+    const removed = Number(/Removed (\d+) small shapes/.exec(said)?.[1] ?? 0);
+    expect(removed).toBeGreaterThanOrEqual(36);
+
+    // And the drawing left is the drawing: an outline and its counter.
+    await expect(page.locator('.svg-prep-object')).toHaveCount(2);
+  });
+
+  test('★ Undo is offered, named by the sentence, and puts the caption back', async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await openPicture(page, RING_WITH_CAPTION);
+    await expect
+      .poll(async () => summaryText(page), { timeout: 60000 })
+      .toMatch(/most likely a credit line/);
+
+    const undo = page.locator('.ink-controls-credit-undo');
+    await expect(undo).toBeVisible();
+    // "Undo" on its own says nothing about what it would undo. It points at
+    // the sentence rather than carrying an aria-label that would replace its
+    // own visible word.
+    const describedBy = await undo.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    await expect(page.locator(`#${describedBy}`)).toHaveText(
+      /most likely a credit line/
+    );
+    // It is a real button, reachable and operable by keyboard.
+    const box = await undo.boundingBox();
+    expect(box.height).toBeGreaterThanOrEqual(44);
+
+    await undo.focus();
+    await page.keyboard.press('Enter');
+
+    // The caption is back, so the drawing is the whole traced picture again.
+    await expect
+      .poll(async () => page.locator('.svg-prep-object').count(), {
+        timeout: 60000,
+      })
+      .toBeGreaterThan(30);
+    // And the offer is withdrawn: there is nothing left to undo.
+    await expect(undo).toBeHidden();
+  });
+
+  test('a drawing with no caption is not told one was removed', async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await openPicture(page, BIRD);
+    await expect
+      .poll(async () => summaryText(page), { timeout: 60000 })
+      .toMatch(/shapes traced/);
+    expect(await summaryText(page)).not.toContain('credit line');
+    await expect(page.locator('.ink-controls-credit-undo')).toBeHidden();
+  });
+
+  test('the panel says removing a credit line removes no duty', async ({
+    page,
+  }) => {
+    await openPicture(page, RING_WITH_CAPTION);
+    await expect(page.locator('.ink-controls-notice')).toContainText(
+      "does not remove any credit the icon's licence asks of you"
     );
   });
 });

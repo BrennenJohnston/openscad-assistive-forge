@@ -268,6 +268,11 @@ export const MEASURED_SECONDS = {
   // files above carry. Chromium only (PROJECT_IGNORES): CPU throttling is a CDP
   // feature, and the other lanes have no headroom (see the note below).
   'trace-start-cancel.spec.js': 135.0,
+  // DP-36 added four cases to ink-modes for the credit line, each opening the
+  // editor door on a fixture. MEASURED locally: the file went from 9 cases to
+  // 13 and from about 33 s to 42 s. Unlisted it was booked at DEFAULT_WEIGHT_S,
+  // 60, which was already close; 70 keeps the same slack the measurement had.
+  'ink-modes.spec.js': 70.0,
   // DP-43. One case: a ring traced through the real worker on both engines,
   // which is also the only place the wasm is proved to load under COOP/COEP.
   // MEASURED locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on Firefox.

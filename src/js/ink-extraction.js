@@ -459,6 +459,49 @@ export function dominantRejectedColor(imageData, mask, minChroma = 25) {
  * @param {Function} [options.makeImageData] - (w, h) => ImageData, for tests
  * @returns {{imageData: ImageData, mask: Uint8Array|null, summary: Object}}
  */
+/**
+ * Put a see-through picture on a white page before anybody traces it.
+ *
+ * Standard mode keeps a picture's own colours and does not build an ink mask,
+ * so a PNG with transparency reached the tracer with its alpha intact and the
+ * tracer decided for itself what a see-through pixel was. What it decided was
+ * not white, and a logo saved on a transparent background came out with a
+ * field around it that nobody drew. Compositing first is the signed answer
+ * (DP-Q31, audit 15): the picture is put on white, which is what a person
+ * looking at it in any viewer has already seen.
+ *
+ * Reports whether it did anything, because "see-through parts were treated as
+ * white" is worth saying and is a lie on a picture that had none.
+ *
+ * @param {ImageData} imageData
+ * @param {Function} [makeImageData] - (w, h) => ImageData
+ * @returns {{imageData: ImageData, composited: boolean}}
+ */
+export function compositeOntoWhite(
+  imageData,
+  makeImageData = defaultMakeImageData
+) {
+  const { width, height, data } = imageData;
+  let sawAlpha = false;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) {
+      sawAlpha = true;
+      break;
+    }
+  }
+  if (!sawAlpha) return { imageData, composited: false };
+
+  const out = makeImageData(width, height);
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3] / 255;
+    out.data[i] = Math.round(data[i] * a + 255 * (1 - a));
+    out.data[i + 1] = Math.round(data[i + 1] * a + 255 * (1 - a));
+    out.data[i + 2] = Math.round(data[i + 2] * a + 255 * (1 - a));
+    out.data[i + 3] = 255;
+  }
+  return { imageData: out, composited: true };
+}
+
 export function extractInk(imageData, options = {}) {
   const {
     mode = 'lineart',
