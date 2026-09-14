@@ -1173,7 +1173,8 @@ export function createSvgPrepWorkspace(containerEl) {
     const picture = renderPictureInto(
       refs.resultPane,
       refs.resultZoom,
-      'The drawing as it is now, not yet combined'
+      'The drawing as it is now, not yet combined',
+      true
     );
     if (picture) {
       picture.classList.add('svg-prep-standin');
@@ -1558,6 +1559,12 @@ export function createSvgPrepWorkspace(containerEl) {
 
       const imported = document.importNode(svg, true);
       if (previousViewBox) imported.setAttribute('viewBox', previousViewBox);
+      // The picture a person is looking at is the one the list has to be able
+      // to point at, and since DP-37 P1 that is THIS one.
+      const resultOverlay = document.createElementNS(SVG_NS, 'g');
+      resultOverlay.setAttribute('class', 'svg-prep-overlay');
+      resultOverlay.setAttribute('aria-hidden', 'true');
+      imported.appendChild(resultOverlay);
       markAsPicture(imported, 'Prepared result');
       refs.resultPane.insertBefore(imported, refs.resultZoom);
 
@@ -1662,30 +1669,42 @@ export function createSvgPrepWorkspace(containerEl) {
     // descriptor's own pathData (viewBox coordinates, transforms baked),
     // so indexes always match the object list — including subpaths of
     // compound paths — and rendering works in every browser.
-    function getOverlay() {
-      return refs.sourcePane.querySelector('.svg-prep-overlay');
+    /**
+     * Every picture on screen, not one named pane.
+     *
+     * ★ It used to be the SOURCE pane alone, which was right until DP-37 P1
+     * made one picture the default and put the source behind Compare. MEASURED
+     * at 1280 after that: the source pane was 0 by 0, the result pane was 808
+     * by 354, and hovering a row drew a highlight path 0 px wide into the pane
+     * nobody could see. The list stopped being able to point at the drawing
+     * and nothing said so.
+     *
+     * Every overlay, so Compare lights the shape up in both pictures at once -
+     * the same rule renderRoleLayer already follows for the tints.
+     */
+    function overlays() {
+      return root.querySelectorAll('.svg-prep-overlay');
     }
 
     function highlight(e) {
       const item = e.target.closest('.svg-prep-object');
-      if (!item) return;
-      const overlay = getOverlay();
-      if (!overlay || !currentAnalysis) return;
-      clearSvgGroup(overlay);
+      if (!item || !currentAnalysis) return;
       const idx = parseInt(item.dataset.index, 10);
       const el = liveElements[idx];
-      if (!el || !el.pathData) return;
-      const p = document.createElementNS(SVG_NS, 'path');
-      p.setAttribute('d', el.pathData);
-      p.setAttribute('class', 'svg-prep-highlight-path');
-      overlay.appendChild(p);
+      overlays().forEach((overlay) => {
+        clearSvgGroup(overlay);
+        if (!el || !el.pathData) return;
+        const p = document.createElementNS(SVG_NS, 'path');
+        p.setAttribute('d', el.pathData);
+        p.setAttribute('class', 'svg-prep-highlight-path');
+        overlay.appendChild(p);
+      });
     }
 
     function unhighlight(e) {
       const item = e.target.closest('.svg-prep-object');
       if (!item) return;
-      const overlay = getOverlay();
-      if (overlay) clearSvgGroup(overlay);
+      overlays().forEach(clearSvgGroup);
     }
 
     refs.objects.addEventListener('mouseover', highlight);

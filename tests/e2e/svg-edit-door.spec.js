@@ -1021,6 +1021,83 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
   })
 })
 
+test.describe('the list can point at the picture (DP-39 P3)', () => {
+  // ★ It could, and then it could not, and nothing said so. Hovering or
+  // focusing a row draws that shape's outline into an overlay - and the
+  // overlay was in the SOURCE pane, which was the picture until DP-37 P1 made
+  // one picture the default and put the source behind Compare.
+  //
+  // MEASURED at 1280 before this: source pane 0 by 0, result pane 808 by 354,
+  // and the highlight path drawn on hover was 0 px wide. A feature that is
+  // still running, still drawing, and painting into a pane nobody can see.
+
+  async function openBird(page) {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+      timeout: 30000,
+    })
+  }
+
+  /** Every highlight the page is drawing, and whether it has any size. */
+  const marks = (page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.svg-prep-highlight-path')].map((p) => {
+        const b = p.getBoundingClientRect()
+        return Math.round(b.width) * Math.round(b.height)
+      })
+    )
+
+  test('★ hovering a row outlines that shape in the picture a person is looking at', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    expect(await marks(page)).toEqual([])
+
+    await page.locator('.svg-prep-object').nth(1).hover()
+    const drawn = await marks(page)
+    expect(drawn.length, 'nothing was drawn at all').toBeGreaterThan(0)
+    expect(
+      drawn.some((area) => area > 0),
+      `every highlight had no size: ${JSON.stringify(drawn)}`
+    ).toBe(true)
+
+    // And it goes away again.
+    await page.locator('.svg-prep-result-caption, .svg-prep-workspace').first().hover()
+    await expect
+      .poll(async () => (await marks(page)).filter((a) => a > 0).length)
+      .toBe(0)
+  })
+
+  test('★ a keyboard gets the same pointing as a mouse', async ({ page }) => {
+    // The list is walked by Tab in this editor, and somebody who never touches
+    // a mouse needs the drawing to answer the same way.
+    test.setTimeout(180000)
+    await openBird(page)
+    await page.locator('.svg-prep-object').nth(2).focus()
+    const drawn = await marks(page)
+    expect(
+      drawn.some((area) => area > 0),
+      `focus drew nothing with size: ${JSON.stringify(drawn)}`
+    ).toBe(true)
+  })
+
+  test('with Compare on, the shape lights up in both pictures', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await page.getByRole('button', { name: /Compare/ }).click()
+    await expect(page.locator('.svg-prep-source-pane svg')).toBeVisible()
+
+    await page.locator('.svg-prep-object').nth(1).hover()
+    const drawn = (await marks(page)).filter((a) => a > 0)
+    expect(drawn.length, 'only one picture answered').toBeGreaterThanOrEqual(2)
+  })
+})
+
 test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
   // DP-Q36 was asked with the three candidates drawn at this panel's real
   // widths and A was confirmed: colour tag, name, a role control with the
