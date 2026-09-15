@@ -403,5 +403,5 @@ SOC 2 controls primarily apply to the hosting platform (e.g., Cloudflare).
 
 - [Content Security Policy (MDN)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
 - [WebAssembly Security (WebAssembly.org)](https://webassembly.org/docs/security/)
-- [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/)
+- [OWASP HTTP Headers Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html)
 - [Cloudflare Pages Documentation](https://developers.cloudflare.com/pages/)
