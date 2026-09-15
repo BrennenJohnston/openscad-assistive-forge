@@ -825,6 +825,7 @@ export function createDrawingEditor({
     // a thing the stencil lane cuts and paints; what somebody is looking at on
     // a charm is a shape, which is already the word the rows and counts use.
     panelToggleBtn.textContent = stencil ? S.panelToggle : S.panelToggleShapes;
+    skipToTable.textContent = stencil ? S.skipToRegions : S.skipToShapes;
     const regionsName = sections.regions?.details?.querySelector(
       '.drawing-editor-section-name'
     );
@@ -1778,8 +1779,8 @@ export function createDrawingEditor({
   zoomInBtn.addEventListener('click', () => canvas.zoomIn());
   zoomOutBtn.addEventListener('click', () => canvas.zoomOut());
   panelToggleBtn.addEventListener('click', () => setPanel(panel.hidden));
-  // The skip link's promise ("skip to the regions table") holds with the
-  // drawer closed: it opens the drawer on its way there.
+  // The skip link's promise holds with the drawer closed: it opens the
+  // drawer on its way there.
   skipToTable.addEventListener('click', () => {
     if (panel.hidden) setPanel(true);
   });

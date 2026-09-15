@@ -356,6 +356,17 @@ describe('the relief purpose', () => {
     expect(surface.querySelector('[data-count="regions"]').textContent).toBe('3')
     expect(editor.getPlan()).toBeNull()
   })
+
+  it('names the shapes list in the skip link, and leaves the stencil its word', () => {
+    const editor = make()
+    const skip = () =>
+      surface.querySelector('a.drawing-editor-skip').textContent
+    openOn(editor, THREE, { purpose: 'relief' })
+    expect(skip()).toBe(S.skipToShapes)
+    editor.dismiss()
+    openOn(editor, CAT_SVG, { purpose: 'stencil' })
+    expect(skip()).toBe(S.skipToRegions)
+  })
 })
 
 describe('the stencil purpose, on the owner drawing', () => {
