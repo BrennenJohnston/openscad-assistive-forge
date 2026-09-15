@@ -307,27 +307,61 @@ When you upload an SVG file (or select one from the gallery), the app analyzes i
    - **Unsupported features** (red): Gradients, clip-paths, or other features that cannot be flattened
 3. Simple SVGs are auto-prepared silently. Complex or ambiguous SVGs open the preparation editor
 
-**The SVG Preparation Editor:**
+**The drawing editor:**
 
-The editor shows a side-by-side view of your source SVG and the prepared result. Below the previews, an object list shows each detected shape with its assigned role:
+The editor shows **one picture** — what your drawing will print as — with the
+list of shapes beside it. Press **Compare with original** when you want the
+before and after side by side; the rest of the time one picture is the point.
 
-- **Foreground**: Becomes solid geometry in the final shape
-- **Hole**: Subtracted from the foreground (creates cutouts)
-- **Ignore**: Dropped from the output entirely
+Each shape in the list has a role:
 
-For a drawing of fifty shapes or fewer, every role change updates the prepared
-result preview straight away, so you can see exactly what your changes do before
-applying.
+- **Raised**: stands up off the face, which is the part a finger finds
+- **Hole**: cut out of the raised shape
+- **Ignore**: left out of the result entirely
+
+The role control shows all three words, so what you read and what a screen
+reader reads are the same three words. Arrow keys move between them.
+
+**Pointing at a shape**
+
+The list and the picture point at each other. Move over a row and that shape
+lights up in the drawing; move over the drawing and its row is marked. Click
+either one to choose it — hold Ctrl (or Cmd) to add and remove, Shift to take
+a range — and **Delete selected** appears in the shapes panel with the number
+you have chosen.
+
+On a touch screen, one finger scrolls the page and two fingers zoom and pan the
+picture. A tap chooses a shape. **Fit**, **+** and **−** do the same job
+for anyone who would rather not pinch.
+
+One thing to know: pressing inside an outline chooses whatever is really under
+your finger, which is usually the background behind it rather than the outline.
+An outline is the line itself, not the space inside it. The mark that appears
+as you move tells you which shape you are about to choose.
+
+**More, on each row**
+
+Each row has a **More** button holding that shape's offset, its layer where the
+design has a choice of layers, and **Delete**. It keeps the row down to one
+line so the shape's name has room to be read.
 
 **Bigger drawings: the preview waits to be asked**
 
-Combining shapes into one outline is the expensive step, and it grows steeply:
-about a second for fifty shapes, a minute for two hundred. So above fifty shapes
-the list and the original are shown immediately, and the "Will print as" pane
-stays empty with a **Render preview** button under it. Press it when you want to
-see the result; Forge tells you it is working and how long it took. Apply and
-Save wait until you have rendered, so you are never applying something you have
-not seen.
+Combining shapes into one outline is the expensive step, and how long it takes
+depends on how complicated the shapes are rather than on how many there are:
+the same two hundred shapes take a tenth of a second as rectangles and half a
+second as curves. So Forge predicts the wait, and combines the drawing by
+itself when that prediction is under about a third of a second.
+
+Above that, the drawing itself is shown where the result will go — marked as
+not yet combined — with a **Render preview** button and a sentence saying about
+how long it will take. Press it when you want the result. Apply and Save wait
+until you have, so you are never applying something you have not seen, and
+**Cancel** stops a combine you would rather not wait for.
+
+The prediction learns from your machine: after the first real combine, Forge
+knows how fast this computer and this kind of drawing are, and says so more
+accurately from then on.
 
 Above a thousand shapes Forge says so and asks you to simplify the drawing
 first, naming both numbers.
@@ -339,14 +373,15 @@ the *list* as well, which is what you want when there are hundreds of them:
 
 | Action | How |
 |--------|-----|
-| Remove one shape | The **Delete** button at the end of its row |
+| Remove one shape | **More** on its row, then **Delete** |
+| Remove the shapes you have chosen | Choose them on the list or the picture, then **Delete selected** |
 | Remove every shape below a size | Type a size in **Smaller than … mm²** and press **Delete those** |
 | Keep only the biggest ones | Type a number in **Keep largest …** and press **Delete the rest** |
 | Put the last removal back | **Undo delete** (one step, and only for this session) |
 
 Sizes are measured against the design width in the editor's header, so they are
-the size the shape will really print. If removing shapes brings the drawing under
-fifty, the preview starts updating on its own again.
+the size the shape will really print. If removing shapes brings the drawing back
+under the budget, the preview starts updating on its own again.
 
 Removals are remembered with the project, so reopening it later shows the list
 you left behind rather than starting over.
@@ -355,17 +390,31 @@ you left behind rather than starting over.
 
 | Action | How |
 |--------|-----|
-| Change a role | Click a radio button or use arrow keys in the radio group |
-| See the effect | The prepared result updates instantly, or after **Render preview** on a big drawing |
+| Change a role | Click **Raised**, **Hole** or **Ignore**, or use arrow keys |
+| Choose a shape | Click its row or the shape itself; Ctrl or Cmd adds, Shift takes a range |
+| See the effect | The result updates on its own, or after **Render preview** on a slower drawing |
+| See the charm instead of the drawing | The **Drawing / Charm** switch in the toolbar |
 | Apply changes | Click "Apply prepared SVG" |
 | Save it as a file | Click "Save edited SVG" |
 | Keep the original | Click "Keep original" (bypasses preparation) |
 | Reset roles | Click "Reset" to return to auto-classification (this does not bring deleted shapes back) |
+| Shut a row's **More** menu | `Escape` (the editor stays open) |
 | Expand to fullscreen | Click the fullscreen button (top-right) |
 | Exit fullscreen | Press `Escape` or click the fullscreen button again |
 
+**Looking at the charm while you work**
+
+The **Drawing / Charm** switch in the editor's toolbar swaps between the drawing
+you are editing and the charm it makes. Nothing is lost by switching: every role,
+removal and layer is still there when you switch back.
+
+While the editor is open, previews are drawn at draft quality, which is about a
+quarter of the work for a charm that differs only in how round the clip's edges
+are. Your own quality setting comes back the moment you close the editor, and
+the preview is redrawn at it.
+
 **If the result looks like a solid blob:** the preparer merges everything set to
-Foreground into one shape. When a drawing has an outline around its detail --
+Raised into one shape. When a drawing has an outline around its detail --
 the outline of a bird with an eye and feather strokes inside it, say -- merging
 them fills the outline in and swallows the detail. That is not a bug, it is what
 "print this as one shape" means. Set the interior shapes to **Ignore**, or to
@@ -439,6 +488,42 @@ If the picture had a single colour behind its lines, Forge also names it, so you
 can pick a filament near that colour and keep the symbol recognisable. It stays
 quiet when the picture has several different fills, because an average of four
 colours is a colour that is in none of them.
+
+**Tracing starts when you say so, and stops when you say so.**
+
+A big picture takes real time to trace, and it used to start the moment you
+chose one, with nothing to show for it and no way out. Now the picture is shown
+with a **Start conversion** button under it. While it works there is a bar and
+a **Cancel**, and the page goes on answering: you can scroll, read, change your
+mind. Cancel gives you the picture back exactly as it was.
+
+Before you commit, Forge takes a **quick look** at a thumbnail of the picture
+and tells you roughly what it will find — how busy the drawing is, and how much
+of it is likely to become ink. It costs a few milliseconds and it is a
+forecast, not a promise, which is why it is offered before the conversion
+rather than instead of it.
+
+**Stock icons: the caption comes off.**
+
+Icons downloaded from symbol libraries usually carry a line of credit along the
+bottom, and it is a surprising amount of the file: MEASURED across nine of
+them, the caption was between 76 and 97 per cent of the shapes in the drawing.
+Traced as-is it becomes forty-odd tiny raised specks along the bottom edge of a
+charm, which nobody can read with a finger and everybody has to delete by hand.
+
+Forge finds that line and takes it off, then says so, with **Undo** beside it if
+the drawing really did end in a row of small marks. It only fires when the marks
+look like a caption: enough of them, all small, all low down, all in one band.
+
+**Removing a caption removes no obligation.** If the licence on an icon asks you
+to credit its author, you still have to, wherever your project says who made
+what. Forge says this in the panel too.
+
+**Lines too thin to print.** Forge measures the thinnest line in the drawing and
+tells you how wide it will be in millimetres at the size you are printing. Under
+about half a millimetre a line may not come out at all, or may come out too
+faint to feel. It is a sentence, not an action: Forge does not change your
+drawing, it tells you what to expect so you can make it bigger or accept it.
 
 **Nothing is uploaded.** The tracing and every choice above happen in your
 browser. You are responsible for having the right to use any image you bring.
