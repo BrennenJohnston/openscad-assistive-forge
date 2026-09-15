@@ -2756,6 +2756,29 @@ test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
       )
       .toBeGreaterThan(8)
     await page.keyboard.up('KeyW')
+    // The walk does not end on the key release: the walker coasts a stride
+    // first (MEASURED on Firefox at the grade: 0.36 m inside the next 250 ms,
+    // then still), and the slope sentence follows the ground it coasts over.
+    // Sampling "standing still" at the release therefore catches a reading
+    // that is still moving - on this grade it went 14 percent to 17 while the
+    // walker came to rest, which is the sentence doing its job, not repeating
+    // itself. Wait for the walk to actually stop, then sample. The pair is
+    // spaced on purpose: two samples read back to back are the same sample.
+    await expect
+      .poll(
+        async () => {
+          const where = () =>
+            page.evaluate(() => {
+              const w = window.__cityWalkGame.walkState
+              return `${w.x},${w.y}`
+            })
+          const before = await where()
+          await page.waitForTimeout(250)
+          return (await where()) === before
+        },
+        { timeout: 30000 }
+      )
+      .toBe(true)
 
     // Standing still on the grade: the sentence does not repeat.
     const said = await announcer(page).textContent()
