@@ -134,6 +134,21 @@ SVG path offset calculations use clipper2-js for polygon offsetting (Minkowski s
 
 ---
 
+## imagetracerjs (Unlicense)
+
+The picture tracer's other engine. It is the one Forge used before Potrace
+arrived, and it still runs two of the four ways to read a picture: Light and
+dark, which keeps the picture's own colours where Potrace draws in one, and
+Colours, which traces each quantised colour as its own mask.
+
+**License**: The Unlicense (public domain dedication)  
+**Version**: 1.2.6  
+**Author**: Andras Jankovics  
+**Project**: https://github.com/jankovicsandras/imagetracerjs  
+**Usage**: `src/js/image-import.js` and `src/js/colour-separation.js`, bundled from npm
+
+---
+
 ## Potrace (GPL-2.0-or-later)
 
 The picture tracer can use Potrace to turn an ink mask into curves. I compile it

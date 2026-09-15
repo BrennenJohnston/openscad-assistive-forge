@@ -1,6 +1,6 @@
 # Release Notes
 
-## v5.0.0 (2026-09-01)
+## v5.0.0 (2026-09-15)
 
 The release where the workshop got big enough for everyone I built it for.
 Since 4.5.0 the app grew three switchable interfaces - Simplified, Standard,
@@ -8,8 +8,10 @@ and a Classic layout that rebuilds desktop OpenSCAD in the browser - plus a
 drawing lane that round-trips SVG and DXF, a Stencil Maker, one-link project
 sharing with provenance records, braille editing refinements, and a long
 accessibility pass driven by listening to a screen reader rather than
-measuring one. The illustrated version of this story is
-[docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
+measuring one. The last work before release went back over the
+picture-to-charm editor until it behaved like one product rather than five
+features that happened to share a screen. The illustrated version of this
+story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
 
 ### Highlights
 
@@ -43,6 +45,44 @@ measuring one. The illustrated version of this story is
   every claim citing the file that proves it
 - **Security**: three high-severity transitive advisories patched
 
+### The picture-to-charm editor, gone over one more time
+
+- **A conversion you start, watch and can stop**: choosing a picture used to
+  hand the page over for as long as the work took. Tracing runs on a worker
+  thread now, with a moving bar and a Cancel that really stops it, and one
+  sentence tells you what the picture appears to be and roughly what it will
+  cost before any of it begins. A picture small and simple enough to be quick
+  still starts by itself, through the same bar and the same Cancel
+- **Far faster, and no longer a freeze**: one step was doing nineteen seconds
+  of work on the main thread where 637 milliseconds were needed. Conversion
+  went from about nineteen seconds to about one and a half, an eight
+  megapixel photograph from 5,413 ms to 1,207, and combining a complicated
+  drawing moved off the main thread entirely, with its own bar and Cancel and
+  a budget measured in milliseconds rather than a count of shapes
+- **A second tracing engine, built from source**: Potrace, compiled to
+  WebAssembly by a workflow from a pinned tarball and committed with its
+  recipe and checksums, is now the default for Line art and Solid shape. It
+  is about fourteen times faster than what it replaces. On a clean
+  vector-derived icon the two are hard to tell apart; the smoothness it buys
+  shows on a hand-drawn source
+- **An editor that shows the drawing**: the drawing fills the editor as one
+  picture, the side panel no longer sits on top of it, the picture comes
+  before the settings for it, and a Drawing / Charm switch shows the charm it
+  will become without leaving. While you edit, previews are drawn at draft
+  quality and go back to full on close
+- **A shapes panel you can read**: one row per shape - its name, a Raised /
+  Hole / Ignore switch, and More - and the row says when it has run out of
+  room instead of eating the name, which at 768 pixels wide it used to do to
+  every name at once. Hover marks a row, a press chooses it, two fingers
+  pinch and pan while one finger still scrolls the page
+- **One vocabulary**: what the panel is called, what a row is called, what
+  the colour key says, and what a screen reader hears are the same words
+- **Credit lines left where they belong**: a downloaded icon usually carries
+  its attribution baked into the picture, and converting it produced the icon
+  plus fifty letters of caption. The caption is recognised and left out, with
+  an Undo beside the sentence saying so - which changes nothing about the
+  attribution you still owe the designer
+
 ### Upgrade Notes
 
 The version number marks the scale of the change, not a compatibility break:
@@ -51,6 +91,9 @@ The version number marks the scale of the change, not a compatibility break:
 2. All existing saved projects and presets remain compatible
 3. For contributors: the Pixi environment layer is gone - npm is the one
    toolchain (`npm ci`, `npm run dev`)
+4. The About dialog now carries a build stamp beside the version, and the
+   same string appears in `/forge-capabilities.txt` - quote it in a bug
+   report and two builds of one version can be told apart
 
 See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
 

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [5.0.0] - 2026-09-01
+## [5.0.0] - 2026-09-15
 
 ### Three Interfaces, a Design Lane, and One-Link Sharing
 
@@ -18,9 +18,128 @@ the desktop OpenSCAD experience in the browser - along with a drawing lane
 that opens, cleans and saves SVG and DXF in both directions, a Stencil
 Maker, braille editing refinements across the card, sign and charm tools,
 one-link project sharing with manifests and provenance records, and a long
-accessibility and honesty pass over the whole surface. The complete
-engineering record is below; `docs/updates/WHATS_NEW_v5.md` is the short,
-illustrated version.
+accessibility and honesty pass over the whole surface. The last work before
+release rebuilt the picture-to-charm editor as one product: a conversion you
+start, watch and can stop, a second tracing engine built from source, an
+editor that no longer freezes the page, and a shapes panel with one
+vocabulary in front of every person who reads it. The complete engineering
+record is below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated
+version.
+
+### Added
+
+- **A second tracing engine, built from source** (DP-43) - Potrace is compiled to WebAssembly
+  by a GitHub Actions workflow from a pinned source tarball, committed with its recipe and its
+  checksums, and is now the default for Line art and Solid shape at `opttolerance` 1.0. It
+  traces about fourteen times faster than the engine it replaces and returns one compound path
+  rather than many elements. The `.wasm` is weighed on its own line of the bundle budget
+  (18,521 of 30,000 bytes gzipped). GPL-2.0-or-later, recorded in `THIRD_PARTY_NOTICES.md`
+  with the tarball's sha256
+- **A conversion you start, watch, and can stop** (DP-34) - choosing a picture no longer hands
+  the page to a conversion nobody asked for. Tracing runs on a worker thread with a moving bar
+  and a Cancel that returns in a fraction of a millisecond, and the page keeps answering while
+  it works. A picture small and simple enough to be quick still starts by itself, through the
+  same bar and the same Cancel - there is no second, invisible path
+- **One sentence about a picture before any work starts** (DP-35) - a quick look at the chosen
+  file says what it appears to be and roughly what converting will cost, before the expensive
+  work begins. It costs a thumbnail pass and a fixed calibration, measured in single-digit
+  milliseconds, and it never refuses or blocks
+- **A switch between the drawing and the charm** (DP-38) - a Drawing / Charm control in the
+  editor's toolbar shows the charm the drawing will become without leaving the editor. It
+  appears only where there is a model behind the editor, because through the standalone door
+  there is no charm to show. While the editor is open, previews are drawn at draft quality and
+  return to full quality on close (measured end to end: 29,372 triangles and 1.2 MB before,
+  7,500 and 291 KB while editing, 29,388 after)
+- **The mouse and the finger on the drawing** (DP-40) - hovering a shape marks its row in the
+  list, a press chooses it, and two fingers pinch and pan the drawing while one finger still
+  scrolls the page. Measured at 412x915: two fingers took the viewBox from 600 to 180, a tap
+  chose the shape, and the page did not move
+- **A build stamp in the About dialog** (DP-41) - the version line carries the same stamp the
+  service worker names its cache after, so two builds of one version can be told apart in a
+  bug report. The same string appears in `forge-capabilities.txt`
+- **A rule for the credit line that comes with an icon** (DP-36) - a downloaded icon usually
+  arrives with its attribution baked into the picture, and converting it produced the icon plus
+  fifty letters of caption. The caption is recognised and left out by default, with an Undo
+  beside the sentence that says so, and a thin-line advisory reports the narrowest line at the
+  width the design will actually print
+
+### Changed
+
+- **The drawing editor is one picture, and it is never blank** (DP-37 P1) - the edited drawing
+  fills the editor instead of sharing the room with a side-by-side comparison, which is still
+  one button away. Three defects went with it: a preview that rendered 1268x160 with no drawing
+  in it, a side panel sitting on top of the drawing (453 px of it hidden at 1280, 384 at 900,
+  and on a phone the panel is the full-width drawer it was always written to be), and settings
+  that came before the picture they were about ("Will print as" moved from y 862 to 122 at
+  1280, and from 1,590 to 290 at 412)
+- **Combining a drawing leaves the main thread** (DP-37 P2) - the flatten that merges shapes now
+  runs in a worker with its own bar and Cancel. Measured on one drawing: 2 frames rendered in
+  3,818 ms on the main thread against 244 frames in 4,030 ms through the worker; Cancel takes
+  48 ms. Six defects were found and fixed in the window this opened, all of one family - work in
+  flight must not answer with choices a person has already replaced, and only their own Cancel
+  has anything left to say
+- **The combine waits on a measured budget, not on a count of shapes** (DP-37 P3) - the old
+  thresholds of 50 and 200 shapes are retired for a 300 ms budget and a predictor in
+  milliseconds per shape-and-ring-point, calibrated by the first real flatten on the device and
+  remembered there. A count was never the cost: 200 synthetic shapes were 800 ring points and
+  about 75 ms, while 200 real traced shapes were 34,382 points and 14.7 seconds. In practice
+  210 shapes now combine by themselves where the old rule stopped to ask
+- **The shapes panel, rebuilt around one signed row** (DP-39) - each row is the shape's name, a
+  Raised / Hole / Ignore switch and a More button, and the row says when it has run out of room
+  instead of taking the space out of the name. Measured on the same drawing before and after:
+  at 1280 a name went from 82 px cut to 210 px whole; at 768 all seven names rendered at zero
+  pixels and all seven Delete buttons were clipped, and now nothing is clipped. The list points
+  at the picture again, and on a phone it is a sheet rather than 99.8 % of the drawing
+- **One vocabulary, wherever a person meets it** (DP-Q40) - what the panel is called, what a row
+  is called, what the colour key says and what a screen reader hears are now the same words:
+  "Shapes", "Shape 3", and the roles Raised / Hole / Ignore (Include / Exclude where a compound
+  path has no holes to offer). Eight strings across four files were still saying the retired
+  ones, four of them only to people who cannot see the control that disagreed
+- **The CI shard planner knows what CI skips** (#211) - three of six Chromium shards were each
+  given a heavy suite that skips in seconds there, so they finished in under a minute while one
+  shard ran nineteen. Measured on the real runners, shard wall clock before and after:
+  57 / 54 / 55 / 780 / 677 / 1,178 s became 515 / 458 / 486 / 446 / 434 / 337 s - the lane is
+  gated by its longest shard, so it more than halved. Local planning is byte-for-byte unchanged
+- **The Standard mode guide covers the editor as it is now** (DP-41) - one picture, the roles,
+  pointing at shapes, More, the budget and its prediction, the Drawing / Charm switch, draft
+  previews and touch; and for photographs, Start conversion, the quick look, the credit line and
+  the obligation it does not remove
+
+### Fixed
+
+- **A drawing took nineteen seconds to come back, and the page could not answer** (D-132) - the
+  layer companions were flattened by a path engine that spent all of it computing point winding.
+  Profiled at `applyTracedImage` 18,960 ms, of which `flattenToCompoundPath` was 18,905;
+  after, 637 ms. Conversion end to end went from 19 s to about 1.4 s
+- **The picture cap was doing nothing for three of the four ink modes** (D-131) - an 8 megapixel
+  photograph went through at full size. 5,413 ms to 1,207 ms, four and a half times faster, on
+  the same drawing (86 shapes before, 89 after)
+- **Every plain upload quietly turned the layered-design prototype on** (D-135) - a picture
+  chosen with no editor and no layer assignments filled both layer parameters, and a charm's
+  layers are additive over the ordinary design. Measured from the STLs' own Z extents on a
+  traced icon: 9.450 mm and 65,288 facets became 10.250 mm and 83,030 - 0.80 mm of relief
+  nobody asked for. The stack now only runs when it is asked for
+- **"Use as design" stopped doing anything** (#211) - the overlay panel hands a picture over by
+  dispatching a change on the file input, which after DP-34 looked exactly like choosing a file,
+  so it waited for a Start nobody was going to press and the design parameter stayed empty. The
+  input now carries a one-shot flag saying the work was already asked for, read once and cleared
+- **Safari never gave focus back after the welcome tour closed** (D-134) - pressing Escape closed
+  the tour and left focus nowhere. All three engines return it to the button that opened it
+- **The preview died on Safari in the dev server** (D-133) - the render worker did not survive
+  the cross-origin isolation headers in development, so the preview never rendered there. The
+  built app was always fine; this was the dev lane only
+- **An icon converted to the icon plus fifty letters of credit** (DP-36) - every sampled icon of
+  that kind is between 76 % and 97 % caption by area. Measured on nine icons through both
+  tracing engines: no stray shapes left behind
+- **Three red lanes on develop, none fixed by loosening an assertion** (DP-33) - besides D-133,
+  a visual baseline was deterministically stale (byte-identical across three attempts, with a
+  ten-pixel delta that made the verdict depend on the runner's text rasterisation), and a
+  Firefox red was a click lost into a measured dead window rather than a slow modal
+- **Twelve tests that only a full local board could see** (DP-42) - each is skipped on CI, so
+  nothing caught them drifting out of date with the app: parameter groups have been collapsed on
+  a fresh file since May, the first number input on the page is hidden panel chrome rather than
+  a parameter, and a newer "Export all plates" button made an old text selector ambiguous. None
+  was a defect in the app
 
 ### Added
 
