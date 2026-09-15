@@ -15487,6 +15487,31 @@ body.tutorial-body-locked {
   width: 100%;
   height: 100%;
   max-height: 300px;
+  /* DP-Q37: two fingers are the editor's, one finger is the page's. The
+     browser keeps vertical panning - which is how somebody gets DOWN a long
+     editor on a phone - and hands us everything else. On the picture and
+     nowhere else: a page you cannot scroll is a worse bargain than a picture
+     you cannot pinch. */
+  touch-action: pan-y;
+}
+
+/* ── DP-40: the only part of the picture a pointer can hit ───────────────
+   Invisible, on top, one shape per element. `pointer-events: all` is what
+   makes an unpainted shape hittable at all: it means "answer for your fill and
+   your stroke whatever they are painted", which is the only way a stroke-only
+   drawing - every CAD export, D-118's whole subject - can be pointed at. */
+.svg-prep-hit-path {
+  fill: none;
+  stroke: none;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+/* The row the pointer is over. Lighter than a chosen row, because it is
+   saying "this one" rather than "this one is picked", and it goes when the
+   pointer does. */
+.svg-prep-object--pointed {
+  background: var(--color-hover-bg);
 }
 
 /* Hover/focus highlight overlay (drawn as SVG paths, works everywhere) */

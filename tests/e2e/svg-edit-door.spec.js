@@ -1280,6 +1280,194 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
   })
 })
 
+test.describe('the picture can be pointed at (DP-40)', () => {
+  // Directive item 6, signed at DP-Q37. DP-39 P3 let the LIST point at the
+  // picture; this is the other direction.
+  //
+  // ★ Built on the SVG picture, not on the DP-20 canvas the plan named. That
+  // line was written before DP-37 P1 made one picture the default, and
+  // mounting a second one to be able to touch it would undo the release that
+  // got this editor down to a single drawing.
+
+  async function openBird(page) {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+      timeout: 30000,
+    })
+  }
+
+  const shape = (page, i) =>
+    page.locator(`.svg-prep-result-pane .svg-prep-hit-path[data-index="${i}"]`)
+
+  test('★ every shape in the drawing can be pointed at, painted or not', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    const rows = await page.locator('.svg-prep-object').count()
+    await expect(
+      page.locator('.svg-prep-result-pane .svg-prep-hit-path')
+    ).toHaveCount(rows)
+
+    // Invisible, and still hittable. `pointer-events: all` is what buys that:
+    // it means "answer for your fill and your stroke whatever they are
+    // painted", which is the only way a stroke-only drawing - every CAD
+    // export, D-118's whole subject - can be pointed at at all.
+    const paint = await shape(page, 2).evaluate((el) => {
+      const c = getComputedStyle(el)
+      return { fill: c.fill, stroke: c.stroke, events: c.pointerEvents }
+    })
+    expect(paint.fill).toBe('none')
+    expect(paint.stroke).toBe('none')
+    expect(paint.events).toBe('all')
+  })
+
+  test('★ hovering the drawing marks the row, and pressing it chooses', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+
+    await shape(page, 2).hover()
+    await expect(page.locator('.svg-prep-object--pointed')).toHaveAttribute(
+      'data-index',
+      '2'
+    )
+    // And the shape lights up, the same mark the list makes.
+    expect(
+      await page.locator('.svg-prep-highlight-path').count()
+    ).toBeGreaterThan(0)
+
+    await shape(page, 2).click()
+    await expect(page.locator('.svg-prep-object--selected')).toHaveAttribute(
+      'data-index',
+      '2'
+    )
+  })
+
+  test('★ a small shape on top of a big one is the one you get', async ({
+    page,
+  }) => {
+    // The bird sits on a paper rectangle that fills the whole drawing. If the
+    // order were wrong every press would land on the paper and nothing else
+    // could ever be chosen.
+    test.setTimeout(180000)
+    await openBird(page)
+    await shape(page, 0).click({ position: { x: 5, y: 5 } })
+    await expect(page.locator('.svg-prep-object--selected')).toHaveAttribute(
+      'data-index',
+      '0'
+    )
+    await shape(page, 2).click()
+    await expect(page.locator('.svg-prep-object--selected')).toHaveAttribute(
+      'data-index',
+      '2'
+    )
+  })
+
+  test('Ctrl and Shift work on the picture too', async ({ page }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await shape(page, 2).click()
+    await shape(page, 3).click({ modifiers: ['Control'] })
+    await expect(page.locator('.svg-prep-object--selected')).toHaveCount(2)
+  })
+})
+
+test.describe('two fingers on the drawing (DP-40 P3, signed at DP-Q37)', () => {
+  // The unit suites cannot answer this one. A pinch is two pointers arriving
+  // and leaving independently and a browser deciding what it keeps for
+  // scrolling, and none of that exists in jsdom - so it is walked here, with
+  // real touch events, at a phone's size.
+  test.use({ hasTouch: true, viewport: { width: 412, height: 915 } })
+
+  async function openBird(page) {
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible({ timeout: 60000 })
+  }
+
+  const picture = (page) => page.locator('.svg-prep-result-pane svg').first()
+  const viewBox = (page) => picture(page).getAttribute('viewBox')
+
+  test('★ one finger belongs to the page, two belong to the drawing', async ({
+    page,
+  }) => {
+    test.setTimeout(240000)
+    await openBird(page)
+
+    // DP-Q37's split, and it lives on the picture and nowhere else: a page you
+    // cannot scroll is a worse bargain than a picture you cannot pinch.
+    await expect(picture(page)).toHaveCSS('touch-action', 'pan-y')
+
+    const before = await viewBox(page)
+    const box = await picture(page).boundingBox()
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+    const cdp = await page.context().newCDPSession(page)
+    const send = (type, touchPoints) =>
+      cdp.send('Input.dispatchTouchEvent', { type, touchPoints })
+
+    await send('touchStart', [
+      { x: cx - 30, y: cy, id: 1 },
+      { x: cx + 30, y: cy, id: 2 },
+    ])
+    for (const d of [45, 60, 80, 100]) {
+      await send('touchMove', [
+        { x: cx - d, y: cy, id: 1 },
+        { x: cx + d, y: cy, id: 2 },
+      ])
+      await page.waitForTimeout(40)
+    }
+    await send('touchEnd', [])
+
+    const after = await viewBox(page)
+    expect(after, 'two fingers did nothing').not.toBe(before)
+    // Fingers apart means closer in: a viewBox IS the window onto the
+    // drawing, so zooming in asks for less of it.
+    const w = (vb) => Number(vb.split(/\s+/)[2])
+    expect(w(after)).toBeLessThan(w(before))
+  })
+
+  test('★ a tap still chooses a shape', async ({ page }) => {
+    test.setTimeout(240000)
+    await openBird(page)
+    // A FILLED shape, on purpose. A tap lands in the middle of what it aims
+    // at, and the middle of a stroke-converted outline is the hole inside it,
+    // where the paper genuinely is - which is honest hit-testing and not
+    // something to test around.
+    await page
+      .locator('.svg-prep-result-pane .svg-prep-hit-path[data-index="2"]')
+      .tap()
+    await expect(page.locator('.svg-prep-object--selected')).toHaveAttribute(
+      'data-index',
+      '2'
+    )
+  })
+
+  test('the buttons are still there, because a pinch cannot be the only way', async ({
+    page,
+  }) => {
+    // WCAG 2.5.7: anything done with a multi-point gesture needs a
+    // single-pointer way too. Fit, + and - are it, and they are real targets.
+    test.setTimeout(240000)
+    await openBird(page)
+    const before = await viewBox(page)
+    const zoomIn = page.locator('.svg-prep-result-pane button', {
+      hasText: '+',
+    })
+    const box = await zoomIn.boundingBox()
+    expect(box.width).toBeGreaterThanOrEqual(44)
+    expect(box.height).toBeGreaterThanOrEqual(44)
+    await zoomIn.tap()
+    expect(await viewBox(page)).not.toBe(before)
+  })
+})
+
 test.describe('the list can point at the picture (DP-39 P3)', () => {
   // ★ It could, and then it could not, and nothing said so. Hovering or
   // focusing a row draws that shape's outline into an overlay - and the
@@ -1323,8 +1511,10 @@ test.describe('the list can point at the picture (DP-39 P3)', () => {
       `every highlight had no size: ${JSON.stringify(drawn)}`
     ).toBe(true)
 
-    // And it goes away again.
-    await page.locator('.svg-prep-result-caption, .svg-prep-workspace').first().hover()
+    // And it goes away again. Away means the TOOLBAR: since DP-40 the picture
+    // answers a pointer too, so moving "off the row" onto the drawing lights
+    // a shape up rather than clearing it - which is the feature, not a leak.
+    await page.locator('.drawing-editor-toolbar').first().hover()
     await expect
       .poll(async () => (await marks(page)).filter((a) => a > 0).length)
       .toBe(0)
