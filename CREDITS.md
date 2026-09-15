@@ -16,6 +16,11 @@ For third-party software licenses and compliance information, see [THIRD_PARTY_N
   - https://threejs.org/
   - License: MIT
 
+- **Potrace** by Peter Selinger - the tracer behind Line art and Solid shape,
+  compiled from source to WebAssembly
+  - https://potrace.sourceforge.net/
+  - License: GPL-2.0-or-later
+
 ---
 
 ## Rendering & Visual Techniques

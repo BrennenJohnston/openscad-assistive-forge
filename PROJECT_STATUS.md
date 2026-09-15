@@ -1,8 +1,8 @@
 # Project status
 
 **Project**: OpenSCAD Assistive Forge  
-**Current version**: 5.0.0 (in release preparation)  
-**Last updated**: 2026-09-01  
+**Current version**: 5.0.0  
+**Last updated**: 2026-09-15  
 
 This is a single-maintainer project. This file is here so I don’t have to answer “is it abandoned?” and “what’s next?” in every issue thread.
 
@@ -10,8 +10,9 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 
 - The web app works: upload a Customizer-enabled `.scad`, tweak params, preview, export.
 - It’s intentionally **client-side only** (no accounts, no uploads, no backend).
-- The welcome screen ships ready-to-use tools: the **Charm Designer** (with its SVG drawing editor), the **Braille Card Designer** (card / charm / sign, with on-device liblouis braille translation), and the **Stencil Maker**.
-- There are **two interfaces**: the guided **Assistive Forge** one, and **Classic**, which reproduces the OpenSCAD desktop window. The app asks which you want on your first visit and you can switch at any time.
+- The welcome screen ships ready-to-use tools: the **Charm Designer** (with its drawing editor), the **Braille Card Designer** (card / charm / sign, with on-device liblouis braille translation), and the **Stencil Maker**.
+- There are **three interfaces**: **Simplified** (parameters, preview, one Generate button), **Standard** (adds the console, libraries, companion files, reference images and measurement), and **Classic**, which reproduces the OpenSCAD desktop window. The app asks which you want on your first visit and you can switch at any time.
+- Giving the Charm Designer a picture is a job you drive rather than wait out: one sentence says what the picture appears to be and what it will cost, you press Start, a bar moves, and Cancel really stops it. The tracing and the combining both run off the main thread, so the page keeps answering.
 - The stencil work grew bigger than I expected, so I’ve shelved the deeper stencil project for now — the Stencil Maker tile stays usable as it stands, and I’ll pick the rest up another time.
 
 ## What’s solid (things I’m pretty happy with)
@@ -19,9 +20,9 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 - **Accessibility-first UI**: keyboard, screen reader friendliness, high contrast / forced colors support
 - **Braille toolset**: type text, get printable braille — translation runs entirely in the browser
 - **ZIP multi-file support** for `include` / `use` with hardened companion file resolution
-- **SVG preparation workspace** with transform baking, path offset, role assignment, and fullscreen editing
+- **The drawing editor**: one picture, a shapes panel with one row per shape, roles a person can read, hover and touch on the drawing itself, transform baking and path offset
 - **Presets / undo / sharing** workflows with project-native preset support and numeric sorting
-- **Test coverage** exists (5,100+ unit tests across 158 files, plus end-to-end suites on four browsers, a production-CSP lane, and visual regression)
+- **Test coverage** exists (5,900+ unit tests across 188 files, plus end-to-end suites on four browsers, a production-CSP lane, and visual regression)
 
 ## Known rough edges
 

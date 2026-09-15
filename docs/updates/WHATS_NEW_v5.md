@@ -75,7 +75,7 @@ folder instead of a mystery string.
 
 ## A charm from a drawing
 
-![The Charm Designer: a round pendant with a heart design and a hanging hole, with Shape, Design, Border, and Attachment parameter groups](images/charm-customizer.png)
+![The Charm Designer's design file control with a bird drawing chosen. Under the file name it reads "Looks like a line drawing. Converting should take under a second.", then a Start conversion button, then four choices for what to keep from the picture: Line art, Solid shape, Light and dark, and Colours, each with a sentence explaining when to use it](images/charm-customizer.png)
 
 The Charm Designer turns a simple drawing into a wearable pendant,
 and feeding it your own art is now a documented job rather than a
@@ -86,7 +86,26 @@ Symbols keep their pictures instead of turning into coloured blobs,
 and if another program is watching a folder, your edits can land
 straight in it.
 
-![The drawing editor: a bird line drawing filling the editor as one picture, with a shapes panel open beside it and Save edited SVG and Save as DXF buttons in the toolbar](images/drawing-editor.png)
+Handing it a photograph or a PNG used to be a gamble. You chose a
+file and the page went away for as long as it took, with nothing to
+look at and no way back. Now, before anything heavy starts, Forge
+takes a quick look at the picture and tells you in one sentence what
+it seems to be and roughly what it will cost - and then waits. A
+picture small and simple enough to be quick gets on with it by
+itself; anything bigger waits for **Start conversion**, and while it
+runs there is a moving bar and a **Cancel** that actually stops the
+work. Underneath,
+four plain choices decide what to keep from the picture, each with a
+sentence about when to reach for it rather than a name you have to
+already know.
+
+Conversions are also a great deal faster. The tracing now runs on a
+worker thread, so the page keeps answering while it works, and one
+particular step that used to dominate everything was replaced: a
+drawing that took nineteen seconds to come back now takes about one
+and a half.
+
+![The drawing editor over the charm preview: a bird line drawing fills the left side under the heading "Will print as", with a colour key reading Raised, Hole and Ignore beneath it. A Drawing / Charm switch sits in the toolbar with Drawing chosen. On the right, a Shapes panel lists seven shapes; each row has the shape's name and a Raised / Hole / Ignore switch with one choice highlighted](images/drawing-editor.png)
 
 The editor itself got the change I care most about: it is **one
 picture** now. The drawing you are editing fills the space, and
@@ -96,6 +115,25 @@ takes half the room by default. A DXF's curves arrive whole now too
 (a sketch that used to open as two shapes opens with all of them),
 and anything the engine has to say about a file shows up in the
 editor's own warnings list instead of disappearing.
+
+The panel beside the drawing was rebuilt around a single row. Each
+shape gets its name, one switch reading **Raised · Hole · Ignore**,
+and a **More** button for the rest - and the row can say when it has
+run out of room instead of quietly eating the name, which is what it
+used to do on a narrow screen. The words changed too: what the panel
+calls a thing, what the row calls it, and what a screen reader says
+about it are now the same words. A **Drawing / Charm** switch in the
+toolbar turns the picture into the charm it will become without
+leaving the editor, and while you are editing, previews are drawn at
+draft quality so they arrive quickly and go back to full quality when
+you close.
+
+On a phone or a tablet the drawing takes two fingers to zoom and pan,
+one finger still scrolls the page, and hovering or pressing a shape
+marks its row in the list. Combining a complicated drawing no longer
+freezes the page either: that work moved off the main thread, with a
+bar and a Cancel of its own, and Forge now measures how long it is
+likely to take and decides on that rather than on a count of shapes.
 
 ## A stencil from a picture
 

@@ -73,7 +73,7 @@ The SVG Preparation Editor is fully keyboard accessible and screen reader friend
 | Key | Action |
 |-----|--------|
 | `Tab` / `Shift+Tab` | Move between objects, controls, and buttons |
-| `Arrow keys` | Switch between Foreground / Hole / Ignore within a radio group |
+| `Arrow keys` | Switch between Raised / Hole / Ignore within a radio group (Include / Exclude on a traced picture) |
 | `+` or `=` | Zoom in (when a preview pane is focused) |
 | `-` | Zoom out (when a preview pane is focused) |
 | `Escape` | Exit fullscreen (if active), or close the editor |
@@ -81,10 +81,10 @@ The SVG Preparation Editor is fully keyboard accessible and screen reader friend
 #### Screen Reader Behavior
 
 - The editor is a labelled `region` landmark ("SVG Preparation Editor")
-- The object list uses `role="list"` with `role="listitem"` children
-- Each object's aria-label includes the element name and current role (e.g., "Circle 1, role: foreground")
+- The list of shapes uses `role="list"` with `role="listitem"` children, and is named "Shapes"
+- Each shape's aria-label is its name and the role in the word the control uses (e.g., "Circle 1, Raised")
 - Role changes update the aria-label immediately
-- Preview updates are announced via an `aria-live="polite"` region: "Preview updated — N foreground, M holes"
+- Preview updates are announced via an `aria-live="polite"` region: "Preview updated: N raised, M holes."
 - Warnings appear in a `role="status"` live region
 - Fullscreen and close state changes are announced ("SVG editor expanded to fullscreen", "Exited fullscreen SVG editor")
 - Each radio group has a screen-reader-only `<legend>` ("Role for Circle 1")
