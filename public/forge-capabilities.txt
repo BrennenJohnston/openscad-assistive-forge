@@ -12,7 +12,11 @@
 # Additive only: entries may be added; existing entries keep their meaning.
 
 version: 1
-updated: 2026-08-25
+updated: 2026-09-15
+# Which build answered. The same string the service worker names its cache
+# after, so a bug report and a cache entry can be matched to each other.
+# Written at build time; in a source checkout it is the literal token.
+build: __BUILD_STAMP__
 
 ## OPEN A PROJECT (query parameters, all stable)
 
