@@ -111,14 +111,19 @@ converted until you ask for it.
 Open a charm design, give it a drawing, press **Edit Drawing**. Tab into the
 shapes panel and walk the rows.
 
-Four things are already known to be true here. They are in the list on
-purpose: the question is not whether they exist, it is **how they sound**.
+Three of the four things this section used to warn about were fixed at
+DP-42 P0b, so do not go listening for them. What changed, in case you hear
+the old words anywhere and want to know they are wrong:
 
-- the list's own name is still "SVG objects", while the panel above it is
-  called "Shapes"
-- the skip link still says "Skip to the regions table"
-- the tint legend under the picture still says "Printed shape" where the row
-  control says "Raised"
+- the list is named **"Shapes"** now, not "SVG objects"
+- the skip link says **"Skip to the shapes list"** on a charm, and keeps
+  "Skip to the regions table" on a stencil, where a region is the right word
+- the tint legend under the picture says **Raised · Hole · Ignore**, the same
+  words as the control on the row - and on a traced picture, where the rows
+  say Include / Exclude, the legend says **Include · Exclude** to match
+
+One is unchanged and still worth knowing:
+
 - a chosen row does not claim `aria-selected`; the choice is spoken as a
   sentence instead, because these rows hold radios and a button and an
   option may not
