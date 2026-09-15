@@ -253,16 +253,22 @@ export const MEASURED_SECONDS = {
   // to be a CI one, so this is booked at three times what was measured and
   // re-weighted from a green CI run at the round's close.
   'stencil-plates.spec.js': 60.0,
-  // DP-19..21, RE-MEASURED at DP-38. It was ONE case - one load of the stencil
-  // tile, every walk the editor has on it - measured locally at 42 s after
-  // DP-21 (8.5 s at DP-19) and booked at the same four-times ratio
-  // stencil-plates carries (14.5 measured, 60 booked). DP-38 added eight more
-  // for the Drawing / Charm switch, one of which renders the charm twice to
-  // prove the session is cheaper. MEASURED locally: nine cases in 37 s, well
-  // inside the 170 already booked, so the number is left alone and the shard
-  // deal with it. Chromium only (PROJECT_IGNORES): the two-shard lanes were a
-  // third of a minute from their 35-minute ceiling before this file existed.
-  'drawing-editor.spec.js': 170.0,
+  // DP-19..21, RE-MEASURED at DP-38 and again at DP-41. It was ONE case - one
+  // load of the stencil tile, every walk the editor has on it - measured
+  // locally at 42 s after DP-21 (8.5 s at DP-19) and booked at the same
+  // four-times ratio stencil-plates carries. DP-38 added eight more for the
+  // Drawing / Charm switch, one of which renders the charm twice to prove the
+  // session is cheaper.
+  //
+  // ★ At DP-38 I measured it LOCALLY - nine cases in 37 s - decided it sat
+  // well inside the 170 booked, and left it. From a green CI board it is
+  // **190.6 s** (run 34915591751): over the booking, by a fifth. The local
+  // number was not wrong, it was the wrong number, and this file is Chromium
+  // only so nothing else was absorbing the difference.
+  //
+  // Chromium only (PROJECT_IGNORES): the two-shard lanes were a third of a
+  // minute from their 35-minute ceiling before this file existed.
+  'drawing-editor.spec.js': 220.0,
   // DP-34, RE-MEASURED at DP-43. Now five cases: the 2000x2000 noise picture is
   // built and traced TWICE, because the conversion got fast enough that one run
   // can no longer carry both mid-conversion checks (13,401 ms with
@@ -280,7 +286,26 @@ export const MEASURED_SECONDS = {
   // MEASURED locally: 15 cases to 24, about 32 s to 114 s, and two of the new
   // ones combine a 210-shape drawing for real. Unlisted it was booked at
   // DEFAULT_WEIGHT_S, 60, which is now less than the measurement.
-  'svg-edit-door.spec.js': 200.0,
+  //
+  // RE-WEIGHTED at DP-41, and this time from a GREEN CI BOARD rather than from
+  // this machine (run 34915591751, Chromium shards, summed per file). DP-37
+  // through DP-40 took it from 24 cases to 62: the flatten worker, the budget,
+  // the signed row, choosing rows, the row-to-picture link, the phone sheet
+  // and the touch walks. It measured **242.8 s on CI** against the 200 booked
+  // here - forty seconds of work the planner could not see, in the file that
+  // grew most this round.
+  //
+  // 280 is that measurement with the headroom the entries above carry. Local
+  // is not the number to book: the same file runs 156 s on this machine, and
+  // booking that would have hidden the overrun instead of finding it.
+  'svg-edit-door.spec.js': 280.0,
+  // DP-39 / DP-40 measured it too, from the same green board: layered-design
+  // 51.2 s, ink-modes 76.6 s, trace-start-cancel 59.4 s, dxf-roundtrip 22.4 s,
+  // potrace-engine 3.3 s. Only ink-modes is over its booking, by 6.6 s against
+  // a 70 that was itself rounded up from 42 - inside the rounding, so it is
+  // left alone and written down rather than nudged. layered-design has never
+  // been listed and rides DEFAULT_WEIGHT_S at 60, which its 51.2 fits.
+  //
   // DP-43. One case: a ring traced through the real worker on both engines,
   // which is also the only place the wasm is proved to load under COOP/COEP.
   // MEASURED locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on Firefox.
