@@ -245,7 +245,9 @@ test.describe('The drawing editor door', () => {
     // directly" below.
     await expect(rows.first()).toHaveAttribute(
       'aria-label',
-      /Shape 1, role: foreground/
+      // RE-PINNED at DP-39 P2: the name reads the word a sighted person reads,
+      // and in compound mode that word is Include.
+      /Shape 1, Include/
     )
 
     // With no model behind the editor, Apply and Keep original would have
@@ -269,7 +271,7 @@ test.describe('The drawing editor door', () => {
       await page.keyboard.press('ArrowRight')
       await expect(
         page.locator(`.svg-prep-object[data-index="${i}"]`)
-      ).toHaveAttribute('aria-label', /role: ignore/)
+      ).toHaveAttribute('aria-label', /Exclude$/)
     }
 
     await tabUntil(
@@ -325,7 +327,9 @@ test.describe('The drawing editor door', () => {
     const firstLabel = await rows.first().getAttribute('aria-label')
     // Element mode names a row for what the element IS, not by position.
     expect(firstLabel).not.toMatch(/^Shape \d/)
-    expect(firstLabel).toMatch(/role: (foreground|hole|ignore)/)
+    // RE-PINNED at DP-39 P2: the word, not the value. DP-Q40 made the visible
+    // word "Raised" and the accessible name has to say the same thing.
+    expect(firstLabel).toMatch(/(Raised|Hole|Ignore)$/)
 
     // And it offers the full role choice, which compound mode cannot. Read off
     // the radios themselves: a fallback here would be a test that cannot fail.
@@ -637,6 +641,15 @@ test.describe('The drawing editor door', () => {
     await openEditorByKeyboard(page, CLASS_STYLED)
     await expect(page.locator('.svg-prep-object')).toHaveCount(3)
 
+    // DP-39 P2 (row model A, signed at DP-Q36): Delete lives behind the row's
+    // own More menu now, so the walk has one more step - which is the cost of
+    // the row holding one line down to the drawer's 280 px floor. The menu is
+    // opened the way a keyboard opens it.
+    const firstMore = page.locator('.svg-prep-more-btn').first()
+    await firstMore.focus()
+    await page.keyboard.press('Enter')
+    await expect(firstMore).toHaveAttribute('aria-expanded', 'true')
+
     const firstDelete = page.locator('.svg-prep-object-delete').first()
     await expect
       .poll(
@@ -808,7 +821,10 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     // starts shut (DP-Q46a), so this opens it first and then checks the two
     // things that matter: it takes the WHOLE width rather than lying across
     // the drawing as a strip, and closing it gives the drawing back.
-    const regions = page.locator('button:has-text("Regions")').first()
+    // By its class, not its text. The word changed at DP-Q40 (Regions ->
+    // Shapes) and "Shapes" also matches the door button on the page behind,
+    // so the text is ambiguous here. What the word IS has its own guard.
+    const regions = page.locator('.drawing-editor-panel-toggle').first()
     await regions.click()
     await expect(page.locator('.drawing-editor-panel')).toBeVisible()
     const panelWidth = await page.evaluate(
@@ -907,7 +923,10 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
     expect(box.width).toBeGreaterThan(300)
 
     // And the list is one press away, on a button that was already there.
-    const regions = page.locator('button:has-text("Regions")').first()
+    // By its class, not its text. The word changed at DP-Q40 (Regions ->
+    // Shapes) and "Shapes" also matches the door button on the page behind,
+    // so the text is ambiguous here. What the word IS has its own guard.
+    const regions = page.locator('.drawing-editor-panel-toggle').first()
     await expect(regions).toBeVisible()
     await expect(regions).toHaveAttribute('aria-expanded', 'false')
     await regions.click()
@@ -925,6 +944,679 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
     await expect(page.locator('.drawing-editor-panel')).toBeVisible()
     await expect(page.locator('.svg-prep-object').first()).toBeVisible()
   })
+})
+
+test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () => {
+  test('★ the Design width box asks before it combines, like everything else', async ({
+    page,
+  }) => {
+    // It called the combine straight, with no budget in the way at all, so
+    // typing in this box on a thousand-shape drawing started a flatten nobody
+    // had asked for. Every other change in this editor asks first.
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    await expect(page.locator('.svg-prep-render-btn')).toBeVisible()
+
+    // Watch for a combine rather than sampling for one: this drawing's
+    // combine is 923 ms and would begin and end inside a naive wait.
+    await page.evaluate(() => {
+      window.__combineStarted = false
+      const pane = document.querySelector('.svg-prep-result-pane')
+      new MutationObserver(() => {
+        if (pane.getAttribute('aria-busy') === 'true') {
+          window.__combineStarted = true
+        }
+      }).observe(pane, { attributes: true, attributeFilter: ['aria-busy'] })
+    })
+
+    await page.locator('.svg-prep-design-width-input').fill('20')
+    // Well past the 300 ms the box waits on.
+    await page.waitForTimeout(2500)
+
+    expect(
+      await page.evaluate(() => window.__combineStarted),
+      'a combine started from a width change'
+    ).toBe(false)
+    // And the pane says what it is: out of date, with the way to fix it.
+    await expect(page.locator('.svg-prep-render-row')).toBeVisible()
+    await expect(page.locator('.svg-prep-render-btn')).toBeEnabled()
+    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
+  })
+
+  test('★ what a real combine measured is remembered for the next visit', async ({
+    page,
+  }) => {
+    // DP-Q33 signed a calibration because the cost per (shape x ring point)
+    // spans five-fold between classes of drawing. Forgetting it at the end of
+    // every session means the first drawing of every visit is judged by the
+    // cautious default.
+    test.setTimeout(300000)
+    await openApp(page)
+    const KEY = 'openscad-forge-flatten-cost'
+    await page.evaluate((k) => localStorage.removeItem(k), KEY)
+
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
+    await expect(page.locator('.svg-prep-render-cancel')).toBeHidden({
+      timeout: 300000,
+    })
+
+    const stored = await page.evaluate((k) => localStorage.getItem(k), KEY)
+    expect(stored, 'nothing was remembered').not.toBeNull()
+    const value = Number(stored)
+    // A millisecond-per-unit constant, inside the bounds a stored value has to
+    // be in to be believed. MEASURED range across every class of drawing:
+    // 1.6e-4 to 1.5e-3.
+    expect(Number.isFinite(value)).toBe(true)
+    expect(value).toBeGreaterThan(1e-6)
+    expect(value).toBeLessThan(1e-1)
+  })
+
+  test('the waiting sentence gives the wait without the extra word', async ({
+    page,
+  }) => {
+    // It wrapped to a fourth line and overran the charm host's panel by 6 px.
+    test.setTimeout(180000)
+    await openApp(page)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    const note = page.locator('.svg-prep-render-note')
+    await expect(note).toContainText('300 shapes')
+    await expect(note).toContainText(/may take about \d+ seconds, so Forge waits until you ask\./)
+    await expect(note).not.toContainText('here')
+  })
+})
+
+test.describe('on a phone the list is a sheet, not a cover (DP-39 P4)', () => {
+  // ★ The panel is laid ABSOLUTELY over the editor's body, which is right
+  // beside a wide picture and wrong on a phone, where it is the full width.
+  // MEASURED at 412 x 915 with the drawer open, before this: the panel covered
+  // 107,163 of the picture's 107,352 square pixels. 99.8 per cent. Opening the
+  // list to see which shape is which hid the very thing you were trying to
+  // name.
+
+  /**
+   * What is actually on screen, and what sits on top of it.
+   *
+   * The picture's own rect is not the answer: it is inside a box that scrolls,
+   * so part of it can be laid out somewhere nobody can see. What counts is the
+   * part inside that box.
+   */
+  const coverage = (page) =>
+    page.evaluate(() => {
+      const pic = document.querySelector('.svg-prep-result-pane svg')
+      const stage = document.querySelector('.drawing-editor-stage')
+      const panel = document.querySelector('.drawing-editor-panel')
+      if (!pic || !stage) return null
+      const p = pic.getBoundingClientRect()
+      const st = stage.getBoundingClientRect()
+      const clip = {
+        left: Math.max(p.left, st.left),
+        right: Math.min(p.right, st.right),
+        top: Math.max(p.top, st.top),
+        bottom: Math.min(p.bottom, st.bottom),
+      }
+      const seen =
+        Math.max(0, clip.right - clip.left) * Math.max(0, clip.bottom - clip.top)
+      let covered = 0
+      if (panel && !panel.hidden) {
+        const b = panel.getBoundingClientRect()
+        covered =
+          Math.max(0, Math.min(clip.right, b.right) - Math.max(clip.left, b.left)) *
+          Math.max(0, Math.min(clip.bottom, b.bottom) - Math.max(clip.top, b.top))
+      }
+      return {
+        seen: Math.round(seen),
+        covered: Math.round(covered),
+        whole: Math.round(p.width * p.height),
+        panelTop: panel && !panel.hidden ? Math.round(panel.getBoundingClientRect().top) : null,
+        stageBottom: Math.round(st.bottom),
+      }
+    })
+
+  test('★ at 412 the drawing stays on screen with the list open', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await page.setViewportSize({ width: 412, height: 915 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible({
+      timeout: 60000,
+    })
+
+    // The drawer starts shut at this width (DP-Q46a), so this is the press
+    // that used to hide the drawing.
+    await page.locator('.drawing-editor-panel-toggle').click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+
+    const c = await coverage(page)
+    expect(c.covered, `the list covers ${c.covered} px of the drawing`).toBe(0)
+    expect(c.seen, 'nothing of the drawing is on screen').toBeGreaterThan(10000)
+    // Below, not on top.
+    expect(c.panelTop).toBeGreaterThanOrEqual(c.stageBottom - 2)
+  })
+
+  test('★ and the whole drawing, not the top of it', async ({ page }) => {
+    // Shrinking the stage on its own left the picture at its old size and
+    // simply scrolled the rest away: MEASURED, a 284 px drawing in a 197 px
+    // stage, so what a person saw with the list open was half a bird.
+    test.setTimeout(180000)
+    await page.setViewportSize({ width: 412, height: 915 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await page.locator('.drawing-editor-panel-toggle').click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+
+    const c = await coverage(page)
+    // Every square pixel the picture lays out is a square pixel on screen.
+    expect(
+      c.seen / c.whole,
+      `only ${Math.round((c.seen / c.whole) * 100)}% of the drawing is in view`
+    ).toBeGreaterThan(0.9)
+  })
+
+  test('a wide editor is untouched: the list stays beside the drawing', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+    const c = await coverage(page)
+    expect(c.covered).toBe(0)
+    // Beside, which means it does NOT start below the picture's box.
+    expect(c.panelTop).toBeLessThan(c.stageBottom)
+  })
+})
+
+test.describe('the word on the panel (DP-Q40)', () => {
+  test('★ the charm says Shapes, because that is what is on it', async ({
+    page,
+  }) => {
+    // A region is a thing the stencil lane cuts and paints. What somebody is
+    // looking at on a charm is a shape, and it is already the word the rows
+    // and the counts use - "7 shapes", "Shape 1" - so the heading was the odd
+    // one out.
+    test.setTimeout(180000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+
+    await expect(page.locator('.drawing-editor-panel-toggle')).toHaveText(
+      'Shapes'
+    )
+    await expect(
+      page.locator('[data-section="regions"] .drawing-editor-section-name')
+    ).toHaveText('Shapes')
+  })
+})
+
+test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
+  // "Click selects, Shift and Ctrl extend" was signed as part of row model A.
+  // The ROW is the target and nothing is added to it - which is not only tidy,
+  // it is the only thing that fits: MEASURED, the signed row has no spare
+  // width at the drawer's 280 px floor, so a checkbox per row would have cost
+  // the one line this release just bought.
+
+  async function openBird(page) {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+      timeout: 30000,
+    })
+  }
+
+  const chosen = (page) => page.locator('.svg-prep-object--selected')
+  const row = (page, n) => page.locator('.svg-prep-object').nth(n)
+  /**
+   * Where a person aims when they mean "this shape": its name.
+   *
+   * Not the row's own centre, which is what clicking the row gives you - that
+   * point lands wherever the layout happens to put it, and in a row this full
+   * of controls it can land ON one. MEASURED: it does on CI, where the fonts
+   * are wider, and four of these walks failed because a click meant for the
+   * row set a role instead. Clicking a control is a press on that control, on
+   * purpose; the name is the part of the row that is only the row.
+   */
+  const rowName = (page, n) => row(page, n).locator('.svg-prep-object-name')
+
+  test('★ click chooses one, Shift extends, Ctrl adds', async ({ page }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await expect(chosen(page)).toHaveCount(0)
+
+    await rowName(page, 1).click()
+    await expect(chosen(page)).toHaveCount(1)
+
+    await rowName(page, 4).click({ modifiers: ['Shift'] })
+    await expect(chosen(page), 'Shift did not take the range').toHaveCount(4)
+
+    await rowName(page, 0).click({ modifiers: ['Control'] })
+    await expect(chosen(page)).toHaveCount(5)
+
+    // And a plain click starts again, which is what every list people already
+    // use does.
+    await rowName(page, 2).click()
+    await expect(chosen(page)).toHaveCount(1)
+  })
+
+  test('★ a keyboard chooses the same way, and says what it chose', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await row(page, 3).focus()
+    await page.keyboard.press('Space')
+    await expect(chosen(page)).toHaveCount(1)
+
+    // The state is SAID, because these rows are list items: aria-selected
+    // belongs to options and grid rows, and an option may not hold the radios
+    // and the button this row holds. Rather than change what the whole list
+    // reads as, the change is announced and counted where the actions are.
+    const said = await page.evaluate(
+      () =>
+        document.querySelector('.svg-prep-workspace .sr-only[aria-live]')
+          ?.textContent
+    )
+    expect(said).toMatch(/1 of 7 shapes selected/)
+  })
+
+  test('★ a press on a control in the row is not a press on the row', async ({
+    page,
+  }) => {
+    // The radios, More and everything in it are controls with their own jobs.
+    test.setTimeout(180000)
+    await openBird(page)
+    await rowName(page, 1).click()
+    await expect(chosen(page)).toHaveCount(1)
+
+    await row(page, 3).getByRole('radio', { name: 'Hole' }).check()
+    await expect(chosen(page), 'a role click moved the selection').toHaveCount(1)
+
+    await row(page, 3).locator('.svg-prep-more-btn').click()
+    await expect(chosen(page), 'opening a menu moved the selection').toHaveCount(1)
+  })
+
+  test('★ Delete selected takes exactly those rows, and the choice goes with them', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    const all = await page.locator('.svg-prep-object').count()
+
+    const button = page.locator('[data-action="delete-selected"]')
+    // Nothing chosen, nothing offered: a button that does nothing is worse
+    // than no button.
+    await expect(button).toBeHidden()
+
+    await rowName(page, 1).click()
+    await rowName(page, 2).click({ modifiers: ['Control'] })
+    await expect(button).toBeVisible()
+    // It says how many, because that count is the whole reason somebody chose
+    // rather than deleting one at a time.
+    await expect(button).toHaveText('Delete selected (2)')
+
+    await button.click()
+    await expect(page.locator('.svg-prep-object')).toHaveCount(all - 2)
+    // Every index after a deleted row has moved, so a selection kept across
+    // the rebuild would point at shapes nobody chose.
+    await expect(chosen(page)).toHaveCount(0)
+    await expect(button).toBeHidden()
+  })
+
+  test('the chosen row is not marked by colour alone', async ({ page }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await rowName(page, 1).click()
+    const shadow = await chosen(page).evaluate(
+      (el) => getComputedStyle(el).boxShadow
+    )
+    // A bar down the leading edge, so the state survives a greyscale
+    // screenshot and outlasts the pointer that hover depends on.
+    expect(shadow).not.toBe('none')
+    expect(shadow).toContain('inset')
+  })
+})
+
+test.describe('the list can point at the picture (DP-39 P3)', () => {
+  // ★ It could, and then it could not, and nothing said so. Hovering or
+  // focusing a row draws that shape's outline into an overlay - and the
+  // overlay was in the SOURCE pane, which was the picture until DP-37 P1 made
+  // one picture the default and put the source behind Compare.
+  //
+  // MEASURED at 1280 before this: source pane 0 by 0, result pane 808 by 354,
+  // and the highlight path drawn on hover was 0 px wide. A feature that is
+  // still running, still drawing, and painting into a pane nobody can see.
+
+  async function openBird(page) {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+      timeout: 30000,
+    })
+  }
+
+  /** Every highlight the page is drawing, and whether it has any size. */
+  const marks = (page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.svg-prep-highlight-path')].map((p) => {
+        const b = p.getBoundingClientRect()
+        return Math.round(b.width) * Math.round(b.height)
+      })
+    )
+
+  test('★ hovering a row outlines that shape in the picture a person is looking at', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    expect(await marks(page)).toEqual([])
+
+    await page.locator('.svg-prep-object').nth(1).hover()
+    const drawn = await marks(page)
+    expect(drawn.length, 'nothing was drawn at all').toBeGreaterThan(0)
+    expect(
+      drawn.some((area) => area > 0),
+      `every highlight had no size: ${JSON.stringify(drawn)}`
+    ).toBe(true)
+
+    // And it goes away again.
+    await page.locator('.svg-prep-result-caption, .svg-prep-workspace').first().hover()
+    await expect
+      .poll(async () => (await marks(page)).filter((a) => a > 0).length)
+      .toBe(0)
+  })
+
+  test('★ a keyboard gets the same pointing as a mouse', async ({ page }) => {
+    // The list is walked by Tab in this editor, and somebody who never touches
+    // a mouse needs the drawing to answer the same way.
+    test.setTimeout(180000)
+    await openBird(page)
+    await page.locator('.svg-prep-object').nth(2).focus()
+    const drawn = await marks(page)
+    expect(
+      drawn.some((area) => area > 0),
+      `focus drew nothing with size: ${JSON.stringify(drawn)}`
+    ).toBe(true)
+  })
+
+  test('with Compare on, the shape lights up in both pictures', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await page.getByRole('button', { name: /Compare/ }).click()
+    await expect(page.locator('.svg-prep-source-pane svg')).toBeVisible()
+
+    await page.locator('.svg-prep-object').nth(1).hover()
+    const drawn = (await marks(page)).filter((a) => a > 0)
+    expect(drawn.length, 'only one picture answered').toBeGreaterThanOrEqual(2)
+  })
+})
+
+test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
+  // DP-Q36 was asked with the three candidates drawn at this panel's real
+  // widths and A was confirmed: colour tag, name, a role control with the
+  // words on it, and one More menu holding offset, Layer and Delete.
+  //
+  // What A buys is the line P1 had to give up. MEASURED after building it,
+  // standalone door, bird, first row: the role control went from 199 px to
+  // 138 and the offset box and Delete left the line entirely, so at 1280 the
+  // name goes from 72 px to 210 - which is the whole of "Rectangle 1
+  // (600x450)" rather than six characters of it.
+
+  async function openRows(page, width) {
+    await page.setViewportSize({ width, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    const toggle = page.locator('.drawing-editor-panel-toggle')
+    if (await toggle.isVisible().catch(() => false)) {
+      if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+        await toggle.click()
+      }
+    }
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+      timeout: 30000,
+    })
+  }
+
+  /**
+   * How many lines each row is using.
+   *
+   * Read the CENTRES, not the tops: this row centres its children, so a 14 px
+   * swatch beside a 44 px control has tops 15 px apart while sitting on the
+   * same line. Reading the row's HEIGHT instead would have to know this app's
+   * padding and be a different number at every width.
+   */
+  const lineCounts = (page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.svg-prep-object')].map((row) => {
+        const bands = []
+        for (const child of row.children) {
+          if (child.hidden) continue
+          const b = child.getBoundingClientRect()
+          if (b.height <= 0) continue
+          const centre = b.top + b.height / 2
+          if (!bands.some((y) => Math.abs(y - centre) < 8)) bands.push(centre)
+        }
+        return bands.length
+      })
+    )
+
+  test('★ at 1280 the whole row is one line', async ({ page }) => {
+    // This is the width the name gain is FOR: the role control went from
+    // 199 px to 138 and the offset box and Delete left the line, so
+    // "Rectangle 1 (600x450)" reads as itself rather than as six characters
+    // and an ellipsis.
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    for (const [i, lines] of (await lineCounts(page)).entries()) {
+      expect(lines, `row ${i} took ${lines} lines`).toBe(1)
+    }
+  })
+
+  for (const width of [768, 412]) {
+    test(`★ at ${width} the row stays tidy, one line or two`, async ({
+      page,
+    }) => {
+      // ★ NOT "one line" here, and the difference is the font. MEASURED on
+      // this machine the row holds one line at every width; MEASURED on CI,
+      // where the fonts are wider, it takes two at 768 - which is the
+      // TIGHTEST panel of the three, 312 px against 412's 376. Model A was
+      // signed as fitting one line down to the drawer's floor, and that was
+      // measured with one set of fonts; it is not a promise the layout can
+      // keep on every machine.
+      //
+      // What it can keep is this: when the words are too wide the row wraps
+      // tidily rather than eating the name or clipping Delete, which is
+      // exactly what DP-39 P1 built the wrap for. Two lines is the graceful
+      // path. Three would mean something is wrong.
+      test.setTimeout(180000)
+      await openRows(page, width)
+      for (const [i, lines] of (await lineCounts(page)).entries()) {
+        expect(lines, `row ${i} took ${lines} lines`).toBeLessThanOrEqual(2)
+      }
+    })
+  }
+
+  test('★ the whole name fits where it never used to', async ({ page }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const name = page.locator('.svg-prep-object-name').first()
+    await expect(name).toHaveText('Rectangle 1 (600×450)')
+    const cut = await name.evaluate((el) => el.scrollWidth > el.clientWidth + 1)
+    expect(cut, 'the name is still being cut off').toBe(false)
+  })
+
+  test('★ the role control says the same three words to everybody', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const row = page.locator('.svg-prep-object').first()
+
+    // Still a radio group: DP-Q36 signed a control drawn as a switch, not a
+    // different control. Arrow keys walk it because it never stopped being
+    // three radios in a fieldset.
+    await expect(row.getByRole('radio', { name: 'Raised' })).toBeVisible()
+    await expect(row.getByRole('radio', { name: 'Hole' })).toBeVisible()
+    await expect(row.getByRole('radio', { name: 'Ignore' })).toBeVisible()
+    await expect(row.locator('text=Foreground')).toHaveCount(0)
+
+    // And the row's own accessible name reads the word on screen, so a
+    // screen reader and an eye get the same answer to "what is this shape".
+    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Hole/)
+    await row.getByRole('radio', { name: 'Ignore' }).check()
+    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Ignore/)
+  })
+
+  test('★ More holds what left the line, and gives the row back', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const more = page.locator('.svg-prep-more-btn').first()
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    // The visible word is the same on every row, so the name says which row.
+    await expect(more).toHaveAttribute('aria-label', /More for Rectangle 1/)
+
+    const panel = page.locator('.svg-prep-more-panel').first()
+    await expect(panel).toBeHidden()
+
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    await expect(panel).toBeVisible()
+    await expect(panel.locator('.svg-prep-object-delete')).toBeVisible()
+    await expect(panel.locator('.svg-prep-offset-input')).toBeVisible()
+
+    // Escape shuts the menu and NOT the editor, and puts focus back where the
+    // person left it.
+    await panel.locator('.svg-prep-offset-input').focus()
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+    await expect(more).toBeFocused()
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+  })
+
+  test('only one row opens its menu at a time', async ({ page }) => {
+    // Two open menus on a long list is two rows' worth of controls with
+    // nothing saying which row each belongs to.
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    const buttons = page.locator('.svg-prep-more-btn')
+    await buttons.nth(0).click()
+    await expect(buttons.nth(0)).toHaveAttribute('aria-expanded', 'true')
+    await buttons.nth(2).click()
+    await expect(buttons.nth(2)).toHaveAttribute('aria-expanded', 'true')
+    await expect(buttons.nth(0)).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('every control in the row clears the 44px floor', async ({ page }) => {
+    test.setTimeout(180000)
+    await openRows(page, 412)
+    const row = page.locator('.svg-prep-object').first()
+    const targets = [
+      row.getByRole('radio', { name: 'Raised' }),
+      row.getByRole('radio', { name: 'Hole' }),
+      row.getByRole('radio', { name: 'Ignore' }),
+      row.locator('.svg-prep-more-btn'),
+    ]
+    for (const t of targets) {
+      const box = await t.boundingBox()
+      const name = await t.getAttribute('aria-label')
+      expect(box.height, `${name || 'control'} is ${box.height} px tall`).toBeGreaterThanOrEqual(44)
+      expect(box.width, `${name || 'control'} is ${box.width} px wide`).toBeGreaterThanOrEqual(44)
+    }
+  })
+
+  test('the row passes an accessibility scan, menu open and shut', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openRows(page, 1280)
+    for (const open of [false, true]) {
+      if (open) await page.locator('.svg-prep-more-btn').first().click()
+      const results = await new AxeBuilder({ page })
+        .include('.svg-prep-objects')
+        .analyze()
+      expect(
+        results.violations,
+        `menu ${open ? 'open' : 'shut'}: ${JSON.stringify(results.violations, null, 2)}`
+      ).toEqual([])
+    }
+  })
+})
+
+test.describe('the shapes row keeps its name and its Delete (DP-39 P1)', () => {
+  // ★ The row could not fit on one line and had no way to say so, so it took
+  // the space out of the NAME and then out of Delete. MEASURED in this door on
+  // the bird, at 768: the name rendered at ZERO pixels wide and Delete ran
+  // 38 px past the list, 40 px of the row clipped away. Seven rows of a dot,
+  // three radios and a number box, with nothing to tell one shape from
+  // another - which is the complaint DP-39 exists for.
+  //
+  // 768 is the width that showed it, and it is not an unusual one: it is a
+  // tablet, and it is also what a 1280 window gives this panel once the
+  // customizer has taken its half.
+
+  /** Every row's name width, and how far any row overflows its list. */
+  const rowFacts = (page) =>
+    page.evaluate(() => {
+      const list = document.querySelector('.svg-prep-objects')
+      const rows = [...document.querySelectorAll('.svg-prep-object')]
+      return rows.map((row) => {
+        const name = row.querySelector('.svg-prep-object-name')
+        const del = row.querySelector('.svg-prep-object-delete')
+        return {
+          nameWidth: name ? Math.round(name.getBoundingClientRect().width) : 0,
+          nameText: name ? name.textContent : '',
+          deleteRight: del ? Math.round(del.getBoundingClientRect().right) : 0,
+          listRight: Math.round(list.getBoundingClientRect().right),
+          overflow: Math.max(0, Math.round(row.scrollWidth - list.clientWidth)),
+        }
+      })
+    })
+
+  for (const width of [1280, 768, 412]) {
+    test(`★ at ${width} every row shows a name and a whole Delete`, async ({
+      page,
+    }) => {
+      test.setTimeout(180000)
+      await page.setViewportSize({ width, height: 900 })
+      await openApp(page)
+      await openEditorByKeyboard(page, BIRD_SVG)
+      // Below 640 the drawer starts shut (DP-Q46a).
+      const toggle = page.locator('.drawing-editor-panel-toggle')
+      if (await toggle.isVisible().catch(() => false)) {
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+          await toggle.click()
+        }
+      }
+      await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+        timeout: 30000,
+      })
+
+      const rows = await rowFacts(page)
+      expect(rows.length).toBeGreaterThan(0)
+      for (const [i, row] of rows.entries()) {
+        // Six characters and an ellipsis is the floor the row is signed to
+        // keep. 30 px is that floor with room for the font to differ.
+        expect(
+          row.nameWidth,
+          `row ${i} name "${row.nameText}" is ${row.nameWidth} px wide`
+        ).toBeGreaterThan(30)
+        // Delete is a whole button, inside the list it belongs to.
+        expect(
+          row.deleteRight,
+          `row ${i} Delete ends at ${row.deleteRight}, list at ${row.listRight}`
+        ).toBeLessThanOrEqual(row.listRight)
+        expect(row.overflow, `row ${i} overflows by ${row.overflow} px`).toBe(0)
+      }
+    })
+  }
 })
 
 test.describe('the combine runs off the main thread (DP-37 P2)', () => {

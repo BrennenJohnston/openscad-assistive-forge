@@ -42,8 +42,17 @@ export { flattenWithRings };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/**
+ * The three things a shape can be, in the words a person reads.
+ *
+ * "Raised", not "Foreground" (DP-Q40, 2026-09-14). Foreground is a word about
+ * drawing programs; what this control decides is whether the shape STANDS UP
+ * off the charm's face, which is the thing a finger will find. The value
+ * underneath stays `foreground`, because that is the model's parameter and
+ * changing a parameter is a different decision from changing a label.
+ */
 const ROLE_OPTIONS = [
-  { value: 'foreground', label: 'Foreground' },
+  { value: 'foreground', label: 'Raised' },
   { value: 'hole', label: 'Hole' },
   { value: 'ignore', label: 'Ignore' },
 ];
@@ -54,6 +63,24 @@ const COMPOUND_ROLE_OPTIONS = [
   { value: 'foreground', label: 'Include' },
   { value: 'ignore', label: 'Exclude' },
 ];
+
+/**
+ * The word for a role, from whichever table is in force.
+ *
+ * The row's accessible name used to carry the VALUE - "role: foreground" -
+ * which was the same word a sighted person read, right up until DP-Q40 made
+ * the visible word "Raised". Blind and sighted people reading the same thing
+ * is the whole point of the row this release signs, so the name reads the
+ * label and nothing has to be kept in step by hand.
+ *
+ * @param {string} value
+ * @param {Array<{value: string, label: string}>} options
+ * @returns {string}
+ */
+function roleWord(value, options) {
+  const found = (options || ROLE_OPTIONS).find((o) => o.value === value);
+  return found ? found.label : value;
+}
 
 /** Viewport width below which the editor opens fullscreen automatically. */
 const AUTO_FULLSCREEN_MAX_WIDTH = 768;
@@ -323,6 +350,16 @@ function buildWorkspaceDom() {
   keepLargestBtn.dataset.action = 'keep-largest';
   keepLargestBtn.textContent = 'Delete the rest';
 
+  // DP-39 P2. A selection nobody can act on is not a feature, and Delete is
+  // the thing people said they wanted it for. It says how many, because "3"
+  // is the whole reason somebody selected rather than deleted one at a time.
+  const deleteSelectedBtn = document.createElement('button');
+  deleteSelectedBtn.type = 'button';
+  deleteSelectedBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
+  deleteSelectedBtn.dataset.action = 'delete-selected';
+  deleteSelectedBtn.textContent = 'Delete selected';
+  deleteSelectedBtn.hidden = true;
+
   const undoDeleteBtn = document.createElement('button');
   undoDeleteBtn.type = 'button';
   undoDeleteBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
@@ -336,6 +373,7 @@ function buildWorkspaceDom() {
     deleteSmallBtn,
     keepLabel,
     keepLargestBtn,
+    deleteSelectedBtn,
     undoDeleteBtn,
     bulkHelp
   );
@@ -528,6 +566,7 @@ function buildWorkspaceDom() {
       sourceZoom,
       resultZoom,
       bulkBar,
+      deleteSelectedBtn,
       bulkCount,
       smallInput,
       keepInput,
@@ -632,7 +671,7 @@ function populateObjectList(
     item.setAttribute('role', 'listitem');
     item.tabIndex = 0;
     item.dataset.index = String(i);
-    item.setAttribute('aria-label', `${name}, role: ${role}`);
+    item.setAttribute('aria-label', `${name}, ${roleWord(role, roleOptions)}`);
 
     // Color swatch
     const swatch = document.createElement('span');
@@ -667,6 +706,35 @@ function populateObjectList(
 
     item.append(swatch, nameSpan, fieldset);
 
+    // DP-39 P2, row model A (DP-Q36): offset, Layer and Delete stop competing
+    // with the name for the one line and live behind one control instead.
+    //
+    // A button and a panel it names, not a <details>: the panel has to take
+    // the row's full width when it opens, and a <details> keeps its summary
+    // and its panel in one box, so the row would either grow a narrow column
+    // or need `display: contents` to escape it. An absolutely positioned menu
+    // was the other way and would be clipped by the drawer that scrolls these
+    // rows, on the row that most needs it - the last one.
+    const moreId = `svg-prep-more-${i}`;
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'svg-prep-more-btn';
+    moreBtn.dataset.moreIndex = String(i);
+    moreBtn.textContent = 'More';
+    // The visible word is the same on every row, so the accessible name says
+    // which row it belongs to - and it CONTAINS the visible word, which is
+    // what anybody driving this by voice will say.
+    moreBtn.setAttribute('aria-label', `More for ${name}`);
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.setAttribute('aria-controls', moreId);
+
+    const morePanel = document.createElement('div');
+    morePanel.className = 'svg-prep-more-panel';
+    morePanel.id = moreId;
+    morePanel.hidden = true;
+
+    item.append(moreBtn, morePanel);
+
     if (offsetEnabled) {
       const offsetInput = document.createElement('input');
       offsetInput.type = 'number';
@@ -678,7 +746,7 @@ function populateObjectList(
       offsetInput.value = '0';
       offsetInput.setAttribute('aria-label', `Offset for ${name} (mm)`);
       if (role === 'ignore') offsetInput.disabled = true;
-      item.appendChild(offsetInput);
+      morePanel.appendChild(offsetInput);
     }
 
     if (layerCount > 0) {
@@ -702,14 +770,14 @@ function populateObjectList(
         layerSelect.appendChild(opt);
       }
       if (role === 'ignore') layerSelect.disabled = true;
-      item.appendChild(layerSelect);
+      morePanel.appendChild(layerSelect);
 
       // Filled in by validateAndMarkLayers(); an empty node keeps the row's
       // layout from jumping when a warning appears under it.
       const layerNote = document.createElement('span');
       layerNote.className = 'svg-prep-layer-note';
       layerNote.hidden = true;
-      item.appendChild(layerNote);
+      morePanel.appendChild(layerNote);
     } else {
       layers.push(1);
     }
@@ -719,7 +787,10 @@ function populateObjectList(
       warning.className = 'svg-prep-object-warning';
       warning.setAttribute('aria-label', el.warnings.join('; '));
       warning.textContent = '\u26A0';
-      item.appendChild(warning);
+      // Beside the NAME, not after the menu button. It is an advisory about
+      // this shape, and appended at the end it read as though it belonged to
+      // More - which is a control, not a shape.
+      nameSpan.after(warning);
     }
 
     // DP-4. Ignore already removes a shape from the OUTPUT; this removes it
@@ -731,7 +802,7 @@ function populateObjectList(
     deleteBtn.dataset.deleteIndex = String(i);
     deleteBtn.textContent = 'Delete';
     deleteBtn.setAttribute('aria-label', `Delete ${name}`);
-    item.appendChild(deleteBtn);
+    morePanel.appendChild(deleteBtn);
 
     listEl.appendChild(item);
   });
@@ -912,6 +983,48 @@ export function createSvgPrepWorkspace(containerEl) {
   // in Chromium over traced curves: 50 shapes 485 ms, 200 shapes 14.7 s, 800
   // shapes eight and a half minutes - every one of them with the page frozen.
   let flattenRunner = null;
+  /** Where the measured constant is kept between visits. */
+  const FLATTEN_COST_KEY = 'openscad-forge-flatten-cost';
+
+  /**
+   * The bounds a stored constant has to be inside to be believed.
+   *
+   * The whole measured range is 1.6e-4 (synthetic shapes) to 1.5e-3 (real
+   * prepped artwork). These are two orders either side of that, which is wide
+   * enough for a machine far slower or faster than any measured here and
+   * narrow enough that a corrupted value cannot teach the app that a
+   * thousand-shape drawing is free.
+   */
+  const FLATTEN_COST_MIN = 1e-6;
+  const FLATTEN_COST_MAX = 1e-1;
+
+  /** @returns {number} the remembered constant, or the default */
+  function readFlattenCost() {
+    try {
+      const raw = localStorage.getItem(FLATTEN_COST_KEY);
+      if (!raw) return FLATTEN_COST_DEFAULT;
+      const value = Number(raw);
+      if (!Number.isFinite(value)) return FLATTEN_COST_DEFAULT;
+      if (value < FLATTEN_COST_MIN || value > FLATTEN_COST_MAX) {
+        return FLATTEN_COST_DEFAULT;
+      }
+      return value;
+    } catch {
+      // A private window, or storage the person has turned off. The default
+      // is a working answer, so there is nothing to report and nothing to fix.
+      return FLATTEN_COST_DEFAULT;
+    }
+  }
+
+  /** Keep what a real flatten just proved, for the next visit. */
+  function writeFlattenCost(value) {
+    try {
+      localStorage.setItem(FLATTEN_COST_KEY, String(value));
+    } catch {
+      // Same: the session still has the number in hand.
+    }
+  }
+
   function getFlattenRunner() {
     if (!flattenRunner) flattenRunner = createFlattenRunner();
     return flattenRunner;
@@ -926,7 +1039,7 @@ export function createSvgPrepWorkspace(containerEl) {
   const canUseWorker = () => typeof Worker !== 'undefined';
   let previewWaitingForEngine = false;
   /**
-   * Milliseconds per (shape x ring point), as this session has measured it.
+   * Milliseconds per (shape x ring point), as this machine has measured it.
    *
    * DP-Q33 signed the calibration as well as the predictor because the
    * constant belongs to the artwork and the machine, not to the formula:
@@ -934,12 +1047,12 @@ export function createSvgPrepWorkspace(containerEl) {
    * five-fold between classes. It starts at the default and is replaced by
    * the first real flatten big enough to have measured anything.
    *
-   * It lives for as long as the editor does, and no longer. Keeping it across
-   * sessions would predict better on the second visit; it would also be a new
-   * thing stored about a person's drawings, which is the owner's call and not
-   * mine.
+   * The owner signed remembering it (2026-09-14): without that, the first
+   * drawing of every visit is judged by the cautious default and some quick
+   * drawings are handed a button they did not need. What is kept is ONE
+   * number about this machine's speed - never a drawing, never a file name.
    */
-  let flattenCost = FLATTEN_COST_DEFAULT;
+  let flattenCost = readFlattenCost();
   function loadRingEngine() {
     if (!ringEnginePromise) {
       ringEnginePromise = import('./ring-geometry.js')
@@ -1072,7 +1185,8 @@ export function createSvgPrepWorkspace(containerEl) {
     const picture = renderPictureInto(
       refs.resultPane,
       refs.resultZoom,
-      'The drawing as it is now, not yet combined'
+      'The drawing as it is now, not yet combined',
+      true
     );
     if (picture) {
       picture.classList.add('svg-prep-standin');
@@ -1277,9 +1391,12 @@ export function createSvgPrepWorkspace(containerEl) {
     // wait for 300.
     const { shapes, points } = flattenSizeOf();
     const ms = predictFlattenMs(shapes, points, flattenCost);
+    // "here" is gone (the owner, 2026-09-14): it wrapped the sentence to a
+    // fourth line and overran the charm host's panel by 6 px, MEASURED at
+    // 1280x900, and "may take" already says the number is an estimate.
     return (
       `This drawing has ${shapes} shapes. Combining them may take ` +
-      `${waitInWords(ms)} here, so Forge waits until you ask.`
+      `${waitInWords(ms)}, so Forge waits until you ask.`
     );
   }
 
@@ -1365,7 +1482,10 @@ export function createSvgPrepWorkspace(containerEl) {
           // DP-Q33's calibration: what this drawing really cost, on this
           // machine, replaces the default for every prediction after it.
           const measured = flattenCostFrom(size.shapes, size.points, out.ms);
-          if (measured !== null) flattenCost = measured;
+          if (measured !== null) {
+            flattenCost = measured;
+            writeFlattenCost(measured);
+          }
         } catch (error) {
           // None of the three is a failure and none may be reported as one:
           // the person stopped this combine, a newer one replaced it, or the
@@ -1451,6 +1571,12 @@ export function createSvgPrepWorkspace(containerEl) {
 
       const imported = document.importNode(svg, true);
       if (previousViewBox) imported.setAttribute('viewBox', previousViewBox);
+      // The picture a person is looking at is the one the list has to be able
+      // to point at, and since DP-37 P1 that is THIS one.
+      const resultOverlay = document.createElementNS(SVG_NS, 'g');
+      resultOverlay.setAttribute('class', 'svg-prep-overlay');
+      resultOverlay.setAttribute('aria-hidden', 'true');
+      imported.appendChild(resultOverlay);
       markAsPicture(imported, 'Prepared result');
       refs.resultPane.insertBefore(imported, refs.resultZoom);
 
@@ -1555,30 +1681,42 @@ export function createSvgPrepWorkspace(containerEl) {
     // descriptor's own pathData (viewBox coordinates, transforms baked),
     // so indexes always match the object list — including subpaths of
     // compound paths — and rendering works in every browser.
-    function getOverlay() {
-      return refs.sourcePane.querySelector('.svg-prep-overlay');
+    /**
+     * Every picture on screen, not one named pane.
+     *
+     * ★ It used to be the SOURCE pane alone, which was right until DP-37 P1
+     * made one picture the default and put the source behind Compare. MEASURED
+     * at 1280 after that: the source pane was 0 by 0, the result pane was 808
+     * by 354, and hovering a row drew a highlight path 0 px wide into the pane
+     * nobody could see. The list stopped being able to point at the drawing
+     * and nothing said so.
+     *
+     * Every overlay, so Compare lights the shape up in both pictures at once -
+     * the same rule renderRoleLayer already follows for the tints.
+     */
+    function overlays() {
+      return root.querySelectorAll('.svg-prep-overlay');
     }
 
     function highlight(e) {
       const item = e.target.closest('.svg-prep-object');
-      if (!item) return;
-      const overlay = getOverlay();
-      if (!overlay || !currentAnalysis) return;
-      clearSvgGroup(overlay);
+      if (!item || !currentAnalysis) return;
       const idx = parseInt(item.dataset.index, 10);
       const el = liveElements[idx];
-      if (!el || !el.pathData) return;
-      const p = document.createElementNS(SVG_NS, 'path');
-      p.setAttribute('d', el.pathData);
-      p.setAttribute('class', 'svg-prep-highlight-path');
-      overlay.appendChild(p);
+      overlays().forEach((overlay) => {
+        clearSvgGroup(overlay);
+        if (!el || !el.pathData) return;
+        const p = document.createElementNS(SVG_NS, 'path');
+        p.setAttribute('d', el.pathData);
+        p.setAttribute('class', 'svg-prep-highlight-path');
+        overlay.appendChild(p);
+      });
     }
 
     function unhighlight(e) {
       const item = e.target.closest('.svg-prep-object');
       if (!item) return;
-      const overlay = getOverlay();
-      if (overlay) clearSvgGroup(overlay);
+      overlays().forEach(clearSvgGroup);
     }
 
     refs.objects.addEventListener('mouseover', highlight);
@@ -1604,15 +1742,170 @@ export function createSvgPrepWorkspace(containerEl) {
 
   // ── Event handlers ─────────────────────────────────────────────────────
 
+  /**
+   * Escape, innermost thing first.
+   *
+   * A row's menu is the smallest thing open, so it is the first thing Escape
+   * shuts - anything else and one press with a menu open would close the whole
+   * editor, which is a long way further than anybody meant to go.
+   *
+   * This has to live HERE rather than on the list, where it started. The focus
+   * trap listens on the document in the CAPTURE phase, so it reaches Escape
+   * before any bubbling listener inside the editor could: MEASURED, the menu
+   * stayed open and the editor closed under it. One Escape policy, one place.
+   *
+   * @returns {boolean} whether the press was spent
+   */
+  function closeOpenMenu() {
+    const open = refs.objects.querySelector(
+      '.svg-prep-more-btn[aria-expanded="true"]'
+    );
+    if (!open) return false;
+    setMoreOpen(open, false);
+    open.focus();
+    return true;
+  }
+
   function handleKeydown(e) {
     if (e.key === 'Escape') {
+      // Somebody upstream has already spent this press. The surface's focus
+      // trap listens on the document in the capture phase and calls
+      // preventDefault before its own handler runs, and it does NOT stop the
+      // event - so without this, one Escape shut the row's menu on the way
+      // down and then closed the whole editor on the way up. MEASURED.
+      if (e.defaultPrevented) return;
       e.preventDefault();
+      if (closeOpenMenu()) return;
       if (isFullscreen) {
         closeFullscreen();
       } else {
         close();
       }
     }
+  }
+
+  // ── DP-39 P2: the selection ────────────────────────────────────────────
+  //
+  // Signed at DP-Q36 as part of row model A: "click selects, Shift and Ctrl
+  // extend". The ROW is the target and nothing is added to it - which is not
+  // only tidy, it is the only thing that fits. MEASURED at the drawer's 280 px
+  // floor the signed row has no spare width at all, so a checkbox per row
+  // (about 30 px once it clears the 44 px floor) would have cost the one line
+  // this release just bought.
+  //
+  // What it does NOT do is claim `aria-selected`. That attribute belongs to
+  // options and grid rows; these are list items, and they hold radios and a
+  // button, which an option may not. Rather than change what the whole list
+  // reads as - the thing the gate pinned - the state is said out loud when it
+  // changes and counted where the actions are.
+
+  /** Indices currently selected. */
+  let selected = new Set();
+  /** Where a Shift range starts: the last row chosen on its own. */
+  let selectionAnchor = null;
+
+  function selectionSentence() {
+    if (selected.size === 0) return 'Nothing selected.';
+    return `${selected.size} of ${liveElements.length} shapes selected.`;
+  }
+
+  /** Paint the rows, the count and the button from `selected`. */
+  function renderSelection() {
+    refs.objects.querySelectorAll('.svg-prep-object').forEach((row) => {
+      const on = selected.has(parseInt(row.dataset.index, 10));
+      row.classList.toggle('svg-prep-object--selected', on);
+    });
+    refs.deleteSelectedBtn.hidden = selected.size === 0;
+    refs.deleteSelectedBtn.textContent =
+      selected.size > 0
+        ? `Delete selected (${selected.size})`
+        : 'Delete selected';
+  }
+
+  /** Change the selection and say what it is now. */
+  function setSelection(next, { announce: say = true } = {}) {
+    selected = next;
+    renderSelection();
+    if (say) {
+      const sentence = selectionSentence();
+      liveRegion.textContent = sentence;
+      announce(sentence);
+    }
+  }
+
+  function clearSelection() {
+    if (selected.size === 0) return;
+    selectionAnchor = null;
+    setSelection(new Set(), { announce: false });
+  }
+
+  /**
+   * One press on a row.
+   *
+   * Plain: this row alone. Ctrl or Cmd: add or remove this row. Shift: every
+   * row from the last single choice to this one, which is what every list
+   * people already use does.
+   */
+  function chooseRow(index, { toggle = false, range = false } = {}) {
+    if (!Number.isInteger(index) || index < 0) return;
+    const next = new Set(selected);
+    if (range && selectionAnchor !== null) {
+      const from = Math.min(selectionAnchor, index);
+      const to = Math.max(selectionAnchor, index);
+      for (let i = from; i <= to; i++) next.add(i);
+    } else if (toggle) {
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      selectionAnchor = index;
+    } else {
+      next.clear();
+      next.add(index);
+      selectionAnchor = index;
+    }
+    setSelection(next);
+  }
+
+  /**
+   * A press on the row, but not on anything the row holds.
+   *
+   * The radios, the menu and everything inside it are controls with their own
+   * jobs; a click on one of those is not a click on the row.
+   */
+  function handleRowClick(e) {
+    const row = e.target.closest('.svg-prep-object');
+    if (!row || !refs.objects.contains(row)) return;
+    if (
+      e.target.closest(
+        'input, button, select, label, .svg-prep-more-panel, .svg-prep-role-group'
+      )
+    ) {
+      return;
+    }
+    chooseRow(parseInt(row.dataset.index, 10), {
+      toggle: e.ctrlKey || e.metaKey,
+      range: e.shiftKey,
+    });
+  }
+
+  /** The same three choices from the keyboard, on the focused row. */
+  function handleRowKeydown(e) {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    const row = e.target.closest('.svg-prep-object');
+    // Only when the ROW itself has focus: inside a control, Space and Enter
+    // belong to the control.
+    if (!row || e.target !== row) return;
+    e.preventDefault();
+    chooseRow(parseInt(row.dataset.index, 10), {
+      toggle: e.ctrlKey || e.metaKey,
+      range: e.shiftKey,
+    });
+  }
+
+  /** Which role table this drawing is using. */
+  function currentRoleOptions() {
+    return currentAnalysis?.isCompoundPathOnly
+      ? COMPOUND_ROLE_OPTIONS
+      : ROLE_OPTIONS;
   }
 
   function handleRoleChange(e) {
@@ -1628,7 +1921,10 @@ export function createSvgPrepWorkspace(containerEl) {
     if (item) {
       const nameSpan = item.querySelector('.svg-prep-object-name');
       const nameText = nameSpan ? nameSpan.textContent : `Element ${idx + 1}`;
-      item.setAttribute('aria-label', `${nameText}, role: ${e.target.value}`);
+      item.setAttribute(
+        'aria-label',
+        `${nameText}, ${roleWord(e.target.value, currentRoleOptions())}`
+      );
 
       const offsetInput = item.querySelector('.svg-prep-offset-input');
       if (offsetInput) {
@@ -1810,7 +2106,12 @@ export function createSvgPrepWorkspace(containerEl) {
 
   function handleDesignWidthChange() {
     clearTimeout(offsetDebounceTimer);
-    offsetDebounceTimer = setTimeout(updateResultPreview, 300);
+    // Through the GATE, not straight at the combine (the owner, 2026-09-14).
+    // This called `updateResultPreview` directly and so obeyed no budget at
+    // all: typing in the width box on a thousand-shape drawing started a
+    // flatten nobody had asked for. Every other change in this editor asks
+    // first; this one now asks too.
+    offsetDebounceTimer = setTimeout(requestResultPreview, 300);
   }
 
   /**
@@ -1939,6 +2240,10 @@ export function createSvgPrepWorkspace(containerEl) {
     // this point `roles` is still the array from before the rebuild and is a
     // different length from `liveElements`.
     setPreviewBand();
+    // Every index after a deleted row has moved, so a selection kept across
+    // the rebuild would point at different shapes than the ones a person
+    // chose. It goes rather than lies.
+    clearSelection();
     requestResultPreview();
   }
 
@@ -2052,6 +2357,35 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /** A click on a row's Delete, or on one of the bulk controls. */
+  /** Open or shut one row's menu. */
+  function setMoreOpen(btn, open) {
+    if (!btn) return;
+    const panel = refs.objects.querySelector(
+      `#${CSS.escape(btn.getAttribute('aria-controls'))}`
+    );
+    btn.setAttribute('aria-expanded', String(open === true));
+    if (panel) panel.hidden = open !== true;
+  }
+
+  /** Shut every row's menu except the one named. */
+  function closeOtherMenus(keep) {
+    refs.objects
+      .querySelectorAll('.svg-prep-more-btn[aria-expanded="true"]')
+      .forEach((btn) => {
+        if (btn !== keep) setMoreOpen(btn, false);
+      });
+  }
+
+  function handleMoreClick(e) {
+    const btn = e.target.closest('.svg-prep-more-btn');
+    if (!btn || !refs.objects.contains(btn)) return;
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    // One at a time: two open menus on a long list is two rows' worth of
+    // controls with nothing saying which row each belongs to.
+    closeOtherMenus(open ? btn : null);
+    setMoreOpen(btn, open);
+  }
+
   function handleDeleteClick(e) {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -2076,6 +2410,11 @@ export function createSvgPrepWorkspace(containerEl) {
         return;
       }
       deleteRows(doomed, `${doomed.length} small shapes`);
+    } else if (btn.dataset.action === 'delete-selected') {
+      const doomed = [...selected].filter((i) => i < liveElements.length);
+      if (doomed.length === 0) return;
+      clearSelection();
+      deleteRows(doomed, `${doomed.length} selected shapes`);
     } else if (btn.dataset.action === 'keep-largest') {
       const keep = parseInt(refs.keepInput.value, 10);
       if (!Number.isInteger(keep) || keep < 1) return;
@@ -2387,6 +2726,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // Anything the analyzer did not label is treated as tier A, so an older
     // caller keeps exactly the behaviour it had.
     setPreviewBand();
+    clearSelection();
     if (autoPreview) {
       updateResultPreview();
     } else {
@@ -2415,6 +2755,9 @@ export function createSvgPrepWorkspace(containerEl) {
     // the footer's delegated handler cannot see it.
     refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
     refs.renderCancelBtn.addEventListener('click', cancelRender);
+    refs.objects.addEventListener('click', handleRowClick);
+    refs.objects.addEventListener('keydown', handleRowKeydown);
+    refs.objects.addEventListener('click', handleMoreClick);
     refs.objects.addEventListener('click', handleDeleteClick);
     refs.bulkBar.addEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
@@ -2500,6 +2843,9 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.renderBtn.removeEventListener('click', renderPreviewOnDemand);
+    refs.objects.removeEventListener('click', handleRowClick);
+    refs.objects.removeEventListener('keydown', handleRowKeydown);
+    refs.objects.removeEventListener('click', handleMoreClick);
     refs.objects.removeEventListener('click', handleDeleteClick);
     refs.bulkBar.removeEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
@@ -2530,7 +2876,11 @@ export function createSvgPrepWorkspace(containerEl) {
     fullscreenTrap = createDocumentFocusTrap(root, {
       // In file mode there is nothing behind the editor: Escape must close it
       // outright rather than strand it inline at the foot of the page.
-      onEscape: hostMode === 'file' ? close : closeFullscreen,
+      onEscape: () => {
+        if (closeOpenMenu()) return;
+        if (hostMode === 'file') close();
+        else closeFullscreen();
+      },
     });
     fullscreenTrap.activate({
       initialFocus: initialFocus || refs.closeBtn,
@@ -2622,6 +2972,19 @@ export function createSvgPrepWorkspace(containerEl) {
      * pulling clipper into the core bundle.
      */
     getRingEngine: () => ringEngine,
+    /**
+     * Shut a row's open menu, and say whether there was one.
+     *
+     * Escape belongs to whoever is hosting this editor - the standalone door
+     * traps focus and uses Escape as the way out, and the surface's trap
+     * listens on the document in the CAPTURE phase, so nothing inside the
+     * workspace can reach the press first. MEASURED: the workspace's own
+     * keydown handler never ran at all. So the host asks this before it acts,
+     * and the innermost open thing is the first thing Escape shuts.
+     *
+     * @returns {boolean} true if a menu was open and is now shut
+     */
+    closeOpenMenu,
     destroy,
     openFullscreen,
     closeFullscreen,

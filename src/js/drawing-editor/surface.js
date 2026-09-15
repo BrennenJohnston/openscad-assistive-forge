@@ -724,7 +724,13 @@ export function createDrawingEditor({
       // the way out. Over the preview there is no trap: the customizer is
       // one Tab away on purpose.
       trap = createDocumentFocusTrap(root, {
-        onEscape: () => finish('onKeepOriginal'),
+        // A row's menu is the smallest thing open, so it is the first thing
+        // Escape shuts. Without this, one press with a menu open left the
+        // editor entirely - a long way further than anybody meant to go.
+        onEscape: () => {
+          if (workspace.closeOpenMenu?.()) return;
+          finish('onKeepOriginal');
+        },
       });
       trap.activate({ initialFocus: title, initialFocusDelay: 0 });
     }
@@ -815,6 +821,16 @@ export function createDrawingEditor({
     canvas.root.hidden = !stencil;
     legend.hidden = !stencil;
     applyBtn.hidden = !stencil;
+    // DP-Q40: and the WORD is the relief purpose's vocabulary too. A region is
+    // a thing the stencil lane cuts and paints; what somebody is looking at on
+    // a charm is a shape, which is already the word the rows and counts use.
+    panelToggleBtn.textContent = stencil ? S.panelToggle : S.panelToggleShapes;
+    const regionsName = sections.regions?.details?.querySelector(
+      '.drawing-editor-section-name'
+    );
+    if (regionsName) {
+      regionsName.textContent = stencil ? S.sectionRegions : S.sectionShapes;
+    }
     // Roles, offsets, the design width and the before/after panes are the
     // relief purpose's vocabulary: a stencil region has a colour, not a
     // role, and the plate's size is a parameter beside the editor.
@@ -1903,10 +1919,24 @@ export function createDrawingEditor({
     'keydown',
     (event) => {
       if (event.key !== 'Escape' || !isOpen) return;
+      // Already spent. The focus trap listens on the DOCUMENT in this same
+      // phase, so it reaches the press before this does and calls
+      // preventDefault before its own handler runs - and it does not stop the
+      // event. Without this, one Escape shut a row's menu in the trap and then
+      // closed the whole editor here. MEASURED: the menu closed, focus landed
+      // on the More button, and a tick later it was back on the door.
+      if (event.defaultPrevented) return;
       if (canvas.isDragging()) {
         event.preventDefault();
         event.stopPropagation();
         canvas.cancelDrag();
+        return;
+      }
+      // Same rule as the marquee: the innermost thing in progress is what
+      // Escape ends, and that press goes no further.
+      if (workspace.closeOpenMenu?.()) {
+        event.preventDefault();
+        event.stopPropagation();
         return;
       }
       if (event.target.classList?.contains('drawing-editor-rename-input')) {

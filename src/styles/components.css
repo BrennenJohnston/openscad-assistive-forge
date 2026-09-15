@@ -15621,8 +15621,19 @@ body.tutorial-body-locked {
 
 .svg-prep-object {
   display: flex;
+  /* DP-39 P1. The row could not fit on one line and had no way to say so, so
+     it took the space out of the NAME and then out of Delete. MEASURED in the
+     standalone door on the bird, at 768: the name rendered at ZERO pixels wide
+     and Delete ran 38 px past the list, 40 px of the row clipped away. Seven
+     rows of a dot, three radios and a box, with nothing to tell one shape from
+     another - which is the complaint this release exists for.
+
+     Wrapping is what lets the row say it has run out of room. Nothing moves
+     while there is room for it: MEASURED at 1280 the row still lays out on one
+     line exactly as before. */
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-2xs) var(--space-sm);
   padding: var(--space-sm);
   border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-sm);
@@ -15633,6 +15644,29 @@ body.tutorial-body-locked {
 
 .svg-prep-object:hover {
   background: var(--color-hover-bg);
+}
+
+/* DP-39 P2: chosen.
+   A tinted ground AND a bar down the leading edge, so the state survives a
+   greyscale screenshot and never rests on colour alone.
+
+   The bar is the text colour, not the accent. MEASURED: the accent is #ffe629
+   on a #fcfcfd row, about 1.3:1, and a mark that carries meaning owes 3:1 to
+   what is beside it - the yellow was drawing perfectly and saying nothing.
+   It is the right colour for the role switch, where it is a GROUND with dark
+   text on it and the text carries the contrast.
+
+   And a real token for the ground, not an invented name with a fallback: a
+   var() fallback only applies to a property that was never declared, which is
+   a quiet way to end up with no tint at all.
+
+   The ground is the same step hover uses, on purpose. Hover is a thing that
+   happens while a pointer is somewhere; selection is a thing that stays, and
+   the BAR is what says so - it is there when the pointer has gone. */
+.svg-prep-object--selected,
+.svg-prep-object--selected:hover {
+  background: var(--color-bg-tertiary);
+  box-shadow: inset 4px 0 0 var(--color-text-primary);
 }
 
 .svg-prep-object:focus-visible {
@@ -15660,30 +15694,137 @@ body.tutorial-body-locked {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  /* `min-width: 0` let the name be squeezed to nothing, which is what a flex
+     item does when something has to give and it is the only thing that can.
+     Six characters and an ellipsis is the floor: enough to tell one shape from
+     another, and the width the row is signed to keep for it. */
+  flex: 1 1 6ch;
+  min-width: 6ch;
 }
 
+/* ── DP-39 P2: the role control, drawn as a switch ───────────────────────
+   Three radios with the words beside them cost 199 px. Drawn as one
+   segmented control with "Raised" in place of "Foreground" they cost about
+   145, which is what lets the row hold one line down to the drawer's 280 px
+   floor.
+
+   NOT ONE TAG OF MARKUP CHANGES. It is the same fieldset, the same legend and
+   the same three radios it has always been, so arrow keys still walk the
+   group, the legend still names it, and what a screen reader reads is what it
+   read before. Only the paint is different. */
 .svg-prep-role-group {
   display: inline-flex;
-  gap: var(--space-sm);
-  border: 0;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
   padding: 0;
   margin: 0 0 0 auto;
+  overflow: hidden;
 }
 
 .svg-prep-role-group label {
+  /* The radio is laid over its own label at full size rather than left as a
+     circle beside it: the control itself is then the 44 px target, which is
+     the thing a finger and a switch device both aim at. */
+  position: relative;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2xs);
+  justify-content: center;
+  padding: 0 var(--space-xs);
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
+  /* Both ways. MEASURED at 412 with height alone: "Hole" came to 37.75 px
+     wide, because it is a short word and padding is all that was holding it
+     out. A 44 px floor that only applies to one axis is not a 44 px floor. */
   min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  white-space: nowrap;
+}
+
+/* An inset shadow, not a border: a border takes its pixel out of the label's
+   padding box, and the radio laid over that box then measures 43 px against a
+   44 px floor. MEASURED. The divider is drawn, the box stays whole. */
+.svg-prep-role-group label + label {
+  box-shadow: inset 1px 0 0 var(--color-border);
 }
 
 .svg-prep-role-group input[type='radio'] {
-  flex-shrink: 0;
-  accent-color: var(--color-accent);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.svg-prep-role-group label:has(input:checked) {
+  /* The same pair .btn-primary uses, so the contrast is one this app has
+     already answered for. */
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+/* The ring goes on the label: the input it names is invisible, and a ring
+   nobody can see is not a focus indicator. */
+.svg-prep-role-group label:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+/* A role that cannot be chosen still has to say so rather than just fail. */
+.svg-prep-role-group label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── DP-39 P2: the row's own menu ────────────────────────────────────────
+   Offset, Layer and Delete stop competing with the name for the one line.
+   The panel takes the row's full width when it opens and pushes nothing off
+   the edge, which an absolutely positioned menu would have done on the last
+   row of a drawer that scrolls. */
+.svg-prep-more-btn {
+  flex: 0 0 auto;
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.svg-prep-more-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.svg-prep-more-btn:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.svg-prep-more-btn[aria-expanded='true'] {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border-strong, var(--color-border));
+}
+
+.svg-prep-more-panel {
+  /* Its own line, the width of the row. */
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-sm);
+  padding-top: var(--space-2xs);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.svg-prep-more-panel[hidden] {
+  display: none;
 }
 
 .svg-prep-object-warning {
@@ -17160,11 +17301,58 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    closing the drawer is one press. (The old stacked-columns answer here is
    retired with the drawer - MEASURED before it: at 412 wide the panel grew
    to 1,674 px and the stage was squeezed to 0.) */
+/* ── DP-39 P4: below 640 the list is a SHEET, not a cover ────────────────
+   The panel is laid absolutely over the body, which is right beside a wide
+   picture and wrong on a phone, where it is the full width. MEASURED at
+   412 x 915 with the drawer open: the panel covered 107,163 of the picture's
+   107,352 square pixels. 99.8 per cent. Opening the list to see which shape
+   is which hid the very thing you were trying to name.
+
+   So at this width the body becomes a column and the panel joins the flow
+   underneath the picture: the drawing stays on screen, shorter, and the list
+   sits below it where a thumb can reach it. Its heading is the "Shapes"
+   summary it already carries; a second one would say the same word twice. */
 @container (max-width: 640px) {
+  .drawing-editor-body {
+    flex-direction: column;
+  }
+
   .drawing-editor-panel {
+    position: static;
     width: 100%;
+    /* Whatever the picture does not need, and never so little that the first
+       row is a sliver. */
+    flex: 1 1 auto;
+    min-height: 120px;
     border-left: none;
+    border-top: 1px solid var(--color-border);
     padding-left: var(--space-2xs);
+  }
+
+  /* The picture keeps the top of the editor and gives up the rest. Without a
+     ceiling it takes its natural height and pushes the sheet off the bottom,
+     which is the covering problem again with extra steps. */
+  .drawing-editor--panel-open .drawing-editor-stage {
+    /* A share of the room, with a floor that holds the whole picture: the
+       cap below is 160 px and the pane puts a caption and its padding around
+       it. MEASURED without the floor, the stage settled at 152 px and clipped
+       40 px off the bottom of a 160 px drawing - three quarters of a bird
+       instead of half, which is not the fix, only a smaller version of the
+       same bug. */
+    flex: 0 0 auto;
+    min-height: 200px;
+    max-height: 45%;
+  }
+
+  /* And the drawing SHRINKS to the room it has rather than being cut off in
+     it. The picture is capped at 300 px and the shortened stage simply
+     scrolled the rest away: MEASURED at 412 x 915, a 284 px drawing in a
+     197 px stage, so what a person saw with the list open was the top half of
+     a bird. 160 px is the pane's own minimum height, so the picture is never
+     asked to fit somewhere the pane will not go. */
+  .drawing-editor--panel-open .svg-prep-source-pane svg,
+  .drawing-editor--panel-open .svg-prep-result-pane svg {
+    max-height: 160px;
   }
 }
 
