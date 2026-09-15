@@ -350,8 +350,12 @@ test.describe('Bug 4: Imported preset auto-selection', () => {
     await manageBtn.click()
     await page.waitForTimeout(1000)
 
-    // Use "Export All Designs" button (always visible in modal header)
-    const exportAllBtn = page.locator('button:has-text("Export All")')
+    // Use "Export All Designs" button (always visible in modal header).
+    // Scoped to the modal by its action hook: the Stencil Maker's "Export all
+    // plates" also answers to the text.
+    const exportAllBtn = page.locator(
+      '.preset-modal button[data-action="export-all"]'
+    )
     await expect(exportAllBtn).toBeVisible()
 
     const downloadPromise = page.waitForEvent('download')

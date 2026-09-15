@@ -27,7 +27,13 @@ async function loadSampleFile(page) {
     'sample.scad'
   );
   await page.setInputFiles('#fileInput', fixturePath);
-  await page.waitForSelector('.param-control', { timeout: 30_000 });
+  // F5 collapses every parameter group on a fresh file, and on a phone the
+  // panel is a shut drawer, so nothing inside it is on screen until a person
+  // opens both. Attached is the honest post-condition for the load itself.
+  await page.waitForSelector('.param-control', {
+    state: 'attached',
+    timeout: 30_000,
+  });
 
   try {
     const notNowBtn = page.locator('#saveProjectNotNow');
@@ -43,6 +49,10 @@ async function openDrawer(page) {
   const toggle = page.locator('#mobileDrawerToggle');
   await toggle.click();
   await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
+  // The open drawer shows collapsed group headers; these tests are about the
+  // number inputs inside them, so take the app's own way in.
+  await page.locator('#expandAllGroupsBtn').click();
+  await expect(page.locator('.param-control').first()).toBeVisible();
 }
 
 async function clearAndType(page, locator, value) {
@@ -88,7 +98,12 @@ test.describe('Mobile Number Input Text Visibility', () => {
       await clearAndType(page, numberInput, '55');
       await expect(numberInput).toHaveValue('55');
     } else {
-      const fallbackInput = page.locator('input[type="number"]').first();
+      // Scoped to the parameter controls on purpose: the page carries two
+      // dozen hidden number inputs of panel chrome (viewport, animate,
+      // measure, overlay) that come first in document order.
+      const fallbackInput = page
+        .locator('.param-control input[type="number"]')
+        .first();
       await expect(fallbackInput).toBeVisible();
       await clearAndType(page, fallbackInput, '55');
       await expect(fallbackInput).toHaveValue('55');
