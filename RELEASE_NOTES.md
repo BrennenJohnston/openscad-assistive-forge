@@ -61,10 +61,13 @@ story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
   a budget measured in milliseconds rather than a count of shapes
 - **A second tracing engine, built from source**: Potrace, compiled to
   WebAssembly by a workflow from a pinned tarball and committed with its
-  recipe and checksums, is now the default for Line art and Solid shape. It
-  is about fourteen times faster than what it replaces. On a clean
-  vector-derived icon the two are hard to tell apart; the smoothness it buys
-  shows on a hand-drawn source
+  recipe and checksums, is now the default for Line art and Solid shape. I
+  did not choose it for speed - the two engines draw the same picture, and
+  on a clean vector-derived icon I cannot tell them apart. I chose it for
+  the edge: magnified, the old one returns a stroke made of straight
+  segments and a round dot as a ten-sided polygon, and this one returns a
+  curve and a circle. That edge is what a finger runs along. It is faster
+  too, and it costs more in mesh - on one measured icon, 54 % more facets
 - **An editor that shows the drawing**: the drawing fills the editor as one
   picture, the side panel no longer sits on top of it, the picture comes
   before the settings for it, and a Drawing / Charm switch shows the charm it
