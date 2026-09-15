@@ -962,6 +962,7 @@ export function createSvgPrepWorkspace(containerEl) {
   let sourceZoomCleanup = null;
   let resultZoomCleanup = null;
   let highlightCleanup = null;
+  let picturePointerCleanup = null;
   let offsetDebounceTimer = null;
   // True once Apply or Keep original has fired; closing without either
   // triggers the keep-original callback so the original is never silently
@@ -1148,6 +1149,7 @@ export function createSvgPrepWorkspace(containerEl) {
       overlay.setAttribute('aria-hidden', 'true');
       imported.appendChild(overlay);
     }
+    imported.appendChild(buildHitLayer());
 
     markAsPicture(imported, label);
     pane.insertBefore(imported, before);
@@ -1209,6 +1211,36 @@ export function createSvgPrepWorkspace(containerEl) {
     // colour a shape is.
     const layers = root.querySelectorAll('.svg-prep-role-layer');
     layers.forEach((layer) => paintRoleLayer(layer));
+  }
+
+  /**
+   * One shape per element, invisible, on top, and the only thing in the
+   * picture a pointer can hit.
+   *
+   * DP-40: the list can already point at the picture (DP-39 P3); this is the
+   * other direction. It is its own layer rather than the role tints, because
+   * the tints are a VIEW - "Show roles" turns them off - and a picture you can
+   * no longer touch because you turned the colours off would be a strange
+   * thing to build.
+   *
+   * `pointer-events: all` is what makes an unpainted shape hittable: it means
+   * "answer for your fill and your stroke whatever they are painted", which is
+   * the only way a stroke-only drawing (every CAD export, D-118's whole
+   * subject) can be pointed at at all.
+   */
+  function buildHitLayer() {
+    const layer = document.createElementNS(SVG_NS, 'g');
+    layer.setAttribute('class', 'svg-prep-hit-layer');
+    layer.setAttribute('aria-hidden', 'true');
+    liveElements.forEach((el, i) => {
+      if (!el.pathData) return;
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('class', 'svg-prep-hit-path');
+      p.dataset.index = String(i);
+      layer.appendChild(p);
+    });
+    return layer;
   }
 
   function paintRoleLayer(layer) {
@@ -1577,6 +1609,7 @@ export function createSvgPrepWorkspace(containerEl) {
       resultOverlay.setAttribute('class', 'svg-prep-overlay');
       resultOverlay.setAttribute('aria-hidden', 'true');
       imported.appendChild(resultOverlay);
+      imported.appendChild(buildHitLayer());
       markAsPicture(imported, 'Prepared result');
       refs.resultPane.insertBefore(imported, refs.resultZoom);
 
@@ -1667,13 +1700,195 @@ export function createSvgPrepWorkspace(containerEl) {
     zoomOutBtn.addEventListener('click', handleZoomOut);
     pane.addEventListener('keydown', handlePaneKeydown);
 
+    // ── DP-40 P2: two fingers, signed at DP-Q37 ─────────────────────────
+    //
+    // A cache keyed by pointerId, which is the pattern the platform is built
+    // for: a touch is not a mouse with one position, it is N pointers that
+    // arrive and leave independently, and anything that tracks "the" pointer
+    // gets the second finger wrong.
+    //
+    // The split is DP-Q37's: two fingers pinch and pan the picture, ONE
+    // finger scrolls the page. That is `touch-action: pan-y` on the picture
+    // and nowhere else - the browser keeps vertical panning, which is how
+    // somebody gets DOWN a long editor on a phone, and hands us everything
+    // else. A tap still lands as a click, so tapping a shape still chooses it.
+    //
+    // Nothing here is the only way to do anything (WCAG 2.5.7): Fit, + and -
+    // are single-pointer, and the keyboard walks the panes.
+    const pointers = new Map();
+    let pinch = null;
+
+    const spanOf = (a, b) =>
+      Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const midOf = (a, b) => ({
+      x: (a.clientX + b.clientX) / 2,
+      y: (a.clientY + b.clientY) / 2,
+    });
+
+    function currentVB() {
+      const svg = getSvg();
+      if (!svg) return null;
+      return parseViewBox(svg.getAttribute('viewBox')) || { ...naturalVB };
+    }
+
+    function onPointerDown(e) {
+      if (e.pointerType === 'mouse') return;
+      pointers.set(e.pointerId, e);
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const vb = currentVB();
+        if (!vb) return;
+        pinch = {
+          span: spanOf(a, b),
+          mid: midOf(a, b),
+          vb,
+          box: pane.getBoundingClientRect(),
+        };
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, e);
+      if (pointers.size !== 2 || !pinch) return;
+      const [a, b] = [...pointers.values()];
+      const span = spanOf(a, b);
+      if (span <= 0 || pinch.span <= 0) return;
+      e.preventDefault();
+
+      // Fingers apart, viewBox smaller: a viewBox IS the window onto the
+      // drawing, so zooming in means asking for less of it.
+      const scale = pinch.span / span;
+      const w = Math.max(
+        naturalVB.w / 64,
+        Math.min(naturalVB.w * 8, pinch.vb.w * scale)
+      );
+      const h = pinch.vb.h * (w / pinch.vb.w);
+
+      // And the drawing follows the fingers: how far the midpoint moved, in
+      // the units the viewBox is written in.
+      const mid = midOf(a, b);
+      const perPxX = pinch.vb.w / Math.max(1, pinch.box.width);
+      const perPxY = pinch.vb.h / Math.max(1, pinch.box.height);
+      const dx = (mid.x - pinch.mid.x) * perPxX;
+      const dy = (mid.y - pinch.mid.y) * perPxY;
+
+      applyVB({
+        x: pinch.vb.x + (pinch.vb.w - w) / 2 - dx,
+        y: pinch.vb.y + (pinch.vb.h - h) / 2 - dy,
+        w,
+        h,
+      });
+    }
+
+    function onPointerUp(e) {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = null;
+    }
+
+    pane.addEventListener('pointerdown', onPointerDown);
+    pane.addEventListener('pointermove', onPointerMove);
+    pane.addEventListener('pointerup', onPointerUp);
+    pane.addEventListener('pointercancel', onPointerUp);
+    pane.addEventListener('pointerleave', onPointerUp);
+
     return () => {
       fitBtn.removeEventListener('click', handleFit);
       zoomInBtn.removeEventListener('click', handleZoomIn);
       zoomOutBtn.removeEventListener('click', handleZoomOut);
       pane.removeEventListener('keydown', handlePaneKeydown);
+      pane.removeEventListener('pointerdown', onPointerDown);
+      pane.removeEventListener('pointermove', onPointerMove);
+      pane.removeEventListener('pointerup', onPointerUp);
+      pane.removeEventListener('pointercancel', onPointerUp);
+      pane.removeEventListener('pointerleave', onPointerUp);
+      pointers.clear();
+      pinch = null;
       pane.removeAttribute('tabindex');
     };
+  }
+
+  /**
+   * The picture answers a pointer, and the list follows.
+   *
+   * Hover lights the shape up and marks its row; a press chooses it, with the
+   * same Ctrl and Shift as the list. Signed at DP-Q37 and directive item 6.
+   *
+   * ★ Built on the SVG picture, NOT on the DP-20 canvas the plan named. That
+   * line was written before DP-37 P1 made one picture the default; mounting a
+   * second one to be able to touch it would undo the release that got the
+   * editor down to a single drawing.
+   */
+  function setupPicturePointer() {
+    const indexOf = (e) => {
+      const hit = e.target.closest?.('.svg-prep-hit-path');
+      if (!hit) return null;
+      const i = parseInt(hit.dataset.index, 10);
+      return Number.isInteger(i) ? i : null;
+    };
+
+    function paint(index) {
+      overlaysIn(root).forEach((overlay) => {
+        clearSvgGroup(overlay);
+        const el = index === null ? null : liveElements[index];
+        if (!el || !el.pathData) return;
+        const p = document.createElementNS(SVG_NS, 'path');
+        p.setAttribute('d', el.pathData);
+        p.setAttribute('class', 'svg-prep-highlight-path');
+        overlay.appendChild(p);
+      });
+      refs.objects.querySelectorAll('.svg-prep-object').forEach((r) => {
+        r.classList.toggle(
+          'svg-prep-object--pointed',
+          index !== null && parseInt(r.dataset.index, 10) === index
+        );
+      });
+    }
+
+    function onMove(e) {
+      paint(indexOf(e));
+    }
+
+    function onLeave() {
+      paint(null);
+    }
+
+    function onClick(e) {
+      const index = indexOf(e);
+      if (index === null) return;
+      chooseRow(index, {
+        toggle: e.ctrlKey || e.metaKey,
+        range: e.shiftKey,
+      });
+      // The list can be long; a row chosen on the picture has to be findable
+      // in it.
+      const chosenRow = refs.objects.querySelector(
+        `.svg-prep-object[data-index="${index}"]`
+      );
+      if (chosenRow) {
+        chosenRow.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      }
+    }
+
+    const panes = [refs.sourcePane, refs.resultPane];
+    panes.forEach((pane) => {
+      pane.addEventListener('pointermove', onMove);
+      pane.addEventListener('pointerleave', onLeave);
+      pane.addEventListener('click', onClick);
+    });
+
+    return () => {
+      panes.forEach((pane) => {
+        pane.removeEventListener('pointermove', onMove);
+        pane.removeEventListener('pointerleave', onLeave);
+        pane.removeEventListener('click', onClick);
+      });
+    };
+  }
+
+  /** Every highlight overlay currently on screen. */
+  function overlaysIn(scope) {
+    return scope.querySelectorAll('.svg-prep-overlay');
   }
 
   function setupObjectHighlighting() {
@@ -1694,9 +1909,7 @@ export function createSvgPrepWorkspace(containerEl) {
      * Every overlay, so Compare lights the shape up in both pictures at once -
      * the same rule renderRoleLayer already follows for the tints.
      */
-    function overlays() {
-      return root.querySelectorAll('.svg-prep-overlay');
-    }
+    const overlays = () => overlaysIn(root);
 
     function highlight(e) {
       const item = e.target.closest('.svg-prep-object');
@@ -2744,6 +2957,7 @@ export function createSvgPrepWorkspace(containerEl) {
       currentSvgMeta.viewBox
     );
     highlightCleanup = setupObjectHighlighting();
+    picturePointerCleanup = setupPicturePointer();
 
     root.addEventListener('keydown', handleKeydown);
     refs.objects.addEventListener('change', handleRoleChange);
@@ -2826,6 +3040,10 @@ export function createSvgPrepWorkspace(containerEl) {
     if (highlightCleanup) {
       highlightCleanup();
       highlightCleanup = null;
+    }
+    if (picturePointerCleanup) {
+      picturePointerCleanup();
+      picturePointerCleanup = null;
     }
     clearPanes();
 

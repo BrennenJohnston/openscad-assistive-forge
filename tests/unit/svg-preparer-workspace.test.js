@@ -912,8 +912,16 @@ describe('Phase 3: source pane rendering', () => {
     expect(overlay).toBeTruthy();
     expect(roleLayer.getAttribute('aria-hidden')).toBe('true');
     expect(overlay.getAttribute('aria-hidden')).toBe('true');
-    // Overlay draws on top: it must be the last child
-    expect(sourceSvg.lastElementChild).toBe(overlay);
+    // The overlay draws on top of the ARTWORK and the tints, so it comes
+    // after both. RE-PINNED at DP-40: it is no longer the last child, because
+    // the layer a pointer hits goes above everything - the highlight is a
+    // picture and the hit layer is a target, and a target under a picture is
+    // not a target.
+    const kids = [...sourceSvg.children];
+    expect(kids.indexOf(overlay)).toBeGreaterThan(kids.indexOf(roleLayer));
+    expect(sourceSvg.lastElementChild.classList.contains('svg-prep-hit-layer')).toBe(
+      true
+    );
 
     ws.destroy();
   });
@@ -950,7 +958,13 @@ describe('Phase 3: result pane rendering', () => {
     ws.open(SIMPLE_SVG, makeAnalysis(1));
     await ws.whenReady();
 
-    const paths = ws._root.querySelectorAll('.svg-prep-result-pane path');
+    // The RESULT is one compound path. RE-PINNED at DP-40: the picture also
+    // carries a layer of invisible shapes for a pointer to hit, one per
+    // element, and counting every path in the pane counts those too. What
+    // this test is about is the result.
+    const paths = ws._root.querySelectorAll(
+      '.svg-prep-result-pane path:not(.svg-prep-hit-path)'
+    );
     expect(paths.length).toBe(1);
 
     ws.destroy();
