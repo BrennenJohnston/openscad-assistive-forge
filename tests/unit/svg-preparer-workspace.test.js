@@ -411,6 +411,33 @@ describe('createSvgPrepWorkspace', () => {
 
       ws.destroy();
     });
+
+    it('the row still says the words on screen after a change and a Reset', () => {
+      // DP-41 found this with the text pack in hand. FOUR places write this
+      // label; DP-39 changed two of them and left two. Pressing Reset turned
+      // every row from "Circle 1, Raised" back into "Circle 1, role:
+      // foreground" - the word this round retired, said only to the people
+      // who cannot see the control that says otherwise. The test above pins
+      // the row as BUILT, which is one of the two paths that always worked.
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const item = ws._root.querySelector('.svg-prep-object');
+      const holeRadio = Array.from(
+        item.querySelectorAll('input[type="radio"]')
+      ).find((r) => r.value === 'hole');
+      holeRadio.checked = true;
+      holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*Hole/);
+
+      ws._root.querySelector('[data-action="reset"]').click();
+
+      const after = ws._root.querySelector('.svg-prep-object');
+      expect(after.getAttribute('aria-label')).toMatch(/Circle 1.*Raised/);
+      expect(after.getAttribute('aria-label')).not.toMatch(/role:/);
+
+      ws.destroy();
+    });
   });
 
   describe('global warnings', () => {
@@ -1952,14 +1979,21 @@ describe('Phase 5: open() with initialOverrides', () => {
   });
 
   it('updates aria-labels when applying initial overrides', () => {
+    // RE-PINNED at DP-41. This test was holding the retired words in place:
+    // it asserted "role: ignore" and "role: foreground", which is what this
+    // path still wrote after DP-39 gave the control the words Raised, Hole
+    // and Ignore. The assertion was green because the code and the test
+    // agreed with each other and with nothing a person reads.
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2), {
       initialOverrides: ['ignore', 'foreground'],
     });
 
     const items = ws._root.querySelectorAll('.svg-prep-object');
-    expect(items[0].getAttribute('aria-label')).toContain('role: ignore');
-    expect(items[1].getAttribute('aria-label')).toContain('role: foreground');
+    expect(items[0].getAttribute('aria-label')).toContain('Ignore');
+    expect(items[1].getAttribute('aria-label')).toContain('Raised');
+    expect(items[0].getAttribute('aria-label')).not.toContain('role:');
+    expect(items[1].getAttribute('aria-label')).not.toContain('role:');
 
     ws.destroy();
   });

@@ -2694,7 +2694,15 @@ export function createSvgPrepWorkspace(containerEl) {
           }
           const nameSpan = item.querySelector('.svg-prep-object-name');
           const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
-          item.setAttribute('aria-label', `${nameText}, role: ${role}`);
+          // The word on the control, not the value behind it. FOUR places
+          // write this label; DP-39 changed two and left these two, so Reset
+          // used to turn every row from "Shape 3, Raised" back into "Shape 3,
+          // role: foreground" - the word this round retired, spoken only to
+          // the people who cannot see the control that says otherwise.
+          item.setAttribute(
+            'aria-label',
+            `${nameText}, ${roleWord(role, currentRoleOptions())}`
+          );
         });
         renderRoleLayer();
         requestResultPreview();
@@ -2720,7 +2728,10 @@ export function createSvgPrepWorkspace(containerEl) {
       });
       const nameSpan = item.querySelector('.svg-prep-object-name');
       const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
-      item.setAttribute('aria-label', `${nameText}, role: ${role}`);
+      item.setAttribute(
+        'aria-label',
+        `${nameText}, ${roleWord(role, currentRoleOptions())}`
+      );
     });
   }
 
