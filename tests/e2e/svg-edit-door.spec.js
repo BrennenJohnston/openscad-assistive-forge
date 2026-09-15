@@ -1405,25 +1405,41 @@ test.describe('two fingers on the drawing (DP-40 P3, signed at DP-Q37)', () => {
     await expect(picture(page)).toHaveCSS('touch-action', 'pan-y')
 
     const before = await viewBox(page)
-    const box = await picture(page).boundingBox()
-    const cx = box.x + box.width / 2
-    const cy = box.y + box.height / 2
-    const cdp = await page.context().newCDPSession(page)
-    const send = (type, touchPoints) =>
-      cdp.send('Input.dispatchTouchEvent', { type, touchPoints })
 
-    await send('touchStart', [
-      { x: cx - 30, y: cy, id: 1 },
-      { x: cx + 30, y: cy, id: 2 },
-    ])
-    for (const d of [45, 60, 80, 100]) {
-      await send('touchMove', [
-        { x: cx - d, y: cy, id: 1 },
-        { x: cx + d, y: cy, id: 2 },
-      ])
-      await page.waitForTimeout(40)
-    }
-    await send('touchEnd', [])
+    // Two fingers, dispatched as the POINTER events the editor listens to.
+    //
+    // Not Chromium's touch dispatch, which is what this started as and which
+    // fails outright on the other browsers - "CDP session is only available in
+    // Chromium", found by CI after it passed here. This way the walk runs
+    // everywhere and exercises the thing the release actually wrote: a cache
+    // keyed by pointerId, and the arithmetic that turns two moving fingers
+    // into a viewBox.
+    await page.evaluate(() => {
+      const pane = document.querySelector('.svg-prep-result-pane')
+      const box = pane.getBoundingClientRect()
+      const cx = box.left + box.width / 2
+      const cy = box.top + box.height / 2
+      const fire = (type, id, x) =>
+        pane.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: id,
+            pointerType: 'touch',
+            clientX: x,
+            clientY: cy,
+            bubbles: true,
+            cancelable: true,
+          })
+        )
+      fire('pointerdown', 1, cx - 30)
+      fire('pointerdown', 2, cx + 30)
+      for (const d of [45, 60, 80, 100]) {
+        fire('pointermove', 1, cx - d)
+        fire('pointermove', 2, cx + d)
+      }
+      fire('pointerup', 1, cx - 100)
+      fire('pointerup', 2, cx + 100)
+    })
+    await page.waitForTimeout(150)
 
     const after = await viewBox(page)
     expect(after, 'two fingers did nothing').not.toBe(before)
