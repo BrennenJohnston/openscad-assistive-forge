@@ -31,7 +31,7 @@ test.describe('Keyguard Parser Smoke Tests', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
-    await page.goto('http://localhost:5173/')
+    await page.goto('/')
     // Wait for WASM engine to fully initialise before uploading files.
     // domcontentloaded fires when HTML is parsed, but WASM may still be loading.
     await page.waitForSelector('body[data-wasm-ready="true"]', {

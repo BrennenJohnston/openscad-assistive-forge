@@ -166,7 +166,7 @@ test.describe('Preset Audit Sweep — Browser Side', () => {
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
 
-    await page.goto('http://localhost:5173/')
+    await page.goto('/')
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       state: 'attached',
       timeout: 120_000,
