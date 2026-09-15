@@ -65,6 +65,30 @@ const COMPOUND_ROLE_OPTIONS = [
 ];
 
 /**
+ * The legend's chips, in the words of whichever role table is in force.
+ *
+ * It is painted again when a drawing arrives, because a compound path is not
+ * offered Raised / Hole / Ignore at all - it is offered Include / Exclude -
+ * and a legend that disagrees with the control beside it, for the same
+ * colour, is the defect this pair was built to stop.
+ *
+ * @param {HTMLElement} legendRow
+ * @param {Array<{value: string, label: string}>} options
+ */
+function paintLegend(legendRow, options) {
+  legendRow.replaceChildren();
+  options.forEach(({ value: role, label }) => {
+    const chipWrap = document.createElement('span');
+    chipWrap.className = 'svg-prep-legend-item';
+    const chip = document.createElement('span');
+    chip.className = `svg-prep-legend-chip svg-prep-legend-chip--${role}`;
+    chip.setAttribute('aria-hidden', 'true');
+    chipWrap.append(chip, document.createTextNode(label));
+    legendRow.appendChild(chipWrap);
+  });
+}
+
+/**
  * The word for a role, from whichever table is in force.
  *
  * The row's accessible name used to carry the VALUE - "role: foreground" -
@@ -427,19 +451,7 @@ function buildWorkspaceDom() {
   // Role color legend (shown under the source pane)
   const legendRow = document.createElement('div');
   legendRow.className = 'svg-prep-legend';
-  [
-    { role: 'foreground', label: 'Printed shape' },
-    { role: 'hole', label: 'Cut-out (hole)' },
-    { role: 'ignore', label: 'Ignored' },
-  ].forEach(({ role, label }) => {
-    const chipWrap = document.createElement('span');
-    chipWrap.className = 'svg-prep-legend-item';
-    const chip = document.createElement('span');
-    chip.className = `svg-prep-legend-chip svg-prep-legend-chip--${role}`;
-    chip.setAttribute('aria-hidden', 'true');
-    chipWrap.append(chip, document.createTextNode(label));
-    legendRow.appendChild(chipWrap);
-  });
+  paintLegend(legendRow, ROLE_OPTIONS);
 
   // DP-7. How many layers this artwork can carry, and how many rows currently
   // break the containment law. Sits OUTSIDE the role="list" (D-101).
@@ -451,7 +463,7 @@ function buildWorkspaceDom() {
   const objects = document.createElement('div');
   objects.className = 'svg-prep-objects';
   objects.setAttribute('role', 'list');
-  objects.setAttribute('aria-label', 'SVG objects');
+  objects.setAttribute('aria-label', 'Shapes');
 
   // Warning summary
   const warnings = document.createElement('div');
@@ -1584,7 +1596,7 @@ export function createSvgPrepWorkspace(containerEl) {
         // The pane keeps the drawing rather than emptying: there is no result
         // to show, and showing nothing at all is the defect P1 repaired.
         renderStandInResult();
-        liveRegion.textContent = 'No foreground elements \u2014 preview empty';
+        liveRegion.textContent = 'No shapes included. The preview is empty.';
         return;
       }
 
@@ -1620,17 +1632,17 @@ export function createSvgPrepWorkspace(containerEl) {
         (el) => el.role === 'ignore'
       ).length;
       liveRegion.textContent = isCompound
-        ? `Preview updated \u2014 ${fgCount} subpaths included, ${ignoredCount} ignored`
-        : `Preview updated \u2014 ${fgCount} foreground, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} holes`;
+        ? `Preview updated: ${fgCount} shapes included, ${ignoredCount} ignored.`
+        : `Preview updated: ${fgCount} raised, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} holes.`;
     } catch (err) {
       console.error('[SVG Prep] Preview failed:', err);
       currentResult = null;
       setApplyEnabled(false);
       showResultError(
-        'Preview failed for this combination \u2014 original will be kept'
+        'Preview failed for this combination. The original will be kept.'
       );
       liveRegion.textContent =
-        'Preview failed for this combination \u2014 original will be kept';
+        'Preview failed for this combination. The original will be kept.';
     }
   }
 
@@ -2844,6 +2856,7 @@ export function createSvgPrepWorkspace(containerEl) {
     hosted = callbacks.hosted === true;
     currentSvgString = svgString;
     currentAnalysis = analysis;
+    paintLegend(refs.legendRow, currentRoleOptions());
     currentSvgMeta = extractSvgMeta(svgString);
 
     // How thin the thinnest lines are, at the width this will be printed. The

@@ -37,11 +37,19 @@ export const EDITOR_STRINGS = Object.freeze({
 
   /**
    * The two links that make a long list escapable. A person who tabs into the
-   * editor should never have to walk the whole regions table to reach the
-   * toolbar again, and a person reading the toolbar should be able to jump to
-   * the table without walking the toolbar.
+   * editor should never have to walk the whole list to reach the toolbar
+   * again, and a person reading the toolbar should be able to jump to the
+   * list without walking the toolbar.
+   *
+   * Two words for one link, picked by purpose like the section name above it:
+   * the stencil lane cuts and paints regions, and the charm's panel says
+   * Shapes. A11Y - the link is spoken, and it named a section that is not
+   * called that any more.
+   *
+   * STRINGS: owner review pending.
    */
   skipToRegions: 'Skip to the regions table',
+  skipToShapes: 'Skip to the shapes list',
   backToToolbar: 'Back to the toolbar',
 
   /**

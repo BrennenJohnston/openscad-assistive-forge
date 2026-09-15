@@ -196,7 +196,7 @@ describe('createSvgPrepWorkspace', () => {
 
       expect(objects).toBeTruthy();
       expect(objects.getAttribute('role')).toBe('list');
-      expect(objects.getAttribute('aria-label')).toBe('SVG objects');
+      expect(objects.getAttribute('aria-label')).toBe('Shapes');
 
       ws.destroy();
     });
@@ -1091,7 +1091,9 @@ describe('Phase 3: role change updates result preview', () => {
       '[aria-live="polite"][aria-atomic="true"]'
     );
     expect(liveRegion.textContent).toMatch(/preview updated/i);
-    expect(liveRegion.textContent).toMatch(/foreground/i);
+    // The word a person reads on the control, not the value underneath it.
+    expect(liveRegion.textContent).toMatch(/raised/i);
+    expect(liveRegion.textContent).not.toMatch(/foreground/i);
 
     ws.destroy();
   });
@@ -1221,6 +1223,51 @@ describe('Phase 3: object list highlighting (overlay paths)', () => {
 });
 
 describe('role color-coding layer and legend', () => {
+  const legendWords = (ws) =>
+    [...ws._root.querySelectorAll('.svg-prep-legend-item')].map((el) =>
+      el.textContent.trim()
+    );
+
+  it('the legend says what the control beside it says, in both role tables', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    expect(legendWords(ws)).toEqual(['Raised', 'Hole', 'Ignore']);
+
+    const compoundSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M10,10 L20,10 L20,20 Z M40,40 L50,40 L50,50 Z" fill="black"/>' +
+      '</svg>';
+    const pathEl = new DOMParser()
+      .parseFromString(compoundSvg, 'image/svg+xml')
+      .querySelector('path');
+    ws.open(compoundSvg, {
+      status: 'ready',
+      confidence: 1,
+      elements: ['M10,10 L20,10 L20,20 Z', 'M40,40 L50,40 L50,50 Z'].map(
+        (d, i) => ({
+          element: pathEl,
+          pathData: d,
+          fill: 'black',
+          stroke: '',
+          luminance: 0,
+          autoRole: 'foreground',
+          subpathIndex: i,
+          warnings: [],
+        })
+      ),
+      warnings: [],
+      unsupportedFeatures: [],
+      recommendation: 'pass_through',
+      singleElement: false,
+      isCompoundPathOnly: true,
+    });
+    // A compound path is never offered Hole, so the legend must not offer it.
+    expect(legendWords(ws)).toEqual(['Include', 'Exclude']);
+
+    ws.destroy();
+  });
+
   it('renders one role path per descriptor with role classes', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
@@ -2070,7 +2117,7 @@ describe('Phase 6b: accessibility — screen reader landmarks', () => {
 
     const list = ws._root.querySelector('.svg-prep-objects');
     expect(list.getAttribute('role')).toBe('list');
-    expect(list.getAttribute('aria-label')).toBe('SVG objects');
+    expect(list.getAttribute('aria-label')).toBe('Shapes');
 
     const items = list.querySelectorAll('[role="listitem"]');
     expect(items.length).toBe(2);
