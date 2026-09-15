@@ -751,7 +751,11 @@ function openAboutModal() {
 
   const versionLine = document.getElementById('aboutVersion');
   if (versionLine) {
-    versionLine.textContent = `OpenSCAD Assistive Forge, version ${__APP_VERSION__}`;
+    // Audit 19: the version alone cannot tell two builds of the same version
+    // apart, which is exactly what somebody reporting a bug needs to do. The
+    // stamp is the string the service worker names its cache after, so what a
+    // person reads here and what they see in DevTools are the same thing.
+    versionLine.textContent = `OpenSCAD Assistive Forge, version ${__APP_VERSION__} (${__BUILD_STAMP__})`;
   }
 
   openModal(modal, {

@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
-import { injectSwVersion } from './scripts/inject-sw-version.js';
+import {
+  injectSwVersion,
+  injectBuildStamp,
+} from './scripts/inject-sw-version.js';
 
 const APP_VERSION_TOKEN = '__APP_VERSION__';
 const BUILD_TIME_TOKEN = '__BUILD_TIME__';
@@ -224,6 +227,13 @@ function injectSwCacheVersion() {
     closeBundle() {
       const injected = injectSwVersion('dist', swVersion);
       console.log(`[sw] cache version injected: ${injected}`);
+      // Audit 19: the capability index is copied from public/ verbatim, the
+      // same as sw.js, so the stamp has to be written into it here for the
+      // same reason. Everything that says which build this is now says the
+      // same string: the service worker's cache name, the About dialog, and
+      // this file.
+      const stamped = injectBuildStamp('dist', swVersion);
+      console.log(`[capabilities] build stamp injected: ${stamped}`);
     },
   };
 }
@@ -239,6 +249,10 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(buildInfo.version),
     __BUILD_TIME__: JSON.stringify(buildInfo.buildTime),
     __COMMIT_SHA__: JSON.stringify(buildInfo.commitSha),
+    // The same string the service worker names its cache after, so a person
+    // reading the About dialog and a person reading DevTools are talking
+    // about the same build (audit 19).
+    __BUILD_STAMP__: JSON.stringify(buildInfo.swVersion),
     // path-bool references process.env.PATH_BOOL_DEV_ASSERTS (Node-only global).
     // Vite doesn't auto-replace arbitrary process.env.* in pre-bundled deps.
     'process.env.PATH_BOOL_DEV_ASSERTS': 'undefined',
