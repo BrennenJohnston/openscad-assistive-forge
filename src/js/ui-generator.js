@@ -2347,8 +2347,11 @@ function createFileControl(
    * exactly as it was; fill layer 1 in to turn the stack on." Nobody was
    * filling them in. This was.
    *
-   * The depth SUGGESTION is not gone - it is what the editor's Layer column
-   * offers when someone opens it. What is gone is applying it on their behalf.
+   * D-142 (DP-51, 2026-09-16) finished the same job in the EDITOR, where the
+   * Layer column still arrived pre-filled from nesting depth: it now starts
+   * every shape on layer 1 and reports no stack at all until a person builds
+   * one, so this function's `assignments` is null on an untouched drawing and
+   * the two rules agree twice over.
    *
    * @param {Object|null} value - The file value being emitted
    * @param {Array<number>|null} assignments - The editor's Layer column, by

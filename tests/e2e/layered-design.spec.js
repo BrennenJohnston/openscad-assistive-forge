@@ -65,12 +65,15 @@ const layerState = (page) =>
   });
 
 /**
- * Build the stack the way a person does: open the editor, accept the Layer
- * column it offers, and apply.
+ * Build the stack the way a person does: open the editor, SET a layer on each
+ * shape that is meant to stand on another, and apply.
  *
- * D-135 (the owner's answer at DP-Q44): the app no longer assigns layers on
- * anyone's behalf. The depth SUGGESTION is still there - it is what the Layer
- * column is pre-filled with - but somebody has to look at it and press Apply.
+ * D-135 (the owner at DP-Q44) stopped the app assigning layers on the plain
+ * upload path; D-142 (DP-51, the owner's second walk) finished the job in the
+ * EDITOR, where the column used to arrive pre-filled from nesting depth. It
+ * now starts at all ones, so building a stack means choosing the layers - and
+ * this helper does what the person does, rather than pressing Apply over a
+ * column the app filled in.
  */
 async function openTheEditor(page) {
   // The editor's door lives in the design control's status card, inside the
@@ -97,12 +100,26 @@ async function buildStackInTheEditor(page) {
   await expect
     .poll(() => layerSelects.count(), { timeout: 60000 })
     .toBeGreaterThan(0);
-  // The column arrives pre-filled with the suggestion, so accepting it is the
-  // whole action. Read it back so the test says what it accepted.
+  // The column starts at all ones (D-142). The middle square goes on layer 2
+  // and the inner one on layer 3, which is the stack the rest of this file
+  // measures: each pass standing on the one before it.
+  //
+  // The select lives in the row's More panel, which is shut until it is
+  // asked for - so this presses More first, exactly as a person has to.
+  const rows = page.locator('.svg-prep-object');
+  for (const [row, layer] of [
+    [1, '2'],
+    [2, '3'],
+  ]) {
+    await rows.nth(row).locator('.svg-prep-more-btn').click();
+    await layerSelects.nth(row).selectOption(layer);
+  }
   const chosen = await layerSelects.evaluateAll((els) =>
     els.map((e) => Number(e.value))
   );
-  expect(Math.max(...chosen)).toBeGreaterThan(1);
+  expect(chosen).toEqual([1, 2, 3]);
+  await expect(page.getByRole('button', { name: /^Apply/ }).first())
+    .toBeEnabled({ timeout: 90000 });
   await page
     .getByRole('button', { name: /^Apply/ })
     .first()
@@ -172,6 +189,63 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
     expect(layers.filter(Boolean), `layers: ${JSON.stringify(layers)}`).toEqual(
       []
     );
+  });
+
+  test('★ the editor opens on layer 1, and Apply alone builds NO stack (D-142)', async ({
+    page,
+  }) => {
+    // The owner's second walk, 2026-09-16: "the inside of the R and the A in
+    // CREATE came out as a layer 3 shape". MEASURED on their logo before the
+    // fix, on this same host: 394 of 553 rows opened on layer 2, 158 on layer
+    // 3, and an untouched Apply emitted three layer files of 197,898, 234,598
+    // and 53,402 bytes. The column is where the phantom stack was built, so
+    // the guard is here: open the editor on a drawing that nests three deep,
+    // touch nothing, Apply, and the passes stay empty.
+    test.slow();
+    await openCharm(page);
+    await page.setInputFiles('#param-design_file', SQUARES);
+    await expect
+      .poll(async () => (await layerState(page)).design, { timeout: 90000 })
+      .toBe('nested-squares.svg');
+
+    await openTheEditor(page);
+    const layerSelects = page.locator('.svg-prep-layer-select');
+    await expect
+      .poll(() => layerSelects.count(), { timeout: 60000 })
+      .toBeGreaterThan(0);
+
+    // Every shape starts on layer 1, however deep the drawing nests.
+    const onOpen = await layerSelects.evaluateAll((els) =>
+      els.map((e) => Number(e.value))
+    );
+    expect(onOpen).toEqual([1, 1, 1]);
+    // And it still OFFERS the three the artwork can carry.
+    expect(
+      await layerSelects.first().locator('option').count(),
+      'the drawing nests three deep, so three layers are on offer'
+    ).toBe(3);
+    await expect(page.locator('.svg-prep-layer-summary')).toContainText(
+      'Every shape starts on layer 1'
+    );
+
+    await expect(page.getByRole('button', { name: /^Apply/ }).first())
+      .toBeEnabled({ timeout: 90000 });
+    await page
+      .getByRole('button', { name: /^Apply/ })
+      .first()
+      .click();
+
+    // The design is applied...
+    await expect
+      .poll(async () => (await layerState(page)).design, { timeout: 90000 })
+      .toBe('nested-squares.svg');
+    await page.waitForTimeout(2000);
+    // ...and not one pass was filled in on the person's behalf.
+    const { layers } = await layerState(page);
+    expect(
+      layers.filter(Boolean),
+      `layers after an untouched Apply: ${JSON.stringify(layers)}`
+    ).toEqual([]);
   });
 
   test('★ Apply is not offered while the shapes are still being combined', async ({
