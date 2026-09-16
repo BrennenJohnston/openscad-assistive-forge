@@ -3172,12 +3172,16 @@ describe('the Layer column (DP-7)', () => {
     });
   });
 
-  describe('suggestions', () => {
-    it('auto-categorizes each shape to its nesting depth', () => {
+  // D-142 (DP-51, the owner's second walk, 2026-09-16): nesting depth decides
+  // how many layers a drawing OFFERS and never what a shape sits on. MEASURED
+  // on the owner's CREATE logo before the fix: 394 of 553 rows opened on layer
+  // 2 and 158 on layer 3, and Apply emitted a three-layer stack nobody built.
+  describe('the starting column', () => {
+    it('starts every shape on layer 1, however deep the artwork nests', () => {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(3);
       ws.open(svgString, analysis, { layersEnabled: true });
-      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '2', '3']);
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
     });
 
     it('offers exactly as many layers as the artwork supports', () => {
@@ -3187,7 +3191,76 @@ describe('the Layer column (DP-7)', () => {
       for (const s of layerSelects(ws)) {
         expect(Array.from(s.options).map((o) => o.value)).toEqual(['1', '2']);
       }
-      expect(ws._refs.layerSummary.textContent).toContain('2 layers');
+      expect(ws._refs.layerSummary.textContent).toContain('up to 2 layers');
+    });
+
+    it('says the default in the summary, and how to build a stack', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      const said = ws._refs.layerSummary.textContent;
+      expect(said).toContain('Every shape starts on layer 1.');
+      expect(said).toContain('Choose a layer under More to build a stack.');
+      expect(said).not.toContain('—');
+    });
+
+    it('drops the starting sentence once a stack is built', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      setLayer(ws, 1, 2);
+      expect(ws._refs.layerSummary.textContent).not.toContain(
+        'Every shape starts on layer 1'
+      );
+      expect(ws._refs.layerSummary.textContent).toContain('up to 3 layers');
+    });
+
+    it('reports NO STACK until somebody builds one', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      // What Apply reads: null means "leave every layer file empty", which is
+      // the ordinary design with its holes cut.
+      const untouched = ws.getLayerAssignments();
+      expect(untouched.layers).toBeNull();
+      expect(untouched.limit).toBe(3);
+      expect(untouched.problems).toEqual([]);
+
+      setLayer(ws, 1, 2);
+      expect(ws.getLayerAssignments().layers).toEqual([1, 2, 1]);
+    });
+
+    it('counts a saved column above layer 1 as a stack somebody built', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 2, 3],
+      });
+      expect(ws.getLayerAssignments().layers).toEqual([1, 2, 3]);
+    });
+
+    it('a saved column of ones is still no stack', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 1, 1],
+      });
+      expect(ws.getLayerAssignments().layers).toBeNull();
+    });
+
+    it('forgets the stack when the editor opens on another drawing', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const first = makeNestedAnalysis(3);
+      ws.open(first.svgString, first.analysis, { layersEnabled: true });
+      setLayer(ws, 1, 2);
+      expect(ws.getLayerAssignments().layers).not.toBeNull();
+
+      const second = makeNestedAnalysis(3);
+      ws.open(second.svgString, second.analysis, { layersEnabled: true });
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
+      expect(ws.getLayerAssignments().layers).toBeNull();
     });
 
     it('never offers a fourth layer, whatever the artwork nests to', () => {
@@ -3209,15 +3282,32 @@ describe('the Layer column (DP-7)', () => {
   });
 
   describe('the containment law', () => {
+    /**
+     * Open the nested squares and BUILD the stack, the way a person does
+     * since D-142: the column starts at all ones, so the middle square is
+     * put on layer 2 and the inner one on layer 3 by hand.
+     */
     function openNested(count = 3) {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(count);
       ws.open(svgString, analysis, { layersEnabled: true });
+      for (let i = 1; i < count && i < 3; i++) setLayer(ws, i, i + 1);
       return ws;
     }
 
-    it('accepts the suggestion it made', () => {
+    it('accepts a stack that stands on itself', () => {
       const ws = openNested();
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '2', '3']);
+      expect(ws.getLayerAssignments().problems).toEqual([]);
+      expect(
+        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
+      ).toHaveLength(0);
+    });
+
+    it('breaks no law while every shape is still on layer 1', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
       expect(ws.getLayerAssignments().problems).toEqual([]);
       expect(
         ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
@@ -3345,6 +3435,8 @@ describe('the Layer column (DP-7)', () => {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(3);
       ws.open(svgString, analysis, { layersEnabled: true });
+      setLayer(ws, 1, 2);
+      setLayer(ws, 2, 3);
       expect(ws.getLayerAssignments().layers).toEqual([1, 2, 3]);
     });
   });

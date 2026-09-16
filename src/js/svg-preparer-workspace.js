@@ -23,7 +23,6 @@ import {
 } from './svg-preparer.js';
 import {
   buildNestingTree,
-  suggestLayers,
   layerLimit,
   validateLayers,
   estimateRingPoints,
@@ -651,7 +650,11 @@ function buildZoomControls(pane) {
  *   listitem children, and a live region among them made the whole list
  *   invalid to assistive technology (D-101).
  * @param {boolean} [isCompound=false] - Compound-path mode (Include/Exclude)
- * @returns {{roles: string[], offsets: number[]}} Initial assignments
+ * @param {{limit: number}|null} [layerInfo=null] - How many layers this
+ *   drawing can offer; null for a tile that did not ask for the column. The
+ *   starting VALUE is always layer 1 (D-142).
+ * @returns {{roles: string[], offsets: number[], layers: number[]}} Initial
+ *   assignments
  */
 function populateObjectList(
   listEl,
@@ -770,13 +773,15 @@ function populateObjectList(
     }
 
     if (layerCount > 0) {
-      // The suggestion is the shape's nesting depth. Editable straight away:
-      // auto-categorized is a starting point, not a verdict.
-      const suggested = Math.min(
-        Math.max(layerInfo.suggestions[i] || 1, 1),
-        layerCount
-      );
-      layers.push(suggested);
+      // ★ D-142 (DP-51, the owner's second walk of 2026-09-16): EVERY SHAPE
+      // STARTS ON LAYER 1. This used to pre-select the shape's nesting depth.
+      // MEASURED on the owner's CREATE logo in Colors: 394 of 553 rows opened
+      // on layer 2 and 158 on layer 3, so the counter inside the R read
+      // "Layer 3" and Apply emitted a three-layer stack nobody had built.
+      // Nesting depth still decides how many layers a drawing can OFFER
+      // (layerLimit, below); it no longer decides what a shape sits on. A
+      // stack is something a person builds (D-135, the owner at DP-Q44).
+      layers.push(1);
 
       const layerSelect = document.createElement('select');
       layerSelect.className = 'svg-prep-layer-select';
@@ -786,7 +791,7 @@ function populateObjectList(
         const opt = document.createElement('option');
         opt.value = String(n);
         opt.textContent = `Layer ${n}`;
-        if (n === suggested) opt.selected = true;
+        if (n === 1) opt.selected = true;
         layerSelect.appendChild(opt);
       }
       if (role === 'ignore') layerSelect.disabled = true;
@@ -1113,6 +1118,12 @@ export function createSvgPrepWorkspace(containerEl) {
   let nestingTree = null;
   let layerCount = 0;
   let layers = [];
+  // D-142. A stack exists only once a person has built one: a Layer select
+  // changed this session, or a saved column restored above layer 1. Until
+  // then getLayerAssignments() reports no stack at all, so the emit leaves
+  // every layer file empty and the charm is the ordinary design with its
+  // holes cut - the "previous logic" the owner asked to come back.
+  let layersTouched = false;
   // DP-19. When a host surface has mounted this workspace inside itself, the
   // host owns the announcements and the size: it says "opened" once, in its
   // own words, and it is already the biggest thing on the page, so there is
@@ -2240,17 +2251,25 @@ export function createSvgPrepWorkspace(containerEl) {
       return;
     }
     refs.layerSummary.hidden = false;
+    // D-142, text-pack row 180. The sentence says what the column HOLDS, not
+    // only what the drawing could carry: until somebody builds a stack every
+    // shape is on layer 1, and the way to build one is worth saying once,
+    // because the selects live behind each row's More button.
     const limitText =
       layerCount === 1
         ? 'This design supports 1 layer.'
-        : `This design supports ${layerCount} layers.`;
+        : `This design supports up to ${layerCount} layers.`;
+    const startText =
+      layersTouched || layerCount === 1
+        ? ''
+        : ' Every shape starts on layer 1. Choose a layer under More to build a stack.';
     const problemText =
       problemCount === 0
         ? ''
         : problemCount === 1
           ? ' 1 shape needs a different layer.'
           : ` ${problemCount} shapes need a different layer.`;
-    refs.layerSummary.textContent = limitText + problemText;
+    refs.layerSummary.textContent = limitText + startText + problemText;
     refs.layerSummary.classList.toggle(
       'svg-prep-layer-summary-problem',
       problemCount > 0
@@ -2265,6 +2284,7 @@ export function createSvgPrepWorkspace(containerEl) {
     if (!match) return;
     const idx = parseInt(match[1], 10);
     layers[idx] = parseInt(target.value, 10) || 1;
+    layersTouched = true;
 
     const problems = validateAndMarkLayers();
     const mine = problems.find((pr) => pr.index === idx);
@@ -2446,9 +2466,7 @@ export function createSvgPrepWorkspace(containerEl) {
       liveElements,
       liveRegion,
       Boolean(currentAnalysis?.isCompoundPathOnly),
-      layersEnabled && layerCount > 0
-        ? { limit: layerCount, suggestions: suggestLayers(nestingTree) }
-        : null
+      layersEnabled && layerCount > 0 ? { limit: layerCount } : null
     );
     roles = populated.roles;
     offsets = populated.offsets;
@@ -2821,12 +2839,20 @@ export function createSvgPrepWorkspace(containerEl) {
    * A SPARSE ARRAY, the same shape roles and offsets travel in, so the
    * persistence and reopen plumbing needs no special case for layers.
    *
-   * @returns {{layers: Array, limit: number, problems: Array}} Empty when the
-   *   tile did not opt in.
+   * D-142: `layers` is NULL until somebody builds a stack, which is what
+   * `buildLayerCompanions` reads as "no stack to emit". A column of ones is
+   * not a stack, and reporting it as one is how a three-layer emission used
+   * to ride out of an editor nobody had touched.
+   *
+   * @returns {{layers: Array|null, limit: number, problems: Array}} Empty when
+   *   the tile did not opt in; `layers: null` when no stack has been built.
    */
   function getLayerAssignments() {
     if (!layersEnabled || layerCount === 0) {
       return { layers: [], limit: 0, problems: [] };
+    }
+    if (!layersTouched) {
+      return { layers: null, limit: layerCount, problems: [] };
     }
     const out = [];
     originalIndex.forEach((original, live) => {
@@ -2924,6 +2950,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // would be that cost per click, and the depth SUGGESTION is a starting
     // point that does not need to chase each role change.
     layersEnabled = callbacks.layersEnabled === true;
+    layersTouched = false;
     if (layersEnabled) {
       nestingTree = buildNestingTree(liveElements);
       layerCount = layerLimit(nestingTree);
@@ -2937,9 +2964,7 @@ export function createSvgPrepWorkspace(containerEl) {
       liveElements,
       liveRegion,
       Boolean(analysis.isCompoundPathOnly),
-      layersEnabled && layerCount > 0
-        ? { limit: layerCount, suggestions: suggestLayers(nestingTree) }
-        : null
+      layersEnabled && layerCount > 0 ? { limit: layerCount } : null
     );
     roles = populated.roles;
     offsets = populated.offsets;
@@ -2957,6 +2982,10 @@ export function createSvgPrepWorkspace(containerEl) {
         const v = parseInt(saved[i], 10);
         if (v >= 1) layers[i] = Math.min(v, layerCount || 1);
       }
+      // D-142: a saved column that stands above layer 1 is a stack somebody
+      // built in an earlier visit, so reopening the design keeps it rather
+      // than quietly flattening their work back to one pass.
+      if (layers.some((v) => v >= 2)) layersTouched = true;
     }
     // Run the law once on open, so a design that already breaks it says so
     // instead of waiting for the person to touch a control first.
