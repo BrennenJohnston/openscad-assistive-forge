@@ -41,7 +41,7 @@ let onCameraChange = null;
 function statusNumber(value) {
   if (!Number.isFinite(value)) return '—';
   // A rotation a hair below zero rounds to the string "-0.00", which reads as a
-  // defect rather than as zero. Normalise the sign, not the value.
+  // defect rather than as zero. Normalize the sign, not the value.
   const rounded = Number(value.toFixed(2));
   return (rounded === 0 ? 0 : rounded).toFixed(2);
 }

@@ -209,7 +209,7 @@ test.describe('The Stencil Maker makes plates', () => {
     // The summary names every colour and its share, so a person can SEE that
     // a colour they wanted is missing and ask for one more.
     const summary = page.locator('.ink-controls-summary')
-    await expect(summary).toContainText(/colours to paint, and the wall/, {
+    await expect(summary).toContainText(/colors to paint, and the wall/, {
       timeout: 180000,
     })
     await expect(summary).toContainText(/%/)

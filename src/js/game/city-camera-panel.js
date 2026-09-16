@@ -318,7 +318,7 @@ export function buildCityCameraPanel(actions) {
   /**
    * ★★ CW-60: THIS PAD HAD NOTHING OF ITS OWN TO DO OVER THE MAP. Both pads
    * sent the same four pan actions there, so the panel offered eight buttons
-   * for four jobs. MEASURED at this head, one 700 ms hold each, in metres of
+   * for four jobs. MEASURED at this head, one 700 ms hold each, in meters of
    * map moved: Rotate up +1147 / down -1168 / left -1147 / right +1147, and
    * this pad +1127 / -1127 / -1188 / +1168. The same axes, the same signs -
    * a genuine duplicate rather than two controls that merely look alike.
@@ -509,7 +509,7 @@ export function buildCityCameraPanel(actions) {
     id: 'cityWalkCamReset',
     className: 'btn-sm btn-outline camera-btn-full',
     text: 'Reset View',
-    // "Center", not "Centre": the toolbar button beside it already says
+    // "Center", not "Centre" (sic): the toolbar button beside it already says
     // "Center on you" and the announcement says "Map centered on you".
     label: (isMap) => (isMap ? 'Center the map on you' : 'Level the view'),
     onPress: (isMap) => {

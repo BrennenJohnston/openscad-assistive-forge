@@ -113,7 +113,7 @@ function _createInstanceState() {
 
     // CW-21 intensity: one atlas of the SAME phosphor per drive level, chosen
     // per cell by luminance. Monochrome only — in palette mode the per-cell
-    // atlas selector is already spoken for by the colour, and colour carries
+    // atlas selector is already spoken for by the color, and color carries
     // the identity intensity would have added.
     intensityLevels: null, // number[] drive factors, dimmest first, or null
     intensityAtlases: null,
@@ -450,7 +450,7 @@ const _CURVE_STEPS = 2048;
  * Tabulate pow(t, exp) for t in [0, 1].
  *
  * The array carries one extra entry past the end so that t === 1 lands on
- * index _CURVE_STEPS with a real neighbour to interpolate against; reading
+ * index _CURVE_STEPS with a real neighbor to interpolate against; reading
  * one off the end of a Float32Array yields undefined, and undefined would
  * turn the whole cell into NaN.
  */
@@ -621,12 +621,12 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
     // The CPU asks `useIntensity ? st.reverseAtlasIndex : -1` and gets -1, so
     // no palette cell is ever reversed. The GPU's `reverseAt` asked only
     // whether the index was non-negative, so after a LIVE switch from mono to
-    // colour it kept the mono threshold of 0.80: every palette cell above it
+    // color it kept the mono threshold of 0.80: every palette cell above it
     // was matched against an INVERTED shape vector and, because a reversed
     // cell deliberately draws from the whole atlas, without its own surface's
     // vocabulary.
     //
-    // Reaching colour from a cold start never showed it - no mono atlas had
+    // Reaching color from a cold start never showed it - no mono atlas had
     // been built, so the index was still -1 - and CW-93's own fix is what made
     // it visible at all: while the vocabularies were switched off in palette
     // mode there was nothing left for it to break. Measured after that fix, at
@@ -809,10 +809,10 @@ function _computeSampleScale(charW) {
  * rather than recomputed, so the two paths cannot drift on tap positions,
  * contrast exponents or the glyph vectors themselves.
  *
- * Palette mode goes through the shader too. The colour selector needs each
+ * Palette mode goes through the shader too. The color selector needs each
  * cell's mean tint, which the taps already have, so it is picked there and
  * rides back in the green channel — the one that otherwise carries only a
- * debug class byte. Without this the game's colour mode would have been the
+ * debug class byte. Without this the game's color mode would have been the
  * one mode the release did not speed up, and it is the mode the owner's own
  * screenshots were taken in.
  */
@@ -907,7 +907,7 @@ function _sampleOnGpu(
     // antialiasing the downscale was quietly providing.
     sourceW: renderer.domElement.width,
     sourceH: renderer.domElement.height,
-    // Written in the same colour space the canvas is, so that the hardware's
+    // Written in the same color space the canvas is, so that the hardware's
     // linear filtering averages encoded values exactly as drawImage does.
     sceneColorSpace: renderer.outputColorSpace,
     reverseAt,
@@ -1101,7 +1101,7 @@ function _renderFrame(
         }
         if (history) {
           // A reverse cell has no drive level, so it forgets one: on the way
-          // back out it takes the plain pick rather than a stale neighbour.
+          // back out it takes the plain pick rather than a stale neighbor.
           history.drive[i] = cellReversed ? -1 : st.intensityIndices[i];
           history.reversed[i] = cellReversed ? 1 : 0;
         }
@@ -1176,10 +1176,10 @@ function _renderFrame(
     // holding a snapshot must not watch it change under the next frame.
     st.lastGlyphIndices = glyphIndices;
     st.lastProbeIntensity = useIntensity ? st.intensityIndices : null;
-    // CW-92: and the COLOUR decision, which until now the instrument had to
+    // CW-92: and the COLOR decision, which until now the instrument had to
     // recover by matching painted pixels back to the palette. That reads the
     // bloom and Day's backing as well as the cell, so a cell whose index never
-    // moved could still be reported as having changed colour - and that is
+    // moved could still be reported as having changed color - and that is
     // exactly the question D-127 asks. The decision itself is right here.
     st.lastProbeColour = usePalette ? st.colorIndices : null;
   }
@@ -1231,7 +1231,7 @@ function _probeLumArray(st, cellCount) {
 
 /**
  * The CPU sampling loop: sixteen taps, two contrast curves and a
- * nearest-glyph search per cell. Unchanged in behaviour by CW-32 — it is now
+ * nearest-glyph search per cell. Unchanged in behavior by CW-32 — it is now
  * one of two paths rather than the only one, and it remains the only path on
  * WebGL1 and wherever the GPU pass declines.
  */
@@ -1277,8 +1277,8 @@ function _convertOnCpu(
   // ★ CW-92: the class map is not a VOCABULARY thing. It was fetched only when
   // there were class vocabularies to pick a glyph from, which was true of every
   // caller until the ink families arrived - they need the same map to choose a
-  // COLOUR and have nothing to do with glyph lists. Asking the narrower
-  // question made a caller with families and no vocabularies get no colour at
+  // COLOR and have nothing to do with glyph lists. Asking the narrower
+  // question made a caller with families and no vocabularies get no color at
   // all, silently, which is how a unit case found this.
   if ((st.classLookups || st.inkFamilies) && st.classMapProvider) {
     const supplied = st.classMapProvider(cols, rows);
@@ -1316,7 +1316,7 @@ function _convertOnCpu(
       if (tapPlan) {
         // Read every distinct pixel once, then hand each tap the value it
         // asked for. A pixel two taps share is still counted twice in the
-        // colour average, exactly as sampling it twice would.
+        // color average, exactly as sampling it twice would.
         const tCount = tapPlan.count;
         const tdx = tapPlan.dx;
         const tdy = tapPlan.dy;
@@ -1418,12 +1418,12 @@ function _convertOnCpu(
       }
       // ★★★ GUARDED BY useIntensity, THE WAY THE GPU BRANCH ALWAYS HAS BEEN.
       // `st.intensityIndices` is only allocated when there are drive levels to
-      // hold, and in COLOUR MODE there never are - useIntensity is
+      // hold, and in COLOR MODE there never are - useIntensity is
       // `!usePalette && ...`, so it is false for every palette frame. This line
       // read `st.intensityIndices[cell]` unconditionally and threw
-      // 'Cannot read properties of null' on the first colour frame it ever saw.
+      // 'Cannot read properties of null' on the first color frame it ever saw.
       //
-      // It had never seen one: colour mode has always taken the GPU path, and
+      // It had never seen one: color mode has always taken the GPU path, and
       // the GPU branch guards the identical assignment. CW-86 forces the CPU
       // path, which is how a crash that has been sitting in this file since the
       // memory landed finally got to happen. The fix is to ask the same
@@ -1528,7 +1528,7 @@ function _convertOnCpu(
 
       // CW-86: THE GLYPH COMES FROM THE SURFACE, THE LIGHT STILL COMES FROM
       // THE SCREEN. Everything above this line - the blank floor, the reverse
-      // decision, the intensity level, the palette colour - has already been
+      // decision, the intensity level, the palette color - has already been
       // decided from the lit cell and is untouched. All that changes is WHICH
       // character carries it, and for an anchored cell that is a property of
       // the wall rather than of where the camera is standing.
@@ -1641,10 +1641,10 @@ function _paintConverted(
       usePalette,
       useIntensity,
       // CW-85 measured TWO tint sources before choosing one, and the second
-      // needed the cell's OWN colour: this is the palette entry the glyph is
+      // needed the cell's OWN color: this is the palette entry the glyph is
       // about to be drawn in. Handing it over costs nothing (the array
       // already exists for the paint) and it is the only way a provider
-      // outside the converter can ask what colour a cell came out.
+      // outside the converter can ask what color a cell came out.
       colorIndices: usePalette ? st.colorIndices : null,
       palette: usePalette ? st.palette : null,
     });
@@ -1714,7 +1714,7 @@ export async function initAltView(previewManager, options = {}) {
   st.anchoredGlyphs = options.anchoredGlyphs === true;
   st.classVocabularies = options.glyphVocabularies ?? null;
   // CW-85: the backing layer ("Day"). Opt-in per instance and asked once per
-  // PAINT, not per rAF. It returns one opaque colour per cell (0 = leave this
+  // PAINT, not per rAF. It returns one opaque color per cell (0 = leave this
   // cell alone) and CANNOT reach the glyph decision: by the time it is called
   // the glyphs are already chosen, which is what makes "the backing changes
   // no decision" a fact about the shape of the code rather than a promise.
@@ -1952,7 +1952,7 @@ export async function initAltView(previewManager, options = {}) {
      *
      * Callers opt in exactly as they do for setPalette: nothing changes for an
      * instance that never calls this, which is what keeps the main app's Alt
-     * View untouched. Ignored while a palette is active — colour already gives
+     * View untouched. Ignored while a palette is active — color already gives
      * each cell an identity, and the per-cell atlas selector cannot serve two
      * masters.
      *
@@ -2109,21 +2109,21 @@ export async function initAltView(previewManager, options = {}) {
       return Boolean(st.anchoredGlyphs);
     },
     /**
-     * ★★★ CW-92 (D-127): WHAT COLOUR EACH SURFACE IS, decided once and not
+     * ★★★ CW-92 (D-127): WHAT COLOR EACH SURFACE IS, decided once and not
      * re-taken every frame.
      *
-     * In palette mode a classified cell's colour index comes from this table
+     * In palette mode a classified cell's color index comes from this table
      * rather than from a nearest-palette match on the lit sample. The lit
      * sample still decides everything it truly owns - whether the cell is
      * inked at all, its intensity, and CW-71's white gate - and nothing else
      * about the picture changes.
      *
-     * WHY A TABLE AND NOT THE SURFACE'S OWN COLOUR, which is what the release
+     * WHY A TABLE AND NOT THE SURFACE'S OWN COLOR, which is what the release
      * was briefed to use: the city has none. Measured over all 60 materials,
      * 51 land on the palette's white entry, because every material is white or
-     * neutral grey, both lights are white and the fog is black. Every hue a
-     * colour player has seen was manufactured out of the last digit or two of
-     * a grey image, and that is why a whole face crossed a palette boundary
+     * neutral gray, both lights are white and the fog is black. Every hue a
+     * color player has seen was manufactured out of the last digit or two of
+     * a gray image, and that is why a whole face crossed a palette boundary
      * together when the camera moved.
      *
      * Pass null to go back to the per-frame screen pick, which is what the
@@ -2510,7 +2510,7 @@ export async function initAltView(previewManager, options = {}) {
       return out;
     };
     /**
-     * CW-92: `colour` is the palette index the converter chose, in palette
+     * CW-92: `color` is the palette index the converter chose, in palette
      * mode only. Null in mono, where there is no palette to index.
      */
     api.readCellProbe = () => {

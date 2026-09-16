@@ -1093,7 +1093,7 @@ export async function exportSingleProject(projectId) {
       );
     }
 
-    // Add a minimal manifest so the ZIP is recognisable by importProjectsBackup
+    // Add a minimal manifest so the ZIP is recognizable by importProjectsBackup
     const manifest = {
       version: '2.0',
       exportedAt: new Date().toISOString(),

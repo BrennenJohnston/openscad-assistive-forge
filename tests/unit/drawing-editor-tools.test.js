@@ -453,7 +453,7 @@ describe('the stencil purpose with tools (DP-20)', () => {
     expect(document.activeElement).toBe(rowsOf()[1].querySelector('.drawing-editor-region-remove'))
   })
 
-  it('adding a colour is undoable, and Rename, Merge and Remove colour each say what they did', async () => {
+  it('adding a colour is undoable, and Rename, Merge and Remove color each say what they did', async () => {
     await openCat()
     addColour('Brown', '#997048')
     expect(editor.getPlan().palette).toHaveLength(2)

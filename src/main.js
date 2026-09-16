@@ -1248,7 +1248,7 @@ async function initApp() {
   // File handler controller -- declared early so wrappers can reference it;
   // assigned after all const deps are available (see initFileHandler call below).
   let fileHandler; // eslint-disable-line prefer-const
-  // Built when folder sync initialises; null until then and on browsers with
+  // Built when folder sync initializes; null until then and on browsers with
   // no File System Access API at all.
   let folderWriteBack = null;
 
@@ -2267,7 +2267,7 @@ async function initApp() {
           } catch (err) {
             dismissOverlay();
             if (err.name === 'AbortError') {
-              updateStatus('Folder selection cancelled');
+              updateStatus('Folder selection canceled');
               return;
             }
             showErrorToast({
@@ -2601,7 +2601,7 @@ async function initApp() {
         announceImmediate(`Connected to folder ${result.folderName}`);
         await _loadFromConnectedFolder(result.handle);
       } else if (result.reason === 'cancelled') {
-        updateStatus('Folder connection cancelled');
+        updateStatus('Folder connection canceled');
       } else if (result.reason === 'permission-denied') {
         updateStatus(
           'Folder connection denied — permission required',
@@ -2845,7 +2845,7 @@ async function initApp() {
   //   │  z:   900  Drawers             (--z-index-drawer)               │
   //   └──────────────────────────────────────────────────────────────────┘
   //
-  // A tutorial layer above a modal is NOT a licence to paint over one: while
+  // A tutorial layer above a modal is NOT a license to paint over one: while
   // a user-opened dialog is on screen the tour stands down entirely (D-61,
   // Q-66). See applyDialogStandDown in tutorial-sandbox.js.
   //
@@ -3383,7 +3383,7 @@ async function initApp() {
         if (renderErr.code === 'MODEL_NOT_2D') {
           const proceed = await confirmProjectionFallback(format);
           if (!proceed) {
-            updateStatus(`${formatName} export cancelled`);
+            updateStatus(`${formatName} export canceled`);
             return;
           }
           updateStatus(`Projecting 3D mesh to approximate ${formatName}...`);
@@ -5012,7 +5012,7 @@ async function initApp() {
       },
       // The three panels sub-plan F builds are Classic-only this round (D-32),
       // so each is a real dock toggle in Classic and keeps its previous Forge
-      // behaviour outside it. Viewport-Control used to be disabled in Classic
+      // behavior outside it. Viewport-Control used to be disabled in Classic
       // with an apologetic tooltip; it is a real panel now (F4/F6).
       ...(inClassic
         ? [
@@ -10325,7 +10325,7 @@ if (rounded) {
 
     // The Classic dock resizers change the 3D view's box without a window
     // resize, so the canvas would keep its old backing store and letterbox
-    // or stretch. Same contract Split.js's onDrag fulfils above, same rAF
+    // or stretch. Same contract Split.js's onDrag fulfills above, same rAF
     // throttle — a keyboard repeat or a drag fires this continuously.
     let classicResizePending = false;
     document.addEventListener('classic-layout-resize', () => {
@@ -10476,7 +10476,7 @@ if (rounded) {
 
       // The bar's View All and Reset View carry the same labels as the View
       // menu's items, so they run the same commands (G4). Reset View used to
-      // be a third behaviour again — a snap to the diagonal view.
+      // be a third behavior again — a snap to the diagonal view.
       document
         .getElementById('classicViewHomeBtn')
         ?.addEventListener('click', () => {
@@ -11820,7 +11820,7 @@ if (rounded) {
           if (renderErr.code === 'MODEL_NOT_2D') {
             const proceed = await confirmProjectionFallback(outputFormat);
             if (!proceed) {
-              updateStatus(`${formatName} export cancelled`);
+              updateStatus(`${formatName} export canceled`);
               updatePreviewStateUI(PREVIEW_STATE.STALE);
               return;
             }
@@ -12092,7 +12092,7 @@ if (rounded) {
   cancelRenderBtn.addEventListener('click', () => {
     if (renderController) {
       renderController.cancel();
-      updateStatus('Generation cancelled by user');
+      updateStatus('Generation canceled by user');
       cancelRenderBtn.classList.add('hidden');
       primaryActionBtn.disabled = false;
       // Re-enable undo/redo after cancellation
@@ -13383,7 +13383,7 @@ if (rounded) {
   /**
    * Single entry point for applying a preset's parameters AND companion files.
    * Called by both the Manage Presets modal and the preset dropdown so the two
-   * code paths stay identical in behaviour (Bug D fix).
+   * code paths stay identical in behavior (Bug D fix).
    *
    * Responsibilities:
    *  1. Merge visible preset parameters onto current state
@@ -14270,7 +14270,7 @@ if (rounded) {
           );
         });
 
-        if (!importMode) return; // user cancelled
+        if (!importMode) return; // user canceled
 
         // Create file input for import
         const input = document.createElement('input');
@@ -14316,7 +14316,7 @@ if (rounded) {
                 showErrorToast({
                   title: 'Invalid Import Data',
                   message:
-                    'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.',
+                    'The selected file(s) contain no valid preset data. Import canceled to protect your existing designs.',
                 });
                 return;
               }

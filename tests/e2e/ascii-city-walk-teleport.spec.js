@@ -309,7 +309,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     await expect(dialog(page)).toBeVisible()
     await cancelBtn(page).click()
     await expect(dialog(page)).toBeHidden()
-    await expect(announcer(page)).toContainText(/Travel cancelled/)
+    await expect(announcer(page)).toContainText(/Travel canceled/)
     expect(dist(await walk(page), start)).toBeLessThan(0.01)
 
     // Escape closes it and moves nothing either, and it closes ONLY the

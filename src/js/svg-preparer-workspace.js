@@ -70,7 +70,7 @@ const COMPOUND_ROLE_OPTIONS = [
  * It is painted again when a drawing arrives, because a compound path is not
  * offered Raised / Hole / Ignore at all - it is offered Include / Exclude -
  * and a legend that disagrees with the control beside it, for the same
- * colour, is the defect this pair was built to stop.
+ * color, is the defect this pair was built to stop.
  *
  * @param {HTMLElement} legendRow
  * @param {Array<{value: string, label: string}>} options
@@ -865,8 +865,8 @@ function renderWarnings(warningsEl, warnings) {
  */
 /**
  * The name an edited SVG is saved under. Provenance-aware: the file it came
- * from is still recognisable in what goes back, which is the whole point when
- * the file is travelling between two tools and a person.
+ * from is still recognizable in what goes back, which is the whole point when
+ * the file is traveling between two tools and a person.
  *
  * @param {string|null} sourceName - The file the editor was opened on
  * @returns {string}
@@ -1091,7 +1091,7 @@ export function createSvgPrepWorkspace(containerEl) {
   // the analysis as first read, and everything that leaves this module is
   // expressed in those ORIGINAL indices. Without it, deleting one shape and
   // reopening the project would silently apply every later shape's role to
-  // its neighbour.
+  // its neighbor.
   let originalIndex = [];
   // The element list as it stands after deletions - what the rows, roles and
   // offsets are parallel to. currentAnalysis.elements keeps the full original.
@@ -1220,7 +1220,7 @@ export function createSvgPrepWorkspace(containerEl) {
   function renderRoleLayer() {
     // Every layer, not just the source pane's: the stand-in picture in the
     // result pane carries one too, and the two must never disagree about what
-    // colour a shape is.
+    // color a shape is.
     const layers = root.querySelectorAll('.svg-prep-role-layer');
     layers.forEach((layer) => paintRoleLayer(layer));
   }
@@ -1232,7 +1232,7 @@ export function createSvgPrepWorkspace(containerEl) {
    * DP-40: the list can already point at the picture (DP-39 P3); this is the
    * other direction. It is its own layer rather than the role tints, because
    * the tints are a VIEW - "Show roles" turns them off - and a picture you can
-   * no longer touch because you turned the colours off would be a strange
+   * no longer touch because you turned the colors off would be a strange
    * thing to build.
    *
    * `pointer-events: all` is what makes an unpainted shape hittable: it means
@@ -1557,8 +1557,8 @@ export function createSvgPrepWorkspace(containerEl) {
             // drawing the row holding it is hidden the rest of the time.
             refs.renderRow.hidden = false;
             refs.renderBtn.disabled = false;
-            refs.renderNote.textContent = 'Combining cancelled.';
-            liveRegion.textContent = 'Combining cancelled.';
+            refs.renderNote.textContent = 'Combining canceled.';
+            liveRegion.textContent = 'Combining canceled.';
             return;
           }
           setRenderBusy(false);
@@ -2354,7 +2354,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // updateResultPreview says nothing more about it (DP-32: one action, one
     // announcement).
     flattenRunner.cancel();
-    announce('Combining cancelled');
+    announce('Combining canceled');
   }
 
   async function renderPreviewOnDemand() {
@@ -2365,7 +2365,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // No frame dance before the work any more. There used to be two, so the
     // busy state was painted before the main thread was taken for the boolean;
     // the boolean is in a worker now (DP-37 P2) and the thread is never taken,
-    // so the ceremony documented behaviour this code no longer has.
+    // so the ceremony documented behavior this code no longer has.
     const message = `Combining ${count} shapes.`;
     liveRegion.textContent = message;
     announce(message);
@@ -2392,7 +2392,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // wrong is worse than no announcement.
     await updateResultPreview();
 
-    // Cancelled: the action the person took has already spoken for itself.
+    // Canceled: the action the person took has already spoken for itself.
     if (!currentResult && flattenRunner && flattenRunner.isRunning()) return;
 
     const seconds = Math.max(
@@ -2544,7 +2544,7 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * The bbox area of a row's path, in square millimetres.
+   * The bbox area of a row's path, in square millimeters.
    *
    * The viewBox-to-mm mapping is the one the offsets already use: the design's
    * width in mm (the header field) divided by the viewBox width. Quoting the
@@ -2629,7 +2629,7 @@ export function createSvgPrepWorkspace(containerEl) {
         if (rowAreaMm2(i) < limit) doomed.push(i);
       }
       if (doomed.length === 0) {
-        const nothing = `Nothing is smaller than ${limit} square millimetres.`;
+        const nothing = `Nothing is smaller than ${limit} square millimeters.`;
         liveRegion.textContent = nothing;
         announce(nothing);
         return;
@@ -2961,7 +2961,7 @@ export function createSvgPrepWorkspace(containerEl) {
     renderRoleLayer();
     // DP-3: tier decides whether the boolean may run without being asked.
     // Anything the analyzer did not label is treated as tier A, so an older
-    // caller keeps exactly the behaviour it had.
+    // caller keeps exactly the behavior it had.
     setPreviewBand();
     clearSelection();
     if (autoPreview) {

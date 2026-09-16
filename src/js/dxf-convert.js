@@ -38,14 +38,14 @@ export const INSUNITS_MILLIMETERS = 4;
 /**
  * Declare the drawing's units, so a laser cutter does not guess.
  *
- * MEASURED on our own export: OpenSCAD writes correct millimetre COORDINATES
+ * MEASURED on our own export: OpenSCAD writes correct millimeter COORDINATES
  * but no $INSUNITS and no $MEASUREMENT, so the file says nothing at all about
  * what its numbers mean. Software configured for inches reads 50 as fifty
  * INCHES - a 25.4x error that looks perfectly fine on screen and ruins a sheet
  * of material.
  *
  * The header OpenSCAD writes is $ACADVER = AC1006 (R10), which predates both
- * variables. Permissive readers - which is nearly all laser software - honour
+ * variables. Permissive readers - which is nearly all laser software - honor
  * them anyway, and a strict one is no worse off than it is today. $ACADVER is
  * deliberately left alone: raising it would claim a format whose entities this
  * file does not otherwise use.
@@ -346,7 +346,7 @@ export function mountName(name, fallback) {
 }
 
 /**
- * Read a DXF's declared extents, in millimetres.
+ * Read a DXF's declared extents, in millimeters.
  *
  * DXF header pairs are a group code on one line and its value on the next, so
  * `$EXTMIN` is followed by `10`/x then `20`/y. This is the same thing the
@@ -383,7 +383,7 @@ export function parseDxfExtents(dxfText) {
 }
 
 /**
- * Width and height in millimetres, from a DXF's extents.
+ * Width and height in millimeters, from a DXF's extents.
  * @param {string} dxfText
  * @returns {{width: number, height: number}|null}
  */

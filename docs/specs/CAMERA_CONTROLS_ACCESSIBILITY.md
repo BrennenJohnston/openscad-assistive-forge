@@ -181,7 +181,7 @@ Handled globally rather than per component, in `src/styles/variables.css`:
 ```
 
 That covers the camera buttons along with everything else. The buttons' only
-transitions are colour changes, and the `scale(0.95)` on press has no transition
+transitions are color changes, and the `scale(0.95)` on press has no transition
 of its own, so it is instant either way.
 
 (There is also a per-component `@media (prefers-reduced-motion: reduce)` block

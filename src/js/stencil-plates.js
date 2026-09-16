@@ -25,11 +25,11 @@
  * bridge ever crosses the artwork and no bridge scar appears in the paint.
  *
  * That is why this is a better stencil than a cut sheet, and it is the reason
- * this file forces every element solid rather than honouring hole roles: see
+ * this file forces every element solid rather than honoring hole roles: see
  * flattenLayers' `solid` option.
  *
  * The plate SVG carries EVERYTHING - the plate outline, the cuts, and the
- * registration marks - as one even-odd path in millimetres, so the .scad that
+ * registration marks - as one even-odd path in millimeters, so the .scad that
  * extrudes it stays a dumb extruder and the preview cannot drift from the
  * export.
  *
@@ -45,18 +45,18 @@ import { ringsToPathData } from './ring-geometry.js';
 import { jigHolePathData } from './stencil-jig.js';
 
 /**
- * Colour is how laser software decides what to DO with a line: it maps each
- * colour to an operation and an order, so two operations need two colours.
+ * Color is how laser software decides what to DO with a line: it maps each
+ * color to an operation and an order, so two operations need two colors.
  *
  * These are the ordinary defaults. The guide tells a LightBurn user to set
  * black to Cut and red to Score or Fill once, after which the machine
  * remembers. Anything is possible; what matters is that the file DISTINGUISHES
- * them, because a single colour cannot be split back apart afterwards.
+ * them, because a single color cannot be split back apart afterwards.
  */
 export const CUT_COLOR = '#000000';
 export const ENGRAVE_COLOR = '#FF0000';
 
-/** Registration cross arm length and stroke, in millimetres. */
+/** Registration cross arm length and stroke, in millimeters. */
 export const MARK_ARM_MM = 6;
 export const MARK_WIDTH_MM = 1;
 
@@ -65,7 +65,7 @@ export { STENCIL_PLATE_CAP } from './stencil-limits.js';
 /**
  * Every plate carries the SAME marks in the SAME places. They are how a
  * person lines plate 2 up over paint that plate 1 laid down; a plate whose
- * marks moved would register the second colour a few millimetres out and
+ * marks moved would register the second color a few millimeters out and
  * there is no way to tell until the paint is on.
  *
  * @param {number} w - Plate width in mm
@@ -94,10 +94,10 @@ export function registrationMarks(w, h, inset = 8) {
 }
 
 /**
- * The transform that puts a normalized cut file onto the plate, centred.
+ * The transform that puts a normalized cut file onto the plate, centered.
  *
  * The cut arrives on the shared canvas every layer file uses, so all plates
- * take the SAME transform and the colours land on each other.
+ * take the SAME transform and the colors land on each other.
  *
  * @param {object} args
  * @param {number} args.canvasSpan - Width of the layer canvas
@@ -170,7 +170,7 @@ export function composeFit(fit, pre) {
  * @param {number} [args.scalePercent]
  * @param {boolean} [args.marks]
  * @param {boolean} [args.engraveLabel] - Add the plate's name as an engraved
- *   layer in its own colour. Off by default: it only helps a machine that can
+ *   layer in its own color. Off by default: it only helps a machine that can
  *   engrave, and an SVG <text> element depends on the reader's font handling.
  * @param {number} args.layer - Which plate this is, 1-based
  * @param {number} args.layerCount - How many plates the design makes
@@ -211,7 +211,7 @@ export function buildStencilPlate({
   // else, for the reason in the comment below: a hole in a path of its own is
   // not a hole.
   if (pegs) d += ` ${jigHolePathData({ ...pegs, plateW, plateH })}`;
-  // Rings arrive already in plate millimetres (fitRingsToPlate did that, once)
+  // Rings arrive already in plate millimeters (fitRingsToPlate did that, once)
   // so there is nothing here to scale. This is the D-122-free path; the
   // cutPathData one below is what the charm-era callers still use.
   if (rings && rings.length > 0) {
@@ -232,7 +232,7 @@ export function buildStencilPlate({
   }
 
   const text = plateLabel(layer, layerCount, colourName);
-  // The label rides as its own colour so it arrives as a separate layer a
+  // The label rides as its own color so it arrives as a separate layer a
   // laser can engrave rather than cut. Left out entirely when not wanted -
   // an empty layer is a thing to explain rather than a thing to use.
   const engraved = engraveLabel
@@ -358,7 +358,7 @@ export function stencilLayers(tree, roles, cap = 3, canvas = null) {
   /**
    * Is this root the paper rather than the drawing?
    *
-   * COLOUR CANNOT ANSWER THIS, and is not consulted. The bird fixture's
+   * COLOR CANNOT ANSWER THIS, and is not consulted. The bird fixture's
    * background is a light `<rect fill="#efe9dc">`; the owner's traced mark
    * has a DARK one, rgb(54,59,127). Both are the paper. What they share is
    * that they span the whole artwork and something is drawn on them.
@@ -392,7 +392,7 @@ export function stencilLayers(tree, roles, cap = 3, canvas = null) {
     const role = roleAt(index);
     // A background or an ignored shape is not the design; step past it
     // WITHOUT spending a layer on it, so the drawing on top starts at 1.
-    // Colour is deliberately NOT consulted. It cannot tell paper from
+    // Color is deliberately NOT consulted. It cannot tell paper from
     // drawing, and using it here also mis-skipped the first LIGHT shape of a
     // light-on-dark design, which is content, not paper.
     const isDesign = role !== 'ignore' && !(depth === 0 && isBackdrop(index));
@@ -468,11 +468,11 @@ export function plateLabel(layer, layerCount, colourName = null) {
  *
  * ★ D-122 BY CONSTRUCTION. The rings arrive in the drawing's own units and
  * `contentBox` says where the drawing is in them; this returns rings in plate
- * millimetres, and it is the only place the two spaces meet. Nothing
+ * millimeters, and it is the only place the two spaces meet. Nothing
  * downstream fits anything again, because there is nothing left to fit.
  *
  * The whole DESIGN is fitted, not each plate: every plate takes the same
- * transform, so the colours land on each other. Passing plate 3's own bounds
+ * transform, so the colors land on each other. Passing plate 3's own bounds
  * as `contentBox` would blow a two-region plate up to fill the sheet.
  *
  * @param {Array<Array<{x: number, y: number}>>} rings
@@ -480,7 +480,7 @@ export function plateLabel(layer, layerCount, colourName = null) {
  *   The whole design's bounds, in the rings' units
  * @param {{plateW: number, plateH: number, marginMm: number,
  *   scalePercent?: number, offsetX?: number, offsetY?: number}} plate
- * @returns {Array<Array<{x: number, y: number}>>} Rings in plate millimetres
+ * @returns {Array<Array<{x: number, y: number}>>} Rings in plate millimeters
  */
 export function fitRingsToPlate(rings, contentBox, plate) {
   const span = contentBox.maxX - contentBox.minX;
@@ -508,20 +508,20 @@ export function fitRingsToPlate(rings, contentBox, plate) {
  * so it is spelled out rather than left to be inferred from a number.
  * STRINGS: owner review pending (DP-R1 text pack).
  *
- * @param {number|string[]} layerCountOrNames - How many plates, or the colour
+ * @param {number|string[]} layerCountOrNames - How many plates, or the color
  *   names in paint order when the caller knows them
  * @returns {string[]} One sentence per plate, in order
  */
 export function paintSequence(layerCountOrNames) {
-  // A colour name says more than a number, so when the caller knows the
-  // colours the sentence uses them. Callers that only have a count still get
+  // A color name says more than a number, so when the caller knows the
+  // colors the sentence uses them. Callers that only have a count still get
   // the sentences they had.
   const names = Array.isArray(layerCountOrNames) ? layerCountOrNames : null;
   const layerCount = names ? names.length : layerCountOrNames;
   if (names) {
     return names.map((name, i) =>
       i === 0
-        ? `Plate 1, ${name}: lay it on the bare surface and paint. This coat is the ground every later colour sits on.`
+        ? `Plate 1, ${name}: lay it on the bare surface and paint. This coat is the ground every later color sits on.`
         : `Plate ${i + 1}, ${name}: line it up on the marks or drop it over the pegs, then paint. This coat covers part of what the last one put down.`
     );
   }

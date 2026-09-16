@@ -345,7 +345,7 @@ const wrapArrowTheme = EditorView.theme({
   '.cm-wrapReturnArrow': {
     display: 'flex',
     alignItems: 'center',
-    // Centred in the reserved column rather than pushed hard right, which put
+    // Centered in the reserved column rather than pushed hard right, which put
     // the glyph's own border stroke against the pane's border stroke.
     justifyContent: 'center',
     pointerEvents: 'none',

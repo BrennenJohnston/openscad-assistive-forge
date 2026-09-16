@@ -84,7 +84,7 @@ label_width = 70; // [30:1:150]
 - If the description ends in a unit like `(mm)`, the app picks the unit up and
   shows it beside the value.
 
-Leave the comment out and the control still appears, labelled with the bare
+Leave the comment out and the control still appears, labeled with the bare
 variable name and explained by nothing.
 
 The bit in square brackets after the value decides what kind of control it is:
@@ -231,7 +231,7 @@ Three models share the charm program, and features kept being added to one and
 forgotten on the others. This table is the contract. It is not documentation
 ABOUT the models - `tests/unit/parity-charm-models.test.js` PARSES this table
 and checks each model's `.scad` against it, so a row that stops being true
-fails the build rather than quietly ageing.
+fails the build rather than quietly aging.
 
 `N-A` needs a reason. "Not done yet" is not one; write `yes` and do it, or say
 why the feature does not belong to that model.

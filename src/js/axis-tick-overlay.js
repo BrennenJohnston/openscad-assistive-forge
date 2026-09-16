@@ -39,7 +39,7 @@
 
 import { PREVIEW_COLORS, isViewportSchemeKey } from './preview.js';
 
-// GLView.cc showScalemarkers(): size_div_sm and the labelling cadence.
+// GLView.cc showScalemarkers(): size_div_sm and the labeling cadence.
 const SIZE_DIV_SM = 60;
 const MAJOR_EVERY = 10;
 const MORE_LABELS_THRESHOLD = 3;

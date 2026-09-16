@@ -266,8 +266,8 @@ const SIDEWALK_TONES = { street: 0x161616, map: 0x6a6a6a };
  */
 // CW-Q81, answered by the owner at G1 2026-08-29. A park's surface was
 // 0x101410 - a luminance of about 0.07 - so the converter drew almost nothing
-// on it and a park read as a hole in the city; with CW-71's colour ink floor
-// at 0.3 it would have drawn NOTHING at all in colour. The owner asked for it
+// on it and a park read as a hole in the city; with CW-71's color ink floor
+// at 0.3 it would have drawn NOTHING at all in color. The owner asked for it
 // raised ABOVE that floor, knowing that this puts a park brighter than the
 // road (0.15-0.23) and so on the far side of CW-8's carpet law, which was
 // written to stop a ground surface reading as a carpet. 0x4a5c4a is a
@@ -321,7 +321,7 @@ const UNDRAWN_ROAD_KINDS = new Set([
 ]);
 
 /**
- * A building's own colour comes from its vertex colours, so the material tint
+ * A building's own color comes from its vertex colors, so the material tint
  * is a plain multiplier and white is the identity. CW-60's styles move it
  * over the map; naming it means the street's value and the restore cannot
  * drift apart (D-114).
@@ -340,7 +340,7 @@ const WAYFIND_LIFT_M = ROAD_LIFT_M + 0.12;
 // curb height.
 const ROADWAY_LIFT_M = ROAD_LIFT_M - CURB_HEIGHT_M;
 
-// CW-51 centre lines. The rhythm is the US skip line, 3 m of paint to 9 m of
+// CW-51 center lines. The rhythm is the US skip line, 3 m of paint to 9 m of
 // gap. The WIDTH is a model rather than a measurement, and the number came
 // from measuring rather than from argument.
 //
@@ -348,7 +348,7 @@ const ROADWAY_LIFT_M = ROAD_LIFT_M - CURB_HEIGHT_M;
 // 1.44-million-pixel frame - 0.015%, invisible, and confined to a band in the
 // middle distance. Widening moved that steadily (0.25 -> 367 px, 0.35 -> 477,
 // 0.50 -> 643) and only at 0.50 did the photographs show a line reading as
-// dashes rather than as speckle. This is the same licence CURB_WIDTH_M already
+// dashes rather than as speckle. This is the same license CURB_WIDTH_M already
 // takes for the same reason: a converter that turns brightness into characters
 // cannot resolve a sub-cell feature, however true to life its width is.
 //
@@ -357,11 +357,11 @@ const ROADWAY_LIFT_M = ROAD_LIFT_M - CURB_HEIGHT_M;
 // band (+0.6 to +1.0 points); the sky band moves by EXACTLY zero and so do the
 // near-ground bands.
 //
-// LINE_TONE sits at the curb's own luminance (0x30 grey reads 48/255) but
-// carries warmth, so a colour scheme quantizes it toward yellow while a
+// LINE_TONE sits at the curb's own luminance (0x30 gray reads 48/255) but
+// carries warmth, so a color scheme quantizes it toward yellow while a
 // monochrome scheme - which reads luminance alone - sees what it saw from a
 // curb. Only arterials are painted: a residential street often carries no
-// centre line in life, and painting every street is the fastest way to break
+// center line in life, and painting every street is the fastest way to break
 // the carpet law.
 const LINE_PAINT_M = 3;
 const LINE_GAP_M = 9;
@@ -376,7 +376,7 @@ const LINE_LIFT_M = ROADWAY_LIFT_M + 0.01;
 const GROUND_PLANE_Z = ROADWAY_LIFT_M - 0.02;
 const GROUND_MARGIN_M = 200;
 
-// Window grid: 4 m bays, 3 m storeys; the texture tile spans 4×3 bays so a
+// Window grid: 4 m bays, 3 m stories; the texture tile spans 4×3 bays so a
 // deterministic scatter of dark windows repeats every 16 m × 9 m instead of
 // every bay.
 const WINDOW_BAY_W_M = 4;
@@ -390,7 +390,7 @@ const WINDOW_TILE_BAYS_Y = 12;
 const STOREFRONT_HEIGHT_M = 3.5;
 const GROUND_TILE_M = 48;
 // Ground dither (CW-18). The 256 px tile covers GROUND_TILE_M, so a pixel is
-// about 19 cm and a streak runs up to a metre and a half.
+// about 19 cm and a streak runs up to a meter and a half.
 const GROUND_TONE_MIN = 0x26;
 const GROUND_TONE_SPAN = 0x14;
 const GROUND_STREAK_MAX_PX = 8;
@@ -526,7 +526,7 @@ function hashBuilding(index, name) {
  * @returns {number} unsigned 32-bit
  */
 export function hashSpot(x, y) {
-  // Millimetres: fine enough that two props never collide, coarse enough that
+  // Millimeters: fine enough that two props never collide, coarse enough that
   // a coordinate which round-trips through a float differently still agrees.
   let h = (Math.round(x * 1000) * 2654435761) >>> 0;
   h = ((h ^ Math.round(y * 1000)) * 16777619) >>> 0;
@@ -671,7 +671,7 @@ function makeRepeatingTexture(canvas, repeatX, repeatY, offsetY = 0) {
  *
  * Every building wore the same rectangular window, so once the converter had
  * turned a frame into characters one tower's wall was indistinguishable from
- * the next: colour told them apart but TEXTURE did not. Each family gives its
+ * the next: color told them apart but TEXTURE did not. Each family gives its
  * buildings a differently-shaped lit pane, which is variation the sampler can
  * actually see.
  *
@@ -713,15 +713,15 @@ function makeRepeatingTexture(canvas, repeatX, repeatY, offsetY = 0) {
  */
 // CW-46 facade rider (the directive's third uniformity: "the buildings
 // surfaces all being the same size windows"): every archetype now carries
-// its OWN bay metre size (bayWM x bayHM), so window rhythm differs between
+// its OWN bay meter size (bayWM x bayHM), so window rhythm differs between
 // families - a 'narrow' punched wall runs 2.8 m bays where a 'band'
-// curtain wall runs 5 m. The texture tile stays 8x12 bays; only the metre
+// curtain wall runs 5 m. The texture tile stays 8x12 bays; only the meter
 // repeat changes, and the per-building phase shift moves in the
 // archetype's own bay units, which is what keeps CW-34's whole-bay law
 // intact (a fractional shift would put half-height window rows at every
 // ground line). The values are a taste table, one line each to reverse.
 const WINDOW_ARCHETYPES = [
-  // A plain pane split by a centre mullion - the window the city has always
+  // A plain pane split by a center mullion - the window the city has always
   // had, kept as one family so a share of the buildings look unchanged.
   {
     name: 'plain',
@@ -1012,11 +1012,11 @@ function createWindowTexture(archetypeIndex = 0) {
  * ★ THE RESOLUTION IS SET BY THE MEMBER, NOT BY TASTE. CW-52 found a facade
  * pattern finer than the character grid beats against it and shimmers, and the
  * release prompt's floor is a line at least 3 px wide in TEXTURE space. At
- * 14.2 px per metre the shipped 1.2 m member is 17 px there, far over it, and
+ * 14.2 px per meter the shipped 1.2 m member is 17 px there, far over it, and
  * the whole tile is a quarter of a megabyte.
  *
  * That floor is not the binding one, though. On SCREEN at the 90 m photograph
- * gate one metre is 7.28 px, so the member is 8.7 px against a character cell
+ * gate one meter is 7.28 px, so the member is 8.7 px against a character cell
  * 4 px wide - and it is the SCREEN number that decided the width, because a
  * member under one cell across cannot make a cell dark whatever the texture
  * holds.
@@ -1062,7 +1062,7 @@ function createDiagridTexture() {
   }
 
   const wrap = (n) => ((n % (tileD * 2)) + tileD * 2) % (tileD * 2);
-  // Pane centres sit where both diagonal families cross at half-integers -
+  // Pane centers sit where both diagonal families cross at half-integers -
   // every (k, l) with k + l odd, in half-diamond steps.
   for (let k = -1; k <= tileD * 2 + 1; k++) {
     for (let l = -1; l <= tileD * 2 + 1; l++) {
@@ -1119,7 +1119,7 @@ function createDiagridTexture() {
  *
  * The owner's second photographed complaint: "the first level of each
  * building is exactly the same". It was — one texture strip, one merged mesh,
- * repeating every four metres along every building in the city.
+ * repeating every four meters along every building in the city.
  *
  * Each entry paints one storefront kind into a bay. They are stacked
  * vertically into ONE texture and each building's ground floor slides its UVs
@@ -1417,7 +1417,7 @@ const STOREFRONT_VARIANTS = [
  *
  * CW-53: shop kinds arrive as `shop:<value>` now that the parser keeps the
  * value. Only the values with a band of their own are listed - every other
- * shop is normalised back to the generic `shop` kind below, so a jeweller and
+ * shop is normalized back to the generic `shop` kind below, so a jeweller and
  * a phone shop read exactly as they did before rather than falling through to
  * the hash and losing the one thing the map data knew about them.
  */
@@ -1745,10 +1745,10 @@ function createStorefrontTexture(brightness = 1) {
  *
  * Three rules, all learned the hard way:
  * - Tones stay inside a narrow dim band. A visible SURFACE tone carpets the
- *   lower half of the street view, because perspective stacks every metre of
+ *   lower half of the street view, because perspective stacks every meter of
  *   road between here and the horizon into a few cell rows.
  * - The marks are STREAKS, not dots. The reference's pavement reads as scuffs
- *   and tyre lines; single pixels sub-sample to nothing at a distance and to
+ *   and tire lines; single pixels sub-sample to nothing at a distance and to
  *   a regular stipple up close.
  * - The density is uneven. A flat scatter reads as a carpet however dim it
  *   is, so most marks arrive in patches with bare tarmac between them.
@@ -1892,7 +1892,7 @@ const GREEN_TILE_PX = 256;
 /**
  * A greenspace's own surface, as a texture that multiplies GREEN_TONES.
  *
- * Mid grey is "unchanged", exactly as in the paving texture, so every mark
+ * Mid gray is "unchanged", exactly as in the paving texture, so every mark
  * here is a small step either side of the tone the green already had.
  *
  * @param {'lush'|'dirt'|'turf'|'moss'} style
@@ -1911,9 +1911,9 @@ function createGreenTexture(style) {
 
   // ★ THE CONTRAST IS WIDE ON PURPOSE, AND THAT IS NOT THE SAME AS BRIGHT.
   // GREEN_TONES.street is 0x101410 - a luminance under a tenth - and a texture
-  // that only steps a few percent either side of mid grey multiplies almost
+  // that only steps a few percent either side of mid gray multiplies almost
   // nothing: measured, the first version of this was invisible in every city.
-  // The MEAN stays at mid grey, so the tone the carpet law governs does not
+  // The MEAN stays at mid gray, so the tone the carpet law governs does not
   // move; the VARIANCE is what grows, which is exactly what "texture and
   // vocabulary, never brightness" asks for.
   if (style === 'lush') {
@@ -1968,7 +1968,7 @@ function createGreenTexture(style) {
   }
 
   // ShapeGeometry's UVs are the vertex x/y, which this project keeps in
-  // METRES - so the repeat is distance over tile, never a normalized guess,
+  // METERS - so the repeat is distance over tile, never a normalized guess,
   // and a park keeps one real-world scale whatever its size.
   return makeRepeatingTexture(canvas, 1 / GREEN_TILE_M, 1 / GREEN_TILE_M);
 }
@@ -1976,7 +1976,7 @@ function createGreenTexture(style) {
 // Municipal sidewalk standards put control joints at roughly the width of the
 // walk - 4 to 6 ft on a standard walk - so the seams land about every 1.5 m.
 const PAVING_SCORE_M = 1.5;
-// One tile covers this many metres, and the UVs are in metres, so the repeat
+// One tile covers this many meters, and the UVs are in meters, so the repeat
 // is just distance / tile.
 const PAVING_TILE_M = 6;
 const PAVING_TILE_PX = 256;
@@ -1985,7 +1985,7 @@ const PAVING_TILE_PX = 256;
  * A pavement's paving texture: scoring seams everywhere, plus the city's own
  * finish on top.
  *
- * Brightness only - the tone stays SIDEWALK_TONES' own dark neighbourhood and
+ * Brightness only - the tone stays SIDEWALK_TONES' own dark neighborhood and
  * the texture multiplies it. A paving that brightened the pavement would
  * carpet the lower half of the street view, which is the CW-8 law this whole
  * cluster is written around.
@@ -2000,7 +2000,7 @@ function createPavingTexture(style) {
   const { canvas, ctx } = c;
   const pxPerM = size / PAVING_TILE_M;
 
-  // Mid grey is "unchanged": the texture multiplies the material tone, so
+  // Mid gray is "unchanged": the texture multiplies the material tone, so
   // everything here is a small step either side of it.
   ctx.fillStyle = 'rgb(160,160,160)';
   ctx.fillRect(0, 0, size, size);
@@ -2056,7 +2056,7 @@ function createPavingTexture(style) {
     ctx.fillRect(0, Math.round(m * pxPerM), size, seam);
   }
 
-  // The UVs are in METRES, so the repeat is one tile per PAVING_TILE_M and a
+  // The UVs are in METERS, so the repeat is one tile per PAVING_TILE_M and a
   // pavement keeps one real-world paving scale whatever its width.
   return makeRepeatingTexture(canvas, 1 / PAVING_TILE_M, 1 / PAVING_TILE_M);
 }
@@ -2078,7 +2078,7 @@ function createPavingTexture(style) {
  * Slide a geometry's UVs, in tile fractions (CW-34).
  *
  * The window texture repeats every WINDOW_TILE_BAYS_X bays across and
- * WINDOW_TILE_BAYS_Y up, and its `repeat` is set in metres, so a shift of one
+ * WINDOW_TILE_BAYS_Y up, and its `repeat` is set in meters, so a shift of one
  * bay's width moves the pattern one window along on this geometry and nothing
  * else. Eight by twelve gives ninety-six distinct walls per archetype.
  */
@@ -2095,8 +2095,8 @@ function scaleGeometryUv(geometry, su, sv) {
  * ★★ CW-73: FIT THE WINDOW GRID TO THE WALL IT IS ON.
  *
  * ExtrudeGeometry lays a side wall out as u = whichever of world x or y the
- * wall runs along, v = 1 - z, both in METRES, and every facade texture in this
- * city carries a metre repeat that assumes it. That is why a wall of arbitrary
+ * wall runs along, v = 1 - z, both in METERS, and every facade texture in this
+ * city carries a meter repeat that assumes it. That is why a wall of arbitrary
  * width has a fractional bay at its corner and a building of arbitrary height
  * a fractional row at its top: the grid is fitted to the WORLD, not to the
  * building.
@@ -2117,7 +2117,7 @@ function scaleGeometryUv(geometry, su, sv) {
  * the city for no reason.
  *
  * The per-building phase that CW-34 introduced still applies and still moves
- * in WHOLE bays and rows - `phaseU` in bay metres, `phaseV` in row metres -
+ * in WHOLE bays and rows - `phaseU` in bay meters, `phaseV` in row meters -
  * so fifty towers sharing one texture still do not share one lit pattern.
  *
  * @param {BufferGeometry} geometry
@@ -2237,7 +2237,7 @@ function offsetGeometryUv(geometry, du, dv) {
  * other building already uses. So the legs cost geometry and nothing else -
  * no new material, no new draw call, no new class id.
  *
- * @param {[number, number]} centre the tower's own centre, in world metres
+ * @param {[number, number]} center the tower's own center, in world meters
  * @param {number} groundZ what the tower stands on
  */
 function needleTripodGeometries(centre, groundZ, tint) {
@@ -2316,7 +2316,7 @@ function memberBox(ax, ay, az, bx, by, bz, thickM, tint) {
  * the top house, and the spire to the cited 605 ft total. Numbers and the
  * design choices among them are in landmark-dressings.js.
  *
- * Per-part material colours are STATED (CW-92: the family byte is honest per
+ * Per-part material colors are STATED (CW-92: the family byte is honest per
  * part): the flare keeps the building's own tint so it reads as one
  * structure with the legs; the saucer stack is the published white-painted
  * steel, drawn as bright neutrals.
@@ -2389,13 +2389,13 @@ function needleTopGeometries(centre, groundZ, tint) {
 /**
  * ★★ CW-78: THE GREAT WHEEL EXISTS. A closed rim circle with spokes and a
  * hub, on A-frame legs over the pier platform (the owner's silhouette sheet,
- * plan §11.7), keyed to the attraction NODE and drawn in the same metres the
+ * plan §11.7), keyed to the attraction NODE and drawn in the same meters the
  * city is built in - rim top at the cited 53.3 m. The wheel plane runs along
  * the pier's own measured bearing, so the circle photographs from the
  * Alaskan Way pavement exactly as the real one does.
  *
- * Per-part material colours are STATED (CW-92): white-painted rim, spokes
- * and legs as bright neutrals, the gondolas a mid grey (the real blue would
+ * Per-part material colors are STATED (CW-92): white-painted rim, spokes
+ * and legs as bright neutrals, the gondolas a mid gray (the real blue would
  * be manufactured hue in an achromatic scene), the deck dark.
  */
 function greatWheelGeometries(node) {
@@ -2499,7 +2499,7 @@ function greatWheelGeometries(node) {
  *
  * ★ THE FOOTPRINTS ARE THE DATA'S, SHRUNK AND SLID. Each platform is the
  * building's own outline scaled about its centroid along the block's own axes
- * and offset in metres, so every platform keeps the block's cut-corner plan
+ * and offset in meters, so every platform keeps the block's cut-corner plan
  * and the whole stack stays where the map put it. The numbers are in
  * landmark-dressings.js with their sources.
  *
@@ -2554,7 +2554,7 @@ function libraryPlatformGeometries(building, tint) {
  *
  * ★ THE UVs COPY ExtrudeGeometry'S SIDE-WALL RULE ON PURPOSE. Three.js lays a
  * side wall out as u = whichever of world x or y the wall runs along and
- * v = 1 - z, and every facade texture in this city is built with a metre
+ * v = 1 - z, and every facade texture in this city is built with a meter
  * repeat that assumes it. Inventing a UV here would have run the diagrid at a
  * different scale on the leaning parts than on the upright ones, which is
  * exactly the seam a diamond lattice shows.
@@ -2666,7 +2666,7 @@ function canopyColumnGeometries(building, tint, roadways) {
       sinceLast += Math.hypot(x - px, y - py);
     }
     if (sinceLast < CANOPY_COLUMN_SPACING_M) continue;
-    // The whole post has to clear the kerb, not just its centre.
+    // The whole post has to clear the kerb, not just its center.
     if (roadways?.insideRoadway(x, y, -CANOPY_COLUMN_W_M)) {
       out.refused++;
       continue;
@@ -2694,7 +2694,7 @@ function canopyColumnGeometries(building, tint, roadways) {
 }
 
 // CW-26 roofs. Only these three become geometry. Each has an exact
-// construction a walker can recognise on a skyline; round, dome, mansard,
+// construction a walker can recognize on a skyline; round, dome, mansard,
 // skillion and the rest keep their flat top rather than being guessed at,
 // because a wrong roof reads worse than no roof.
 const ROOF_SHAPES_BUILT = new Set(['pyramidal', 'gabled', 'hipped']);
@@ -2924,12 +2924,12 @@ function appendCurbFace(road, positions, cullBounds, shape) {
 }
 
 /**
- * A dashed centre line down a two-way arterial (CW-51).
+ * A dashed center line down a two-way arterial (CW-51).
  *
  * OpenStreetMap carries NO road_marking tags at all in any of the four baked
  * circles, so this is derived from the road CLASS rather than from data, and
  * the record says so. Only arterials get one: a residential street often has
- * no centre line in life, and painting every street is the fastest way to
+ * no center line in life, and painting every street is the fastest way to
  * break the CW-8 carpet law.
  *
  * The rhythm is the US skip line, 3 m of paint to 9 m of gap, and the paint is
@@ -3056,7 +3056,7 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
       const d = [cx2 + px, cy2 + py, lift];
       // Two CCW triangles (normal +Z): a-b-c, a-c-d
       positions.push(...a, ...b, ...c, ...a, ...c, ...d);
-      // CW-33: the surface tint rides as a vertex colour so that every
+      // CW-33: the surface tint rides as a vertex color so that every
       // ribbon stays in ONE merged mesh. Splitting by paving material would
       // multiply the draw calls and, worse, give the class pass a new mesh
       // name to learn for every value OSM happens to carry.
@@ -3064,7 +3064,7 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
         const t = shape.tint ?? 1;
         for (let v = 0; v < 6; v++) shape.colors.push(t, t, t);
       }
-      // CW-51: UVs in METRES, so a paving texture keeps one real-world
+      // CW-51: UVs in METERS, so a paving texture keeps one real-world
       // scale whatever width the ribbon is and however the way is split. v
       // runs ALONG the ribbon and carries across segments on
       // `shape.uvCursor`, otherwise the scoring seams would restart at
@@ -3329,7 +3329,7 @@ const FAR_BAND_KEEP = [FAR_SILHOUETTE_KEEP, 0.11, 0.08];
  * Give a material a fog FLOOR: it fogs normally with distance, then stops.
  *
  * three.js has no such knob, so this rewrites the stock fog chunk. The stock
- * chunk computes a fog factor and mixes to the fog colour; this one clamps
+ * chunk computes a fog factor and mixes to the fog color; this one clamps
  * that factor first. Both fog kinds are handled because the chunk is replaced
  * whole and the scene's fog kind is not this function's business to assume.
  *
@@ -3381,14 +3381,14 @@ function applyFarSilhouetteFog(
 
 /**
  * CW-82: the far skyline's own fog - distance bands from the detail
- * boundary outward, in ABSOLUTE metres so the weather drift cannot move
+ * boundary outward, in ABSOLUTE meters so the weather drift cannot move
  * the hand-over seam. Band 1 holds the near floor's exact value in every
  * weather; from band 2 out the keep scales with the live fog far plane
  * (fogFar / DETAIL_FAR_M), so a murky night pulls the skyline closer
  * instead of ignoring the murk - CW-20's own words for what weather does
  * to the silhouettes. Fragments inside the detail boundary are discarded
  * (the near mesh owns them); there is deliberately NO far clamp, because
- * the bake circle is centred on the CITY, not the camera - from the
+ * the bake circle is centered on the CITY, not the camera - from the
  * circle's edge, real towers stand up to a full diameter away (Seattle
  * Center to downtown is ~1.49 km, past the 1.3 km radius a first draft
  * clamped at). The geometry ends at the bake edge; nothing needs help not
@@ -3496,7 +3496,7 @@ export function buildCityGroup(model) {
   // the texture is per-material, so a facade look means a mesh to carry it.
   const buildingGeoms = Array.from({ length: FACADE_COUNT }, () => []);
   // CW-79: the ground's real height. Null for a fixture or a v1 extract,
-  // and then nothing in this build moves a millimetre.
+  // and then nothing in this build moves a millimeter.
   const terrain = buildTerrain(model.elevation);
   let skirtsAdded = 0;
   const storefrontGeoms = [];
@@ -3631,7 +3631,7 @@ export function buildCityGroup(model) {
       building.minHeightM === 0 && building.heightM >= storefrontHM + 1.5;
     // `building:levels` is a statement about the whole building, so it is
     // read once and applied to the body only - a rooftop plant room is not
-    // six storeys tall because the tower under it is.
+    // six stories tall because the tower under it is.
     // CW-74: set false when the building's own tag says it has no shopfront.
     let hasBand = true;
     const taggedLevels = Number.parseFloat(
@@ -3683,7 +3683,7 @@ export function buildCityGroup(model) {
         : volume;
       const geom = extrudeBuilding(body, tint);
       if (!geom && !roof) continue;
-      // The same hash that fixes a building's colour fixes its facade, so a
+      // The same hash that fixes a building's color fixes its facade, so a
       // tower keeps both for as long as the extract does.
       const bucket = buildingGeoms[archetypeIndex];
       if (geom) {
@@ -3694,7 +3694,7 @@ export function buildCityGroup(model) {
         // EXACTLY - the same lit windows in the same places, which is the
         // repetition CW-34 existed to remove, only at a coarser grain. The
         // phase moves in WHOLE BAYS and WHOLE ROWS (CW-46: the archetype's
-        // own metre sizes), so no shift can put a half-height row of windows
+        // own meter sizes), so no shift can put a half-height row of windows
         // at a ground line. It survives the merge because it is baked into
         // the vertex data rather than set on the material.
         const bayW = WINDOW_ARCHETYPES[archetypeIndex]?.bayWM ?? WINDOW_BAY_W_M;
@@ -3713,7 +3713,7 @@ export function buildCityGroup(model) {
         // Every volume is fitted to ITS OWN extent, not to the building's, so
         // a setback or a skybridge finishes on a full row too. That is also
         // why `building:levels` is only offered to a volume standing on the
-        // ground: it counts storeys from the pavement, and the ground floor
+        // ground: it counts stories from the pavement, and the ground floor
         // it counts is the one the reservation takes away.
         const volumeBaseM = body.minHeightM ?? 0;
         const reserveM = grounded && volumeBaseM === 0 ? storefrontHM : 0;
@@ -3734,7 +3734,7 @@ export function buildCityGroup(model) {
                 levels: volumeLevels,
                 levelM: familySpec.levelM,
               }));
-        // COUNTED, NOT ACTED ON. A volume shorter than one storey gets a row
+        // COUNTED, NOT ACTED ON. A volume shorter than one story gets a row
         // of windows squashed into it, which is wrong and is left alone on
         // purpose: blanking those bands costs a fifth of Denver's facade. The
         // whole measurement is in facade-grammar.js beside the constant.
@@ -3854,7 +3854,7 @@ export function buildCityGroup(model) {
       const [cx, cy] = ringCentroid(building.outer);
       // CW-53: a hotel is a WAY in every one of the four extracts, never a
       // node, so it can only be read off the building's own tags - the POI
-      // index would never see one. Its own tag beats a neighbour's point.
+      // index would never see one. Its own tag beats a neighbor's point.
       // CW-74: the building's own tag decides first. Everything the picker
       // reads is counted, so a table nobody reaches and a table everybody
       // reaches do not look the same in the record.
@@ -4137,7 +4137,7 @@ export function buildCityGroup(model) {
   const height = Math.max(b.maxY - b.minY, 1) + GROUND_MARGIN_M * 2;
   // CW-79: with terrain the plane is subdivided near the DEM's own step and
   // displaced onto it - the whole floor becomes the hill. Vertices are in
-  // the plane's LOCAL frame (centred on the model), so the world offset the
+  // the plane's LOCAL frame (centered on the model), so the world offset the
   // mesh position adds below is applied before asking the terrain.
   const groundSegs = terrain
     ? [Math.ceil(width / 15), Math.ceil(height / 15)]
@@ -4526,9 +4526,9 @@ export function buildCityGroup(model) {
       mesh.name = 'wayfinding-marks';
       mesh.visible = false;
       mesh.renderOrder = 3;
-      // The unit square is centred on the point, so scaling the MESH about
+      // The unit square is centered on the point, so scaling the MESH about
       // the world origin would slide every mark. Each mark is instead built
-      // around its own centre and the mesh scaled about that centre per
+      // around its own center and the mesh scaled about that center per
       // frame - see setMapZoom below.
       mesh.userData.wayfindKind = kind;
       mesh.userData.points = points;
@@ -4566,8 +4566,8 @@ export function buildCityGroup(model) {
     put(greenMeshRef, greenMat, style.greens, GREEN_TONES.map);
     for (const { mesh, material } of buildingMeshRefs) {
       mesh.visible = style.buildings.show;
-      // A building's tone is per-family vertex colour, so a style tints the
-      // material rather than replacing a single colour.
+      // A building's tone is per-family vertex color, so a style tints the
+      // material rather than replacing a single color.
       material.color = new Color(style.buildings.tone ?? BUILDING_STREET_TINT);
     }
     for (const mesh of wayfindMeshes) mesh.visible = style.wayfinding.show;
@@ -4782,7 +4782,7 @@ export function buildCityGroup(model) {
 // CW-46 (CW-Q46): six vehicle CLASSES, never likenesses - the owner asked
 // for the average size and shape of what Americans actually drive, and we
 // ship segment-typical exterior dimensions (length x width x height,
-// metres) rounded from manufacturers' published spec sheets for each US
+// meters) rounded from manufacturers' published spec sheets for each US
 // segment's common models (full-size crew-cab pickup, three-row SUV,
 // two-row crossover, mid-size sedan, compact hatch, minivan). The table is
 // the owner-signed CW-Q46 data (plan section 2, 2026-08-23). `bodyM` is
@@ -4858,7 +4858,7 @@ export function pickCarClass(r) {
 }
 
 // The longest class must fit a slot with air at both ends, and the spot
-// grid must keep crossing-street neighbours' stamped footprints apart -
+// grid must keep crossing-street neighbors' stamped footprints apart -
 // 5.8 m pickups at the old 5 m centers would have overlapped by 0.8 m.
 const CAR_SLOT_M = 6.5;
 const CAR_OCCUPANCY_MIN = 0.4;
@@ -4994,10 +4994,10 @@ function pushCarClassGeoms(
 // stand where a walker actually goes.
 // Silhouette people (CW-19).
 //
-// The owner's recorded dislike of the reference is its people: two coloured
+// The owner's recorded dislike of the reference is its people: two colored
 // blobs read as debris rather than as anyone. A figure through this converter
 // is a SHAPE — a dark cutout against a lit shopfront, or a lit form against
-// the dark street — so what it needs is an outline a person recognises, which
+// the dark street — so what it needs is an outline a person recognizes, which
 // two boxes cannot give. These are built from head, shoulders, torso, two
 // arms and two legs: seven small boxes, cheap enough to merge with everything
 // else and specific enough to read as a human at a few character cells.
@@ -5008,7 +5008,7 @@ function pushCarClassGeoms(
 // CW-45 (CW-Q45): the figure GEOMETRY lives in city-figures.js now, with
 // per-figure height/build from documented human ranges and jointed poses.
 // These two stay as the obstacle footprint every figure stamps - a walker's
-// personal space does not change with a few centimetres of stature.
+// personal space does not change with a few centimeters of stature.
 const PERSON_SHOULDER_W_M = 0.46;
 const PERSON_DEPTH_M = 0.24;
 // The bright and dim tones the small companion geometry wears (the dog).
@@ -5017,7 +5017,7 @@ const PERSON_DEPTH_M = 0.24;
 // Figure zones take scheme hues of their own; see plantFigure.
 const PERSON_TINT = [0.82, 0.82, 0.82];
 const PERSON_DARK_TINT = [0.5, 0.5, 0.5];
-// One figure every so many metres of shopfront-facing pavement.
+// One figure every so many meters of shopfront-facing pavement.
 const PERSON_SPACING_M = 26;
 const PERSON_MIN_GAP_M = 3;
 const PERSON_CURB_OFFSET_M = 1.1;
@@ -5105,16 +5105,16 @@ const CAR_MAX_HALF_W_M = Math.max(...CAR_CLASSES.map((cls) => cls.widM)) / 2;
  * ★ HOW A ROADWAY DIVIDES INTO A PARKING BAY AND A TRAVEL LANE (CW-75).
  *
  * The frozen traffic used to sit a flat 1.6 m in from the kerb and the parked
- * row 1.5 m in, which put the two CENTRES 0.10 m apart on every road class
+ * row 1.5 m in, which put the two CENTERS 0.10 m apart on every road class
  * this game parks on - the whole "cars clip through each other" complaint, by
  * construction rather than by accident. Parked cars never overlapped each
  * other; a moving car was simply parked on top of them.
  *
  * So the lane is derived instead of assumed. The parked row keeps exactly the
  * place it has always had, one car-half inside the kerb, and the travel lanes
- * take what is left between it and the centreline:
+ * take what is left between it and the centerline:
  *
- *   - two lanes, one each side of the centreline, when the free strip holds
+ *   - two lanes, one each side of the centerline, when the free strip holds
  *     two car widths;
  *   - one lane down the middle, shared by both directions, when it holds one -
  *     which is what an 8 m residential street with cars parked on both sides
@@ -5128,9 +5128,9 @@ const CAR_MAX_HALF_W_M = Math.max(...CAR_CLASSES.map((cls) => cls.widM)) / 2;
 function laneLayoutFor(road) {
   const halfM = (road?.widthM ?? 0) / 2;
   const kerbFreeM = halfM - CURB_WIDTH_M;
-  // Unchanged: the parked row's own centre.
+  // Unchanged: the parked row's own center.
   const parkedCentreM = halfM - CURB_WIDTH_M - 1;
-  // Tarmac between the centreline and the parked row's inner flank.
+  // Tarmac between the centerline and the parked row's inner flank.
   const parkedFreeM = parkedCentreM - CAR_MAX_HALF_W_M;
   const parks = parkedCentreM >= 0.8 && parkedFreeM >= CAR_MAX_HALF_W_M;
   const freeM = parks ? parkedFreeM : kerbFreeM;
@@ -5189,7 +5189,7 @@ const CAR_CHROMA = 0.5;
 export const CAR_CABIN_LIFT = 0.12;
 
 /**
- * CW-54: the greenhouse is GLASS, and glass is the same colour on every car.
+ * CW-54: the greenhouse is GLASS, and glass is the same color on every car.
  *
  * The cabin already sat a ladder step above the body (CAR_CABIN_LIFT), but it
  * took the car's own paint hue, so a red car had red windows. It takes one
@@ -5200,11 +5200,11 @@ export const CAR_CABIN_LIFT = 0.12;
  * inGamutChroma rather than CAR_CHROMA: tintOf's luminance promise holds only
  * while nothing clamps, so an in-gamut chroma keeps the cabin at exactly
  * 0.47 / 0.62 / 0.77 / 0.92 - the same four numbers a monochrome screen read
- * before. Only the colour schemes can tell the difference.
+ * before. Only the color schemes can tell the difference.
  *
  * MEASURED at hue 195, encoded the way D-112 says to measure: the tint lands a
  * cool entry from chroma 0.140 at the darkest cabin, 0.190 at the next and
- * 0.235 at the third, so 0.30 clears all three with room and is about as grey
+ * 0.235 at the third, so 0.30 clears all three with room and is about as gray
  * as this can be and still be glass. THE BRIGHTEST CABIN CANNOT READ COOL AT
  * ALL: at 0.92 the gamut caps chroma at 0.204, below the 0.235 it would need,
  * so a top-tier windscreen lands white. That is a fact about where the ladder
@@ -5225,7 +5225,7 @@ export function glassTint(tier) {
 }
 
 /**
- * CW-54: tyres are SLIGHTLY dimmer than the body they carry (the owner's
+ * CW-54: tires are SLIGHTLY dimmer than the body they carry (the owner's
  * word), and floored so the darkest cars keep wheels that read.
  *
  * The floor is the lesson CW-45 paid for: a dark tier on black pavement
@@ -5242,7 +5242,7 @@ const CAR_TYRE_FLOOR = 0.3;
  * The luminance ladder decides these numbers, not taste. A lit shopfront is
  * reserved the 0.93-0.95 band and a sign plate sits at 0.97; the monochrome
  * reverse-video threshold is 0.80, and a cell has to cross it to read as a
- * LIT POINT rather than as a bright grey.
+ * LIT POINT rather than as a bright gray.
  *
  * MEASURED, and it moved the number: the brightest paint already on a car is
  * a top-tier cabin at 0.92 (CAR_TIERS tops out at 0.8 and CAR_CABIN_LIFT adds
@@ -5263,7 +5263,7 @@ const CAR_TYRE_FLOOR = 0.3;
  * tint is a linear 1 / 0.8095 / 0.8095 - decisively red through
  * pickPaletteIndex. But the converter reads the ENCODED canvas, where sRGB's
  * toe lifts 0.8095 to 0.910; raised to the scheme's chromaBoost of 5 that is
- * 0.624, past the 0.6 at which WHITE beats RED. Photographed at nine metres,
+ * 0.624, past the 0.6 at which WHITE beats RED. Photographed at nine meters,
  * 233 of the 390 pixels a tail lamp owns came back #ffffff - a second pair of
  * head lamps. Read off the frame, the flip sits between 0.835 and 0.839; the
  * reverse-video floor is 0.80; so a red brake light lives in a window about
@@ -5298,7 +5298,7 @@ export const CAR_TAILLAMP_TINT = tintOf(
 
 // Street furniture (CW-43, CW-Q43). True node positions only: the owner's
 // mission sentence makes this wayfinding data for a blind traveler, and a
-// prop moved for looks is a lie a cane cannot check. Sizes in metres.
+// prop moved for looks is a lie a cane cannot check. Sizes in meters.
 const STOP_POLE_SIDE_M = 0.12;
 const STOP_POLE_HEIGHT_M = 3.2;
 const STOP_FLAG_W_M = 0.6;
@@ -5357,7 +5357,7 @@ const BED_CHROMA = 0.5;
  * A bird is TINY - a sparrow is 0.15 m against a planter's 1.2 - so it was
  * natural to reach for brightness as the lever. THE PROOF GATE SAYS THERE IS
  * NO SUCH LEVER: a per-species brightness bias moved the frame by nothing in
- * mono across its whole range, and in colour every species landed #ffffff
+ * mono across its whole range, and in color every species landed #ffffff
  * because these palettes have no dark neutral. See city-birds.js for both
  * measurements. Every bird therefore takes ONE tier, and what distinguishes
  * them is size, shape and where they rest.
@@ -5392,7 +5392,7 @@ const GOOSE_SPACING_M = 1.9;
  * says out loud that it is design rather than data.
  *
  * Planters go INSIDE mapped green polygons, at roughly one per this many
- * square metres, which is ordinary parks-department planting-bed spacing for a
+ * square meters, which is ordinary parks-department planting-bed spacing for a
  * civic bed. Real data always wins: a city with mapped planters never reaches
  * this branch, so Seattle's eleven and Burnaby's four are its own.
  *
@@ -5514,7 +5514,7 @@ const LAMP_CLAIM_CELL_M = 80;
 // So a mapped lamp shallowly inside a ribbon is NUDGED out to the kerb along
 // the ribbon's own outward normal - our approximation yields to the survey -
 // and one deeper than this is dropped and counted, because there the two are
-// not disagreeing by a metre, they are describing different worlds. The
+// not disagreeing by a meter, they are describing different worlds. The
 // threshold is the roadway index's own slack, past which it refuses to answer
 // at all.
 const LAMP_NUDGE_MAX_M = 2;
@@ -5546,8 +5546,8 @@ const LAMP_HEAD_REACH_M = 0.5;
 // directive, and these are the one exception the owner signed: a light that
 // never changes is not a traffic light.
 //
-// The lit head is a flat, unlit colour rather than a shaded surface, because a
-// signal EMITS. The dark heads are a dim grey rather than black: only exact
+// The lit head is a flat, unlit color rather than a shaded surface, because a
+// signal EMITS. The dark heads are a dim gray rather than black: only exact
 // black reads as an empty cell, and a head that vanishes leaves the lit one
 // floating with nothing under it — the same failure the lamp posts hit in
 // CW-18 and were fixed for.
@@ -5626,7 +5626,7 @@ function makeKindGrid(cellM) {
     },
     /**
      * The kind of the nearest point within `rangeM`, or null. Searches the
-     * cell the query falls in and its eight neighbours, which is exact as
+     * cell the query falls in and its eight neighbors, which is exact as
      * long as rangeM does not exceed the cell size.
      */
     nearestKind(x, y, rangeM) {
@@ -5655,13 +5655,13 @@ function makeKindGrid(cellM) {
 /**
  * ★ WHERE THE CARS ARE, AS RECTANGLES (CW-75).
  *
- * `makePointGrid` answers "is anything within N metres", which is the right
+ * `makePointGrid` answers "is anything within N meters", which is the right
  * question for a row of parked cars sharing a kerb and the WRONG one for a
  * moving car in the next lane. MEASURED on Seattle: entering the frozen
  * traffic into the parked stream's 6 m point grid does take the last car-on-
  * car overlap out, and it costs 856 parked cars and 401 traffic cars to do
- * it - because a radius cannot tell "two metres to the side, which is a lane"
- * from "two metres along, which is a collision".
+ * it - because a radius cannot tell "two meters to the side, which is a lane"
+ * from "two meters along, which is a collision".
  *
  * So the streams share this instead: the same spatial buckets, but the test
  * is the true rectangle overlap the census scores them on. Same zero, 66
@@ -5926,7 +5926,7 @@ export function buildStreetProps(model, collision = null) {
   const canopyGeoms = [];
   // CW-94: the ring-branch system's two kinds, merged separately so each
   // wears its own name in the class pass (both TREE) and its own stated
-  // material colour (branches the trunk's wood, leaves the canopy tint).
+  // material color (branches the trunk's wood, leaves the canopy tint).
   const branchGeoms = [];
   const leafGeoms = [];
   let branchesClipped = 0;
@@ -5950,7 +5950,7 @@ export function buildStreetProps(model, collision = null) {
   // CW-45 (CW-Q45): plant one whole person - their own height and build
   // drawn from the documented ranges, jointed pose, and tones from the SAME
   // palette machinery the cars wear. Every zone of a figure takes a hue from
-  // the city's colour scheme (CW-49): torso, legs, and head and shoulders
+  // the city's color scheme (CW-49): torso, legs, and head and shoulders
   // each pick their own, so a street of people carries the scheme's whole
   // range rather than one repeated tone.
   const FIGURE_CHROMA = 0.5;
@@ -5961,7 +5961,7 @@ export function buildStreetProps(model, collision = null) {
   // The value is the tone heads already wore, exactly. tintOf holds luminance
   // AT the tier and moves only chroma, so matching it means the monochrome
   // schemes - which have only luminance to read - render bit-identically to
-  // before, while the colour schemes gain the hue. Measured both ways: at
+  // before, while the color schemes gain the hue. Measured both ways: at
   // 0.80 the mono frames moved by up to 0.74% of their pixels, because a two
   // percent luminance shift is enough to flip a cell's glyph; at 0.82 they do
   // not move at all.
@@ -5978,7 +5978,7 @@ export function buildStreetProps(model, collision = null) {
     // The proof gate caught the first tier draw: a 0.35 torso over 0.3
     // legs vanished against black pavement - a floating half-person.
     // Figures are thin, so their clothing stays in the upper luminance
-    // band (the R4 figure wore 0.82/0.5 greys and read).
+    // band (the R4 figure wore 0.82/0.5 grays and read).
     const FIGURE_TIERS = [0.5, 0.65, 0.8];
     const torsoTier =
       FIGURE_TIERS[
@@ -6044,10 +6044,10 @@ export function buildStreetProps(model, collision = null) {
   // walked straight into the ribbon of the street they cross, and nothing in
   // the build was ever asked about it. `insideRoadway` is that question, and
   // it is asked with the prop's own footprint so a trunk is rejected when its
-  // BOX reaches the tarmac, not only when its centre does.
+  // BOX reaches the tarmac, not only when its center does.
   const roadways = buildRoadwayIndex(model.roads);
   // Where a person may stand in the road: on a mapped crossing. The cell size
-  // IS the reach, so `occupied`'s one-cell neighbourhood covers it exactly.
+  // IS the reach, so `occupied`'s one-cell neighborhood covers it exactly.
   const crossingSpots = makePointGrid(CROSSING_REACH_M);
   for (const point of model.wayfinding ?? []) {
     if (point.kind === 'crossing') crossingSpots.add(point.x, point.y);
@@ -6197,7 +6197,7 @@ export function buildStreetProps(model, collision = null) {
     for (const box of crownCluster(spec, seed)) {
       const bx = x + box.x;
       const by = y + box.y;
-      // Constraint (a) for the crown: a mass whose centre stands in a
+      // Constraint (a) for the crown: a mass whose center stands in a
       // building's footprint is skipped and counted, like a branch.
       if (isBlocked(bx, by)) {
         crownClipped++;
@@ -6255,7 +6255,7 @@ export function buildStreetProps(model, collision = null) {
   //    CW-75: except about standing in the road. A mapped tree node whose
   //    coordinates land inside a drawn roadway is not a tree in the road in
   //    the real world - it is a street tree whose kerb this game draws a
-  //    metre or two off, because the ribbon is a class width rather than a
+  //    meter or two off, because the ribbon is a class width rather than a
   //    survey. The tree keeps its side of the street and steps back onto the
   //    pavement; only where there is no pavement to take it is it dropped,
   //    and then it is counted rather than quietly forgotten.
@@ -6764,7 +6764,7 @@ export function buildStreetProps(model, collision = null) {
       trafficDensity > 0
         ? makeLcg(hashBuilding(roadIndex, road.kind + ':traffic'))
         : null;
-    // Cars per kilometre becomes metres between cars, floored so a busy
+    // Cars per kilometer becomes meters between cars, floored so a busy
     // arterial does not end up bumper to bumper.
     const trafficSpacingM = Math.max(
       TRAFFIC_MIN_SPACING_M,
@@ -6801,7 +6801,7 @@ export function buildStreetProps(model, collision = null) {
     // ...and how far a mapped lamp reaches when it claims its stretch: one
     // interval ALONG the street, plus the street's own half width, because a
     // pole mapped on the far kerb is still this street's lamp. Without the
-    // width the claim misses the opposite side by a metre or two and the
+    // width the claim misses the opposite side by a meter or two and the
     // stream quietly lights a street the map had already described.
     const claimM =
       lampLayout.spacingM * LAMP_CLAIM_SHARE + (road.widthM ?? 0) / 2;
@@ -6892,7 +6892,7 @@ export function buildStreetProps(model, collision = null) {
       }
 
       if (trafficRng) {
-        // Both directions: a lane each side of the centreline where the road
+        // Both directions: a lane each side of the centerline where the road
         // is wide enough for two, otherwise one lane down the middle that
         // both directions share (CW-75 `laneLayoutFor`).
         for (const dir of [1, -1]) {
@@ -7324,7 +7324,7 @@ export function buildStreetProps(model, collision = null) {
 
   // Open ground is PAVEMENT, not parkland, and a lamp post is the cheapest
   // honest way to find some: a lamp stands on the footway beside the
-  // carriageway, so a spot a couple of metres off one is footway too. The
+  // carriageway, so a spot a couple of meters off one is footway too. The
   // blocked check does the rest.
   const openSites = [];
   placedLampHeads.forEach((lamp, index) => {
@@ -7382,7 +7382,7 @@ export function buildStreetProps(model, collision = null) {
   addMerged(rackGeoms, 'bike-racks', propMaterial());
   addMerged(hydrantGeoms, 'hydrants', propMaterial());
   // CW-57: the planting props. The flowers are their own mesh so the class
-  // pass can give colour its own voice without the box changing.
+  // pass can give color its own voice without the box changing.
   addMerged(planterGeoms, 'planters', propMaterial());
   addMerged(flowerGeoms, 'planter-flowers', propMaterial());
   addMerged(tableGeoms, 'picnic-tables', propMaterial());
@@ -7509,7 +7509,7 @@ export function buildStreetProps(model, collision = null) {
     });
   }
 
-  // A material per head so a state change is a colour write, not a rebuild.
+  // A material per head so a state change is a color write, not a rebuild.
   const lightMaterials = [];
   addMerged(lightPoleGeoms, 'light-poles', propMaterial());
   for (let phase = 0; phase < LIGHT_PHASE_COUNT; phase++) {
@@ -7676,7 +7676,7 @@ export function buildStreetProps(model, collision = null) {
  *
  * So the marks are rebuilt to the laws the map's other marks already obey:
  *
- * ★ A MARK IS A SCREEN SIZE, NOT A NUMBER OF METRES (CW-60, photographed
+ * ★ A MARK IS A SCREEN SIZE, NOT A NUMBER OF METERS (CW-60, photographed
  *   empty twice to learn it). Size comes from a fraction of the CITY'S span
  *   and the caller scales the root by the same `2.2 / zoom` clamp the player
  *   marker and the pick circle use, so a mark holds its footprint in glyphs
@@ -7714,11 +7714,11 @@ export function buildLandmarkBeacons(landmarks, spanM) {
    * FAILED IN THE MOST INSTRUCTIVE WAY.
    *
    * Visited began as a dimmer frame (0x8a8a8a against white). Measured, that
-   * changed 0.46% of the frame in colour, 0.66% in mono green and 0.46% in
+   * changed 0.46% of the frame in color, 0.66% in mono green and 0.46% in
    * HC-light, against a 0.000% same-run control - a real, repeatable change,
    * about forty per cent of the layer's own pixels. It looked like a pass.
    *
-   * Photographed, every visited diamond DISAPPEARED. The dim grey sank into
+   * Photographed, every visited diamond DISAPPEARED. The dim gray sank into
    * the map's own glyph noise and what remained was the selected mark and the
    * player. **Changed is not readable**, the same way CW-61 found that
    * present is not findable - and the number would have shipped it.
@@ -7743,7 +7743,7 @@ export function buildLandmarkBeacons(landmarks, spanM) {
     root.position.set(lm.x, lm.y, 0);
 
     // The selected ring sits UNDER the frame and shows only for the chosen
-    // one, so selection changes the mark's outline rather than its colour.
+    // one, so selection changes the mark's outline rather than its color.
     const halo = new Mesh(selectedGeom, frameMat);
     halo.position.z = 58;
     halo.renderOrder = 990;
@@ -7879,7 +7879,7 @@ export function buildRain(
     },
 
     /**
-     * Fall, and keep the box centred on the player. Re-centring MOVES the
+     * Fall, and keep the box centered on the player. Re-centring MOVES the
      * drops with the box rather than leaving them behind, so walking never
      * outruns the weather.
      */
@@ -7940,10 +7940,10 @@ export const RAIN_LEVEL_NAMES = RAIN_LEVELS.map((l) => l.name);
  * paired luminance SWINGS, not brightness, so a bloom with no edge is a bloom
  * with no flash. The same shape answers both.
  *
- * ★★ THE BLOOM IS DRIVEN THROUGH COLOUR, NEVER OPACITY. Scaling
+ * ★★ THE BLOOM IS DRIVEN THROUGH COLOR, NEVER OPACITY. Scaling
  * `material.color` lands a star on EXACT BLACK at both ends of the hump, and
  * exact black is the one value this converter renders as an empty cell (CW-5),
- * so a burst fades to nothing rather than to a grey stain - and there is no
+ * so a burst fades to nothing rather than to a gray stain - and there is no
  * transparency sorting anywhere in it.
  */
 /**
@@ -7959,7 +7959,7 @@ export const FIREWORK_SHOW = {
    * ★★ THE PLAN SAYS "z ~60-120 m, just above the buildings", AND MEASURED
    * THAT IS NOT ABOVE THEM.
    *
-   * Counted within 250 m of each city's centre: Seattle has 12 buildings over
+   * Counted within 250 m of each city's center: Seattle has 12 buildings over
    * 60 m and 6 over 120 m (tallest 148); Denver 10 and 1 (tallest 152);
    * Burnaby 10 and 0 (114); Albuquerque 2 and 0 (120). Photographed from the
    * Seattle spawn, a burst at 68 m on the 200 m ring sat squarely BEHIND a
@@ -7967,15 +7967,15 @@ export const FIREWORK_SHOW = {
    * doing its job.
    *
    * So the band is raised to clear the skyline the plan meant it to clear. The
-   * plan's INTENT ("just above the buildings") is what is honoured here; its
+   * plan's INTENT ("just above the buildings") is what is honored here; its
    * number was written before anyone counted.
    */
   zMinM: 150,
   zMaxM: 230,
   /**
-   * ★★ SEVEN METRES, AND FIVE SIZES WERE PHOTOGRAPHED TO GET THERE.
+   * ★★ SEVEN METERS, AND FIVE SIZES WERE PHOTOGRAPHED TO GET THERE.
    *
-   * At the 200 m ring one metre is 3.27 px over the game viewport's 756, so a
+   * At the 200 m ring one meter is 3.27 px over the game viewport's 756, so a
    * 1 m star is 0.82 of a character cell wide and 0.36 TALL - it would average
    * away exactly as CW-63's published diagrid member did. Measured against a
    * same-run control frame with the show stopped:
@@ -8030,12 +8030,12 @@ export function buildFireworks(spanM) {
   group.name = 'fireworks';
   group.visible = false;
 
-  // One metre, scaled per star at update time, so the size stays sweepable
+  // One meter, scaled per star at update time, so the size stays sweepable
   // without rebuilding the city.
   const geom = new BoxGeometry(1, 1, 1);
 
   // The star pattern is the same every burst on purpose: what a player reads
-  // is the position, the colour and the timing, and a per-burst direction set
+  // is the position, the color and the timing, and a per-burst direction set
   // would be a new random stream inserted into a draw order (the seed law).
   const rand = makeLcg(0xf1b0c0de);
   const dirs = [];
@@ -8079,7 +8079,7 @@ export function buildFireworks(spanM) {
     color: 0x000000,
     depthTest: false,
   });
-  // One metre, scaled at update time, so the map's own zoom law owns the size.
+  // One meter, scaled at update time, so the map's own zoom law owns the size.
   const mapFrameGeom = new CircleGeometry(1, 3);
   const mapCoreGeom = new CircleGeometry(0.52, 3);
 
@@ -8162,7 +8162,7 @@ export function buildFireworks(spanM) {
   const fireBurst = (nowMs, centreX, centreY) => {
     const slot = slots.find((s) => s.startMs < 0);
     if (!slot) return;
-    // Position and colour from the burst's own index, never a new stream.
+    // Position and color from the burst's own index, never a new stream.
     // ★ THE OFFSETS ARE NOT DECORATION: hashSpot(0, 0) is 0, so without them
     // the FIRST burst of every show would fire at angle 0 in the first hue,
     // every time. Checked, not assumed.
@@ -8185,7 +8185,7 @@ export function buildFireworks(spanM) {
     // ★★ 0.75, NOT 0.9, AND D-112 IS WHY. Fitted with inGamutChroma, encoded
     // to sRGB and handed to the real pickPaletteIndex with chromaBoost 5:
     // at tier 0.9 FOUR OF SIX hues land white in each palette set, because the
-    // gamut cap makes the colour impossible rather than merely hard. At 0.75
+    // gamut cap makes the color impossible rather than merely hard. At 0.75
     // every hue lands its own entry in both sets. The bloom scales down from
     // the peak and lower tiers land their hue MORE reliably, so the peak is
     // the only value that needed checking.
@@ -8246,7 +8246,7 @@ export function buildFireworks(spanM) {
         //
         // Placed on the show's own ring at fixed compass bearings, it
         // photographed from the Seattle spawn as a wall: 200 m out at 190 m up
-        // is 43 degrees of elevation, and a tower thirty metres away covers
+        // is 43 degrees of elevation, and a tower thirty meters away covers
         // that easily. The moving show can afford a blocked burst because
         // fourteen more follow from other bearings; a single still frame
         // cannot. So it sits either side of the player's own heading, at
@@ -8611,7 +8611,7 @@ export const TRAVELER_LOOK = {
  * stretch of pavement.
  *
  * ★★ AND "BUSY" IS A SMALLER WORD HERE THAN IT SOUNDS. Measured at this head,
- * PERSON_SPACING_M is 26 m and the DENSEST 25 m neighbourhood in the whole of
+ * PERSON_SPACING_M is 26 m and the DENSEST 25 m neighborhood in the whole of
  * Seattle holds SEVEN figures - six other people over a 50 m circle, in a city
  * 2,627 x 2,644 m across. So this bias does NOT hide the traveler in a crowd;
  * there is no crowd. What it buys is that the traveler is found among people
@@ -8633,7 +8633,7 @@ export const TRAVELER_MIN_FROM_SPAWN_M = 150;
  * @param {{x: number, y: number, pose: string, facing: number}[]} spots
  * @param {string} citySlug
  * @param {{spawnX?: number, spawnY?: number}} [options]
- * @returns {{x: number, y: number, facing: number, neighbours: number}|null}
+ * @returns {{x: number, y: number, facing: number, neighbors: number}|null}
  */
 export function pickTravelerSpot(spots, citySlug, options = {}) {
   if (!Array.isArray(spots) || spots.length === 0) return null;
@@ -8645,7 +8645,7 @@ export function pickTravelerSpot(spots, citySlug, options = {}) {
   for (const s of spots)
     counts.set(key(s.x, s.y), (counts.get(key(s.x, s.y)) ?? 0) + 1);
 
-  // A spot's neighbourhood is its own cell plus the eight around it.
+  // A spot's neighborhood is its own cell plus the eight around it.
   const scoreOf = (s) => {
     const cx = Math.floor(s.x / R);
     const cy = Math.floor(s.y / R);
@@ -8869,7 +8869,7 @@ export function buildTraveler(citySlug, groundAt = null) {
   let mesh = null;
   let at = null;
 
-  // ★★ EXACT BLACK, not a dark colour. The converter renders exact black as an
+  // ★★ EXACT BLACK, not a dark color. The converter renders exact black as an
   // EMPTY CELL (CW-5), which is the only true dark this medium has - these
   // palettes carry no dark neutral at all (CW-58 measured every bird landing
   // white). A hole across the eyes of a bright head is CW-40's law used on

@@ -24,13 +24,13 @@
  * ★ AND THE ANSI SET HAS NO BLUE. Its six entries are green, cyan, yellow,
  * magenta, red and white. Colorado's columbine is blue-violet and British
  * Columbia's hydrangeas are blue; both land on their nearest available
- * neighbour there, and on the neon set's violet, which is right. The hues below
+ * neighbor there, and on the neon set's violet, which is right. The hues below
  * are the FLOWERS' - the landing is the palette's, and it is written down
  * rather than tuned away.
  *
  * At the sizes this game is played a flower is sub-cell, BY DESIGN: the planter
- * box is the readable object and the flowers are colour on top of it. That is
- * the hydrant lesson - shape and position carry identity, colour decorates.
+ * box is the readable object and the flowers are color on top of it. That is
+ * the hydrant lesson - shape and position carry identity, color decorates.
  *
  * @license GPL-3.0-or-later
  */
@@ -88,7 +88,7 @@ export function pickFlower(table, draw) {
  * 1.2 x 0.5 x 0.5 m is a municipal street planter, and the height is the
  * point - knee-high is high enough to read as an object against the pavement
  * and low enough that it never blocks a view. Its lid is a separate thin band
- * so the flowers can be a different colour from the box without the box
+ * so the flowers can be a different color from the box without the box
  * changing brightness: MONO SEES ONE SHAPE either way.
  */
 export const PLANTER_L_M = 1.2;
@@ -218,7 +218,7 @@ export function picnicTableBoxes(x, y, angle, tint) {
  *
  * What is different here is NUMBER. The carpet law is about a SURFACE - "any
  * visible surface tone carpets the lower half of the street view, because
- * perspective stacks every metre of road between here and the horizon into a
+ * perspective stacks every meter of road between here and the horizon into a
  * few cell rows". Leaves sat under every deciduous tree, 4,593 of them in
  * Seattle, which is near-continuous along every street. A flowerbed sits at 56
  * mapped places in Seattle and 17 in Burnaby. That is not a surface.

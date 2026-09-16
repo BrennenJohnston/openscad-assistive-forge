@@ -11,7 +11,7 @@
  *   parameters: object,
  *   outputFormat: string,
  *   result: { data: ArrayBuffer, stats: object } | null,
- *   state: 'queued' | 'rendering' | 'complete' | 'error' | 'cancelled',
+ *   state: 'queued' | 'rendering' | 'complete' | 'error' | 'canceled',
  *   error: string | null,
  *   timestamp: number,
  *   renderTime: number | null
@@ -246,7 +246,7 @@ export class RenderQueue {
 
     // Process jobs sequentially
     for (const job of queued) {
-      // Skip cancelled jobs
+      // Skip canceled jobs
       if (job.state === 'cancelled') {
         continue;
       }

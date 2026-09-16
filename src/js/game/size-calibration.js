@@ -48,7 +48,7 @@ export const CALIBRATION_FLOOR_LADDER = [0.3, 0.4, 0.5];
  */
 export const CALIBRATION_RAISE_PASSES = 2;
 
-/** CW-42's candidates, kept ONLY so a stored value of its shape is recognised. */
+/** CW-42's candidates, kept ONLY so a stored value of its shape is recognized. */
 export const CALIBRATION_LEGACY_CANDIDATES = [0.1, 0.3];
 
 /** None of the range holds: the floor parks here and the default stays. */
@@ -345,7 +345,7 @@ export function encodeCalibration(result) {
  * CW-42 stored a landing, and the landing could be BELOW the one default -
  * 10% was one of its two candidates. A stored 10% must not survive as a
  * floor, or the machine that wrote it would keep its own private game after
- * this release. So: a stored value at or above the default is honoured as a
+ * this release. So: a stored value at or above the default is honored as a
  * floor; anything below it, and CW-42's `fallback` token, migrate to the
  * default. Junk still reads as null - no trusted floor, use the default.
  *

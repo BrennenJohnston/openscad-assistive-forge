@@ -84,7 +84,7 @@ export function fullImageRect(imageWidth, imageHeight) {
  * Cut a rectangle out of an image and hand back a new data URL.
  *
  * PNG regardless of the source format: a crop of a photograph is going to be
- * traced or laid under a model, and a second lossy round would add artefacts
+ * traced or laid under a model, and a second lossy round would add artifacts
  * to the very edges someone is trying to follow.
  *
  * @param {string} dataUrl - The source image

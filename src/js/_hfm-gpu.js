@@ -107,10 +107,10 @@ uniform sampler2D uLadder;
 uniform float uAnchored;
 uniform float uFieldLevels;
 // CW-92: the authored palette family per surface class, -1 where a class has
-// none. The city is achromatic - every material white or neutral grey, both
-// lights white, the fog black - so there is no surface colour to read and the
+// none. The city is achromatic - every material white or neutral gray, both
+// lights white, the fog black - so there is no surface color to read and the
 // per-frame nearest-palette match was manufacturing a hue out of the last
-// digit or two of a grey image. That is what flipped a whole face between two
+// digit or two of a gray image. That is what flipped a whole face between two
 // entries as the camera moved. See hc-palettes.js CITY_INK_FAMILY.
 uniform float uInkFamily[16];
 uniform float uHasInkFamily;
@@ -174,7 +174,7 @@ vec3 encodeOutput(vec3 c) {
  * drawImage and then point-samples THAT. So the value a tap wants is not one
  * source pixel, it is the average of the block the downscale would have
  * collapsed. Sampling the full-resolution target with linear filtering at the
- * centre of that block gives exactly the same number when the ratio is two,
+ * center of that block gives exactly the same number when the ratio is two,
  * which is every character size at or below the eight-pixel cell where the
  * scale clamps - the whole range the small-character work is about.
  *
@@ -213,7 +213,7 @@ vec3 tapAt(vec2 posTopDown, bool clampInside, out bool inside) {
     }
     rgb *= 0.25;
   } else {
-    // Any other ratio: one linearly filtered sample at the block's centre.
+    // Any other ratio: one linearly filtered sample at the block's center.
     // Close, not exact, and only reached at character sizes far above the
     // floor where CW-31 measured the sampling difference to be invisible.
     vec2 srcTopDown = (c + 0.5) / uScale;
@@ -257,7 +257,7 @@ void main() {
     ext[i] = tapLum(tapAt(base + uExternal[i], false, inside));
   }
 
-  // Directional contrast: normalise each component to the brightest external
+  // Directional contrast: normalize each component to the brightest external
   // tap that bounds it, sharpen, scale back.
   for (int i = 0; i < 6; i++) {
     float maxExt = v[i];
@@ -329,7 +329,7 @@ void main() {
   // ★★★ CW-91: THE GLYPH COMES FROM THE SURFACE, THE LIGHT STILL COMES FROM
   // THE SCREEN. The same contract the CPU path carries (_hfm.js, the anchored
   // branch), in the same order: everything decided from the lit cell above this
-  // line - the reverse flag, the palette colour, the cell's luminance - stands
+  // line - the reverse flag, the palette color, the cell's luminance - stands
   // untouched, and all that changes is WHICH character carries it.
   //
   // A REVERSED CELL IS NEVER ANCHORED, exactly as on the CPU, where the reverse
@@ -437,7 +437,7 @@ void main() {
     }
   }
 
-  // Palette mode (CW-6) picks each cell's colour from its mean tint, in
+  // Palette mode (CW-6) picks each cell's color from its mean tint, in
   // chroma-normalised space. Ported from pickPaletteIndex; the index rides
   // in the green channel, which otherwise only carries a debug class byte.
   float second = classId;
@@ -446,9 +446,9 @@ void main() {
     float mx = max(mean.r, max(mean.g, mean.b));
     vec3 n = mx < 1e-6 ? vec3(0.0) : mean / mx;
     if (abs(uChromaBoost - 1.0) > 1e-6) n = pow(max(n, vec3(0.0)), vec3(uChromaBoost));
-    // CW-71: how far from grey this cell is, in the same max-normalised
+    // CW-71: how far from gray this cell is, in the same max-normalised
     // space the match works in. n's largest component is 1, so the smallest
-    // one IS the distance from grey.
+    // one IS the distance from gray.
     float chroma = 1.0 - min(n.r, min(n.g, n.b));
     bool allowWhite =
       uWhiteLum <= 0.0 || (cellLum >= uWhiteLum && chroma < uWhiteChroma);
@@ -478,7 +478,7 @@ void main() {
     // Both in one byte: the palette index in the low nibble (at most 16
     // entries) and the surface class in the high one (at most 15). Without
     // this the memory would have no way to know a palette cell's class had
-    // changed, and colour mode would smear where mono does not - measured
+    // changed, and color mode would smear where mono does not - measured
     // before it was fixed: 44 % of class changes kept their glyph with the
     // memory off, 87 % with it on.
     second = float(bestColour) + classId * 16.0;
@@ -706,7 +706,7 @@ export function createGpuGlyphPass(renderer) {
       depthBuffer: true,
       stencilBuffer: false,
     });
-    // MEASURED: asking three to write this target in the canvas's colour
+    // MEASURED: asking three to write this target in the canvas's color
     // space does NOT encode it - the output transform is applied to the
     // default framebuffer only. The target holds linear light whatever this
     // says, so the shader encodes when it reads (encodeOutput). Left explicit
@@ -715,7 +715,7 @@ export function createGpuGlyphPass(renderer) {
     // the road drops below the darkest glyph, leaving the road empty.
     sceneTarget.texture.colorSpace = NoColorSpace;
     sceneTarget.texture.generateMipmaps = false;
-    // Linear filtering IS the downscale: one sample at the centre of a 2x2
+    // Linear filtering IS the downscale: one sample at the center of a 2x2
     // block returns that block's average.
     sceneTarget.texture.minFilter = LinearFilter;
     sceneTarget.texture.magFilter = LinearFilter;

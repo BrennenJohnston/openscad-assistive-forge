@@ -5,7 +5,7 @@
  * every size is unit-testable against the citation it claims.
  *
  * THE SIZES ARE CITED AND TRUE TO SCALE. Field-guide body lengths
- * (Audubon / AllAboutBirds), metres:
+ * (Audubon / AllAboutBirds), meters:
  *
  *   house sparrow          0.13-0.17
  *   black-capped chickadee 0.12-0.15
@@ -18,7 +18,7 @@
  * ★ NOTHING HERE IS ALLOWED TO GROW TO BE SEEN. CW-56 compressed its tree
  * heights, and could, because a street tree's height is a range a designer
  * picks from and the compression is stated in the record. A bird's body
- * length is not that kind of number: a sparrow you can see at thirty metres
+ * length is not that kind of number: a sparrow you can see at thirty meters
  * is not a sparrow. So a species that cannot read at a given size is
  * RECORDED as unreadable there, and the record carries the honesty table.
  * The one thing forbidden is inflating a bird to rescue its picture.
@@ -30,7 +30,7 @@
  */
 
 /**
- * Body length range in metres, plus the build that carries the silhouette.
+ * Body length range in meters, plus the build that carries the silhouette.
  *
  * ★★ THERE WAS A `tierBias` HERE - a per-species brightness nudge, dark for
  * the crow and pale for the gull - AND IT WAS MEASURABLY INERT IN BOTH MODES.
@@ -42,7 +42,7 @@
  * actually dark - a "dark" bird still sits far above ground at under 0.1 - so
  * the real-world contrast the field was imitating does not exist here.
  *
- * In COLOUR, checked ENCODED because that is where the converter reads
+ * In COLOR, checked ENCODED because that is where the converter reads
  * (D-112), the palette match at this hue is a CLIFF: #ffffff everywhere above
  * tier 0.50 and #ffff00 below it. All seven species sat between 0.52 and
  * 0.82, so ALL SEVEN LANDED WHITE in both palettes, and the crow sat 0.02
@@ -50,7 +50,7 @@
  *
  * ★ AND WHITE IS THE RIGHT ANSWER, not a failure. These palettes have no dark
  * neutral - the same shape of gap CW-57 found when the ANSI set turned out to
- * have no blue - so a grey or black bird cannot be rendered dark here. The
+ * have no blue - so a gray or black bird cannot be rendered dark here. The
  * alternatives are yellow and red, and a yellow crow would be a lie where a
  * white one is merely a monochrome. Identity is SHAPE: the hydrant lesson.
  *
@@ -115,7 +115,7 @@ export function birdTableFor(cityName) {
  * merges into the lamp.
  *
  * The reason is that in this game NOTHING IS ACTUALLY DARK. A crow at tier
- * 0.52 is still far brighter than ground at under 0.1, so real-world colour
+ * 0.52 is still far brighter than ground at under 0.1, so real-world color
  * intuition - black bird, dark lawn - describes two things that are not close
  * together here at all. What decides legibility is having an uncluttered
  * backdrop and a silhouette, and near-black ground is the best backdrop in
@@ -271,7 +271,7 @@ export function birdBoxes(spec, angle = 0) {
 
   if (spec.form === 'roadrunner') {
     // The roadrunner is a long tail and a crest, and both are the reason it
-    // is recognisable at all - it is a big bird that reads as a shape rather
+    // is recognizable at all - it is a big bird that reads as a shape rather
     // than as a blob.
     const headL = L * HEAD_F;
     push(headL, headL * 0.8, headL, bodyL * 0.5, 0, bodyZ + bodyH * 0.45);

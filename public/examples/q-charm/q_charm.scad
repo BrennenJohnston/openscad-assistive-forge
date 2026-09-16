@@ -402,7 +402,7 @@ module design_2d_layer2() {
 
 // One pass of a layered design, placed exactly like the single design above so
 // the two surfaces agree. The file arrives on the shared canvas with its own
-// minimum corner at the origin, so it is centred here and then scaled by ONE
+// minimum corner at the origin, so it is centered here and then scaled by ONE
 // factor - never resize()d, which would fit each pass to the face separately
 // and scale the smallest one up to the size of the largest.
 module design_layer_2d(layer_file, layer_aspect) {

@@ -240,7 +240,7 @@ test.describe('What to keep from a picture', () => {
     const before = await summaryText(page);
     const shapesBefore = await shapeCount(page);
     const chromaNumber = page.locator(
-      'input[aria-label="How colourful is still a line, as a number"]'
+      'input[aria-label="How colorful is still a line, as a number"]'
     );
     await chromaNumber.fill('80');
     await chromaNumber.dispatchEvent('change');
@@ -471,7 +471,7 @@ test.describe('the credit line a stock icon carries (DP-36)', () => {
   }) => {
     await openPicture(page, RING_WITH_CAPTION);
     await expect(page.locator('.ink-controls-notice')).toContainText(
-      "does not remove any credit the icon's licence asks of you"
+      "does not remove any credit the icon's license asks of you"
     );
   });
 });

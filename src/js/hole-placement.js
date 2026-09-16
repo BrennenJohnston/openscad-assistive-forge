@@ -28,11 +28,11 @@ import { polygonFromPathData, boundsOf, holeFits } from './svg-nesting.js';
 export const MIN_WEB_MM = 1.2;
 
 /**
- * Read the outline out of a companion SVG the app wrote, in millimetres.
+ * Read the outline out of a companion SVG the app wrote, in millimeters.
  *
  * The outline arrives on the normalized canvas, so its own units are scaled
  * to the model's real width before anything is measured. Measuring in canvas
- * units and comparing against a millimetre web would be off by whatever the
+ * units and comparing against a millimeter web would be off by whatever the
  * scale happens to be, which is the kind of mistake that looks fine at one
  * pendant size and fails at another.
  *
@@ -51,7 +51,7 @@ export function outlineInMm(svgText, widthMm) {
   const scale = widthMm / (box.maxX - box.minX);
   const cx = (box.minX + box.maxX) / 2;
   const cy = (box.minY + box.maxY) / 2;
-  // Centred on the origin, the way the model places it.
+  // Centered on the origin, the way the model places it.
   return {
     polygon: points.map((p) => ({
       x: (p.x - cx) * scale,

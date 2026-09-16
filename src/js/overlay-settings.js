@@ -3,7 +3,7 @@
  *
  * WHY A PROJECT FILE, and not a preference. The overlay's app-level keys
  * (`overlay-*`, the UF-14 facade) are deliberately shared across projects:
- * opacity and colour are how a person likes to work, not facts about a
+ * opacity and color are how a person likes to work, not facts about a
  * design. Where the image SITS is the opposite - it is measured against one
  * particular model, and carrying it to the next project would place someone
  * else's tracing over your charm. So this layer sits ABOVE the preferences
@@ -123,7 +123,7 @@ export function readOverlaySettings(files) {
   } catch (err) {
     // A corrupt settings file must not stop a project opening: the overlay
     // simply falls back to the app-level preferences, which is the same
-    // behaviour as a project that never had one.
+    // behavior as a project that never had one.
     console.warn('[Overlay settings] Could not read saved settings:', err);
     return null;
   }

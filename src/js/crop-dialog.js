@@ -132,7 +132,7 @@ export function createCropDialog({ saveCopy, onCropped } = {}) {
   }
 
   function onCancel() {
-    close('Cropping cancelled. Your image is unchanged.');
+    close('Cropping canceled. Your image is unchanged.');
   }
 
   function onSelectAll() {

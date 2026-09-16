@@ -500,5 +500,5 @@ npm run dev   # then toggle themes in the browser settings panel
 
 - **`main.js` is huge** -- it's the orchestration file. Don't panic. Use your editor's search to jump to what you need.
 - **The worker runs in a separate thread** -- you can't `console.log` from the worker and see it in the main thread's console. Worker logs appear separately. Check the browser's "Web Workers" console.
-- **CSS custom properties are the theming system** -- never hardcode a colour. Always use a `var(--token-name)` from `variables.css`.
+- **CSS custom properties are the theming system** -- never hardcode a color. Always use a `var(--token-name)` from `variables.css`.
 - **Accessibility is enforced in tests** -- if you add UI, the E2E tests check keyboard navigation and ARIA. Failing those tests is expected until you add proper accessibility.

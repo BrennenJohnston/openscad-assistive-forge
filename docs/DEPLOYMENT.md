@@ -94,7 +94,7 @@ OpenSCAD build could use. They cost nothing to send and keep that door open.
 
 **They are not required.** MEASURED on 2026-08-04 against a static server
 sending no COOP or COEP headers at all: `crossOriginIsolated` was `false` and
-`SharedArrayBuffer` was unavailable, and the WASM engine still initialised, the
+`SharedArrayBuffer` was unavailable, and the WASM engine still initialized, the
 preview still rendered real geometry, and there were no console errors -- both
 on a cold visit and on an offline reload afterwards. The full record is in
 [`audit/offline-pwa-spike-results.md`](./audit/offline-pwa-spike-results.md).

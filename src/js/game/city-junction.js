@@ -28,14 +28,14 @@
  *   30 m                     17 of 120
  *
  * The runner-up's distance tracks the offset exactly, so the cut is a cut in
- * distance and nothing else. Twelve metres is the game's existing ON_M - the
+ * distance and nothing else. Twelve meters is the game's existing ON_M - the
  * distance at which the HUD says you are ON a street rather than near it -
  * and it lands squarely inside that cliff. The caller passes it rather than
  * this file owning a second copy.
  *
  * ★ RULE TWO: THE SECOND NAME MUST BE A DIFFERENT STREET, NOT THE SAME ONE
  * WEARING A SUFFIX. The road graph carries "4th Avenue" and "4th Avenue
- * Cycletrack" as separate named ways a metre apart, and "Alaskan Way" and
+ * Cycletrack" as separate named ways a meter apart, and "Alaskan Way" and
  * "Alaskan Way South" where the naming changes. "Near 4th Avenue and 4th
  * Avenue Cycletrack" is not a corner, it is a street next to itself.
  */

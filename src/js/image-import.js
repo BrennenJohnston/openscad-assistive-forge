@@ -93,7 +93,7 @@ export async function convertPngToSvg(dataUrl, options = {}) {
  * @param {ImageData} imageData
  * @param {Object} [options] - Tracer overrides
  * @param {Object|null} [options.ink] - Passed to extractInk; omit or set
- *   `{ mode: 'standard' }` for the original behaviour
+ *   `{ mode: 'standard' }` for the original behavior
  * @returns {Promise<{svg: string, summary: Object|null}>}
  */
 export async function convertImageDataToSvg(imageData, options = {}) {
@@ -120,9 +120,9 @@ export async function convertImageDataToSvg(imageData, options = {}) {
     );
   }
 
-  // The Colours mode does not trace ink at all: it separates the picture into
-  // flat colours and hands back regions with their fills, which is the shape a
-  // coloured vector drawing already arrives in. filterForegroundPaths is
+  // The Colors mode does not trace ink at all: it separates the picture into
+  // flat colors and hands back regions with their fills, which is the shape a
+  // colored vector drawing already arrives in. filterForegroundPaths is
   // deliberately NOT applied - it drops the lightest layer, and here the
   // lightest layer is usually the wall, which is a first-class part of a
   // stencil plan rather than something to throw away.
@@ -139,7 +139,7 @@ export async function convertImageDataToSvg(imageData, options = {}) {
           `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`
         ),
     });
-    // A wall the person chose is applied by re-running with that colour named
+    // A wall the person chose is applied by re-running with that color named
     // as the background, so the separation and the choice cannot disagree.
     const chosen = wall
       ? first.colours.findIndex(
@@ -207,9 +207,9 @@ export async function convertImageDataToSvg(imageData, options = {}) {
  *
  * Whole-number steps and a box average: a fractional resample would need a
  * canvas, and this has to work in a worker and in a test as well as in a
- * page. The average is right here, unlike in the colour clustering, because
+ * page. The average is right here, unlike in the color clustering, because
  * what comes out is going to be TRACED - a blend along an edge is a softer
- * edge, not a phantom colour that gets its own plate.
+ * edge, not a phantom color that gets its own plate.
  *
  * @param {{width: number, height: number, data: Uint8ClampedArray}} imageData
  * @param {number} [cap]

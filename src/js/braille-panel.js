@@ -725,7 +725,7 @@ class BraillePanel {
     const marginInputLabel = document.createElement('label');
     marginInputLabel.setAttribute('for', 'brailleMarginInput');
     marginInputLabel.className = 'sr-only';
-    marginInputLabel.textContent = 'Margin in millimetres';
+    marginInputLabel.textContent = 'Margin in millimeters';
     marginRow.appendChild(marginInputLabel);
 
     const marginInput = document.createElement('input');

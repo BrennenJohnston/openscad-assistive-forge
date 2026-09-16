@@ -32,9 +32,9 @@
  *
  * There are two tracing engines behind one message shape. `engine: 'potrace'`
  * takes the one-bit ink mask straight to the Forge-built Potrace wasm;
- * anything else goes to imagetracerjs. Potrace draws in one colour, so it can
- * only answer for the ink modes - Standard keeps the picture's colours and
- * Colours is a different road entirely, and both stay with imagetracerjs. When
+ * anything else goes to imagetracerjs. Potrace draws in one color, so it can
+ * only answer for the ink modes - Standard keeps the picture's colors and
+ * Colors is a different road entirely, and both stay with imagetracerjs. When
  * Potrace is asked for and cannot answer, the reply SAYS which engine ran
  * rather than quietly substituting one.
  *
@@ -117,7 +117,7 @@ self.onmessage = async (event) => {
       pixels = downscale.imageData;
     }
 
-    // Colours is its own road: it separates the picture into flat colours and
+    // Colors is its own road: it separates the picture into flat colors and
     // returns regions with their fills, so there is no ink mask and no trace.
     // It lives here for the same reason the rest does - it is arithmetic over
     // pixels, and the stencil purpose should not be the one thing that still
@@ -159,7 +159,7 @@ self.onmessage = async (event) => {
         type: 'done',
         svg: result.svg,
         filterForeground: false,
-        // Colours is its own separator, not either tracing engine.
+        // Colors is its own separator, not either tracing engine.
         engine: 'colours',
         summary: {
           mode: 'colours',
@@ -211,7 +211,7 @@ self.onmessage = async (event) => {
         };
       }
     } else {
-      // Standard keeps the picture's own colours and builds no mask, so a
+      // Standard keeps the picture's own colors and builds no mask, so a
       // see-through picture used to reach the tracer with its alpha and the
       // tracer decided what that meant. It is put on white first now, which is
       // what the person has already seen in every viewer they opened it in.
@@ -252,7 +252,7 @@ self.onmessage = async (event) => {
         ...(potraceOverrides || {}),
       });
       svg = pathDataToSvg(pathData, pixels.width, pixels.height);
-      // One colour: there is no lightest layer to drop, and dropping the only
+      // One color: there is no lightest layer to drop, and dropping the only
       // path there is would erase the drawing.
       filterForeground = false;
     } else {

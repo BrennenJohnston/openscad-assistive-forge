@@ -9,7 +9,7 @@
  * Shape:
  *
  *   field   a cell of the Classic grid: left | right-top | right-bottom |
- *           bottom. `centre` is the 3D view — it is never a drop target and
+ *           bottom. `center` is the 3D view — it is never a drop target and
  *           never appears in the map.
  *   group   an ordered list of panels sharing one cell of a field. Separate
  *           groups sit side by side (the bottom strip) or stacked (a column);

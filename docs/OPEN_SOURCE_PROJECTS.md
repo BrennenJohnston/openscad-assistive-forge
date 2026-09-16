@@ -72,7 +72,7 @@ These projects are shipped with the application.
 > existed only for the `openscad-forge` command-line tool, which was removed
 > from the project on 2026-08-04; neither is in `package.json` any more and
 > neither was ever shipped to the browser. They were not listed in
-> `THIRD_PARTY_NOTICES.md`, so nothing in the licence record changes.
+> `THIRD_PARTY_NOTICES.md`, so nothing in the license record changes.
 
 ---
 

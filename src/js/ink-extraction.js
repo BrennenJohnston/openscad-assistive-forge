@@ -1,10 +1,10 @@
 /**
- * Ink extraction: getting line work out of a coloured picture.
+ * Ink extraction: getting line work out of a colored picture.
  *
- * WHY THIS EXISTS. Forge traces a raster image by quantizing it to two colours
+ * WHY THIS EXISTS. Forge traces a raster image by quantizing it to two colors
  * and keeping the darker bucket. That works for a dark drawing on light paper.
  * It fails, silently, on the pictures communication symbols are actually made
- * of: black line work over a saturated fill, where the fill colour carries
+ * of: black line work over a saturated fill, where the fill color carries
  * meaning (Fitzgerald coding). MEASURED on the shipped tracer with the fixtures
  * in `tests/fixtures/aac/`: a black person glyph inside a blue rounded square
  * traced to ONE path - the blue square. The glyph was gone, and nothing said
@@ -17,7 +17,7 @@
  *
  * WHAT THIS DOES. It runs BEFORE the tracer and decides what counts as ink,
  * using lightness and colourfulness rather than luminance alone. Black line
- * work is dark AND grey; a blue fill is dark and very much not grey. Separating
+ * work is dark AND gray; a blue fill is dark and very much not gray. Separating
  * on both keeps the drawing and rejects the field.
  *
  * The output is an ImageData of black on white, which the existing
@@ -30,8 +30,8 @@
 /**
  * How a picture is turned into ink.
  *
- * - `lineart`: keep what is dark AND close to grey. Black strokes over a
- *   coloured field survive; the field does not.
+ * - `lineart`: keep what is dark AND close to gray. Black strokes over a
+ *   colored field survive; the field does not.
  * - `silhouette`: keep the whole outer shape, filled. Detail inside is lost on
  *   purpose - for very small pieces where detail could not be felt anyway.
  * - `standard`: no extraction at all. What Forge did before this existed.
@@ -43,13 +43,13 @@ export const INK_DEFAULTS = {
   /** L* at or below this may be ink. 0 is black, 100 is white. */
   lightnessMax: 55,
   lightnessRange: [10, 90],
-  /** C* at or below this may be ink. 0 is a perfect grey. */
+  /** C* at or below this may be ink. 0 is a perfect gray. */
   chromaMax: 25,
   chromaRange: [2, 80],
-  // How many flat colours the Colours mode looks for. Six is what the
-  // owner's own cat needs for its painted colours; the picture also has a
+  // How many flat colors the Colors mode looks for. Six is what the
+  // owner's own cat needs for its painted colors; the picture also has a
   // second black along its outlines, so seven finds every one of them. A
-  // colour that was never found cannot be taken out later, so the help
+  // color that was never found cannot be taken out later, so the help
   // text says to ask for more rather than fewer.
   colourCount: 6,
   colourCountRange: [2, 8],
@@ -57,7 +57,7 @@ export const INK_DEFAULTS = {
 
 /**
  * A picture with this share of partly-transparent pixels is treated as having
- * a real alpha channel, so transparency decides the shape rather than colour.
+ * a real alpha channel, so transparency decides the shape rather than color.
  */
 export const MEANINGFUL_ALPHA_SHARE = 0.02;
 
@@ -125,7 +125,7 @@ export function srgbToLab(r, g, b) {
 /**
  * The share of pixels that are neither fully opaque nor fully transparent, or
  * fully transparent. A picture cut out on transparency says what its shape is
- * far more reliably than its colours do.
+ * far more reliably than its colors do.
  *
  * @param {ImageData} imageData
  * @returns {number} 0-1
@@ -195,7 +195,7 @@ export function lightnessHistogram(imageData) {
 }
 
 /**
- * A 3x3 median over each colour channel. JPEG ringing puts speckles of colour
+ * A 3x3 median over each color channel. JPEG ringing puts speckles of color
  * along a black stroke, and a chroma gate would otherwise punch holes in it.
  *
  * NOT on by default, and this is why: a median over a 3x3 window removes any
@@ -386,16 +386,16 @@ export function maskToImageData(mask, width, height, makeImageData) {
 export const REJECTED_COLOR_TOLERANCE = 30;
 
 /**
- * The colour a picture's rejected fills were, so the app can suggest printing
+ * The color a picture's rejected fills were, so the app can suggest printing
  * the plate in it. Averages the pixels the ink gate turned down that were
- * colourful enough to be a fill rather than paper.
+ * colorful enough to be a fill rather than paper.
  *
  * `coherence` is what keeps the suggestion honest. A symbol with one blue
  * field averages to that blue. A card with yellow, blue, green and red fields
  * averages to mud - MEASURED on the Fitzgerald fixture: rgb(155,134,69), a
- * colour that appears nowhere in it. Coherence is the share of rejected
+ * color that appears nowhere in it. Coherence is the share of rejected
  * pixels actually near the mean, so the caller can decline to suggest anything
- * when the picture has no single fill colour.
+ * when the picture has no single fill color.
  *
  * @param {ImageData} imageData
  * @param {Uint8Array} mask - The ink mask; rejected pixels are the 0s
@@ -462,7 +462,7 @@ export function dominantRejectedColor(imageData, mask, minChroma = 25) {
 /**
  * Put a see-through picture on a white page before anybody traces it.
  *
- * Standard mode keeps a picture's own colours and does not build an ink mask,
+ * Standard mode keeps a picture's own colors and does not build an ink mask,
  * so a PNG with transparency reached the tracer with its alpha intact and the
  * tracer decided for itself what a see-through pixel was. What it decided was
  * not white, and a logo saved on a transparent background came out with a
@@ -480,8 +480,8 @@ export function dominantRejectedColor(imageData, mask, minChroma = 25) {
 /**
  * How thin the thinnest lines in a drawing are, in picture pixels.
  *
- * A charm is fourteen millimetres across and a 0.4 mm nozzle cannot lay a line
- * thinner than about half a millimetre. MEASURED on nine stock icons, their
+ * A charm is fourteen millimeters across and a 0.4 mm nozzle cannot lay a line
+ * thinner than about half a millimeter. MEASURED on nine stock icons, their
  * outlines land between 0.31 and 0.65 mm at that size - some of them print and
  * some of them do not, and nothing in the app said which was which.
  *
@@ -620,7 +620,7 @@ export function extractInk(imageData, options = {}) {
   if (mode === 'standard') {
     return {
       imageData,
-      // Standard keeps the picture's own colours, so there is no one-bit mask
+      // Standard keeps the picture's own colors, so there is no one-bit mask
       // to hand anybody. Said with a null rather than left absent.
       mask: null,
       summary: {

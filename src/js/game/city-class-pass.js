@@ -18,8 +18,8 @@
 // is looking at.
 //
 // Ids are written by a shader straight into the red channel rather than by
-// setting a material colour, because a colour would be put through the
-// renderer's colour management on the way in and the readback would no longer
+// setting a material color, because a color would be put through the
+// renderer's color management on the way in and the readback would no longer
 // be the number that went in.
 
 import {
@@ -61,7 +61,7 @@ export const SURFACE_CLASS = {
   PERSON: 12,
   // CW-33. APPENDED, never renumbered: these ids are the wire format between
   // this pass and the glyph vocabularies, and a shifted id would silently
-  // give every surface the voice of its neighbour.
+  // give every surface the voice of its neighbor.
   SIDEWALK: 13,
   GREEN: 14,
 };
@@ -217,7 +217,7 @@ const ROOF_SPLIT = new Map([
 const ROOF_NORMAL_Z = 0.9;
 
 /**
- * CW-85: how far the B channel's 255 steps reach, in metres.
+ * CW-85: how far the B channel's 255 steps reach, in meters.
  *
  * The backing fades out at the fog's own far plane (`Fog(0x000000, 40, 260)`,
  * city-scene.js), so a byte that ran to a different distance would make the
@@ -260,10 +260,10 @@ const VERTEX_SHADER = /* glsl */ `
     vUp = normalize(normal).z;
     vUv = uv;
     vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
-    // CW-85: LINEAR view depth, in metres, interpolated across the face. The
+    // CW-85: LINEAR view depth, in meters, interpolated across the face. The
     // depth BUFFER this target already carries is the non-linear one the GPU
     // needs for occlusion; a tint that faded on that curve would fall off a
-    // cliff in the first few metres and then barely move for two hundred.
+    // cliff in the first few meters and then barely move for two hundred.
     vViewDepth = -viewPos.z;
     gl_Position = projectionMatrix * viewPos;
   }
@@ -514,7 +514,7 @@ export function createClassPass(renderer, root) {
     ensureTarget(cols, rows);
 
     // Dress EVERY mesh, not only the known ones. A mesh left in its own
-    // material would paint its own colour into the id buffer and be read
+    // material would paint its own color into the id buffer and be read
     // back as whatever class that number happens to be; an unknown mesh
     // writes 0 instead and is reported as sky, which falls back to the full
     // glyph vocabulary the converter has always used.
@@ -606,9 +606,9 @@ export function createClassPass(renderer, root) {
      * it that way; the backing is the only thing that wants this, and only
      * while Day is on.
      *
-     * Byte b is `b / 255 * CLASS_DEPTH_FAR_M` metres. A cell the city does
+     * Byte b is `b / 255 * CLASS_DEPTH_FAR_M` meters. A cell the city does
      * not cover reads 0, which is the sky - and the sky is never backed, so
-     * the ambiguity between "zero metres away" and "nothing there" never has
+     * the ambiguity between "zero meters away" and "nothing there" never has
      * to be resolved.
      *
      * @returns {Uint8Array|null} the last read's depth bytes, or null

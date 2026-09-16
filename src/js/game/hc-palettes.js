@@ -1,16 +1,16 @@
 /**
- * Retro colour palettes for the ASCII City Walk game (CW-6, reopened CW-18).
+ * Retro color palettes for the ASCII City Walk game (CW-6, reopened CW-18).
  *
  * Owner-signed under CW-Q5/CW-Q6 (2026-08-18) and amended by CW-Q16
- * (2026-08-21): colour is no longer tied to high contrast. The game carries
- * its own Colour toggle, and until the player touches it colour follows high
+ * (2026-08-21): color is no longer tied to high contrast. The game carries
+ * its own Color toggle, and until the player touches it color follows high
  * contrast exactly as it always did. Which SET applies still follows the
  * phosphor: the ANSI bright set in green (dark), the neon set in amber
  * (light).
  *
  * Every entry is guarded ≥ 4.5:1 against the black game background in
  * tests/unit/color-contrast.test.js — change a hex and the guard measures the
- * change. Turning colour OFF never drops a player below the floor they had:
+ * change. Turning color OFF never drops a player below the floor they had:
  * the bare phosphors are 15.30:1 (green) and 11.46:1 (amber), above the worst
  * entry of their own set. They are NOT above every entry — cyan and yellow
  * both beat green — so the guard measures the floor, not the maximum.
@@ -36,7 +36,7 @@ export const HC_PALETTE_AMBER = [
   '#ff2d95', // hot pink
   '#00ffff', // cyan
   '#aaff00', // lime
-  // CW-Q11: foliage had no colour of its own here - a tree canopy and a
+  // CW-Q11: foliage had no color of its own here - a tree canopy and a
   // yellow-green building both fell to lime. A seventh entry gives the trees
   // green and leaves lime to the buildings; one more glyph atlas costs a
   // measured 0.2 ms to build.
@@ -60,7 +60,7 @@ export const HC_PALETTE_AMBER = [
  * and fails. tests/unit/color-contrast.test.js drives the same function the
  * renderer does and re-measures both phosphors at every level.
  *
- * Applies to MONOCHROME only — with colour on, each cell's atlas is already
+ * Applies to MONOCHROME only — with color on, each cell's atlas is already
  * chosen by its palette entry.
  */
 export const MONO_INTENSITY_LEVELS = [0.65, 1];
@@ -120,9 +120,9 @@ export const MONO_REVERSE_THRESHOLD = 0.8;
  * What "the luminance layer" is, measured: cells at or above
  * MONO_REVERSE_THRESHOLD are painted as solid phosphor with the glyph knocked
  * out of them, and the shopfront bands are painted at 0.93-0.95 luminance,
- * which is the brightest thing in the picture and lands on WHITE in colour.
+ * which is the brightest thing in the picture and lands on WHITE in color.
  * At the spawn that is eight solid bands in a row; a lamp cone paints a solid
- * block on whatever wall it touches; a lamp post two metres away is a solid bar
+ * block on whatever wall it touches; a lamp post two meters away is a solid bar
  * from the pavement to the top of the frame.
  *
  * Two columns, one row each:
@@ -203,15 +203,15 @@ export const LUMINANCE_LAYER = Object.freeze({
 /**
  * CW-71 - the palette-mode INK BUDGET the game asks for.
  *
- * Measured before it was chosen. At the Seattle spawn, in colour, 70 to 83 per
+ * Measured before it was chosen. At the Seattle spawn, in color, 70 to 83 per
  * cent of ALL cells carry ink and 54 to 62 per cent of them are WHITE, against
  * 3 to 7 per cent inked in monochrome. The cause is structural: palette mode
- * has no intensity ladder, the cell contrast curve normalises every cell to
- * full scale before its glyph is chosen, and a colour is then put on whatever
+ * has no intensity ladder, the cell contrast curve normalizes every cell to
+ * full scale before its glyph is chosen, and a color is then put on whatever
  * came out - so a cell's ABSOLUTE brightness never reaches the picture.
  *
- * `floor` is the monochrome ladder's own blank level, applied to colour. Its
- * consequence is deliberate and large: colour mode inks about as much of the
+ * `floor` is the monochrome ladder's own blank level, applied to color. Its
+ * consequence is deliberate and large: color mode inks about as much of the
  * screen as monochrome does, because that is what the same rule produces.
  * `whiteLum` and `whiteChroma` are the gate on the white entry, which is what
  * a low-chroma highlight lands on through the D-112 sRGB match.
@@ -244,23 +244,23 @@ export const CITY_PALETTE_INK_BUDGET = Object.freeze({
 });
 
 /**
- * ★★★ CW-92 (D-127, CW-Q96): WHAT COLOUR EACH SURFACE IS.
+ * ★★★ CW-92 (D-127, CW-Q96): WHAT COLOR EACH SURFACE IS.
  *
  * THE MEASUREMENT THAT MADE THIS NECESSARY. The city is achromatic end to end.
  * Over all 60 materials in a Seattle session, almost every `material.color` is
- * 1,1,1; the per-mesh textures are neutral grey (buildings 0.269, storefronts
+ * 1,1,1; the per-mesh textures are neutral gray (buildings 0.269, storefronts
  * 0.309, ground 0.034, sidewalks 0.053, r = g = b); both scene lights are pure
  * white; the fog is pure black. Fed through `pickPaletteIndex`, 51 of the 60
- * land on the palette's WHITE entry. So there is no surface colour to read, and
- * every hue a colour player has ever seen was manufactured by the converter out
- * of the last digit or two of a grey image - which is why a whole face crossed
+ * land on the palette's WHITE entry. So there is no surface color to read, and
+ * every hue a color player has ever seen was manufactured by the converter out
+ * of the last digit or two of a gray image - which is why a whole face crossed
  * a palette boundary together as the camera moved (D-127). The owner asked for
  * an authored palette instead (CW-Q96).
  *
  * ★★ SIX ENTRIES FOR FIFTEEN CLASSES, SO SURFACES SHARE - AND THAT IS SAFE
- * BECAUSE COLOUR IS NO LONGER CARRYING IDENTITY ON ITS OWN. CW-59 settled that
- * SHAPE identifies and colour does not, and CW-93 gave every surface its own
- * character set back in colour mode for the first time since CW-32. A tree and
+ * BECAUSE COLOR IS NO LONGER CARRYING IDENTITY ON ITS OWN. CW-59 settled that
+ * SHAPE identifies and color does not, and CW-93 gave every surface its own
+ * character set back in color mode for the first time since CW-32. A tree and
  * the building behind it can share the green phosphor here because one is drawn
  * with `@ v o O` and the other with `| [ ] ( ) { }`.
  *
@@ -345,7 +345,7 @@ export const LUMINANCE_LAYER_DEFAULT = 'calm';
 // The numbers are deliberately dark for that reason. They say "a surface is
 // here" and must never read as ink.
 
-/** Full-strength backing out to here, in metres. */
+/** Full-strength backing out to here, in meters. */
 export const CITY_BACKING_NEAR_M = 60;
 
 /**
@@ -372,7 +372,7 @@ export const CITY_BACKING_EXEMPT_CLASS_IDS = Object.freeze([0]);
 /**
  * MONOCHROME backing: the phosphor itself, driven down.
  *
- * A single-phosphor tube has one colour, so a mono backing cannot be a
+ * A single-phosphor tube has one color, so a mono backing cannot be a
  * material tint - it is the same phosphor at a low drive, which is what a
  * dark surface looked like on the hardware this game imitates. Values are the
  * `drive` argument to driveColor(), the same function the renderer paints
@@ -387,7 +387,7 @@ export const CITY_BACKING_EXEMPT_CLASS_IDS = Object.freeze([0]);
  * each phosphor gets the brightest backing it can carry and the guard
  * measures both. The consequence is worth saying out loud: in monochrome the
  * backing is a good deal fainter in amber than in green, and fainter in both
- * than in colour. It is a contrast bound, not a taste, and it cannot be
+ * than in color. It is a contrast bound, not a taste, and it cannot be
  * turned up without taking legibility off a player who has no other cue.
  *
  * Every value is far below the ladder's dimmest ink level (0.65), so a blank
@@ -437,10 +437,10 @@ export const CITY_BACKING_MONO_DRIVE = Object.freeze({
 });
 
 /**
- * COLOUR backing: a dark material tint per class, per palette.
+ * COLOR backing: a dark material tint per class, per palette.
  *
  * The reference's own way of doing it - the surface says what it is made of,
- * not what colour the glyph on it happens to be. The two palettes get their
+ * not what color the glyph on it happens to be. The two palettes get their
  * own rows because a green-phosphor city and a neon-amber one are different
  * worlds and a slate that sits right in one reads cold in the other. The
  * tints are NOT palette entries: a backing is painted straight into the frame

@@ -8,7 +8,7 @@
  * the card's Start button sits at y=1026 inside a 1024px window, below the
  * fold, so the tip decorates something nobody has scrolled to. This module
  * brings the tutorial menu onto the screen first, lights it through a dimmed
- * page, outlines the Start button, and asks in a centred dialog.
+ * page, outlines the Start button, and asks in a centered dialog.
  *
  * Q-52 (owner, 2026-08-15, with the mock on screen):
  *  (a) it shows while the welcome family is NOT completed and not suppressed.

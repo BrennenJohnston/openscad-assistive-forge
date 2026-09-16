@@ -15,7 +15,7 @@
  *
  * Q-85 (owner, 2026-08-22) scopes it to the project surface. The guard arms on
  * the flip to 'project' and retracts its own entry on the flip back to
- * 'welcome', so the Main Page keeps the browser's own one-press behaviour and
+ * 'welcome', so the Main Page keeps the browser's own one-press behavior and
  * no stale entry is left behind.
  *
  * WHAT THIS DOES NOT DO. beforeunload cannot carry custom text, needs sticky
@@ -150,7 +150,7 @@ async function ask() {
     return;
   }
 
-  // The user's own choice, honoured without argument: the guard does not
+  // The user's own choice, honored without argument: the guard does not
   // re-arm behind it.
   leaving = true;
   walkOut();
@@ -164,7 +164,7 @@ async function ask() {
  * Main Page and knows nothing about it, and opening a project pushes a second
  * one. "Leave" then went back exactly one step and landed on the app's own
  * earlier entry, so the app was still there and the URL had jumped back to
- * `?example=simple-box`. Reading the entry's state to recognise it does not
+ * `?example=simple-box`. Reading the entry's state to recognize it does not
  * work either: the deep-link cleanup calls `replaceState(null, ...)` and wipes
  * the marker.
  *
@@ -229,8 +229,8 @@ function handlePopState() {
   if (!armed) {
     // Nothing of ours was armed, yet the document is still here, so the entry
     // just consumed was a leftover of ours from before a reload. Q-85 says the
-    // Main Page keeps the browser's own behaviour, and the browser's own
-    // behaviour is to leave, so carry on out rather than swallowing the press.
+    // Main Page keeps the browser's own behavior, and the browser's own
+    // behavior is to leave, so carry on out rather than swallowing the press.
     walkOut();
     return;
   }

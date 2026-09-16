@@ -1,9 +1,9 @@
 /**
- * The desktop's editor colour schemes (U-37 ¶2, Q-60a).
+ * The desktop's editor color schemes (U-37 ¶2, Q-60a).
  *
  * Transcribed from OpenSCAD 2021.01's own
  * `color-schemes/editor/light-background.json` and `dark-background.json`.
- * Qt resolves the named colours in those files through the SVG keyword list,
+ * Qt resolves the named colors in those files through the SVG keyword list,
  * so "Green" is #008000 rather than #00ff00, "DarkCyan" is #008b8b, and so on.
  *
  * POLICY, signed as Q-60(a) and matching the Q-10 / Q-42a precedent already

@@ -22,7 +22,7 @@
 // import-free, so the Node bake path stays clean.
 import { pointInRing } from './walk-controls.js';
 
-// One storey when only building:levels is tagged. 3 m/level is the common
+// One story when only building:levels is tagged. 3 m/level is the common
 // renderer convention (OSM Simple 3D Buildings recommends explicit height
 // over levels; levels are a fallback).
 export const LEVEL_HEIGHT_M = 3.0;
@@ -51,7 +51,7 @@ export const PART_GROUND_MAX_M = 0.5;
 
 // CW-76. Two volumes this far apart vertically are still one building: real
 // extracts round a podium to 8 m and start the slab above it at 9, and a
-// walker at street level cannot see a metre of daylight thirty metres up.
+// walker at street level cannot see a meter of daylight thirty meters up.
 // Wider than this and the gap is the defect this release is named after.
 export const SUPPORT_GAP_TOLERANCE_M = 1.5;
 
@@ -123,7 +123,7 @@ export function resolveRoof(tags = {}, heightM = 0, minHeightM = 0) {
 // 6, and each step up the class ladder adds a lane's worth.
 //
 // unclassified moves with residential (CW-Q62): it is the same kind of street
-// and reading two metres narrower than an identical neighbour was an accident
+// and reading two meters narrower than an identical neighbor was an accident
 // of the class list, not a design. living_street stays at 6 because a shared
 // street is narrow ON PURPOSE - that narrowness is the traffic calming.
 //
@@ -280,7 +280,7 @@ export const ATTRACTION_TOURISM_VALUES = ['attraction'];
  * A planter is a node OR a way (a raised bed with a footprint); a flowerbed
  * is a way, tagged either leisure or landuse, and deliberately NOT added to
  * the GREEN_* lists - a flowerbed is a planting to be dressed, not a lawn to
- * be coloured green. A picnic table is a node.
+ * be colored green. A picnic table is a node.
  */
 export const PLANTER_MAN_MADE_VALUES = ['planter'];
 export const FLOWERBED_VALUES = ['flowerbed'];
@@ -479,8 +479,8 @@ export function resolveCanopy(tags = {}, coveredHeightM = null) {
  *     a stack whose lower slices are separate ways standing on the street,
  *     and a per-way test calls all four of them floating. Where the column
  *     really is empty the volume is drawn down to whatever IS under it - the
- *     gap is closed, never doubled, so a slab a metre above an 8 m podium
- *     grows by a metre rather than sprouting a second copy of the podium.
+ *     gap is closed, never doubled, so a slab a meter above an 8 m podium
+ *     grows by a meter rather than sprouting a second copy of the podium.
  *
  * Canopies are exempt from (3) on purpose. A canopy hangs; that is what it is
  * for. What it must not do is hang over nothing with no support, and that is
@@ -642,7 +642,7 @@ export function resolveMassing(buildings) {
   // Seattle Municipal Tower began at 18 m under a 220 m tower, Qualtrics
   // Tower at 25 m, Museum House 88.5 m up with 77.8 m of nothing under it.
   //
-  // It is also asked at each VOLUME'S own centre rather than at its
+  // It is also asked at each VOLUME'S own center rather than at its
   // building's: a wing off to one side of a big outline is not described by
   // the middle of that outline.
   const floaters = [];
@@ -707,7 +707,7 @@ export function resolveMassing(buildings) {
  *
  * The bake samples a national 1 m DEM on a regular grid clipped to the
  * circle and writes it as a flat row-major array with its own origin, step
- * and dimensions, plus the licence and attribution the source requires. This
+ * and dimensions, plus the license and attribution the source requires. This
  * turns it into something a heightfield can be built from and REFUSES a block
  * it cannot trust rather than handing on a half-filled grid: a wrong terrain
  * is a walker sunk to the knee or floating, which is worse than flat ground.
@@ -881,10 +881,10 @@ export function signedArea(pts) {
 }
 
 /**
- * The smallest building:part the bake keeps, in square metres (CW-Q31).
+ * The smallest building:part the bake keeps, in square meters (CW-Q31).
  *
  * Denver's downtown is mapped with thousands of building:part volumes, and a
- * large share of them are slivers a few centimetres across - ledges and
+ * large share of them are slivers a few centimeters across - ledges and
  * setbacks that no character cell could ever show. Dropping them at BAKE time
  * is what brought Denver inside the size bar and finally let it have the
  * stepped towers and roofs the other three cities already had.
@@ -895,7 +895,7 @@ export function signedArea(pts) {
 export const MIN_PART_AREA_M2 = 10;
 
 /**
- * Ground area of a lat/lon ring in square metres, as the game would project
+ * Ground area of a lat/lon ring in square meters, as the game would project
  * it. Pure; used by the bake to apply MIN_PART_AREA_M2.
  *
  * @param {Array<{lat:number,lon:number}>} geometry - a closed ring
@@ -1868,7 +1868,7 @@ export const DRIVABLE_ROAD_KINDS = new Set([
 const NODE_SNAP_M = 1.5;
 
 /**
- * Cars per kilometre of road, by class — the open-data proxy for how busy a
+ * Cars per kilometer of road, by class — the open-data proxy for how busy a
  * street is (CW-19, signed at CW-Q17a).
  *
  * This is the honest part of the design, so it is written down rather than
@@ -1884,7 +1884,7 @@ const NODE_SNAP_M = 1.5;
  * function, one call site.
  *
  * @param {{kind: string, lanes?: number}} road
- * @returns {number} cars per kilometre
+ * @returns {number} cars per kilometer
  */
 export function trafficDensityFor(road) {
   const perKm = {
@@ -1913,7 +1913,7 @@ export function trafficDensityFor(road) {
  * for crossings, only to notice which chains share an end. Endpoints within
  * NODE_SNAP_M of each other are treated as the same node, because the extract
  * rounds coordinates and two ways that meet in the data can land a few
- * centimetres apart after projection.
+ * centimeters apart after projection.
  *
  * Degree is what makes a node useful: 1 is a dead end or the edge of the
  * bake, 2 is a road simply continuing under a new name, and 3 or more is a
@@ -1934,7 +1934,7 @@ export function buildRoadGraph(roads, options = {}) {
 
   const nodeAt = (x, y) => {
     // A snap grid alone would split two points that straddle a cell edge, so
-    // the neighbouring cells are searched too.
+    // the neighboring cells are searched too.
     const cx = Math.round(x / snap);
     const cy = Math.round(y / snap);
     for (let dx = -1; dx <= 1; dx++) {
@@ -1993,7 +1993,7 @@ export function buildRoadGraph(roads, options = {}) {
 // query only ever visits the rings it needs to cover its own limit.
 const STREET_CELL_M = 40;
 
-// A cycletrack or footpath usually runs a few metres from the street it
+// A cycletrack or footpath usually runs a few meters from the street it
 // parallels, so the NEAREST named way is often not the street a player
 // would say they are on: at the Seattle spawn it is "4th Avenue Cycletrack"
 // at 4.1 m with "4th Avenue" itself at 8.1 m. A small penalty prefers the

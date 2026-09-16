@@ -278,7 +278,7 @@ export const PREVIEW_COLORS = {
     ambientLight: 0xffffff,
   },
 
-  // --- Desktop viewport colour schemes (Preferences ▸ 3D View) ---
+  // --- Desktop viewport color schemes (Preferences ▸ 3D View) ---
   //
   // Transcribed from OpenSCAD at tag `openscad-2021.01`: Cornfield is the
   // hardcoded default in `src/colormap.cc` (lines 39-47, no JSON exists for
@@ -287,7 +287,7 @@ export const PREVIEW_COLORS = {
   // absent — it carries `"show-in-gui": false`, which is why the desktop's
   // own list shows nine JSON schemes plus the built-in Cornfield.
   //
-  // Backgrounds are VERBATIM. Model and edge colours are tuned the minimum
+  // Backgrounds are VERBATIM. Model and edge colors are tuned the minimum
   // distance along lightness — hue and saturation untouched, so a scheme
   // still reads as itself — until `model`/`modelBack` reach 3:1 against the
   // background (SC 1.4.11) and `edges` reaches 4.5:1 against the model.
@@ -496,7 +496,7 @@ export class PreviewManager {
     // true matches stakeholder expectation (F17, "zoom toward cursor").
     this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
 
-    // Chosen desktop viewport colour scheme (Preferences ▸ 3D View). Read
+    // Chosen desktop viewport color scheme (Preferences ▸ 3D View). Read
     // before the first detectTheme() so Classic opens on the saved choice
     // rather than flashing Cornfield and correcting itself.
     this.viewportScheme = this.loadViewportScheme();
@@ -990,7 +990,7 @@ export class PreviewManager {
   }
 
   /**
-   * Synchronise mesh material state with the current colorOverrideEnabled
+   * Synchronize mesh material state with the current colorOverrideEnabled
    * flag. Toggles vertex coloring on/off to switch between COFF per-face
    * colors and a solid user-chosen color without re-rendering geometry.
    */
@@ -3645,9 +3645,9 @@ export class PreviewManager {
   }
 
   /**
-   * Toggle mouse-wheel zoom-to-cursor behaviour. When enabled, scrolling
+   * Toggle mouse-wheel zoom-to-cursor behavior. When enabled, scrolling
    * over the preview zooms toward the pointer position; when disabled,
-   * zoom is centred on the orbit target (the previous default).
+   * zoom is centered on the orbit target (the previous default).
    * Keyboard zoom (`+` / `-`) is unaffected.
    *
    * @param {boolean} enabled
@@ -3662,7 +3662,7 @@ export class PreviewManager {
 
   /**
    * Load zoom-to-cursor preference from localStorage.
-   * Defaults to true so first-time users get the modern behaviour
+   * Defaults to true so first-time users get the modern behavior
    * the stakeholder asked for in F17.
    * @returns {boolean}
    */
@@ -3672,7 +3672,7 @@ export class PreviewManager {
   }
 
   /**
-   * The saved viewport colour scheme id, falling back to the desktop default.
+   * The saved viewport color scheme id, falling back to the desktop default.
    * @returns {string}
    */
   loadViewportScheme() {
@@ -3688,13 +3688,13 @@ export class PreviewManager {
   }
 
   /**
-   * Choose a desktop viewport colour scheme and apply it now.
+   * Choose a desktop viewport color scheme and apply it now.
    *
    * Instant-apply, like the desktop: there is no OK/Cancel row in upstream's
    * dialog (OpenSCAD_2/3.png), so picking a name IS the action.
    *
    * The scheme governs the Classic viewport. Outside Classic the app theme
-   * drives these colours and keeps doing so, because overriding it would
+   * drives these colors and keeps doing so, because overriding it would
    * also override the high-contrast and mono variants, which are
    * accessibility features rather than decoration. The tab says this in its
    * own text rather than leaving it as a silent divergence.
@@ -4066,7 +4066,7 @@ export class PreviewManager {
   /**
    * Convert SVG text to a Three.js CanvasTexture.
    * When recolorHex is provided, all non-transparent pixels are replaced
-   * with that colour — making dark SVGs visible on dark backgrounds.
+   * with that color — making dark SVGs visible on dark backgrounds.
    *
    * Also computes the physical mm dimensions of the SVG using the same
    * 96 DPI convention that OpenSCAD desktop uses for SVG import, so the
@@ -4074,7 +4074,7 @@ export class PreviewManager {
    * was saved with.
    *
    * @param {string} svgContent - SVG markup
-   * @param {string|null} [recolorHex=null] - CSS hex colour (e.g. '#ffffff')
+   * @param {string|null} [recolorHex=null] - CSS hex color (e.g. '#ffffff')
    * @param {{ targetCanvasSize?: number }} [opts] - Optional overrides
    * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number, widthMm: number|null, heightMm: number|null}>}
    */
@@ -4166,7 +4166,7 @@ export class PreviewManager {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // Recolor: replace all non-transparent pixels with the chosen colour.
+      // Recolor: replace all non-transparent pixels with the chosen color.
       // Uses 'source-in' compositing so alpha/shape is preserved.
       if (recolorHex) {
         ctx.globalCompositeOperation = 'source-in';
@@ -4416,8 +4416,8 @@ export class PreviewManager {
 
   /**
    * Set the SVG recolor hex and re-rasterise the current overlay if it is SVG.
-   * Pass null to revert to original SVG colours.
-   * @param {string|null} hexColor - CSS hex colour (e.g. '#ffffff') or null
+   * Pass null to revert to original SVG colors.
+   * @param {string|null} hexColor - CSS hex color (e.g. '#ffffff') or null
    */
   async setOverlaySvgColor(hexColor) {
     this.overlayConfig.svgColor = hexColor || null;
@@ -5271,7 +5271,7 @@ export class PreviewManager {
 
     // While the drawing editor owns the area, a render behind it must not
     // put the canvas or the label back: what it asked for is remembered
-    // above and honoured when the editor gives the area back.
+    // above and honored when the editor gives the area back.
     if (this._isEditorSurfaceActive) return;
 
     // Hide 3D canvas when 2D is active, show when 3D
@@ -5369,7 +5369,7 @@ export class PreviewManager {
    * preview, which `showEditorSurface` put out of sight, and showing it again
    * is the whole of it. Deliberately narrow: it does nothing unless the
    * editor is active, and it never decides between the 3D canvas and the 2D
-   * preview - it honours whichever one was already asked for, so a design
+   * preview - it honors whichever one was already asked for, so a design
    * being previewed as SVG shows its SVG.
    *
    * @param {boolean} visible

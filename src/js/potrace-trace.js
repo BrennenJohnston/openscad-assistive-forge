@@ -36,7 +36,7 @@ export const POTRACE_DEFAULTS = Object.freeze({
   turnpolicy: 4,
   /** Corner threshold. 0 makes every corner sharp; 1.34 rounds everything. */
   alphamax: 1.0,
-  /** How far an optimised curve may stray from the one it replaces. */
+  /** How far an optimized curve may stray from the one it replaces. */
   opttolerance: 0.2,
 });
 
@@ -52,7 +52,7 @@ export const POTRACE_DEFAULTS = Object.freeze({
  * MEASURED over twelve pictures, Line art: at 0.2 the trace and the flatten
  * together cost 4,671 ms against imagetracerjs's 4,071; at 1.0 they cost
  * 3,978. The drawing does not change - same shape count, same overlap, same
- * line width to a hundredth of a millimetre - so this buys the difference for
+ * line width to a hundredth of a millimeter - so this buys the difference for
  * nothing.
  */
 export const FORGE_POTRACE_SETTINGS = Object.freeze({
@@ -163,7 +163,7 @@ export async function trace(mask, width, height, options = {}) {
  * Wrap path data in the same envelope the other engine writes, so everything
  * downstream reads one shape of document whichever engine drew it.
  *
- * Potrace answers in one colour, and its boundaries and holes only make a
+ * Potrace answers in one color, and its boundaries and holes only make a
  * drawing when they are filled EVEN-ODD, so the rule is written on the path
  * rather than left to a default.
  *

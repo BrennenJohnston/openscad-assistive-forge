@@ -375,7 +375,7 @@ const TRAVEL_WHERE_OPEN = 'Open ground, away from any named street.';
 // could say.
 const TRAVEL_CONFIRM_LABEL = 'Travel here';
 const TRAVEL_CANCEL_LABEL = 'Cancel';
-const TRAVEL_CANCELLED_MESSAGE = 'Travel cancelled. You have not moved.';
+const TRAVEL_CANCELLED_MESSAGE = 'Travel canceled. You have not moved.';
 const TELEPORT_LANDED_MESSAGE = (street, on, compass) =>
   `Teleported ${on ? 'to' : 'near'} ${street}, facing ${compass}.`;
 const TELEPORT_LANDED_OPEN_MESSAGE = (compass) =>
@@ -385,7 +385,7 @@ const TELEPORT_REFUSED_MESSAGE =
 
 // CW-14: what the header's theme button calls each setting the app cycles
 // through. 'auto' resolves to light or dark, which is what the phosphor
-// colour follows, so the button names the SETTING and the announcement
+// color follows, so the button names the SETTING and the announcement
 // carries the manager's own fuller message.
 const THEME_SETTING_LABELS = {
   auto: 'Auto',
@@ -544,7 +544,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
     // CW-61: the travel dialog is the innermost thing Escape can close, so it
-    // goes first. Cancelling it must not also close the help or leave the
+    // goes first. Canceling it must not also close the help or leave the
     // game - one Escape, one dismissal.
     if (state.travel) {
       closeTravelDialog(false);
@@ -612,7 +612,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     themeBtn.addEventListener('click', cycleAppTheme);
     headerActions.appendChild(themeBtn);
 
-    // CW-Q16: colour is the game's own switch now, not a side effect of high
+    // CW-Q16: color is the game's own switch now, not a side effect of high
     // contrast. It sits after the two app-wide controls because it changes
     // only this game.
     const colourBtn = document.createElement('button');
@@ -901,7 +901,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
      * ★ NOT a second `aria-modal`. The layer is already `role="dialog"
      * aria-modal="true"` and owns the focus trap, and nesting a second modal
      * inside it would tell a screen reader that the outer one had gone away.
-     * This is a focus-managed panel with `role="group"` and its own labelled
+     * This is a focus-managed panel with `role="group"` and its own labeled
      * heading, the same shape the help panel has, plus Escape ahead of the
      * help in the chain.
      */
@@ -951,7 +951,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
      * ★ NOT a second `aria-modal`, for exactly CW-61's reason: the layer is
      * already `role="dialog" aria-modal="true"` and owns the focus trap, and
      * nesting a second modal inside it tells a screen reader the outer one has
-     * gone away. A focus-managed `role="group"` with its own labelled heading,
+     * gone away. A focus-managed `role="group"` with its own labeled heading,
      * like the help panel and the travel dialog before it.
      */
     const found = document.createElement('div');
@@ -1087,14 +1087,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * Is the city drawn in colour right now? (CW-Q16.)
+   * Is the city drawn in color right now? (CW-Q16.)
    *
-   * With nothing stored, colour follows high contrast — which is exactly what
+   * With nothing stored, color follows high contrast — which is exactly what
    * the palettes did when they were HC-only, so a player who never finds the
    * button sees no change at all. Once the player works the toggle their
    * choice is stored and wins from then on, in both directions.
    *
-   * Turning colour off costs no contrast: the bare phosphors measure 15.30:1
+   * Turning color off costs no contrast: the bare phosphors measure 15.30:1
    * (green) and 11.46:1 (amber) on black, above every palette entry.
    *
    * @returns {boolean}
@@ -1106,7 +1106,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     return root.getAttribute('data-high-contrast') === 'true';
   }
 
-  /** Colour on/off, from the header button and from O (CW-Q16). */
+  /** Color on/off, from the header button and from O (CW-Q16). */
   function flipColour() {
     const next = !colourIsOn();
     safeSetItem(STORAGE_KEY_CITY_WALK_COLOUR, next ? 'on' : 'off');
@@ -1365,7 +1365,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
        * inside Map - and hiding them made the whole strip re-lay-out. Measured
        * on a 1280px window: **all NINE shared buttons moved**, by up to
        * 186 px, and some moved LEFT while others moved RIGHT, because the
-       * toolbar centres itself and the total width changed. A player who
+       * toolbar centers itself and the total width changed. A player who
        * reaches for Larger in the street view found Photo under the cursor
        * after switching to the map.
        *
@@ -1456,7 +1456,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           views: 'map',
         },
         // CW-61 (CW-Q58): the ARMING has retired and the button has not.
-        // It opens the travel dialog at the map's centre, which is exactly
+        // It opens the travel dialog at the map's center, which is exactly
         // what J does - so a mouse-only player and a keyboard player reach
         // the same question the same way, and the toolbar promise (every key
         // has a button) survives the change. It is no longer a toggle:
@@ -1472,7 +1472,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         // in the zone, where its own width is behind everything else in it,
         // and the zone is behind every shared button (CW-59). The label does
         // not name the current style: a label that changed width would move
-        // its neighbours, and the style is already said out loud, written in
+        // its neighbors, and the style is already said out loud, written in
         // the HUD, and visible on the map.
         {
           id: 'cityWalkMapStyleBtn',
@@ -1763,7 +1763,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         lm.y - game.walkState.y
       );
       const seen = game.visited?.has(lm.name);
-      // A real text mark, not a colour and not an icon font: the tick has
+      // A real text mark, not a color and not an icon font: the tick has
       // to survive a screen reader and a high-contrast theme alike, and
       // the word after it is what actually gets read out.
       li.textContent = `${seen ? '✓ ' : ''}${lm.name} — ${headingLabel(bearing)}`;
@@ -1954,7 +1954,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     );
 
     // CW-62: the landmark marks need the city's span for the same reason the
-    // player's marker does - a mark is a screen size, not a number of metres.
+    // player's marker does - a mark is a screen size, not a number of meters.
     const beacons = buildLandmarkBeacons(landmarks, spanM);
     beacons.group.visible = false;
     scene.add(beacons.group);
@@ -1962,7 +1962,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const markerSize = Math.max(14, spanM * 0.025);
     const markerGeom = new BoxGeometry(markerSize, markerSize, 120);
     // CW-40: never occluded. Once the marker scales with zoom (see
-    // applyMapCamera) it can reach over a neighbouring building's
+    // applyMapCamera) it can reach over a neighboring building's
     // footprint, and a taller building would clip it exactly the way the
     // CW-36 ring was clipped at z=40. The marker is the one thing on the
     // map that must always win.
@@ -1976,8 +1976,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     scene.add(marker);
 
     // CW-40: a two-tone square-in-square, because a solid white block is
-    // camouflage in colour mode - the CW-Q45 palettes fill the map with
-    // white and grey buildings, and the six-teleport eyes-on tour could
+    // camouflage in color mode - the CW-Q45 palettes fill the map with
+    // white and gray buildings, and the six-teleport eyes-on tour could
     // not find the marker among them. The inner square is EXACT black,
     // which is the one value the converter reads as empty (CW-5), so the
     // marker renders as a bright frame around a hole - a footprint no
@@ -2038,7 +2038,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
      * The same laws as the marker - a bright ring around an exact-black core,
      * never occluded, one shared scale - so the two marks are the same family
      * and the eye reads them as one language. It shows only while the
-     * question is open, and travelling retires it because the man is standing
+     * question is open, and traveling retires it because the man is standing
      * there now.
      */
     const pickMat = new MeshBasicMaterial({
@@ -2062,8 +2062,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
      * ★★ AND THE HOLE, WITHOUT WHICH THE RING DOES NOT READ AT ALL.
      *
      * The ring shipped first as a bare outline and was photographed in five
-     * palettes: clear in both monochromes, and INVISIBLE in colour, HC-dark
-     * and HC-light. Those palettes fill the map with white and grey glyphs,
+     * palettes: clear in both monochromes, and INVISIBLE in color, HC-dark
+     * and HC-light. Those palettes fill the map with white and gray glyphs,
      * so a white ring is a white thing among white things - which is CW-40's
      * finding arriving a second time from a new direction.
      *
@@ -2311,7 +2311,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         if (!daylightIsOn()) return null;
         // Street only. The map is an overhead plan with its fog nulled, so
         // there is no distance for the tint to fade over and nothing it would
-        // say that the map's own colours do not already say better.
+        // say that the map's own colors do not already say better.
         if (game.mapView) return null;
         const pass = game.classPass;
         if (!pass) return null;
@@ -2339,7 +2339,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           return null;
         }
         // CW-85's experiment, DEV-only and off unless a measurement turns it
-        // on: tint from the cell's own colour instead of from its class. It
+        // on: tint from the cell's own color instead of from its class. It
         // never reaches a player - the switch is not wired to a control and
         // production strips import.meta.env.DEV - and it exists so the two
         // sources could be photographed against ONE scene in one run rather
@@ -2396,10 +2396,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // over.
     startCalibration(game, Number.isFinite(parseFloat(savedManualScale ?? '')));
 
-    // CW-21: with colour off the city used to be one flat green or amber —
+    // CW-21: with color off the city used to be one flat green or amber —
     // pavement, walls and lit windows all at the same drive. A monochrome
     // tube's intensity bit separates them, and the converter ignores this
-    // whenever a palette is active, so it costs colour mode nothing.
+    // whenever a palette is active, so it costs color mode nothing.
     game.altView.setIntensityLevels(MONO_INTENSITY_LEVELS);
     game.altView.setReverseVideo(MONO_REVERSE_THRESHOLD);
 
@@ -2485,7 +2485,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // knowing it does not steady a wall, because at 64 the windows read.
     game.setAnchoredGlyphs(true);
 
-    // CW-71: colour mode's own bright layer. Per instance; the main app's Alt
+    // CW-71: color mode's own bright layer. Per instance; the main app's Alt
     // View is not given one. The thresholds are the owner's (CW-Q79).
     game.altView.setPaletteInkBudget?.(CITY_PALETTE_INK_BUDGET);
 
@@ -2679,8 +2679,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * Colour gate (CW-Q2, amended by CW-Q16): the palette applies when the
-   * game's Colour toggle is on, and the scheme picks the set (light = amber
+   * Color gate (CW-Q2, amended by CW-Q16): the palette applies when the
+   * game's Color toggle is on, and the scheme picks the set (light = amber
    * -> neon, dark = green -> ANSI bright). Otherwise the classic single
    * phosphor.
    */
@@ -2689,7 +2689,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (!colourIsOn()) {
       game.altView.setPalette(null);
       // CW-92: mono has one phosphor, so there is no family to choose. Cleared
-      // rather than left standing, or a return to colour would arrive with the
+      // rather than left standing, or a return to color would arrive with the
       // other theme's table already in force.
       game.altView.setInkFamilies?.(null);
       return;
@@ -2698,14 +2698,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // chromaBoost exaggerates the scene's deliberately mild tints (kept low
     // so monochrome stays luminance-true) into decisive palette picks.
     // CW-Q11 raised it from 3.5: measured on a Seattle canyon, that cut the
-    // share of the frame with no colour at all from 47.3% to 37.9%, and it
-    // is the point at which every TINTED surface lands on a coloured entry.
-    // Genuinely grey ones still land on white - dividing by the brightest
-    // channel leaves a grey unchanged, whatever the boost.
+    // share of the frame with no color at all from 47.3% to 37.9%, and it
+    // is the point at which every TINTED surface lands on a colored entry.
+    // Genuinely gray ones still land on white - dividing by the brightest
+    // channel leaves a gray unchanged, whatever the boost.
     game.altView.setPalette(light ? HC_PALETTE_AMBER : HC_PALETTE_GREEN, {
       chromaBoost: 5,
     });
-    // ★★★ CW-92 (D-127, CW-Q96): and each surface's colour comes from the
+    // ★★★ CW-92 (D-127, CW-Q96): and each surface's color comes from the
     // authored table, not from a nearest-palette match on the lit screen. The
     // two palettes get their own rows because they are different sets - amber
     // has seven entries, green six - and a class must name an entry that
@@ -2807,7 +2807,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
-    // CW-Q16: colour on or off. C is spoken for by high contrast, so the
+    // CW-Q16: color on or off. C is spoken for by high contrast, so the
     // key is O. Like the two above it, it works on the picker as well.
     if (event.code === 'KeyP') {
       event.preventDefault();
@@ -3383,13 +3383,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
   /**
    * Drag the map under the pointer. The world point you grabbed stays under
-   * the cursor, which is the only behaviour that feels like moving a map
+   * the cursor, which is the only behavior that feels like moving a map
    * rather than nudging a camera.
    *
    * The arithmetic is `mapPointToWorld` inverted: that turns a screen point
    * into a world point through the same frustum, so one screen pixel is
-   * `(right - left) / width` metres across and `(top - bottom) / height`
-   * metres up. Screen y grows downward and world y grows north, so the y
+   * `(right - left) / width` meters across and `(top - bottom) / height`
+   * meters up. Screen y grows downward and world y grows north, so the y
    * term flips.
    */
   function panMapByDrag(drag, event) {
@@ -3555,7 +3555,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
   /**
    * The badge row. A REAL TEXT row with an sr-only word, never an icon and
-   * never a colour - CW-62's legend tick pattern, for its reasons.
+   * never a color - CW-62's legend tick pattern, for its reasons.
    *
    * ★ It sits OUTSIDE the numbered landmark list on purpose: that list is
    * indexed by game.landmarks[i] in refreshLegend, so an extra <li> would
@@ -3940,7 +3940,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.altView.invalidate();
       // ★ A TIMEOUT, NOT A FRAME COUNT, AND THAT IS RIGHT HERE. This round
       // forbids wall-clock holds where a quantity the GAME decides is being
-      // measured - metres walked, frames converted. Nothing is being measured
+      // measured - meters walked, frames converted. Nothing is being measured
       // here: a still picture is shown for a few seconds the way a message is,
       // and under reduced motion the step loop deliberately never runs, so
       // there are no frames to count in the first place.
@@ -4237,7 +4237,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // The manual key's PRESENCE is what says they chose one (storage-keys.js
     // says so, and the step handler is its only writer), so this needs no new
     // marker. Without a saved choice the floor still lands, which is the seed
-    // behaviour CW-Q68 asked for and this release keeps.
+    // behavior CW-Q68 asked for and this release keeps.
     const chosenBySomebody = Number.isFinite(
       parseFloat(safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE) ?? '')
     );
@@ -4360,7 +4360,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // zoom. 2.2 rather than 1.4 because the marker is a hollow frame now,
     // and a frame's border has to stay comfortably over a glyph cell thick
     // or the grid eats it (the CW-36 ring's death). Photographed at
-    // 0.8x/1x/2x, in colour mode too, before the factors were chosen.
+    // 0.8x/1x/2x, in color mode too, before the factors were chosen.
     const markerScale = Math.min(3.5, Math.max(0.6, 2.2 / game.mapCam.zoom));
     game.marker.scale.set(markerScale, markerScale, 1);
     // CW-61: the circle is the same family and shares the same number. Two
@@ -4397,7 +4397,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
     // A person is street furniture as far as the map is concerned: at a
-    // kilometre up they are overhead fuzz, exactly like the benches.
+    // kilometer up they are overhead fuzz, exactly like the benches.
     game.traveler?.setMapView(game.mapView);
     // CW-60: the style is a map state, so it is applied on the way IN and
     // never has to be undone on the way out - setMapView restores the street.
@@ -4508,8 +4508,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * question and answer it with the same two buttons. CW-Q58 supersedes
    * CW-Q40's one-step J deliberately: the preview is the point.
    *
-   * @param {number} x world metres
-   * @param {number} y world metres
+   * @param {number} x world meters
+   * @param {number} y world meters
    */
   function openTravelDialog(x, y) {
     const game = state.game;
@@ -4575,7 +4575,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * J: ask at the map's centre crosshair. The arrows already steer the middle
+   * J: ask at the map's center crosshair. The arrows already steer the middle
    * of the screen onto a street and PageUp/PageDown already zoom it (CW-Q41),
    * so the keyboard reaches any spot; what it lacked was the preview.
    */
@@ -4697,7 +4697,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   // CW-27 wayfinding. A walker on the pavement of a 6 m residential street
-  // sits about 5 m from its centreline, and on a 12 m primary about 8, so
+  // sits about 5 m from its centerline, and on a 12 m primary about 8, so
   // ON_M covers standing in the street itself. Between that and NEAR_M the
   // HUD says "near" instead, and past it says nothing rather than lying.
   const STREET_ON_M = 12;
@@ -4706,9 +4706,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * CW-61: how close the SECOND street has to be before the travel dialog is
    * allowed to call a spot a corner. MEASURED by walking away from 120 real
    * junctions along one of their own streets: at 0, 5 and 10 m offsets ALL
-   * 120 still had a second street within twelve metres, and at 15 m only 27
+   * 120 still had a second street within twelve meters, and at 15 m only 27
    * did. The runner-up's distance tracks the offset exactly, so the cliff is
-   * a cliff in distance and twelve metres sits inside it. It is ON_M's value
+   * a cliff in distance and twelve meters sits inside it. It is ON_M's value
    * and ON_M's meaning - close enough to be standing in it - which is why it
    * is written as the same number rather than a second one that happens to
    * match.
@@ -4966,7 +4966,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
 
     // Hover-look (CW-81, CW-Q72): the cursor's offset from the viewport
-    // centre turns the target - dead zone at the middle, rate rising to
+    // center turns the target - dead zone at the middle, rate rising to
     // the axis maximum at the edge. Paused whenever the cursor is away,
     // a dialog is up, or the map owns the pointer; a live street drag also
     // pauses it (the drag would double every movement otherwise).

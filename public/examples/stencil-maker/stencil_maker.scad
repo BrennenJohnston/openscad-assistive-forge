@@ -18,8 +18,8 @@
 output_type = "3d_print"; // [3d_print, laser_cut]
 
 // What to make. A plate is one sheet of the stencil. The jig base is the tray
-// with pegs that every plate drops onto, so each colour lands in the same
-// place; print one of those and as many plates as your design has colours.
+// with pegs that every plate drops onto, so each color lands in the same
+// place; print one of those and as many plates as your design has colors.
 output_part = "plate"; // [plate, jig_base]
 
 // How the stencil is made. Single sheet is one plate with support bars, and
@@ -34,7 +34,7 @@ plate_number = 1; // [1:1:8]
 
 // Plate 1, written by the app from your design. It cuts every part of the
 // design at once and takes the first coat of paint. Each plate already carries
-// its own outline, cuts and registration marks in millimetres, so this model
+// its own outline, cuts and registration marks in millimeters, so this model
 // only has to give it thickness.
 stencil_plate_1 = ""; // [file:svg]
 
@@ -57,7 +57,7 @@ stencil_plate_6 = ""; // [file:svg]
 // Plate 7, written by the app. Empty when your design does not go this far.
 stencil_plate_7 = ""; // [file:svg]
 
-// Plate 8, written by the app. Eight colours is the most one stencil can have.
+// Plate 8, written by the app. Eight colors is the most one stencil can have.
 stencil_plate_8 = ""; // [file:svg]
 
 /* [Design] */
@@ -115,7 +115,7 @@ key_width = 3.0; // [2:0.1:6]
 // Depth of that rectangular key (mm)
 key_depth = 2.0; // [1:0.1:4]
 
-// How far in from both edges each peg sits, measured to its centre (mm)
+// How far in from both edges each peg sits, measured to its center (mm)
 feature_inset = 2.5; // [2:0.1:10]
 
 // How far the pegs stand above the base sheet (mm). Taller holds more plates
@@ -202,9 +202,9 @@ fit_h = design_area_h * design_scale / 100;
 mark_size = min(10, margin - 2);
 mark_stroke = 1.2;
 mark_c = margin / 2;
-// The jig, in plate millimetres. Round pegs at the TOP corners, rectangular
+// The jig, in plate millimeters. Round pegs at the TOP corners, rectangular
 // keys at the BOTTOM: a plate can only go on one way round, which matters
-// because a stencil laid on backwards paints one colour mirrored over five
+// because a stencil laid on backwards paints one color mirrored over five
 // correct ones. Holes are the peg plus the clearance; the peg itself is never
 // shrunk, because the peg is the thing the print has to get right.
 pegs_on = registration == "pegs" || registration == "both";
@@ -215,7 +215,7 @@ notch_h = key_depth + hole_clearance;
 widest_feature = max(hole_d, notch_w);
 tallest_feature = max(hole_d, notch_h);
 // The numeral sits in the bottom margin beside nothing: the jig features are
-// at the corners and this is centred, so only the vertical fit is in question.
+// at the corners and this is centered, so only the vertical fit is in question.
 label_size = max(4, min(12, margin * 0.45));
 label_c = pegs_on ? (feature_inset + tallest_feature / 2 + margin) / 2
                   : margin / 2;
@@ -367,7 +367,7 @@ module jig_peg_3d(kind) {
 }
 
 // The base every plate drops onto: a sheet the size of the plate, with the
-// four pegs standing on it. Printed once; the plates are printed per colour.
+// four pegs standing on it. Printed once; the plates are printed per color.
 module jig_base_3d() {
     linear_extrude(height = plate_thickness)
         square([plate_width, plate_height]);

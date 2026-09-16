@@ -80,7 +80,7 @@ The SVG Preparation Editor is fully keyboard accessible and screen reader friend
 
 #### Screen Reader Behavior
 
-- The editor is a labelled `region` landmark ("SVG Preparation Editor")
+- The editor is a labeled `region` landmark ("SVG Preparation Editor")
 - The list of shapes uses `role="list"` with `role="listitem"` children, and is named "Shapes"
 - Each shape's aria-label is its name and the role in the word the control uses (e.g., "Circle 1, Raised")
 - Role changes update the aria-label immediately

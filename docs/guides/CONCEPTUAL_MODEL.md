@@ -35,7 +35,7 @@ your design. For a keyguard project, this might be named
 
 - You upload it (or a ZIP containing it) once.
 - You don't usually need to edit it directly — the parameter UI lets you
-  customise the design without touching the code.
+  customize the design without touching the code.
 - The SCAD file is the unchanging "template". It doesn't know about specific
   tablets or grid sizes until you supply parameter values.
 

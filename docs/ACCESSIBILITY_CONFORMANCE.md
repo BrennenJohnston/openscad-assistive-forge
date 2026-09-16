@@ -85,7 +85,7 @@ Some OpenSCAD parameters contain expressions that cannot be parsed:
 ### Console output is offered to a screen reader more than once
 
 When the OpenSCAD engine produces a message, the same text is currently
-offered by more than one route, and the behaviour is identical in both
+offered by more than one route, and the behavior is identical in both
 interfaces (measured 2026-08-14, Assistive Forge and Classic):
 
 - The console message list is itself a live region

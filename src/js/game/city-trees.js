@@ -9,7 +9,7 @@
  *
  * THE TABLES ARE DESIGN DATA, NOT A TREE CENSUS, and they are owner-vetoable
  * row by row. Municipal per-tree inventories exist for at least three of the
- * four cities, but ingesting them would be a new bulk pipeline with a licence
+ * four cities, but ingesting them would be a new bulk pipeline with a license
  * to read per portal, for variety the game can get from what it already has.
  * Every table below is the published COMPOSITION of that city's street trees,
  * cited, turned into five rows. Sources, in full, in plan section 3b:
@@ -114,7 +114,7 @@ const TRUNK_SIDE_SHARE = 0.022;
 const TRUNK_SIDE_MIN_M = 0.28;
 
 /**
- * The four city tables. `h` is the canopy TOP above the ground, in metres,
+ * The four city tables. `h` is the canopy TOP above the ground, in meters,
  * from the cited height ranges for each species as a street tree.
  *
  * `deciduous` drives CW-56's fallen leaves and nothing else here.
@@ -389,8 +389,8 @@ export const CONIFER_WHORLS = {
 
 /** The value gradient (cue five): per-box luminance tier offsets the
  * caller applies around the tree's own palette tier - top shell lighter,
- * interior darker, a little per-box jitter so no two neighbours match.
- * Palette CHOICE stays in city-scene; these are offsets, not colours. */
+ * interior darker, a little per-box jitter so no two neighbors match.
+ * Palette CHOICE stays in city-scene; these are offsets, not colors. */
 export const CROWN_TONE = {
   heightSpan: 0.16,
   interiorDrop: 0.12,
@@ -502,7 +502,7 @@ function ellipsoidSurfaceM2(a, b, c) {
  * every load. Positions are TREE-LOCAL (trunk axis at 0,0; ground at z 0);
  * the caller places the tree, clips against buildings, and enforces
  * constraint (e) - no leaf mass below head height - because only the
- * caller knows the tree's neighbours.
+ * caller knows the tree's neighbors.
  *
  * @param {ReturnType<typeof treeSpec>} spec
  * @param {number} seed - the tree's existing integer seed
@@ -704,7 +704,7 @@ export function makeCanopyGeoms(x, y, spec) {
       // crown fills its slice exactly.
       (sliceH / 2) * (n === 1 ? 1 : 1.35)
     );
-    // ★ THE CROWN IS PLACED BY ITS MEASURED BOTTOM, not by its centre. A
+    // ★ THE CROWN IS PLACED BY ITS MEASURED BOTTOM, not by its center. A
     // unit icosahedron does not extend a full 1 along z - its vertices sit
     // where they sit - so a crown positioned by arithmetic lands somewhere
     // the arithmetic did not predict. Measured: the first version put

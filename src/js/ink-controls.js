@@ -20,7 +20,7 @@ export const INK_MODE_CHOICES = [
     value: 'lineart',
     label: 'Line art',
     description:
-      'Keep the drawn lines, drop the colour behind them. Best for symbols and drawings with coloured backgrounds.',
+      'Keep the drawn lines, drop the color behind them. Best for symbols and drawings with colored backgrounds.',
   },
   {
     value: 'silhouette',
@@ -36,9 +36,9 @@ export const INK_MODE_CHOICES = [
   },
   {
     value: 'colours',
-    label: 'Colours',
+    label: 'Colors',
     description:
-      'Separate the picture into flat colours, one region per colour, ready to paint a plate for each. Best for a photo or a coloured drawing you want as a spray stencil.',
+      'Separate the picture into flat colors, one region per color, ready to paint a plate for each. Best for a photo or a colored drawing you want as a spray stencil.',
   },
 ];
 
@@ -50,20 +50,20 @@ export const OPEN_SYMBOL_SETS = [
 ];
 
 /**
- * What the colour separation found, said in one sentence.
+ * What the color separation found, said in one sentence.
  *
- * STRINGS: owner review pending (DP-R2 text pack). Every colour is named with
- * its share, because a person who wanted a colour that is not in the list has
+ * STRINGS: owner review pending (DP-R2 text pack). Every color is named with
+ * its share, because a person who wanted a color that is not in the list has
  * to be able to SEE that it is not there - and the answer is to ask for more.
  *
  * @param {Array<{name: string, hex: string, share: number,
- *   isBackground: boolean}>} colours
+ *   isBackground: boolean}>} colors
  * @param {{downscaledFrom?: number, factor?: number}} [notes]
  * @returns {string}
  */
 export function colourSentence(colours, notes = {}) {
   const list = colours || [];
-  if (list.length === 0) return 'No colours were found in this picture.';
+  if (list.length === 0) return 'No colors were found in this picture.';
   const parts = list.map(
     (c) =>
       `${c.name} ${Math.round(c.share * 100)}%${c.isBackground ? ' (the wall)' : ''}`
@@ -71,8 +71,8 @@ export function colourSentence(colours, notes = {}) {
   const painted = list.filter((c) => !c.isBackground).length;
   const head =
     painted === 1
-      ? '1 colour to paint, and the wall:'
-      : `${painted} colours to paint, and the wall:`;
+      ? '1 color to paint, and the wall:'
+      : `${painted} colors to paint, and the wall:`;
   const downscale = notes.factor
     ? ` The picture was ${notes.factor} times too big to trace, so it was made ${notes.factor} times smaller first.`
     : '';
@@ -144,7 +144,7 @@ export function warningSentences(summary) {
  *
  * Only fires when the rejected fills agree with each other: a symbol with one
  * blue field averages to that blue, while a card of four different fills
- * averages to a colour that is in none of them.
+ * averages to a color that is in none of them.
  *
  * @param {Object|null} summary
  * @param {number} [minCoherence]
@@ -158,7 +158,7 @@ export function filamentSentence(summary, minCoherence = 0.6, minShare = 0.05) {
   const hex = `#${[color.r, color.g, color.b]
     .map((c) => c.toString(16).padStart(2, '0'))
     .join('')}`;
-  return `The colour behind the lines was about ${hex}. Printing this plate in a filament near that colour keeps the symbol recognisable.`;
+  return `The color behind the lines was about ${hex}. Printing this plate in a filament near that color keeps the symbol recognizable.`;
 }
 
 /**
@@ -266,30 +266,30 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   );
   const chroma = makeSlider(
     'chroma',
-    'How colourful is still a line',
+    'How colorful is still a line',
     INK_DEFAULTS.chromaRange,
     INK_DEFAULTS.chromaMax,
-    'Lower rejects coloured fills more firmly. Raise it if a coloured line is being dropped.'
+    'Lower rejects colored fills more firmly. Raise it if a colored line is being dropped.'
   );
   const colourCount = makeSlider(
     'colours',
-    'How many colours',
+    'How many colors',
     INK_DEFAULTS.colourCountRange,
     INK_DEFAULTS.colourCount,
-    'One plate per colour. Ask for more than you think you need: taking a colour out later is easy, and a colour that was never found is not there to take.'
+    'One plate per color. Ask for more than you think you need: taking a color out later is easy, and a color that was never found is not there to take.'
   );
   sliders.append(lightness.wrap, chroma.wrap, colourCount.wrap);
 
-  // Which colour is the wall behind the stencil, rather than paint on it.
+  // Which color is the wall behind the stencil, rather than paint on it.
   // "Work it out" votes along the border of the picture, which is where a
-  // wall shows; colour alone cannot answer it, because a dark background is
+  // wall shows; color alone cannot answer it, because a dark background is
   // still a background.
   const wallWrap = document.createElement('div');
   wallWrap.className = 'ink-slider-row ink-wall-row';
   const wallLabel = document.createElement('label');
   wallLabel.setAttribute('for', id('wall'));
   wallLabel.className = 'ink-slider-label';
-  wallLabel.textContent = 'Wall colour';
+  wallLabel.textContent = 'Wall color';
   const wallSelect = document.createElement('select');
   wallSelect.id = id('wall');
   wallSelect.className = 'ink-wall-select';
@@ -302,7 +302,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   wallHelp.className = 'ink-slider-help';
   wallHelp.id = id('wall-help');
   wallHelp.textContent =
-    'The colour that is the surface behind the stencil, not paint on it. It gets no plate.';
+    'The color that is the surface behind the stencil, not paint on it. It gets no plate.';
   wallWrap.append(wallLabel, wallSelect, wallHelp);
   sliders.appendChild(wallWrap);
 
@@ -350,7 +350,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   notice.textContent =
     'Your picture is processed entirely in your browser and never uploaded. ' +
     'You are responsible for having the right to use any image you bring here. ' +
-    "Removing a credit line from the picture does not remove any credit the icon's licence asks of you.";
+    "Removing a credit line from the picture does not remove any credit the icon's license asks of you.";
 
   const signpost = document.createElement('p');
   signpost.className = 'ink-controls-signpost';
@@ -370,7 +370,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   });
   signpost.append(
     document.createTextNode(
-      '. Check each set’s own licence before you share what you make.'
+      '. Check each set’s own license before you share what you make.'
     )
   );
 
@@ -398,7 +398,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     const usesThresholds = settings.mode !== 'standard' && !isColours;
     lightness.range.disabled = !usesThresholds;
     lightness.number.disabled = !usesThresholds;
-    // The two colour controls are the other way round: they are the only ones
+    // The two color controls are the other way round: they are the only ones
     // this mode uses, and they mean nothing to the other three.
     colourCount.range.disabled = !isColours;
     colourCount.number.disabled = !isColours;
@@ -407,10 +407,10 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   };
 
   /**
-   * Offer the colours that were actually found as the wall, so the choice is
+   * Offer the colors that were actually found as the wall, so the choice is
    * between things a person can see rather than between abstractions.
    *
-   * @param {Array<{hex: string, name: string, isBackground: boolean}>} colours
+   * @param {Array<{hex: string, name: string, isBackground: boolean}>} colors
    */
   const setColours = (colours) => {
     const chosen = wallSelect.value;
@@ -458,7 +458,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     const label =
       wallSelect.options[wallSelect.selectedIndex]?.textContent ||
       'Work it out';
-    say(`Wall colour: ${label}`);
+    say(`Wall color: ${label}`);
     emit();
   });
 
@@ -466,11 +466,11 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     element: root,
     getSettings: () => ({ ...settings }),
     /**
-     * Offer the colours a separation actually found as the wall choice, and
-     * say what came out. Called only in the Colours mode.
+     * Offer the colors a separation actually found as the wall choice, and
+     * say what came out. Called only in the Colors mode.
      *
      * @param {Array<{hex: string, name: string, share: number,
-     *   isBackground: boolean, shapes: number}>} colours
+     *   isBackground: boolean, shapes: number}>} colors
      * @param {{downscaledFrom?: number, factor?: number}} [notes]
      */
     setColourResult(colours, notes = {}) {

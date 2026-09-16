@@ -25,7 +25,7 @@ const MISSING_LIBRARY_PATTERN =
 /**
  * The library id a model asked for and did not get, or null.
  *
- * Exported because the failure has to be recognised in two places: here, to
+ * Exported because the failure has to be recognized in two places: here, to
  * word the message, and in the render error handler, which otherwise reports
  * the CONSEQUENCE (empty geometry) instead of the cause.
  *
@@ -172,7 +172,7 @@ const ERROR_PATTERNS = [
     pattern: /Render cancelled.*hard cancel/i,
     title: 'Render Timed Out',
     explanation:
-      'The model took too long to render and was cancelled. ' +
+      'The model took too long to render and was canceled. ' +
       'This often happens with minkowski() or all-edges rounding at high quality.',
     suggestion:
       'Try setting "All-edges rounding radius" to 0 (use side-only rounding instead), ' +

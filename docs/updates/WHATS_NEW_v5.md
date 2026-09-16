@@ -55,7 +55,7 @@ middle ground for someone comfortable poking at a project's insides.
 the menu bar, the icon toolbar, the pale viewport with its axes, the
 viewport readout along the bottom. If you learned OpenSCAD on the
 desktop, your hands already know where everything is; the camera
-controls are the ones you already know. It took a long programme of
+controls are the ones you already know. It took a long program of
 small fidelity fixes to make this view feel honest rather than like a
 costume, and it is the part of version 5 I am quietly proudest of.
 
@@ -75,14 +75,14 @@ folder instead of a mystery string.
 
 ## A charm from a drawing
 
-![The Charm Designer's design file control with a bird drawing chosen. Under the file name it reads "Looks like a line drawing. Converting should take under a second.", then a Start conversion button, then four choices for what to keep from the picture: Line art, Solid shape, Light and dark, and Colours, each with a sentence explaining when to use it](images/charm-customizer.png)
+![The Charm Designer's design file control with a bird drawing chosen. Under the file name it reads "Looks like a line drawing. Converting should take under a second.", then a Start conversion button, then four choices for what to keep from the picture: Line art, Solid shape, Light and dark, and Colors, each with a sentence explaining when to use it](images/charm-customizer.png)
 
 The Charm Designer turns a simple drawing into a wearable pendant,
 and feeding it your own art is now a documented job rather than a
 favour. The drawing editor underneath it learned the two halves of a
 round trip this summer: open a drawing, clean it up, and save it back
 out - as SVG or as DXF - even if you never make a 3D design from it.
-Symbols keep their pictures instead of turning into coloured blobs,
+Symbols keep their pictures instead of turning into colored blobs,
 and if another program is watching a folder, your edits can land
 straight in it.
 
@@ -105,7 +105,7 @@ particular step that used to dominate everything was replaced: a
 drawing that took nineteen seconds to come back now takes about one
 and a half.
 
-![The drawing editor over the charm preview: a bird line drawing fills the left side under the heading "Will print as", with a colour key reading Raised, Hole and Ignore beneath it. A Drawing / Charm switch sits in the toolbar with Drawing chosen. On the right, a Shapes panel lists seven shapes; each row has the shape's name and a Raised / Hole / Ignore switch with one choice highlighted](images/drawing-editor.png)
+![The drawing editor over the charm preview: a bird line drawing fills the left side under the heading "Will print as", with a color key reading Raised, Hole and Ignore beneath it. A Drawing / Charm switch sits in the toolbar with Drawing chosen. On the right, a Shapes panel lists seven shapes; each row has the shape's name and a Raised / Hole / Ignore switch with one choice highlighted](images/drawing-editor.png)
 
 The editor itself got the change I care most about: it is **one
 picture** now. The drawing you are editing fills the space, and
@@ -137,13 +137,13 @@ likely to take and decides on that rather than on a count of shapes.
 
 ## A stencil from a picture
 
-![The Stencil Maker: a flat yellow stencil plate with a ring shaped cutout, thin bridges holding the centre, and registration marks in the corners](images/stencil-maker.png)
+![The Stencil Maker: a flat yellow stencil plate with a ring shaped cutout, thin bridges holding the center, and registration marks in the corners](images/stencil-maker.png)
 
 The Stencil Maker is new since 4.5.0. It takes a shape or a picture
 and produces printable stencil plates: bridges hold the islands so
-the letter centres do not fall out, registration marks in the corners
+the letter centers do not fall out, registration marks in the corners
 line the plates up, and a multi-colour picture becomes one plate per
-paint colour with a jig to keep them all honest.
+paint color with a jig to keep them all honest.
 
 ## Share it with one link
 

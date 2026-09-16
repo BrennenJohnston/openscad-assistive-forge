@@ -16,7 +16,7 @@ bake script trims an extract, and under vitest. It is written that way on
 purpose, and it should stay that way.
 
 That single property is what makes both roadmaps below possible. A city model
-made of buildings, roads, landmarks, names and metres, with no renderer
+made of buildings, roads, landmarks, names and meters, with no renderer
 attached, can be drawn on a screen, or measured for something else entirely.
 The moment the model starts assuming a canvas, both futures get much harder.
 
@@ -102,7 +102,7 @@ place it lands.
 
 ## Part two: maps you can feel
 
-This project builds assistive technology, and a city model in real metres is
+This project builds assistive technology, and a city model in real meters is
 exactly the input a tactile map needs. The map view already in the game — the
 overhead street network, with landmarks marked — is the visual ancestor of the
 idea.
@@ -122,13 +122,13 @@ idea.
 
 There is also an existing open-source tactile map project, **touch-mapper**,
 which is licensed AGPL-3.0. It is **reference only** unless I check the
-licence compatibility properly and sign it off. Do not copy from
+license compatibility properly and sign it off. Do not copy from
 it on the assumption that open means usable here.
 
 ### What "ready for tactile" means concretely
 
 It means the city model stays renderer-independent and exportable: buildings,
-roads, landmarks, names, all in metres, with no drawing code in the way. That
+roads, landmarks, names, all in meters, with no drawing code in the way. That
 is the rule at the top of this document, and the schema document is what makes
 it real — a written contract another program can consume.
 
@@ -158,7 +158,7 @@ matter for tactile work, and one of them is a warning rather than a gain:
   measuring it is the finding worth carrying forward. Round 7 added a
   character to find in the city, and then measured what a player can actually
   resolve: **a whole person is about 2.5 by 4.2 character cells at thirty
-  metres**, and the brightest clothing stops separating them from the crowd at
+  meters**, and the brightest clothing stops separating them from the crowd at
   about twenty. So the spoken distance report is not an accessible alternative
   to looking — **it is the only instrument that works, for everybody**. When
   tactile output is designed, expect the same shape of answer: the legible
@@ -272,12 +272,12 @@ the whole session.
   tiles is what a player sees change.
 - **The flip map** (`-flipmap.png`) is one pixel per character cell, summed
   over the sequence. **Green** is glyph change, **red** is drive change (the
-  intensity level in mono, the palette index in colour), **blue** marks a cell
+  intensity level in mono, the palette index in color), **blue** marks a cell
   whose surface CLASS moved at some point. A green field with no blue in it is
   texture churn - the same surface picking different characters. Blue bands are
   geometry edges sweeping across cells, which is honest motion.
 - **The class map** (`-classmap.png`) puts frame 0's surface classes on the
-  left, one colour per class, and on the right the cells whose class moved.
+  left, one color per class, and on the right the cells whose class moved.
   Reading it beside the flip map is what separates "this wall is boiling" from
   "the camera swept a wall past this cell".
 - **The JSON summary** carries every table row, so a later release can diff
@@ -286,7 +286,7 @@ the whole session.
 ### The columns
 
 Change rate is the plain per-frame churn. **Flip** is the A-B-A signature: a
-cell that comes back to what it was two frames ago while its neighbours slide
+cell that comes back to what it was two frames ago while its neighbors slide
 on is flashing rather than moving, and a flip rate means nothing without the
 change rate it is a fraction of. **Persistence** is the mean run length, in
 frames, of one glyph in one cell - two scenes with the same change rate feel
@@ -326,7 +326,7 @@ Measured after: facade characters re-roll **one to two per cent** per frame
 walking, a character survives **fifteen to sixteen** frames, and a standing
 picture is still perfectly still. The share of surface changes where the
 character failed to follow - the smear this could have introduced - went DOWN
-rather than up, on both graphics cards and in both colour and monochrome.
+rather than up, on both graphics cards and in both color and monochrome.
 
 It is off for everything except the game. The converter is shared with the main
 application's Alt View, which converts one still frame, and a memory of a
@@ -354,7 +354,7 @@ OFF so the mechanism is visible, per cent of characters re-rolled per frame:
 | the mip chain | 35.0 | 41.8 | 43.0 | 51.1 |
 | the cell-raster blur | 35.0 | 41.8 | 43.0 | 51.1 |
 | both | 35.0 | 41.8 | 43.0 | 51.1 |
-| the tile spread over 2x the metres | 34.9 | 34.9 | 35.1 | 35.3 |
+| the tile spread over 2x the meters | 34.9 | 34.9 | 35.1 | 35.3 |
 | ...4x | 21.2 | 32.4 | 28.3 | 38.8 |
 | ...8x | 8.4 | 19.2 | 14.5 | 20.9 |
 | **the ground texture itself** | **0.25** | **0.23** | **0.26** | **0.30** |
@@ -422,18 +422,18 @@ threshold and the lit band, so the cap can bound a sweeping cone and can never
 delete a lit ground floor. The same pose now settles in five frames and holds
 flat for the remaining forty-two.
 
-**None of this reaches colour mode.** The solid layer is a monochrome feature:
+**None of this reaches color mode.** The solid layer is a monochrome feature:
 with a palette active the converter has no intensity ladder, so it paints no
 solid cells at all. Measured across all three treatments, six poses and both
-distances: zero solid cells in colour, every time. What is bright in colour is
+distances: zero solid cells in color, every time. What is bright in color is
 the white palette entry, which is a different mechanism and a different
 release's question.
 
-### Colour mode had no way to say "this cell is dim"
+### Color mode had no way to say "this cell is dim"
 
 Monochrome has an intensity ladder, so a dim cell is drawn dim and an empty one
 is drawn empty: three to seven per cent of a monochrome frame carries ink.
-Palette mode has no ladder. The cell contrast curve normalises every cell to
+Palette mode has no ladder. The cell contrast curve normalizes every cell to
 full scale before its character is chosen, and a palette entry is then put on
 whatever came out, so a cell's ABSOLUTE brightness never reaches the picture.
 Measured at the Seattle spawn: **seventy to eighty-nine per cent of every frame
@@ -447,13 +447,13 @@ of the six-colour green palette, standing at the spawn at the default size:
 | without a budget | 6,305 | 2,802 | 5,543 | 1,373 | 2,299 | **41,559** | 7,277 |
 | with the budget | 435 | 450 | 813 | 203 | 188 | **5** | 65,064 |
 
-Six colours, and one of them was sixty-two per cent of the screen.
+Six colors, and one of them was sixty-two per cent of the screen.
 
 There is now an ink budget with two rules, both about the absolute luminance
 the contrast curve threw away: a FLOOR below which the cell draws nothing (the
 monochrome ladder's own blank level), and a GATE on white, which a cell may
-take only if it is both bright enough and colourless enough. The sRGB match
-that measures colour distance is untouched; the budget only decides which
+take only if it is both bright enough and colorless enough. The sRGB match
+that measures color distance is untouched; the budget only decides which
 entries a cell may choose from, and whether it draws at all.
 
 **The white and the ink turned out to be separate problems.** Three settings,
@@ -469,9 +469,9 @@ measured at the spawn at the default size:
 The gate alone removes every white cell and changes nothing else - which says
 plainly that the flatness was never only about white. Take the ink away as
 well and the flat fields go with it, at the cost of a much emptier picture:
-at the monochrome floor, colour mode inks about as much of the screen as
+at the monochrome floor, color mode inks about as much of the screen as
 monochrome does, because it is the same rule. Both palettes keep all their
-entries in use at every setting - nothing collapses to two colours.
+entries in use at every setting - nothing collapses to two colors.
 
 
 
@@ -539,18 +539,18 @@ than being read as a verdict on a size it never measured.
 
 ### What I chose when the pictures were on the table
 
-The three treatments of the bright layer, the four settings of the colour ink
+The three treatments of the bright layer, the four settings of the color ink
 budget and the size were all decided with the measurements and the
 pictures beside each option. The answers:
 
 - **No solid cells at all.** A lit shopfront is drawn as characters. It costs
   three per cent of the ink in the shopfront band and all of its solidity.
 - **30 per cent**, as above.
-- **Colour's ink floor at 0.3**, which leaves a street you can read, rather
+- **Color's ink floor at 0.3**, which leaves a street you can read, rather
   than the monochrome rule at 0.5, which empties it to a few lights.
 - **Raise a park's surface above the ink floor**, knowing that puts it brighter
   than the road. Measured afterwards: the raise takes the share of park cells
-  that draw in colour from 26 to 35 per cent, and then SATURATES - a much
+  that draw in color from 26 to 35 per cent, and then SATURATES - a much
   brighter tone adds two more points and nothing else. So the tone is set where
   the gain is, not where the brightness is.
 
@@ -558,7 +558,7 @@ pictures beside each option. The answers:
 
 A facade used to be picked by `hash % 9`, with a mapped `building:material`
 narrowing the choice where there was one, and then laid onto the wall in world
-metres. Two things followed, and CW-73 removes both.
+meters. Two things followed, and CW-73 removes both.
 
 **The map data said which building was which, and nothing read it.** Across the
 four shipped extracts there are 605 `building=apartments`, 266 `commercial`,
@@ -568,7 +568,7 @@ FAMILY, the material narrows it, and the building's own hash still picks which
 face inside it - so the variety CW-34 bought is kept while the kind of building
 becomes legible.
 
-| family | `building=*` | glazing | storey |
+| family | `building=*` | glazing | story |
 |---|---|---|---|
 | apartments | apartments, residential, terrace, dormitory | narrow, plain, cross | 3.0 m |
 | house | house, detached, semidetached_house, bungalow, hut, cabin, prefabricated | narrow, blinds | 3.0 m |
@@ -586,7 +586,7 @@ three of the four cities - 511 of Albuquerque's 640 buildings - so a default
 that named one family would have traded this release's gain for a monoculture
 across most of the city.
 
-**UVs in world metres put a fractional bay at every corner.** The tile started
+**UVs in world meters put a fractional bay at every corner.** The tile started
 wherever the building happened to stand, so a wall of arbitrary width finished
 mid-window and a building of arbitrary height finished mid-row. Now each wall
 run carries a whole number of bays that share it exactly, and the height above
@@ -598,8 +598,8 @@ one bay is left blank rather than given a window wider than itself.
 Measured on all four cities, over every fitted volume rather than a sample: the
 worst wall vertex anywhere sits 0.00003 of a row from a row boundary - float
 noise, and the only remaining evidence of the problem. Blank walls are 1.1 to
-2.1 per cent of wall METRES (10.7 to 22.8 per cent of wall COUNT: the blanks
-are short jogs, and counting walls rather than metres overstates them tenfold).
+2.1 per cent of wall METERS (10.7 to 22.8 per cent of wall COUNT: the blanks
+are short jogs, and counting walls rather than meters overstates them tenfold).
 
 **What it costs.** Nothing per frame and nothing in geometry - the fit is baked
 into the vertex data when the city is built, and the build itself moved from a
@@ -620,7 +620,7 @@ lands. Fine detail is not automatically the thing that flickers.
 
 ### The ground floor reads the building
 
-The storefront picker looked at POI NODES within 35 metres and at nothing else.
+The storefront picker looked at POI NODES within 35 meters and at nothing else.
 A building carrying `amenity=library` was never asked what it was, so the
 Central Library's ground floor - and 130 other grounded Seattle buildings, and
 27, 44 and 9 in the other three cities - came from a hash of the building's
@@ -665,7 +665,7 @@ the map does say something. Seattle loses 2,268 storefront triangles (60,744 to
 
 **What it costs.** Nothing measurable. At the spawn's storefront pose, walking,
 glyph change is 7.54 per cent against 7.55 before in monochrome and 9.80
-against 9.79 in colour; the storefront class carries the same 2,193 cells with
+against 9.79 in color; the storefront class carries the same 2,193 cells with
 the same 2,156 lit. Standing, the storefront class actually settles better
 (glyph change 0.57 to 0.17, persistence 37.8 to 44.5 frames of 48). The band's
 brightness is untouched - that is the luminance treatment I chose with the
@@ -676,7 +676,7 @@ G1 pictures on the table, and this release does not go near it.
 Every street lamp in this game was invented. `highway=street_lamp` was never
 queried, so the 221 lamps OpenStreetMap records inside Seattle's circle, the
 520 in Denver's, the 115 in Albuquerque's and the 142 in Burnaby's were all
-invisible to it, and one procedural lamp stood every 30 metres on every street
+invisible to it, and one procedural lamp stood every 30 meters on every street
 of six road classes - and none at all on a pedestrian street.
 
 Three things changed, and each of them found something.
@@ -687,8 +687,8 @@ one it has already described, so a mapped lamp suppresses the invented ones
 within a share of that street's own interval.
 
 **Seattle carries a surveyed register.** Seattle City Light publishes every
-pole it owns with a "has streetlight" flag, and I authorised its use
-(CW-Q76) knowing the publisher states no licence. What it holds inside the
+pole it owns with a "has streetlight" flag, and I authorized its use
+(CW-Q76) knowing the publisher states no license. What it holds inside the
 baked circle:
 
 | | |
@@ -721,12 +721,12 @@ ribbon is what is wrong. The disagreement splits cleanly by class:
 | **motorway** | **114** | **4.86 m** | **7.89 m** |
 | **trunk** | **9** | **5.53 m** | 6.94 m |
 
-On an ordinary street the two descriptions disagree by about a metre: the game
+On an ordinary street the two descriptions disagree by about a meter: the game
 ribbon is slightly wider than the real carriageway, and the pole is nudged out
 to the kerb along the ribbon's own outward normal. On the freeway they
 disagree by five, because I-5 runs below grade there and the game draws a flat
-16 metre band across it - those poles are dropped and counted, since moving
-one five metres is inventing a position rather than correcting one.
+16 meter band across it - those poles are dropped and counted, since moving
+one five meters is inventing a position rather than correcting one.
 
 **Spacing follows the city's own standard.** Seattle Streets Illustrated 3.6:
 a street 50 ft (15.2 m) wide or less takes street lights alternating every
@@ -757,8 +757,8 @@ grid, so a later release can put Seattle's hills back:
 | | |
 |---|---|
 | source | USGS 3DEP (EPQS) for the three US cities; NRCan CDEM/HRDEM for Burnaby |
-| licence | public domain / Open Government Licence - Canada, both written into the file |
-| grid | 30 m, square, centred on the city, clipped to the bake radius |
+| license | public domain / Open Government License - Canada, both written into the file |
+| grid | 30 m, square, centered on the city, clipped to the bake radius |
 
 ★ **A burst is not a throughput.** Forty samples measured 21 per second at
 concurrency 8 and 41 at 16. Two hundred sustained samples, same machine, same
@@ -804,25 +804,25 @@ of code are exactly the kind that quietly stop being true.
 
 The distance fade needed a channel. The class pass has always rendered the
 scene's surface classes into a texture's red channel; it now writes linear view
-depth, in metres, into the blue one. Linear rather than the depth buffer it
+depth, in meters, into the blue one. Linear rather than the depth buffer it
 already carried: that one is the non-linear curve the GPU needs for occlusion,
-and a tint faded on it would collapse inside the first few metres and then
+and a tint faded on it would collapse inside the first few meters and then
 barely move for two hundred. Green is left free on purpose for the release
 after this one.
 
 ★ **The tint source was decided by steadiness, not by taste.** Two were built
 and photographed against the same scene: a per-class table, and the cell's own
-colour driven down to a low luminance. The pictures were arguable. The numbers
+color driven down to a low luminance. The pictures were arguable. The numbers
 were not. Over a look of 1.5 degrees per frame, the per-class table changes
-12.23 per cent of its backings per frame and the sampled colour changes 17.06,
+12.23 per cent of its backings per frame and the sampled color changes 17.06,
 against a floor of 7.12 per cent for the class map itself. The sampled source
-loses because it inherits the converter's per-cell colour decision, and that
+loses because it inherits the converter's per-cell color decision, and that
 decision re-rolls - which is the churn this whole part of the document is
 about. The class table shipped.
 
 ★ **The first version of that comparison measured one thing twice.** It rebuilt
 the backing from the development cell probe, which carries glyphs, intensity
-and luminance but not the palette or the colour indices, so the sampled arm
+and luminance but not the palette or the color indices, so the sampled arm
 silently fell back to the class table and both rows printed 12.23 per cent,
 identical to two decimal places. Two arms agreeing that exactly is the tell.
 The rewrite drives both through the same public entry point the real layer uses
@@ -838,7 +838,7 @@ of 0.180; amber only to 0.080, because amber's ink is itself much darker and
 the gap between ink and backing closes more than twice as fast. Each phosphor
 therefore gets its own table, and the consequence is worth saying plainly: in
 monochrome the backing is a good deal fainter in amber than in green, and
-fainter in both than in colour. That is a contrast bound, not a preference, and
+fainter in both than in color. That is a contrast bound, not a preference, and
 it cannot be turned up without taking legibility away from a player who has no
 other cue.
 
@@ -851,8 +851,8 @@ the call happens roughly four hundred thousand times a frame. Sweeping along
 the scanline with the column geometry hoisted out of the inner loop lands
 within a twentieth of a millisecond of where it started. The cost is the memory
 traffic itself. Banding the fill by distance was the planned answer and cannot
-save it either: 79 per cent of the cells on screen are inside 60 metres, so the
-band would have to pull in to 15 or 20 metres, which backs the ground at your
+save it either: 79 per cent of the cells on screen are inside 60 meters, so the
+band would have to pull in to 15 or 20 meters, which backs the ground at your
 feet and leaves the street bare.
 
 What makes that acceptable is what the toggle already was. Day is off unless
@@ -876,7 +876,7 @@ about why it moves at all.
 
 A cell's character is chosen by matching the brightness of that patch of SCREEN
 against the shape of every character the cell is allowed. Nothing in that
-sentence mentions the world. Walk 16 centimetres and the patch of screen is
+sentence mentions the world. Walk 16 centimeters and the patch of screen is
 looking at a slightly different patch of wall, so the match can come out
 differently, and the character changes although nothing in the city did. That
 is the churn this whole part of the document has been circling: 8 per cent of
@@ -893,11 +893,11 @@ So the class pass now renders a second thing beside the surface class: a GLYPH
 FIELD, one value per cell, read from the surface's own texture at the point the
 cell is looking at. The converter can take an anchored cell's character from
 that value instead of from the screen, and still uses the lit cell for
-everything else - whether the cell draws at all, how bright, what colour.
+everything else - whether the cell draws at all, how bright, what color.
 
 ★ **The field is deliberately coarse, and that is the mechanism rather than a
-compromise.** At the texture's own resolution a patch is a few centimetres, a
-cell forty metres away covers hundreds of them, and the smallest camera move
+compromise.** At the texture's own resolution a patch is a few centimeters, a
+cell forty meters away covers hundreds of them, and the smallest camera move
 slides onto a different one - the character would re-roll exactly as before.
 What makes a character belong to a wall is that a patch of wall about the size
 of a cell shares one value.
@@ -948,7 +948,7 @@ graphics card has been taught it, and teaching it is a piece of work in its own
 right.
 
 Two older faults surfaced while forcing that path, both invisible until
-something did. Converting on the processor crashed on the first colour frame it
+something did. Converting on the processor crashed on the first color frame it
 had ever been asked for, because it read a drive-level array that only exists in
 monochrome, where the graphics path had always guarded the same line. And the
 renderer decided the graphics card was drawing the scene while the sampler had

@@ -518,7 +518,7 @@ export class ErrorLogPanel {
     // always computed Compile / Parse / Geometry / Runtime / General and never
     // shown it. Owner-approved 2026-08-08: the Group cell carries the severity
     // badge as well as the group name, so relabelling the column does not leave
-    // severity to the red row colour alone (WCAG 1.4.1).
+    // severity to the red row color alone (WCAG 1.4.1).
     const cols = [
       { key: 'group', label: 'Group' },
       { key: 'file', label: 'File' },

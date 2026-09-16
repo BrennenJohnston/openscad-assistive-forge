@@ -68,7 +68,7 @@ If you're setting up the project for development or thinking about forking:
 - [Camera Controls Accessibility](./specs/CAMERA_CONTROLS_ACCESSIBILITY.md) -- 3D camera a11y spec
 - [Manifest Stability Contract](./specs/MANIFEST_STABILITY_CONTRACT.md) -- what stays stable for people who publish share links
 - [Responsive UI](./RESPONSIVE_UI.md) -- breakpoints and the layout system
-- [Colour System](./guides/COLOR_SYSTEM_GUIDE.md) -- the token palette and its contrast targets
+- [Color System](./guides/COLOR_SYSTEM_GUIDE.md) -- the token palette and its contrast targets
 - [Performance](./PERFORMANCE.md) -- bundle budget, caching, worker architecture
 
 ---

@@ -209,7 +209,7 @@ not a network problem.
 1. **Reload the page**
 2. **Check the console** (`F12` → Console) and include any error if you report it
 3. **Not a fault:** if your system's "increase contrast" setting is on, you get
-   the plain text editor instead of the coloured one. That is deliberate
+   the plain text editor instead of the colored one. That is deliberate
 
 ### Code Changes Not Syncing to Parameters
 
@@ -228,10 +228,10 @@ not a network problem.
 
 **Solutions:**
 
-1. **Check the file type**: only `.scad` content is coloured
+1. **Check the file type**: only `.scad` content is colored
 2. **Check which editor you have**: with your system's increase-contrast setting
-   on you get the plain text editor, whose colouring is lighter by design
-3. **Reload the page** if the text was pasted in and never coloured
+   on you get the plain text editor, whose coloring is lighter by design
+3. **Reload the page** if the text was pasted in and never colored
 
 ---
 

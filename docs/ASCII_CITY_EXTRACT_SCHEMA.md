@@ -40,8 +40,8 @@ to about 0.1 m.
 | --- | --- | --- |
 | `format` | string | `ascii-city-extract@1` or `@2`. Check it before trusting anything else; the versions are ADDITIVE, so a v1 reader handles a v2 file correctly and simply sees less of it. |
 | `name` | string | The slug the file is stored under, such as `seattle`. |
-| `center` | `{lat, lon}` | The projection origin. Every coordinate in the parsed model is in metres from this point. |
-| `radiusM` | number | The radius the extract was queried with, in metres. |
+| `center` | `{lat, lon}` | The projection origin. Every coordinate in the parsed model is in meters from this point. |
+| `radiusM` | number | The radius the extract was queried with, in meters. |
 | `generated` | string | The day it was baked, as `YYYY-MM-DD`. Day granularity on purpose: a finer stamp would churn the file on every rebake without telling anyone anything. |
 | `source` | string | Where the data came from, in words. |
 | `attribution` | string | The credit line the game displays. Do not remove it. |
@@ -78,7 +78,7 @@ is about 0.1 m; keeping more digits would grow the file without changing
 anything a walker can see.
 
 Keeping a tag is not enough on its own: the gate above decides whether the way
-survives at all, and a way whose only tags are kept ones it does not recognise
+survives at all, and a way whose only tags are kept ones it does not recognize
 is still dropped. Both have to be changed together.
 
 ### Relation
@@ -138,8 +138,8 @@ the size of the raw Overpass response.
 | tag | why it is kept |
 | --- | --- |
 | `building` | Marks a footprint as a building. |
-| `height`, `building:height` | The building's height, in metres or feet. |
-| `building:levels` | Storey count, used when no height is tagged. |
+| `height`, `building:height` | The building's height, in meters or feet. |
+| `building:levels` | Story count, used when no height is tagged. |
 | `min_height`, `building:min_level` | Where the volume starts, for things that do not touch the ground. |
 | `wikidata` | A stable identity for a landmark, where a name is not one. |
 | `layer`, `location` | How the map says a building is below the street. Both are read at BAKE time and such buildings are dropped from the extract; they are kept in the tag list so the bake can see them. |
@@ -201,7 +201,7 @@ for a pavement. A pavement with no `width` is drawn 1.8 m wide.
 
 A `building:part` whose footprint is smaller than **10 m²** is dropped at bake
 time. Downtowns are mapped with thousands of sliver parts - ledges and setbacks
-a few centimetres across - that no character cell could ever show, and dropping
+a few centimeters across - that no character cell could ever show, and dropping
 them is what lets a densely-modelled city fit inside the size budget at all.
 The number is `MIN_PART_AREA_M2` in `src/js/game/city-data.js`.
 
@@ -252,7 +252,7 @@ elevation: {
 The grid is sampled at bake time from a national 1 m digital elevation model:
 USGS 3DEP through the EPQS point service for the three US cities (public
 domain), and Natural Resources Canada's CDEM/HRDEM altitude service for
-Burnaby (Open Government Licence - Canada). The licence and the requested
+Burnaby (Open Government License - Canada). The license and the requested
 credit travel in the file.
 
 `null` means the service had no answer there, and it is never written as
@@ -279,17 +279,17 @@ lamps alternating every 55 m, a wider one gets opposite pairs every 76 m, and
 a pedestrian street gets luminaires every 18 m.
 
 Seattle's extract additionally carries Seattle City Light's own surveyed pole
-register, on the project owner's explicit authorisation (CW-Q76) after being
-told the publisher's catalog page states no licence. Those nodes carry
+register, on the project owner's explicit authorization (CW-Q76) after being
+told the publisher's catalog page states no license. Those nodes carry
 `operator=Seattle City Light` and a **negative id**: OpenStreetMap ids are
 positive, so a negative id marks an element that is not from OSM, and the ODbL
 statement on the file keeps meaning exactly what it says. The extract's
-`poleSource` block records the service, the publisher and the authorisation.
+`poleSource` block records the service, the publisher and the authorization.
 
 ## What the parser gives you
 
 `parseCityExtract(extract)` turns the file into flat, renderer-ready data.
-Distances are metres; `x` is east, `y` is north; height is added by whatever
+Distances are meters; `x` is east, `y` is north; height is added by whatever
 draws it.
 
 ```js
@@ -363,7 +363,7 @@ extract for a detail nobody can see. A planter mapped as a bare node reports
 `areaM2: 0` rather than guessing a footprint. `picnicTables` are
 `leisure=picnic_table` nodes at their true positions. Neither is drawn yet.
 
-A flowerbed is deliberately **not** greenspace. A park is a lawn to colour; a
+A flowerbed is deliberately **not** greenspace. A park is a lawn to color; a
 flowerbed is a planting to dress, and adding `flowerbed` to the greenspace
 value lists would have been one word and would have painted every bed as grass.
 
@@ -380,7 +380,7 @@ through unchanged, and are `undefined` where the mapper did not say.
 
 1. `height`, then `building:height`. Both accept `12`, `12.5`, `12 m`, `12m`,
    `40'`, `40 ft`.
-2. `building:levels` multiplied by 3 m per storey.
+2. `building:levels` multiplied by 3 m per story.
 3. A default of 8 m, so an untagged building is a low-rise rather than nothing.
 
 Anything over 700 m is treated as a tagging error and clamped. `min_height` and
@@ -425,9 +425,9 @@ Where the slab's underside sits, taking the first answer available:
 2. The height of the building whose outline contains the canopy's centroid -
    a rooftop canopy sits on the roof it belongs to. Where more than one
    outline contains it, the tallest wins.
-3. The canopy's own tagged height, less the slab. A roof tagged three metres
-   tall has its SURFACE three metres up, not its underside.
-4. Four metres, a shelter height. Two thirds of the roof ways in the four
+3. The canopy's own tagged height, less the slab. A roof tagged three meters
+   tall has its SURFACE three meters up, not its underside.
+4. Four meters, a shelter height. Two thirds of the roof ways in the four
    shipped extracts carry no height tag at all, so this is the number most
    canopies actually wear.
 
@@ -439,7 +439,7 @@ slab's thickness otherwise. A canopy takes no pitched roof: a `roof:shape` on a
 0.3 m slab would cap it with a pyramid taller than the slab.
 
 A canopy standing over open ground gets thin **columns** at its outline's
-corners, thinned to one every six metres so a twelve-sided awning reads as a
+corners, thinned to one every six meters so a twelve-sided awning reads as a
 colonnade rather than a fence. A corner that falls inside a drawn roadway gets
 no column, because nothing in this city stands in the road; a canopy that
 spans a street corner to corner therefore gets none at all, and
@@ -461,8 +461,8 @@ three are closed at parse time:
   is the top slice of a stack whose lower slices are separate ways standing
   on the street, and a per-way test calls all of them floating. Where the
   column really is empty the volume is drawn down to whatever IS under it -
-  the gap is closed, never doubled, so a slab a metre above an eight-metre
-  podium grows by a metre rather than sprouting a second copy of the podium.
+  the gap is closed, never doubled, so a slab a meter above an eight-metre
+  podium grows by a meter rather than sprouting a second copy of the podium.
   Gaps under 1.5 m are left alone.
 - **Canopies are exempt.** A canopy hangs; that is what it is for.
 
@@ -478,7 +478,7 @@ most ways in a downtown extract are unnamed service spurs and footpaths, so
 expect roughly a fifth of them to carry a name.
 
 Overpass `around` queries return **whole ways**, so a road passing through the
-radius can trail for kilometres beyond it. `boundsM` is therefore computed from
+radius can trail for kilometers beyond it. `boundsM` is therefore computed from
 buildings alone whenever any exist, and long road tails are treated as scenery
 outside the playable core.
 
@@ -501,7 +501,7 @@ The bake script self-checks: after writing, it parses its own output with
 
 You do not need this repo's bake script. Anything that produces the wrapper
 above with valid elements will load. If you do write your own, please keep the
-attribution and licence fields intact, round your coordinates (the file gets
+attribution and license fields intact, round your coordinates (the file gets
 large fast otherwise), and respect the
 [Overpass API usage policy](https://wiki.openstreetmap.org/wiki/Overpass_API)
 if that is where your data comes from: send an identifying `User-Agent`, stay

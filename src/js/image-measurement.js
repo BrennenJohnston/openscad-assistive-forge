@@ -94,7 +94,7 @@ let onCoordinateCopied = null; // (axis: 'x'|'y', value: number) => void
 // ---------------------------------------------------------------------------
 
 /**
- * Initialise the image measurement tool.
+ * Initialize the image measurement tool.
  * @param {Object} opts
  * @param {Function} [opts.onCoordinateCopied] - Called when user copies a coordinate
  */
@@ -176,7 +176,7 @@ export function initImageMeasurement(opts = {}) {
     });
   }
 
-  // Initialise canvas with placeholder
+  // Initialize canvas with placeholder
   resizeCanvas();
   drawPlaceholder();
 
@@ -439,7 +439,7 @@ function redraw() {
 }
 
 function drawCrosshair(cx, cy, cw, ch) {
-  // Use theme-aware colour; forced-colors mode will use system colour
+  // Use theme-aware color; forced-colors mode will use system color
   const color =
     getComputedColor('--color-accent') || 'rgba(100, 180, 255, 0.9)';
 
@@ -462,7 +462,7 @@ function drawCrosshair(cx, cy, cw, ch) {
 
   ctx.setLineDash([]);
 
-  // Centre dot
+  // Center dot
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
@@ -490,7 +490,7 @@ function drawPinnedCrosshair(cx, cy, cw, ch) {
   ctx.lineTo(cx, ch);
   ctx.stroke();
 
-  // Filled centre dot (5px radius for pinned state)
+  // Filled center dot (5px radius for pinned state)
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(cx, cy, 5, 0, Math.PI * 2);

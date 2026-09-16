@@ -223,7 +223,7 @@ Your manifest can say which handful somebody should meet first:
 ```
 
 Forge then shows those controls, opens the groups they live in, and puts
-everything else behind one button labelled **Show all parameters**.
+everything else behind one button labeled **Show all parameters**.
 
 Things worth knowing before you use it:
 

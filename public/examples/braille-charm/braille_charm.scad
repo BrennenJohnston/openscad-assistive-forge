@@ -66,7 +66,7 @@ braille_chars = "⠠⠁";
 // Render one charm (braille_chars) or every non-empty Charm_N below in one
 // file, laid out side by side along X.
 charm_layout = "Single"; // [Single, All charms]
-// Gap between neighbouring charm footprints in All-charms mode (mm)
+// Gap between neighboring charm footprints in All-charms mode (mm)
 charm_gap_mm = 5; // [0:0.5:50]
 // Braille for charm 1 in All-charms mode (empty = skipped)
 Charm_1 = "";
@@ -312,13 +312,13 @@ max_charm_cells = max([for (c = active_charms) len(c)]);
 // Bed footprint of ONE charm along X. The bracelet clip stands with its C
 // profile on the bed (clip_outer_w wide); pendant shapes span
 // effective_width, widened by the fin brim when the Angled support fin is
-// on (the fin is centred, so its brim only matters for very slim charms).
+// on (the fin is centered, so its brim only matters for very slim charms).
 charm_footprint_w = clip_on
     ? clip_outer_w
     : (fin_on ? max(effective_width, fin_thickness_mm + 2 * brim_width_mm)
               : effective_width);
 // In All-charms mode successive charms step along +X by this pitch, so
-// neighbouring footprints are separated by exactly charm_gap_mm.
+// neighboring footprints are separated by exactly charm_gap_mm.
 charm_pitch_mm = charm_footprint_w + charm_gap_mm;
 // Total bed width used by the whole All-charms layout
 multi_total_width_mm = charms_count * charm_footprint_w
@@ -346,7 +346,7 @@ function get_dot_pattern(char) =
     : [0, 0, 0, 0, 0, 0];
 
 // Dot offsets in the FLAT face frame (+X = reading direction, +Y = up):
-// columns left/right of the cell centre, rows top/middle/bottom.
+// columns left/right of the cell center, rows top/middle/bottom.
 dot_col_x_offsets = [-dot_spacing / 2, +dot_spacing / 2];
 dot_row_y_offsets = [+dot_spacing, 0, -dot_spacing];
 dot_positions     = [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]];
@@ -465,7 +465,7 @@ module attachment_add() {
 // =============================================================================
 // BRAILLE DOTS ON THE FACE
 // =============================================================================
-// Cells are laid out along +X and centred on the face; the attachment sits
+// Cells are laid out along +X and centered on the face; the attachment sits
 // above, so the dot block is nudged down slightly when a hole/bail is used.
 braille_y_offset = (attachment_type == "none" || clip_on) ? 0 : -hole_diameter / 4;
 
@@ -628,7 +628,7 @@ BRIDGE_AUTO_INTERVAL_MM = 10;
 effective_bridge_count = max(bridge_count, ceil(fin_top_z() / BRIDGE_AUTO_INTERVAL_MM));
 
 // Single central fin (x = 0): every charm outline reaches its full height on
-// the centre column, so the break-away bridges always land on charm material.
+// the center column, so the break-away bridges always land on charm material.
 module support_fin_2d() {
     polygon([
         [-lean_run / 2 - fin_offset_mm, 0],

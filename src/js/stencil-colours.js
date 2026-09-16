@@ -1,24 +1,24 @@
 /**
- * The Harley law: a layer is a paint COLOUR a person assigns to regions.
+ * The Harley law: a layer is a paint COLOR a person assigns to regions.
  *
  * Named after the drawing that taught it. The owner made a six-plate spray
  * stencil of their cat by hand and the plates say plainly what a layer is:
  * plate 1 cuts the whole silhouette and the base coat goes through it; plates
- * 2 to 6 cut the regions of one colour each; the black lines between regions
+ * 2 to 6 cut the regions of one color each; the black lines between regions
  * are not cut by anything, because they are the base coat showing through.
  * Depth, which the app used to decide layers by, is at best a hint.
  *
  * So this module is the model the app was missing:
  *
  *   REGION      a closed area a person can point at.
- *   COLOUR      a named swatch. "Base coat" and "Unpainted" are colours too,
- *               and a colour may appear MORE THAN ONCE in the order - which
+ *   COLOR      a named swatch. "Base coat" and "Unpainted" are colors too,
+ *               and a color may appear MORE THAN ONCE in the order - which
  *               is how the owner avoided islands without a single bridge.
- *   ASSIGNMENT  region -> colour.
- *   ORDER       the colours, in spray order.
- *   PLATE k     under the stacked rule, the union of the regions of colours
+ *   ASSIGNMENT  region -> color.
+ *   ORDER       the colors, in spray order.
+ *   PLATE k     under the stacked rule, the union of the regions of colors
  *               k..N, so a cut is always solid and never a ring; under the
- *               own rule, the regions of colour k alone, which is the hand
+ *               own rule, the regions of color k alone, which is the hand
  *               method and can leave islands.
  *
  * ★ WHAT A REGION IS IN A LINE DRAWING, which is the thing the old engine got
@@ -32,8 +32,8 @@
  * regions the reference plates cut, each within a tenth of a unit of the
  * point measured out of the owner's own STLs.
  *
- * Nothing here draws, and nothing here knows about millimetres: regions are
- * found in the drawing's own units and become millimetres only when a plate
+ * Nothing here draws, and nothing here knows about millimeters: regions are
+ * found in the drawing's own units and become millimeters only when a plate
  * size says so. D-122 was what happens when a module is not sure which space
  * it is in.
  *
@@ -52,7 +52,7 @@ import {
 import { boundsOf, interiorPoint, pointInPolygon } from './svg-nesting.js';
 import { STENCIL_PLATE_CAP } from './stencil-limits.js';
 
-/** The colour every region starts at when the art has no colours of its own. */
+/** The color every region starts at when the art has no colors of its own. */
 export const BASE_COLOUR_ID = 'base';
 
 /** A region the person wants left as the wall behind the stencil. */
@@ -94,9 +94,9 @@ export const MIN_FACE_AREA_FRACTION = 1e-5;
  */
 export const REMEDY_SENTENCES = Object.freeze({
   'paint-later':
-    'Move {colour} later in the paint order. Then this piece is held by the plate before it and cannot fall out.',
+    'Move {color} later in the paint order. Then this piece is held by the plate before it and cannot fall out.',
   'paint-again':
-    'Paint {colour} twice: once here and once later in the order. That is what holds this piece, and it is what the reference stencil does with black.',
+    'Paint {color} twice: once here and once later in the order. That is what holds this piece, and it is what the reference stencil does with black.',
   'support-bar':
     'Add a support bar across this opening. It leaves a small unpainted line where the bar sits.',
 });
@@ -130,7 +130,7 @@ export function regionKey(point) {
  * Is this drawing made of lines between regions, or of shapes to paint?
  *
  * Two conditions, and both have to hold. Every element is unfilled or black,
- * because a drawing that names its own colours is telling you what it is; and
+ * because a drawing that names its own colors is telling you what it is; and
  * the union's holes cover most of its outer contour, because that is what
  * "thin lines" means when you measure it rather than look at it.
  *
@@ -177,7 +177,7 @@ export function detectLineArt(elements) {
     allInk,
     distinctFills: fills.size,
     reason: !allInk
-      ? 'the drawing names colours of its own'
+      ? 'the drawing names colors of its own'
       : holeRatio < LINE_ART_HOLE_RATIO
         ? 'the marks are too thick to be lines between regions'
         : 'unfilled marks with faces between them',
@@ -222,7 +222,7 @@ function describeRegion(index, interior, box, parent) {
  * the union of every element, carrying any solid island directly inside it as
  * its own hole, plus the silhouette (the outer contour with its holes filled)
  * as the base region. In `shapes` mode every element is a region and its own
- * subpath holes are honoured.
+ * subpath holes are honored.
  *
  * @param {Array<{pathData: string, fill: string|null, role: string}>} elements
  * @param {{lineMode?: 'edges'|'shapes'}} [options]
@@ -303,7 +303,7 @@ export function buildRegions(elements, options = {}) {
 
   // Filled art: one region per DRAWN SHAPE. The backdrop is stepped over by
   // the same area rule the stencil layering uses - a root that covers
-  // essentially the whole picture is the paper, and colour cannot tell you
+  // essentially the whole picture is the paper, and color cannot tell you
   // that.
   //
   // ★ ONE REGION PER DOM ELEMENT, NOT PER SUBPATH. `parseSvgElements` splits a
@@ -360,7 +360,7 @@ export function buildRegions(elements, options = {}) {
 }
 
 /**
- * The palette a drawing brings with it, or the one colour it does not.
+ * The palette a drawing brings with it, or the one color it does not.
  *
  * @param {Array<object>} regions
  * @param {{baseName?: string, baseHex?: string}} [options]
@@ -381,10 +381,10 @@ export function paletteFromFills(regions, options = {}) {
     seen.set(hex, seen.get(hex) + (r.area || 0));
   }
   if (seen.size < 2) return [base];
-  // ★ TWO SWATCHES MUST NOT SHARE A NAME. The colour table has eighteen
-  // saturated anchors, so anything muted lands on a grey: MEASURED on a
+  // ★ TWO SWATCHES MUST NOT SHARE A NAME. The color table has eighteen
+  // saturated anchors, so anything muted lands on a gray: MEASURED on a
   // traced photograph of the owner's cat, its sage-green eyes, its dusty-pink
-  // nose and its grey muzzle ALL came out "Gray" - three swatches called the
+  // nose and its gray muzzle ALL came out "Gray" - three swatches called the
   // same thing, in a list whose whole job is telling them apart. The second
   // and later get a number, until the owner decides whether to add muted
   // anchors to the table (on the ledger).
@@ -404,7 +404,7 @@ export function paletteFromFills(regions, options = {}) {
 }
 
 /**
- * A plain-language name for a colour, so a plate can be called "the brown
+ * A plain-language name for a color, so a plate can be called "the brown
  * one" rather than "#997048".
  *
  * Ported from the owner's stencil-forge `colorName` (color-separation.js,
@@ -417,7 +417,7 @@ export function paletteFromFills(regions, options = {}) {
  */
 export function colourLabel(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
-  if (!m) return 'Colour';
+  if (!m) return 'Color';
   const v = parseInt(m[1], 16);
   const c = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
   let best = NAMED_COLOURS[0];
@@ -455,11 +455,11 @@ const NAMED_COLOURS = [
   { name: 'Brown', rgb: [130, 85, 50] },
   { name: 'Tan', rgb: [200, 170, 130] },
   // ★ The muted anchors, added at the owner's G0 decision (2026-09-01).
-  // The eighteen above are all saturated, so every muted colour in a
+  // The eighteen above are all saturated, so every muted color in a
   // traced photograph landed on a gray: the cat's sage-green eyes, its
   // dusty-pink nose and its gray muzzle were ALL "Gray" - three swatches
   // sharing one name in a list whose whole job is telling them apart.
-  // Each anchor is placed so it names its own neighbourhood without
+  // Each anchor is placed so it names its own neighborhood without
   // stealing from the saturated names (measured: an olive at 128,128,64
   // took Brown's #997048; at 110,120,45 it does not).
   { name: 'Olive', rgb: [110, 120, 45] },
@@ -476,7 +476,7 @@ const NAMED_COLOURS = [
  * 1. SMALLEST WINS. A face nested inside another face is inside both outer
  *    rings, so a search that takes the first match in any other order hands
  *    back the eye when it was asked about the pupil. MEASURED on the cat:
- *    matching largest-first gave the pupils' colour to the eyes, emptied the
+ *    matching largest-first gave the pupils' color to the eyes, emptied the
  *    green plate, and put two islands on the black plate that were nothing
  *    but the eye rings.
  * 2. SMALLEST BY THE OUTER RING, not by the region's paintable area. A
@@ -504,24 +504,24 @@ export function regionAt(regions, point) {
 }
 
 /**
- * Every region's first colour.
+ * Every region's first color.
  *
- * When the art has colours of its own, each region keeps the one it is drawn
+ * When the art has colors of its own, each region keeps the one it is drawn
  * in. When it does not, every region starts at the base coat, so the first
  * preview a person sees is the honest base coat and they paint from there
  * rather than from a guess the app made for them.
  *
  * @param {Array<object>} regions
  * @param {Array<{id: string, hex: string}>} palette
- * @returns {Object<string, string>} region key -> colour id
+ * @returns {Object<string, string>} region key -> color id
  */
 export function autoAssign(regions, palette) {
   const list = palette || [];
   const byHex = new Map(list.map((c) => [c.hex.toLowerCase(), c.id]));
   // The base is whatever the palette calls its ground, and a palette that
-  // does not have one starts at its first colour. Hard-coding 'base' here
+  // does not have one starts at its first color. Hard-coding 'base' here
   // wrote an id no palette contained and every region came out assigned to a
-  // colour that did not exist.
+  // color that did not exist.
   const base =
     list.find((c) => c.id === BASE_COLOUR_ID)?.id ||
     list[0]?.id ||
@@ -544,7 +544,7 @@ export function autoAssign(regions, palette) {
  * @param {Array<object>} regions
  * @param {Object<string, string>} assignment
  * @param {Array<{id: string}>} palette
- * @returns {Array<string>} colour ids
+ * @returns {Array<string>} color ids
  */
 export function defaultOrder(regions, assignment, palette) {
   const total = new Map();
@@ -569,11 +569,11 @@ export function defaultOrder(regions, assignment, palette) {
  *
  * ★ The two rules are different laws, not a preference:
  *
- *   stacked  plate k cuts colours k..N together, so every cut is SOLID and no
+ *   stacked  plate k cuts colors k..N together, so every cut is SOLID and no
  *            plate ever has an island. Plate 1 is the whole silhouette. This
  *            is the 3D-printed multi-plate method, and it is the reason the
  *            method needs no bridges.
- *   own      plate k cuts colour k alone, which is the hand method and what
+ *   own      plate k cuts color k alone, which is the hand method and what
  *            the reference plates do. It can leave islands, and the owner's
  *            answer to that was to paint black twice.
  *
@@ -584,7 +584,7 @@ export function defaultOrder(regions, assignment, palette) {
  *   rule, when the drawing has one
  * @param {{absorbEnclosedLines?: boolean}} [options] - See
  *   `absorbEnclosedLines` below. Off by default: closing a line changes which
- *   colour lands on it.
+ *   color lands on it.
  * @returns {Array<{colourId: string, rings: Array, regionKeys: Array<string>}>}
  */
 export function platesFor(plan, regions, silhouette = null, options = {}) {
@@ -600,7 +600,7 @@ export function platesFor(plan, regions, silhouette = null, options = {}) {
   }
 
   const hasSilhouette = Array.isArray(silhouette) && silhouette.length > 0;
-  // Where in the paint order each region's colour falls, so a hole can be
+  // Where in the paint order each region's color falls, so a hole can be
   // asked whether filling it would paint over something.
   const at = new Map(order.map((id, i) => [id, i]));
   const rank = new Map();
@@ -659,7 +659,7 @@ export function platesFor(plan, regions, silhouette = null, options = {}) {
  * Optionally close the LINES a plate's cut has surrounded.
  *
  * ★ THE STACKED RULE DOES NOT GUARANTEE A SOLID CUT, and the plan said it
- * did. MEASURED on the cat: under the stacked rule, plate 2 cuts every colour
+ * did. MEASURED on the cat: under the stacked rule, plate 2 cuts every color
  * from brown onwards, which includes both the eye faces and the pupil faces -
  * but the thin black BAND between an eye and its pupil is a line, not a
  * region, so it is not cut, and it ends up a ring of material with cut on
@@ -670,7 +670,7 @@ export function platesFor(plan, regions, silhouette = null, options = {}) {
  * The owner's own answer was to cut the eye solid, band and all, which is
  * what this option does: any hole in the cut that contains no region at all
  * is a line, and it is filled in. It is NOT the default, because it changes
- * the picture - the band gets painted this colour instead of staying base
+ * the picture - the band gets painted this color instead of staying base
  * coat - and that is the person's decision, not the engine's.
  *
  * @param {Array<Array<object>>} rings
@@ -710,7 +710,7 @@ function absorbEnclosedLines(rings, regions, on, rank, position) {
  *
  * A hole in a plate's cut is material with cut all round it: it falls out the
  * moment the plate is printed, and takes the paint mask with it. Reported,
- * with the ways out named, and never quietly reassigned - which colour goes
+ * with the ways out named, and never quietly reassigned - which color goes
  * where is the person's decision, and an island is a consequence of their
  * paint order rather than an error in it.
  *
@@ -757,7 +757,7 @@ export function validatePlan(plan, regions = []) {
     if (!ids.has(id)) {
       problems.push({
         code: 'unknown-colour',
-        message: `The paint order names a colour that is not in the palette: ${id}.`,
+        message: `The paint order names a color that is not in the palette: ${id}.`,
       });
     }
   }
@@ -767,7 +767,7 @@ export function validatePlan(plan, regions = []) {
     if (!ids.has(id)) {
       problems.push({
         code: 'unknown-colour',
-        message: `A region is assigned to a colour that is not in the palette: ${id}.`,
+        message: `A region is assigned to a color that is not in the palette: ${id}.`,
       });
     }
   }
@@ -775,7 +775,7 @@ export function validatePlan(plan, regions = []) {
   if (order.length > STENCIL_PLATE_CAP) {
     problems.push({
       code: 'too-many-plates',
-      message: `This plan needs ${order.length} plates and the most that can be made is ${STENCIL_PLATE_CAP}. Give two colours the same plate, or take one out.`,
+      message: `This plan needs ${order.length} plates and the most that can be made is ${STENCIL_PLATE_CAP}. Give two colors the same plate, or take one out.`,
     });
   }
   const used = new Set(
@@ -837,7 +837,7 @@ export function serialisePlan(plan, regions = []) {
  * a key does not (a drawing edited between save and reopen), a filled region
  * still has its element index, and a region neither matches goes back to the
  * base. Nothing here is silently invented: the palette and the order are the
- * person's, and every region gets exactly one of the colours in it.
+ * person's, and every region gets exactly one of the colors in it.
  *
  * @param {object|string|null} saved - As `serialisePlan` wrote it
  * @param {Array<object>} regions - As `buildRegions` found them
