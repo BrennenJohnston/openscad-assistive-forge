@@ -1133,7 +1133,12 @@ describe('Phase 3: object list highlighting (overlay paths)', () => {
     item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     item.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
 
-    expect(getOverlay(ws).children.length).toBe(0);
+    // DP-47: the overlay holds two groups of its own now - what a person
+    // CHOSE and where the pointer IS - so "cleared" is about the marks in it,
+    // not about the groups.
+    expect(
+      getOverlay(ws).querySelectorAll('.svg-prep-highlight-path')
+    ).toHaveLength(0);
 
     ws.destroy();
   });
@@ -1160,7 +1165,9 @@ describe('Phase 3: object list highlighting (overlay paths)', () => {
     item.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     item.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
 
-    expect(getOverlay(ws).children.length).toBe(0);
+    expect(
+      getOverlay(ws).querySelectorAll('.svg-prep-highlight-path')
+    ).toHaveLength(0);
 
     ws.destroy();
   });
@@ -3204,15 +3211,17 @@ describe('the Layer column (DP-7)', () => {
       expect(said).not.toContain('—');
     });
 
-    it('drops the starting sentence once a stack is built', () => {
+    it('drops the starting sentence once a stack is built, and says when it shows', () => {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(3);
       ws.open(svgString, analysis, { layersEnabled: true });
       setLayer(ws, 1, 2);
-      expect(ws._refs.layerSummary.textContent).not.toContain(
-        'Every shape starts on layer 1'
-      );
-      expect(ws._refs.layerSummary.textContent).toContain('up to 3 layers');
+      const said = ws._refs.layerSummary.textContent;
+      expect(said).not.toContain('Every shape starts on layer 1');
+      expect(said).toContain('up to 3 layers');
+      // DP-47: the charm behind the editor is the last APPLIED design, so a
+      // stack that has not been applied is not on it yet.
+      expect(said).toContain('Layers show on the charm after you press Apply.');
     });
 
     it('reports NO STACK until somebody builds one', () => {
@@ -3621,8 +3630,11 @@ describe('the result pane is never empty (DP-37 P1)', () => {
 
     const picture = ws._root.querySelector('.svg-prep-result-pane svg');
     expect(picture.getAttribute('role')).toBe('img');
-    expect(picture.getAttribute('aria-label')).toBe(
-      'The drawing as it is now, not yet combined'
+    // DP-47 P4: the name counts what is in the picture, because the picture
+    // is painted from the roles now and changes when they do. It still says
+    // plainly that this is not the combined result.
+    expect(picture.getAttribute('aria-label')).toMatch(
+      /^The drawing as it is now: \d+ raised, \d+ holes?, \d+ left out, not yet combined$/
     );
 
     ws.destroy();
@@ -3683,5 +3695,261 @@ describe('the drawer breakpoint lives in two files (DP-Q46a)', () => {
     );
     const css = readFileSync(resolve('src/styles/components.css'), 'utf-8');
     expect(css).toContain(`@container (max-width: ${PANEL_DRAWER_MAX_WIDTH}px)`);
+  });
+});
+
+// ── DP-47 / D-141: choosing shapes, and changing them together ──────────────
+//
+// The owner's words, on their own logo: "I tried to select and change the
+// letters at the bottom and could not ignore any path, even when I pressed
+// ignore or layer. This defeats the entire purpose of the drawing editor."
+// MEASURED before this release: Delete did nothing at all, Ctrl+A selected
+// 35,759 characters of PAGE text, and the picture never marked the selection -
+// the only thing it ever drew was the hover mark of one shape.
+
+describe('choosing shapes and changing them together (DP-47, D-141)', () => {
+  const rows = (ws) => [
+    ...ws._refs.objects.querySelectorAll('.svg-prep-object'),
+  ];
+  const roleOf = (ws, i) =>
+    rows(ws)[i].querySelector('input[type="radio"]:checked')?.value;
+  const selectedRows = (ws) =>
+    ws._refs.objects.querySelectorAll('.svg-prep-object--selected');
+  const selectionPaths = (ws) =>
+    ws._root.querySelectorAll('.svg-prep-selected-path');
+  const clickRow = (ws, i, opts = {}) =>
+    rows(ws)[i]
+      .querySelector('.svg-prep-object-name')
+      .dispatchEvent(new MouseEvent('click', { bubbles: true, ...opts }));
+  /** A press, as the browser delivers it: from a target, bubbling. */
+  const press = (target, key, opts = {}) => {
+    const e = new KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...opts,
+    });
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  function openThree() {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    return ws;
+  }
+
+  it('★ paints every selected shape on the picture, not just the rows', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    clickRow(ws, 2, { ctrlKey: true });
+
+    expect(selectedRows(ws)).toHaveLength(2);
+    // One outline per selected shape, in the picture.
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(2);
+    ws.destroy();
+  });
+
+  it('★ the hover mark and the selection do not wipe each other', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(1);
+
+    // Moving the pointer over another row draws the hover mark...
+    rows(ws)[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(
+      ws._root.querySelectorAll('.svg-prep-highlight-path').length
+    ).toBeGreaterThanOrEqual(1);
+    // ...and the selection is still there.
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(1);
+
+    // And moving off clears the hover mark alone.
+    rows(ws)[1].dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    expect(ws._root.querySelectorAll('.svg-prep-highlight-path')).toHaveLength(
+      0
+    );
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(1);
+    ws.destroy();
+  });
+
+  it('★ Delete sets the whole selection to Ignore, and says so once', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    clickRow(ws, 1, { ctrlKey: true });
+    announce.mockClear();
+
+    const e = press(rows(ws)[1], 'Delete');
+
+    expect(roleOf(ws, 0)).toBe('ignore');
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(roleOf(ws, 2)).not.toBe('ignore');
+    // One sentence for the whole action, not one per shape.
+    const said = announce.mock.calls.map((c) => c[0]);
+    expect(said).toEqual(['2 shapes set to Ignore.']);
+    // And the press is spent here: the app never sees it.
+    expect(e.defaultPrevented).toBe(true);
+    ws.destroy();
+  });
+
+  it('Backspace does the same thing as Delete', () => {
+    const ws = openThree();
+    clickRow(ws, 2);
+    press(rows(ws)[2], 'Backspace');
+    expect(roleOf(ws, 2)).toBe('ignore');
+    ws.destroy();
+  });
+
+  it('with nothing selected, Delete acts on the row a person is standing on', () => {
+    const ws = openThree();
+    announce.mockClear();
+    press(rows(ws)[1], 'Delete');
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(roleOf(ws, 0)).not.toBe('ignore');
+    expect(announce.mock.calls.map((c) => c[0])[0]).toMatch(/set to Ignore\.$/);
+    ws.destroy();
+  });
+
+  it('with nothing selected and nowhere to act, it asks rather than guessing', () => {
+    const ws = openThree();
+    announce.mockClear();
+    press(ws._refs.objects, 'Delete');
+    expect(rows(ws).some((_, i) => roleOf(ws, i) === 'ignore')).toBe(false);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      'Choose a shape first.',
+    ]);
+    ws.destroy();
+  });
+
+  it('★ Ctrl+A selects every row, and the press never reaches the page', () => {
+    const ws = openThree();
+    announce.mockClear();
+    // What the app would hear, if the editor let the press through: the real
+    // defect was 35,759 characters of page text going blue.
+    const heardOutside = vi.fn();
+    document.addEventListener('keydown', heardOutside);
+
+    const e = press(rows(ws)[0], 'a', { ctrlKey: true });
+
+    expect(selectedRows(ws)).toHaveLength(3);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      'All 3 shapes selected.',
+    ]);
+    // preventDefault is what stops the browser selecting the whole page...
+    expect(e.defaultPrevented).toBe(true);
+    // ...and stopPropagation is what keeps it out of the app's own shortcuts.
+    expect(heardOutside).not.toHaveBeenCalled();
+
+    document.removeEventListener('keydown', heardOutside);
+    ws.destroy();
+  });
+
+  it('leaves typing alone: Delete in a number box is Delete in a number box', () => {
+    const ws = openThree();
+    const e = press(ws._refs.designWidthInput, 'Delete');
+    expect(e.defaultPrevented).toBe(false);
+    expect(rows(ws).some((_, i) => roleOf(ws, i) === 'ignore')).toBe(false);
+    ws.destroy();
+  });
+
+  it('a press on the empty picture clears the selection', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    expect(selectedRows(ws)).toHaveLength(1);
+
+    ws._refs.sourcePane.dispatchEvent(
+      new MouseEvent('click', { bubbles: true })
+    );
+    expect(selectedRows(ws)).toHaveLength(0);
+    expect(selectionPaths(ws)).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('★ the bulk button says Remove from list, because Delete means Ignore now', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    expect(ws._refs.deleteSelectedBtn.textContent).toBe('Remove from list (1)');
+    // And the row menu agrees with it.
+    const rowBtn = rows(ws)[0].querySelector('.svg-prep-object-delete');
+    expect(rowBtn.textContent).toBe('Remove from list');
+    expect(rowBtn.getAttribute('aria-label')).toMatch(
+      /^Remove .+ from the list$/
+    );
+    ws.destroy();
+  });
+
+  it('the selection mark is its own style, and survives a forced-colors theme', () => {
+    // jsdom has no layout and no forced-colors mode, so the rule is asserted
+    // where it is WRITTEN. What matters is that the mark is an OUTLINE (a fill
+    // would argue with the role tint under it) and that a theme which throws
+    // the app's colors away leaves something behind.
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/styles/components.css'),
+      'utf8'
+    );
+    const block = (selector) => {
+      const at = css.indexOf(`${selector} {`);
+      if (at === -1) return null;
+      const open = css.indexOf('{', at);
+      return css.slice(open, css.indexOf('}', open));
+    };
+    const mark = block('.svg-prep-selected-path');
+    expect(mark, '.svg-prep-selected-path must have a rule of its own').not.toBeNull();
+    expect(mark).toMatch(/fill:\s*none/);
+    expect(mark).toMatch(/stroke:/);
+    expect(mark).toMatch(/vector-effect:\s*non-scaling-stroke/);
+    // And the forced-colors block names it.
+    const forced = css.indexOf('@media (forced-colors: active)');
+    expect(
+      css.slice(forced, forced + 600),
+      'a forced-colors theme must still mark the selection'
+    ).toBeTruthy();
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)[\s\S]{0,400}\.svg-prep-selected-path/
+    );
+  });
+
+  it('★ Ignore takes the shape out of the picture at once (P4)', () => {
+    // The owner's complaint, in one assertion. Above the combine budget the
+    // "Will print as" pane is a STAND-IN, and it used to be the original file
+    // with a 12 %-opacity tint over it: pressing Ignore changed a radio and
+    // nothing a person could see. The stand-in is painted from the roles now.
+    // Above the combine budget, which is the band the stand-in lives in - and
+    // where every drawing of the owner's kind lives. 100 elements, the same
+    // count the DP-37 P1 suite uses for the same reason.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(100));
+
+    const painted = () =>
+      ws._refs.resultPane.querySelectorAll(
+        '.svg-prep-standin-path--raised, .svg-prep-standin-path--hole'
+      ).length;
+    const before = painted();
+    expect(before).toBeGreaterThan(0);
+
+    clickRow(ws, 0);
+    press(rows(ws)[0], 'Delete');
+
+    expect(painted()).toBe(before - 1);
+    // And the shape is still choosable: its row is there and so is its hit
+    // target, because an invisible shape somebody has to turn back on is
+    // worse than no shape at all.
+    expect(rows(ws)).toHaveLength(100);
+    expect(
+      ws._refs.resultPane.querySelectorAll('.svg-prep-hit-path')
+    ).toHaveLength(100);
+    ws.destroy();
+  });
+
+  it('one radio still changes one shape, and stays quiet about it', () => {
+    // The control announces itself; a second sentence would be the editor
+    // talking over the screen reader.
+    const ws = openThree();
+    announce.mockClear();
+    const radio = rows(ws)[1].querySelector('input[value="ignore"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(announce).not.toHaveBeenCalled();
+    ws.destroy();
   });
 });

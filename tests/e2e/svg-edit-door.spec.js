@@ -723,9 +723,11 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     const picture = pane.locator('svg').first()
     await expect(picture).toBeVisible()
     await expect(picture).toHaveClass(/svg-prep-standin/)
+    // DP-47 P4: the name counts what is in the picture, because the picture is
+    // painted from the roles now and an ignored shape leaves it at once.
     await expect(picture).toHaveAttribute(
       'aria-label',
-      'The drawing as it is now, not yet combined'
+      /^The drawing as it is now: \d+ raised, \d+ holes?, \d+ left out, not yet combined$/
     )
 
     // It is a picture of what you HAVE, not of what you will get, and nothing
@@ -734,9 +736,14 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     await expect(page.locator('.svg-prep-render-row')).toBeVisible()
     await expect(page.locator('button[data-action="save"]')).toBeDisabled()
 
-    // And it is the drawing, not an empty frame: the tints are on it.
+    // And it is the drawing, not an empty frame: the tints are on it, and so
+    // are the painted shapes themselves (DP-47 P4).
     const tinted = await picture.locator('.svg-prep-role-path').count()
     expect(tinted).toBe(300)
+    const painted = await picture
+      .locator('.svg-prep-standin-path--raised, .svg-prep-standin-path--hole')
+      .count()
+    expect(painted).toBe(300)
   })
 
   test('a drawing under the budget still shows its combined result', async ({
@@ -1284,7 +1291,7 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
     await expect(chosen(page), 'opening a menu moved the selection').toHaveCount(1)
   })
 
-  test('★ Delete selected takes exactly those rows, and the choice goes with them', async ({
+  test('★ Remove from list takes exactly those rows, and the choice goes with them', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1301,7 +1308,10 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
     await expect(button).toBeVisible()
     // It says how many, because that count is the whole reason somebody chose
     // rather than deleting one at a time.
-    await expect(button).toHaveText('Delete selected (2)')
+    // DP-47: "Remove from list", because the Delete KEY now sets a shape to
+    // Ignore and LEAVES it in the list. Two controls called Delete, one press
+    // apart, meaning opposite things, is how the owner lost shapes.
+    await expect(button).toHaveText('Remove from list (2)')
 
     await button.click()
     await expect(page.locator('.svg-prep-object')).toHaveCount(all - 2)

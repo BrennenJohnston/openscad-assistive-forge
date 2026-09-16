@@ -999,4 +999,113 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
       page.locator('.drawing-editor-statusline .svg-prep-apply-hint')
     ).toHaveCount(1)
   })
+
+  test('★ the keyboard walk on the charm host: choose, Delete, Ctrl+A (DP-47, D-141)', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(2)
+    const chosen = page.locator('.svg-prep-object--selected')
+    const roleOf = (i) =>
+      page.evaluate(
+        (n) =>
+          document
+            .querySelectorAll('.svg-prep-object')
+            [n].querySelector('input[type="radio"]:checked')?.value,
+        i
+      )
+
+    // Two rows, the way the owner tried to: click, then Ctrl-click.
+    await rows.nth(0).locator('.svg-prep-object-name').click()
+    await rows
+      .nth(1)
+      .locator('.svg-prep-object-name')
+      .click({ modifiers: ['Control'] })
+    await expect(chosen).toHaveCount(2)
+
+    // ★ The picture marks BOTH of them. Before DP-47 the only thing it ever
+    // drew was the hover mark of one shape.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.querySelectorAll('.svg-prep-selected-path').length
+        )
+      )
+      .toBeGreaterThanOrEqual(2)
+
+    // ★ Delete sets the selection to Ignore. Before DP-47 it did nothing at
+    // all: the surface returned before any key in the relief purpose.
+    await rows.nth(1).focus()
+    await page.keyboard.press('Delete')
+    await expect.poll(() => roleOf(0)).toBe('ignore')
+    await expect.poll(() => roleOf(1)).toBe('ignore')
+
+    // ★ Ctrl+A selects every row, and NOT the page. Before DP-47 it selected
+    // 35,759 characters of page text and the whole app turned blue.
+    await page.keyboard.press('Control+a')
+    await expect.poll(() => rows.count()).toBeGreaterThan(2)
+    await expect(chosen).toHaveCount(await rows.count())
+    const pageTextSelected = await page.evaluate(
+      () => String(getSelection() || '').length
+    )
+    expect(
+      pageTextSelected,
+      `Ctrl+A selected ${pageTextSelected} characters of page text`
+    ).toBeLessThan(50)
+  })
+
+  test('★ Ignore takes a shape out of the picture without a render (DP-47 P4)', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    const painted = () =>
+      page.evaluate(
+        () =>
+          document.querySelectorAll(
+            '.svg-prep-result-pane .svg-prep-standin-path--raised, .svg-prep-result-pane .svg-prep-standin-path--hole'
+          ).length
+      )
+    // Three nested squares combine well under the budget, so the pane holds a
+    // real result rather than the stand-in - which is the honest case to say
+    // so about: this walk checks the picture ANSWERS, whichever it is showing.
+    const before = await page.evaluate(
+      () =>
+        document.querySelectorAll('.svg-prep-result-pane svg path').length
+    )
+    expect(before).toBeGreaterThan(0)
+
+    const rows = page.locator('.svg-prep-object')
+    await rows.nth(0).locator('.svg-prep-object-name').click()
+    await rows.nth(0).focus()
+    await page.keyboard.press('Delete')
+
+    await expect
+      .poll(async () => {
+        const stand = await painted()
+        if (stand > 0) return stand
+        return page.evaluate(
+          () =>
+            document.querySelectorAll('.svg-prep-result-pane svg path').length
+        )
+      })
+      .toBeLessThan(before + 1)
+    // The row and its hit target stay: an ignored shape must be findable
+    // again, both in the list and on the picture.
+    await expect(rows).toHaveCount(3)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.querySelectorAll(
+              '.svg-prep-result-pane .svg-prep-hit-path'
+            ).length
+        )
+      )
+      .toBe(3)
+  })
 })
