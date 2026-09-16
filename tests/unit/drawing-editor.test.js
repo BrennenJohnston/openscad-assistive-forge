@@ -357,6 +357,42 @@ describe('the relief purpose', () => {
     expect(editor.getPlan()).toBeNull()
   })
 
+  it('★ the relief keys reach the shapes, and stop inside the editor (DP-47)', () => {
+    // The surface takes every shortcut the stencil purpose uses and stops it
+    // there, and for the relief purpose it used to return before any key at
+    // all - so Delete did nothing and Ctrl+A selected the whole page. The
+    // workspace handles both now, INSIDE the surface, and the app never hears
+    // them.
+    const editor = make()
+    openOn(editor, THREE, { purpose: 'relief' })
+    const heardOutside = vi.fn()
+    document.addEventListener('keydown', heardOutside)
+
+    const rows = [...surface.querySelectorAll('.svg-prep-object')]
+    rows[0].querySelector('.svg-prep-object-name').dispatchEvent(
+      new MouseEvent('click', { bubbles: true })
+    )
+    rows[1].querySelector('.svg-prep-object-name').dispatchEvent(
+      new MouseEvent('click', { bubbles: true, ctrlKey: true })
+    )
+    rows[1].dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Delete',
+        bubbles: true,
+        cancelable: true,
+      })
+    )
+
+    const roleOf = (i) =>
+      rows[i].querySelector('input[type="radio"]:checked')?.value
+    expect(roleOf(0)).toBe('ignore')
+    expect(roleOf(1)).toBe('ignore')
+    expect(roleOf(2)).not.toBe('ignore')
+    expect(heardOutside).not.toHaveBeenCalled()
+
+    document.removeEventListener('keydown', heardOutside)
+  })
+
   it('names the shapes list in the skip link, and leaves the stencil its word', () => {
     const editor = make()
     const skip = () =>

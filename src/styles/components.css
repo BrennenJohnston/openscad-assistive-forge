@@ -15528,6 +15528,41 @@ body.tutorial-body-locked {
   vector-effect: non-scaling-stroke;
 }
 
+/* DP-47: the shapes a person CHOSE, drawn on the picture.
+
+   An outline and no fill, so it never argues with the role tint underneath it
+   about what color a shape is, and so several selected shapes at once still
+   read as separate shapes. The dashes move it further from the hover mark,
+   which is a solid translucent fill of one shape: the two are on screen
+   together whenever somebody points at a row while holding a selection.
+
+   non-scaling-stroke keeps it one width at every zoom, which matters here
+   more than usual: a person zooms in to find the small shapes worth
+   ignoring. */
+.svg-prep-selected-path {
+  fill: none;
+  stroke: var(--color-text-primary);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke;
+}
+
+@media (forced-colors: active) {
+  /* In a forced-colors theme the app's own colors are replaced, and an
+     outline drawn in a system color is the only thing that survives. */
+  .svg-prep-selected-path {
+    stroke: Highlight;
+    stroke-width: 3;
+  }
+
+  .svg-prep-highlight-path {
+    fill: Highlight;
+    fill-opacity: 0.3;
+    stroke: CanvasText;
+  }
+}
+
 /* Always-visible role color-coding */
 .svg-prep-role-path {
   vector-effect: non-scaling-stroke;
@@ -15537,6 +15572,18 @@ body.tutorial-body-locked {
    are never confused at a glance: this is what you have, not what you get. */
 .svg-prep-standin {
   opacity: 0.75;
+}
+
+/* DP-47 P4: the stand-in is PAINTED from the roles, not shown as the original
+   file, so a shape set to Ignore leaves the picture at once. Ink and paper
+   rather than the drawing's own colors: this pane answers "what will print",
+   and what prints is one material. */
+.svg-prep-standin-path--raised {
+  fill: var(--color-text-primary);
+}
+
+.svg-prep-standin-path--hole {
+  fill: var(--color-bg-secondary);
 }
 
 .svg-prep-role--foreground {
@@ -16341,6 +16388,11 @@ body.tutorial-body-locked {
 :root[data-high-contrast='true'] .svg-prep-highlight-path {
   fill-opacity: 0.5;
   stroke-width: 3;
+}
+
+:root[data-high-contrast='true'] .svg-prep-selected-path {
+  stroke-width: 3.5;
+  stroke-dasharray: 6 3;
 }
 
 :root[data-high-contrast='true'] .svg-prep-role--foreground {

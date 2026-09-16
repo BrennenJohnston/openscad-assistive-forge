@@ -388,7 +388,7 @@ function buildWorkspaceDom() {
   deleteSelectedBtn.type = 'button';
   deleteSelectedBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
   deleteSelectedBtn.dataset.action = 'delete-selected';
-  deleteSelectedBtn.textContent = 'Delete selected';
+  deleteSelectedBtn.textContent = 'Remove from list';
   deleteSelectedBtn.hidden = true;
 
   const undoDeleteBtn = document.createElement('button');
@@ -471,6 +471,20 @@ function buildWorkspaceDom() {
   objects.className = 'svg-prep-objects';
   objects.setAttribute('role', 'list');
   objects.setAttribute('aria-label', 'Shapes');
+
+  // DP-47: the keys, said once, where a person meets the list.
+  //
+  // A shortcut nobody is told about is a shortcut nobody has. It is a
+  // DESCRIPTION rather than aria-keyshortcuts, because the keys belong to the
+  // selection and not to any one control - and it is read out when the list is
+  // entered, which is the moment it is useful.
+  const objectsHelp = document.createElement('p');
+  objectsHelp.className = 'sr-only';
+  objectsHelp.id = `svg-prep-objects-help-${Math.random().toString(36).slice(2, 8)}`;
+  objectsHelp.textContent =
+    'Click a shape to choose it. Ctrl or Cmd adds one, Shift takes a range, ' +
+    'Ctrl+A takes all. Delete sets the chosen shapes to Ignore.';
+  objects.setAttribute('aria-describedby', objectsHelp.id);
 
   // Warning summary
   const warnings = document.createElement('div');
@@ -564,6 +578,10 @@ function buildWorkspaceDom() {
     layerSummary,
     bulkBar,
     objects,
+    // On the ROOT rather than beside the list, because a host may move the
+    // list into a panel of its own (the surface does) and aria-describedby
+    // reaches across the whole document by id.
+    objectsHelp,
     warnings,
     footer
   );
@@ -829,12 +847,16 @@ function populateObjectList(
     // DP-4. Ignore already removes a shape from the OUTPUT; this removes it
     // from the LIST. At 831 rows that is the difference between a table you
     // can work in and one you only scroll past.
+    //
+    // DP-47: it says "Remove from list" now. The Delete KEY sets a shape to
+    // Ignore and leaves it in the list, so two things called Delete would mean
+    // two different things one press apart.
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'svg-prep-object-delete';
     deleteBtn.dataset.deleteIndex = String(i);
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.setAttribute('aria-label', `Delete ${name}`);
+    deleteBtn.textContent = 'Remove from list';
+    deleteBtn.setAttribute('aria-label', `Remove ${name} from the list`);
     morePanel.appendChild(deleteBtn);
 
     listEl.appendChild(item);
@@ -1182,12 +1204,7 @@ export function createSvgPrepWorkspace(containerEl) {
     roleLayer.setAttribute('aria-hidden', 'true');
     imported.appendChild(roleLayer);
 
-    if (withOverlay) {
-      const overlay = document.createElementNS(SVG_NS, 'g');
-      overlay.setAttribute('class', 'svg-prep-overlay');
-      overlay.setAttribute('aria-hidden', 'true');
-      imported.appendChild(overlay);
-    }
+    if (withOverlay) imported.appendChild(buildOverlay());
     imported.appendChild(buildHitLayer());
 
     markAsPicture(imported, label);
@@ -1223,17 +1240,96 @@ export function createSvgPrepWorkspace(containerEl) {
    * which. Signed at DP-Q34.
    */
   function renderStandInResult() {
-    const picture = renderPictureInto(
+    // DP-47 P4: the name says what is IN the picture, because the picture now
+    // changes with the roles. Somebody who cannot see it presses Ignore and
+    // hears the count fall, which is the same answer the drawing gives.
+    const counts = { foreground: 0, hole: 0, ignore: 0 };
+    liveElements.forEach((el, i) => {
+      if (!el.pathData) return;
+      const role = roles[i] || 'ignore';
+      if (counts[role] !== undefined) counts[role] += 1;
+    });
+    const picture = renderPaintedInto(
       refs.resultPane,
       refs.resultZoom,
-      'The drawing as it is now, not yet combined',
-      true
+      `The drawing as it is now: ${counts.foreground} raised, ` +
+        `${counts.hole} ${counts.hole === 1 ? 'hole' : 'holes'}, ` +
+        `${counts.ignore} left out, not yet combined`
     );
     if (picture) {
       picture.classList.add('svg-prep-standin');
       renderRoleLayer();
     }
     return picture;
+  }
+
+  /**
+   * ★ The drawing as the ROLES have left it (DP-47 P4).
+   *
+   * The stand-in used to be the raw drawing with translucent role tints laid
+   * over it, and the owner's sentence about that is the reason this exists:
+   * "I tried to select and change the letters at the bottom and could not
+   * ignore any path." Pressing Ignore changed a radio, a tint at 12 % opacity
+   * and a number in a note - and left the shape sitting in the picture exactly
+   * as before, because the picture WAS the original file. Above the combine
+   * budget, which is where a drawing of any size lives, that is every visible
+   * answer a person gets until they press Render preview.
+   *
+   * So this paints the picture from the live elements instead: raised shapes
+   * in ink, holes in the paper color over them, and ignored shapes ABSENT.
+   * An ignored letter leaves the drawing the moment it is ignored.
+   *
+   * The hit layer is still built from EVERY element, ignored ones included:
+   * a shape you cannot see is still a shape you must be able to choose again,
+   * and its row is still in the list pointing at it.
+   */
+  function renderPaintedInto(pane, before, label) {
+    const existingSvg = pane.querySelector('svg');
+    if (existingSvg) existingSvg.remove();
+    if (!currentSvgString) return null;
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    const viewBox =
+      currentSvgMeta?.viewBox ||
+      (() => {
+        const parsed = new DOMParser().parseFromString(
+          currentSvgString,
+          'image/svg+xml'
+        );
+        return parsed.querySelector('svg')?.getAttribute('viewBox') || '';
+      })();
+    if (viewBox) svg.setAttribute('viewBox', viewBox);
+
+    // Raised first, holes over them: a hole is a shape cut OUT of what it
+    // sits in, and painting it under would show nothing at all.
+    const art = document.createElementNS(SVG_NS, 'g');
+    art.setAttribute('class', 'svg-prep-standin-art');
+    const paint = (wanted, className) => {
+      liveElements.forEach((el, i) => {
+        if (!el.pathData || (roles[i] || 'ignore') !== wanted) return;
+        const p = document.createElementNS(SVG_NS, 'path');
+        p.setAttribute('d', el.pathData);
+        p.setAttribute('fill-rule', 'evenodd');
+        p.setAttribute('class', className);
+        art.appendChild(p);
+      });
+    };
+    paint('foreground', 'svg-prep-standin-path--raised');
+    paint('hole', 'svg-prep-standin-path--hole');
+    svg.appendChild(art);
+
+    const roleLayer = document.createElementNS(SVG_NS, 'g');
+    roleLayer.setAttribute('class', 'svg-prep-role-layer');
+    roleLayer.setAttribute('aria-hidden', 'true');
+    svg.appendChild(roleLayer);
+
+    svg.appendChild(buildOverlay());
+
+    svg.appendChild(buildHitLayer());
+
+    markAsPicture(svg, label);
+    pane.insertBefore(svg, before);
+    return svg;
   }
 
   function clearSvgGroup(group) {
@@ -1250,6 +1346,9 @@ export function createSvgPrepWorkspace(containerEl) {
     // color a shape is.
     const layers = root.querySelectorAll('.svg-prep-role-layer');
     layers.forEach((layer) => paintRoleLayer(layer));
+    // A rebuilt picture is a picture with an empty selection group in it, and
+    // the selection did not change just because the drawing was repainted.
+    paintSelectionLayers();
   }
 
   /**
@@ -1267,6 +1366,23 @@ export function createSvgPrepWorkspace(containerEl) {
    * the only way a stroke-only drawing (every CAD export, D-118's whole
    * subject) can be pointed at at all.
    */
+  /**
+   * The marks layer of a picture: what a person CHOSE, and where the pointer
+   * IS. Two groups, because one must not wipe the other - the selection stays
+   * until it is changed and the hover mark is cleared on every move.
+   */
+  function buildOverlay() {
+    const overlay = document.createElementNS(SVG_NS, 'g');
+    overlay.setAttribute('class', 'svg-prep-overlay');
+    overlay.setAttribute('aria-hidden', 'true');
+    const selectionLayer = document.createElementNS(SVG_NS, 'g');
+    selectionLayer.setAttribute('class', 'svg-prep-overlay-selection');
+    const hoverLayer = document.createElementNS(SVG_NS, 'g');
+    hoverLayer.setAttribute('class', 'svg-prep-overlay-hover');
+    overlay.append(selectionLayer, hoverLayer);
+    return overlay;
+  }
+
   function buildHitLayer() {
     const layer = document.createElementNS(SVG_NS, 'g');
     layer.setAttribute('class', 'svg-prep-hit-layer');
@@ -1644,11 +1760,13 @@ export function createSvgPrepWorkspace(containerEl) {
       const imported = document.importNode(svg, true);
       if (previousViewBox) imported.setAttribute('viewBox', previousViewBox);
       // The picture a person is looking at is the one the list has to be able
-      // to point at, and since DP-37 P1 that is THIS one.
-      const resultOverlay = document.createElementNS(SVG_NS, 'g');
-      resultOverlay.setAttribute('class', 'svg-prep-overlay');
-      resultOverlay.setAttribute('aria-hidden', 'true');
-      imported.appendChild(resultOverlay);
+      // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
+      // the SAME builder as every other picture. This used to build a bare
+      // overlay of its own, and the two marks that live in it went missing on
+      // the combined result the moment they moved into groups - which is a
+      // third copy of the same three lines, and exactly how the first two
+      // copies drifted apart.
+      imported.appendChild(buildOverlay());
       imported.appendChild(buildHitLayer());
       markAsPicture(imported, 'Prepared result');
       refs.resultPane.insertBefore(imported, refs.resultZoom);
@@ -1868,14 +1986,14 @@ export function createSvgPrepWorkspace(containerEl) {
     };
 
     function paint(index) {
-      overlaysIn(root).forEach((overlay) => {
-        clearSvgGroup(overlay);
+      hoverLayersIn(root).forEach((layer) => {
+        clearSvgGroup(layer);
         const el = index === null ? null : liveElements[index];
         if (!el || !el.pathData) return;
         const p = document.createElementNS(SVG_NS, 'path');
         p.setAttribute('d', el.pathData);
         p.setAttribute('class', 'svg-prep-highlight-path');
-        overlay.appendChild(p);
+        layer.appendChild(p);
       });
       refs.objects.querySelectorAll('.svg-prep-object').forEach((r) => {
         r.classList.toggle(
@@ -1895,7 +2013,15 @@ export function createSvgPrepWorkspace(containerEl) {
 
     function onClick(e) {
       const index = indexOf(e);
-      if (index === null) return;
+      if (index === null) {
+        // Empty picture: the same thing a click on empty space does in every
+        // list of things people already use.
+        if (selected.size > 0) {
+          selectionAnchor = null;
+          setSelection(new Set());
+        }
+        return;
+      }
       chooseRow(index, {
         toggle: e.ctrlKey || e.metaKey,
         range: e.shiftKey,
@@ -1926,9 +2052,14 @@ export function createSvgPrepWorkspace(containerEl) {
     };
   }
 
-  /** Every highlight overlay currently on screen. */
-  function overlaysIn(scope) {
-    return scope.querySelectorAll('.svg-prep-overlay');
+  /** Where the pointer is this instant, in every picture on screen. */
+  function hoverLayersIn(scope) {
+    return scope.querySelectorAll('.svg-prep-overlay-hover');
+  }
+
+  /** What a person has chosen, in every picture on screen. */
+  function selectionLayersIn(scope) {
+    return scope.querySelectorAll('.svg-prep-overlay-selection');
   }
 
   function setupObjectHighlighting() {
@@ -1949,27 +2080,27 @@ export function createSvgPrepWorkspace(containerEl) {
      * Every overlay, so Compare lights the shape up in both pictures at once -
      * the same rule renderRoleLayer already follows for the tints.
      */
-    const overlays = () => overlaysIn(root);
+    const hoverLayers = () => hoverLayersIn(root);
 
     function highlight(e) {
       const item = e.target.closest('.svg-prep-object');
       if (!item || !currentAnalysis) return;
       const idx = parseInt(item.dataset.index, 10);
       const el = liveElements[idx];
-      overlays().forEach((overlay) => {
-        clearSvgGroup(overlay);
+      hoverLayers().forEach((layer) => {
+        clearSvgGroup(layer);
         if (!el || !el.pathData) return;
         const p = document.createElementNS(SVG_NS, 'path');
         p.setAttribute('d', el.pathData);
         p.setAttribute('class', 'svg-prep-highlight-path');
-        overlay.appendChild(p);
+        layer.appendChild(p);
       });
     }
 
     function unhighlight(e) {
       const item = e.target.closest('.svg-prep-object');
       if (!item) return;
-      overlays().forEach(clearSvgGroup);
+      hoverLayers().forEach(clearSvgGroup);
     }
 
     refs.objects.addEventListener('mouseover', highlight);
@@ -2019,7 +2150,87 @@ export function createSvgPrepWorkspace(containerEl) {
     return true;
   }
 
+  /** A key pressed inside a control belongs to the control. */
+  function isTypingTarget(target) {
+    if (!target || !target.tagName) return false;
+    const tag = target.tagName.toLowerCase();
+    if (tag === 'input') {
+      const type = (target.type || 'text').toLowerCase();
+      // A radio or a checkbox is not a place anybody types, and the shapes
+      // list is made of radios: Delete pressed on one is Delete pressed on
+      // the row it belongs to.
+      return type !== 'radio' && type !== 'checkbox' && type !== 'button';
+    }
+    return tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  }
+
+  /**
+   * ★ The keys the owner asked for, in the relief purpose (D-141).
+   *
+   * MEASURED before this: Delete did nothing at all, and Ctrl+A selected
+   * 35,759 characters of PAGE TEXT - the whole app turned blue - because the
+   * editor bound neither and the browser's own select-all took the press.
+   *
+   * Both are handled here and STOPPED here. The app has its own Ctrl+Z and
+   * its own ideas about Delete; an editor that lets its shortcuts through to
+   * the page is the Ctrl+Z bug of DP-21 again.
+   */
+  function handleShortcutKey(e) {
+    if (e.altKey || isTypingTarget(e.target)) return false;
+    const mod = e.ctrlKey || e.metaKey;
+
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'a') {
+      if (liveElements.length === 0) return false;
+      selectAllRows();
+      return true;
+    }
+    if (mod) return false;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      // The selection if there is one; otherwise the row a person is standing
+      // on, which is what Delete means everywhere else in a list.
+      let rows = [...selected];
+      if (rows.length === 0) {
+        const focused = e.target.closest?.('.svg-prep-object');
+        const idx = focused ? parseInt(focused.dataset.index, 10) : NaN;
+        if (Number.isInteger(idx)) rows = [idx];
+      }
+      if (rows.length === 0) {
+        const sentence = 'Choose a shape first.';
+        liveRegion.textContent = sentence;
+        announce(sentence);
+        return true;
+      }
+      applyRole(rows, 'ignore', { announce: true });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * The shortcut keys, wherever the press lands.
+   *
+   * ★ This is attached to the LIST as well as to the root, and the reason is
+   * a defect this release nearly shipped: the surface MOVES the shapes list
+   * out of the workspace and into its own panel
+   * (`shapesBlock.append(refs.layerSummary, refs.bulkBar, refs.objects)`), so
+   * a press on a row does not bubble through the workspace root at all. The
+   * workspace's own unit tests passed; the editor a person actually uses did
+   * nothing. Listeners belong on the elements that travel.
+   */
+  function handleShortcutKeydown(e) {
+    if (e.key === 'Escape') return;
+    if (!handleShortcutKey(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   function handleKeydown(e) {
+    if (e.key !== 'Escape' && handleShortcutKey(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (e.key === 'Escape') {
       // Somebody upstream has already spent this press. The surface's focus
       // trap listens on the document in the capture phase and calls
@@ -2062,17 +2273,63 @@ export function createSvgPrepWorkspace(containerEl) {
     return `${selected.size} of ${liveElements.length} shapes selected.`;
   }
 
-  /** Paint the rows, the count and the button from `selected`. */
+  /**
+   * ★ The selection, drawn ON THE PICTURE as well as on the rows (D-141).
+   *
+   * MEASURED before this: choosing two rows drew two highlighted rows and
+   * nothing at all in the drawing - the only thing the picture ever showed was
+   * the hover mark of ONE shape. A person choosing shapes to ignore could not
+   * see which shapes they had chosen, in the one place where shapes look like
+   * anything.
+   *
+   * An outline, not a fill: the role tints already fill, and two fills over
+   * one shape is a color nobody chose. `non-scaling-stroke` keeps the outline
+   * one width at every zoom.
+   */
+  function paintSelectionLayers() {
+    selectionLayersIn(root).forEach((layer) => {
+      clearSvgGroup(layer);
+      if (selected.size === 0) return;
+      for (const index of selected) {
+        const el = liveElements[index];
+        if (!el || !el.pathData) continue;
+        const p = document.createElementNS(SVG_NS, 'path');
+        p.setAttribute('d', el.pathData);
+        p.setAttribute('class', 'svg-prep-selected-path');
+        layer.appendChild(p);
+      }
+    });
+  }
+
+  /** Paint the rows, the picture, the count and the button from `selected`. */
   function renderSelection() {
     refs.objects.querySelectorAll('.svg-prep-object').forEach((row) => {
       const on = selected.has(parseInt(row.dataset.index, 10));
       row.classList.toggle('svg-prep-object--selected', on);
     });
+    paintSelectionLayers();
     refs.deleteSelectedBtn.hidden = selected.size === 0;
+    // DP-47: "Remove from list" and not "Delete", because the Delete KEY now
+    // means something else on this list - it sets the chosen shapes to Ignore,
+    // which keeps them in the drawing. This button takes rows out of the list
+    // and is the one that cannot be undone by a radio.
     refs.deleteSelectedBtn.textContent =
       selected.size > 0
-        ? `Delete selected (${selected.size})`
-        : 'Delete selected';
+        ? `Remove from list (${selected.size})`
+        : 'Remove from list';
+  }
+
+  /** Every row, in one press (Ctrl+A). */
+  function selectAllRows() {
+    const all = new Set(liveElements.map((_, i) => i));
+    selectionAnchor = all.size > 0 ? 0 : null;
+    setSelection(all, { announce: false });
+    const sentence =
+      all.size === 1
+        ? 'All 1 shape selected.'
+        : `All ${all.size} shapes selected.`;
+    liveRegion.textContent = sentence;
+    announce(sentence);
   }
 
   /** Change the selection and say what it is now. */
@@ -2161,27 +2418,50 @@ export function createSvgPrepWorkspace(containerEl) {
       : ROLE_OPTIONS;
   }
 
-  function handleRoleChange(e) {
-    if (e.target.type !== 'radio') return;
-    const match = e.target.name.match(/^svg-prep-role-(\d+)$/);
-    if (!match) return;
-    const idx = parseInt(match[1], 10);
-    roles[idx] = e.target.value;
-
-    const item = refs.objects.querySelector(
-      `.svg-prep-object[data-index="${idx}"]`
+  /**
+   * ★ Set a role on one shape or on fifty, with ONE repaint, ONE preview
+   * request and ONE sentence (DP-47).
+   *
+   * The Delete key acts on a SELECTION, and a selection is often several
+   * shapes: the two lines of small text on the owner's logo are dozens. Doing
+   * this per row would ask for the combine dozens of times and say dozens of
+   * sentences, and a screen reader would still be reading the first when the
+   * last arrived.
+   *
+   * @param {Iterable<number>} indices - Rows, in the LIVE numbering
+   * @param {string} role - foreground, hole or ignore
+   * @param {{announce?: boolean}} [options] - Say what happened. False for a
+   *   radio, which announces itself as the control a person just operated.
+   * @returns {number} How many rows changed
+   */
+  function applyRole(indices, role, { announce: say = false } = {}) {
+    const options = currentRoleOptions();
+    if (!options.some((o) => o.value === role)) return 0;
+    const rows = [...new Set(indices)].filter(
+      (i) => Number.isInteger(i) && i >= 0 && i < liveElements.length
     );
-    if (item) {
+    if (rows.length === 0) return 0;
+
+    for (const idx of rows) {
+      roles[idx] = role;
+      const item = refs.objects.querySelector(
+        `.svg-prep-object[data-index="${idx}"]`
+      );
+      if (!item) continue;
+
+      const radio = item.querySelector(`input[type="radio"][value="${role}"]`);
+      if (radio) radio.checked = true;
+
       const nameSpan = item.querySelector('.svg-prep-object-name');
       const nameText = nameSpan ? nameSpan.textContent : `Element ${idx + 1}`;
       item.setAttribute(
         'aria-label',
-        `${nameText}, ${roleWord(e.target.value, currentRoleOptions())}`
+        `${nameText}, ${roleWord(role, options)}`
       );
 
       const offsetInput = item.querySelector('.svg-prep-offset-input');
       if (offsetInput) {
-        if (e.target.value === 'ignore') {
+        if (role === 'ignore') {
           offsetInput.disabled = true;
           offsetInput.value = '0';
           offsets[idx] = 0;
@@ -2192,13 +2472,32 @@ export function createSvgPrepWorkspace(containerEl) {
 
       // An ignored shape is not built at all, so it cannot be on a layer.
       const layerSelect = item.querySelector('.svg-prep-layer-select');
-      if (layerSelect) layerSelect.disabled = e.target.value === 'ignore';
+      if (layerSelect) layerSelect.disabled = role === 'ignore';
     }
 
     if (layersEnabled) validateAndMarkLayers();
-
     renderRoleLayer();
     requestResultPreview();
+
+    if (say) {
+      const word = roleWord(role, options);
+      const sentence =
+        rows.length === 1
+          ? `${rowName(rows[0])} set to ${word}.`
+          : `${rows.length} shapes set to ${word}.`;
+      liveRegion.textContent = sentence;
+      announce(sentence);
+    }
+    return rows.length;
+  }
+
+  function handleRoleChange(e) {
+    if (e.target.type !== 'radio') return;
+    const match = e.target.name.match(/^svg-prep-role-(\d+)$/);
+    if (!match) return;
+    // The radio is the control the person operated and says its own name and
+    // state; applyRole does the rest of the work for one row.
+    applyRole([parseInt(match[1], 10)], e.target.value);
   }
 
   /**
@@ -2272,13 +2571,22 @@ export function createSvgPrepWorkspace(containerEl) {
       layersTouched || layerCount === 1
         ? ''
         : ' Every shape starts on layer 1. Choose a layer under More to build a stack.';
+    // DP-47: once a stack exists, the thing worth knowing is WHEN it shows.
+    // The charm behind the editor is the last APPLIED design, so a person who
+    // has just built a stack and is looking at an unchanged charm is owed the
+    // reason rather than left to conclude the layers did nothing.
+    const builtText =
+      layersTouched && layerCount > 1
+        ? ' Layers show on the charm after you press Apply.'
+        : '';
     const problemText =
       problemCount === 0
         ? ''
         : problemCount === 1
           ? ' 1 shape needs a different layer.'
           : ` ${problemCount} shapes need a different layer.`;
-    refs.layerSummary.textContent = limitText + startText + problemText;
+    refs.layerSummary.textContent =
+      limitText + startText + builtText + problemText;
     refs.layerSummary.classList.toggle(
       'svg-prep-layer-summary-problem',
       problemCount > 0
@@ -3043,6 +3351,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.renderCancelBtn.addEventListener('click', cancelRender);
     refs.objects.addEventListener('click', handleRowClick);
     refs.objects.addEventListener('keydown', handleRowKeydown);
+    refs.objects.addEventListener('keydown', handleShortcutKeydown);
     refs.objects.addEventListener('click', handleMoreClick);
     refs.objects.addEventListener('click', handleDeleteClick);
     refs.bulkBar.addEventListener('click', handleDeleteClick);
