@@ -17,8 +17,8 @@
  * put where the surface wants them - the shape list and the warnings in the
  * side panel, the Apply/Save/Keep buttons in the toolbar - by moving the
  * nodes, which keeps every listener the workspace attached to them. Deriving
- * it again would have spent the round's remaining time re-earning behaviour
- * the owner already has, and the way to lose a pinned behaviour is to write
+ * it again would have spent the round's remaining time re-earning behavior
+ * the owner already has, and the way to lose a pinned behavior is to write
  * it twice. The surface is new; what happens inside it is the tested thing.
  * To reverse: build the table into this file and delete the mount.
  *
@@ -33,8 +33,8 @@
  *            rows, layers and offsets, exactly as before, in the Regions
  *            section.
  *   stencil  the Harley law (stencil-colours.js): the drawing's REGIONS, each
- *            with a colour, the palette, the plates in paint order and the
- *            loose pieces each plate would leave. The colour engine is a lazy
+ *            with a color, the palette, the plates in paint order and the
+ *            loose pieces each plate would leave. The color engine is a lazy
  *            chunk and arrives after the surface does. DP-20 gave it the
  *            tools: a canvas a person can point at, a table a person can walk
  *            with the arrow keys, and an Undo that says what came back. The
@@ -57,7 +57,7 @@ import { EDITOR_STRINGS as S } from './strings.js';
 import { createCommandStack } from './undo.js';
 import { createRegionCanvas, TOOLS } from './canvas.js';
 
-/** The colour engine, loaded once, on the first stencil open. */
+/** The color engine, loaded once, on the first stencil open. */
 let enginePromise = null;
 function loadEngine() {
   if (!enginePromise) {
@@ -97,7 +97,7 @@ export const PANEL_DRAWER_MAX_WIDTH = 640;
 /** A value made safe inside an attribute selector; jsdom has no CSS.escape. */
 const escapeAttr = (value) => String(value).replace(/["\\]/g, '\\$&');
 
-/** Keys that colour the selection: 1-8 the palette, 0 the base. */
+/** Keys that color the selection: 1-8 the palette, 0 the base. */
 const NUMBER_KEYS = /^[0-8]$/;
 
 const isTextField = (el) =>
@@ -456,7 +456,7 @@ export function createDrawingEditor({
   canvasLabel.id = canvasLabelId;
   canvasLabel.textContent = S.canvasLabel;
 
-  // What the tints mean, in words beside each swatch: colour is never the
+  // What the tints mean, in words beside each swatch: color is never the
   // only signal, and the legend is the one place the four looks are named.
   const legend = document.createElement('ul');
   legend.className = 'drawing-editor-legend';
@@ -685,7 +685,7 @@ export function createDrawingEditor({
     // No charm to switch to without a model behind the editor (`mode` is the
     // same flag the workspace reads to decide whether Apply means anything),
     // and none on the stencil purpose either: what sits behind THAT editor is
-    // a tile of plates, and a control labelled Charm would be naming something
+    // a tile of plates, and a control labeled Charm would be naming something
     // that is not there. DP-38 is the charm's release.
     viewSwitch.hidden = rest.mode === 'file' || purpose !== 'relief';
     isOpen = true;
@@ -833,7 +833,7 @@ export function createDrawingEditor({
       regionsName.textContent = stencil ? S.sectionRegions : S.sectionShapes;
     }
     // Roles, offsets, the design width and the before/after panes are the
-    // relief purpose's vocabulary: a stencil region has a colour, not a
+    // relief purpose's vocabulary: a stencil region has a color, not a
     // role, and the plate's size is a parameter beside the editor.
     refs.rolesToggleBtn.hidden = stencil;
     refs.compareBtn.hidden = stencil;
@@ -869,7 +869,7 @@ export function createDrawingEditor({
     try {
       engine = await loadEngine();
     } catch (err) {
-      console.error('[Drawing editor] colour engine failed to load:', err);
+      console.error('[Drawing editor] color engine failed to load:', err);
       if (token === openToken && isOpen) say(S.engineFailed);
       return;
     }
@@ -956,7 +956,7 @@ export function createDrawingEditor({
     return plan.palette.find((c) => c.id === id)?.name || id;
   }
 
-  /** The plate a region's colour is painted with, 1-based, or 0 for none. */
+  /** The plate a region's color is painted with, 1-based, or 0 for none. */
   function plateOf(regionKey) {
     const id = plan.assignment[regionKey];
     const at = plan.order.indexOf(id);
@@ -1276,7 +1276,7 @@ export function createDrawingEditor({
     say(sentence);
   }
 
-  /** A region, or a selection, gets a colour. */
+  /** A region, or a selection, gets a color. */
   function assign(keys, colourId) {
     if (!plan || !colourId) return;
     const targets = keys.filter((k) => regionOf(k) && !isRemoved(k));
@@ -1387,7 +1387,7 @@ export function createDrawingEditor({
     }
   }
 
-  // ── The colours section ─────────────────────────────────────────────────
+  // ── The colors section ─────────────────────────────────────────────────
 
   function renderSwatches() {
     const focused = document.activeElement;
@@ -1593,7 +1593,7 @@ export function createDrawingEditor({
     const taken = new Set(plan.palette.map((c) => c.name));
     let name = String(addColourForm.name.value || '').trim();
     if (!name) {
-      // No name given: the colour's own plain-language name, numbered when
+      // No name given: the color's own plain-language name, numbered when
       // the palette already has one of those (two swatches must not share).
       const label = engine.colourLabel(hex);
       name = label;
@@ -1715,7 +1715,7 @@ export function createDrawingEditor({
 
   /**
    * How many loose pieces a plate lists in full. MEASURED on the cat PNG
-   * traced at seven colours: the masks do not tile, and 567 sliver gaps
+   * traced at seven colors: the masks do not tile, and 567 sliver gaps
    * between them are honest islands - 236 on plate 1 alone. Listing every
    * one is a wall nobody can walk with a screen reader, so each plate shows
    * its largest few and counts the rest; the section's count stays true.
@@ -1740,7 +1740,7 @@ export function createDrawingEditor({
         for (const code of island.remedies) {
           const r = document.createElement('li');
           r.textContent = engine.REMEDY_SENTENCES[code].replace(
-            '{colour}',
+            '{color}',
             colourName(cut.colourId)
           );
           remedies.appendChild(r);
@@ -1914,7 +1914,7 @@ export function createDrawingEditor({
   });
 
   // Capture phase, so this runs before the workspace's own Escape handler and
-  // the one gesture takes one path. A marquee in progress is cancelled first,
+  // the one gesture takes one path. A marquee in progress is canceled first,
   // and that Escape goes no further.
   root.addEventListener(
     'keydown',
@@ -1944,7 +1944,7 @@ export function createDrawingEditor({
         return;
       }
       // The drawer does NOT intercept Escape: "Escape from anywhere inside
-      // takes one path" is pinned behaviour the owner already has, and the
+      // takes one path" is pinned behavior the owner already has, and the
       // drawer's own way shut is its toggle.
       event.preventDefault();
       event.stopPropagation();
@@ -1974,7 +1974,7 @@ export function createDrawingEditor({
     getOffsetOverrides: () => workspace.getOffsetOverrides(),
     getDeletedIndices: () => workspace.getDeletedIndices(),
     getLayerAssignments: () => workspace.getLayerAssignments(),
-    /** The colour plan, as a saved project can hold it; null for relief. */
+    /** The color plan, as a saved project can hold it; null for relief. */
     getPlan: () =>
       purpose === 'stencil' && engine && plan
         ? engine.serialisePlan(plan, regions)
@@ -2008,7 +2008,7 @@ export function createDrawingEditor({
   };
 }
 
-/** Name + colour + button: the smallest thing that adds a swatch. */
+/** Name + color + button: the smallest thing that adds a swatch. */
 function buildAddColourForm(uid) {
   const form = document.createElement('form');
   form.className = 'drawing-editor-add-colour';

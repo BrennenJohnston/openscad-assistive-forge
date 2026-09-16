@@ -549,9 +549,9 @@ export const STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR = getAppPrefKey(
 /**
  * localStorage key for the City Walk game's colour/monochrome choice
  * (CW-Q16). 'on' or 'off'. ABSENT is meaningful and is the shipped state:
- * with no stored value colour follows high contrast, exactly as it did when
+ * with no stored value color follows high contrast, exactly as it did when
  * the palettes were HC-only. The key is written only when the player works
- * the Colour toggle themselves, and from then on their choice wins.
+ * the Color toggle themselves, and from then on their choice wins.
  */
 export const STORAGE_KEY_CITY_WALK_COLOUR = getAppPrefKey('city-walk-colour');
 
@@ -561,7 +561,7 @@ export const STORAGE_KEY_CITY_WALK_COLOUR = getAppPrefKey('city-walk-colour');
  * been drawn: characters on the page's own black, and nothing behind them.
  *
  * Day fills the black gaps on nearby surfaces with a dark material tint under
- * the glyphs. It changes no glyph and no colour decision - only what is
+ * the glyphs. It changes no glyph and no color decision - only what is
  * behind them - and it is the owner's own ask, taken from the reference the
  * project is working from.
  */
@@ -571,7 +571,7 @@ export const STORAGE_KEY_CITY_WALK_DAYLIGHT =
 /**
  * localStorage key for the City Walk's mouse-look preference (CW-81,
  * CW-Q72): 'follow' (the view turns toward the cursor - the default),
- * 'drag' (the pre-CW-81 behaviour, a held-button drag), or 'off'. ABSENT
+ * 'drag' (the pre-CW-81 behavior, a held-button drag), or 'off'. ABSENT
  * means follow, except under prefers-reduced-motion where absent means off;
  * a stored choice always wins over both defaults.
  */

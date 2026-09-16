@@ -71,8 +71,8 @@ between them.
 
 | Editor | When you get it | What it gives you |
 |--------|-----------------|-------------------|
-| **CodeMirror 6** | Normally | Syntax colouring, line numbers, code folding, bracket matching, find and replace, bookmarks, wrapped-line markers |
-| **Plain text editor** | When your operating system asks for increased contrast | A real `<textarea>`: your browser's own text handling, its own find, its own undo, plus line numbers and a lightweight colour overlay |
+| **CodeMirror 6** | Normally | Syntax coloring, line numbers, code folding, bracket matching, find and replace, bookmarks, wrapped-line markers |
+| **Plain text editor** | When your operating system asks for increased contrast | A real `<textarea>`: your browser's own text handling, its own find, its own undo, plus line numbers and a lightweight color overlay |
 
 The switch happens at startup and follows your system's "increase contrast"
 setting (`prefers-contrast: more` in browser terms). If you turn that on in
@@ -85,7 +85,7 @@ works the same in both.
 
 ### CodeMirror features
 
-- Syntax colouring using the OpenSCAD desktop application's own colour scheme
+- Syntax coloring using the OpenSCAD desktop application's own color scheme
 - Line numbers
 - Code folding, with plus and minus boxes in the gutter like the desktop
 - Bracket matching
@@ -107,7 +107,7 @@ on, because that is how the desktop application behaves.
 - A real `<textarea>`, so your screen reader treats it as ordinary editable text
 - Your browser's own find and its own undo and redo
 - Line numbers and a status bar
-- A colour overlay behind the text, marked `aria-hidden` so it never reaches
+- A color overlay behind the text, marked `aria-hidden` so it never reaches
   assistive technology
 
 ---
@@ -437,13 +437,13 @@ Note: Library availability depends on the WASM build.
 
 The plain text editor is an ordinary `<textarea>`, so your screen reader reads
 it the way it reads any editable text box: line by line, character by character,
-with your usual review keys. Its colour overlay is marked `aria-hidden`, so it
+with your usual review keys. Its color overlay is marked `aria-hidden`, so it
 never adds noise.
 
 Turning on your system's "increase contrast" setting is what gives you that
 editor. There is no in-app control that swaps them.
 
-> Not yet confirmed by ear. The behaviour above is what the code does; nobody
+> Not yet confirmed by ear. The behavior above is what the code does; nobody
 > has yet sat down with NVDA, JAWS or VoiceOver and worked through Expert Mode.
 > If you do, please tell us what you find.
 
@@ -512,7 +512,7 @@ problem cannot stop it appearing. If the editor area is blank:
 2. Check the browser console (`F12`) for an error and include it if you report
    the problem
 3. If you have your system's "increase contrast" setting on, you are meant to
-   see the plain text editor rather than the coloured one -- that is the design,
+   see the plain text editor rather than the colored one -- that is the design,
    not a fault
 
 ---

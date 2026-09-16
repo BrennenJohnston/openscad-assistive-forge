@@ -117,7 +117,7 @@ relative paths cannot resolve against a `data:` base, so name absolute URLs.
 
 Inline file *content* is possible but awkward: the loader decides a file's kind
 by its suffix, so an inline `.scad` needs a fragment suffix
-(`data:text/plain;base64,…#f.scad`) to be recognised. If you find yourself doing
+(`data:text/plain;base64,…#f.scad`) to be recognized. If you find yourself doing
 this, say so in an issue - a proper inline-content field is the obvious
 successor and nobody has needed it yet.
 
@@ -134,7 +134,7 @@ Documented in `MANIFEST_STABILITY_CONTRACT.md`.
 
 Forge hands files to the person, not to your tool. There is no callback, no
 postMessage, and no shared storage (see section 5). What you can rely on is that
-the file the person sends you is recognisable.
+the file the person sends you is recognizable.
 
 | What | Named | Notes |
 | --- | --- | --- |
@@ -167,9 +167,9 @@ reproduce their result without asking them anything.
 
 Forge accepts `.svg` and `.dxf` as drawings, and `.png`, `.jpg`, `.bmp` and
 `.gif` as pictures it will trace into a drawing. A drawing that comes in can be
-tidied up (subpaths excluded, ink separated from a coloured background) and sent
+tidied up (subpaths excluded, ink separated from a colored background) and sent
 back out as SVG or DXF. The DXF conversion runs through Forge's own OpenSCAD
-engine, and the editor states the finished size in millimetres, out loud,
+engine, and the editor states the finished size in millimeters, out loud,
 because a DXF is a file somebody is going to cut.
 
 ### 3.3 The shared-folder lane (Chromium-family only, and currently off)

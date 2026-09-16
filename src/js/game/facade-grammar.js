@@ -4,7 +4,7 @@
  *
  * Before this module a facade was a texture chosen by `hash % 9` (a mapped
  * `building:material` narrowing the choice where one existed), laid onto the
- * wall in world metres. Two things followed from that, and both of them are
+ * wall in world meters. Two things followed from that, and both of them are
  * what this module exists to remove:
  *
  *   1. A block of flats and an office tower had the same chance of every
@@ -12,7 +12,7 @@
  *      says which is which - `building=apartments` on 605 buildings across
  *      the four extracts, `commercial` on 266, `office` on 91 - and nothing
  *      read it.
- *   2. UVs in world metres mean the tile starts wherever the building happens
+ *   2. UVs in world meters mean the tile starts wherever the building happens
  *      to stand, so a wall of arbitrary width carries a FRACTIONAL BAY at its
  *      corner and a building of arbitrary height a fractional row at its top.
  *      CW-34 and CW-46 fixed the PHASE (the per-building shift moves in whole
@@ -45,7 +45,7 @@
  * cannot slip past unnoticed.
  */
 
-/** The storey height assumed when a building carries no `building:levels`. */
+/** The story height assumed when a building carries no `building:levels`. */
 export const FACADE_LEVEL_M_DEFAULT = 3.2;
 
 /**
@@ -57,7 +57,7 @@ export const FACADE_LEVEL_M_DEFAULT = 3.2;
 export const BLANK_WALL_MIN_BAY_FRACTION = 0.6;
 
 /**
- * ★★ A WALL LOWER THAN THIS IS NOT A STOREY - AND THE RULE THAT WOULD BLANK IT
+ * ★★ A WALL LOWER THAN THIS IS NOT A STORY - AND THE RULE THAT WOULD BLANK IT
  * WAS MEASURED AND REFUSED. `tooShort` is reported, and COUNTED in the scene
  * statistics, but nothing acts on it.
  *
@@ -69,16 +69,16 @@ export const BLANK_WALL_MIN_BAY_FRACTION = 0.6;
  * Then it was measured on all four cities, and the cure is worse:
  *
  *   threshold        Denver blank walls        Seattle
- *   none (shipped)   2.10 % of wall metres     2.14 %
+ *   none (shipped)   2.10 % of wall meters     2.14 %
  *   1.0 m           12.90 % (232 volumes)      2.69 % (16)
  *   1.3 m           18.24 % (343)              3.10 % (31)
  *   1.8 m           20.49 % (380)              4.61 % (68)
- *   0.6 of a storey 24.93 % (488)              5.32 % (86)
+ *   0.6 of a story 24.93 % (488)              5.32 % (86)
  *
  * Denver's 330 buildings carry 3,013 `building:part` prisms, stacked slabs
  * with long perimeters and sub-metre heights, and blanking them takes an
  * eighth to a quarter of the whole city's facade away at EVERY threshold that
- * catches the artefact. A squashed strip of window on a 0.9 m band is a few
+ * catches the artifact. A squashed strip of window on a 0.9 m band is a few
  * pixels seen from the street; a fifth of Denver going dark is not. The
  * measurement is kept here and in `stats.shortWalls` so that CW-74, which owns
  * the ground-floor band, inherits the number rather than the surprise.
@@ -89,7 +89,7 @@ export const BLANK_WALL_MIN_ROW_M = 1.8;
 export const WALL_RUN_MAX_TURN_DEG = 12;
 
 /**
- * The families, each a shortlist of window archetypes and the storey height
+ * The families, each a shortlist of window archetypes and the story height
  * to assume when the data does not say.
  *
  * The archetypes are named, not indexed: city-scene.js owns the table they
@@ -133,7 +133,7 @@ export const FACADE_FAMILIES = Object.freeze({
     archetypes: Object.freeze(['slot', 'cross', 'plain']),
     levelM: 4,
   }),
-  // One tall slot, and a storey height nothing else in the city has.
+  // One tall slot, and a story height nothing else in the city has.
   church: Object.freeze({
     archetypes: Object.freeze(['slot']),
     levelM: 6,
@@ -281,11 +281,11 @@ export function facadeCandidates(family, materialNames) {
  * `building:levels` wins outright where it exists (766 + 271 + 159 + 258
  * buildings across the four cities have it), because it is a statement about
  * the building rather than an inference from its height. Where it does not,
- * the family's storey height divides the wall and the remainder is spread
+ * the family's story height divides the wall and the remainder is spread
  * back over the rows, which is what makes the top row full instead of cut.
  *
  * ★ THE GROUND FLOOR IS RESERVED, NOT COUNTED. Pass `baseM` and the grid
- * starts above it; a tagged level count then loses one storey to it, because
+ * starts above it; a tagged level count then loses one story to it, because
  * the ground floor is one of the levels the mapper counted. CW-74 owns what
  * is drawn in that reserved band; this release only keeps the window grid out
  * of it.
@@ -325,9 +325,9 @@ export function fitRows({
 /**
  * How many bays fit across one wall, and how wide each one is.
  *
- * ★ THE EDGE RULE IS TO STRETCH, NOT TO CENTRE. The bay count is the nearest
+ * ★ THE EDGE RULE IS TO STRETCH, NOT TO CENTER. The bay count is the nearest
  * whole number of the family's pitch, and the bays then share the wall
- * exactly, so there is no leftover to centre and no bay cut at a corner. A
+ * exactly, so there is no leftover to center and no bay cut at a corner. A
  * 17.3 m wall at a 4 m pitch is four bays of 4.325 m; the alternative - four
  * 4 m bays and a 1.3 m gap - puts the very fraction at the corner that this
  * release exists to remove.
@@ -349,7 +349,7 @@ export function fitBays({ widthM, pitchM }) {
  * have split at a node is fitted as one wall rather than two.
  *
  * OSM footprints split straight walls all the time - a node shared with a
- * neighbouring building, a kerb, a survey point. Fitting bays per EDGE would
+ * neighboring building, a kerb, a survey point. Fitting bays per EDGE would
  * put a different bay width either side of such a node, and the join is
  * exactly where the eye looks. Two edges join a run when they share an
  * endpoint and turn by less than `maxTurnDeg`.

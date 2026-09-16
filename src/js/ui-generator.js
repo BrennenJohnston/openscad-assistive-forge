@@ -516,7 +516,7 @@ function findParamControl(paramName, labelHint = null) {
         .trim()
         .toLowerCase();
       // A hint can be the tile's label or the parameter name itself, because a
-      // labelled dial no longer shows its name anywhere.
+      // labeled dial no longer shows its name anywhere.
       const spacedName = name.replace(/_/g, ' ').toLowerCase();
       if ((lbl && lbl === hint) || spacedName === hint) {
         const byLabel = document.querySelector(
@@ -1998,10 +1998,10 @@ export function findLaserParam(parameters) {
 /**
  * Everything that turns a drawing into stencil plates, loaded on demand.
  *
- * ★ IT IS A LAZY CHUNK BECAUSE IT DOES NOT FIT. The colour model, the ring
+ * ★ IT IS A LAZY CHUNK BECAUSE IT DOES NOT FIT. The color model, the ring
  * geometry, the plate builder and the jig come to a little over 4 KB gzipped,
  * and the core bundle had 704 bytes left. MEASURED: in the core, 516,052 B
- * against a 512,000 budget; with the colour model alone split out, 513,070,
+ * against a 512,000 budget; with the color model alone split out, 513,070,
  * still over; with the whole engine split out, 511,384 and passing. Most
  * people never open a stencil, so this is where it belongs anyway.
  *
@@ -2040,7 +2040,7 @@ export function findPlateParams(parameters) {
   if (!parameters) return [];
   const out = [];
   // Up to STENCIL_PLATE_CAP, which is NOT the charm engine's LAYER_EMIT_CAP:
-  // one is how many paint colours a stencil may have (eight, the owner's
+  // one is how many paint colors a stencil may have (eight, the owner's
   // number) and the other is how many relief passes a tiered charm builds
   // (three). Walking the wrong one capped a six-colour cat at three plates.
   for (let n = 1; n <= STENCIL_PLATE_CAP; n++) {
@@ -2468,12 +2468,12 @@ function createFileControl(
    * plates that are already mm-true and the model is a dumb extruder. Change
    * those names in the model and change them here.
    *
-   * ★ A PLATE IS A COLOUR NOW, not a nesting depth (DP-16). The regions of the
-   * drawing are found, given colours, put in a paint order, and each plate
+   * ★ A PLATE IS A COLOR NOW, not a nesting depth (DP-16). The regions of the
+   * drawing are found, given colors, put in a paint order, and each plate
    * cuts what its rule says. Until the editor exists, a drawing with no
-   * colours of its own gets ONE colour - the base coat - and therefore one
+   * colors of its own gets ONE color - the base coat - and therefore one
    * plate cutting the whole silhouette. That is the honest answer to "what
-   * colours does this line drawing have", and it is an answer a person changes
+   * colors does this line drawing have", and it is an answer a person changes
    * by painting regions rather than one the app guesses from nesting depth.
    *
    * @param {Object|null} value - The design being emitted
@@ -2565,7 +2565,7 @@ function createFileControl(
       const names = new Map(palette.map((c) => [c.id, c.name]));
 
       // ONE content box for every plate and for the laser sheet, so the
-      // colours land on each other, and ONE fit from it onto the plate. That
+      // colors land on each other, and ONE fit from it onto the plate. That
       // is the whole of D-122, said in two lines.
       const contentBox = boundsOf(
         [...(silhouette || []), ...cuts.flatMap((c) => c.rings)].flat()
@@ -2710,7 +2710,7 @@ function createFileControl(
   // The conversion no longer begins by itself for anything but a picture small
   // enough that it is over before a person could have pressed the button
   // (AUTO_START_MAX_PIXELS). Everything else waits to be started, reports the
-  // stage it has reached, and can be cancelled at any moment.
+  // stage it has reached, and can be canceled at any moment.
   //
   // AUTO_START_MAX_PIXELS is the owner's number, signed at DP-Q32: at most
   // 0.5 MP may start by itself, through the same bar and the same Cancel. Above
@@ -2741,7 +2741,7 @@ function createFileControl(
   workspaceContainer.className = 'svg-prep-workspace-container';
 
   let workspace = null;
-  // The colour plan the person applied in the editor (stencil purpose), as
+  // The color plan the person applied in the editor (stencil purpose), as
   // `serialisePlan` wrote it. Session only until DP-20 saves it with the
   // project; null means the plates follow the automatic first pass.
   let currentPlan = null;
@@ -2807,9 +2807,9 @@ function createFileControl(
       // DP-7. The column exists only for a tile that declares layer params.
       layersEnabled: layerParams.length > 0,
       initialLayers: storedMeta?.prepLayers || null,
-      // DP-20. The colour plan a person applied, keyed by region (a property
+      // DP-20. The color plan a person applied, keyed by region (a property
       // of the shape) so it survives the regions being found again. Absent
-      // in older saves and in a drawing nobody has coloured yet, which means
+      // in older saves and in a drawing nobody has colored yet, which means
       // what it always did: the automatic first pass.
       initialPlan: currentPlan || storedMeta?.prepPlan || null,
       ...extra,
@@ -2830,7 +2830,7 @@ function createFileControl(
   }
 
   /**
-   * Does the drawing bring colours of its own? Two distinct fills at least;
+   * Does the drawing bring colors of its own? Two distinct fills at least;
    * a line drawing is all black or all unfilled and brings none.
    */
   function hasOwnColours(analysis) {
@@ -2871,9 +2871,9 @@ function createFileControl(
       // there is something to decide and a way to go and decide it.
       badge.textContent =
         plateParams.length > 0
-          ? `${count} shapes, no colours yet. Open the editor to say what each one gets.`
+          ? `${count} shapes, no colors yet. Open the editor to say what each one gets.`
           : count > 1
-            ? `Using original (${count} shapes) \u2014 OpenSCAD merges these automatically`
+            ? `Using original (${count} shapes). OpenSCAD merges these automatically.`
             : 'SVG Ready';
       badge.dataset.level = 'ready';
       statusCard.appendChild(badge);
@@ -2929,7 +2929,7 @@ function createFileControl(
     }
 
     // The Design card's summary line: what the plates will be, once a plan
-    // has been applied. A colour can be painted twice, so the two counts are
+    // has been applied. A color can be painted twice, so the two counts are
     // not the same number.
     if (currentPlan) {
       const summary = document.createElement('p');
@@ -2938,7 +2938,7 @@ function createFileControl(
       const plates = currentPlan.order.length;
       // STRINGS: owner review pending (DP-R2 text pack).
       summary.textContent =
-        `${colours} ${colours === 1 ? 'colour' : 'colours'}, ` +
+        `${colours} ${colours === 1 ? 'color' : 'colors'}, ` +
         `${plates} ${plates === 1 ? 'plate' : 'plates'}.`;
       statusCard.appendChild(summary);
     }
@@ -2946,7 +2946,7 @@ function createFileControl(
 
   function handleEditorApply(result) {
     if (!result) return;
-    // The stencil purpose's colour plan rides with the drawing, so the
+    // The stencil purpose's color plan rides with the drawing, so the
     // plates that come out follow what the person said and not the automatic
     // first pass. Null for a relief tile, which has no plan.
     currentPlan =
@@ -3075,12 +3075,12 @@ function createFileControl(
     traceRunner.cancel();
     traceProgress.finish();
     traceProgress.offer('Start conversion');
-    fileInfo.textContent = 'Conversion cancelled';
+    fileInfo.textContent = 'Conversion canceled';
     fileInfo.removeAttribute('aria-busy');
     fileButton.disabled = false;
-    if (inkControls) inkControls.setFailed('Conversion cancelled');
+    if (inkControls) inkControls.setFailed('Conversion canceled');
     // One action, one announcement (DP-32).
-    announceChange('Conversion cancelled');
+    announceChange('Conversion canceled');
   }
 
   /** Begin a conversion of the picture already read, with the current settings. */
@@ -3143,10 +3143,10 @@ function createFileControl(
 
       const pathCount = countTracedShapes(svg);
       if (inkControls) {
-        // The Colours mode has its own sentence: the ink summary is about how
+        // The Colors mode has its own sentence: the ink summary is about how
         // much of a picture counted as a line, which is not a question this
         // mode asks. It also feeds the wall-colour list, which cannot be
-        // offered until the colours are known.
+        // offered until the colors are known.
         if (summary && summary.mode === 'colours') {
           inkControls.setColourResult(summary.colours, {
             factor: summary.downscale ? summary.downscale.factor : null,
@@ -3272,14 +3272,14 @@ function createFileControl(
       if (analysis.recommendation === 'pass_through') {
         // \u2605 D-124. For a charm there is nothing to decide about a plain
         // drawing: OpenSCAD fills every shape it is given. On a tile that
-        // makes plates, a drawing with no colours of its own IS the task -
+        // makes plates, a drawing with no colors of its own IS the task -
         // every region is base coat until somebody says otherwise - so the
-        // editor opens on it, saying so. A drawing that brings its colours
+        // editor opens on it, saying so. A drawing that brings its colors
         // (a traced picture, a filled SVG) already has a first pass worth
         // looking at, and the card's button is the way in.
         if (plateParams.length > 0 && !hasOwnColours(analysis)) {
           // The surface says what it found as it opens ("21 regions found,
-          // no colours yet: every one starts as the base coat"), so there is
+          // no colors yet: every one starts as the base coat"), so there is
           // no second sentence to write here.
           openEditor();
         }
@@ -3329,7 +3329,7 @@ function createFileControl(
       statusCard.appendChild(guidance);
       statusCard.style.display = '';
 
-      announceChange('SVG preparation failed \u2014 try a simpler file');
+      announceChange('SVG preparation failed. Try a simpler file.');
       return rawSvgText;
     }
   }

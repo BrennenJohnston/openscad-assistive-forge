@@ -152,7 +152,7 @@ function visibleTopBoundFor(el) {
  * step the halo's top edge, and the panel's own heading with it, disappeared
  * under the header. MEASURED at the base: #welcomeScreen is the scroll
  * container and its visible box starts 124px down, but scrollIntoView with
- * block:'center' centres against the WINDOW, so it parked the 476px panel at
+ * block:'center' centers against the WINDOW, so it parked the 476px panel at
  * y=13 and the container clipped its first 111px. The halo's top edge sat 66px
  * above the header's bottom edge.
  *
@@ -1789,7 +1789,7 @@ const TUTORIALS = {
           <p><strong>Try it:</strong> Select a different output format.</p>
           <ul>
             <li><strong>STL</strong> - 3D printing</li>
-            <li><strong>AMF</strong> - Multi-material, carries colour</li>
+            <li><strong>AMF</strong> - Multi-material, carries color</li>
             <li><strong>OBJ</strong> - Rendering/animation</li>
           </ul>
         `,
@@ -3491,7 +3491,7 @@ function toggleMinimize() {
  *
  * Its symptom was that Restore did nothing on a phone while the drawer was
  * open: the watcher re-minimized the tour in the same frame, so the button was
- * visible, labelled, and inert. The patch was to make Restore close the drawer
+ * visible, labeled, and inert. The patch was to make Restore close the drawer
  * first - the move a person had to make by hand to get the tour back.
  *
  * That was a patch over D-62. With the drawer no longer counted as a dialog
@@ -3981,7 +3981,7 @@ async function showStep(stepIndex) {
  *
  * D-65 (UF-38). Both callers used to do this by hand, and both left `dock()`'s
  * inline `width` and `maxHeight` behind while dropping the class that keeps
- * the mobile bottom-sheet rule away - so a centred card was sized by one
+ * the mobile bottom-sheet rule away - so a centered card was sized by one
  * step's dock arithmetic and padded by another rule's safe-area inset.
  * `tutorial-panel-centered` says which of the two un-docked states this is.
  *
@@ -4250,7 +4250,7 @@ function updateSpotlightAndPosition() {
     // pointing at something low on the screen docks upward, and at 412x810 a
     // card starting at y 8 buried the header row and the Customizer row on
     // its way past — measured on the intro tour's "Generate and download your
-    // file" step, where elementFromPoint at #uiModeToggle's centre returned
+    // file" step, where elementFromPoint at #uiModeToggle's center returned
     // the card. Docking clear of the chrome is better than disqualifying the
     // dock, which would cost the card its visibility on those steps.
     // A bar the target itself lives in is not counted: the spotlight elevates
@@ -4306,7 +4306,7 @@ function updateSpotlightAndPosition() {
     // cleared its target could still bury the rest of the chrome — measured
     // at 412x810 on the intro tour's "Generate and download your file" step,
     // where the top-docked card covered #uiModeToggle and elementFromPoint
-    // at that button's centre returned the card.
+    // at that button's center returned the card.
     const clearanceRects = () => {
       const out = [];
       const selector = [
@@ -5087,7 +5087,7 @@ function handleModeChangeDuringTutorial(newMode) {
 
 /**
  * Close the tutorial and clean up
- * @param {boolean} completed - Whether tutorial was completed (vs cancelled)
+ * @param {boolean} completed - Whether tutorial was completed (vs canceled)
  * @param {Object} [options]
  * @param {boolean} [options.skipModeRestore] - Do not switch back to the
  *   pre-tutorial mode (the close was caused by the user's own mode switch)

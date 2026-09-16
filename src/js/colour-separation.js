@@ -1,10 +1,10 @@
 /**
- * Colours out of a picture: the owner's own pipeline, in the app.
+ * Colors out of a picture: the owner's own pipeline, in the app.
  *
  * Their route to a stencil was photograph, then Photoshop posterize, then
  * Illustrator, then Fusion. This is the first two steps: quantise a picture
- * into a handful of colours and hand back an SVG whose `<path fill="#...">`
- * elements ARE the regions. That is the same shape a coloured vector drawing
+ * into a handful of colors and hand back an SVG whose `<path fill="#...">`
+ * elements ARE the regions. That is the same shape a colored vector drawing
  * arrives in, so `paletteFromFills` and everything after it cannot tell the
  * two apart, and a photograph and a drawing meet in the same editor.
  *
@@ -13,20 +13,20 @@
  * GPL-3.0-or-later): the deterministic k-means with histogram-prefiltered
  * farthest-point seeding, and the border-vote background pick. Two things
  * changed on the way over: a FIXED palette path, so a person who knows their
- * paint can name it and get exactly those colours; and the tracing, which
+ * paint can name it and get exactly those colors; and the tracing, which
  * stencil-forge does per mask with its own tracer and which here goes through
  * imagetracerjs, already a dependency.
  *
- * ★ EACH COLOUR IS TRACED AS ITS OWN BINARY MASK, not by letting the tracer
+ * ★ EACH COLOR IS TRACED AS ITS OWN BINARY MASK, not by letting the tracer
  * quantise. MEASURED on the owner's cat: automatic 8-colour quantisation gave
- * brown 181 paths and grey 178, nearly all of them anti-alias slivers along
- * the edges between colours. One colour at a time against a plain white
+ * brown 181 paths and gray 178, nearly all of them anti-alias slivers along
+ * the edges between colors. One color at a time against a plain white
  * ground gives the tracer nothing to be uncertain about, and an area floor
  * removes what is left.
  *
- * ★ THE PAPER IS A COLOUR. `filterForegroundPaths` in image-import drops the
+ * ★ THE PAPER IS A COLOR. `filterForegroundPaths` in image-import drops the
  * lightest layer, which is right when the question is "what is drawn here"
- * and wrong when it is "what colours is this". The wall behind a stencil is a
+ * and wrong when it is "what colors is this". The wall behind a stencil is a
  * first-class part of the plan - it is what "Unpainted" means - so nothing is
  * dropped here.
  *
@@ -40,7 +40,7 @@ import { medianFilter3x3 } from './ink-extraction.js';
 /** Below this alpha a pixel is not part of the picture. */
 const ALPHA_OPAQUE_MIN = 128;
 
-/** How many colours a person may ask for. */
+/** How many colors a person may ask for. */
 export const COLOUR_COUNT_MIN = 2;
 export const COLOUR_COUNT_MAX = 8;
 
@@ -48,13 +48,13 @@ export const COLOUR_COUNT_MAX = 8;
  * How many extra clusters to ask for before keeping the ones that matter.
  *
  * ★ MEASURED, and it is the difference between finding the owner's cat's eyes
- * and not. Asked for six colours flat, the clustering spends its whole budget
+ * and not. Asked for six colors flat, the clustering spends its whole budget
  * on the black-to-white ramp that anti-aliasing leaves along every edge:
- * white 43.6%, black 31.1%, brown 15.9%, grey 8.5%, and then two near-greys at
+ * white 43.6%, black 31.1%, brown 15.9%, gray 8.5%, and then two near-greys at
  * 0.6% and 0.3%. The green eyes (1.4% of the picture) and the pink nose (1.1%)
  * never get a cluster at all - not at six, not at eight. Asked for six PLUS
- * TWO, the eight clusters cover white, black, brown, grey, GREEN, PINK and two
- * remnants, and the remnants merge back into their nearest neighbour. Same
+ * TWO, the eight clusters cover white, black, brown, gray, GREEN, PINK and two
+ * remnants, and the remnants merge back into their nearest neighbor. Same
  * cost to a tenth of a second.
  */
 export const CLUSTER_OVERSHOOT = 2;
@@ -63,8 +63,8 @@ export const CLUSTER_OVERSHOOT = 2;
  * How many median passes flatten the anti-alias ramp before clustering.
  *
  * ★ Also measured on the cat, and also load-bearing: without it, overshooting
- * finds two more shades of grey rather than the green and the pink, because
- * the ramp has more distinct colours in it than the picture does. Two passes
+ * finds two more shades of gray rather than the green and the pink, because
+ * the ramp has more distinct colors in it than the picture does. Two passes
  * of a 3x3 median collapse the ramp and leave every region's interior exactly
  * where it was. Single-pixel detail goes too, and a stencil could not cut it
  * anyway - the area floor drops it a step later.
@@ -74,11 +74,11 @@ export const PREFILTER_PASSES = 2;
 /**
  * How many pixels the CLUSTERING pass looks at.
  *
- * ★ Clustering is a question about COLOURS, not about pixels, and it does not
+ * ★ Clustering is a question about COLORS, not about pixels, and it does not
  * get a better answer from more of them. MEASURED on the cat: the two median
- * passes that make the small colours findable cost 3,692 ms on the full
+ * passes that make the small colors findable cost 3,692 ms on the full
  * 316,387-pixel image and 24 ms on a 40,000-pixel sample of it, and both find
- * the same six colours - the green is 1.5% of the picture either way, which is
+ * the same six colors - the green is 1.5% of the picture either way, which is
  * 600 pixels at this size. So the clusters are found on a sample and every
  * pixel of the real picture is then snapped to the palette that came out.
  */
@@ -87,14 +87,14 @@ export const CLUSTER_SAMPLE_PIXELS = 40000;
 /**
  * The smallest region worth keeping, in PIXELS of the traced image.
  *
- * ★ Four is the floor, and it scales with how big a pixel is in millimetres.
+ * ★ Four is the floor, and it scales with how big a pixel is in millimeters.
  * A picture traced at 0.1 mm per pixel has a 4-pixel region 0.04 mm2 across,
  * which no printer or laser can make and no eye can see; the same 4 pixels at
  * 1 mm per pixel is 4 mm2, which is a real mark. The rule is therefore "at
- * least four pixels, and at least a tenth of a square millimetre", and the
+ * least four pixels, and at least a tenth of a square millimeter", and the
  * second half is what a caller who knows the scale gets.
  *
- * @param {number} [mmPerPixel] - Millimetres one pixel will become
+ * @param {number} [mmPerPixel] - Millimeters one pixel will become
  * @returns {number} Area floor in square pixels
  */
 export function floorPx(mmPerPixel = 0) {
@@ -115,26 +115,26 @@ const hex = (c) =>
 
 /**
  * A smaller copy of a picture in which each output pixel is the MOST COMMON
- * colour of the block it came from, not the average and not a sample.
+ * color of the block it came from, not the average and not a sample.
  *
- * ★ THIS IS THE STEP THAT MAKES SMALL COLOURS FINDABLE, and three ways of
+ * ★ THIS IS THE STEP THAT MAKES SMALL COLORS FINDABLE, and three ways of
  * doing it were measured on the owner's cat before this one:
  *
  *   full image, two median passes   finds green and pink   3,692 ms
  *   sample every nth pixel          MISSES both              24 ms
- *   most common colour per block    finds green and pink     31 ms
+ *   most common color per block    finds green and pink     31 ms
  *
  * Sampling misses them because it keeps the anti-aliased ramp between black
  * and white at exactly the proportion it had, and the clustering then spends
- * its whole budget on shades of grey; a median applied afterwards is filtering
- * a mosaic whose neighbours were never neighbours. Averaging would INVENT
- * colours between the real ones, which is the opposite of what a step looking
- * for the real ones wants. The mode of a block is a colour that was actually
+ * its whole budget on shades of gray; a median applied afterwards is filtering
+ * a mosaic whose neighbors were never neighbors. Averaging would INVENT
+ * colors between the real ones, which is the opposite of what a step looking
+ * for the real ones wants. The mode of a block is a color that was actually
  * there, and a block straddling an edge resolves to whichever side owns more
  * of it - which is what removing a ramp means.
  *
- * The modal colour is reported as the MEAN of the pixels in its own histogram
- * bin, so a region's true colour survives rather than being rounded to the
+ * The modal color is reported as the MEAN of the pixels in its own histogram
+ * bin, so a region's true color survives rather than being rounded to the
  * bin's corner.
  *
  * @param {{width: number, height: number, data: Uint8ClampedArray}} imageData
@@ -194,10 +194,10 @@ export function modeDown(imageData, maxPixels) {
 }
 
 /**
- * Snap every pixel to the nearest colour of a palette the caller supplies.
+ * Snap every pixel to the nearest color of a palette the caller supplies.
  *
  * The deterministic path: a person who knows their paint names it, and gets
- * exactly those colours rather than whatever k-means decides is nearby.
+ * exactly those colors rather than whatever k-means decides is nearby.
  *
  * @param {{width: number, height: number, data: Uint8ClampedArray}} imageData
  * @param {Array<{r: number, g: number, b: number}>} palette
@@ -232,11 +232,11 @@ export function snapToPalette(imageData, palette) {
 /**
  * Deterministic k-means over the opaque pixels, in RGB.
  *
- * Ported unchanged in behaviour from stencil-forge. Seeding is
+ * Ported unchanged in behavior from stencil-forge. Seeding is
  * histogram-prefiltered farthest-point rather than luminance quantiles,
- * because quantile seeds collapse on a picture with one dominant colour -
+ * because quantile seeds collapse on a picture with one dominant color -
  * measured there on an antialiased bullseye, where two seeds landed inside
- * the grey wall and a small orange accent never got a cluster at all. No
+ * the gray wall and a small orange accent never got a cluster at all. No
  * randomness anywhere: the same picture gives the same answer.
  *
  * @param {{width: number, height: number, data: Uint8ClampedArray}} imageData
@@ -244,7 +244,7 @@ export function snapToPalette(imageData, palette) {
  * @param {number} [iterations]
  * @param {number} [overshoot] - Extra clusters beyond colourCount; see
  *   CLUSTER_OVERSHOOT for why asking for more and merging back is what finds
- *   a colour that covers 1% of a picture
+ *   a color that covers 1% of a picture
  * @returns {{palette: Array, assignments: Int16Array, pixelCounts: number[]}}
  */
 export function quantise(
@@ -268,7 +268,7 @@ export function quantise(
   const assignments = new Int16Array(pixelCount).fill(-1);
   if (opaque.length === 0) return { palette: [], assignments, pixelCounts: [] };
 
-  // A 4-bit-per-channel histogram, so seeding looks at COLOURS rather than at
+  // A 4-bit-per-channel histogram, so seeding looks at COLORS rather than at
   // pixels and a thousand near-identical pixels do not outvote a small patch.
   const bin = (r, g, b) => ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
   const binCount = new Uint32Array(4096);
@@ -296,8 +296,8 @@ export function quantise(
     }
     return out;
   };
-  // A picture small enough that every colour is rarer than the floor still
-  // has colours; fall back to the raw bins rather than to nothing.
+  // A picture small enough that every color is rarer than the floor still
+  // has colors; fall back to the raw bins rather than to nothing.
   const candidates = gather(floor).length > 0 ? gather(floor) : gather(1);
 
   candidates.sort((a, b) => b.count - a.count);
@@ -377,11 +377,11 @@ export function quantise(
 
 /**
  * Keep the `keep` biggest clusters and fold the rest into their nearest
- * neighbour among them.
+ * neighbor among them.
  *
- * The overshoot above exists so a small distinct colour gets a cluster of its
+ * The overshoot above exists so a small distinct color gets a cluster of its
  * own; this is the other half of it, which puts the leftovers back. Merging by
- * NEAREST COLOUR rather than dropping them means no pixel is left unassigned
+ * NEAREST COLOR rather than dropping them means no pixel is left unassigned
  * and the picture still adds up to the whole picture.
  *
  * @param {{palette: Array, assignments: Int16Array, pixelCounts: number[]}} q
@@ -432,10 +432,10 @@ export function keepLargest(q, keep) {
 }
 
 /**
- * Which colour is the wall behind the stencil.
+ * Which color is the wall behind the stencil.
  *
  * The one most present along the BORDER of the picture, because that is where
- * the wall shows, with the lighter of a tie winning. Colour cannot answer this
+ * the wall shows, with the lighter of a tie winning. Color cannot answer this
  * on its own - a dark background is still a background - which is the same
  * lesson the stencil layering learned about paper.
  *
@@ -474,8 +474,8 @@ export function pickBackground(size, assignments, palette) {
 }
 
 /**
- * One binary mask per colour. NOT stacked: stacking regions into plates is
- * the colour model's job, on rings, after the person has said what goes where.
+ * One binary mask per color. NOT stacked: stacking regions into plates is
+ * the color model's job, on rings, after the person has said what goes where.
  *
  * @param {Int16Array} assignments
  * @param {number} colourCount
@@ -492,7 +492,7 @@ export function masksFor(assignments, colourCount) {
   return masks;
 }
 
-/** imagetracerjs, told to see two colours and only two. */
+/** imagetracerjs, told to see two colors and only two. */
 const MASK_TRACER = {
   colorsampling: 0,
   colorquantcycles: 1,
@@ -516,11 +516,11 @@ const MASK_TRACER = {
 /**
  * Grow a mask by one pixel in the four directions.
  *
- * ★ DP-24 P3, THE SLIVER FIX. Each colour is traced as its own mask and the
- * tracer pulls every boundary inward, so two traced neighbours did not
+ * ★ DP-24 P3, THE SLIVER FIX. Each color is traced as its own mask and the
+ * tracer pulls every boundary inward, so two traced neighbors did not
  * quite touch: the hairline gaps between them became 567 loose pieces on
  * the owner's cat (236 on plate 1 alone). Grown under a pixel before
- * tracing, neighbours MEET - the overlap is harmless because the paint
+ * tracing, neighbors MEET - the overlap is harmless because the paint
  * order paints over it and every region is solid by design, while a gap is
  * a sliver on a plate that nothing can cut.
  *
@@ -632,9 +632,9 @@ export function traceMask(mask, size, options = {}) {
   }
   const svg = ImageTracer.imagedataToSVG({ width, height, data }, MASK_TRACER);
 
-  // ★ A COLOUR REGION FROM A PICTURE IS SOLID, AND THAT IS ON PURPOSE.
+  // ★ A COLOR REGION FROM A PICTURE IS SOLID, AND THAT IS ON PURPOSE.
   //
-  // The tracer writes a hole as a separate path in the OTHER colour, drawn
+  // The tracer writes a hole as a separate path in the OTHER color, drawn
   // over the shape it is a hole in, so keeping only the mask-coloured paths
   // fills every hole in. Two attempts at putting the holes back were measured
   // and both were worse than leaving them out: pairing each light path with
@@ -644,17 +644,17 @@ export function traceMask(mask, size, options = {}) {
   // splinters.
   //
   // Leaving them solid is not a compromise, it is the model. Every pixel of
-  // the picture belongs to exactly ONE colour, so whatever is inside the hole
-  // has a region of its own, in its own colour, and the paint order is what
+  // the picture belongs to exactly ONE color, so whatever is inside the hole
+  // has a region of its own, in its own color, and the paint order is what
   // decides which of the two wins: largest area first, so a big field is laid
   // down and the small shapes inside it are painted over the top. That is how
   // spraying through a stack of stencils works, and it is what the owner did
   // by hand - their plate 1 cuts the whole silhouette, black, and every later
   // plate paints over part of it.
   //
-  // Where it costs something: under the "this colour only" rule a solid
-  // region paints over a colour that came BEFORE it in the order. The editor
-  // is where a person moves a colour later, and the island report is where
+  // Where it costs something: under the "this color only" rule a solid
+  // region paints over a color that came BEFORE it in the order. The editor
+  // is where a person moves a color later, and the island report is where
   // they are told.
   const paths = [];
   let dropped = droppedPieces;
@@ -677,16 +677,16 @@ export function traceMask(mask, size, options = {}) {
 }
 
 /**
- * A picture, separated into colours, as an SVG a person can paint from.
+ * A picture, separated into colors, as an SVG a person can paint from.
  *
  * @param {{width: number, height: number, data: Uint8ClampedArray}} imageData
  * @param {object} [options]
- * @param {number} [options.count] - How many colours to find
- * @param {Array<{r,g,b}>} [options.palette] - Or exactly which colours
+ * @param {number} [options.count] - How many colors to find
+ * @param {Array<{r,g,b}>} [options.palette] - Or exactly which colors
  * @param {number|null} [options.backgroundIndex] - Or let the border decide
  * @param {number} [options.mmPerPixel] - For the area floor
- * @param {Function} [options.nameFor] - Colour to plain-language name
- * @returns {{svg: string, colours: Array, droppedTotal: number}}
+ * @param {Function} [options.nameFor] - Color to plain-language name
+ * @returns {{svg: string, colors: Array, droppedTotal: number}}
  */
 export function separateColours(imageData, options = {}) {
   const { width, height } = imageData;
@@ -733,7 +733,7 @@ export function separateColours(imageData, options = {}) {
   let droppedTotal = 0;
   let body = '';
   // Largest first, so the biggest field is the first thing in the file and a
-  // person reading the list meets the colours in the order they will paint.
+  // person reading the list meets the colors in the order they will paint.
   const order = palette
     .map((c, i) => i)
     .sort((a, b) => (pixelCounts[b] || 0) - (pixelCounts[a] || 0));

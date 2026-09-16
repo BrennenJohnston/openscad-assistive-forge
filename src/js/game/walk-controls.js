@@ -106,7 +106,7 @@ export function clampSpeedLabel(label) {
 }
 
 /**
- * Metres per second for an announced speed label (CW-48).
+ * Meters per second for an announced speed label (CW-48).
  *
  * @param {number} label
  * @returns {number}
@@ -217,7 +217,7 @@ export function stepWalk(state, input, dtS, collision) {
   // slide branches below: nose to a wall, the walker "slides" 1e-16 m per
   // frame with moved: true, forever - standing still while claiming to
   // walk, so auto-walk's blocked stop never fires. A micron per hop is
-  // nothing a player can perceive; a real glide moves millimetres.
+  // nothing a player can perceive; a real glide moves millimeters.
   if (Math.abs(hopX) < MIN_HOP_M) hopX = 0;
   if (Math.abs(hopY) < MIN_HOP_M) hopY = 0;
 
@@ -271,7 +271,7 @@ export const CURB_EASE_M = 0.5;
  *
  * Bilinear over the bake's 30 m DEM grid, expressed RELATIVE to the city's
  * lowest sampled ground (the datum), so z = 0 stays "the lowest street" and
- * every number in a log reads as metres of climb. Holes - points the DEM
+ * every number in a log reads as meters of climb. Holes - points the DEM
  * service had no answer for, kept as NaN by parseElevation on purpose - are
  * filled once here by flooding outward from the answered cells, because a
  * height query must never return NaN into camera math; the fill count is
@@ -291,7 +291,7 @@ export function buildTerrain(elevation) {
 
   const filled = Float32Array.from(samples);
   let filledHoles = 0;
-  // Flood the holes from their answered neighbours, nearest first: a BFS
+  // Flood the holes from their answered neighbors, nearest first: a BFS
   // ring by ring, so an unanswered corner takes the value of the closest
   // real ground rather than an average across the map.
   const queue = [];
@@ -409,7 +409,7 @@ export function buildSurfaceGrid(model, options = {}) {
   const rows = Math.max(1, Math.ceil((b.maxY - b.minY + marginM * 2) / cellM));
   const cells = new Uint8Array(cols * rows);
 
-  /** Stamp every cell whose centre is within `reachM` of the polyline. */
+  /** Stamp every cell whose center is within `reachM` of the polyline. */
   const stampAlong = (pts, reachM, value) => {
     const reach = Math.ceil(reachM / cellM);
     for (let i = 0; i < pts.length - 1; i++) {
@@ -420,8 +420,8 @@ export function buildSurfaceGrid(model, options = {}) {
       const len = Math.hypot(dx, dy);
       if (len < 1e-6) continue;
       // Half-cell steps along the segment, stamping a disc at each: cheaper
-      // than a true quad rasterizer and, at a metre cell against a strip
-      // metres wide, indistinguishable from one.
+      // than a true quad rasterizer and, at a meter cell against a strip
+      // meters wide, indistinguishable from one.
       const steps = Math.ceil(len / (cellM * 0.5));
       for (let s = 0; s <= steps; s++) {
         const t = s / steps;
@@ -696,10 +696,10 @@ export function buildRoadwayIndex(roads, options = {}) {
     /**
      * The roadway a point stands deepest inside, or null.
      *
-     * `inside` is metres of ribbon between the point and the nearest kerb:
+     * `inside` is meters of ribbon between the point and the nearest kerb:
      * positive means in the road. A NEGATIVE `marginM` asks the wider
      * question "is this within |marginM| of a roadway", which is how a prop
-     * with a footprint asks whether its box - not just its centre - reaches
+     * with a footprint asks whether its box - not just its center - reaches
      * the tarmac.
      *
      * @param {number} x
@@ -736,7 +736,7 @@ export function buildRoadwayIndex(roads, options = {}) {
         const d = Math.hypot(x - px, y - py);
         const inside = halfW - d;
         if (best && inside <= best.inside) continue;
-        // Which way is out: from the centreline toward the point, or the
+        // Which way is out: from the centerline toward the point, or the
         // segment's own normal when the point sits exactly on the line.
         let nx = x - px;
         let ny = y - py;
@@ -767,7 +767,7 @@ export function buildRoadwayIndex(roads, options = {}) {
 
 /**
  * Move the walker's ground height toward what is underfoot, at a rate fixed
- * per METRE travelled rather than per second (CW-50). Standing still on a
+ * per METER traveled rather than per second (CW-50). Standing still on a
  * changed surface - a teleport, a spawn - snaps, because there is no step to
  * smooth out.
  *
@@ -957,7 +957,7 @@ export function buildCollisionGrid(model, options = {}) {
     cols,
     rows,
     cellM,
-    // CW-87: the tour's A* needs cell centres in world metres, which needs
+    // CW-87: the tour's A* needs cell centers in world meters, which needs
     // the grid's origin - isBlocked alone cannot be inverted.
     originX,
     originY,
@@ -1102,7 +1102,7 @@ export function pointInRing(x, y, ring) {
  * Wheel is 18 m away ON the pier, where a 53 m wheel is legs filling the
  * frame rather than a wheel - vertices nearer than minM are passed over
  * while anything in the ring remains. If nothing within the ring is clear,
- * the centre rule stands and the caller's record says so; a silent bad
+ * the center rule stands and the caller's record says so; a silent bad
  * spawn is worse than an honest central one.
  *
  * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
@@ -1280,7 +1280,7 @@ export function segmentClear(collision, x0, y0, x1, y1) {
 
 /**
  * CW-87: a walkable route from one point to another over the collision
- * grid - A* on cell centres with the walker's own body probe deciding
+ * grid - A* on cell centers with the walker's own body probe deciding
  * walkability, diagonals allowed only when both flanking orthogonal cells
  * are walkable (a disc cannot cut a corner stepWalk would refuse), then
  * greedily straightened: each kept waypoint is the farthest path point the
@@ -1314,8 +1314,8 @@ export function findRoute(collision, from, to, options = {}) {
   const walkable = (c) =>
     c >= 0 && !isCircleBlocked(collision, wxOf(c), wyOf(c));
 
-  // The walker may stand pressed against something (its own cell centre
-  // blocked for the body probe): start from the nearest walkable centre.
+  // The walker may stand pressed against something (its own cell center
+  // blocked for the body probe): start from the nearest walkable center.
   let start = -1;
   outer: for (let ring = 0; ring <= 3; ring++) {
     for (let dy = -ring; dy <= ring; dy++) {
@@ -1769,7 +1769,7 @@ export function clampCharScale(scale, floorScale = null) {
  * CW-88 (CW-Q87): the floor used to raise a saved size up to itself, and the
  * owner reversed that half of CW-Q68 - keep 30 per cent as the default, and
  * let a player who wants to adjust go as small as 10 again. Three comments in
- * this codebase already described the behaviour restored here, including
+ * this codebase already described the behavior restored here, including
  * `clampCharScale`'s own docblock above ("a stored manual choice below
  * today's floor is grandfathered on seed, never clamped up") and two in the
  * controller; CW-72's `Math.max` is what diverged from them. The DEFAULT half

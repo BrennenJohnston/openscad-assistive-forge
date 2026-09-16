@@ -1,9 +1,9 @@
 /**
  * Rings: closed polygons in one coordinate space, with flat boolean ops.
  *
- * The colour model needs to ask questions the element-level nesting tree
+ * The color model needs to ask questions the element-level nesting tree
  * cannot answer - what are the FACES of a line network, what is left of a
- * plate once the colours after it are added, is this hole an island - and all
+ * plate once the colors after it are added, is this hole an island - and all
  * of them are boolean questions about closed rings rather than about drawn
  * elements. This module is that layer, and nothing above it talks to
  * clipper2-js directly.
@@ -14,8 +14,8 @@
  * flat booleans, the signed-area and centroid formulas, and buildRingTree.
  * Three things changed on the way over:
  *
- *   1. The units are the CALLER'S, not millimetres. A face of a drawing is
- *      found in SVG user units and only becomes millimetres when a plate
+ *   1. The units are the CALLER'S, not millimeters. A face of a drawing is
+ *      found in SVG user units and only becomes millimeters when a plate
  *      size says so, and a module that calls everything mm invites exactly
  *      the mistake D-122 was.
  *   2. `pointInPolygon` and `boundsOf` are IMPORTED from svg-nesting.js
@@ -64,7 +64,7 @@ import {
  * Caller units per Clipper integer unit.
  *
  * 1000 means a thousandth of a caller unit survives the round trip: a
- * micrometre when the caller counts millimetres, and about a quarter of a
+ * micrometre when the caller counts millimeters, and about a quarter of a
  * micrometre on the cat, whose drawing is 119.813 units wide. Rounding is the
  * only lossy step in a boolean, so it is named once, here.
  */
@@ -114,7 +114,7 @@ export function toPaths64(rings) {
  * Paths64 back to rings.
  *
  * Degenerate rings are dropped here rather than by each caller: this port
- * occasionally emits a zero-area artefact ring - measured in the standalone
+ * occasionally emits a zero-area artifact ring - measured in the standalone
  * on a re-union of an already-unioned donut - and every clipper result in
  * this module comes back through this one function.
  *

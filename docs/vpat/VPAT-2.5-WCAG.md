@@ -70,7 +70,7 @@ The terms used in the Conformance Level column are defined as follows:
 | **2.4.3 Focus Order** | Supports | Focus order follows logical sequence. Tab moves through controls predictably. Focus programmatically managed after file upload (moves to first parameter) and mode switches (moves to editor or parameter controls). |
 | **2.4.4 Link Purpose (In Context)** | Supports | Link text describes destination. External links are marked. |
 | **2.5.1 Pointer Gestures** | Supports | All path-based gestures have single-pointer alternatives. 3D navigation available via buttons. |
-| **2.5.2 Pointer Cancellation** | Supports | Actions trigger on up-event. Dragging operations can be cancelled. |
+| **2.5.2 Pointer Cancellation** | Supports | Actions trigger on up-event. Dragging operations can be canceled. |
 | **2.5.3 Label in Name** | Supports | Visible labels match accessible names. Button text matches aria-label where used. |
 | **2.5.4 Motion Actuation** | Not Applicable | Application does not use device motion. |
 | **3.1.1 Language of Page** | Supports | HTML lang attribute set to "en". |

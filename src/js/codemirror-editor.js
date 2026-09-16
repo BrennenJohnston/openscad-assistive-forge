@@ -234,8 +234,8 @@ const openscadStreamLanguage = StreamLanguage.define({
 
     // Operators and punctuation. Added in UF-29: this tokenizer never emitted
     // them, so they fell through to `null` and painted as plain text — which
-    // is why the palette's `operator` entry had nothing to colour. The desktop
-    // draws them in its operator colour, brackets and semicolons included.
+    // is why the palette's `operator` entry had nothing to color. The desktop
+    // draws them in its operator color, brackets and semicolons included.
     if (stream.match(/[+\-*/%=<>!&|?:;,.()[\]{}]/)) {
       return 'operator';
     }
@@ -341,7 +341,7 @@ function fontSizeTheme(px) {
 }
 
 /**
- * The editor chrome, from the same scheme file as the syntax colours.
+ * The editor chrome, from the same scheme file as the syntax colors.
  *
  * `.cm-activeLine` takes the scheme's caret-line background verbatim. That is
  * a visible change from the old themes, whose light active line was fully
@@ -378,7 +378,7 @@ function editorThemeFor(scheme, options = {}) {
         backgroundColor: scheme.caretLine,
       },
       // Brace matching (Q-61). The scheme carries both pairs, so the rider
-      // needed no colour of its own.
+      // needed no color of its own.
       '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
         backgroundColor: scheme.matchedBraceBackground,
         color: scheme.matchedBraceForeground,
@@ -849,7 +849,7 @@ export class CodeMirrorEditor {
         scadFoldService,
         boxedFoldGutter(),
         // Q-61: the desktop highlights the brace matching the one at the
-        // cursor, and its scheme file already carried both colour pairs. It is
+        // cursor, and its scheme file already carried both color pairs. It is
         // a real setting there (settings.cc enableBraceMatching, default true)
         // sitting beside highlightCurrentLine, so it is a real setting here.
         this._braceMatchCompartment.of(

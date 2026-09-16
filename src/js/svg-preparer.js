@@ -1113,7 +1113,7 @@ export function flattenLayers(
  *   2. import(center = false) preserves ABSOLUTE user coordinates (the probe
  *      came back at 2..38 and 16..24 exactly), so layers already share one
  *      coordinate system and need ONE transform between them.
- *   3. OpenSCAD honours a <g transform> on import: a translate+scale wrapper
+ *   3. OpenSCAD honors a <g transform> on import: a translate+scale wrapper
  *      moved a square from 16..24 to 12..28 as written.
  *   4. A width with NO unit is pixels, converted at 72 dpi: a 100-wide
  *      document came in at 35.28 mm. The unit is therefore always written.
@@ -1212,7 +1212,7 @@ export function readLayerFile(layerSvg) {
 }
 
 /**
- * The width every layer file is normalized to, in millimetres of SVG canvas.
+ * The width every layer file is normalized to, in millimeters of SVG canvas.
  * A CONTRACT between this emitter and any tile that reads layer files: the
  * model multiplies by one scale factor to reach the size it wants, and may
  * not be changed without changing them together.
@@ -1419,21 +1419,17 @@ export function analyzeSvg(svgString) {
     const hasStroke = el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
 
     if (el.strokeConverted) {
-      elWarnings.push('Stroked path \u2014 converted to filled outline');
+      elWarnings.push('Stroked path: converted to filled outline');
     } else if (fillLower === 'none' && hasStroke) {
-      elWarnings.push(
-        'Stroked path \u2014 not supported for boolean operations'
-      );
+      elWarnings.push('Stroked path: not supported for boolean operations');
     }
     if (fillLower.startsWith('url(')) {
-      elWarnings.push(
-        'Gradient or pattern fill \u2014 cannot classify by luminance'
-      );
+      elWarnings.push('Gradient or pattern fill: cannot classify by luminance');
     }
     // Transforms are baked into pathData during parsing; only warn when
     // baking failed and coordinates are still in local space.
     if (el.transformBakeFailed) {
-      elWarnings.push('Has transform \u2014 could not be baked');
+      elWarnings.push('Has transform: could not be baked');
     }
     if (el.element.hasAttribute('clip-path')) {
       elWarnings.push('Has clip-path reference');
@@ -1469,7 +1465,7 @@ export function analyzeSvg(svgString) {
   ).length;
   if (ignoredStrokedCount > 0) {
     warnings.push(
-      `${ignoredStrokedCount} stroked path(s) ignored \u2014 stroke-to-fill not yet supported`
+      `${ignoredStrokedCount} stroked path(s) ignored: stroke to fill is not supported yet`
     );
   }
 
@@ -1508,7 +1504,7 @@ export function analyzeSvg(svgString) {
       if (max - min < 50) {
         confidence -= 0.3;
         warnings.push(
-          'All elements have similar luminance \u2014 classification may be ambiguous'
+          'All elements have similar luminance, so the classification may be ambiguous'
         );
       }
     }

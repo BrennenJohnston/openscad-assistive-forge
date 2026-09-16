@@ -685,7 +685,7 @@ Throughout the life of your project, you'll do a lot of writing: READMEs, tutori
 
 Whether it's official documentation or a casual email, your writing style is part of your project's brand.
 
-> I tried to be involved with every thread on the mailing list, and showing exemplary behaviour, being nice to people, taking their issues seriously and trying to be helpful overall. After a while, people stuck around not to only ask questions, but to help with the answering as well, and to my complete delight, they mimicked my style.
+> I tried to be involved with every thread on the mailing list, and showing exemplary behavior, being nice to people, taking their issues seriously and trying to be helpful overall. After a while, people stuck around not to only ask questions, but to help with the answering as well, and to my complete delight, they mimicked my style.
 > -- @janl on CouchDB, "Sustainable Open Source"
 
 Using warm, inclusive language (such as "them", even when referring to the single person) can go a long way in making your project feel welcoming to new contributors. Stick to simple language, as many of your readers may not be native English speakers.
@@ -1116,7 +1116,7 @@ One way to gain new contributors is to explicitly label issues that are simple e
 
 When you see new contributors making repeated contributions, recognize their work by offering more responsibility. Document how others can grow into leadership roles if they wish.
 
-> I'd been saying, "Yeah, anyone can be involved, you don't have to have a lot of coding expertise [...]." We had people sign up to come [to an event] and that's when I was really wondering: is this true, what I've been saying? There are gonna be 40 people who show up, and it's not like I can sit with each of them...But people came together, and it just sort of worked. As soon as one person got it, they could teach their neighbour.
+> I'd been saying, "Yeah, anyone can be involved, you don't have to have a lot of coding expertise [...]." We had people sign up to come [to an event] and that's when I was really wondering: is this true, what I've been saying? There are gonna be 40 people who show up, and it's not like I can sit with each of them...But people came together, and it just sort of worked. As soon as one person got it, they could teach their neighbor.
 > -- @lmccart, "What Does 'Open Source' Even Mean? p5.js Edition"
 
 If you need to step away from your project, either on hiatus or permanently, there's no shame in asking someone else to take over for you.
@@ -1554,7 +1554,7 @@ With more information, you can:
 
 For example, Homebrew finds that Google Analytics helps them prioritize work:
 
-> Homebrew is provided free of charge and run entirely by volunteers in their spare time. As a result, we do not have the resources to do detailed user studies of Homebrew users to decide on how best to design future features and prioritise current work. Anonymous aggregate user analytics allow us to prioritise fixes and features based on how, where and when people use Homebrew.
+> Homebrew is provided free of charge and run entirely by volunteers in their spare time. As a result, we do not have the resources to do detailed user studies of Homebrew users to decide on how best to design future features and prioritize current work. Anonymous aggregate user analytics allow us to prioritize fixes and features based on how, where and when people use Homebrew.
 
 Popularity isn't everything. Everybody gets into open source for different reasons. If your goal as an open source maintainer is to show off your work, be transparent about your code, or just have fun, metrics may not be important to you.
 

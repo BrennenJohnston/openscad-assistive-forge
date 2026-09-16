@@ -138,7 +138,7 @@ $fn = 48; // [24:8:128]
 // control. Put your maths, your constants and your modules here.
 
 // Overlap for boolean operations. Two faces that touch exactly are ambiguous
-// to the geometry engine and can export as a hole; a hundredth of a millimetre
+// to the geometry engine and can export as a hole; a hundredth of a millimeter
 // of overlap is the fix.
 _fuse = 0.01;
 

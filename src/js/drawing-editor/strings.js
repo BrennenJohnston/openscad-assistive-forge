@@ -87,7 +87,7 @@ export const EDITOR_STRINGS = Object.freeze({
    */
   draftNote: 'Previews are drawn at draft quality while you edit.',
 
-  sectionColours: 'Colours',
+  sectionColours: 'Colors',
   sectionRegions: 'Regions',
   /**
    * DP-Q40 (signed): "Shapes" is the word on the CHARM's panel.
@@ -107,25 +107,25 @@ export const EDITOR_STRINGS = Object.freeze({
   /**
    * Said once when the surface takes the preview area. A11Y. On the stencil
    * purpose the engine's own finding follows it in the same breath (★ D-124:
-   * "21 regions found, no colours yet: every one starts as the base coat."),
+   * "21 regions found, no colors yet: every one starts as the base coat."),
    * so a drawing that arrived with no plan is never pretended to have one.
    */
   opened: 'Drawing editor open. The model preview is behind it.',
 
-  /** The status line while the colour engine is on its way. A11Y. */
+  /** The status line while the color engine is on its way. A11Y. */
   findingRegions: 'Finding the regions in this drawing.',
 
   /** What the engine found, said once with the opening. A11Y (two shapes). */
   regionsFound: (regions, colours) =>
     colours > 1
-      ? `${count(regions, 'region', 'regions')} found, in ${count(colours, 'colour', 'colours')}.`
-      : `${count(regions, 'region', 'regions')} found, no colours yet: every one starts as the base coat.`,
+      ? `${count(regions, 'region', 'regions')} found, in ${count(colours, 'color', 'colors')}.`
+      : `${count(regions, 'region', 'regions')} found, no colors yet: every one starts as the base coat.`,
 
   noRegions: 'No regions were found in this drawing.',
 
-  /** Not swallowed: without the chunk the colours cannot be shown at all. A11Y. */
+  /** Not swallowed: without the chunk the colors cannot be shown at all. A11Y. */
   engineFailed:
-    'The colour engine could not be loaded, so the regions cannot be shown. Reload the page and try again.',
+    'The color engine could not be loaded, so the regions cannot be shown. Reload the page and try again.',
 
   // ── The toolbar (DP-20) ────────────────────────────────────────────────
   /** The five tools, with the key that picks each in the accessible name. */
@@ -140,10 +140,10 @@ export const EDITOR_STRINGS = Object.freeze({
   toolsLabel: 'Tools',
   toolKeyHint: (name, key) => `${name}, key ${key.toUpperCase()}`,
   toolChosen: (name) => `${name} tool.`,
-  /** The current colour for the Paint tool. A11Y. */
+  /** The current color for the Paint tool. A11Y. */
   paintColourLabel: 'Paint with',
   /**
-   * REVISED at DP-24 from "Colour the selection": same act, the Paint
+   * REVISED at DP-24 from "Colour the selection" (sic): same act, the Paint
    * tool's own verb, and the hands row fits the editor's real 692 px at a
    * 1280 window with room instead of teetering at one pixel.
    */
@@ -154,7 +154,7 @@ export const EDITOR_STRINGS = Object.freeze({
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   /** The stencil purpose's Apply: the plan goes with the drawing. */
-  applyColours: 'Apply colours',
+  applyColours: 'Apply colors',
   /** What is undone or redone. A11Y. */
   undone: (label) => `Undone: ${label}.`,
   redone: (label) => `Redone: ${label}.`,
@@ -165,7 +165,7 @@ export const EDITOR_STRINGS = Object.freeze({
   /** The canvas's own name and its keyboard help. A11Y. */
   canvasLabel: 'The drawing',
   canvasHelp:
-    'Arrow keys move between regions, Enter or Space adds one to the selection, number keys 1 to 8 colour the selection, 0 sets it to the base coat, Delete removes it.',
+    'Arrow keys move between regions, Enter or Space adds one to the selection, number keys 1 to 8 color the selection, 0 sets it to the base coat, Delete removes it.',
   /** The status line as the highlight moves. A11Y (two shapes). */
   highlighting: (name, colour, plate) => `${name}, ${colour}, plate ${plate}.`,
   highlightingRemoved: (name) => `${name}, removed.`,
@@ -173,13 +173,13 @@ export const EDITOR_STRINGS = Object.freeze({
   // ── The regions table ──────────────────────────────────────────────────
   regionsCaption: 'Regions in this drawing',
   colRegion: 'Region',
-  colColour: 'Colour',
+  colColour: 'Color',
   colPlate: 'Plate',
   /** The column head; the caption above it says "of this drawing". */
   colShare: 'Share',
   colActions: 'Remove',
   /** The select's name: the row header is visible, the select needs its own. */
-  colourFor: (name) => `Colour for ${name}`,
+  colourFor: (name) => `Color for ${name}`,
   unpainted: 'Unpainted',
   /** The plate cell for a region no plate cuts. */
   notCut: 'Not cut',
@@ -192,11 +192,11 @@ export const EDITOR_STRINGS = Object.freeze({
   putBack: 'Put back',
   undoBesideTable: 'Undo',
 
-  /** After a colour is chosen for a region. A11Y (two shapes). */
+  /** After a color is chosen for a region. A11Y (two shapes). */
   regionSet: (name, colour, plate) =>
     `${name} set to ${colour}. Plate ${plate}.`,
   regionSetUnpainted: (name) => `${name} set to unpainted. No plate cuts it.`,
-  /** After a colour is given to a selection. A11Y (two shapes). */
+  /** After a color is given to a selection. A11Y (two shapes). */
   regionsSet: (n, colour, plate) =>
     `${count(n, 'region', 'regions')} set to ${colour}. Plate ${plate}.`,
   regionsSetUnpainted: (n) =>
@@ -216,14 +216,14 @@ export const EDITOR_STRINGS = Object.freeze({
   labelRemoveMany: (n) => `${count(n, 'region', 'regions')} removed`,
   labelRestore: (name) => `${name} put back`,
 
-  // ── The colours section ────────────────────────────────────────────────
+  // ── The colors section ────────────────────────────────────────────────
   /** How many regions a swatch is on (two shapes). */
   usedBy: (n) => `used by ${count(n, 'region', 'regions')}`,
-  addColourLegend: 'Add a colour',
+  addColourLegend: 'Add a color',
   addColourName: 'Name',
-  addColourHex: 'Colour',
-  addColourButton: 'Add colour',
-  /** After a colour joins the palette. A11Y. */
+  addColourHex: 'Color',
+  addColourButton: 'Add color',
+  /** After a color joins the palette. A11Y. */
   colourAdded: (name) => `${name} added. Choose it for a region.`,
   labelAddColour: (name) => `${name} added`,
   rename: 'Rename',
@@ -234,7 +234,7 @@ export const EDITOR_STRINGS = Object.freeze({
   colourMerged: (from, to, n) =>
     `${from} merged into ${to}: ${count(n, 'region', 'regions')} moved.`,
   labelMerge: (from, to) => `${from} merged into ${to}`,
-  removeColour: 'Remove colour',
+  removeColour: 'Remove color',
   removeColourLabel: (name) => `Remove ${name}`,
   colourRemoved: (name, n, base) =>
     `${name} removed. ${count(n, 'region', 'regions')} back to ${base}.`,
@@ -252,18 +252,18 @@ export const EDITOR_STRINGS = Object.freeze({
   paintEarlier: 'Paint earlier',
   paintLater: 'Paint later',
   orderFor: (name, verb) => `${verb}: ${name}`,
-  /** After a colour moves in the order. A11Y. */
+  /** After a color moves in the order. A11Y. */
   orderChanged: (name, position) => `${name} now paints ${ordinal(position)}.`,
   labelOrder: (name, position) => `${name} moved to ${ordinal(position)}`,
   /**
-   * The plate rule, DP-Q18. On is the stacked rule: every later colour is cut
+   * The plate rule, DP-Q18. On is the stacked rule: every later color is cut
    * through this plate too, so nothing can fall out. Off is the hand method.
    */
-  ruleLabel: 'Later colours also cut through each plate',
+  ruleLabel: 'Later colors also cut through each plate',
   ruleHelp:
-    'On, a piece painted later is held by every plate before it and cannot fall out. Off, each plate cuts its own colour only, the way a hand-cut set does, and a loose piece is reported.',
-  ruleStacked: 'Later colours cut through each plate.',
-  ruleOwn: 'Each plate cuts its own colour only.',
+    'On, a piece painted later is held by every plate before it and cannot fall out. Off, each plate cuts its own color only, the way a hand-cut set does, and a loose piece is reported.',
+  ruleStacked: 'Later colors cut through each plate.',
+  ruleOwn: 'Each plate cuts its own color only.',
 
   // ── The view (DP-21) ───────────────────────────────────────────────────
   /** A pressed toggle: the untouched drawing alone, or the plan over it. */
@@ -278,8 +278,8 @@ export const EDITOR_STRINGS = Object.freeze({
   nextPlate: 'Next plate',
   showingAllPlates: 'Showing all plates.',
   /** The legend under the drawing: what the tints mean. */
-  legendLabel: 'What the colours on the drawing mean',
-  legendPainted: 'Painted with its colour',
+  legendLabel: 'What the colors on the drawing mean',
+  legendPainted: 'Painted with its color',
   legendBase: 'Base coat',
   legendRemoved: 'Removed',
   legendUnpainted: 'Unpainted (the wall)',
@@ -289,6 +289,6 @@ export const EDITOR_STRINGS = Object.freeze({
     `And ${count(n, 'more loose piece', 'more loose pieces')} on plate ${plate}, all smaller.`,
   labelRule: (stacked) =>
     stacked
-      ? 'plates set to cut later colours too'
-      : 'plates set to their own colour only',
+      ? 'plates set to cut later colors too'
+      : 'plates set to their own color only',
 });

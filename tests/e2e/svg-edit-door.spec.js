@@ -1950,7 +1950,7 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     await expect(cancel).toBeHidden()
     await expect(page.locator('.svg-prep-render-btn')).toBeVisible()
     await expect(page.locator('.svg-prep-render-note')).toHaveText(
-      'Combining cancelled.'
+      'Combining canceled.'
     )
     // Nothing is left claiming to be busy, and the drawing is still there.
     await expect(page.locator('.svg-prep-result-pane')).toHaveAttribute(

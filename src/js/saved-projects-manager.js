@@ -804,7 +804,7 @@ export async function saveProject({
     // the handle named by folderRef, never in this record.
     const isFolderLink = kind === 'folder-link';
 
-    // Normalise projectFiles to a plain object once so both the inline path
+    // Normalize projectFiles to a plain object once so both the inline path
     // and the batched path share the same representation.
     const filesObj =
       projectFiles && !isFolderLink
@@ -816,7 +816,7 @@ export async function saveProject({
     const filesJson = filesObj ? JSON.stringify(filesObj) : null;
 
     // Use batched PROJECT_FILES_STORE writes for large imports (IndexedDB only).
-    // Storing hundreds of file contents as one serialised JSON string in a single
+    // Storing hundreds of file contents as one serialized JSON string in a single
     // transaction risks a browser transaction-timeout or quota abort — and a few
     // big files can hit the per-value cap without ever crossing the file-count
     // threshold, so byte size triggers batching too.

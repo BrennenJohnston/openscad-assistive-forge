@@ -84,7 +84,7 @@ export const LANDMARK_REGISTRY = {
         name: 'Arctic Building',
         wayId: 110176001,
         cite: 'Seattle Landmarks Preservation Board; Wikipedia: 1916, the terra-cotta walrus heads on 3rd Avenue (Q638024)',
-        reason: 'A designated landmark a walker can recognise from the kerb.',
+        reason: 'A designated landmark a walker can recognize from the kerb.',
       },
     ],
   },
@@ -210,7 +210,7 @@ export const LANDMARK_REGISTRY = {
       {
         name: 'Station Square Tower 5',
         wayId: 962138235,
-        cite: 'Plan §3f: the Station Square towers, 35-57 storeys; tower 5 is the tallest in this circle at 172 m in the extract',
+        cite: 'Plan §3f: the Station Square towers, 35-57 stories; tower 5 is the tallest in this circle at 172 m in the extract',
         reason: 'The tallest thing the circle contains.',
       },
       {
@@ -235,7 +235,7 @@ export function registryFor(citySlug) {
   return entry && Array.isArray(entry.rows) ? entry : null;
 }
 
-/** Vertex-average centre of a ring - the same arithmetic the scorer uses, so
+/** Vertex-average center of a ring - the same arithmetic the scorer uses, so
  * a registry landmark and a scored one agree about where a building is. */
 function ringCentre(ring) {
   let cx = 0;
@@ -341,7 +341,7 @@ export function cityLandmarks(model, citySlug) {
  * figure needs five rows").
  */
 export const WAYPOINT_MARK = Object.freeze({
-  /** Outer radius of the bright ring, in metres. */
+  /** Outer radius of the bright ring, in meters. */
   ringOuterM: 1.6,
   /** Inner radius - everything inside is the exact-black core. */
   ringInnerM: 1.25,
@@ -357,7 +357,7 @@ export const WAYPOINT_MARK = Object.freeze({
 
 /**
  * Touch = walking into the mark. The walker stops PLAYER_RADIUS_M short of
- * the plinth's blocked cell, so the reachable minimum centre distance is
+ * the plinth's blocked cell, so the reachable minimum center distance is
  * about plinth half (0.35) + player radius (0.3) + one collision hop
  * (0.15); 1.6 m gives the press-against-it margin. The leave radius is the
  * hysteresis that keeps one touch from announcing every frame.
@@ -424,8 +424,8 @@ export function findWaypointSpot(model, collision, surface, landmark) {
   const cy = landmark.y;
 
   // The street face: nearest (outline point, road point) pair. Roads are
-  // prefiltered by a coarse box around the OUTLINE's bounds, not the centre
-  // - Burnaby's Central Park is 800 m across and its centre is nowhere near
+  // prefiltered by a coarse box around the OUTLINE's bounds, not the center
+  // - Burnaby's Central Park is 800 m across and its center is nowhere near
   // its own street faces.
   const probePoints = landmark.outer ?? [[cx, cy]];
   let minX = Infinity;
@@ -482,7 +482,7 @@ export function findWaypointSpot(model, collision, surface, landmark) {
   const inGrid = (x, y) =>
     x > b.minX - 29 && x < b.maxX + 29 && y > b.minY - 29 && y < b.maxY + 29;
   // Rank by street distance in 2 m buckets, then by nearness to the
-  // landmark's centre: a park's perimeter ties at d = 0 all the way round,
+  // landmark's center: a park's perimeter ties at d = 0 all the way round,
   // and the mark should stand where the map beacon and the 60 m visit ring
   // are, not at whichever corner the outline happens to start.
   const faces = candidates

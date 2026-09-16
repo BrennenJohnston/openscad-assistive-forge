@@ -117,7 +117,7 @@ export class ConsolePanel {
   }
 
   /**
-   * Wire the follow-the-tail behaviour to the log container.
+   * Wire the follow-the-tail behavior to the log container.
    * @private
    */
   _initTailFollowing() {
@@ -143,7 +143,7 @@ export class ConsolePanel {
       if (resized) return;
 
       // Our own scroll writes land at the bottom, so they re-assert following
-      // rather than cancelling it; no programmatic-scroll flag is needed.
+      // rather than canceling it; no programmatic-scroll flag is needed.
       this._followTail = this.isScrolledToTail();
     });
 

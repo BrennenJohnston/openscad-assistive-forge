@@ -14,7 +14,7 @@
 // code the tests cover is byte-for-byte the code that runs; and the class
 // labels come from `city-class-pass.js` rather than a second copy that can
 // drift from the wire format (CW-33 appended two ids and a duplicated table
-// would have given every surface the voice of its neighbour).
+// would have given every surface the voice of its neighbor).
 //
 // WHAT THE COLUMNS MEAN, and why each is here:
 //
@@ -22,7 +22,7 @@
 //     slots where the glyph is not what it was. A walking picture should
 //     change; the question this round asks is how much, and where.
 //   * FLIP (A-B-A) is the fracture signature: a cell that comes back to what
-//     it was two frames ago while its neighbours slide on is flashing, not
+//     it was two frames ago while its neighbors slide on is flashing, not
 //     moving. A flip rate means nothing without the change rate beside it,
 //     so both are always reported.
 //   * PERSISTENCE is the mean length in frames of a cell's runs of one
@@ -31,7 +31,7 @@
 //   * CHURN CELLS is the share of cells that changed in MORE THAN HALF the
 //     frame pairs - the population that is boiling rather than sliding.
 //   * DRIVE is the converter's own decision, not a painted pixel: the
-//     intensity level in mono, the palette index in colour. Reverse video
+//     intensity level in mono, the palette index in color. Reverse video
 //     paints a solid cell with the glyph knocked out and no pixel statistic
 //     separates that from a dense glyph reliably; the drive index says so.
 //   * The EDGE row holds every cell whose CLASS moved during the sequence.
@@ -106,7 +106,7 @@ export function glyphChar(glyph) {
  * of a street tree. Every other column in this file describes a picture; this
  * one asks a question with a right answer: **is this cell drawing a character
  * its own surface is not allowed to draw?** A wall glyph on a TREE cell is
- * exactly the reported artefact, and nothing legitimate produces one - the
+ * exactly the reported artifact, and nothing legitimate produces one - the
  * class pass says TREE, `glyph-vocabularies.js` says a TREE cell may only be
  * one of ` .,^*oO&%@8wvV`, and both converter paths search that list and
  * nothing else. So a non-zero count is a defect, not a description, and the
@@ -182,7 +182,7 @@ function createMismatch(vocabularies, cells) {
  * @property {boolean} mono true for the intensity ladder, false for a palette
  * @property {number} reverseIndex the drive index the reverse-video atlas
  *   rides at (mono only; -1 when unknown)
- * @property {number} whiteIndex the palette index of white (colour only; -1
+ * @property {number} whiteIndex the palette index of white (color only; -1
  *   when the palette has no white)
  * @property {number} litLumMin the converter's blank/ink cliff, used for the
  *   mono lit share (an option because CW-70/CW-71 move it)
@@ -202,17 +202,17 @@ function createMismatch(vocabularies, cells) {
  * @property {Int32Array} driveChange per-cell count of drive changes
  * @property {Int32Array} driveFlip per-cell count of A-B-A drive returns
  * @property {Int32Array} reverseOrWhiteToggle per-cell count of crossings
- *   into or out of reverse video (mono) or white (colour)
+ *   into or out of reverse video (mono) or white (color)
  * @property {Uint8Array} everLit 1 where the cell carried ink in any frame
  * @property {Uint8Array} everFlagged 1 where the cell was painted solid
- *   (reverse video, mono) or white (colour) in any frame
+ *   (reverse video, mono) or white (color) in any frame
  * @property {Int32Array} runLength the open run of one glyph, per cell
  * @property {Float64Array} runSum closed run lengths, per cell
  * @property {Int32Array} runCount closed runs, per cell
  * @property {Int32Array} colourCounts cells taking each palette entry,
- *   summed over frames (colour mode only; index 16 counts blank cells)
+ *   summed over frames (color mode only; index 16 counts blank cells)
  * @property {number[]} litShare lit share per frame
- * @property {number[]} whiteShare white share per frame (colour)
+ * @property {number[]} whiteShare white share per frame (color)
  * @property {number[]} reverseShare reverse-video share per frame (mono)
  * @property {number} classMoveEvents (cell, frame pair) slots where the class
  *   changed
@@ -290,7 +290,7 @@ export function createFold(cols, rows, options = {}) {
     mismatch: createMismatch(options.vocabularies ?? null, cells),
     // CW-92 (D-127): the face flip. `faceHeld` counts (cell, frame pair) slots
     // where the class did NOT move; `faceFlip` counts how many of those took a
-    // different colour index anyway. `prevClass2` is a second copy of the last
+    // different color index anyway. `prevClass2` is a second copy of the last
     // frame's classes because `prevClass` is overwritten before this runs.
     prevClass2: null,
     faceHeld: new Int32Array(cells),
@@ -310,9 +310,9 @@ export const LIT_LUM_MIN = 0.5;
  * @param {SeqFold} fold
  * @param {{glyphs: ArrayLike<number>, cls: ArrayLike<number>,
  *   intensity?: ArrayLike<number>|null, lum?: ArrayLike<number>|null,
- *   colour?: ArrayLike<number>|null}} frame the cell probe's decisions plus
+ *   color?: ArrayLike<number>|null}} frame the cell probe's decisions plus
  *   the class pass's read. `intensity` and `lum` are the mono pair;
- *   `colour` is the per-cell palette index (-1 where the cell is blank).
+ *   `color` is the per-cell palette index (-1 where the cell is blank).
  * @returns {number} frames folded so far
  */
 export function foldFrame(fold, frame) {
@@ -393,20 +393,20 @@ export function foldFrame(fold, frame) {
   fold.reverseShare.push(reverse / n);
 
   // ★★★ CW-92: THE FACE FLIP, which is the owner's D-127 made a number. Per
-  // class, the share of cells whose COLOUR INDEX changed in a frame pair whose
+  // class, the share of cells whose COLOR INDEX changed in a frame pair whose
   // CLASS did not. A cell that swept onto a different surface is allowed to
-  // change colour; a cell still looking at the same wall is not, and a whole
+  // change color; a cell still looking at the same wall is not, and a whole
   // face crossing a palette boundary together is what the owner photographed.
   //
-  // Mono has no colour index, so this row exists only for a palette fold.
+  // Mono has no color index, so this row exists only for a palette fold.
   if (!fold.mono && fold.prevDrive && fold.prevClass2) {
     for (let i = 0; i < n; i++) {
       if (cls[i] !== fold.prevClass2[i]) continue;
-      // ★ A BLANK CELL HAS NO COLOUR TO FLIP, and counting a cell lighting up
+      // ★ A BLANK CELL HAS NO COLOR TO FLIP, and counting a cell lighting up
       // or going dark as a face flip would bury the row under transitions it
       // was never asking about. The same distinction CW-89 drew for the glyph
       // memory: whether a cell has content is a different question from which
-      // colour that content is.
+      // color that content is.
       if (drive[i] < 0 || fold.prevDrive[i] < 0) continue;
       fold.faceHeld[i]++;
       if (drive[i] !== fold.prevDrive[i]) fold.faceFlip[i]++;
@@ -475,7 +475,7 @@ export function foldFrame(fold, frame) {
 }
 
 /**
- * One summarised row of the tables the instrument prints.
+ * One summarized row of the tables the instrument prints.
  *
  * @typedef {object} SeqRow
  * @property {string} name the class label, or `EDGE(class moved)`
@@ -490,20 +490,20 @@ export function foldFrame(fold, frame) {
  * @property {number} driveOrColourChangePct the same for the drive index
  * @property {number} driveOrColourFlipPct the same for A-B-A drive returns
  * @property {number} reverseOrWhiteToggles crossings into or out of reverse
- *   video (mono) or white (colour)
+ *   video (mono) or white (color)
  * @property {number} churnCellsPct share of cells that changed in more than
  *   half the frame pairs
  * @property {number} mismatch (cell, frame) slots where the drawn glyph was
  *   not in the cell's own class vocabulary (CW-93). Zero in a healthy picture,
  *   and zero when the fold was given no vocabularies.
  * @property {number} faceFlipPct of the cell-frames where the class stayed put,
- *   the share that changed COLOUR INDEX anyway (CW-92, D-127). Colour only.
+ *   the share that changed COLOR INDEX anyway (CW-92, D-127). Color only.
  * @property {number} faceHeld the denominator of the row above
  * @property {number} meanGlyphPersistenceFrames mean run length in frames
  */
 
 /**
- * Close the fold and summarise it.
+ * Close the fold and summarize it.
  *
  * Calling this twice would count the open runs twice, so the fold is closed
  * and a second call throws rather than quietly reporting a different number.
@@ -665,7 +665,7 @@ function summariseRow(row, pairs, triples) {
     // number above zero is a cell drawing a character it is not allowed.
     mismatch: row.mismatch,
     // CW-92: of the cell-frames where this class STAYED under the cell, the
-    // share that changed colour anyway. The owner's face flip, as a number.
+    // share that changed color anyway. The owner's face flip, as a number.
     faceFlipPct: pct(row.faceFlip, row.faceHeld),
     faceHeld: row.faceHeld,
     meanGlyphPersistenceFrames: round2(row.runSum / Math.max(1, row.runCount)),
@@ -675,7 +675,7 @@ function summariseRow(row, pairs, triples) {
 /**
  * CW-93: the mismatch counter, closed and named.
  *
- * `kinds` is the row that names the artefact in words: which class was under
+ * `kinds` is the row that names the artifact in words: which class was under
  * the cell, which character it drew, and WHICH classes' vocabularies that
  * character does belong to. "a `|` drawn on a tree cell, and `|` is a wall
  * character" is the owner's report turned into a line of a table.
@@ -763,12 +763,12 @@ function round4(v) {
 
 /**
  * CW-86: COHERENCE - of the cells that changed, how many took the glyph their
- * neighbour along the motion had a frame ago.
+ * neighbor along the motion had a frame ago.
  *
  * ★★ THIS EXISTS BECAUSE A GLYPH-CHANGE RATE CANNOT TELL A SLIDE FROM A
  * RE-ROLL, AND THE DIFFERENCE IS THE WHOLE SUBJECT OF ROUND 8. A surface whose
  * characters belong to it and are sliding past the eye changes a lot of cells
- * per frame - every cell takes the character its neighbour had - and that is
+ * per frame - every cell takes the character its neighbor had - and that is
  * MOTION, which is what a walk is supposed to look like. A surface whose
  * characters are re-rolled from screen luminance also changes a lot of cells,
  * and that is CHURN. Both score the same on the glyph-change row. They score

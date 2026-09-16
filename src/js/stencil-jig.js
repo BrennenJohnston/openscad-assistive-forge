@@ -10,11 +10,11 @@
  *   a 0.6 mm sheet the size of the plate, with four pegs 4.4 mm tall;
  *   ROUND, 3.00 mm across, at the two TOP corners;
  *   RECTANGULAR, 3.00 x 2.00 mm, at the two BOTTOM corners;
- *   every centre 2.50 mm in from both edges.
+ *   every center 2.50 mm in from both edges.
  *
  * ★ ROUND AT ONE END AND RECTANGULAR AT THE OTHER IS THE WHOLE POINT. Four
  * identical pegs let a plate go on rotated a half turn, and a stencil laid on
- * backwards paints a mirror image of one colour over five correct ones. Two
+ * backwards paints a mirror image of one color over five correct ones. Two
  * shapes make that impossible without anyone having to notice.
  *
  * ★ THE OWNER'S OWN PLATES MODEL NO CLEARANCE AT ALL: the holes are exactly
@@ -25,7 +25,7 @@
  * and its value is the owner's to confirm - it is a print-fit number, and
  * nobody can choose it from a screen.
  *
- * Coordinates here are the PLATE's own millimetres with y measured DOWN from
+ * Coordinates here are the PLATE's own millimeters with y measured DOWN from
  * the top left, which is what an SVG uses. OpenSCAD flips y on import, so a
  * feature written at y = inset comes out at the top of the model, which is
  * where the reference has its round pegs.
@@ -44,7 +44,7 @@ export const MIN_FEATURE_EDGE_MM = 0.8;
  *
  * @param {number} plateW - mm
  * @param {number} plateH - mm
- * @param {number} [inset] - Centre distance from both edges, mm
+ * @param {number} [inset] - Center distance from both edges, mm
  * @returns {Array<{kind: 'round'|'key', cx: number, cy: number}>} Top two
  *   round, bottom two rectangular, in reading order
  */
@@ -115,7 +115,7 @@ function circlePath(cx, cy, radius, segments = 48) {
 }
 
 /**
- * The holes and notches a plate needs, as path data in plate millimetres.
+ * The holes and notches a plate needs, as path data in plate millimeters.
  *
  * They are subpaths of the plate's ONE even-odd path, like every other cut: a
  * hole in a path of its own is not a hole, it is more material (T22, measured
@@ -154,7 +154,7 @@ export function jigHolePathData({
 }
 
 /**
- * The pegs themselves, for the base part and for a preview: centre, shape and
+ * The pegs themselves, for the base part and for a preview: center, shape and
  * true size, with no clearance anywhere.
  *
  * @param {object} spec

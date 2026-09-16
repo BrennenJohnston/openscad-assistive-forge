@@ -35,7 +35,7 @@ logo_file_aspect = 1; // [0.05:0.01:20]
 logo_raised = "no"; // [yes, no]
 
 // Logo size as a percentage of the space it is allowed to fill; 100 fills it.
-// Ignored when Logo width is set: an exact width in millimetres wins over a
+// Ignored when Logo width is set: an exact width in millimeters wins over a
 // percentage, because it is the more specific instruction.
 logo_scale = 100; // [10:5:110]
 
@@ -130,7 +130,7 @@ auto_fit_h = 2 * min(logo_center_y - 4, fit_top_y - logo_center_y);
 assert(logo_file_aspect > 0, "logo_file_aspect must be positive (width divided by height)");
 assert(auto_fit_h > 0, "plate too shallow for the logo margins");
 // logo_scale shrinks the box the auto-fit contains the logo in. It leaves
-// logo_width alone: an exact width in millimetres is the more specific
+// logo_width alone: an exact width in millimeters is the more specific
 // instruction, so it wins, and at the default 100 the auto-fit is exactly
 // what it was before this parameter existed.
 scaled_fit_w = auto_fit_w * logo_scale / 100;

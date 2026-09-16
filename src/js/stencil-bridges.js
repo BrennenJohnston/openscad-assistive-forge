@@ -29,7 +29,7 @@
 
 import { interiorPoint } from './svg-nesting.js';
 
-/** Rib width and overlap defaults, in millimetres. */
+/** Rib width and overlap defaults, in millimeters. */
 export const BRIDGE_WIDTH_MM = 3;
 export const BRIDGE_OVERLAP_MM = 0.5;
 

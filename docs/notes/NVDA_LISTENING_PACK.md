@@ -101,10 +101,10 @@ converted until you ask for it.
 | The quick look's two sentences (what the picture looks like, and about how long converting will take) are findable by browsing, and are not announced over anything | ☐ | |
 | "Start conversion" is a real button with that name, and Enter starts it | ☐ | |
 | While it runs, the bar is a progress bar named "Converting your picture", and the stage sentence under it changes without announcing each change (DP-32: one action, one announcement) | ☐ | |
-| Cancel is reachable by Tab while the bar is up, and pressing it says "Conversion cancelled" once | ☐ | |
+| Cancel is reachable by Tab while the bar is up, and pressing it says "Conversion canceled" once | ☐ | |
 | Letting it finish says "Converted: N shapes" once; a one-shape picture says "1 shape", not "1 shapes" | ☐ | |
 | When a credit line came off, that is said once with the count, and "Undo" is the next control after the sentence | ☐ | |
-| The thin-line advisory reads as a sentence with a real millimetre number in it, not as a warning symbol alone | ☐ | |
+| The thin-line advisory reads as a sentence with a real millimeter number in it, not as a warning symbol alone | ☐ | |
 
 ## 8. The shapes list in the drawing editor (rebuilt this round)
 
@@ -161,8 +161,8 @@ over-budget fixture, or any traced photograph.
 | "Render preview" is described by that sentence rather than repeating it | ☐ | |
 | While it combines, Apply and Save report themselves disabled, and the reason ("Still combining the shapes...") is findable | ☐ | |
 | The bar carries the name "Combining N shapes" | ☐ | |
-| Cancel says "Combining cancelled" once, and the Render button comes back | ☐ | |
-| ★ Cancel is the worst case of the doubling above, and the only one where the two copies are not identical: the press says "Combining cancelled" and the stopped job says "Combining cancelled." with a full stop. Count how many times you hear it | ☐ | |
+| Cancel says "Combining canceled" once, and the Render button comes back | ☐ | |
+| ★ Cancel is the worst case of the doubling above, and the only one where the two copies are not identical: the press says "Combining canceled" and the stopped job says "Combining canceled." with a full stop. Count how many times you hear it | ☐ | |
 | Finishing says "Preview ready. It took N seconds." once, and nothing says "Rendering" while it runs | ☐ | |
 | Changing a role while it combines does not leave a stale sentence about the role you replaced | ☐ | |
 | Four older sentences in this editor still carry an em dash and the old word: "Preview updated — 5 foreground, 2 holes". Say how the em dash sounds and whether "foreground" now jars against "Raised" | ☐ | |

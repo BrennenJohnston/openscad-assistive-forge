@@ -59,7 +59,7 @@ Project-level companion files (shared across all presets) are stored as before i
 
 ## Migration Strategy
 
-| Saved project version | Behaviour |
+| Saved project version | Behavior |
 |---|---|
 | `schemaVersion` 1 or 2 | All companion files treated as project-level (no change) |
 | `schemaVersion` 3 | Preset-specific files loaded from `preset.companionFiles` |
@@ -86,7 +86,7 @@ iPad Pro 11 — LAMP layout (current design)
    openings_and_additions.txt [preset-specific]
 ```
 
-Badge colours distinguish project-level ("shared") from preset-specific files.
+Badge colors distinguish project-level ("shared") from preset-specific files.
 
 When no preset is active, all uploads go to project level.
 When a preset is active, a toggle control lets users choose: "Save as shared" vs "Save to this design".

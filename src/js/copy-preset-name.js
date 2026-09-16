@@ -2,7 +2,7 @@
  * Copy-preset-name helper (F30).
  *
  * Encapsulates the clipboard fallback chain so the main.js wiring stays
- * a thin event listener and the behaviour is unit-testable without
+ * a thin event listener and the behavior is unit-testable without
  * having to spin up the entire app.
  *
  * Strategy:

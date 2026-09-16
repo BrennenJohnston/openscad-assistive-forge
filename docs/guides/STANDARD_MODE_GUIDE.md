@@ -448,7 +448,7 @@ you a blank drawing. Export the drawing again with its outlines as geometry, or
 send an SVG.
 
 This is separate from **9a. Export for laser cutting** in the keyguard guide,
-which is about exporting a MODEL you are customising. This section is about a
+which is about exporting a MODEL you are customizing. This section is about a
 drawing you already have.
 
 ### Choosing what to keep from a photo
@@ -459,17 +459,17 @@ wherever a picture enters Forge:
 
 | Choice | What it keeps | Best for |
 |--------|---------------|----------|
-| **Line art** (the default) | The drawn lines. The colour behind them is dropped. | Communication symbols, and any drawing on a coloured background |
+| **Line art** (the default) | The drawn lines. The color behind them is dropped. | Communication symbols, and any drawing on a colored background |
 | **Solid shape** | The outline of the whole picture, filled in. | Very small pieces, where detail could not be felt anyway |
 | **Light and dark** | Whatever is darker than the background. What Forge did before. | A plain pencil drawing on white paper |
 
 **Why Line art is the default.** Professional communication symbols are black
-line work over a saturated fill, and the fill colour carries meaning. Judging by
+line work over a saturated fill, and the fill color carries meaning. Judging by
 brightness alone puts a blue field and the black drawing on top of it in the
 same bucket, and they merge into one shape: MEASURED on a black person symbol
 inside a blue square, the old tracing returned a plain blue square with the
 person gone, and said nothing. Line art asks two questions instead of one - is
-it dark, and is it close to grey - so black strokes survive and coloured fills
+it dark, and is it close to gray - so black strokes survive and colored fills
 do not.
 
 Both sliders can be moved, each with a number box beside it for setting an
@@ -477,17 +477,17 @@ exact value:
 
 - **How dark counts as a line** - higher keeps more of the picture, lower keeps
   only the darkest strokes.
-- **How colourful is still a line** - lower rejects coloured fills more firmly.
-  Raise it if a coloured line is being dropped. It only applies to Line art.
+- **How colorful is still a line** - lower rejects colored fills more firmly.
+  Raise it if a colored line is being dropped. It only applies to Line art.
 
 After every change Forge says what happened: how many shapes it found, how much
 of the picture became ink, and whether anything looked wrong - almost nothing
 kept, or so much kept that the result will print as one block.
 
-If the picture had a single colour behind its lines, Forge also names it, so you
-can pick a filament near that colour and keep the symbol recognisable. It stays
+If the picture had a single color behind its lines, Forge also names it, so you
+can pick a filament near that color and keep the symbol recognizable. It stays
 quiet when the picture has several different fills, because an average of four
-colours is a colour that is in none of them.
+colors is a color that is in none of them.
 
 **Tracing starts when you say so, and stops when you say so.**
 
@@ -515,13 +515,13 @@ Forge finds that line and takes it off, then says so, with **Undo** beside it if
 the drawing really did end in a row of small marks. It only fires when the marks
 look like a caption: enough of them, all small, all low down, all in one band.
 
-**Removing a caption removes no obligation.** If the licence on an icon asks you
+**Removing a caption removes no obligation.** If the license on an icon asks you
 to credit its author, you still have to, wherever your project says who made
 what. Forge says this in the panel too.
 
 **Lines too thin to print.** Forge measures the thinnest line in the drawing and
-tells you how wide it will be in millimetres at the size you are printing. Under
-about half a millimetre a line may not come out at all, or may come out too
+tells you how wide it will be in millimeters at the size you are printing. Under
+about half a millimeter a line may not come out at all, or may come out too
 faint to feel. It is a sentence, not an action: Forge does not change your
 drawing, it tells you what to expect so you can make it bigger or accept it.
 
@@ -530,7 +530,7 @@ browser. You are responsible for having the right to use any image you bring.
 If you need symbols you can share freely, [ARASAAC](https://arasaac.org/),
 [Mulberry Symbols](https://mulberrysymbols.org/) and
 [Blissymbolics](https://blissymbolics.org/) publish openly licensed sets; check
-each set's own licence before you share what you make.
+each set's own license before you share what you make.
 
 ### Editing a drawing with no design open
 
@@ -629,8 +629,8 @@ model has more than one design slot, you choose which one.
 
 The image's position, rotation, size and chosen surface are saved **with the
 project**, so reopening it later puts the reference back where you left it.
-Opacity and colour are settings for how you like to work, so they stay the
-same across every project rather than travelling with one.
+Opacity and color are settings for how you like to work, so they stay the
+same across every project rather than traveling with one.
 
 Your images never leave your device. Cropping, tracing and measuring all
 happen in your browser.

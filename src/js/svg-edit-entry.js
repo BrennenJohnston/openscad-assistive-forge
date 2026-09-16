@@ -363,7 +363,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       const mm = (n) => Number(n.toFixed(2));
       let sentence = `${name} saved. Your original file is untouched.`;
       if (saved) {
-        sentence += ` It measures ${mm(saved.width)} by ${mm(saved.height)} millimetres.`;
+        sentence += ` It measures ${mm(saved.width)} by ${mm(saved.height)} millimeters.`;
         if (sourceDxfSize) {
           const dw = Math.abs(saved.width - sourceDxfSize.width);
           const dh = Math.abs(saved.height - sourceDxfSize.height);

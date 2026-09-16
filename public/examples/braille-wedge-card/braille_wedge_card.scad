@@ -176,7 +176,7 @@ card_layout = "Single";      // [Single, All cards]
 // Braille rows on each card in All-cards mode (chunking mirrors the web
 // panel's card splitting: sequential groups, blank lines included).
 rows_per_card = 8;           // [1:1:20]
-// Gap between neighbouring card footprints in All-cards mode (mm)
+// Gap between neighboring card footprints in All-cards mode (mm)
 card_gap_mm = 5;             // [0:0.5:50]
 
 /* [Warnings] */
@@ -190,7 +190,7 @@ support_fins = "On";         // [On, Off]
 // Spacing between fins across the card width (mm). End fins at both outer edges
 // are always added on top of this interval (per masukomi's "side fins" lesson).
 // At the max interval only the two edge fins remain (2 minimum); at the min a
-// fin lands every millimetre (hundreds across a wide card).
+// fin lands every millimeter (hundreds across a wide card).
 fin_interval_mm = 25;        // [1:0.5:200]
 // Horizontal gap between the card's back face and the fin (mm) — the break-away
 // gap that the bridges span. ~1 mm per masukomi.
@@ -424,7 +424,7 @@ function back_y(z) = base_run * (1 - z / card_height) - card_thickness_mm;
 // One card's bed footprint along Y runs from the front bottom edge (y =
 // base_run) back to the card rear (y = -card_thickness_mm), extended by the
 // fin offset and brim flange when fins are on. In All-cards mode successive
-// cards step back along -Y by this depth plus card_gap_mm, so neighbouring
+// cards step back along -Y by this depth plus card_gap_mm, so neighboring
 // footprints are separated by exactly card_gap_mm.
 _footprint_back_y = fins_on
     ? -card_thickness_mm - fin_offset_mm - brim_width_mm
@@ -460,7 +460,7 @@ function get_dot_pattern(char) =
 // DOT CREATION MODULE
 // =============================================================================
 // `braille_dot_centered()` builds the dot at the origin with its central
-// axis on +Z and total height centred at z = 0. To sit on a surface, the
+// axis on +Z and total height centered at z = 0. To sit on a surface, the
 // caller translates by +totalHeight/2.
 module braille_dot_centered() {
     if (use_rounded_dots) {
@@ -510,7 +510,7 @@ module braille_dot_centered() {
 // the face width direction, +Y axis is DOWN-THE-SLOPE (so row 0 of the braille
 // grid sits at the TOP of the face), and +Z axis is the OUTWARD face normal.
 //
-// The origin is the centre of the reading face's TOP edge, the top-front corner
+// The origin is the center of the reading face's TOP edge, the top-front corner
 // C of the leaning slab. In global coordinates that point is (0, 0, card_height).
 //
 // A rotation of -face_angle_deg about +X is the unique single-axis rotation
@@ -582,7 +582,7 @@ module support_fin_2d() {
     ]);
 }
 
-// One fin prism centred on column x (thickness fin_thickness_mm along X).
+// One fin prism centered on column x (thickness fin_thickness_mm along X).
 module support_fin(x) {
     translate([x - fin_thickness_mm / 2, 0, 0])
         rotate([90, 0, 90])
@@ -667,10 +667,10 @@ module support_fins_all() {
 // FACE-LOCAL BRAILLE LAYOUT
 // =============================================================================
 // All of the modules below run inside face_transform(): local +X = width
-// (centred at 0), local +Y = down-the-slope (0 = face top, +grid_height = face
-// bottom), local +Z = outward. y_pos = vertical centre of a row in this frame.
+// (centered at 0), local +Y = down-the-slope (0 = face top, +grid_height = face
+// bottom), local +Z = outward. y_pos = vertical center of a row in this frame.
 
-// Vertical centre of a braille row in face-local Y. row 0 = top. Centers a
+// Vertical center of a braille row in face-local Y. row 0 = top. Centers a
 // content block of the given height on the (effective) face;
 // braille_y_adjust is an additive nudge on top (default 0 = centered).
 function face_row_y(row, block_height = content_height) =
@@ -678,16 +678,16 @@ function face_row_y(row, block_height = content_height) =
     + row * active_line_spacing
     + braille_y_adjust;
 
-// Horizontal centre of a grid column in face-local X. Lines are left-aligned
+// Horizontal center of a grid column in face-local X. Lines are left-aligned
 // within the block; the block is centered by the longest line.
 // braille_x_adjust is an additive nudge on top (default 0 = centered).
 function face_col_x(col, block_width = content_width) =
     -block_width/2 + col * active_cell_spacing + braille_x_adjust;
 
-// Place raised dots for a list of braille lines, centred on the face. The
+// Place raised dots for a list of braille lines, centered on the face. The
 // content metrics are computed from the given lines (so in All-cards mode
-// each card centres its OWN chunk exactly as it would render on its own),
-// while truncation still honours the shared grid capacity.
+// each card centers its OWN chunk exactly as it would render on its own),
+// while truncation still honors the shared grid capacity.
 module place_face_dots_for_lines(lines) {
     if (len(lines) > 0) {
         _ml = max([for (l = lines) len(l)]);

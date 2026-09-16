@@ -20,7 +20,7 @@
  */
 
 /**
- * `tone` is a hex colour or null to leave the map default alone.
+ * `tone` is a hex color or null to leave the map default alone.
  * `show` false hides the layer outright.
  *
  * `wayfinding` is the only layer that is OFF by default: CW-43 parsed it and
@@ -124,15 +124,15 @@ export function cycleMapStyle(id, delta) {
 /**
  * Wayfinding marks (CW-60), and the whole difficulty is SIZE.
  *
- * ★★ A MARK MUST BE A SCREEN SIZE, NOT A NUMBER OF METRES. Seattle has 5,355
+ * ★★ A MARK MUST BE A SCREEN SIZE, NOT A NUMBER OF METERS. Seattle has 5,355
  * wayfinding points. At the map's widest the entire city is a few hundred
- * character cells, so marks drawn at a fixed number of metres are either
+ * character cells, so marks drawn at a fixed number of meters are either
  * invisible zoomed out or the size of a block zoomed in. Either way the layer
  * stops being a layer.
  *
  * ★ THE FIRST ATTEMPT GOT THIS WRONG IN A WAY WORTH KEEPING. It used a fixed
  * 2.6 m divided by the zoom, which at zoom 1 is 2.6 m - and at zoom 1 the
- * whole city is in frame, so one pixel is about four metres. The marks were
+ * whole city is in frame, so one pixel is about four meters. The marks were
  * SUB-PIXEL and the style photographed as an empty dimmed map. The fix is the
  * family the player marker already uses: a fraction of the CITY'S OWN SPAN,
  * scaled by the zoom, so it works for a small extract and a large one alike.

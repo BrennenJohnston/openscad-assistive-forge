@@ -204,7 +204,7 @@ All 16 desktop parity scenarios audited; 14 fully resolved, 1 partially resolved
 | S-010 | Console and Error Log were separate panels | Unified Console with Log/Structured views |
 | S-011 | No rendering indicator during auto-preview | Non-blocking toast + pulsing badge |
 | S-012 | Missing-file errors were silent | Synthetic warnings in desktop console format |
-| S-014 (BUG-A) | Sequential renders could overlap via `_callMainInvoked` | Guard added; sequential renders now serialised |
+| S-014 (BUG-A) | Sequential renders could overlap via `_callMainInvoked` | Guard added; sequential renders now serialized |
 | S-016 | Grid opacity not adjustable | Grid opacity slider with localStorage persistence |
 
 ### v4.1.0 → v4.2.0

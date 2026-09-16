@@ -79,10 +79,10 @@ story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
   every name at once. Hover marks a row, a press chooses it, two fingers
   pinch and pan while one finger still scrolls the page
 - **One vocabulary**: what the panel is called, what a row is called, what
-  the colour key says, and what a screen reader hears are the same words
+  the color key says, and what a screen reader hears are the same words
 - **Credit lines left where they belong**: a downloaded icon usually carries
   its attribution baked into the picture, and converting it produced the icon
-  plus fifty letters of caption. The caption is recognised and left out, with
+  plus fifty letters of caption. The caption is recognized and left out, with
   an Undo beside the sentence saying so - which changes nothing about the
   attribution you still owe the designer
 

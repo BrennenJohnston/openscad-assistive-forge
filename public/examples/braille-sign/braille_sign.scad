@@ -325,7 +325,7 @@ module braille_dot_centered() {
 }
 
 // =============================================================================
-// SPLIT BORDER (2D, plate-local: plate centred at origin)
+// SPLIT BORDER (2D, plate-local: plate centered at origin)
 // =============================================================================
 // Full ring minus one rail: the letter plate keeps top + sides, the braille
 // plate keeps bottom + sides. Stacked (letters above braille) the segments
@@ -358,8 +358,8 @@ module split_border_2d(w, h, which) {
 // =============================================================================
 // LETTER PLATE (always prints flat, letters up)
 // =============================================================================
-// Raised text block is centred on the plate (the border is thin enough to
-// ignore in the centring). Lines are centred horizontally per 703-style
+// Raised text block is centered on the plate (the border is thin enough to
+// ignore in the centring). Lines are centered horizontally per 703-style
 // signage conventions.
 module letter_plate() {
     union() {
@@ -395,7 +395,7 @@ module letter_plate() {
 // =============================================================================
 // BRAILLE PLATE — face content (plate-local, flat, dots up)
 // =============================================================================
-// Braille block centred on the plate; line 0 at the top.
+// Braille block centered on the plate; line 0 at the top.
 module braille_face_dots() {
     if (braille_rows > 0) {
         for (row = [0 : braille_rows - 1]) {
@@ -403,7 +403,7 @@ module braille_face_dots() {
             if (len(line) > 0) {
                 y_line = braille_block_h / 2 - row * line_spacing;
                 for (col = [0 : len(line) - 1]) {
-                    // Left-aligned within the block, block centred by longest line
+                    // Left-aligned within the block, block centered by longest line
                     x_cell = -braille_block_w / 2 + col * cell_spacing;
                     dots = get_dot_pattern(line[col]);
                     for (d = [0:5]) {

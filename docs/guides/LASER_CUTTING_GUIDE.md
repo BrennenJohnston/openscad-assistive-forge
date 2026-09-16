@@ -23,8 +23,8 @@ material, your machine, or your beam.
 **True size.** The drawing is exactly the size it says. Nothing is shrunk or
 grown to allow for the beam.
 
-**Millimetres, stated.** The SVG carries `width="200mm"` and matching
-coordinates, so no software has to guess. The DXF now declares millimetres too
+**Millimeters, stated.** The SVG carries `width="200mm"` and matching
+coordinates, so no software has to guess. The DXF now declares millimeters too
 (`$INSUNITS`), which it did not before: a DXF with no unit header is read as
 inches by software set up for inches, and a 200 mm plate arrives 5,080 mm wide.
 
@@ -59,17 +59,17 @@ cutting.
 laser program reads it, and Forge writes cut lines as unfilled strokes.
 
 **DXF also works** and some older machines and job shops prefer it. Forge now
-writes a millimetre declaration into it. If your software still asks what unit
-the file is in, answer millimetres.
+writes a millimeter declaration into it. If your software still asks what unit
+the file is in, answer millimeters.
 
 Whichever you pick, **check the size after import**. It takes five seconds and
 catches a unit mistake before it costs a sheet.
 
-## Colours are instructions
+## Colors are instructions
 
-Laser software decides what to do with a line by its **colour**. Forge uses:
+Laser software decides what to do with a line by its **color**. Forge uses:
 
-| Colour | What it is | Set it to |
+| Color | What it is | Set it to |
 |---|---|---|
 | Black `#000000` | The stencil outline and every opening | **Cut** |
 | Red `#FF0000` | The plate label, when you ask for one | **Score** or **Fill** |

@@ -13,7 +13,7 @@
  * scales with `l` for the same reason the ticks' does: desktop stipples in
  * screen pixels, and a fixed world-unit dash vanishes at far zoom.
  *
- * Colour follows the tick overlay's theme resolution (Q-22, owner decision
+ * Color follows the tick overlay's theme resolution (Q-22, owner decision
  * 2026-08-09): upstream's axes are black, and AxesHelper's red/green/blue
  * failed contrast — pure green measured 1.36:1 against the Cornfield
  * background where SC 1.4.11 wants 3:1. Resolving --color-text-primary gives
@@ -44,7 +44,7 @@ const AXIS_VECTORS = {
  * @param {Object} [opts]
  * @param {number} [opts.distanceMm] Camera distance to the look-at point —
  *   the arm length, desktop `zoomValue()`. Defaults like the tick overlay.
- * @param {string} [opts.themeKey] Preview theme key, for the colour fallback.
+ * @param {string} [opts.themeKey] Preview theme key, for the color fallback.
  * @param {Document} [opts.document] Override `document` (tests).
  * @returns {{group: Object, distanceMm: number, dispose: () => void}}
  */

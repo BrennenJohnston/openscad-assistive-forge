@@ -2,7 +2,7 @@
  * Braille layout engine — capacity math, BANA-style word wrapping, and
  * multi-card splitting for the Braille Card Customizer.
  *
- * All geometry inputs are millimetres and mirror the wedge-card SCAD
+ * All geometry inputs are millimeters and mirror the wedge-card SCAD
  * parameters. Translation itself is NOT done here: callers supply an async
  * `translate(text) => braille` function (see braille-translator.js), which
  * keeps every function in this module either pure or trivially testable
@@ -46,7 +46,7 @@ export function countCells(braille) {
  * rowsPerCard  = min(maxRowsPerCard, floor((cardHeight − 2·margin) / lineSpacing))
  *
  * The flooring intentionally leaves one spacing unit of slack for the
- * physical dot extent beyond cell centres.
+ * physical dot extent beyond cell centers.
  *
  * @param {Object} opts
  * @param {number} opts.cardWidthMm - Card face width (mm)

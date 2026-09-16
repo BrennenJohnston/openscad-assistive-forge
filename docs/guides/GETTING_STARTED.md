@@ -39,7 +39,7 @@ The rest of this guide describes the **Assistive Forge** interface.
 ### Option 1: Load an Example
 
 1. Open the app at your hosted URL
-2. Once past the interface choice, look for the **Welcome Panel** in the centre
+2. Once past the interface choice, look for the **Welcome Panel** in the center
    of the screen
 3. Click **"Load Example"** to see available sample models
 4. Select any example to load it
@@ -104,7 +104,7 @@ When you're happy with your customization:
 2. Choose your format:
    - **STL**: Standard format for 3D printing
    - **OBJ**: Includes vertex colors, works with most software
-   - **AMF**: XML-based, carries per-object colour
+   - **AMF**: XML-based, carries per-object color
 3. Click the format button to download the file
 
 The export takes a few seconds for complex models. Your browser downloads the file automatically.

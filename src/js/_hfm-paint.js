@@ -372,12 +372,12 @@ function _paintComposited(
       // down for a blank cell too - filling the black gaps is the whole
       // point of it. Glyph pixels overwrite it below, so no decision changes
       // and no blending is needed: the caller has already folded the
-      // distance fade into an opaque colour, because the page behind this
+      // distance fade into an opaque color, because the page behind this
       // canvas is black and fading toward black is the same arithmetic.
       //
       // ★★ THIS LOOP IS THE WHOLE COST OF DAY, AND IT CANNOT BE WRITTEN
       // CHEAPER. About 1.1 million pixel writes per conversion at 30 %.
-      // Measured on the Iris Xe, A-B-B-A, Seattle, 30 %, colour, heavy rain,
+      // Measured on the Iris Xe, A-B-B-A, Seattle, 30 %, color, heavy rain,
       // 45 s, against 24.9-25.4 ms at Night:
       //
       //   this loop, as written      +4.2 ms
@@ -478,7 +478,7 @@ function _applyAfterglow(ctx, img, fade) {
   for (let i = 0; i < cur.length; i += 4) {
     const decayed = prev[i + 3] * fade;
     if (decayed > cur[i + 3]) {
-      // The decaying pixel still out-glows the new one: keep its colour at the
+      // The decaying pixel still out-glows the new one: keep its color at the
       // decayed alpha, so a trail dims away instead of changing hue.
       cur[i] = prev[i];
       cur[i + 1] = prev[i + 1];
@@ -539,7 +539,7 @@ export function paintFrame(
   colorLayers,
   glowInComposite = false,
   scanlineDim = 0,
-  // CW-85: one opaque colour per cell, or 0 for "leave this cell alone", or
+  // CW-85: one opaque color per cell, or 0 for "leave this cell alone", or
   // null for a caller that has no backing at all - which is every caller but
   // the game's own instance, and the game itself while Night is on.
   backing = null
@@ -627,7 +627,7 @@ export function paintFrame(
  *
  * Below full drive the beam is simply weaker, so every channel scales together
  * and the hue is unchanged. ABOVE full drive a real tube cannot make the
- * phosphor a new colour — it saturates and blooms toward white, and that is
+ * phosphor a new color — it saturates and blooms toward white, and that is
  * what the extra energy looks like. So drive > 1 blends toward white rather
  * than multiplying, and green (already near maximum) gains very little from
  * it: MEASURED, #00ff00 is 15.30:1 on black while drive 1.5 reaches only
@@ -638,7 +638,7 @@ export function paintFrame(
  * 4.5:1 this project holds itself to. tests/unit/color-contrast.test.js
  * imports this function and re-measures every level the renderer ships.
  *
- * @param {string} css - #rrggbb phosphor colour
+ * @param {string} css - #rrggbb phosphor color
  * @param {number} drive - below 1 dims, 1 is the phosphor itself, above 1
  *   blooms toward white
  * @returns {string} #rrggbb
@@ -772,11 +772,11 @@ export function normalizeChroma([r, g, b]) {
  * CW-71 - the INK BUDGET for palette mode.
  *
  * Monochrome has an intensity ladder, so a dim cell is drawn dim. Palette mode
- * has none: the cell contrast curve normalises every cell to full scale before
- * the glyph is chosen, and then a colour is put on whatever came out. The
+ * has none: the cell contrast curve normalizes every cell to full scale before
+ * the glyph is chosen, and then a color is put on whatever came out. The
  * result, measured at the Seattle spawn: 70 to 83 per cent of ALL cells carry
  * ink and more than half of them are WHITE, against 3 to 7 per cent inked in
- * mono. The picture reads as three or four flat fields of colour rather than
+ * mono. The picture reads as three or four flat fields of color rather than
  * as a street.
  *
  * Two rules, both about the cell's ABSOLUTE luminance, which is the thing the
@@ -787,7 +787,7 @@ export function normalizeChroma([r, g, b]) {
  *   whiteLum,    white is the brightest entry in every palette and it is what
  *   whiteChroma  a low-chroma highlight lands on through the sRGB match. A
  *                cell may take it only if it is BOTH bright enough and
- *                colourless enough; anything else takes the nearest
+ *                colorless enough; anything else takes the nearest
  *                CHROMATIC entry instead.
  *
  * The sRGB match itself is untouched: this decides which entries the match may
@@ -818,8 +818,8 @@ export function normalizeInkBudget(options) {
 }
 
 /**
- * How far from grey a colour is, in the same max-normalised space the palette
- * match works in: 0 for any grey, 1 for a fully saturated hue.
+ * How far from gray a color is, in the same max-normalised space the palette
+ * match works in: 0 for any gray, 1 for a fully saturated hue.
  *
  * @param {number} r @param {number} g @param {number} b in [0, 1]
  * @returns {number}

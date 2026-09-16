@@ -223,7 +223,7 @@ function jointEnd(f0, z0, len, swingRad) {
  * Build one figure as unpainted geometries grouped by the tint zone the
  * palette applies to. city-scene paints and merges them: `torso`, `legs` and
  * `figure` (head + shoulders) each take their own tone from the city's
- * colour scheme, so a street of people carries the scheme's whole range.
+ * color scheme, so a street of people carries the scheme's whole range.
  *
  * CW-65 adds two MORE zones, `cane` and `glasses`, and they are EMPTY unless
  * the spec asks for them. Every ordinary figure in every city must come back
@@ -403,7 +403,7 @@ export function makeFigureGeoms(x, y, facingRad, spec) {
        * ★★ EXACT BLACK, WRAPPED IN A BRIGHT HEAD - CW-40's law used
        * deliberately rather than worked around. These palettes carry NO dark
        * neutral (CW-58 measured every bird landing white), so a "dark band"
-       * drawn dark would land on a colour that is not dark. Exact black is the
+       * drawn dark would land on a color that is not dark. Exact black is the
        * one value the converter renders as an EMPTY CELL (CW-5), and the head
        * is already the brightest zone a figure has at tier 0.82.
        *

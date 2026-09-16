@@ -1312,7 +1312,7 @@ async function renderWithCallMain(
       // The needsRestart flag ensures the render controller restarts before retrying.
       const doubleInvokeError = new Error(
         'WASM_DOUBLE_INVOKE: The rendering engine was not restarted between renders. ' +
-          'This render has been cancelled to prevent corrupted geometry. ' +
+          'This render has been canceled to prevent corrupted geometry. ' +
           'The engine will restart automatically before the next render.'
       );
       doubleInvokeError.code = 'WASM_DOUBLE_INVOKE';
@@ -2125,7 +2125,7 @@ function cancelRender(requestId) {
       payload: {
         requestId,
         code: 'CANCELLED',
-        message: 'Render cancelled by user',
+        message: 'Render canceled by user',
       },
     });
   }

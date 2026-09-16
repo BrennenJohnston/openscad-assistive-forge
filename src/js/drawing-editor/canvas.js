@@ -95,7 +95,7 @@ export function regionsInside(regions, rect) {
 /**
  * The nearest region in a direction, by interior point.
  *
- * "In a direction" means the other region's centre lies inside a 90-degree
+ * "In a direction" means the other region's center lies inside a 90-degree
  * cone opening that way, so pressing Right never lands on something that is
  * mostly above; among those, the closest wins.
  *
@@ -162,7 +162,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   // The layers, in drawing order (DP-21): the art underneath, the regions
   // tinted over it, the plate being stepped through, the keyboard highlight
   // (two strokes), the marquee on top. A hatch pattern for removed regions
-  // lives in defs; its colour comes from the stylesheet's tokens.
+  // lives in defs; its color comes from the stylesheet's tokens.
   const defs = document.createElementNS(SVG_NS, 'defs');
   const hatchId = `${labelId}-hatch`;
   const hatch = document.createElementNS(SVG_NS, 'pattern');
@@ -294,11 +294,11 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   }
 
   /**
-   * Paint the plan onto the regions: each path takes its colour, and the
+   * Paint the plan onto the regions: each path takes its color, and the
    * selected, removed and highlighted ones say so in a class.
    *
    * @param {object} state
-   * @param {Object<string, string>} state.fills - key -> css colour, or ''
+   * @param {Object<string, string>} state.fills - key -> css color, or ''
    * @param {Set<string>} state.selected
    * @param {Set<string>} state.removed
    */
@@ -318,7 +318,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
 
   /**
    * The keyboard highlight: a two-stroke outline drawn OVER the regions
-   * (the region's own stroke would sit under its neighbours), which PULSES
+   * (the region's own stroke would sit under its neighbors), which PULSES
    * for three beats and then settles, unless the person asked for less
    * motion, in which case it settles at once. The classes are the contract a
    * spec can read: `is-pulsing` until the animation ends, then `is-steady`.

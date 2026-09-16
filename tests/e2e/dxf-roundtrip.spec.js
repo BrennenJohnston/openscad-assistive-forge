@@ -179,7 +179,7 @@ test.describe('DXF in, DXF out', () => {
 
     const said = (await announcements(page)).join(' ')
     expect(said).toMatch(/known-extents-edited\.dxf saved/)
-    expect(said).toMatch(/It measures [\d.]+ by [\d.]+ millimetres/)
+    expect(said).toMatch(/It measures [\d.]+ by [\d.]+ millimeters/)
 
     testInfo.attach?.('saved.dxf', { body: saved, contentType: 'text/plain' })
   })

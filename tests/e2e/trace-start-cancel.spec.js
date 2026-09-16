@@ -242,7 +242,7 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
 
     await expect(p.running).toBeHidden({ timeout: 15_000 });
     await expect(p.start).toBeVisible();
-    await expect(p.info).toHaveText('Conversion cancelled');
+    await expect(p.info).toHaveText('Conversion canceled');
     // Nothing is left claiming to be busy.
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     // And nothing was converted: a cancelled job leaves no file behind.

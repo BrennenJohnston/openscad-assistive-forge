@@ -136,7 +136,7 @@ const EXAMPLES = {
     additionalFiles: [
       '/examples/stencil-maker/sample-design.svg',
       // DP-14. The gallery is this project's own work now: the ring, which
-      // demonstrates a support bar holding an enclosed centre, and the Forge
+      // demonstrates a support bar holding an enclosed center, and the Forge
       // logo. The six charm icons that used to sit here were copies of another
       // tile's library and had nothing to do with stencils.
       '/examples/stencil-maker/forge-logo.svg',

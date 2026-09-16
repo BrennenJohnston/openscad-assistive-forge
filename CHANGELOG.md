@@ -32,7 +32,7 @@ version.
   by a GitHub Actions workflow from a pinned source tarball, committed with its recipe and its
   checksums, and is now the default for Line art and Solid shape at `opttolerance` 1.0. It was
   not chosen for speed: across twelve pictures the two engines draw the same picture, to a
-  region overlap of 0.87 to 0.99 and a line width matching to a hundredth of a millimetre. It
+  region overlap of 0.87 to 0.99 and a line width matching to a hundredth of a millimeter. It
   was chosen for the edge. Magnified, the old engine returns a stroke edge of straight segments
   with countable corners and a round dot as a ten-sided polygon, where Potrace returns one
   continuous curve and a circle - and what is drawn here becomes an edge a finger runs along.
@@ -65,7 +65,7 @@ version.
   bug report. The same string appears in `forge-capabilities.txt`
 - **A rule for the credit line that comes with an icon** (DP-36) - a downloaded icon usually
   arrives with its attribution baked into the picture, and converting it produced the icon plus
-  fifty letters of caption. The caption is recognised and left out by default, with an Undo
+  fifty letters of caption. The caption is recognized and left out by default, with an Undo
   beside the sentence that says so, and a thin-line advisory reports the narrowest line at the
   width the design will actually print
 
@@ -97,7 +97,7 @@ version.
   pixels and all seven Delete buttons were clipped, and now nothing is clipped. The list points
   at the picture again, and on a phone it is a sheet rather than 99.8 % of the drawing
 - **One vocabulary, wherever a person meets it** (DP-Q40) - what the panel is called, what a row
-  is called, what the colour key says and what a screen reader hears are now the same words:
+  is called, what the color key says and what a screen reader hears are now the same words:
   "Shapes", "Shape 3", and the roles Raised / Hole / Ignore (Include / Exclude where a compound
   path has no holes to offer). Eight strings across four files were still saying the retired
   ones, four of them only to people who cannot see the control that disagreed
@@ -196,7 +196,7 @@ version.
   drawing is the editor now: it takes the full width, and toggling a shape on or off shows in
   that one picture. **Compare with original** is a button beside Show roles that brings the pair
   back while it is pressed; every fresh open returns to the one picture
-- **The editor's side panel is a drawer over the drawing** (DP-24) - the regions, colours,
+- **The editor's side panel is a drawer over the drawing** (DP-24) - the regions, colors,
   plates and warnings used to be a column that squeezed the drawing to less than half its space
   (and at phone width grew to four screens tall while the drawing shrank to nothing). The panel
   lays OVER the drawing's right edge now, from a Regions toggle in the toolbar: closed by
@@ -206,7 +206,7 @@ version.
 - **The editor toolbar is three named rows** (DP-24) - it used to be one long line that wrapped
   wherever it ran out, four rows deep. Now it is the actions row, the view row and the hands
   row, and none of them wraps at a desktop window. Getting the hands row to hold took a shorter
-  word: **Paint selection**, the Paint tool's own verb, where "Colour the selection" wrapped the
+  word: **Paint selection**, the Paint tool's own verb, where "Colour the selection" (sic) wrapped the
   row at every width
 - **The two ready-made cards are Designers now** - the parameter panel is called the Customizer,
   and two welcome cards were called Customizers too, which put one word on two different things
@@ -215,16 +215,16 @@ version.
 
 ### Added
 
-- **Muted colour names** (DP-25) - the automatic colour namer knew eighteen saturated anchors,
-  so every muted colour in a traced photograph landed on a gray: sage-green eyes, a dusty-pink
+- **Muted color names** (DP-25) - the automatic color namer knew eighteen saturated anchors,
+  so every muted color in a traced photograph landed on a gray: sage-green eyes, a dusty-pink
   nose and a gray muzzle were all called "Gray", three swatches sharing one name in a list whose
   whole job is telling them apart. Olive, Sage, Dusty pink and Cream join the table, each placed
   so it does not steal a saturated name
-- **A cropped photo can be the design** (DP-26) - colour from the photo itself: crop a reference
-  photo down to its subject and press Use as design, and the cropped copy enters the colours
+- **A cropped photo can be the design** (DP-26) - color from the photo itself: crop a reference
+  photo down to its subject and press Use as design, and the cropped copy enters the colors
   flow with the editor open on it. The hand-over row used to hide itself after a crop - a plain
   upload offered it and a cropped copy did not, which was backwards, because cropping is what
-  you do on the way to the colours
+  you do on the way to the colors
 
 ### Fixed
 
@@ -241,11 +241,11 @@ version.
   the curve's own arithmetic and every ellipse parametrically before the engine sees the file -
   the same sketch opens whole - and the engine's warning lines ride into the editor's warnings
   list instead of being swallowed at the door
-- **The traced colour masks tile** (DP-24) - each colour of a separated picture is traced on its
-  own, and the tracer pulls every boundary inward, so neighbouring colours never quite touched:
+- **The traced color masks tile** (DP-24) - each color of a separated picture is traced on its
+  own, and the tracer pulls every boundary inward, so neighboring colors never quite touched:
   the hairline gaps between them became hundreds of loose pieces on the plates. Grown under a
   pixel before tracing (after the too-small specks are dropped, counted, so growth cannot
-  resurrect them), neighbours meet: the owner's cat went from 997 loose pieces to 64, and the
+  resurrect them), neighbors meet: the owner's cat went from 997 loose pieces to 64, and the
   survivors are true paint-order islands the report should name
 - **A file control never says [object Object]** (DP-25) - a rebuilt file control whose saved
   value is a file object printed its type instead of its name, to the person and to the screen
@@ -345,9 +345,9 @@ version.
   from. A city whose extract carries no terrain stays exactly as flat as it was, and the
   measured cost on the same machine was under a millisecond
 
-- **The skyline is visible from anywhere** (CW-82) - the city used to end 260 metres out: past
+- **The skyline is visible from anywhere** (CW-82) - the city used to end 260 meters out: past
   the fog, a tower was a faint cutout and most of the map simply was not there. The detailed
-  buildings still own the first 260 metres, and beyond them the same volumes are drawn a second
+  buildings still own the first 260 meters, and beyond them the same volumes are drawn a second
   time through a windowless material - no facade detail to shimmer at distance, one shared copy
   of the geometry - fading in distance bands to the edge of the map, so downtown reads from the
   waterfront and a walk toward it has a destination on the horizon. A murky night still pulls
@@ -358,7 +358,7 @@ version.
   hold-and-drag (the default), hands-free follow, and off, and the choice is remembered; with
   reduced motion set it starts off and stays whatever you pick. In hands-free follow the view
   turns toward wherever the cursor points: still in the middle, faster toward the edges,
-  settling the moment the cursor comes back to centre or leaves the picture. It stays a choice
+  settling the moment the cursor comes back to center or leaves the picture. It stays a choice
   rather than the default - it does not yet get along with leaving the picture to press the
   on-screen buttons. Underneath, every way of looking - keys, mouse, the camera panel's
   buttons - now steers one target the camera follows smoothly, and walking builds to full
@@ -367,10 +367,10 @@ version.
 - **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as
   you walked toward it, sometimes flipping from one color to another all at once across a whole
   face. The color was being guessed afresh every frame from how the lit screen looked in that
-  cell, and the city itself is drawn in greys, so the guess was reading almost nothing and
+  cell, and the city itself is drawn in grays, so the guess was reading almost nothing and
   changing its mind. Each kind of surface has its own color now - foliage, buildings, shop fronts,
   the roadway, the pavement, signs - and the light on it decides only how bright it is. Walking
-  nineteen metres toward a shop front used to change the color of one cell in nine; it now changes
+  nineteen meters toward a shop front used to change the color of one cell in nine; it now changes
   none. The sky is left as it was, because it is not a surface. Nothing about monochrome changes
 
 - **The ground, the paving and the buildings keep their own characters as you walk** (CW-91) -
@@ -416,12 +416,12 @@ version.
   for deciding whether there is one. Measured walking, ink left where the game had chosen blank
   went from about five hundred cells a frame to none
 
-- **Buildings do not hover** (CW-90) - some buildings were drawn starting several storeys above
+- **Buildings do not hover** (CW-90) - some buildings were drawn starting several stories above
   the pavement, so a tower hung in the air with a gap underneath it, and some had an upper half
   floating clear of their own lower half. Anything that would hover is now built down to whatever
   is beneath it, or to the ground. The shape above is unchanged; only the hole underneath is
-  filled. Across the four cities this closed seventy-one gaps, including a two hundred metre tower
-  that began eighteen metres up
+  filled. Across the four cities this closed seventy-one gaps, including a two hundred meter tower
+  that began eighteen meters up
 
 - **The ground keeps its own characters** (CW-86, groundwork, off by default) - a cell's
   character has always been chosen by how bright that patch of SCREEN is, so walking re-rolled
@@ -475,7 +475,7 @@ version.
 
 - **The city is not dark any more** (CW-84) - playing the deployed build, the picture read too dark
   and frames looked like they were blending together. Three things changed.
-  In colour, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per
+  In color, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per
   cent used to, so the sky, the road and the pavement were simply black. The gate that removed the
   flat white fields stays, so nothing goes back to white. In monochrome the solid bright layer is
   back, capped, so a lit shopfront reads as a bright block again. And the frame-to-frame memory that
@@ -484,16 +484,16 @@ version.
 
 
 - **Street lights where the city actually has them** (CW-77) - every lamp in the game was invented,
-  one every 30 metres on every street, because the map's own `highway=street_lamp` nodes were never
+  one every 30 meters on every street, because the map's own `highway=street_lamp` nodes were never
   asked for. They are now: Seattle carries Seattle City Light's surveyed register of 3,679 lit poles
   and the other three cities carry OpenStreetMap's, and where the map has put a lamp the game no
   longer invents one beside it. Where the map is silent the spacing follows Seattle's own lighting
-  standard read whole, which is a luminaire every 18 metres on an ordinary street and on a
+  standard read whole, which is a luminaire every 18 meters on an ordinary street and on a
   pedestrian street, on alternating sides. Pedestrian streets had no lighting at all before. A
-  street wider than 15 metres carries a facing pair every 76 metres instead
+  street wider than 15 meters carries a facing pair every 76 meters instead
 
 - **The ground under the city, measured** (CW-77) - the extracts now carry a terrain grid sampled
-  from the national 1 metre elevation models (USGS for the three US cities, Natural Resources Canada
+  from the national 1 meter elevation models (USGS for the three US cities, Natural Resources Canada
   for Burnaby), so a later release can put Seattle's hills back. Nothing is drawn on it yet. Buildings
   the map records as being below the street are no longer built up from ground level
 
@@ -504,7 +504,7 @@ version.
   columns where there is room for them, and you can see and walk under it. The Convention Center
   Arch, whose mapper wrote down both where it starts and where it ends, is unchanged
 
-- **Towers stand on the ground** (CW-76) - Metropolitan Park West Tower began 45 metres in the air,
+- **Towers stand on the ground** (CW-76) - Metropolitan Park West Tower began 45 meters in the air,
   and 32 other buildings in Seattle floated the same way, because the game drew the detailed volumes
   a mapper had added and stopped drawing the plain outline under them. The outline is now drawn as
   the podium those volumes stand on. Where a volume genuinely has nothing under it anywhere in the
@@ -517,16 +517,16 @@ version.
   roadway steps back onto the pavement on its own side of the street, and is only dropped where there
   is no pavement to take it. Nobody stands in the road unless the map records a crossing there
 
-- **Cars no longer drive through parked cars** (CW-75) - a moving car sat a fixed 1.6 metres in from
-  the kerb and a parked car 1.5 metres, which put the two of them 10 centimetres apart on every kind
+- **Cars no longer drive through parked cars** (CW-75) - a moving car sat a fixed 1.6 meters in from
+  the kerb and a parked car 1.5 meters, which put the two of them 10 centimeters apart on every kind
   of street this game parks on: 637 pairs of cars occupied the same ground in Seattle, the nearest of
-  them six metres from where the player starts. The travel lane is now worked out from the road's own
+  them six meters from where the player starts. The travel lane is now worked out from the road's own
   width, so a wide street gets a lane each way and a narrow one gets a single shared lane down the
   middle, with the parked rows left exactly where they were. A street too narrow to hold both a
   parking bay and a travel lane carries no parked cars
 
 - **A building's ground floor is what the map says it is** (CW-74) - the game decided what kind of
-  shopfront a building had by looking for a cafe or a shop pinned within 35 metres of it, and never
+  shopfront a building had by looking for a cafe or a shop pinned within 35 meters of it, and never
   looked at the building itself. So the Central Library, which the map plainly labels a library, got
   its ground floor from a coin toss, along with 130 other buildings in Seattle alone. A building's own
   label now decides first, the nearest pinned place second, and the coin toss only where nothing at
@@ -546,7 +546,7 @@ version.
   - which is most of Albuquerque - the building still chooses from all nine as it always did, so no
   street becomes uniform
 
-- **Windows fit the wall they are on** (CW-73) - the window grid used to be laid out in world metres,
+- **Windows fit the wall they are on** (CW-73) - the window grid used to be laid out in world meters,
   which meant a wall finished halfway through a window and a building finished halfway through a row
   of them, wherever it happened to stand. Every wall now carries a whole number of windows across and
   every building a whole number of rows up, the ground floor is kept clear for the shopfront, and a
@@ -573,7 +573,7 @@ version.
 - **The bright layer is gone from the game, and the parks are visible** (CW-72) - I compared the two
   treatments built and measured in the previous release, pictures side by side, and chose to
   remove the solid layer: no cell is painted as a solid block any more, and a lit shopfront is drawn
-  as characters you can see into. Colour mode's ink floor was set to the value that keeps a street
+  as characters you can see into. Color mode's ink floor was set to the value that keeps a street
   readable rather than the one that empties it, and a park's surface was raised out of the near-black
   it had been sitting in
 
@@ -584,22 +584,22 @@ version.
   lamp posts inside a roadway, cars overlapping cars, people in the road away from a crossing,
   buildings that float and roofs drawn from the ground up
 
-- **Colour mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity
+- **Color mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity
   ladder, so a dim cell is drawn dim and an empty one empty: three to seven per cent of a monochrome
-  frame carries ink. Colour had no ladder at all. Every cell was normalised to full brightness before
-  its character was chosen and then had a colour put on it, so **seventy to eighty-nine per cent of
-  every colour frame carried ink and about sixty per cent of all cells were white** - six colours in
+  frame carries ink. Color had no ladder at all. Every cell was normalized to full brightness before
+  its character was chosen and then had a color put on it, so **seventy to eighty-nine per cent of
+  every color frame carried ink and about sixty per cent of all cells were white** - six colors in
   the palette, and one of them was most of the screen. There is now an ink budget: a floor below which
   a cell draws nothing, and a gate that lets a cell take white only if it is both bright enough and
-  colourless enough. Measured at the Seattle spawn: ink from 89.3 to 3.1 per cent, white from 61.8 to
-  0.01, and the colour flicker while walking from 15,677 changes over 24 frames to 171. Both palettes
-  still use all of their colours; nothing collapses
+  colorless enough. Measured at the Seattle spawn: ink from 89.3 to 3.1 per cent, white from 61.8 to
+  0.01, and the color flicker while walking from 15,677 changes over 24 frames to 171. Both palettes
+  still use all of their colors; nothing collapses
 
 - **The white and the ink turned out to be two problems, not one** (CW-71) - turning on the white gate
   alone, with no floor, removes every white cell and changes nothing else: the same large flat fields
   are still there, in teal instead of white. That says plainly that the flatness was never only about
   white. Three settings are measured and photographed side by side in `docs/CITY_WALK_ROADMAP.md`, so
-  the choice of how empty colour mode should be is made from pictures rather than from a hunch
+  the choice of how empty color mode should be is made from pictures rather than from a hunch
 
 - **Three selectable treatments of the solid bright layer, measured side by side** (CW-70) - the
   brightest cells are not drawn as characters at all: at or above a luminance of 0.80 the whole cell
@@ -648,16 +648,16 @@ version.
   exactly that reason: cells kept the character of the surface they had just left. A cell now forgets
   everything the moment its surface class changes under it or its solid-cell state flips, and no cell
   may override the fresh answer for more than a second in a row. Measured: the share of surface
-  changes where the character failed to follow went DOWN, not up. In colour mode that reset was
+  changes where the character failed to follow went DOWN, not up. In color mode that reset was
   missing at first because the surface map was never sent to the graphics card there, and the smear it
   allowed was visible in the numbers (87 per cent of surface changes kept a stale character, against
-  44 with no memory at all); packing the palette colour and the surface into one byte fixed it, and
-  colour mode now measures better than it did with no memory at all. Nothing outside the game gets
+  44 with no memory at all); packing the palette color and the surface into one byte fixed it, and
+  color mode now measures better than it did with no memory at all. Nothing outside the game gets
   any of this: the same converter draws the main app's alternate view, which converts one still frame
 
 - **An instrument that photographs the City Walk in motion** (CW-67) - every judgement this game has
   made about whether its picture holds still was read off a screenshot or off a two-centimetre test
-  step, and the walk a player actually does is 4.8 metres a second. `scripts/seq-city-walk.mjs` runs
+  step, and the walk a player actually does is 4.8 meters a second. `scripts/seq-city-walk.mjs` runs
   a scripted walk, a scripted look and a standing control, waits for one converted frame per step,
   and scores the converter's own decisions cell by cell: how often a character changes, how often it
   comes back to what it was two frames ago, how many frames a character survives on average, and
@@ -694,8 +694,8 @@ version.
   job. The Stencil Maker card still credits the Stencil Forge project by name, but no longer
   links to it: that repository is private, so the link was a dead end for everybody who followed
   it. The same credit is now in CREDITS.md, saying which parts were carried over and under what
-  licence. Behind the scenes, the Bracelet Clip Charm stopped borrowing its six gallery icons
-  from a neighbouring tool's folder and uses its own copies, which have been sitting there unused
+  license. Behind the scenes, the Bracelet Clip Charm stopped borrowing its six gallery icons
+  from a neighboring tool's folder and uses its own copies, which have been sitting there unused
   since they were added
 
 - **A pendant can take the shape of your own drawing** (DP-11) - the Flat Pendant gains a shape
@@ -721,7 +721,7 @@ version.
   built a blank pendant anyway. And text could run off the edge of a charm and print standing on
   nothing; text is now cut off at the edge of the face on every model. The guide gains a table
   saying which model has which feature, and the tests read that table, so a promise it makes
-  that stops being true now fails the build instead of quietly ageing
+  that stops being true now fails the build instead of quietly aging
 
 - **A drawing can be built as a stack of layers, not just one flat shape** (DP-7, DP-8) - if the
   shapes in your drawing sit inside one another, the app can now work that out and build them as
@@ -740,7 +740,7 @@ version.
   marking a shape "Ignore" kept it out of what gets printed but left it in the list, which is no
   help when a drawing has hundreds of them. Every row now has a Delete button, and above the list
   there are two ways to clear out a lot at once: remove everything smaller than a size you give,
-  or keep only the largest few and remove the rest. Sizes are in square millimetres measured
+  or keep only the largest few and remove the rest. Sizes are in square millimeters measured
   against the design width, so they are the size the shape will really print. One step of undo is
   available while you are working, and what you removed is remembered with the project, so
   reopening it shows the list you left behind. Removing enough shapes to get under fifty brings
@@ -786,7 +786,7 @@ version.
   cat that used to overflow a 70 mm design box now fills it exactly. The laser sheet was reading
   the same drawing the same wrong way, and is fixed with it
 
-- **Drawings that declare their colours in a style block are no longer read as solid black**
+- **Drawings that declare their colors in a style block are no longer read as solid black**
   (DP-3) - drawings exported from CAD and illustration programs usually set "no fill, black
   outline" once at the top of the file and refer to it by name from every shape. Forge was not
   reading that, so it assumed every shape was filled in, and a line drawing became a page of
@@ -808,20 +808,20 @@ version.
 - **Two pieces of text on the chosen card were just under the contrast minimum** (DP-1) - putting
   a card in the chosen state on first paint was the first time the modal's amber text had ever sat
   on the pale yellow chosen fill, and there it measured 4.44 to 1 where the standard asks for 4.5.
-  The badge and the Accessibility highlights link now use a foreground colour picked for that
-  fill, measured at 5.78 to 1. The colour was missing from the design system rather than wrong in
+  The badge and the Accessibility highlights link now use a foreground color picked for that
+  fill, measured at 5.78 to 1. The color was missing from the design system rather than wrong in
   the modal, so it is added there and every theme states its own value; nothing that was already
   correct changed. Anyone who clicked a card before this release met the same problem
 
 ### Added
 
 - **You can see what you did** (DP-21) - the drawing editor's canvas is one picture now. The
-  original drawing sits underneath, dimmed; every region is painted in its colour at full
-  strength, the base coat in a neutral grey so it reads differently from "unpainted"; a removed
+  original drawing sits underneath, dimmed; every region is painted in its color at full
+  strength, the base coat in a neutral gray so it reads differently from "unpainted"; a removed
   region is hatched; a selected one has a thick outline. "Show original" is a button you press
   to see the untouched drawing alone and press again to see your edits, and it says which. When
   you move through the regions table, the drawing draws a two-stroke outline around the region
-  you are on - dark outside, light inside, so it reads on any colour - that pulses three times
+  you are on - dark outside, light inside, so it reads on any color - that pulses three times
   and then settles; if your system asks for less motion, it settles at once. The plate stepper
   in the toolbar walks the plates one at a time, drawing that plate's cut over the dimmed plan
   and saying the same paint sentence the export writes, so you can see what plate 2 will cut
@@ -829,17 +829,17 @@ version.
 
 - **You can point at a region and say brown** (DP-20) - the drawing editor on the Stencil Maker
   gains its tools. The drawing is one canvas you work on directly: Select a region by clicking it
-  (Shift adds another), drag a Marquee around several, Paint one with the current colour, Remove
+  (Shift adds another), drag a Marquee around several, Paint one with the current color, Remove
   one, or drag with the Hand to move around; the wheel zooms. Every one of those has a keyboard
   equivalent: the regions table has a checkbox on each row, Up and Down walk the rows in the same
   column while the drawing highlights the region you are on, Space ticks, Ctrl+A ticks them all,
-  the number keys 1 to 8 give the ticked regions the matching colour and 0 the base coat, Delete
+  the number keys 1 to 8 give the ticked regions the matching color and 0 the base coat, Delete
   removes them and "Put back" restores them. Everything you do is an Undo away - Ctrl+Z, Ctrl+Y,
   the Undo button in the toolbar or the one under the table - and every undo says what came back,
-  in words. Colours can be renamed, merged into another, or removed (their regions go back to the
+  in words. Colors can be renamed, merged into another, or removed (their regions go back to the
   base coat), and the paint order has "Paint earlier" and "Paint later" buttons on each plate. One
-  checkbox decides the plate rule: on, later colours also cut through each plate so nothing can
-  fall out; off, each plate cuts its own colour only, the way a hand-cut set does. The plan you
+  checkbox decides the plate rule: on, later colors also cut through each plate so nothing can
+  fall out; off, each plate cuts its own color only, the way a hand-cut set does. The plan you
   apply is saved with the drawing and comes back when the drawing does, so a project reopened
   cuts what it cut when it was saved. Walked through with one user's own cat: their six plates,
   applied by hand through the interface, come out as six plates
@@ -848,16 +848,16 @@ version.
   inside the customizer's file control, a long flat list with a before-and-after pair above it.
   Now it takes the preview area, the biggest surface on the page and on a phone the whole of it:
   a toolbar across the top, the drawing in the middle, and a side panel of collapsible sections
-  beside it (Colours, Regions, Plates and paint order, Warnings), each a native disclosure that
+  beside it (Colors, Regions, Plates and paint order, Warnings), each a native disclosure that
   opens from the keyboard. The customizer stays one Tab away, the arrow keys you use inside the
   editor no longer turn the model behind it, and Escape gives the area back. On the Stencil
   Maker the editor reads a drawing into REGIONS, the faces between the lines, one row each with
-  a colour to choose, the plate that paints it and its share of the drawing; you can add a
-  colour, give it to a region, and when you apply, that colour comes out as a plate. A drawing
-  with no colours of its own, like a line drawing from a CAD program, used to be waved through
+  a color to choose, the plate that paints it and its share of the drawing; you can add a
+  color, give it to a region, and when you apply, that color comes out as a plate. A drawing
+  with no colors of its own, like a line drawing from a CAD program, used to be waved through
   with "OpenSCAD merges these automatically", which is how one user's cat came out as a single
   silhouette hole; on a stencil tile it now opens the editor by itself and says what it found:
-  "21 regions found, no colours yet: every one starts as the base coat." The editor's own door
+  "21 regions found, no colors yet: every one starts as the base coat." The editor's own door
   on the welcome screen hosts the same surface over the whole page. The editing itself - roles,
   layers, deleting shapes and undoing it, the render tiers - is the same tested code as before,
   mounted inside the new surface rather than rewritten. Behind the scenes the editor is loaded
@@ -869,44 +869,44 @@ version.
   users made a six-plate spray stencil of their cat by hand, drawing it in Illustrator, cutting
   the plates in Fusion 360 and painting the result, and has contributed the drawing and the seven
   printed pieces to the project as test fixtures. They live in `tests/fixtures/harley/`, with the
-  colour plan measured out of the plates themselves rather than typed from a description, and a
+  color plan measured out of the plates themselves rather than typed from a description, and a
   new tool, `scripts/stencil-golden.mjs`, sets a plate Forge makes beside the plate the owner made
   and reports how much of the two cuts is the same shape. That number is what the stencil work in
   this round is judged by. The photograph the drawing was traced from is deliberately not included
 
-- **A photo or a coloured drawing can become the colours of a stencil, by itself** (DP-18) - the
-  picture panel gains a fourth choice, **Colours**. Instead of deciding what counts as a line, it
-  separates the picture into flat colours, one region per colour, and hands them straight to the
-  plate maker: choose a photo, choose how many colours, and a set of plates comes out with nobody
-  having to point at anything. It also names the wall, which is the colour that is the surface
+- **A photo or a colored drawing can become the colors of a stencil, by itself** (DP-18) - the
+  picture panel gains a fourth choice, **Colors**. Instead of deciding what counts as a line, it
+  separates the picture into flat colors, one region per color, and hands them straight to the
+  plate maker: choose a photo, choose how many colors, and a set of plates comes out with nobody
+  having to point at anything. It also names the wall, which is the color that is the surface
   behind the stencil rather than paint on it, and gets no plate; Forge guesses by looking at the
   edges of the picture, where a wall shows, and you can override it. The summary line names every
-  colour and how much of the picture it covers, so a colour you wanted and did not get is visible
+  color and how much of the picture it covers, so a color you wanted and did not get is visible
   rather than merely absent, and the answer is to ask for one more. Two things are worth knowing.
-  A colour that covers about one per cent of a picture is genuinely hard to find, and the way
-  Forge finds it is by looking at a smaller copy in which each pixel is the most common colour of
+  A color that covers about one per cent of a picture is genuinely hard to find, and the way
+  Forge finds it is by looking at a smaller copy in which each pixel is the most common color of
   the block it came from, which removes the soft edges that would otherwise eat the search. And a
   white that is five shades from the paper cannot be told apart from the paper by any amount of
-  cleverness, so if your picture has one, name your colours instead of asking Forge to find them.
+  cleverness, so if your picture has one, name your colors instead of asking Forge to find them.
   A picture too big to trace is now made smaller and traced, instead of refused, and the amount it
   was shrunk by is said out loud
 
-- **A stencil can now be a set of plates and a jig, up to eight colours** (DP-17) - the Stencil
+- **A stencil can now be a set of plates and a jig, up to eight colors** (DP-17) - the Stencil
   Maker used to make three plates and decide what went on them by how deeply the shapes nested.
-  It now makes as many plates as the design has colours, up to eight, and it makes the thing that
+  It now makes as many plates as the design has colors, up to eight, and it makes the thing that
   holds them still: a printed base with four posts, and a matching hole in the corner of every
   plate. The posts are round at one end and rectangular at the other, so a plate cannot go on
   backwards, which is the mistake that ruins a six-colour picture on the last coat. Each plate
   carries its own number cut through the bottom margin, so a stack of them on a bench still says
   which is which. There is a new **Export all plates** button that renders the whole set in turn
-  and hands back one zip: a file per plate named for its colour, the jig base, and a text file
+  and hands back one zip: a file per plate named for its color, the jig base, and a text file
   with the order to paint in. All of it is measured against a real stencil: one user made a
   six-plate set of their cat by hand, and five of Forge's six plates now come out at 99.7% to
   99.9% the same shape as the ones they cut. The sixth is lower for a reason worth knowing: on
   that plate they opened the pupil of each eye together with the black ring around it, and Forge
   opens the pupil
 
-- **Forge now understands that a stencil layer is a paint colour** (DP-16) - not a nesting depth,
+- **Forge now understands that a stencil layer is a paint color** (DP-16) - not a nesting depth,
   which is what it used to work out for itself. Nothing on screen changes yet; this is the part
   underneath. It knows what a region of a drawing is, and for a line drawing that is the areas
   BETWEEN the lines rather than the lines themselves, which is the thing the old version had
@@ -930,7 +930,7 @@ version.
 
 - **Forge remembers where you put the reference image, per project** (DP-5) - position, rotation,
   size and chosen surface are saved with the project, so reopening it puts the reference back
-  where you left it. Opacity and colour stay the same across every project, because those are
+  where you left it. Opacity and color stay the same across every project, because those are
   settings for how you like to work rather than facts about one design. A project saved before
   this release opens exactly as it did
 
@@ -989,7 +989,7 @@ version.
   a person can do
 
 - **Stencil Maker** (`?example=stencil-maker`) - a new welcome-screen tool that turns a shape or
-  a drawing into printable stencil plates: thin bridges hold the islands so letter centres do not
+  a drawing into printable stencil plates: thin bridges hold the islands so letter centers do not
   fall out, registration marks in the corners line the plates up, and the plate, bridge and mark
   dimensions are all parameters. This entry records the tool's arrival; the CHANGELOG missed it
   at the time
@@ -1000,21 +1000,21 @@ version.
   drawing with every shape listed, and Save as DXF sits beside Save edited SVG. Measured on a
   40 by 25 mm drawing, converting takes about a third of a second each way. Forge states the size
   of what it saved out loud, because rebuilding a drawing from its shapes is not perfectly exact
-  and a millimetre matters when you are cutting to a fit. A DXF holding only text or dimensions
+  and a millimeter matters when you are cutting to a fit. A DXF holding only text or dimensions
   arrives empty - OpenSCAD reads drawing entities, not annotations - and Forge says exactly that
   rather than handing back a blank page
 
-- **A symbol keeps its picture instead of turning into a coloured blob** (IR-11) - communication
-  symbols are black line work over a strong colour, and the colour means something. Forge decided
+- **A symbol keeps its picture instead of turning into a colored blob** (IR-11) - communication
+  symbols are black line work over a strong color, and the color means something. Forge decided
   what to trace by brightness alone, which puts a blue background and the black drawing on top of
   it in the same bucket: a person symbol inside a blue square came out as a plain blue square, the
   person gone, with nothing said about it. Photos now come in through a choice - Line art, which
-  keeps the drawn lines and drops the colour behind them, Solid shape for very small pieces, or
+  keeps the drawn lines and drops the color behind them, Solid shape for very small pieces, or
   Light and dark, which is what Forge did before and is one press away. Line art is the starting
   point for photos. Two sliders, each with a number box, tune it, and after every change Forge
   says how many shapes it found, how much of the picture became ink, and whether the result looks
-  almost empty or almost solid. If one colour sat behind the lines, it tells you which, so you can
-  choose a filament that keeps the symbol recognisable. Everything happens in your browser and
+  almost empty or almost solid. If one color sat behind the lines, it tells you which, so you can
+  choose a filament that keeps the symbol recognizable. Everything happens in your browser and
   nothing is uploaded
 
 - **Open a drawing, clean it up, and save it back - no design needed** (IR-4) - Forge already had an
@@ -1118,8 +1118,8 @@ version.
   and that is not a fallback for anyone - it is the search itself. Pressing X adds a line saying
   roughly how far away they are, from "a long way from here" down to "you can hear a cane tapping
   close by", and it goes quiet once you have found them. The reason is measured rather than assumed:
-  a whole person is about two and a half characters wide and four tall at thirty metres, and the
-  jacket stops standing out from the crowd at about twenty, in a city two and a half kilometres
+  a whole person is about two and a half characters wide and four tall at thirty meters, and the
+  jacket stops standing out from the crowd at about twenty, in a city two and a half kilometers
   across. Nobody finds one figure in that by looking, so nobody is asked to. **The cane you see is
   drawn thicker than a real one** - a real cane is two-thirds of a screen pixel at that distance and
   could not mark a single character - and the record says so plainly rather than pretending
@@ -1152,8 +1152,8 @@ version.
   silhouette the Space Needle rather than a mast - is drawn from the published dimensions. The
   Seattle Central Library has its five offset platforms with the flowing planes between them and the
   diamond steel grid over the whole envelope, where before it was a plain box: its map data is a
-  60 metre outline and four roof planes, with no massing in it at all. Both are authored from
-  published heights, storey counts and section drawings, cited in the code beside the numbers they
+  60 meter outline and four roof planes, with no massing in it at all. Both are authored from
+  published heights, story counts and section drawings, cited in the code beside the numbers they
   produced; there is no imagery involved and nothing traced from anybody's photographs. Every other
   building in every city takes exactly the path it always did, and each landmark is one line to
   reverse
@@ -1165,7 +1165,7 @@ version.
   corner, or open ground. Nothing moves until you press Travel here, and Cancel or Escape leaves you
   exactly where you were and says so. J asks the same question about the middle of the map, so the
   keyboard reaches it too. The naming is careful about what it claims: it will only call a spot a
-  corner when a second street really is within twelve metres, and it will never offer a street its
+  corner when a second street really is within twelve meters, and it will never offer a street its
   own cycle track as the cross street. A circle marks the spot being asked about while you decide.
   The old Teleport button stays, doing the asking rather than the arming
 
@@ -1187,7 +1187,7 @@ version.
   own roster and each bird sits only on a perch that bird actually uses. Everything is built at its
   real field-guide size, and nothing was made bigger in order to be seen: the goose reads
   unmistakably, neck and all, while a house sparrow at true scale is a small mark on a bench back
-  rather than a recognisable bird. That is the honest trade, and it is written down rather than
+  rather than a recognizable bird. That is the honest trade, and it is written down rather than
   papered over
 
 - **Planters, flowerbeds and picnic tables** (CW-57) - where a city's map records them, and only
@@ -1207,7 +1207,7 @@ version.
   row used to read as a low dotted mass, because every car body sat flat on the road with nothing
   under it. Each car now rides on four wheels at a height typical of its own kind, so there is a gap
   under it, and at this size that shadow line is what says vehicle long before a wheel is big enough
-  to see. Tyres are a little darker than the body they carry, but not so dark that they vanish
+  to see. Tires are a little darker than the body they carry, but not so dark that they vanish
   against black tarmac. The cars standing in the traffic lanes have white head lamps at the front
   and red brake lights at the back; the parked ones are dark, because a parked car is parked and
   because a string of bright points down every kerb is not what a street looks like at night
@@ -1234,10 +1234,10 @@ version.
   that angle as well
 
 - **Lines on the road, and a pavement with the finish its own city specifies** (CW-51) - the
-  arterial streets now carry a dashed centre line, so a main road reads as a main road rather than
+  arterial streets now carry a dashed center line, so a main road reads as a main road rather than
   as a wider gap. The lines are derived from what kind of street it is, because the map data does
   not record road markings anywhere in the four cities. Pavements had no surface at all and now
-  carry control joints about every metre and a half, plus the finish the city itself specifies:
+  carry control joints about every meter and a half, plus the finish the city itself specifies:
   pebbly river stone in Seattle, flat with cracks and grip scoring in Albuquerque, and a broom
   finish in Denver and Burnaby, which is what both of those cities' construction standards call
   for
@@ -1246,7 +1246,7 @@ version.
   described the driving lanes only, so a street read as narrower than the one you would stand on,
   and the roadway itself was an indistinct dark gap between two thin lines. Widths are now measured
   curb to curb, the way a pavement meets a road: a two-lane residential street with parking on both
-  sides is about eight metres across, not six, and each step up from there adds a lane. Every
+  sides is about eight meters across, not six, and each step up from there adds a lane. Every
   street now has a raised pavement beside it and a real curb you can step down off and back up
   onto, instead of only the few streets whose pavements the map happens to record separately. Your
   eye follows the ground: it drops as you step into the road and climbs as you step back up, over a
@@ -1272,7 +1272,7 @@ version.
   because the slowest setting on the new scale is quicker than the slowest on the old one
 
 - **Walking into things works the same however fast you are going** (CW-48) - collision was checked
-  once per drawn frame, so how precisely it worked depended on how far you travelled in that frame,
+  once per drawn frame, so how precisely it worked depended on how far you traveled in that frame,
   which meant it depended on your walking speed and on how busy your machine was. Tripling the
   default speed would have made the loose case the usual one, and at the very top of the new range
   a sprint on a slow frame could cross a tree trunk entirely. Each frame's movement is now checked
@@ -1304,7 +1304,7 @@ version.
   From the keyboard nothing got harder: the arrows still steer the map and **J** still drops you at
   the middle of the screen, with no mode to arm. The old two-step flow - click to pick, then press J
   to go - is gone, along with its "Press J to go" prompt. The marker itself was redrawn as a bright
-  square frame around a dark centre that stays the same size at every zoom level: the old solid
+  square frame around a dark center that stays the same size at every zoom level: the old solid
   block shrank to a dot zoomed out, and in color mode it vanished entirely among white buildings
 
 - **The phosphor trail is retired** (CW-39) - moving through the city used to leave a fading
@@ -1329,7 +1329,7 @@ version.
   **Page Down** instead - held down, exactly the way the old keys worked. The help panel, the spoken
   map-view announcement and the toolbar tooltips all teach the new keys
 
-- **The Colour button now says Color** (CW-38) - the game speaks US English everywhere a player can
+- **The Color button now says Color** (CW-38) - the game speaks US English everywhere a player can
   see, and this was the one hold-out. Only the words changed: your saved choice is kept, and
   everything under the hood keeps its old name so nothing you stored is lost
 
@@ -1386,7 +1386,7 @@ version.
   lit**. The old pattern lit each window independently, which produces an even scatter that repeats
   every four windows across; the city read as wallpaper because it was. Windows are now lit in
   runs, with the run length and how many are lit re-rolled every few floors, so a tower reads as
-  offices working late. Each building also slides its own pattern along the tile, so two neighbours
+  offices working late. Each building also slides its own pattern along the tile, so two neighbors
   of the same family are not the same wall twice
 - **Ground floors that are not all the same** (CW-34) - the second: every building's first level was
   literally one repeating strip. There are five now - a glass front, an awning, a closed roller
@@ -1499,8 +1499,8 @@ version.
   OpenStreetMap itself assumes. All four cities were rebaked to collect this
 - **Denver has its shape at last** (CW-33, CW-Q31) - it has been the one city drawn as plain boxes
   since the stepped towers arrived, because it is mapped in unusual detail: 3,013 separate volumes,
-  more than the file budget allowed. **2,118 of those are smaller than ten square metres** - ledges
-  and setbacks a few centimetres across that no character on screen could ever show. Dropping them
+  more than the file budget allowed. **2,118 of those are smaller than ten square meters** - ledges
+  and setbacks a few centimeters across that no character on screen could ever show. Dropping them
   leaves 895 real volumes and brings the city inside the budget, so Denver now has its stepped
   towers and its roofs
 
@@ -1512,9 +1512,9 @@ version.
   smallest character size. All of it is now one drawing pass on the graphics card, which is the kind
   of work graphics cards exist for. Same session, same standing view, heavy rain, 10% characters,
   with the processor slowed to a quarter speed: a conversion fell from 220 ms to 65 ms in
-  monochrome, and from 268 ms to 34 ms in colour. The picture refreshes about three times as often
+  monochrome, and from 268 ms to 34 ms in color. The picture refreshes about three times as often
   and the frame rate roughly tripled. The city looks the same - the two paths were photographed side
-  by side at 10% and 50%, in monochrome, colour and high contrast, and the differences are subtle
+  by side at 10% and 50%, in monochrome, color and high contrast, and the differences are subtle
   changes in how densely a few cells are inked, about half of them cases where the graphics card
   picks the *nearer* character than the processor's cache did. Nothing depends on it: a machine
   without WebGL2, a shader that will not compile, or a readback that fails all fall back to the
@@ -1597,7 +1597,7 @@ version.
   streets actually meet. Nothing moves except the signals, which is deliberate: this city is
   deliberately held still, and a traffic light that never changes is not a traffic light. The
   signals run in two groups so that when one street goes green the cross street is red, every
-  colour holds for at least two seconds, and they stop entirely - holding a real colour rather than
+  color holds for at least two seconds, and they stop entirely - holding a real color rather than
   going dark - for anyone who has asked for reduced motion. They also only ask the screen to
   redraw when a light actually changes, roughly once every two seconds, rather than every frame.
   You can walk around the people, the signal posts and the parked cars; the cars stopped in the
@@ -1622,27 +1622,27 @@ version.
   middle and heavy characters, or that surface flattens to one tone. Measured cost: about 1.1 ms a
   frame at the default character size and 1.7 ms at the smallest, against a budget of 3
 
-- **A skyline past the fog** (CW-24) - the fog faded everything to black beyond about 260 metres,
+- **A skyline past the fog** (CW-24) - the fog faded everything to black beyond about 260 meters,
   and a cell that is exactly black is an empty cell, so every tower past the fog was not being
   pushed into the distance - it was being deleted. The middle of the frame was a void even though
-  the city data reaches 700 metres. Buildings now keep about a seventh of their brightness however
+  the city data reaches 700 meters. Buildings now keep about a seventh of their brightness however
   far away they are, so a distant tower reads as a dim silhouette. Only buildings: the ground,
   roads and kerbs still fade to true black, because a dim carpet across the lower half of the
-  screen is a failure this project has already made once. In colour the far towers keep their own
-  hue, so the skyline reads as a coloured city rather than a grey smudge
+  screen is a failure this project has already made once. In color the far towers keep their own
+  hue, so the skyline reads as a colored city rather than a gray smudge
 
 - **Buildings no longer all wear the same windows** (CW-25) - every building used one identical
   window pattern, so once the picture had become characters, one tower's wall was
-  indistinguishable from the next: colour told them apart, texture did not. There are now eight
+  indistinguishable from the next: color told them apart, texture did not. There are now eight
   facade patterns, each cutting a different letter shape out of its lit window panes - not writing,
   just glazing bars, the way a leaded window has a pattern. Which one a building gets is fixed by
-  the same identity that fixes its colour, so a building keeps its face for as long as the city
+  the same identity that fixes its color, so a building keeps its face for as long as the city
   data does. The patterns are painted when the city loads, so eight of them add nothing to the
   download
 
-- **Monochrome is a choice now, not a loss** (CW-21) - with colour switched off the City Walk was a
+- **Monochrome is a choice now, not a loss** (CW-21) - with color switched off the City Walk was a
   single flat tone: pavement, walls and lit shop signs all painted at exactly the same brightness, so
-  turning colour off cost depth as well as hue. Real single-colour terminals never had that problem,
+  turning color off cost depth as well as hue. Real single-colour terminals never had that problem,
   because they separated things with an intensity attribute rather than with more characters - which
   matters here, since this project only ever draws the 95 printable ASCII characters and the densest
   one of those fills less than half its cell. Three things change. Darker parts of the picture are
@@ -1657,7 +1657,7 @@ version.
   while you move, the way a slow tube smeared when it scrolled, gone within about three frames and
   gone entirely when you stop. The trail is motion, so it turns itself off for anyone who asks for
   reduced motion, including if that preference changes while you are walking. All of this is
-  monochrome only - with colour on, each cell is already picked out by its own hue - and none of it
+  monochrome only - with color on, each cell is already picked out by its own hue - and none of it
   reaches the main app's Alt View. Measured cost at the size the game starts at: the intensity and
   reverse-video work is lost in the noise, the trail adds about 5 ms and the game stays at 60 frames
   a second; at the smallest characters the trail takes it from 30.0 to 28.3
@@ -1667,10 +1667,10 @@ version.
   street and arterial, one every 30 m, alternating sides: a slim post with a bright head reaching out
   over the roadway, which at glyph scale is the row of bright dashes overhead that the reference
   screenshots show. Shop signs hang over the storefront glass, and the rarer big billboard high on a
-  tower's flank. A sign is two pieces on purpose - a bright near-white plate with a deeply coloured
+  tower's flank. A sign is two pieces on purpose - a bright near-white plate with a deeply colored
   face laid on it - because one piece cannot do both jobs: a tone bright enough to be the brightest
-  thing on the street is too close to white for the colour quantizer to read as anything but white.
-  So monochrome sees a bright bordered panel and colour sees a vivid one. Signs pick the wall people
+  thing on the street is too close to white for the color quantizer to read as anything but white.
+  So monochrome sees a bright bordered panel and color sees a vivid one. Signs pick the wall people
   actually walk past rather than simply the longest, which moves the typical sign from about 20 m off
   the nearest street to about 13. A long parade of shops is a single footprint in OpenStreetMap, so a
   long frontage carries a row of up to four signs rather than one lonely one. Towers grow rooftop
@@ -1680,13 +1680,13 @@ version.
   54 to 130 masts. The cost, measured on this machine's real GPU: about one frame per second at the
   default character size and a third of one at the smallest
 
-- **Colour is now a switch of its own** (CW-Q16) - colour used to arrive only with high contrast, so
-  anybody who wanted the city in colour had to take high contrast with it, and anybody who wanted the
+- **Color is now a switch of its own** (CW-Q16) - color used to arrive only with high contrast, so
+  anybody who wanted the city in color had to take high contrast with it, and anybody who wanted the
   authentic single-colour retro screen had to give up high contrast to keep it. The game's header
-  carries a third button, Colour, with O as its key, and the two are independent. Nothing changes for
-  anyone who does not press it: with no choice stored, colour still follows high contrast exactly as
+  carries a third button, Color, with O as its key, and the two are independent. Nothing changes for
+  anyone who does not press it: with no choice stored, color still follows high contrast exactly as
   it did. Once you press it, your choice is remembered and outranks high contrast in both directions.
-  Turning colour off is not a step down in legibility - the single phosphor measures 15.3:1 (green)
+  Turning color off is not a step down in legibility - the single phosphor measures 15.3:1 (green)
   and 11.5:1 (amber) against the black screen, and a test now reads those from the same token the
   renderer reads so that stays true
 
@@ -1729,17 +1729,17 @@ version.
   than the default, from 48.7 to 15.6 ms and 38 to 60 frames a second; at the largest characters from
   25.0 to 12.9 ms. Everything from 40% down was already using the faster way and is unchanged.
   Nothing looks different, and that is checked rather than asserted: 40 full-frame comparisons across
-  two cities, monochrome and colour, at every character size from 2 to 12 pixels wide, found 0
-  differing pixels out of about 1.6 million on every colour channel, and the suite now carries that
+  two cities, monochrome and color, at every character size from 2 to 12 pixels wide, found 0
+  differing pixels out of about 1.6 million on every color channel, and the suite now carries that
   comparison against a hand-written reference so it stays true. The main app's Alt View gets the same
   speed-up and the same unchanged picture. The phosphor afterglow still draws character by character,
   because layering the previous frame on top is the one thing a single buffer cannot do
 
-- **The retro colour palettes read as colour more of the time** (CW-Q11) - measured by counting the
-  pixels the game actually paints, nearly half of a high-contrast street had no colour in it at all.
+- **The retro color palettes read as color more of the time** (CW-Q11) - measured by counting the
+  pixels the game actually paints, nearly half of a high-contrast street had no color in it at all.
   Three changes cut that to about a quarter: the quantizer's chroma boost rises from 3.5 to 5.0,
-  which is the point where every tinted surface in the scene lands on a colour rather than washing
-  out to white (genuinely grey things - pavement, curbs, lamp posts, sign plates - still come out
+  which is the point where every tinted surface in the scene lands on a color rather than washing
+  out to white (genuinely gray things - pavement, curbs, lamp posts, sign plates - still come out
   white, as they should); the amber neon set gains a seventh entry, a foliage green, because tree
   crowns and yellow-green buildings had both been landing on the same lime; and the green set's soft
   red becomes a saturated one, which was carrying the most work of any entry and now hands the
@@ -1814,7 +1814,7 @@ version.
   High contrast is a toggle button that carries its pressed state, and switching it on mid-walk raises
   the multicolour high-contrast palette over the city without a reload; switching it off returns the
   single phosphor. The theme button cycles the app's three settings and names the one it is on - Auto,
-  Light or Dark - and because the phosphor colour is the theme's accent, dark walks the city in green
+  Light or Dark - and because the phosphor color is the theme's accent, dark walks the city in green
   and light walks it in amber, swapping live as you press. Both buttons announce what happened through
   the game's own in-layer announcer rather than the app's status line, which a modal hides, and both
   keep their labels honest when the flip arrives from somewhere else. The pressed pair was measured on
@@ -1897,7 +1897,7 @@ version.
 - **The welcome dialog's title no longer hides under the browser's toolbar** (UF-41, U-39) - on a
   phone the title was cut off at the top by the browser's own chrome. The dialog was being sized
   against the height a phone has with its toolbar hidden, so whenever the toolbar was showing the
-  box was taller than the space it was being centred in, and it overflowed off the top and the
+  box was taller than the space it was being centered in, and it overflowed off the top and the
   bottom at once. It is now sized against the space that actually exists, with the phone's safe
   areas already taken out of it
 - **The Back button asks before it closes the app** (UF-39, U-41) - on a phone, halfway through the
@@ -1911,7 +1911,7 @@ version.
   where you were, including the address bar, and it works every time rather than once. Leave really
   leaves. Escape and a press outside the box both choose Stay, and Stay is the button that already
   has focus when the dialog opens. A tour that is running stays running, on the step it was on. The
-  Main Page keeps the browser's own behaviour: the guard is for a project you are inside of, and it
+  Main Page keeps the browser's own behavior: the guard is for a project you are inside of, and it
   takes its entry back out of the history when you return to the Main Page, so nothing stale is left
   behind. If you press Back twice, the second press leaves, the same as it always did
 - **Walls you look straight at are drawn as walls again** (CW-29, D-73) - the City Walk decides what
@@ -1971,7 +1971,7 @@ version.
   a phone puts it straight on top of the words "Features Guide". At phone widths it now takes its own
   line under the title, where it has room, and the close button keeps its pulse
 
-- **The Clear Cache dialog is centred again, and its backdrop covers the screen** (UF-38, D-69) - a
+- **The Clear Cache dialog is centered again, and its backdrop covers the screen** (UF-38, D-69) - a
   `max-width` meant for the dialog had been applied to the full-screen layer behind it, so on any
   window wider than 500 points the dialog sat against the left edge and the dark backdrop was a
   narrow strip beside it instead of dimming the page. Phones were never affected, which is why this
@@ -1982,7 +1982,7 @@ version.
   the Customizer is a drawer that covers the screen, so it correctly tells a screen reader to ignore
   everything behind it. Since the tour card started staying on screen next to that drawer, "behind
   it" included the instructions. A blind user got no instructions at all on the drawer steps, which
-  is most of the tour, and a keyboard user could not reach Next, Back, minimise or Close - measured
+  is most of the tour, and a keyboard user could not reach Next, Back, minimize or Close - measured
   at eighty consecutive Tab presses without once leaving the panel. While a tour is running, the
   drawer and the card stop competing to be the only thing on screen, and the drawer's keyboard trap
   now spans the card as well: one Shift+Tab from the top of the drawer reaches it. Everything is put
@@ -1996,7 +1996,7 @@ version.
   open, a ring around a Close button nobody had been told about, and not one word of instruction on
   screen. Pressing the pill to get the instructions back closed the drawer, and pressing Next opened
   it again, and the instructions vanished again. On step 4 it was worse: the pill did nothing at all
-  that you could see, because the drawer was still open and the tour minimised itself again in the
+  that you could see, because the drawer was still open and the tour minimized itself again in the
   same instant. Closing the drawer by hand did not work either, since the tour reopened it within half
   a second. Four things change. The tour now knows the Customizer is part of the app rather than a
   dialog you opened, so the instruction card stays on screen next to the open drawer instead of
@@ -2007,7 +2007,7 @@ version.
   the button that opens it again and says "Open Params to continue." rather than dragging it back
   open. And Escape now takes one surface at a time - the first press closes the drawer, the second
   ends the tour - where before, once the drawer stopped counting as a dialog, a single press would
-  have taken both. Minimising and restoring the card by hand works and stays worked. The same rules
+  have taken both. Minimizing and restoring the card by hand works and stays worked. The same rules
   apply to the collapsing panel on a desktop, where the line reads "Expand Parameters to continue."
 
 - **A dialog you open during a tour is now a dialog you can answer** (UF-36, D-61) - following the
@@ -2048,12 +2048,12 @@ version.
   left the label saying the opposite of the truth, to the one group of people who cannot see the
   button change. Three routes reached it: the keyboard shortcut, the City Walk's in-game toggles
   (which act on the same setting from inside a modal that hides the header), and - under the Auto
-  theme setting - the system simply changing colour scheme, with nobody touching anything at all.
+  theme setting - the system simply changing color scheme, with nobody touching anything at all.
   Both labels now follow the theme manager itself, which every route already notifies
 
 - **The Classic button reads clearly while it is unavailable** (CW-Q13c) - on a window too narrow for
   Classic the header button stays focusable and explains why, dimmed so it also reads as unavailable
-  without relying on colour. That dimming was quietly costing the label its legibility: measured
+  without relying on color. That dimming was quietly costing the label its legibility: measured
   across all eight theme states, five sat below the 4.5:1 minimum, the worst of them in high contrast
   and the mono Alt View - the modes people choose because they need contrast. The dimming is gentler
   now, so the worst reading is 5.35:1 and the button still reads as unavailable. Nothing had caught
@@ -2639,7 +2639,7 @@ This is the first **major stable release** for production deployment on Cloudfla
 
 - Resolved `openFeaturesGuide` scope error that caused lint failures
 - Fixed unused variable warnings (`formatPresetDescription`, `index`, `fileContent`)
-- Prevented generate actions from cancelling in-progress previews
+- Prevented generate actions from canceling in-progress previews
 - Improved internal render retry detection for numeric OpenSCAD error codes
 
 ---
@@ -2648,7 +2648,7 @@ This is the first **major stable release** for production deployment on Cloudfla
 
 ### Fixed
 
-- Prevented generate actions from cancelling in-progress previews, which could leave the UI stuck when generating before preview completion.
+- Prevented generate actions from canceling in-progress previews, which could leave the UI stuck when generating before preview completion.
 - Improved internal render retry detection for numeric OpenSCAD error codes to recover cleanly without user intervention.
 
 ---

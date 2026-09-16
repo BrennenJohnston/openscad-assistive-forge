@@ -2,7 +2,7 @@
  * The runner that owns the trace worker.
  *
  * One runner per file control. It starts a job, reports the stage it has
- * reached, and can be cancelled at any moment - including in the middle of a
+ * reached, and can be canceled at any moment - including in the middle of a
  * trace that would otherwise have run for a minute.
  *
  * Why cancel is `terminate()` and not an `AbortController`: every stage of the
@@ -27,10 +27,10 @@
 import { filterForegroundPaths } from './image-import.js';
 import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
-/** Thrown (as a rejection reason) when a job is cancelled or superseded. */
+/** Thrown (as a rejection reason) when a job is canceled or superseded. */
 export class TraceCancelled extends Error {
   constructor(reason = 'cancelled') {
-    super(reason === 'superseded' ? 'Trace superseded' : 'Trace cancelled');
+    super(reason === 'superseded' ? 'Trace superseded' : 'Trace canceled');
     this.name = 'TraceCancelled';
     this.reason = reason;
   }
@@ -133,7 +133,7 @@ export function createTraceRunner(options = {}) {
    * @param {Function} [opts.onStage] - Called with {stage, index, total}
    * @param {object} [opts.tracerOverrides]
    * @param {string} [opts.engine] - 'potrace' (the default, DEFAULT_TRACE_ENGINE)
-   *   or 'imagetracer'. Potrace draws in one colour, so it can only answer for
+   *   or 'imagetracer'. Potrace draws in one color, so it can only answer for
    *   the ink modes; the result says which engine actually ran.
    * @param {object} [opts.potraceOverrides]
    * @returns {Promise<{svg: string, summary: object|null, engine: string}>}

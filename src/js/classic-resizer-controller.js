@@ -88,7 +88,7 @@ function readPxToken(host, token) {
 /**
  * Announce that the dock geometry changed. The 3D canvas sizes itself from
  * its container, so it has to re-measure — the same contract Split.js's
- * onDrag fulfils for the Forge layout (main.js:7908-7915).
+ * onDrag fulfills for the Forge layout (main.js:7908-7915).
  */
 function emitLayoutResize() {
   document.dispatchEvent(new CustomEvent('classic-layout-resize'));

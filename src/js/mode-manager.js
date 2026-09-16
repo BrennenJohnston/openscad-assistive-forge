@@ -209,7 +209,7 @@ export class ModeManager {
     //
     // Deliberately narrow. Declining whenever focus had changed AT ALL would
     // also skip the move in the ordinary case where the switch itself moved
-    // focus, and the 2.4.3 behaviour every other path relies on would become
+    // focus, and the 2.4.3 behavior every other path relies on would become
     // conditional on timing. Only a menu or a dialog owns focus in a way this
     // must not steal back.
     if (!options.skipFocus) {

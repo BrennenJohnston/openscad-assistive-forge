@@ -1080,7 +1080,7 @@ export class RenderController {
             if (this.currentRequest?.id === requestId) {
               console.error(
                 `[RenderController] Render watchdog fired after ${watchdogMs}ms — ` +
-                  `worker is hung. Hard cancelling.`
+                  `worker is hung. Hard canceling.`
               );
               this.cancel({ hard: true });
             }
@@ -1284,7 +1284,7 @@ export class RenderController {
     if (hard) {
       // Immediate hard cancel — terminate and reinit
       console.warn('[RenderController] Hard cancel: terminating worker');
-      reject(new Error('Render cancelled (hard cancel)'));
+      reject(new Error('Render canceled (hard cancel)'));
       this.currentRequest = null;
       this._hardCancelAndReinit();
       return;
@@ -1297,7 +1297,7 @@ export class RenderController {
         payload: { requestId: id },
       });
     }
-    reject(new Error('Render cancelled'));
+    reject(new Error('Render canceled'));
     this.currentRequest = null;
 
     // Watchdog: if the worker is still blocking after the grace period,

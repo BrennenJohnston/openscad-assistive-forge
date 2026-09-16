@@ -105,7 +105,7 @@ describe('detectLineArt', () => {
     const d = detectLineArt(BIRD)
     expect(d.isLineArt).toBe(false)
     expect(d.allInk).toBe(false)
-    expect(d.reason).toMatch(/colours of its own/)
+    expect(d.reason).toMatch(/colors of its own/)
   })
 
   it('refuses black shapes whose marks are too thick to be lines', () => {
@@ -221,7 +221,7 @@ describe('the palette', () => {
     expect(colourLabel('#997048')).toBe('Brown')
     expect(colourLabel('#171411')).toBe('Black')
     expect(colourLabel('#fafbf8')).toBe('White')
-    expect(colourLabel('nonsense')).toBe('Colour')
+    expect(colourLabel('nonsense')).toBe('Color')
   })
 
   it('★ the muted cat colours get their own honest names now (G0, DP-25)', () => {

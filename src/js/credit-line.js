@@ -4,7 +4,7 @@
  * An icon downloaded from a stock library usually arrives with its attribution
  * printed along the bottom edge: "Created by Ilham Fitrotul Hayat from Noun
  * Project". Traced, that sentence is not a caption any more - it is forty-odd
- * separate shapes, each one a letter, and on a charm fourteen millimetres wide
+ * separate shapes, each one a letter, and on a charm fourteen millimeters wide
  * they come out as unreadable specks that soak up print time and cannot be
  * felt. MEASURED across nine icons: 45 to 60 of every 49 to 74 shapes were the
  * caption. The icon was the small part.
@@ -15,7 +15,7 @@
  * ── What counts as a credit line ─────────────────────────────────────────
  *
  * A cluster of at least eight shapes, each small in both directions, whose
- * centres sit in the bottom band, and which together occupy a short strip.
+ * centers sit in the bottom band, and which together occupy a short strip.
  * Every clause earns its place:
  *
  *   - EIGHT, because a sentence has many letters and a drawing rarely has

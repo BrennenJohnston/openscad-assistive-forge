@@ -36,7 +36,7 @@ const INFORMATIONAL_KEYWORDS = ['customizer'];
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Normalise an enum entry (plain string or {value,label} object) to
+ * Normalize an enum entry (plain string or {value,label} object) to
  * lowercase value/label strings plus the original raw value.
  */
 function entryMeta(entry) {

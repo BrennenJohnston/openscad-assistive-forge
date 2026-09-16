@@ -581,7 +581,7 @@ export function distanceToEdge(pt, polygon) {
  * a place they did not choose, on a pendant shaped like their own drawing.
  *
  * @param {Array<{x: number, y: number}>} polygon - The body outline
- * @param {{x: number, y: number}} centre - Hole centre, same units
+ * @param {{x: number, y: number}} center - Hole center, same units
  * @param {number} radius - Hole radius
  * @param {number} web - Minimum material between hole and edge
  * @returns {{fits: boolean, reason: string|null, clearance: number,

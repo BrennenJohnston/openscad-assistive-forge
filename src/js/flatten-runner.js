@@ -24,7 +24,7 @@
  * happens next, and a second voice would only contradict them.
  */
 const CANCEL_MESSAGES = Object.freeze({
-  cancelled: 'Flatten cancelled',
+  cancelled: 'Flatten canceled',
   superseded: 'Flatten superseded',
   stale: 'Flatten abandoned: the choices changed under it',
   closed: 'Flatten dropped: the editor closed',

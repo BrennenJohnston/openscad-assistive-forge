@@ -1245,7 +1245,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
         // momentarily blank (the config sync above writes a name with no
         // "screenshot:" prefix) and hid itself - so a plain upload offered
         // the hand-over and a CROPPED copy did not, which is backwards:
-        // cropping is what you do on the way to the Colours lane.
+        // cropping is what you do on the way to the Colors lane.
         updateUseAsDesignRow();
         noteOverlayChanged();
       } catch (error) {
@@ -1262,7 +1262,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   }
 
   /**
-   * DP-5: the millimetre field belongs to the "A height I choose" preset, so
+   * DP-5: the millimeter field belongs to the "A height I choose" preset, so
    * it is hidden the rest of the time rather than sitting there inert with a
    * number that the preset is about to overwrite.
    */

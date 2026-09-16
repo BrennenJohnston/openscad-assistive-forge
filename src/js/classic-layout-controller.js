@@ -63,7 +63,7 @@ const STOW_RAIL_CLASS = 'classic-stow-rail';
 /**
  * The dock fields that stow toward their own edge (U-6/Q-20, UF-2a). Stowing
  * removes the whole FIELD from the layout — its space goes to the 3D view —
- * leaving a labelled un-stow tab on the field's edge rail. Distinct from the
+ * leaving a labeled un-stow tab on the field's edge rail. Distinct from the
  * per-panel ▾ collapse (one pane's body, bar stays put) and from the strip
  * fold (which becomes the bottom field's stow in UF-2b, per Q-20c).
  *
@@ -942,7 +942,7 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Reconcile the rails' un-stow tabs with the stow state: one labelled tab
+   * Reconcile the rails' un-stow tabs with the stow state: one labeled tab
    * per stowed, occupied field (an empty field has nothing to restore, so a
    * stowed-but-emptied field shows no tab until a pane returns to it).
    * Reconciles rather than rebuilds — this runs from _applyPaneAttributes,
@@ -1020,7 +1020,7 @@ export class ClassicLayoutController {
 
     const subject = members.length > 1 ? 'Panels' : `${panelLabel(panelId)}`;
     // NEW STRINGS, owner review pending (D-35). announceImmediate, not
-    // announce(): a debounced message can be cancelled by the next one, and a
+    // announce(): a debounced message can be canceled by the next one, and a
     // disclosure that sometimes says nothing is worse than one that repeats.
     announceImmediate(
       collapsed ? `${subject} collapsed` : `${subject} expanded`
@@ -1569,7 +1569,7 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Find or create a labelled slot section inside `parent`, with an optional
+   * Find or create a labeled slot section inside `parent`, with an optional
    * desktop-style titlebar (text + fold/close button).
    * @param {Element} parent - the grid, or a container such as the bottom strip
    * @param {{id: string, className: string, label: string, titlebar?: Object}} def

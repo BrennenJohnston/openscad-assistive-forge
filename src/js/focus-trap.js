@@ -179,7 +179,7 @@ export function createFocusTrap(container, options = {}) {
  *   goes. Added for D-70 (UF-38): the mobile Customizer drawer is modal, and
  *   a running tutorial's card sits outside it - reachable to the eye, but
  *   MEASURED unreachable by keyboard, eight Tabs in a row. Defaults to null,
- *   so every existing caller keeps exactly today's single-container behaviour.
+ *   so every existing caller keeps exactly today's single-container behavior.
  * @returns {Object} Focus trap controller with activate/deactivate methods
  */
 export function createDocumentFocusTrap(container, options = {}) {

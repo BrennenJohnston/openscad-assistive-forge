@@ -14,7 +14,7 @@ This guide covers the libraries that come with OpenSCAD Assistive Forge, how to 
 
 ## The four libraries that come with the app
 
-| Library | What it is good for | Licence |
+| Library | What it is good for | License |
 |---|---|---|
 | MCAD | Mechanical parts: gears, screws, bearings, rounded boxes | LGPL-2.1 |
 | BOSL2 | Shapes with rounding and chamfers, attachments, geometry helpers | BSD-2-Clause |

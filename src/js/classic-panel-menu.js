@@ -12,7 +12,7 @@
  * This is a purpose-built WAI-ARIA menu button, NOT the application menubar.
  * ToolbarMenuController cannot host it: its menu ids are a closed list of six,
  * init() requires #toolbarMenuBar plus static per-menu markup, and its arrow
- * keys walk between top-level menus — behaviour a standalone title-bar popup
+ * keys walk between top-level menus — behavior a standalone title-bar popup
  * must not have. Restructuring that controller is out of scope (plan §9), so
  * the APG pattern is implemented here over native <button> elements.
  *

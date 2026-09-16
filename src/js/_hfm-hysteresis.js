@@ -84,7 +84,7 @@ export const DEFAULT_HYSTERESIS = Object.freeze({
 export const MAX_HOLD_FRAMES = 127;
 
 /**
- * Normalise a caller's options into the band pack, or null for OFF.
+ * Normalize a caller's options into the band pack, or null for OFF.
  *
  * @param {{glyph?: number, drive?: number, reverse?: number,
  *   holdFrames?: number}|null|false} options - null, false or an object whose

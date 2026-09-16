@@ -8,7 +8,7 @@
  *
  * MEASURED off the owner's screenshots rather than guessed: the box is 12px
  * square against a 19px row (screenshot 122650, the marker at line 177), with a
- * 2px border, a centred stroke, and the plus's vertical arm the same length as
+ * 2px border, a centered stroke, and the plus's vertical arm the same length as
  * its horizontal one.
  *
  * What is deliberately NOT built here is the guide line: the desktop runs a
@@ -86,7 +86,7 @@ export function foldMarkerDOM(open) {
 }
 
 /**
- * Sized in `em` so the box tracks the font-size preference, and coloured from
+ * Sized in `em` so the box tracks the font-size preference, and colored from
  * the gutter's own foreground so it follows the theme and forced-colors mode.
  */
 const foldBoxTheme = EditorView.theme({

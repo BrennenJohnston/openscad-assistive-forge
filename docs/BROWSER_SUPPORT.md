@@ -114,7 +114,7 @@ All supported browsers work with the following assistive technologies:
 
 If the code editor gets in the way of your assistive technology, turn on your
 operating system's "increase contrast" setting. The app reads it at startup and
-gives you a plain `<textarea>` editor instead of the coloured one.
+gives you a plain `<textarea>` editor instead of the colored one.
 
 There is no in-app setting for this. The **HC** button in the header changes the
 theme only; it does not swap the editor.

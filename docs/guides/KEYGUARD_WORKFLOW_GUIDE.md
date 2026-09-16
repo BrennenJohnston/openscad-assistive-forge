@@ -168,7 +168,7 @@ Typical print time: 2-6 hours depending on size.
 
 ### 9a. Export for laser cutting (SVG or DXF)
 
-> This section is about exporting the keyguard you are customising. If instead
+> This section is about exporting the keyguard you are customizing. If instead
 > you have a drawing FILE already - an SVG or DXF from another tool - and want
 > to tidy it up, that is the drawing editor, described under "Opening and
 > saving a DXF" in the Standard Mode Guide.
@@ -200,7 +200,7 @@ or plywood using a CNC laser cutter.
 5. **Verify in your laser software** -- Open the file in LightBurn, LaserGRBL,
    Inkscape, or your cutter's native software. Check:
    - The cut path covers the full keyguard outline and all openings
-   - Units are in millimetres (not pixels) — scale should be 1:1
+   - Units are in millimeters (not pixels) — scale should be 1:1
    - The bounding box matches your expected tablet screen dimensions
 
 6. **Cut and finish** -- Follow your material's recommended laser settings.

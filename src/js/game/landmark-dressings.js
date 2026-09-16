@@ -6,7 +6,7 @@
  * its own OSM data, deliberately, because a city where the code knows about
  * particular buildings is a city that stops working when the data moves. The
  * owner signed CW-Q56 to make a NAMED exception: a handful of landmarks a
- * player is meant to recognise get authored geometry, keyed by OSM id, beside
+ * player is meant to recognize get authored geometry, keyed by OSM id, beside
  * the generic path rather than instead of it.
  *
  * Every entry here is therefore ONE LINE REVERSIBLE - delete the row and that
@@ -14,7 +14,7 @@
  * in the renderer to unpick.
  *
  * ★ LAWFUL SOURCES ONLY. Everything below is authored from PUBLISHED
- * DIMENSIONS - heights, widths, storey counts, published section drawings -
+ * DIMENSIONS - heights, widths, story counts, published section drawings -
  * cited per entry. No photogrammetry, no imagery, and nothing Google-derived,
  * ever. What is drawn is a design work made from public numbers, in the same
  * sense that a diagram is.
@@ -45,7 +45,7 @@
  */
 export const NEEDLE_WAY_ID = 12903132;
 
-/** Where the tripod starts and ends, in metres, from the published record. */
+/** Where the tripod starts and ends, in meters, from the published record. */
 export const NEEDLE_LEG = {
   /** Half-spread of a footing from the axis - the splay at the ground. */
   footRadiusM: 21,
@@ -85,8 +85,8 @@ export const NEEDLE_LEG_BEARINGS_RAD = [
 ];
 
 /**
- * The centreline of one leg, from footing to waist, as [x, y, z] in metres
- * relative to the tower's own centre.
+ * The centerline of one leg, from footing to waist, as [x, y, z] in meters
+ * relative to the tower's own center.
  *
  * @param {number} bearingRad which leg
  * @param {number} t 0 at the ground, 1 at the waist
@@ -122,8 +122,8 @@ export function needleLegPoint(bearingRad, t) {
  * rather than adding to them, which is the one place this table differs from
  * the Needle's row - and it is why the four slabs vanish with the box.
  *
- * Published dimensions used (plan section 3g): 11 storeys, 185 ft / 56.9 m;
- * FIVE offset platforms of fixed programme with four flowing planes between
+ * Published dimensions used (plan section 3g): 11 stories, 185 ft / 56.9 m;
+ * FIVE offset platforms of fixed program with four flowing planes between
  * them; a steel-and-glass diamond DIAGRID wrapping the whole envelope. Sources
  * cited there: OMA's own project page, the Seattle Public Library's
  * architecture page, Wikipedia, and the WikiArquitectura / ArchDaily section
@@ -149,7 +149,7 @@ export const LIBRARY_TOWARD_4TH_AVE_DEG = 238.4;
 /**
  * The five platforms, bottom to top - and the GAPS BETWEEN THEM ARE THE POINT.
  *
- * The published building is five platforms of fixed programme with FOUR
+ * The published building is five platforms of fixed program with FOUR
  * FLOWING PLANES between them, and leaving those planes out is what turns it
  * into a wedding cake: a stack of offset boxes reads as setbacks, where the
  * Library reads as one faceted envelope leaning in and out. So the bands below
@@ -159,11 +159,11 @@ export const LIBRARY_TOWARD_4TH_AVE_DEG = 238.4;
  * planes, exactly the nine bands this table and its lofts produce.
  *
  * `fromH`/`toH` are FRACTIONS OF THE BUILDING'S OWN TAGGED HEIGHT, derived
- * from the published 11 storeys, so the massing follows the data rather than
+ * from the published 11 stories, so the massing follows the data rather than
  * fighting it: OSM says 60 m where the published record says 56.9 m, and a
  * dressing that hardcoded 56.9 would shrink the building every time the tag is
  * right. `scale` shrinks the data's own footprint about its centroid;
- * `toward4thM` and `towardSpringM` then slide it, in metres, along the block
+ * `toward4thM` and `towardSpringM` then slide it, in meters, along the block
  * axes above. Negative `toward4thM` is a set-back toward 5th Avenue.
  *
  * The lowest row stands for the published PARKING platform as well as the
@@ -171,7 +171,7 @@ export const LIBRARY_TOWARD_4TH_AVE_DEG = 238.4;
  * has no below-grade geometry, so the two fold into the one band that meets
  * all four sidewalks.
  *
- * ★ THE OVERHANG IS THE RECOGNISABLE PART. The lower platforms step AWAY from
+ * ★ THE OVERHANG IS THE RECOGNIZABLE PART. The lower platforms step AWAY from
  * 4th Avenue and the book spiral throws itself back out over them - which is
  * the one thing a walker on 4th Avenue sees, and the reason the block axes
  * above had to be measured rather than guessed.
@@ -226,7 +226,7 @@ export const LIBRARY_PLATFORMS = [
  * ★ THE DIAGRID IS A TALL DIAMOND, AND THE CHARACTER CELL DECIDED THAT.
  *
  * The converter reads the frame through a cell 4 px wide and 9 px tall, so a
- * diamond as tall as it is wide in metres arrives with 2.25x fewer samples
+ * diamond as tall as it is wide in meters arrives with 2.25x fewer samples
  * down its vertical axis than across its horizontal one - CW-61's man died of
  * exactly this anisotropy. A diamond 2x taller than it is wide comes back
  * roughly square in CELLS, which is the axis that matters here, and it is also
@@ -234,7 +234,7 @@ export const LIBRARY_PLATFORMS = [
  * elongated upward, not square.
  *
  * The member width is the CW-52 floor made explicit - a facade pattern finer
- * than the cell grid beats against it and shimmers - and the metres below put
+ * than the cell grid beats against it and shimmers - and the meters below put
  * every member well over 3 px in texture space at the tile resolution
  * city-scene.js paints it at.
  */
@@ -254,7 +254,7 @@ export const LIBRARY_DIAGRID = {
    *
    * So this is a DIAGRAM of the diagrid at the resolution the medium has,
    * which is the same bargain every other facade in this city already makes -
-   * a 4 m window bay is not four metres of window either.
+   * a 4 m window bay is not four meters of window either.
    */
   memberM: 1.2,
   /**
@@ -299,10 +299,10 @@ export const LIBRARY_DIAGRID = {
  */
 
 /**
- * One platform's ring, in world metres.
+ * One platform's ring, in world meters.
  *
  * @param {Array<[number, number]>} outer the building's own outline
- * @param {[number, number]} centre its centroid
+ * @param {[number, number]} center its centroid
  * @param {(typeof LIBRARY_PLATFORMS)[number]} platform
  * @returns {Array<[number, number]>}
  */
@@ -332,7 +332,7 @@ export function libraryPlatformRing(outer, centre, platform) {
  * The dressing table itself, keyed by OSM way id.
  *
  * `legs` asks the scene for authored tripod arcs around the building's own
- * centre. Nothing there replaces the building's parts: the Needle's thirteen
+ * center. Nothing there replaces the building's parts: the Needle's thirteen
  * volumes are correct and stay exactly as the data has them, and the arcs are
  * added beside them. That is what makes the row reversible.
  *
@@ -362,7 +362,7 @@ export const LANDMARK_DRESSINGS = new Map([
       massing: 'library-platforms',
       facade: 'diagrid',
       source:
-        'published dimensions only (11 storeys, 185 ft / 56.9 m, five offset platforms, steel-and-glass diagrid skin)',
+        'published dimensions only (11 stories, 185 ft / 56.9 m, five offset platforms, steel-and-glass diagrid skin)',
     },
   ],
 ]);
@@ -398,7 +398,7 @@ export const GREAT_WHEEL = {
   /**
    * DESIGN, not measurement: 0.458 of the height, chosen so the rim's low
    * point clears the deck by about 4.5 m the way a boarding platform needs.
-   * (It happens to land within a metre of the unsourced 158 ft figure,
+   * (It happens to land within a meter of the unsourced 158 ft figure,
    * which is reassuring and is not the justification.)
    */
   rimRadiusM: 24.4,
@@ -523,8 +523,8 @@ export const NEEDLE_TOP = {
 };
 
 /**
- * The centreline of one upper-flare arc from the waist to the saucer
- * support, [x, y, z] relative to the tower centre. t=0 at the waist, 1 at
+ * The centerline of one upper-flare arc from the waist to the saucer
+ * support, [x, y, z] relative to the tower center. t=0 at the waist, 1 at
  * the support.
  */
 export function needleFlarePoint(bearingRad, t) {

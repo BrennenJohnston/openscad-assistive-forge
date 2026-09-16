@@ -360,7 +360,7 @@ export function initFileHandler({
    * Show a modal prompting the user to select one .scad file from a list.
    * @param {string[]} paths - webkitRelativePath values to choose from
    * @param {string} prompt - Heading text
-   * @returns {Promise<string|null>} Selected path, or null if cancelled
+   * @returns {Promise<string|null>} Selected path, or null if canceled
    */
   async function _promptScadSelection(paths, prompt) {
     return new Promise((resolve) => {
@@ -418,7 +418,7 @@ export function initFileHandler({
    * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
    * @returns {Promise<{fileArr: File[], mainFilePath: string, rootDir: string, totalBytes: number}|null>}
    *   null when the selection was rejected (a toast was shown) or the user
-   *   cancelled the main-file prompt.
+   *   canceled the main-file prompt.
    */
   async function prepareFolderSelection(files) {
     const fileArr = Array.from(files);
@@ -680,7 +680,7 @@ export function initFileHandler({
             );
 
             if (result.action === 'cancel') {
-              updateStatus('Upload cancelled - missing dependencies');
+              updateStatus('Upload canceled - missing dependencies');
               return;
             }
 
@@ -782,7 +782,7 @@ export function initFileHandler({
         { destructive: true }
       );
       if (!confirmed) {
-        updateStatus('Load cancelled');
+        updateStatus('Load canceled');
         return;
       }
     }
@@ -810,7 +810,7 @@ export function initFileHandler({
           group: 'Import',
           file: fileName,
           line: null,
-          message: `Missing companion files: ${allMissingFiles} \u2014 upload the full project folder or ZIP to include all dependencies`,
+          message: `Missing companion files: ${allMissingFiles}. Upload the full project folder or ZIP to include all dependencies.`,
           timestamp: Date.now(),
         });
       }

@@ -101,10 +101,10 @@ test.describe('The drawing editor takes the preview area', () => {
 
     // It said what it found, with the opening, and the card says why.
     await expect(page.locator('.drawing-editor-status')).toContainText(
-      '21 regions found, no colours yet'
+      '21 regions found, no colors yet'
     )
     await expect(page.locator('.svg-prep-status-badge')).toContainText(
-      'no colours yet'
+      'no colors yet'
     )
     await expect(page.locator('[data-count="regions"]')).toHaveText('21')
     await expect(page.locator('[data-count="colours"]')).toHaveText('1')
@@ -357,7 +357,7 @@ test.describe('The drawing editor takes the preview area', () => {
       null,
       null,
     ])
-    await expect(page.locator('.svg-prep-status-plan')).toHaveText('2 colours, 2 plates.')
+    await expect(page.locator('.svg-prep-status-plan')).toHaveText('2 colors, 2 plates.')
     await editBtn.click()
     await expect(surface(page)).toBeVisible()
     // A fresh open starts with the drawer closed; the colour work below
@@ -538,7 +538,7 @@ test.describe('The drawing editor takes the preview area', () => {
       null,
       null,
     ])
-    await expect(page.locator('.svg-prep-status-plan')).toHaveText('6 colours, 6 plates.')
+    await expect(page.locator('.svg-prep-status-plan')).toHaveText('6 colors, 6 plates.')
   })
 })
 

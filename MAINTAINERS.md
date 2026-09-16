@@ -2,9 +2,9 @@
 
 ## Project Mission and Values
 
-OpenSCAD Assistive Forge exists to make parametric 3D modelling accessible to everyone,
+OpenSCAD Assistive Forge exists to make parametric 3D modeling accessible to everyone,
 with a particular focus on designers of assistive technology — AAC keyguards, adaptive
-switches, and other AT hardware. Every design decision prioritises:
+switches, and other AT hardware. Every design decision prioritizes:
 
 1. **Accessibility first** — WCAG 2.2 compliance, screen reader support, keyboard-only
    workflows, and high-contrast theming are non-negotiable, not afterthoughts.

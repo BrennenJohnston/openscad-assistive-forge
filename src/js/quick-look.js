@@ -2,7 +2,7 @@
  * A quick look at a picture, before anyone commits to converting it.
  *
  * The second thing the directive asks for: a person may choose a photograph
- * without realising how much work it is, or that a simpler picture would give a
+ * without realizing how much work it is, or that a simpler picture would give a
  * better charm. So before Start, one sentence about what the picture looks like
  * and roughly what it will cost ON THIS DEVICE. It never blocks and it never
  * refuses; it informs, and the person decides.
@@ -23,7 +23,7 @@
  * The dominant cost is the ink extraction, and which extraction runs is decided
  * by whether the picture has a transparent background. `extractInk` uses the
  * ALPHA channel when enough of the picture is see-through, which is cheap; with
- * no alpha it classifies every pixel by lightness and colour, which is not.
+ * no alpha it classifies every pixel by lightness and color, which is not.
  *
  * MEASURED IN CHROMIUM, which is where this runs - the first version of these
  * numbers was measured in Node and told a person a photograph would take six
@@ -102,7 +102,7 @@ const ALPHA_PATH_SHARE = MEANINGFUL_ALPHA_SHARE;
  * the picture has transparency, so the SAME machine reported a factor of 0.5
  * for a library icon and 2.4 for a photograph. It was measuring the picture.
  *
- * This is 96 x 96 pixels of opaque grey ramp - no alpha, so it always takes the
+ * This is 96 x 96 pixels of opaque gray ramp - no alpha, so it always takes the
  * classifying path, and always exactly the same amount of it.
  */
 function calibrationPicture() {
