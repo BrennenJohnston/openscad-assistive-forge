@@ -133,6 +133,30 @@ const panel = (page) => ({
   info: page.locator('.file-info').first(),
 });
 
+/**
+ * Get a picture converted, whichever way this machine goes about it.
+ *
+ * A picture under half a megapixel usually starts by itself (DP-Q32) - but the
+ * quick look makes that call from a PREDICTION, and on a slow machine it
+ * declines and waits to be asked. MEASURED at 6x CPU throttling: the same
+ * picture that converts by itself in 1.0 s at 4x sits at "Ready to convert"
+ * with a Start button, ninety seconds later still. A test that presses Start
+ * once, the instant the file goes in, is a test that passes on a fast machine
+ * and times out on a CI runner - which is exactly what it did.
+ */
+async function convertNow(page, p, timeout = 180_000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const info = (await p.info.textContent().catch(() => '')) || '';
+    if (/converted from|nothing was kept/i.test(info)) return;
+    const offered =
+      (await p.start.isVisible().catch(() => false)) &&
+      (await p.start.textContent().catch(() => '')) === 'Start conversion';
+    if (offered) await p.start.click({ noWaitAfter: true }).catch(() => {});
+    await page.waitForTimeout(1000);
+  }
+}
+
 test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
   // ★ RE-WRITTEN at DP-43, and the reason is a measurement worth keeping.
   //
@@ -357,10 +381,11 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     page,
   }) => {
     test.slow();
+    test.setTimeout(300_000);
     await openCharm(page);
     await choosePicture(page, 600, 'lightOnDark');
     const p = panel(page);
-    if (await p.start.isVisible().catch(() => false)) await p.start.click();
+    await convertNow(page, p);
 
     await expect
       .poll(
@@ -388,10 +413,11 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     page,
   }) => {
     test.slow();
+    test.setTimeout(300_000);
     await openCharm(page);
     await choosePicture(page, 600, 'blank');
     const p = panel(page);
-    if (await p.start.isVisible().catch(() => false)) await p.start.click();
+    await convertNow(page, p);
 
     // The control says what happened...
     await expect
