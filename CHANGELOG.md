@@ -30,11 +30,17 @@ version.
 
 - **A second tracing engine, built from source** (DP-43) - Potrace is compiled to WebAssembly
   by a GitHub Actions workflow from a pinned source tarball, committed with its recipe and its
-  checksums, and is now the default for Line art and Solid shape at `opttolerance` 1.0. It
-  traces about fourteen times faster than the engine it replaces and returns one compound path
-  rather than many elements. The `.wasm` is weighed on its own line of the bundle budget
-  (18,521 of 30,000 bytes gzipped). GPL-2.0-or-later, recorded in `THIRD_PARTY_NOTICES.md`
-  with the tarball's sha256
+  checksums, and is now the default for Line art and Solid shape at `opttolerance` 1.0. It was
+  not chosen for speed: across twelve pictures the two engines draw the same picture, to a
+  region overlap of 0.87 to 0.99 and a line width matching to a hundredth of a millimetre. It
+  was chosen for the edge. Magnified, the old engine returns a stroke edge of straight segments
+  with countable corners and a round dot as a ten-sided polygon, where Potrace returns one
+  continuous curve and a circle - and what is drawn here becomes an edge a finger runs along.
+  It does also trace about fourteen times faster, though tracing was never the expensive stage.
+  The cost is in the mesh: on one measured icon the shipped setting is 54 % more facets and
+  10 MB more STL than the engine it replaces, for a difference I could not see on that icon.
+  The `.wasm` is weighed on its own line of the bundle budget (18,521 of 30,000 bytes
+  gzipped). GPL-2.0-or-later, recorded in `THIRD_PARTY_NOTICES.md` with the tarball's sha256
 - **A conversion you start, watch, and can stop** (DP-34) - choosing a picture no longer hands
   the page to a conversion nobody asked for. Tracing runs on a worker thread with a moving bar
   and a Cancel that returns in a fraction of a millisecond, and the page keeps answering while
@@ -131,6 +137,11 @@ version.
 - **An icon converted to the icon plus fifty letters of credit** (DP-36) - every sampled icon of
   that kind is between 76 % and 97 % caption by area. Measured on nine icons through both
   tracing engines: no stray shapes left behind
+- **A high-severity advisory in a transitive dependency** - `npm audit` went red on develop
+  without a line of code changing: four advisories against `fast-uri` 3.1.5 were published
+  upstream, one of them high. It is a transitive dependency of ajv, which asks for `^3.0.1`, so
+  pinning it to `^3.1.7` through overrides stays inside the same major and moves nothing else.
+  Ten vulnerabilities (one high) became nine (none high), and the gate's own command exits 0
 - **Three red lanes on develop, none fixed by loosening an assertion** (DP-33) - besides D-133,
   a visual baseline was deterministically stale (byte-identical across three attempts, with a
   ten-pixel delta that made the verdict depend on the runner's text rasterisation), and a
