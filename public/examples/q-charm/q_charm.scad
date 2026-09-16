@@ -6,56 +6,56 @@
 // License: CC0 (Public Domain)
 
 /* [Design] */
-// Image file for the design (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion; simple single-path SVGs work best)
+// Image file for the design (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion; simple single-path SVGs work best) @label(Image file)
 design_file = ""; // [file:svg,png,jpg]
 
-// Depth of engraving (or height of raised design)
+// Depth of engraving (or height of raised design) @label(Engrave depth)
 engrave_depth = 0.8; // [0.2:0.1:3.0]
 
-// Design style on the charm surface
+// Design style on the charm surface @label(Style)
 design_style = "raised"; // [raised, engraved]
 
-// Design size as a percentage of the charm's flat top face; 100 fills it
+// Design size as a percentage of the charm's flat top face; 100 fills it @label(Scale)
 design_scale = 60; // [10:5:110]
 
 // Design width divided by height. The Assistive Forge app measures and sets this when you choose a file; in desktop OpenSCAD set it to your file's width/height so 100 truly fills the face (1 assumes a square design)
 design_file_aspect = 1; // [0.05:0.01:20]
 
-// Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle)
+// Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle) @label(Offset)
 design_offset = 0; // [0:0.2:1.5]
 
-// Left (−) / right (+) position offset for design
+// Left (−) / right (+) position offset for design @label(Left / right)
 design_left_right = 0; // [-10:0.5:10]
 
-// Down (−) / up (+) position offset for design
+// Down (−) / up (+) position offset for design @label(Up / down)
 design_up_down = 0; // [-10:0.5:10]
 
-// Rotation angle for design (degrees, counter-clockwise)
+// Rotation angle for design (degrees, counter-clockwise) @label(Rotation)
 design_rotation = 0; // [-180:5:180]
 
 /* [Design Layer 2] */
-// Image file for the second design (leave empty for none)
+// Image file for the second design (leave empty for none) @label(Image file)
 design_file_2 = ""; // [file:svg,png,jpg]
 
-// Design style for second design
+// Design style for second design @label(Style)
 design_style_2 = "raised"; // [raised, engraved]
 
-// Second design size as a percentage of the charm's flat top face; 100 fills it
+// Second design size as a percentage of the charm's flat top face; 100 fills it @label(Scale)
 design_scale_2 = 40; // [10:5:110]
 
 // Second design width divided by height (set automatically by the app, like design_file_aspect)
 design_file_2_aspect = 1; // [0.05:0.01:20]
 
-// Left (−) / right (+) position offset for second design
+// Left (−) / right (+) position offset for second design @label(Left / right)
 design_2_left_right = 0; // [-10:0.5:10]
 
-// Down (−) / up (+) position offset for second design
+// Down (−) / up (+) position offset for second design @label(Up / down)
 design_2_up_down = 0; // [-10:0.5:10]
 
-// Rotation angle for second design (degrees, counter-clockwise)
+// Rotation angle for second design (degrees, counter-clockwise) @label(Rotation)
 design_rotation_2 = 0; // [-180:5:180]
 
-// Thickness offset for second design (height relative to the charm surface)
+// Thickness offset for second design (height relative to the charm surface) @label(Thickness)
 design_2_thickness = 0; // [-3:0.1:3]
 
 /* [Layered design (prototype)] */
@@ -100,50 +100,50 @@ design_layer_3_depth = 0.8; // [0.4:0.1:3.0]
 design_layer_3_style = "raised"; // [raised, engraved]
 
 /* [Text] */
-// Text or number to display on the charm face (leave empty for none)
+// Text or number to display on the charm face (leave empty for none) @label(Text)
 text_content = "";
 
-// Depth of text engraving (or height of raised text)
+// Depth of text engraving (or height of raised text) @label(Depth)
 text_depth = 0.8; // [0.2:0.1:2]
 
-// Text style on the charm surface
+// Text style on the charm surface @label(Style)
 text_style = "raised"; // [raised, engraved]
 
-// Text height in mm
+// Text height in mm @label(Size)
 text_size = 5; // [3:0.5:12]
 
-// Left (−) / right (+) position offset for text
+// Left (−) / right (+) position offset for text @label(Left / right)
 text_left_right = 6; // [-10:0.5:10]
 
-// Down (−) / up (+) position offset for text
+// Down (−) / up (+) position offset for text @label(Up / down)
 text_up_down = 5.5; // [-10:0.5:10]
 
-// Rotation angle for text (degrees, counter-clockwise)
+// Rotation angle for text (degrees, counter-clockwise) @label(Rotation)
 text_rotation = 90; // [-180:5:180]
 
 /* [Text Layer 2] */
-// Second text line to display on the charm face (leave empty for none)
+// Second text line to display on the charm face (leave empty for none) @label(Text)
 text_content_2 = "";
 
-// Depth of second text engraving (or height of raised text)
+// Depth of second text engraving (or height of raised text) @label(Depth)
 text_depth_2 = 0.8; // [0.2:0.1:2]
 
-// Text style for second text
+// Text style for second text @label(Style)
 text_style_2 = "raised"; // [raised, engraved]
 
-// Text height in mm for second text
+// Text height in mm for second text @label(Size)
 text_size_2 = 5; // [3:0.5:12]
 
-// Left (-) / right (+) position offset for second text
+// Left (-) / right (+) position offset for second text @label(Left / right)
 text_2_left_right = -6; // [-10:0.5:10]
 
-// Down (-) / up (+) position offset for second text
+// Down (-) / up (+) position offset for second text @label(Up / down)
 text_2_up_down = 5.5; // [-10:0.5:10]
 
-// Rotation angle for second text (degrees, counter-clockwise)
+// Rotation angle for second text (degrees, counter-clockwise) @label(Rotation)
 text_rotation_2 = 90; // [-180:5:180]
 
-// Thickness offset for second text (height relative to the charm surface)
+// Thickness offset for second text (height relative to the charm surface) @label(Thickness)
 text_2_thickness = 0; // [-3:0.1:3]
 
 /* [Fit] */
