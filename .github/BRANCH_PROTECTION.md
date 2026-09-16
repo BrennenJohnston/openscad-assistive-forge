@@ -24,11 +24,12 @@ Active, targeting `refs/heads/develop`.
 | Force push (non-fast-forward) | blocked |
 | Bypass | Repository role, always |
 
-Seven required status checks:
+Eight required status checks:
 
 - `E2E Tests (Chromium)`
-- `E2E Tests (Edge 1/2)`
-- `E2E Tests (Edge 2/2)`
+- `E2E Tests (Edge 1/3)`
+- `E2E Tests (Edge 2/3)`
+- `E2E Tests (Edge 3/3)`
 - `Unit Tests`
 - `Lint Markdown`
 - `Build Check`
@@ -40,19 +41,41 @@ Active, targeting the default branch. Stricter than `develop`: it also requires
 **signed commits**, **linear history**, and blocks branch **creation** and
 direct **updates**.
 
-Eight required status checks:
+Nine required status checks:
 
 - `E2E Tests (Chromium)`
-- `E2E Tests (Edge 1/2)`
-- `E2E Tests (Edge 2/2)`
+- `E2E Tests (Edge 1/3)`
+- `E2E Tests (Edge 2/3)`
+- `E2E Tests (Edge 3/3)`
 - `Unit Tests`
 - `Lint Markdown`
 - `Build Check`
 - `Lighthouse Performance Audit`
 - `Cloudflare Pages`
 
-All eight were verified against the jobs that actually report, on 2026-08-16.
+All nine were verified against the jobs that actually report, on 2026-09-15.
 
+> ### Repaired again 2026-09-15 — the same fault, one shard later
+>
+> **It came back, on BOTH rulesets this time.** CW-83 gave the Edge lane a
+> third shard on 2026-08-31, so the jobs have reported `E2E Tests (Edge 1/3)`,
+> `(Edge 2/3)` and `(Edge 3/3)` ever since, while both rulesets still required
+> `(Edge 1/2)` and `(Edge 2/2)`. Nobody saw it for six weeks because no pull
+> request into `main` was opened in that time, and on `develop` the pending
+> pair was simply bypassed by the repository role.
+>
+> The consequence is worth stating plainly: **for six weeks the Edge lane was a
+> required check in name only.** Not one of its shards had to pass for anything
+> to merge into `develop`.
+>
+> Found while preparing the v5.0.0 release, by reading the live rulesets rather
+> than this file - which is the habit the section below already recommends and
+> which this file, being stale itself, would otherwise have defeated.
+>
+> **The lesson the 2026-08-16 note did not draw:** the shard COUNT is part of
+> the check name, so every re-shard renames every context in that lane. Splitting
+> or joining a sharded lane is a ruleset change, not just a workflow change.
+>
 > ### Repaired 2026-08-16 — worth knowing why
 >
 > Until that date this ruleset required a context named `E2E Tests (Edge)`.
