@@ -123,7 +123,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
 
-    await page.goto('http://localhost:5173/')
+    await page.goto('/')
     // Wait for WASM engine to fully initialise before uploading files.
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       state: 'attached',

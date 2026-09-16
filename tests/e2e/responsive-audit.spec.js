@@ -187,7 +187,34 @@ for (const vp of VIEWPORTS) {
       })
       expect(isScrollable).toBe(true)
 
-      await backdrop.click()
+      // The backdrop spans the whole viewport and the open drawer covers the
+      // middle of it, so Playwright's default click - at the element's centre -
+      // lands on the drawer's own content every time. MEASURED with the drawer
+      // open: the centre hits the preset actions at 320, Reset at 375, the
+      // customizer header at 480 and the panel body at 600. A person taps the
+      // strip beside the drawer, 32 px wide at the narrowest of these; so does
+      // this.
+      const strip = await page.evaluate(() => {
+        const back = document.querySelector('#drawerBackdrop')
+        const panel = document
+          .querySelector('#paramPanel')
+          .getBoundingClientRect()
+        // Search the strip rather than assume a point in it: at 320 px it is
+        // 32 px wide and a disabled preset button overflows the panel's right
+        // edge into part of it.
+        for (let f = 0.5; f > 0.05; f -= 0.05) {
+          const y = Math.round(window.innerHeight * f)
+          for (let x = window.innerWidth - 3; x > panel.right; x -= 4) {
+            if (document.elementFromPoint(x, y) === back) return { x, y }
+          }
+        }
+        return null
+      })
+      expect(
+        strip,
+        'the open drawer leaves no strip of backdrop a finger could tap'
+      ).not.toBeNull()
+      await backdrop.click({ position: strip })
       await expect(drawer).not.toHaveClass(/drawer-open/)
 
       await checkNoHorizontalOverflow(page)
