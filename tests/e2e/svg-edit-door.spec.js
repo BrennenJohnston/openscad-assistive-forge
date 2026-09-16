@@ -276,7 +276,7 @@ test.describe('The drawing editor door', () => {
 
     await tabUntil(
       page,
-      (s) => s?.text === 'Save edited SVG',
+      (s) => s?.text === 'Save SVG',
       { max: 12, label: 'the Save button' }
     )
 
@@ -361,6 +361,9 @@ test.describe('The drawing editor door', () => {
 
     await expect(resultWrap).toBeVisible()
     await expect(sourceWrap).toBeHidden()
+    // DP-46: Compare is one of the three tools behind More, so the working
+    // row holds its actions on one line (DP-Q52, signed with pictures).
+    await page.locator('.drawing-editor-more-btn').click()
     await expect(compareBtn).toBeVisible()
     await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')
 
@@ -810,6 +813,46 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     })
   }
 
+  // ★ D-136: closing the panel gave the drawing NOTHING. Two halves of one
+  // feature shipped without meeting: DP-37 P1 reserved the stage's right
+  // padding with an unconditional container query, and DP-24's toggle only
+  // hides the panel. MEASURED on the charm host before this: panel hidden,
+  // `padding-right` stayed 304.469 px and the drawing stayed 374 x 279, with
+  // an empty column where the list had been. The owner pressed Shapes to get
+  // room and the picture did not move.
+  for (const width of [1280, 900]) {
+    test(`★ D-136 closing the panel widens the drawing at ${width}`, async ({
+      page,
+    }) => {
+      test.setTimeout(120000)
+      await openAt(page, width)
+
+      const drawing = page.locator('.svg-prep-result-pane svg').first()
+      const open = await drawing.boundingBox()
+      const reserved = await page.evaluate(
+        () =>
+          getComputedStyle(document.querySelector('.drawing-editor-stage'))
+            .paddingRight
+      )
+
+      await page.locator('.drawing-editor-panel-toggle').first().click()
+      await expect(page.locator('.drawing-editor-panel')).toBeHidden()
+
+      const shut = await drawing.boundingBox()
+      const givenBack = await page.evaluate(
+        () =>
+          getComputedStyle(document.querySelector('.drawing-editor-stage'))
+            .paddingRight
+      )
+
+      // The room the panel held is handed back...
+      expect(parseFloat(reserved)).toBeGreaterThan(100)
+      expect(parseFloat(givenBack)).toBeLessThan(40)
+      // ...and the drawing is the thing that takes it.
+      expect(shut.width).toBeGreaterThan(open.width)
+    })
+  }
+
   test('★ at phone width the panel is a drawer, and one press gives the drawing back', async ({
     page,
   }) => {
@@ -970,6 +1013,8 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
       }).observe(pane, { attributes: true, attributeFilter: ['aria-busy'] })
     })
 
+    // DP-46: Design width is one of the three tools behind More.
+    await page.locator('.drawing-editor-more-btn').click()
     await page.locator('.svg-prep-design-width-input').fill('20')
     // Well past the 300 ms the box waits on.
     await page.waitForTimeout(2500)
@@ -1554,6 +1599,8 @@ test.describe('the list can point at the picture (DP-39 P3)', () => {
   }) => {
     test.setTimeout(180000)
     await openBird(page)
+    // DP-46: Compare moved behind More.
+    await page.locator('.drawing-editor-more-btn').click()
     await page.getByRole('button', { name: /Compare/ }).click()
     await expect(page.locator('.svg-prep-source-pane svg')).toBeVisible()
 
@@ -1960,5 +2007,186 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
     // A cancelled combine is not a result: saving is still refused.
     await expect(page.locator('button[data-action="save"]')).toBeDisabled()
+  })
+})
+
+test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
+  // ★ Before this the header row held the title, Shapes, the workspace footer
+  // (Apply, its 418 px hint sentence, Save, Keep original, Reset) and Close.
+  // MEASURED at the editor's real 692 px: the footer wrapped to two lines and
+  // Close landed on a THIRD line of its own at y 279 - and climbed back up
+  // when the hint disappeared after a render, so the toolbar moved while a
+  // person worked. At 412 the same pile was 401 px of a 753 px screen and the
+  // picture was cut 26 px short.
+  async function openEditorAt(page, width, height) {
+    await page.setViewportSize({ width, height })
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
+  }
+
+  /** Every toolbar row that is actually on screen, with its height. */
+  const toolbarRows = (page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.drawing-editor-toolbar-row')]
+        .filter((row) => row.getClientRects().length > 0)
+        .map((row) => ({
+          name: row.className.replace(/.*row--/, ''),
+          height: Math.round(row.getBoundingClientRect().height),
+        }))
+    )
+
+  for (const [width, height] of [
+    [1280, 900],
+    [900, 900],
+    [412, 915],
+  ]) {
+    test(`★ two rows, each one line, at ${width}`, async ({ page }) => {
+      test.setTimeout(120000)
+      await openEditorAt(page, width, height)
+
+      const rows = await toolbarRows(page)
+      expect(rows.length).toBe(2)
+      // One line of controls is a 44 px target plus the row's own padding.
+      // Two lines would be 90 or more, which is what the wrap used to make.
+      for (const row of rows) expect(row.height).toBeLessThan(60)
+    })
+
+    test(`★ Close is on the first row at ${width}`, async ({ page }) => {
+      test.setTimeout(120000)
+      await openEditorAt(page, width, height)
+
+      const placed = await page.evaluate(() => {
+        const close = document.querySelector('.drawing-editor-close')
+        const header = document.querySelector(
+          '.drawing-editor-toolbar-row--header'
+        )
+        if (!close || !header) return null
+        const c = close.getBoundingClientRect()
+        const h = header.getBoundingClientRect()
+        return { inHeader: c.bottom <= h.bottom + 1, closeWidth: c.width, closeHeight: c.height }
+      })
+      expect(placed.inHeader).toBe(true)
+      // A word and a real target, not a glyph.
+      expect(placed.closeHeight).toBeGreaterThanOrEqual(38)
+    })
+  }
+
+  test('★ the hint sentence is out of the button row and in the status line', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openEditorAt(page, 1280, 900)
+
+    // It is the hint's PLACE that matters: in the button row its width
+    // decided how many lines the toolbar had.
+    await expect(
+      page.locator('.drawing-editor-statusline .svg-prep-apply-hint')
+    ).toHaveCount(1)
+    await expect(
+      page.locator('.svg-prep-footer .svg-prep-apply-hint')
+    ).toHaveCount(0)
+  })
+
+  test('★ More holds the tools that left the row, and says so', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openEditorAt(page, 1280, 900)
+
+    const more = page.locator('.drawing-editor-more-btn')
+    await expect(more).toBeVisible()
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    const panel = page.locator('.drawing-editor-more-panel')
+    await expect(panel).toBeHidden()
+
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    await expect(panel).toBeVisible()
+    await expect(panel.locator('.svg-prep-compare-btn')).toBeVisible()
+    await expect(panel.locator('.svg-prep-roles-toggle')).toBeVisible()
+    await expect(panel.locator('.svg-prep-design-width')).toBeVisible()
+  })
+
+  test('★ on a phone the picture is whole and the stage does not scroll', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openEditorAt(page, 412, 915)
+
+    const fit = await page.evaluate(() => {
+      const stage = document.querySelector('.drawing-editor-stage')
+      const svg = document.querySelector('.svg-prep-result-pane svg')
+      if (!stage || !svg) return null
+      const s = stage.getBoundingClientRect()
+      const d = svg.getBoundingClientRect()
+      return {
+        roomUnderPicture: Math.round(s.bottom - d.bottom),
+        scrolls: stage.scrollHeight > stage.clientHeight + 1,
+        toolbar: Math.round(
+          document.querySelector('.drawing-editor-toolbar').getBoundingClientRect()
+            .height
+        ),
+      }
+    })
+    // The picture's bottom edge is INSIDE the stage: it used to be 26 px past
+    // it, with the Render row below that again.
+    expect(fit.roomUnderPicture).toBeGreaterThanOrEqual(0)
+    expect(fit.scrolls).toBe(false)
+    expect(fit.toolbar).toBeLessThan(120)
+  })
+
+
+  test('★ Escape shuts More before it shuts the editor', async ({ page }) => {
+    test.setTimeout(120000)
+    await openEditorAt(page, 1280, 900)
+
+    const more = page.locator('.drawing-editor-more-btn')
+    const panel = page.locator('.drawing-editor-more-panel')
+    await more.click()
+    await expect(panel).toBeVisible()
+
+    // The innermost thing open is what Escape ends. Before DP-39 put a row's
+    // menu in this chain, one press with a menu open left the editor
+    // entirely; this menu is in the same chain for the same reason.
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await expect(more).toBeFocused()
+    // And the editor is still here.
+    await expect(page.locator('.drawing-editor-toolbar')).toBeVisible()
+  })
+  test('★ below the drawer band the actions move into More, and come back', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openEditorAt(page, 1280, 900)
+
+    const whereIsReset = () =>
+      page.evaluate(() => {
+        const reset = document.querySelector('.svg-prep-footer [data-action="reset"]')
+          ? 'row'
+          : document.querySelector(
+                '.drawing-editor-more-panel [data-action="reset"]'
+              )
+            ? 'more'
+            : 'nowhere'
+        return {
+          reset,
+          // One Reset in the whole editor, wherever it is: a copy would put
+          // two of the same name in the accessibility tree.
+          count: document.querySelectorAll('[data-action="reset"]').length,
+        }
+      })
+
+    expect(await whereIsReset()).toEqual({ reset: 'row', count: 1 })
+
+    await page.setViewportSize({ width: 412, height: 915 })
+    await expect.poll(async () => (await whereIsReset()).reset).toBe('more')
+    expect((await whereIsReset()).count).toBe(1)
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await expect.poll(async () => (await whereIsReset()).reset).toBe('row')
+    expect((await whereIsReset()).count).toBe(1)
   })
 })

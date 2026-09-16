@@ -17245,6 +17245,59 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
+/* ★ D-140: the status line and the reason Apply is off, on one block.
+   The hint used to live in the button row, where its 418 px sentence wrapped
+   the row and pushed Close onto a line of its own - and then unwrapped when
+   the hint went away, so the toolbar moved while a person worked. A sentence
+   belongs beside a sentence. */
+.drawing-editor-statusline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-sm);
+  flex-shrink: 0;
+}
+
+/* Each sentence takes a line of its own as soon as the two will not share
+   one, and WRAPS inside it. Without the min-width the status keeps its
+   flex-shrink: 0 from the surface column it used to sit in, and a sentence
+   wider than the editor runs off the right edge instead: MEASURED at 412,
+   "...needs a look before it is use" with the last two characters cut. */
+.drawing-editor-statusline > * {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+/* ★ D-140: row 1 is the name and the two ways out. The title takes the slack
+   (margin-right: auto above), so Shapes and Close sit hard right and neither
+   ever wraps: two 44 px targets and a heading fit at 376 px, the editor's
+   width on a 412 px phone. */
+.drawing-editor-toolbar-row--header {
+  flex-wrap: nowrap;
+}
+
+/* Row 2 is the work. It may wrap - six controls will not hold one line on a
+   phone - but nothing in it changes height with state, which is what put
+   Close on a line of its own. */
+.drawing-editor-toolbar-row--view {
+  row-gap: var(--space-2xs);
+}
+
+/* The overflow panel sits in the flow under its row, like the shapes row's
+   More: an absolutely positioned menu is clipped by whatever scrolls around
+   it, and here that is the whole editor body. */
+.drawing-editor-more-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-2xs) 0;
+}
+
+.drawing-editor-more-panel[hidden] {
+  display: none;
+}
+
 .drawing-editor-title {
   margin: 0;
   margin-right: auto;
@@ -17284,9 +17337,16 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    boxes and writing them as one would make a coincidence look like a promise.
 
    Not in the drawer band below 640: there the panel covering the drawing IS
-   the design, and closing it is one press. */
+   the design, and closing it is one press.
+
+   ★ D-136: the reservation follows the panel's own state. It used to be
+   unconditional, so pressing Shapes hid the list and left its room behind:
+   MEASURED on the charm host, panel hidden, padding-right still 304.469 px
+   and the drawing still 374 px wide, with an empty column where the list had
+   been. Two halves of one feature - DP-37 P1 reserved the room, DP-24's
+   toggle hid the panel - and nobody joined them. */
 @container (min-width: 641px) {
-  .drawing-editor-stage {
+  .drawing-editor--panel-open .drawing-editor-stage {
     padding-right: clamp(280px, 44%, 460px);
   }
 }

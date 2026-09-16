@@ -132,6 +132,7 @@ export function createDrawingEditor({
   const titleId = `drawingEditorTitle-${uid}`;
   const panelId = `drawingEditorPanel-${uid}`;
   const canvasLabelId = `drawingEditorCanvasLabel-${uid}`;
+  const moreId = `drawingEditorMore-${uid}`;
 
   const root = document.createElement('div');
   root.className = 'drawing-editor';
@@ -479,9 +480,22 @@ export function createDrawingEditor({
   legend.hidden = true;
 
   body.append(stage, panel);
-  // Two rows at desktop width instead of one long wrap (G0 named the
-  // four-row toolbar at 1280): the actions row a person finishes with, and
-  // the working-tools row they live in.
+  // ★ D-140: two rows that never depend on state.
+  //
+  // Before this the header row held the title, Shapes, the whole workspace
+  // footer (Apply, its hint sentence, Save, Keep original, Reset) and Close.
+  // MEASURED at the editor's real 692 px: the footer wrapped to two lines
+  // because the hint is 418 px wide, and Close fell to a third line on its
+  // own at y 279. When the hint went away after a render the row reflowed and
+  // Close climbed back up, so the layout MOVED as the person worked. On a
+  // phone the same pile was 401 px of a 753 px surface and the picture was
+  // cut 26 px short.
+  //
+  // Row 1 is the name of the thing and the two ways out of it. Row 2 is the
+  // work: which view, then what to do with it, then a More for the three
+  // controls a person reaches for now and then. The hint sentence moves to
+  // the status line, where a sentence belongs, so no row's height depends on
+  // whether a button happens to be disabled.
   const toolbarHeaderRow = document.createElement('div');
   toolbarHeaderRow.className =
     'drawing-editor-toolbar-row drawing-editor-toolbar-row--header';
@@ -491,18 +505,59 @@ export function createDrawingEditor({
   const toolbarToolsRow = document.createElement('div');
   toolbarToolsRow.className =
     'drawing-editor-toolbar-row drawing-editor-toolbar-row--tools';
-  toolbarHeaderRow.append(title, panelToggleBtn, applyBtn, closeBtn);
+
+  // The overflow. In the flow under its row, not over the drawing: the same
+  // choice the shapes row's More made, for the same reason - an absolutely
+  // positioned menu is clipped by whatever scrolls around it.
+  const moreBtn = button(
+    S.moreTools,
+    'btn btn-secondary drawing-editor-more-btn',
+    'editor-more'
+  );
+  moreBtn.setAttribute('aria-label', S.moreToolsLabel);
+  moreBtn.setAttribute('aria-expanded', 'false');
+  moreBtn.setAttribute('aria-controls', moreId);
+  const morePanel = document.createElement('div');
+  morePanel.className = 'drawing-editor-more-panel';
+  morePanel.id = moreId;
+  morePanel.hidden = true;
+  const setMore = (open) => {
+    morePanel.hidden = open !== true;
+    moreBtn.setAttribute('aria-expanded', String(open === true));
+  };
+  moreBtn.addEventListener('click', () => setMore(morePanel.hidden));
+  /**
+   * Escape shuts the innermost thing that is open, and this menu is one of
+   * them. Without it, one press with More open left the editor entirely -
+   * the same distance a row's menu used to travel before DP-39 put it in
+   * this chain. Focus goes back to the button that opened it.
+   */
+  function closeToolbarMore() {
+    if (morePanel.hidden) return false;
+    setMore(false);
+    moreBtn.focus();
+    return true;
+  }
+
+  toolbarHeaderRow.append(title, panelToggleBtn, closeBtn);
   toolbarViewRow.append(
     viewSwitch,
     draftNote,
     viewGroup,
     zoomGroup,
     historyGroup,
-    viewControls
+    applyBtn,
+    moreBtn
   );
   toolbarToolsRow.append(stencilTools);
-  toolbar.append(toolbarHeaderRow, toolbarViewRow, toolbarToolsRow);
-  root.append(skipToTable, toolbar, status, body);
+  toolbar.append(toolbarHeaderRow, toolbarViewRow, morePanel, toolbarToolsRow);
+  // The status line and the Apply hint share one block, so the sentence that
+  // says why Apply is off sits beside the sentence that says what happened
+  // instead of inside the button row.
+  const statusLine = document.createElement('div');
+  statusLine.className = 'drawing-editor-statusline';
+  statusLine.append(status);
+  root.append(skipToTable, toolbar, statusLine, body);
   surfaceEl.appendChild(root);
 
   // ── Mount the workspace, then put its pieces where the surface wants them
@@ -517,9 +572,51 @@ export function createDrawingEditor({
     refs.compareBtn,
     refs.rolesToggleBtn
   );
-  // Apply / Save / Keep original / Reset: the workspace's footer IS the
-  // action row, listeners and all, so it moves whole.
-  toolbarHeaderRow.insertBefore(refs.footer, applyBtn);
+  // Apply / Save SVG / Save DXF / Keep original / Reset: the workspace's
+  // footer IS the action row, listeners and all, so it moves whole - into the
+  // working row now, before the More it shares the line with.
+  toolbarViewRow.insertBefore(refs.footer, moreBtn);
+  // The three tools a person reaches for now and then go behind More; the
+  // hint sentence goes to the status line. Both leave the button row, which
+  // is why its height no longer moves with the work (D-140).
+  morePanel.append(viewControls);
+  statusLine.append(refs.applyHint);
+
+  /**
+   * Below the drawer band the working row cannot hold six controls. MEASURED
+   * at 412 with the two-row toolbar: it wrapped across four lines and the
+   * toolbar still took 241 px of a 753 px screen. The three actions a person
+   * finishes with move into More, which is already on the row, and come back
+   * when there is room again.
+   *
+   * MOVED, never copied: the same nodes with the same listeners and one
+   * accessible name each. A copy would put two "Reset" buttons in the
+   * accessibility tree and let them drift apart.
+   */
+  let toolbarIsNarrow = null;
+  function syncToolbarBand() {
+    const narrow = panelIsDrawer();
+    if (narrow === toolbarIsNarrow) return;
+    toolbarIsNarrow = narrow;
+    const secondary = [
+      refs.saveBtn,
+      refs.saveDxfBtn,
+      refs.keepBtn,
+      refs.resetBtn,
+    ];
+    // Focus would be lost with the button it is on when More is shut.
+    const active = document.activeElement;
+    const movingFocus = narrow && secondary.includes(active);
+    if (narrow) morePanel.prepend(...secondary);
+    else refs.footer.append(...secondary);
+    if (movingFocus) moreBtn.focus();
+  }
+  syncToolbarBand();
+  const bandObserver =
+    typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => syncToolbarBand())
+      : null;
+  bandObserver?.observe(root);
   const shapesBlock = document.createElement('div');
   shapesBlock.className = 'drawing-editor-shapes';
   shapesBlock.append(refs.layerSummary, refs.bulkBar, refs.objects);
@@ -632,6 +729,7 @@ export function createDrawingEditor({
       trap = null;
     }
     workspace.close();
+    bandObserver?.disconnect();
     hide();
     resetView();
     status.textContent = '';
@@ -728,6 +826,7 @@ export function createDrawingEditor({
         // Escape shuts. Without this, one press with a menu open left the
         // editor entirely - a long way further than anybody meant to go.
         onEscape: () => {
+          if (closeToolbarMore()) return;
           if (workspace.closeOpenMenu?.()) return;
           finish('onKeepOriginal');
         },
@@ -1935,7 +2034,7 @@ export function createDrawingEditor({
       }
       // Same rule as the marquee: the innermost thing in progress is what
       // Escape ends, and that press goes no further.
-      if (workspace.closeOpenMenu?.()) {
+      if (closeToolbarMore() || workspace.closeOpenMenu?.()) {
         event.preventDefault();
         event.stopPropagation();
         return;

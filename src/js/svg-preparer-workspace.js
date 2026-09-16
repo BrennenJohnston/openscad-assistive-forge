@@ -478,7 +478,15 @@ function buildWorkspaceDom() {
   const applyBtn = document.createElement('button');
   applyBtn.className = 'btn btn-primary';
   applyBtn.dataset.action = 'apply';
-  applyBtn.textContent = 'Apply prepared SVG';
+  // DP-46: one word on the button, the whole sentence in the accessible name.
+  // The row has to hold six controls at the editor's real 692 px, and "Apply
+  // prepared SVG" is a third of that on its own; but a person listening still
+  // needs to know WHAT is applied and WHERE it goes.
+  applyBtn.textContent = 'Apply';
+  applyBtn.setAttribute(
+    'aria-label',
+    'Apply the prepared drawing to your design'
+  );
 
   const applyHint = document.createElement('span');
   applyHint.className = 'svg-prep-apply-hint';
@@ -488,7 +496,7 @@ function buildWorkspaceDom() {
   const saveBtn = document.createElement('button');
   saveBtn.className = 'btn btn-secondary';
   saveBtn.dataset.action = 'save';
-  saveBtn.textContent = 'Save edited SVG';
+  saveBtn.textContent = 'Save SVG';
   saveBtn.setAttribute(
     'aria-label',
     'Save the edited SVG to a file on this computer'
@@ -497,7 +505,7 @@ function buildWorkspaceDom() {
   const saveDxfBtn = document.createElement('button');
   saveDxfBtn.className = 'btn btn-secondary';
   saveDxfBtn.dataset.action = 'save-dxf';
-  saveDxfBtn.textContent = 'Save as DXF';
+  saveDxfBtn.textContent = 'Save DXF';
   saveDxfBtn.setAttribute(
     'aria-label',
     'Save the edited drawing as a DXF file on this computer'

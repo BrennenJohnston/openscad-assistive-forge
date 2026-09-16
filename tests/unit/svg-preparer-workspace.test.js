@@ -220,7 +220,13 @@ describe('createSvgPrepWorkspace', () => {
 
       const applyBtn = footer.querySelector('[data-action="apply"]');
       expect(applyBtn).toBeTruthy();
-      expect(applyBtn.textContent).toBe('Apply prepared SVG');
+      // DP-46: one word on the button so the working row holds one line, the
+      // whole sentence in the accessible name so a person listening still
+      // learns what is applied and where it goes.
+      expect(applyBtn.textContent).toBe('Apply');
+      expect(applyBtn.getAttribute('aria-label')).toBe(
+        'Apply the prepared drawing to your design'
+      );
       expect(applyBtn.classList.contains('btn-primary')).toBe(true);
 
       const keepBtn = footer.querySelector('[data-action="keep"]');
