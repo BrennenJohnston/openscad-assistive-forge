@@ -7,7 +7,11 @@ import { formatFileSize } from './download.js';
 import { announceChange, announceImmediate } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
 import { isRasterImageFile } from './file-param-resolver.js';
-import { loadImageData, validateImageDimensions } from './image-import.js';
+import {
+  loadImageData,
+  validateImageDimensions,
+  RELIEF_COLOUR_SHARE_FLOOR,
+} from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import {
   prepareSvg,
@@ -2872,6 +2876,14 @@ function createFileControl(
       // one is how the owner's cat came out as a single silhouette hole. On a
       // tile that makes plates, the same drawing gets a sentence that says
       // there is something to decide and a way to go and decide it.
+      // D-139: "SVG Ready" is for a drawing with a shape in it. An empty one
+      // says so, and offers no editor, because there is nothing to edit.
+      if (count === 0) {
+        badge.textContent = 'Nothing was kept from this picture.';
+        badge.dataset.level = 'warn';
+        statusCard.appendChild(badge);
+        return;
+      }
       badge.textContent =
         plateParams.length > 0
           ? `${count} shapes, no colors yet. Open the editor to say what each one gets.`
@@ -3131,7 +3143,17 @@ function createFileControl(
     try {
       const { svg: traced, summary } = await ensureTraceRunner().start(
         inkSourceImageData,
-        settings,
+        // D-138. A two-color logo used to arrive as 553 shapes because the
+        // anti-aliased edge between the two colors was quantized into four
+        // colors of its own. They are folded back into the colors they sit
+        // between, RELIEF ONLY: a stencil is painted by hand, and a cat's
+        // green eyes at under a percent are the point of it.
+        {
+          ...settings,
+          ...(plateParams.length === 0
+            ? { shareFloor: RELIEF_COLOUR_SHARE_FLOOR }
+            : {}),
+        },
         { onStage: (s) => traceProgress.stage(s) }
       );
       // A stock icon arrives with its attribution printed along the bottom, and
@@ -3165,6 +3187,33 @@ function createFileControl(
                 : null,
           });
         }
+      }
+
+      // ★ D-139: A CONVERSION THAT KEPT NOTHING IS NOT A DESIGN.
+      //
+      // Line art on the owner's logo produced an 85-byte SVG with no shapes
+      // in it, and the app emitted that as `design_file`, relabeled the
+      // control "converted from ...png" and badged it "SVG Ready". The charm
+      // rendered bare and nothing said why. The advice for fixing it was
+      // already on screen (the ink panel's "Almost nothing was kept" line),
+      // which is why the file value simply stays as it was: the picture is
+      // still there, the settings are still there, and Convert again is the
+      // next thing to press.
+      if (pathCount === 0) {
+        if (sourceFileLabel) {
+          fileInfo.textContent = `${sourceFileLabel}: nothing was kept from this picture.`;
+          fileInfo.title = sourceFileLabel;
+          fileInfo.className = 'file-info';
+        }
+        fileInfo.removeAttribute('aria-busy');
+        if (announceResult) {
+          announceChange(
+            'Nothing was kept from this picture. Try another setting, or another mode, and convert again.'
+          );
+        }
+        traceProgress.finish();
+        traceProgress.offer('Convert again');
+        return;
       }
 
       const convertedFile = {

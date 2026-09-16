@@ -432,6 +432,39 @@ export function keepLargest(q, keep) {
 }
 
 /**
+ * ★ Fold away the colors that are only the edge between two others
+ * (D-138, the share floor; the VALUE is the owner's to set, DP-Q54).
+ *
+ * MEASURED on the owner's CREATE logo, a picture of two colors: the
+ * anti-aliased ramp between the navy and the white was quantized into four
+ * separate colors of about one percent each, and those four carried **279 of
+ * the 379 paths** the separation wrote - three quarters of the shapes for
+ * four percent of the picture. They are not colors anybody chose to paint;
+ * they are the boundary.
+ *
+ * `keepLargest` already folds a color into its nearest neighbor by count
+ * rank, and share is monotone in count, so this is that same operation with
+ * the cut made where a person would make it: below this share of the picture,
+ * a color is the edge between two others.
+ *
+ * Two colors are always kept, whatever their share: a picture has to separate
+ * into something.
+ *
+ * @param {{palette: Array, assignments: Int16Array, pixelCounts: number[]}} q
+ * @param {number} floor - Share of the picture, 0 to 1; 0 turns this off
+ * @returns {{palette: Array, assignments: Int16Array, pixelCounts: number[]}}
+ */
+export function keepAboveShare(q, floor) {
+  if (!(floor > 0)) return q;
+  const total = q.pixelCounts.reduce((a, b) => a + (b || 0), 0);
+  if (!(total > 0)) return q;
+  const passing = q.pixelCounts.filter((c) => (c || 0) / total >= floor).length;
+  const keep = Math.max(2, passing);
+  if (keep >= q.palette.length) return q;
+  return keepLargest(q, keep);
+}
+
+/**
  * Which color is the wall behind the stencil.
  *
  * The one most present along the BORDER of the picture, because that is where
@@ -685,6 +718,11 @@ export function traceMask(mask, size, options = {}) {
  * @param {Array<{r,g,b}>} [options.palette] - Or exactly which colors
  * @param {number|null} [options.backgroundIndex] - Or let the border decide
  * @param {number} [options.mmPerPixel] - For the area floor
+ * @param {number} [options.shareFloor] - Colors under this share of the
+ *   picture are folded into their nearest neighbor (D-138). OFF unless a
+ *   caller asks: a stencil is painted by hand and its small real colors - the
+ *   cat's green eyes, its pink nose - are the point. The charm host passes
+ *   COLOUR_SHARE_FLOOR
  * @param {Function} [options.nameFor] - Color to plain-language name
  * @returns {{svg: string, colors: Array, droppedTotal: number}}
  */
@@ -717,6 +755,12 @@ export function separateColours(imageData, options = {}) {
     // Found on a sample, applied to every pixel: the palette is the answer,
     // and the sample was only ever a way to reach it.
     quantised = snapToPalette(imageData, found.palette);
+  }
+  // D-138. A palette a person named is theirs and is never folded; a palette
+  // the app found gets the edge colors folded back into the colors they sit
+  // between.
+  if (!options.palette) {
+    quantised = keepAboveShare(quantised, options.shareFloor ?? 0);
   }
   const { palette, assignments, pixelCounts } = quantised;
   if (palette.length === 0) {

@@ -47,6 +47,18 @@ async function choosePicture(page, size = 2000, kind = 'noise') {
         ctx.fillRect(0, 0, n, n);
         ctx.fillStyle = '#000000';
         ctx.fillRect(n * 0.25, n * 0.25, n * 0.5, n * 0.5);
+      } else if (kind === 'lightOnDark') {
+        // The class of picture the owner brought (D-139): a light drawing on
+        // a dark, SATURATED ground. The navy is the one from their logo.
+        ctx.fillStyle = '#4b2e83';
+        ctx.fillRect(0, 0, n, n);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(n * 0.2, n * 0.4, n * 0.6, n * 0.2);
+        ctx.fillRect(n * 0.4, n * 0.2, n * 0.2, n * 0.6);
+      } else if (kind === 'blank') {
+        // A picture with nothing in it at all.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, n, n);
       } else {
         const img = ctx.createImageData(n, n);
         // A deterministic pseudo-random field: the same picture every run, so a
@@ -339,6 +351,67 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.note).toHaveJSProperty('tagName', 'P');
     expect(await p.note.getAttribute('aria-live')).toBeNull();
     expect(await p.note.getAttribute('role')).toBeNull();
+  });
+
+  test('★ a light drawing on a dark ground is turned around, not thrown away (D-139)', async ({
+    page,
+  }) => {
+    test.slow();
+    await openCharm(page);
+    await choosePicture(page, 600, 'lightOnDark');
+    const p = panel(page);
+    if (await p.start.isVisible().catch(() => false)) await p.start.click();
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const v = window.stateManager?.getState()?.parameters?.design_file;
+            return v && typeof v === 'object' ? v.name : v;
+          }),
+        { timeout: 120_000 }
+      )
+      .toContain('.svg');
+
+    // Before D-139 this traced to NOTHING: the chroma gate threw the navy
+    // away first, so the old "more than half is ink, turn it around" rule
+    // never fired, and an 85-byte empty drawing was emitted as the design.
+    const summary = await page
+      .locator('.ink-controls-summary')
+      .first()
+      .textContent();
+    expect(summary).not.toMatch(/^0 shapes traced/);
+    expect(summary).toMatch(/turned around/i);
+  });
+
+  test('★ a conversion that keeps nothing is not emitted, and not called ready (D-139)', async ({
+    page,
+  }) => {
+    test.slow();
+    await openCharm(page);
+    await choosePicture(page, 600, 'blank');
+    const p = panel(page);
+    if (await p.start.isVisible().catch(() => false)) await p.start.click();
+
+    // The control says what happened...
+    await expect
+      .poll(async () => (await p.info.textContent()) || '', {
+        timeout: 120_000,
+      })
+      .toMatch(/nothing was kept/i);
+
+    // ...the design is untouched, so the charm is still whatever it was...
+    const design = await page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file;
+      return v && typeof v === 'object' ? v.name : v;
+    });
+    expect(design, `design_file after an empty conversion: ${design}`).toBeFalsy();
+
+    // ...and nothing anywhere calls an empty drawing ready.
+    const badges = await page
+      .locator('.svg-prep-status-badge')
+      .allTextContents();
+    expect(badges.join(' | ')).not.toMatch(/SVG Ready/);
   });
 
   test('a picture small enough to be over in a moment starts itself, through the same bar', async ({

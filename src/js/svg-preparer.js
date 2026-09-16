@@ -741,6 +741,86 @@ export function parseSvgElements(svgString) {
 }
 
 /**
+ * ★ What the Colors mode's WALL becomes on a charm (D-137; the owner
+ * signed the rule at DP-Q53, 2026-09-16: "Leave the wall out; artwork
+ * Raised").
+ *
+ * `separateColours` marks every path of the background color
+ * `data-background="true"`. Nothing read that flag: roles were decided by
+ * luminance alone, so on the owner's CREATE logo - white artwork on a navy
+ * ground - the navy WALL (luminance under the threshold) came out Raised and
+ * the white lettering (luminance over it) came out Hole. MEASURED: the wall
+ * path is the whole 600 x 448 canvas, the editor called it "Path 1, Raised",
+ * and the charm rendered as a black plate with the logo cut out of it.
+ *
+ * The rule, by the separation's own facts rather than by luminance:
+ *   - a wall path at nesting depth 0 is the ground the picture sits on, and
+ *     a charm does not print its ground: **Ignore**;
+ *   - a wall path INSIDE a kept shape is a counter or an island - the middle
+ *     of an R, the hole in an A - and that is a **Hole**;
+ *   - every other color is the artwork: **Raised**, whatever its luminance.
+ *
+ * ★★★ IT FIRES ONLY WHEN THERE IS SOMETHING ELSE TO RAISE.
+ * DP-48 P0 measured the nine icons and found that on a one-colour drawing
+ * `pickBackground` returns index 0 regardless, so the ARTWORK carries the
+ * flag: all nine icons separate into black paths every one of which is
+ * "the wall". A rule that ignored the wall unconditionally would empty them.
+ *
+ * @param {Array} elements - Output of parseSvgElements()
+ * @param {{nodes: Array}|null} [nestingTree] - Reuse a tree already built
+ * @returns {Object} Element index to forced role; empty when the rule does
+ *   not apply, which leaves every existing drawing exactly as it was
+ */
+export function wallRoleOverrides(elements, nestingTree = null) {
+  const out = {};
+  if (!Array.isArray(elements) || elements.length === 0) return out;
+  const isWall = (el) =>
+    el && el.element && typeof el.element.getAttribute === 'function'
+      ? el.element.getAttribute('data-background') === 'true'
+      : false;
+
+  const walls = [];
+  let somethingElse = false;
+  elements.forEach((el, i) => {
+    if (isWall(el)) walls.push(i);
+    else somethingElse = true;
+  });
+  if (walls.length === 0 || !somethingElse) return out;
+
+  const tree = nestingTree || buildNestingTree(elements);
+  const depth = new Map(
+    ((tree && tree.nodes) || []).map((n) => [n.index, n.depth])
+  );
+
+  // ★ THE DECISION IS PER PATH, NEVER PER SUBPATH. `parseSvgElements` splits
+  // every `d` into its rings, and a traced region's INNER rings are its
+  // holes: the navy wall of the CREATE logo is one path whose inner rings are
+  // the letters themselves. Rolling per ring made those letter-shaped rings
+  // Holes, and the charm came out with the lettering drawn in OUTLINE (seen
+  // in `dp48p1-after-2-drawing-after-render.png` before this was fixed). A
+  // path's outermost ring says where the path sits, and every ring of it
+  // carries that one role; the even-odd fill inside the path does the rest.
+  const shallowest = new Map();
+  elements.forEach((el, i) => {
+    const node = el.element;
+    const d = depth.get(i) || 0;
+    const seen = shallowest.get(node);
+    if (seen === undefined || d < seen) shallowest.set(node, d);
+  });
+
+  for (const i of walls) {
+    const d = shallowest.get(elements[i].element) || 0;
+    // Depth 0 is the ground the picture sits on and a charm does not print
+    // it; deeper is an island of wall inside artwork - a letter's counter.
+    out[i] = d > 0 ? 'hole' : 'ignore';
+  }
+  elements.forEach((el, i) => {
+    if (out[i] === undefined) out[i] = 'foreground';
+  });
+  return out;
+}
+
+/**
  * Classify parsed SVG elements by their role in the compound path.
  *
  * - Elements with luminance > threshold → 'hole'
@@ -1246,7 +1326,15 @@ export function prepareSvg(svgString, options = {}) {
   };
 
   const elements = parseSvgElements(svgString);
-  const classified = classifyElements(elements, options);
+  // D-137 again, for the drawings that never open the editor: the caller's
+  // own overrides are a person's choices and still win over the rule.
+  const classified = classifyElements(elements, {
+    ...options,
+    roleOverrides: {
+      ...wallRoleOverrides(elements),
+      ...(options.roleOverrides || {}),
+    },
+  });
   const result = flattenToCompoundPath(
     classified,
     svgMeta,
@@ -1406,7 +1494,12 @@ export function analyzeSvg(svgString) {
     renderElements.length > 1 &&
     renderElements[0].subpathIndex !== undefined;
 
-  const classified = classifyElements(renderElements);
+  // D-137: the separation's own facts decide the wall's role before
+  // luminance gets a say. An ordinary drawing carries no such facts and gets
+  // an empty override map, so nothing about it changes.
+  const classified = classifyElements(renderElements, {
+    roleOverrides: wallRoleOverrides(renderElements),
+  });
 
   const warnings = [];
   const unsupportedFeatures = [];

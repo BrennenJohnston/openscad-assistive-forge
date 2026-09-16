@@ -285,11 +285,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       // ... a photo needs dark lines" gave photo advice for a vector file and
       // named a cause that was not the cause. MEASURED before the fix on both
       // of the owner's SVGs and on Forge's own logo.
+      // D-139: a picture that was just traced gets the sentence for THAT, not
+      // the vector-file one. "A photo needs dark lines on a light background"
+      // was also the wrong advice as of this release: a light drawing on a
+      // dark ground is turned around and traced, so what is left to say is
+      // which lever to move.
       const reason =
         analysis.warnings && analysis.warnings.length > 0
           ? analysis.warnings[0]
-          : `${currentFileName} has no shapes Forge can work with. ` +
-            `A photo needs dark lines on a light background to trace.`;
+          : removeCredit
+            ? `Nothing was kept from ${currentFileName}. ` +
+              `Try another mode, or move "How dark counts as a line", and convert again.`
+            : `${currentFileName} has no shapes Forge can work with. ` +
+              `A photo needs dark lines on a light background to trace.`;
       fail(reason);
       return false;
     }

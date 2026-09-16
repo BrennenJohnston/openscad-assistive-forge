@@ -244,11 +244,13 @@ export function medianFilter3x3(imageData, makeImageData) {
  * @param {number} options.lightnessMax
  * @param {number} options.chromaMax
  * @param {boolean} [options.useAlpha] - Treat transparency as the shape
+ * @param {boolean} [options.invert] - The ink is the LIGHT side of the
+ *   lightness line: a light drawing over a dark ground (D-139)
  * @returns {Uint8Array}
  */
 export function inkMask(
   imageData,
-  { lightnessMax, chromaMax, useAlpha = false }
+  { lightnessMax, chromaMax, useAlpha = false, invert = false }
 ) {
   const { data } = imageData;
   const mask = new Uint8Array(data.length / 4);
@@ -265,7 +267,13 @@ export function inkMask(
       continue;
     }
     const { L, chroma } = srgbToLab(data[i], data[i + 1], data[i + 2]);
-    mask[p] = L <= lightnessMax && chroma <= chromaMax ? 1 : 0;
+    // D-139: on a light drawing over a dark ground the INK is the light
+    // side of the line. The chroma gate still runs, and runs on the side
+    // that was chosen, which is the whole point: it used to throw the
+    // colored ground away first, leaving nothing over half the picture for
+    // the old inversion rule to notice.
+    const dark = invert ? L > lightnessMax : L <= lightnessMax;
+    mask[p] = dark && chroma <= chromaMax ? 1 : 0;
   }
   return mask;
 }
@@ -648,7 +656,7 @@ export function extractInk(imageData, options = {}) {
     lightnessMax = otsu < 0 ? INK_DEFAULTS.lightnessMax : (otsu / 255) * 100;
   }
 
-  const mask =
+  let mask =
     mode === 'silhouette'
       ? silhouetteMask(source, { lightnessMax })
       : inkMask(source, { lightnessMax, chromaMax, useAlpha });
@@ -663,6 +671,36 @@ export function extractInk(imageData, options = {}) {
     for (let p = 0; p < mask.length; p++) mask[p] = mask[p] ? 0 : 1;
     coverage = maskCoverage(mask);
     inverted = true;
+  } else if (mode === 'lineart' && !useAlpha && coverage <= COVERAGE_WARN_LOW) {
+    // ★ D-139: NOTHING PASSED BOTH GATES, so try the other side of the
+    // lightness line before giving up.
+    //
+    // The rule above asks whether the ink covers more than half the picture,
+    // and on the owner's CREATE logo - white lettering on a navy ground - it
+    // could never fire: the chroma gate rejects the navy first (chroma 45
+    // against a limit of 25), so the ink was nothing at all, 0 % coverage,
+    // and the app emitted an 85-byte empty drawing and called it ready.
+    //
+    // Deciding on LIGHTNESS ALONE is not the answer either, and a measurement
+    // says why: the AAC blue-field card is mostly dark by lightness, and
+    // turning it around throws away the dark glyph that is its whole point.
+    // What is special about the logo is not that it is dark - it is that
+    // NOTHING SURVIVED, which is the one case where the other side is worth
+    // a look. The swap is taken only when it finds a drawing rather than a
+    // page: a blank picture's light side covers everything, and everything is
+    // not a drawing.
+    const other = inkMask(source, {
+      lightnessMax,
+      chromaMax,
+      useAlpha,
+      invert: true,
+    });
+    const otherCoverage = maskCoverage(other);
+    if (otherCoverage > coverage && otherCoverage <= 0.5) {
+      mask = other;
+      coverage = otherCoverage;
+      inverted = true;
+    }
   }
 
   if (coverage <= COVERAGE_WARN_LOW) {

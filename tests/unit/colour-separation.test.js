@@ -20,6 +20,7 @@ import {
   masksFor,
   traceMask,
   separateColours,
+  keepAboveShare,
   CLUSTER_OVERSHOOT,
   CLUSTER_SAMPLE_PIXELS,
 } from '../../src/js/colour-separation.js'
@@ -328,5 +329,96 @@ describe('separateColours on the owner cat', () => {
   it('says nothing rather than guessing at a picture with nothing in it', () => {
     const blank = { width: 4, height: 4, data: new Uint8ClampedArray(64) }
     expect(separateColours(blank, { count: 3 }).colours).toEqual([])
+  })
+})
+
+// ── D-138: the edge between two colors is not a third color (DP-48 P2) ──────
+describe('the share floor (D-138, DP-Q54 proposed at 2 %)', () => {
+  /** A light mark on a dark ground, with a soft edge between them. */
+  function rampedMark(w = 120, h = 120) {
+    const data = new Uint8ClampedArray(w * h * 4)
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        // Distance from the mark's edge decides how far along the ramp we are.
+        const dx = Math.max(30 - x, x - 90, 0)
+        const dy = Math.max(30 - y, y - 90, 0)
+        const out = Math.max(dx, dy)
+        const t = Math.min(1, out / 3)
+        const o = (y * w + x) * 4
+        data[o] = Math.round(250 - t * 210)
+        data[o + 1] = Math.round(250 - t * 210)
+        data[o + 2] = Math.round(250 - t * 120)
+        data[o + 3] = 255
+      }
+    }
+    return { data, width: w, height: h }
+  }
+
+  it('is OFF unless a caller asks, so a stencil keeps its small real colors', () => {
+    // The control: the cat's green eyes and pink nose are about a percent
+    // each, and the stencil lane is where somebody paints them.
+    const six = separateColours(CAT, { count: 6 })
+    expect(six.colours).toHaveLength(6)
+  })
+
+  it('folds a color under the floor into the nearest one it is kept beside', () => {
+    const q = {
+      palette: [
+        { r: 0, g: 0, b: 0 },
+        { r: 255, g: 255, b: 255 },
+        { r: 20, g: 20, b: 20 },
+      ],
+      assignments: Int16Array.from([0, 0, 0, 0, 0, 0, 0, 1, 1, 2]),
+      pixelCounts: [7, 2, 1],
+    }
+    const out = keepAboveShare(q, 0.15)
+    expect(out.palette).toHaveLength(2)
+    // The near-black remnant went to black, not to white.
+    expect(out.pixelCounts[0]).toBe(8)
+    expect(out.pixelCounts[1]).toBe(2)
+    expect(Array.from(out.assignments)).toEqual([0, 0, 0, 0, 0, 0, 0, 1, 1, 0])
+  })
+
+  it('never folds below two colors, whatever the floor', () => {
+    const q = {
+      palette: [
+        { r: 0, g: 0, b: 0 },
+        { r: 255, g: 255, b: 255 },
+      ],
+      assignments: Int16Array.from([0, 0, 0, 1]),
+      pixelCounts: [3, 1],
+    }
+    expect(keepAboveShare(q, 0.9).palette).toHaveLength(2)
+  })
+
+  it('does nothing at a floor of zero', () => {
+    const q = {
+      palette: [{ r: 0, g: 0, b: 0 }, { r: 9, g: 9, b: 9 }, { r: 255, g: 255, b: 255 }],
+      assignments: Int16Array.from([0, 1, 2, 0]),
+      pixelCounts: [2, 1, 1],
+    }
+    expect(keepAboveShare(q, 0).palette).toHaveLength(3)
+  })
+
+  it('★ a two-color picture with a soft edge separates into TWO colors', () => {
+    // The owner's logo in miniature. Without the floor the ramp becomes
+    // colors of its own and each one traces into its own pile of slivers.
+    const img = rampedMark()
+    const loose = separateColours(img, { count: 6 })
+    const folded = separateColours(img, { count: 6, shareFloor: 0.02 })
+    expect(loose.colours.length).toBeGreaterThan(2)
+    expect(folded.colours).toHaveLength(2)
+    const countPaths = (svg) => (svg.match(/<path /g) || []).length
+    expect(countPaths(folded.svg)).toBeLessThan(countPaths(loose.svg))
+  })
+
+  it('★ keeps the artwork: the folded picture still covers the mark', () => {
+    // The floor removes colors, never shapes: what was ramp pixels becomes
+    // part of the color it sits against, so nothing of the drawing is lost.
+    const img = rampedMark()
+    const folded = separateColours(img, { count: 6, shareFloor: 0.02 })
+    const shares = folded.colours.map((c) => c.share)
+    expect(shares.reduce((a, b) => a + b, 0)).toBeGreaterThan(0.99)
+    expect(folded.colours.some((c) => c.shapes > 0 && !c.isBackground)).toBe(true)
   })
 })

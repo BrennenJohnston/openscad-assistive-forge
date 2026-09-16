@@ -137,6 +137,11 @@ self.onmessage = async (event) => {
       const options = {
         count: ink.colourCount ?? 6,
         mmPerPixel: ink.mmPerPixel ?? 0,
+        // D-138. The worker builds its own options rather than forwarding
+        // ink, so a setting the host passes has to be named here too - which
+        // is exactly how the share floor reached the separation in a unit
+        // test and nowhere in the app for an afternoon.
+        shareFloor: ink.shareFloor ?? 0,
         nameFor: (c) => colourLabel(hexOf(c)),
       };
       const first = separateColours(pixels, options);
