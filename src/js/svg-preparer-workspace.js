@@ -39,6 +39,14 @@ export { flattenWithRings };
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
+/**
+ * How wide the editor takes a design to be printed when the model does not
+ * say. The Design width control has offered this since DP-5 and the thin-line
+ * advisory measures against it; it is one number in one place because two
+ * copies of a default is this project's oldest bug (core rule 9).
+ */
+export const DEFAULT_DESIGN_WIDTH_MM = 14;
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
@@ -254,7 +262,7 @@ function buildWorkspaceDom() {
   designWidthInput.min = '1';
   designWidthInput.max = '200';
   designWidthInput.step = '1';
-  designWidthInput.value = '14';
+  designWidthInput.value = String(DEFAULT_DESIGN_WIDTH_MM);
 
   // Under the tools, above the picture. It started in the header beside the
   // width control - the two numbers do belong together - but the header is a
@@ -1509,7 +1517,8 @@ export function createSvgPrepWorkspace(containerEl) {
 
       const vb = parseViewBox(currentSvgMeta.viewBox);
       const vbWidth = vb ? vb.w : 0;
-      const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
+      const designWidthMm =
+        parseFloat(refs.designWidthInput.value) || DEFAULT_DESIGN_WIDTH_MM;
       const svgOffsets = offsets.map((mm) =>
         mmToSvgUnits(mm, vbWidth, designWidthMm)
       );
@@ -2585,7 +2594,8 @@ export function createSvgPrepWorkspace(containerEl) {
     if (!el || !el.pathData) return 0;
     const vb = parseViewBox(currentSvgMeta?.viewBox);
     if (!vb || !vb.w) return 0;
-    const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
+    const designWidthMm =
+      parseFloat(refs.designWidthInput.value) || DEFAULT_DESIGN_WIDTH_MM;
     const perUnit = designWidthMm / vb.w;
     try {
       const box = getPathBBox(el.pathData);
@@ -2896,7 +2906,8 @@ export function createSvgPrepWorkspace(containerEl) {
     // How thin the thinnest lines are, at the width this will be printed. The
     // measurement comes from the trace; the width comes from the control right
     // beside this sentence, so the two numbers are read together.
-    const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
+    const designWidthMm =
+      parseFloat(refs.designWidthInput.value) || DEFAULT_DESIGN_WIDTH_MM;
     const thin = thinLineSentence(
       callbacks.lineWidthPx,
       parseFloat(currentSvgMeta.width) || 0,

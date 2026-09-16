@@ -48,7 +48,9 @@ import {
   flattenCostFrom,
   flattenLayers,
   LAYER_EMIT_CAP,
+  wallRoleOverrides,
 } from '../../src/js/svg-preparer.js';
+import { separateColours } from '../../src/js/colour-separation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -2752,5 +2754,163 @@ describe('countTracedShapes (DP-43)', () => {
       '<desc>Made by M. Someone</desc>' +
       '<path id="MMM" fill="#000" d="M0 0L1 0Z"/></svg>';
     expect(countTracedShapes(svg)).toBe(1);
+  });
+});
+
+
+// ── D-137: what the Colours mode's wall becomes on a charm (DP-48 P1) ────────
+//
+// The owner's walk: a white logo on a navy ground came back as a black plate
+// with the logo cut out of it. The separation had marked the navy
+// data-background="true" and nothing read it; luminance alone decided, so the
+// dark wall was "Raised" and the light lettering was "Hole".
+//
+// The rule is signed (DP-Q53): the wall is left out, a patch of wall enclosed
+// by artwork is a hole, and every other color is raised.
+
+/** A drawing shaped exactly as `separateColours` writes one. */
+function separationSvg({ wallColor = '#4b2e83', inkColor = '#ffffff' } = {}) {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
+    // The wall: the whole canvas, and a counter inside the ring below.
+    `<path fill="${wallColor}" fill-rule="evenodd" data-colour="${wallColor}" ` +
+    'data-colour-name="Navy blue" data-background="true" ' +
+    'd="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+    `<path fill="${wallColor}" fill-rule="evenodd" data-colour="${wallColor}" ` +
+    'data-colour-name="Navy blue" data-background="true" ' +
+    'd="M40 40 L60 40 L60 60 L40 60 Z"/>' +
+    // The artwork: a light ring around that counter.
+    `<path fill="${inkColor}" fill-rule="evenodd" data-colour="${inkColor}" ` +
+    'data-colour-name="White" d="M30 30 L70 30 L70 70 L30 70 Z"/>' +
+    '</svg>'
+  );
+}
+
+/** A drawing shaped as the nine icons separate: ONE color, and it is "the wall". */
+function oneColourSeparationSvg() {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
+    '<path fill="#000000" fill-rule="evenodd" data-colour="#000000" ' +
+    'data-colour-name="Black" data-background="true" d="M10 10 L50 10 L50 50 L10 50 Z"/>' +
+    '<path fill="#000000" fill-rule="evenodd" data-colour="#000000" ' +
+    'data-colour-name="Black" data-background="true" d="M60 60 L90 60 L90 90 L60 90 Z"/>' +
+    '</svg>'
+  );
+}
+
+describe('the wall on a charm (D-137, DP-Q53)', () => {
+  it('leaves the wall out, cuts the counter, raises the artwork', () => {
+    const analysis = analyzeSvg(separationSvg());
+    const roles = analysis.elements.map((el) => el.autoRole);
+    // The canvas-sized wall path, the wall patch inside the ring, the ring.
+    expect(roles).toEqual(['ignore', 'hole', 'foreground']);
+  });
+
+  it('raises light artwork that luminance alone would have cut', () => {
+    // The whole defect in one assertion: white on navy. Before the rule, the
+    // white ring was a hole (luminance 255) and the navy wall was raised.
+    const analysis = analyzeSvg(separationSvg());
+    const ring = analysis.elements[2];
+    expect(ring.fill.toLowerCase()).toBe('#ffffff');
+    expect(ring.autoRole).toBe('foreground');
+  });
+
+  it('★ does NOTHING when the only color IS the wall (the nine icons)', () => {
+    // DP-48 P0, measured on all nine: a one-color drawing has the ARTWORK
+    // flagged as the background, because pickBackground returns index 0 when
+    // nothing polls better. A rule that fired here would empty them.
+    const analysis = analyzeSvg(oneColourSeparationSvg());
+    expect(analysis.elements.map((el) => el.autoRole)).toEqual([
+      'foreground',
+      'foreground',
+    ]);
+    expect(wallRoleOverrides(parseSvgElements(oneColourSeparationSvg()))).toEqual(
+      {}
+    );
+  });
+
+  it('★ keeps a wall path whole: its inner rings are ITS holes, not shapes', () => {
+    // The bug this guard exists for, found by LOOKING at the render: a traced
+    // region is one path whose inner rings are its holes, and the navy wall's
+    // inner rings ARE the letters. Deciding ring by ring made those letter
+    // rings "Hole", and the lettering came out drawn in outline. A path's
+    // outermost ring says where the path sits and every ring of it follows.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
+      // One wall path: the canvas, with a letter-shaped ring cut out of it.
+      '<path fill="#4b2e83" fill-rule="evenodd" data-colour="#4b2e83" ' +
+      'data-colour-name="Navy blue" data-background="true" ' +
+      'd="M0 0 L100 0 L100 100 L0 100 Z M20 20 L80 20 L80 80 L20 80 Z"/>' +
+      // The artwork that stands in that hole.
+      '<path fill="#ffffff" fill-rule="evenodd" data-colour="#ffffff" ' +
+      'data-colour-name="White" d="M20 20 L80 20 L80 80 L20 80 Z"/>' +
+      '</svg>';
+    const analysis = analyzeSvg(svg);
+    // Three rings: the canvas, the letter-shaped hole in the wall, the letter.
+    expect(analysis.elements).toHaveLength(3);
+    const roles = analysis.elements.map((el) => el.autoRole);
+    expect(roles[0]).toBe('ignore');
+    expect(roles[1], 'a hole in the wall must not become a shape').toBe(
+      'ignore'
+    );
+    expect(roles[2]).toBe('foreground');
+  });
+
+  it('leaves an ordinary drawing exactly as it was', () => {
+    const plain =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path fill="#000" d="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+      '<path fill="#fff" d="M40 40 L60 40 L60 60 L40 60 Z"/></svg>';
+    expect(wallRoleOverrides(parseSvgElements(plain))).toEqual({});
+    const analysis = analyzeSvg(plain);
+    // Luminance still decides: the black square is raised, the white one is
+    // a hole. No drawing without the separation's attributes changes at all.
+    expect(analysis.elements.map((el) => el.autoRole)).toEqual([
+      'foreground',
+      'hole',
+    ]);
+  });
+
+  it('★ runs on what separateColours actually writes, not on a hand-made copy', () => {
+    // The contract between the two modules, checked end to end: a light mark
+    // on a dark ground goes in as pixels and comes back as roles.
+    const w = 60;
+    const h = 60;
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const inMark = x >= 15 && x < 45 && y >= 15 && y < 45;
+        const inCounter = x >= 25 && x < 35 && y >= 25 && y < 35;
+        const light = inMark && !inCounter;
+        const o = (y * w + x) * 4;
+        data[o] = light ? 250 : 40;
+        data[o + 1] = light ? 250 : 40;
+        data[o + 2] = light ? 250 : 130;
+        data[o + 3] = 255;
+      }
+    }
+    const { svg, colours } = separateColours(
+      { data, width: w, height: h },
+      { count: 2 }
+    );
+    const wall = colours.find((c) => c.isBackground);
+    expect(wall, 'the separation marked no background').toBeTruthy();
+    const analysis = analyzeSvg(svg);
+    const roles = analysis.elements.map((el) => el.autoRole);
+    // Whatever the tracer's piece count, the dark ground is never raised and
+    // the light mark never cut.
+    expect(roles).toContain('ignore');
+    expect(roles).toContain('foreground');
+    expect(roles.filter((r) => r === 'ignore').length).toBeGreaterThan(0);
+
+    const byIndex = analysis.elements.map((el, i) => ({
+      i,
+      role: el.autoRole,
+      fill: (el.fill || '').toLowerCase(),
+    }));
+    const wallHex = wall.hex.toLowerCase();
+    const lightOnes = byIndex.filter((e) => e.fill !== wallHex);
+    expect(lightOnes.length).toBeGreaterThan(0);
+    for (const e of lightOnes) expect(e.role).toBe('foreground');
   });
 });

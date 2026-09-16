@@ -369,6 +369,82 @@ describe('extractInk', () => {
     expect(summary.inkCoverage).toBeCloseTo(4 / 16, 5)
   })
 
+  it('★ turns a light drawing on a COLORED dark page the right way up (D-139)', () => {
+    // The owner's CREATE logo in miniature: white lettering on navy. The navy
+    // is dark AND saturated, so the chroma gate rejects it - and the old rule,
+    // which asked whether the finished mask covered more than half the
+    // picture, saw an empty mask and left the drawing inside out. MEASURED on
+    // the real logo before this: 0 shapes traced, 0 % ink, an 85-byte SVG
+    // emitted as the design.
+    const NAVY = [75, 46, 131];
+    const img = imageFrom(['nnnn', 'nwwn', 'nwwn', 'nnnn'], {
+      n: NAVY,
+      w: WHITE,
+    });
+    const { summary } = extractInk(img, {
+      mode: 'lineart',
+      lightnessMax: INK_DEFAULTS.lightnessMax,
+      chromaMax: INK_DEFAULTS.chromaMax,
+      makeImageData,
+    });
+    expect(summary.inverted).toBe(true);
+    expect(summary.inkCoverage).toBeCloseTo(4 / 16, 5);
+  });
+
+  it('leaves a dark drawing on a light page exactly as it was', () => {
+    // The control, and the nine icons: nothing about the usual case moves.
+    const img = imageFrom(['wwww', 'wbbw', 'wbbw', 'wwww'], {
+      b: BLACK,
+      w: WHITE,
+    });
+    const { summary } = extractInk(img, {
+      mode: 'lineart',
+      lightnessMax: INK_DEFAULTS.lightnessMax,
+      chromaMax: INK_DEFAULTS.chromaMax,
+      makeImageData,
+    });
+    expect(summary.inverted).toBe(false);
+    expect(summary.inkCoverage).toBeCloseTo(4 / 16, 5);
+  });
+
+  it('★ leaves a dark glyph on a dark COLORED field alone', () => {
+    // The measurement that shaped the rule. This is the AAC card: a blue
+    // field with a dark glyph on it, and more than half of it is dark by
+    // lightness. An earlier version of the D-139 fix decided on lightness
+    // alone, turned this picture around, and threw away the glyph that is
+    // its whole point. What is special about the logo above is not that it
+    // is dark - it is that NOTHING survived both gates.
+    const img = imageFrom(['bbbb', 'bkkb', 'bkkb', 'bbbb'], {
+      b: BLUE,
+      k: BLACK,
+    });
+    const { summary } = extractInk(img, {
+      mode: 'lineart',
+      lightnessMax: INK_DEFAULTS.lightnessMax,
+      chromaMax: INK_DEFAULTS.chromaMax,
+      makeImageData,
+    });
+    expect(summary.inverted).toBe(false);
+    // The glyph is the drawing: four pixels of it, and not the twelve of
+    // field around it.
+    expect(summary.inkCoverage).toBeCloseTo(4 / 16, 5);
+  });
+
+  it('never turns around a picture whose other side is the whole page', () => {
+    // A blank page keeps nothing, and "nothing" is the honest answer: the
+    // swap is taken only when it finds a drawing, and everything is not a
+    // drawing. This is what keeps an empty conversion empty (D-139).
+    const img = imageFrom(Array(6).fill('w'.repeat(6)), { w: WHITE });
+    const { summary } = extractInk(img, {
+      mode: 'lineart',
+      lightnessMax: INK_DEFAULTS.lightnessMax,
+      chromaMax: INK_DEFAULTS.chromaMax,
+      makeImageData,
+    });
+    expect(summary.inverted).toBe(false);
+    expect(summary.inkCoverage).toBe(0);
+  });
+
   it('warns when the result is very nearly empty', () => {
     const img = imageFrom(Array(20).fill('w'.repeat(20)), { w: WHITE })
     const { summary } = extractInk(img, {

@@ -47,6 +47,18 @@ async function choosePicture(page, size = 2000, kind = 'noise') {
         ctx.fillRect(0, 0, n, n);
         ctx.fillStyle = '#000000';
         ctx.fillRect(n * 0.25, n * 0.25, n * 0.5, n * 0.5);
+      } else if (kind === 'lightOnDark') {
+        // The class of picture the owner brought (D-139): a light drawing on
+        // a dark, SATURATED ground. The navy is the one from their logo.
+        ctx.fillStyle = '#4b2e83';
+        ctx.fillRect(0, 0, n, n);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(n * 0.2, n * 0.4, n * 0.6, n * 0.2);
+        ctx.fillRect(n * 0.4, n * 0.2, n * 0.2, n * 0.6);
+      } else if (kind === 'blank') {
+        // A picture with nothing in it at all.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, n, n);
       } else {
         const img = ctx.createImageData(n, n);
         // A deterministic pseudo-random field: the same picture every run, so a
@@ -120,6 +132,30 @@ const panel = (page) => ({
   running: page.locator('.trace-progress-running').first(),
   info: page.locator('.file-info').first(),
 });
+
+/**
+ * Get a picture converted, whichever way this machine goes about it.
+ *
+ * A picture under half a megapixel usually starts by itself (DP-Q32) - but the
+ * quick look makes that call from a PREDICTION, and on a slow machine it
+ * declines and waits to be asked. MEASURED at 6x CPU throttling: the same
+ * picture that converts by itself in 1.0 s at 4x sits at "Ready to convert"
+ * with a Start button, ninety seconds later still. A test that presses Start
+ * once, the instant the file goes in, is a test that passes on a fast machine
+ * and times out on a CI runner - which is exactly what it did.
+ */
+async function convertNow(page, p, timeout = 180_000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const info = (await p.info.textContent().catch(() => '')) || '';
+    if (/converted from|nothing was kept/i.test(info)) return;
+    const offered =
+      (await p.start.isVisible().catch(() => false)) &&
+      (await p.start.textContent().catch(() => '')) === 'Start conversion';
+    if (offered) await p.start.click({ noWaitAfter: true }).catch(() => {});
+    await page.waitForTimeout(1000);
+  }
+}
 
 test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
   // ★ RE-WRITTEN at DP-43, and the reason is a measurement worth keeping.
@@ -339,6 +375,69 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.note).toHaveJSProperty('tagName', 'P');
     expect(await p.note.getAttribute('aria-live')).toBeNull();
     expect(await p.note.getAttribute('role')).toBeNull();
+  });
+
+  test('★ a light drawing on a dark ground is turned around, not thrown away (D-139)', async ({
+    page,
+  }) => {
+    test.slow();
+    test.setTimeout(300_000);
+    await openCharm(page);
+    await choosePicture(page, 600, 'lightOnDark');
+    const p = panel(page);
+    await convertNow(page, p);
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const v = window.stateManager?.getState()?.parameters?.design_file;
+            return v && typeof v === 'object' ? v.name : v;
+          }),
+        { timeout: 120_000 }
+      )
+      .toContain('.svg');
+
+    // Before D-139 this traced to NOTHING: the chroma gate threw the navy
+    // away first, so the old "more than half is ink, turn it around" rule
+    // never fired, and an 85-byte empty drawing was emitted as the design.
+    const summary = await page
+      .locator('.ink-controls-summary')
+      .first()
+      .textContent();
+    expect(summary).not.toMatch(/^0 shapes traced/);
+    expect(summary).toMatch(/turned around/i);
+  });
+
+  test('★ a conversion that keeps nothing is not emitted, and not called ready (D-139)', async ({
+    page,
+  }) => {
+    test.slow();
+    test.setTimeout(300_000);
+    await openCharm(page);
+    await choosePicture(page, 600, 'blank');
+    const p = panel(page);
+    await convertNow(page, p);
+
+    // The control says what happened...
+    await expect
+      .poll(async () => (await p.info.textContent()) || '', {
+        timeout: 120_000,
+      })
+      .toMatch(/nothing was kept/i);
+
+    // ...the design is untouched, so the charm is still whatever it was...
+    const design = await page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file;
+      return v && typeof v === 'object' ? v.name : v;
+    });
+    expect(design, `design_file after an empty conversion: ${design}`).toBeFalsy();
+
+    // ...and nothing anywhere calls an empty drawing ready.
+    const badges = await page
+      .locator('.svg-prep-status-badge')
+      .allTextContents();
+    expect(badges.join(' | ')).not.toMatch(/SVG Ready/);
   });
 
   test('a picture small enough to be over in a moment starts itself, through the same bar', async ({

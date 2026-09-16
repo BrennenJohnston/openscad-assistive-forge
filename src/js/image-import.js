@@ -26,6 +26,21 @@ export const IMAGE_IMPORT_LIMITS = {
 };
 
 /**
+ * Below this share of the picture, a color a RELIEF host found is the edge
+ * between two others rather than a color of its own, and `keepAboveShare`
+ * folds it into the nearer of them (D-138).
+ *
+ * PROPOSED at 2 %, and the value is the owner's to set (DP-Q54): it is a
+ * public default and it decides what a person is offered to paint. MEASURED
+ * on the owner's CREATE logo: navy 83 %, white 12 %, and four ramp colors of
+ * 1 % each that between them carried three quarters of the shapes.
+ *
+ * A STENCIL never passes it: that lane is painted by hand, and a cat's green
+ * eyes at under a percent are the point of it.
+ */
+export const RELIEF_COLOUR_SHARE_FLOOR = 0.02;
+
+/**
  * imagetracerjs options tuned for monochrome logo tracing.
  * posterized1 preset (2 colors) with stroke disabled.
  *
@@ -134,6 +149,7 @@ export async function convertImageDataToSvg(imageData, options = {}) {
     const first = separateColours(pixels, {
       count: ink.colourCount ?? 6,
       mmPerPixel: ink.mmPerPixel ?? 0,
+      shareFloor: ink.shareFloor ?? 0,
       nameFor: (c) =>
         colourLabel(
           `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`
@@ -151,6 +167,7 @@ export async function convertImageDataToSvg(imageData, options = {}) {
         ? separateColours(pixels, {
             count: ink.colourCount ?? 6,
             mmPerPixel: ink.mmPerPixel ?? 0,
+            shareFloor: ink.shareFloor ?? 0,
             backgroundIndex: first.colours[chosen].index,
             nameFor: (c) =>
               colourLabel(
