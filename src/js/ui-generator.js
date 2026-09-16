@@ -122,12 +122,18 @@ export function getOpenGroupIdsFromDOM(container) {
 }
 
 /**
- * Format a parameter name for display (replaces underscores with spaces)
- * @param {string} name - Parameter name
+ * Format a parameter name for display: the tile's @label when it has one,
+ * otherwise the parameter name with underscores as spaces
+ * @param {Object|string} param - Parameter definition, or a bare parameter name
  * @returns {string} Formatted name
  */
-function formatParamName(name) {
-  return name.replace(/_/g, ' ');
+function formatParamName(param) {
+  if (param && typeof param === 'object') {
+    return param.label || String(param.name ?? '').replace(/_/g, ' ');
+  }
+
+  const name = String(param ?? '');
+  return parameterMetadata[name]?.label || name.replace(/_/g, ' ');
 }
 
 /**
@@ -154,12 +160,12 @@ function createLabelContainer(param, options = {}) {
   if (useLabel) {
     const label = document.createElement('label');
     label.htmlFor = `param-${param.name}`;
-    label.textContent = formatParamName(param.name);
+    label.textContent = formatParamName(param);
     labelContainer.appendChild(label);
   } else {
     const labelText = document.createElement('span');
     labelText.className = 'param-label-text';
-    labelText.textContent = formatParamName(param.name);
+    labelText.textContent = formatParamName(param);
     labelContainer.appendChild(labelText);
   }
 
@@ -509,7 +515,10 @@ function findParamControl(paramName, labelHint = null) {
       const lbl = String(meta?.label || '')
         .trim()
         .toLowerCase();
-      if (lbl && lbl === hint) {
+      // A hint can be the tile's label or the parameter name itself, because a
+      // labelled dial no longer shows its name anywhere.
+      const spacedName = name.replace(/_/g, ' ').toLowerCase();
+      if ((lbl && lbl === hint) || spacedName === hint) {
         const byLabel = document.querySelector(
           `.param-control[data-param-name="${name}"]`
         );
@@ -811,7 +820,7 @@ function createHelpTooltip(param) {
   const button = document.createElement('button');
   button.className = 'param-help-button';
   button.type = 'button';
-  button.setAttribute('aria-label', `Help for ${formatParamName(param.name)}`);
+  button.setAttribute('aria-label', `Help for ${formatParamName(param)}`);
   button.setAttribute('aria-expanded', 'false');
   // WCAG: Link trigger to tooltip content for SR announcement
   button.setAttribute('aria-describedby', tooltipId);
@@ -1187,7 +1196,7 @@ function createSliderControl(param, onChange) {
   input.setAttribute('aria-valuemin', param.minimum);
   input.setAttribute('aria-valuemax', param.maximum);
   input.setAttribute('aria-valuenow', param.default);
-  input.setAttribute('aria-label', `${formatParamName(param.name)} slider`);
+  input.setAttribute('aria-label', `${formatParamName(param)} slider`);
 
   // Create editable spinbox for precise value entry
   const spinbox = document.createElement('input');
@@ -1207,7 +1216,7 @@ function createSliderControl(param, onChange) {
   );
   spinbox.setAttribute(
     'aria-label',
-    `${formatParamName(param.name)} value${param.unit ? ' in ' + param.unit : ''}, editable`
+    `${formatParamName(param)} value${param.unit ? ' in ' + param.unit : ''}, editable`
   );
   // Link slider and spinbox for screen readers
   spinbox.setAttribute('aria-describedby', `param-${param.name}`);
@@ -1373,10 +1382,10 @@ function createParameterResetButton(param, onChange) {
   resetBtn.type = 'button';
   resetBtn.className = 'param-reset-btn';
   resetBtn.textContent = '↩';
-  resetBtn.title = `Reset ${formatParamName(param.name)} to default`;
+  resetBtn.title = `Reset ${formatParamName(param)} to default`;
   resetBtn.setAttribute(
     'aria-label',
-    `Reset ${formatParamName(param.name)} to default value`
+    `Reset ${formatParamName(param)} to default value`
   );
   resetBtn.dataset.paramName = param.name;
 
@@ -1444,7 +1453,7 @@ function createNumberInput(param, onChange) {
   input.value = param.default;
   input.setAttribute(
     'aria-label',
-    `Enter ${formatParamName(param.name)}${param.unit ? ' in ' + param.unit : ''}`
+    `Enter ${formatParamName(param)}${param.unit ? ' in ' + param.unit : ''}`
   );
 
   // Only apply limits if not unlocked
@@ -1540,7 +1549,7 @@ function createSelectControl(param, onChange) {
 
   const select = document.createElement('select');
   select.id = `param-${param.name}`;
-  select.setAttribute('aria-label', `Select ${formatParamName(param.name)}`);
+  select.setAttribute('aria-label', `Select ${formatParamName(param)}`);
 
   param.enum.forEach((item) => {
     const option = document.createElement('option');
@@ -1605,13 +1614,13 @@ function createToggleControl(param, onChange) {
   input.id = `param-${param.name}`;
   input.setAttribute('role', 'switch');
   input.checked = isChecked;
-  input.setAttribute('aria-label', `Toggle ${formatParamName(param.name)}`);
+  input.setAttribute('aria-label', `Toggle ${formatParamName(param)}`);
   input.setAttribute('aria-checked', String(isChecked));
 
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
   label.className = 'toggle-label';
-  label.textContent = formatParamName(param.name);
+  label.textContent = formatParamName(param);
 
   input.addEventListener('change', (e) => {
     // Return appropriate value type based on parameter type
@@ -1653,7 +1662,7 @@ function createTextInput(param, onChange) {
   input.type = 'text';
   input.id = `param-${param.name}`;
   input.value = param.default;
-  input.setAttribute('aria-label', `Enter ${formatParamName(param.name)}`);
+  input.setAttribute('aria-label', `Enter ${formatParamName(param)}`);
 
   // Apply maxLength if specified (OpenSCAD Customizer format: //8)
   if (param.maxLength && param.maxLength > 0) {
@@ -1729,7 +1738,7 @@ function createColorControl(param, onChange) {
   colorInput.className = 'color-picker';
   colorInput.setAttribute(
     'aria-label',
-    `Select color for ${formatParamName(param.name)}`
+    `Select color for ${formatParamName(param)}`
   );
 
   const hexInput = document.createElement('input');
@@ -1740,7 +1749,7 @@ function createColorControl(param, onChange) {
   hexInput.maxLength = 6;
   hexInput.setAttribute(
     'aria-label',
-    `Hex color code for ${formatParamName(param.name)}`
+    `Hex color code for ${formatParamName(param)}`
   );
 
   const preview = document.createElement('div');
@@ -2217,7 +2226,7 @@ function createFileControl(
   fileInput.className = 'file-input';
   fileInput.setAttribute(
     'aria-label',
-    `Upload file for ${formatParamName(param.name)}`
+    `Upload file for ${formatParamName(param)}`
   );
 
   // Set accepted file types if specified
@@ -2233,7 +2242,7 @@ function createFileControl(
   fileButton.textContent = '📁 Choose File';
   fileButton.setAttribute(
     'aria-label',
-    `Choose file for ${formatParamName(param.name)}`
+    `Choose file for ${formatParamName(param)}`
   );
 
   const fileInfo = document.createElement('div');
@@ -2265,7 +2274,7 @@ function createFileControl(
   clearButton.title = 'Clear file';
   clearButton.setAttribute(
     'aria-label',
-    `Clear file for ${formatParamName(param.name)}`
+    `Clear file for ${formatParamName(param)}`
   );
   clearButton.style.display = 'none';
 
@@ -3580,7 +3589,7 @@ function createVectorControl(param, onChange) {
   // Create legend (acts like label for fieldset)
   const legend = document.createElement('legend');
   legend.className = 'parameter-label';
-  legend.textContent = formatParamName(param.name);
+  legend.textContent = formatParamName(param);
 
   // Add help button if description exists
   const helpTooltip = createHelpTooltip(param);
@@ -3606,7 +3615,7 @@ function createVectorControl(param, onChange) {
   vectorInputs.setAttribute('role', 'group');
   vectorInputs.setAttribute(
     'aria-label',
-    `Vector parameter ${formatParamName(param.name)}`
+    `Vector parameter ${formatParamName(param)}`
   );
 
   // Store original limits for unlock functionality
@@ -3804,7 +3813,7 @@ function createRawControl(param, onChange) {
       : param.default);
   input.setAttribute(
     'aria-label',
-    `Enter ${formatParamName(param.name)} as OpenSCAD expression`
+    `Enter ${formatParamName(param)} as OpenSCAD expression`
   );
 
   // Add warning if parsing failed
@@ -3948,7 +3957,7 @@ export function renderParameterUI(
 
     // Store metadata for search functionality
     parameterMetadata[param.name] = {
-      label: formatParamName(param.name),
+      label: formatParamName(param),
       description: param.description || '',
       group: param.group,
       type: param.type,

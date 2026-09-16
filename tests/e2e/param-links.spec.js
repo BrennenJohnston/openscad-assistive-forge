@@ -228,3 +228,77 @@ test.describe('Shared parameter links', () => {
     await expect(page.locator('#param-width')).toHaveValue('88')
   })
 })
+
+// DP-44: a tile can name a dial with @label(...) so the customizer stops
+// repeating the group's word on every control. The parameter NAME is
+// untouched, which is the whole point: a link, a preset and a project all
+// still carry design_scale.
+test.describe('Dial labels from the tile', () => {
+  async function openCharm(page, fragment = '') {
+    await page.goto(`/?example=q-charm${fragment}`)
+    await expect
+      .poll(() => page.locator('#param-design_scale').count(), {
+        timeout: 120000,
+      })
+      .toBeGreaterThan(0)
+    const notNow = page.locator('#saveProjectNotNow')
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 2000 })
+      await notNow.click()
+      await notNow.waitFor({ state: 'hidden', timeout: 3000 })
+    } catch {
+      // The save prompt only appears on some runs; its absence is fine.
+    }
+    await page.evaluate(() => {
+      document
+        .querySelectorAll('details.param-group')
+        .forEach((d) => (d.open = true))
+    })
+  }
+
+  // A file parameter draws its name into a span and carries no
+  // data-param-name, so the control is found by the input it holds and the
+  // name read from whichever of the two elements it has.
+  const labelOf = (page, name) =>
+    page
+      .locator('.param-control')
+      .filter({ has: page.locator(`#param-${name}`) })
+      .first()
+      .locator('label, .param-label-text')
+      .first()
+
+  test('the Design group reads its short labels', async ({ page }) => {
+    await openCharm(page)
+
+    await expect(labelOf(page, 'design_file')).toHaveText('Image file')
+    await expect(labelOf(page, 'design_scale')).toHaveText('Scale')
+    await expect(labelOf(page, 'design_offset')).toHaveText('Offset')
+    await expect(labelOf(page, 'design_left_right')).toHaveText('Left / right')
+    await expect(labelOf(page, 'design_up_down')).toHaveText('Up / down')
+    await expect(labelOf(page, 'design_rotation')).toHaveText('Rotation')
+  })
+
+  test('a dial with no label still reads its own name', async ({ page }) => {
+    await openCharm(page)
+
+    await expect(labelOf(page, 'charm_width')).toHaveText('charm width')
+  })
+
+  test('the slider is named by the label for a screen reader', async ({
+    page,
+  }) => {
+    await openCharm(page)
+
+    await expect(page.locator('#param-design_scale')).toHaveAttribute(
+      'aria-label',
+      'Scale slider'
+    )
+  })
+
+  test('a shared link still carries the parameter name', async ({ page }) => {
+    await openCharm(page, payload({ design_scale: 80 }))
+
+    await expect(page.locator('#param-design_scale')).toHaveValue('80')
+    await expect(labelOf(page, 'design_scale')).toHaveText('Scale')
+  })
+})

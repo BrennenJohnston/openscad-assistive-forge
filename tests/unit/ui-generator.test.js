@@ -698,6 +698,93 @@ describe('UI Generator', () => {
     });
   });
 
+  describe('Dial labels from the tile (@label)', () => {
+    const labelledSchema = () =>
+      buildParams({
+        groups: [{ id: 'Design', label: 'Design', order: 0 }],
+        params: [
+          {
+            name: 'design_scale',
+            label: 'Scale',
+            type: 'number',
+            default: 60,
+            uiType: 'slider',
+            min: 10,
+            max: 110,
+            step: 5,
+            group: 'Design',
+          },
+          {
+            name: 'design_style',
+            label: 'Style',
+            type: 'string',
+            default: 'raised',
+            uiType: 'select',
+            enum: ['raised', 'engraved'],
+            group: 'Design',
+          },
+          {
+            name: 'design_up_down',
+            type: 'number',
+            default: 0,
+            uiType: 'input',
+            group: 'Design',
+          },
+        ],
+      });
+
+    it('shows the label instead of the parameter name', () => {
+      renderParameterUI(labelledSchema(), container, vi.fn(), {});
+
+      const scale = container.querySelector(
+        '.param-control[data-param-name="design_scale"]'
+      );
+      expect(scale.querySelector('label').textContent).toBe('Scale');
+    });
+
+    it('falls back to the spaced parameter name when there is no label', () => {
+      renderParameterUI(labelledSchema(), container, vi.fn(), {});
+
+      const upDown = container.querySelector(
+        '.param-control[data-param-name="design_up_down"]'
+      );
+      expect(upDown.querySelector('label').textContent).toBe('design up down');
+    });
+
+    it('names the slider and its spinbox by the label', () => {
+      renderParameterUI(labelledSchema(), container, vi.fn(), {});
+
+      const scale = container.querySelector(
+        '.param-control[data-param-name="design_scale"]'
+      );
+      const slider = scale.querySelector('input[type="range"]');
+      const spinbox = scale.querySelector('input[type="number"]');
+      expect(slider.getAttribute('aria-label')).toBe('Scale slider');
+      expect(spinbox.getAttribute('aria-label')).toContain('Scale value');
+    });
+
+    it('names a select by the label', () => {
+      renderParameterUI(labelledSchema(), container, vi.fn(), {});
+
+      const style = container.querySelector(
+        '.param-control[data-param-name="design_style"]'
+      );
+      expect(style.querySelector('select').getAttribute('aria-label')).toBe(
+        'Select Style'
+      );
+    });
+
+    it('keeps the parameter name searchable', () => {
+      renderParameterUI(labelledSchema(), container, vi.fn(), {});
+
+      const scale = container.querySelector(
+        '.param-control[data-param-name="design_scale"]'
+      );
+      expect(scale).not.toBeNull();
+      expect(scale.dataset.paramName).toBe('design_scale');
+    });
+  })
+
   describe('Accessibility and Defaults', () => {
     it('sets aria-label for sliders', () => {
       const schema = buildParams({
