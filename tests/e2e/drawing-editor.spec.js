@@ -863,3 +863,140 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     await expect(page.locator('.drawing-editor-view-switch')).toBeHidden()
   })
 })
+
+test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
+  // ★ This is where the defect the owner met actually lived. The door host
+  // fills the page, so its toolbar had room; the charm host's editor is
+  // 692 px at a 1280 window with the customizer open, and there the workspace
+  // footer wrapped to two lines because the Apply hint sentence is 418 px, and
+  // Close fell to a THIRD line of its own at y 279. MEASURED before this on
+  // the owner's own picture. The guard opens the editor where they open it.
+  const NESTED = path.join(
+    process.cwd(),
+    'tests',
+    'fixtures',
+    'svg-edit',
+    'nested-squares.svg'
+  )
+
+  async function openCharmEditor(page) {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.selectOption('#charmVariantSelect', 'q-charm')
+    await page.click('#openCharmMakerBtn')
+    await page.waitForFunction(
+      () =>
+        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+        0,
+      null,
+      { timeout: 120000 }
+    )
+    for (let i = 0; i < 2; i++) {
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click()
+        await page.waitForTimeout(300)
+      }
+    }
+    await page.setInputFiles('#param-design_file', NESTED)
+    await page.evaluate(() => {
+      let d = document.querySelector('#param-design_file')?.closest('details')
+      while (d) {
+        d.open = true
+        d = d.parentElement?.closest('details')
+      }
+    })
+    const door = page
+      .getByRole('button', { name: 'Open the drawing editor' })
+      .first()
+    await door.waitFor({ state: 'visible', timeout: 60000 })
+    await door.scrollIntoViewIfNeeded()
+    await door.click({ timeout: 30000 })
+    await expect(
+      page.locator('.svg-prep-result-pane svg').first()
+    ).toBeVisible({ timeout: 90000 })
+  }
+
+  test('★ two rows, Close on the first, at the editor\'s real width', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    const shape = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.drawing-editor-toolbar-row')]
+        .filter((row) => row.getClientRects().length > 0)
+        .map((row) => Math.round(row.getBoundingClientRect().height))
+      const close = document.querySelector('.drawing-editor-close')
+      const header = document.querySelector(
+        '.drawing-editor-toolbar-row--header'
+      )
+      const toolbar = document.querySelector('.drawing-editor-toolbar')
+      return {
+        rows,
+        editorWidth: Math.round(
+          document.querySelector('.drawing-editor').getBoundingClientRect().width
+        ),
+        toolbarHeight: Math.round(toolbar.getBoundingClientRect().height),
+        closeOnRow1:
+          close.getBoundingClientRect().bottom <=
+          header.getBoundingClientRect().bottom + 1,
+      }
+    })
+
+    // The width the owner sees, not the window's.
+    expect(shape.editorWidth).toBeLessThan(800)
+    expect(shape.rows.length).toBe(2)
+    for (const height of shape.rows) expect(height).toBeLessThan(60)
+    // It was 170 px of header alone, plus a wrapped footer under it.
+    expect(shape.toolbarHeight).toBeLessThan(120)
+    expect(shape.closeOnRow1).toBe(true)
+  })
+
+  test('★ the toolbar does not move when the Apply hint goes', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmEditor(page)
+
+    const toolbarHeight = () =>
+      page.evaluate(() =>
+        Math.round(
+          document
+            .querySelector('.drawing-editor-toolbar')
+            .getBoundingClientRect().height
+        )
+      )
+
+    // The hint comes and goes as the flatten finishes and as a choice
+    // changes; on a small drawing it may be gone before the editor is even
+    // looked at. What matters is that the TOOLBAR does not care either way.
+    // It used to: the hint's 418 px sentence wrapped the button row, and when
+    // it went the row reflowed and lifted Close back up, so the layout moved
+    // while a person worked.
+    const setHint = (hidden) =>
+      page.evaluate((h) => {
+        document.querySelector('.svg-prep-apply-hint').hidden = h
+      }, hidden)
+
+    await setHint(true)
+    await page.waitForTimeout(200)
+    const without = await toolbarHeight()
+
+    await setHint(false)
+    await page.waitForTimeout(200)
+    const withHint = await toolbarHeight()
+
+    expect(withHint).toBe(without)
+    // And the sentence is on screen either way, in the status line.
+    await expect(
+      page.locator('.drawing-editor-statusline .svg-prep-apply-hint')
+    ).toHaveCount(1)
+  })
+})

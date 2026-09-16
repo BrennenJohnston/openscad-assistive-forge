@@ -60,6 +60,17 @@ export const EDITOR_STRINGS = Object.freeze({
   panelToggle: 'Regions',
 
   /**
+   * DP-46: the toolbar's overflow. Three controls a person reaches for now
+   * and then - Compare with original, Show roles, Design width - live behind
+   * it so the working row holds its actions on one line at the editor's real
+   * width (692 px at a 1280 window with the customizer open). A11Y: the
+   * button carries aria-expanded and aria-controls, and the panel it opens
+   * sits in the flow under the row rather than over the drawing.
+   */
+  moreTools: 'More',
+  moreToolsLabel: 'More editor tools',
+
+  /**
    * DP-38: the two-state switch between the drawing and the thing it makes.
    *
    * A real radio group, not a button that toggles: there are two named
