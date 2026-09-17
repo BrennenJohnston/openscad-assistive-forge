@@ -19,6 +19,9 @@ import { analyzeSvg } from './svg-preparer.js';
 import { removeCreditLine } from './credit-line.js';
 import { loadImageData, IMAGE_IMPORT_LIMITS } from './image-import.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
+import { createConversionJob } from './conversion-job.js';
+import { createConversionDialog } from './conversion-dialog.js';
+import { COST_BANDS } from './quick-look.js';
 
 // DP-34: the door's FIRST trace, the one that happens while the editor is
 // still being opened. It runs in the worker like every other trace, so a big
@@ -179,9 +182,56 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
   // until the editor exists. DP-37 gives this door a picture first, and the
   // bar and Cancel belong with it.
   let traceRunner = null;
-  const runTrace = (imageData, ink) => {
+  // DP-52: the door's traces run through the same job and dialog as the
+  // charm host's. The dialog closes BEFORE the editor opens: the editor traps
+  // focus itself and says it has opened, neither of which can happen behind an
+  // inert page. So its last stage is not shown here, and the sentence for it
+  // stays proposed.
+  let conversionDialog = null;
+  let conversionJob = null;
+  const ensureConversion = () => {
     if (!traceRunner) traceRunner = createTraceRunner();
-    return traceRunner.start(imageData, ink);
+    if (!conversionDialog) {
+      conversionDialog = createConversionDialog({
+        onCancel: () => {
+          if (conversionJob) conversionJob.cancel();
+          say('Conversion canceled');
+        },
+      });
+    }
+    if (!conversionJob) {
+      conversionJob = createConversionJob({
+        runner: traceRunner,
+        onStage: (s) => conversionDialog.stage(s),
+      });
+    }
+    return { job: conversionJob, dialog: conversionDialog };
+  };
+  /**
+   * Trace pixels behind the dialog. `startedBy` follows the charm host's
+   * rule: a person's own act shows the dialog at once, a re-trace after a
+   * slider move shows it only once it has run for the quick band.
+   */
+  const runTrace = async (imageData, ink, { startedBy = 'person' } = {}) => {
+    const { job, dialog } = ensureConversion();
+    let graceTimer = null;
+    if (startedBy === 'person') dialog.open(currentFileName);
+    else {
+      graceTimer = setTimeout(() => {
+        if (job.isRunning()) dialog.open(currentFileName);
+      }, COST_BANDS.quickMs);
+    }
+    try {
+      return await job.run({
+        imageData,
+        settings: ink,
+        prepare: (traced) => traced,
+        update: (traced) => traced,
+      });
+    } finally {
+      clearTimeout(graceTimer);
+      dialog.close();
+    }
   };
   let container = null;
   let workspace = null;
@@ -392,7 +442,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     if (!currentImageData) return;
     if (inkControls) inkControls.setBusy(true);
     try {
-      const { svg, summary } = await runTrace(currentImageData, settings);
+      const { svg, summary } = await runTrace(currentImageData, settings, {
+        startedBy: 'self',
+      });
       await showSvg(svg, { summary, removeCredit: true });
     } catch (error) {
       // A trace the person superseded by moving another slider is not a
@@ -415,8 +467,23 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       if (fileExtension(file.name) === 'dxf') {
         say(`Converting ${file.name} to a drawing Forge can edit.`);
       }
-      prepared = await svgTextForFile(file, { mode: 'lineart' }, render);
+      if (RASTER_EXTENSIONS.includes(fileExtension(file.name))) {
+        // A picture: through the job and the dialog. Choosing Edit Drawing
+        // IS the deliberate act, so the dialog opens at once.
+        currentFileName = file.name;
+        const imageData = await loadImageData(await readAsDataUrl(file));
+        const { svg, summary } = await runTrace(
+          imageData,
+          { mode: 'lineart' },
+          { startedBy: 'person' }
+        );
+        prepared = { svg, traced: true, imageData, summary };
+      } else {
+        prepared = await svgTextForFile(file, { mode: 'lineart' }, render);
+      }
     } catch (error) {
+      // The person stopped it; the dialog's own Cancel has already said so.
+      if (error instanceof TraceCancelled) return false;
       fail(error.message);
       return false;
     }

@@ -14829,18 +14829,6 @@ body.tutorial-body-locked {
   margin-top: var(--space-sm);
 }
 
-.trace-progress-running {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.trace-progress-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
-  font-weight: 600;
-}
-
 .trace-progress-bar {
   width: 100%;
   height: 10px;
@@ -14901,8 +14889,42 @@ body.tutorial-body-locked {
   color: var(--color-text-secondary);
 }
 
-.trace-progress-cancel {
+/* DP-52: the conversion dialog. The bar, the stage sentence and Cancel moved
+   here from the inline panel: one place for the progress, in front of the page
+   the job has made unavailable. The overlay and the box are the app's own
+   modal classes; what is set here is the stack inside the box. */
+/* No backdrop blur on THIS overlay. The dialog stands over the live 3D canvas
+   while a slow machine is already busy, and a blur over a WebGL surface is
+   paid again on every frame; MEASURED at 4x CPU, the first frames after the
+   overlay appeared took 200 to 500 ms with the blur and 10 to 20 ms without.
+   A darker plain overlay says the same thing for nothing. */
+.conversion-dialog .modal-overlay {
+  background: rgba(12, 12, 12, 0.7);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.conversion-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.conversion-dialog-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.conversion-dialog-bar {
+  margin-top: var(--space-xs);
+}
+
+.conversion-dialog-cancel {
   align-self: flex-start;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* Reduced, not removed. MDN's own guidance keeps a subtle indeterminate motion

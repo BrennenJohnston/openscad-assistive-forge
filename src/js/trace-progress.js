@@ -1,5 +1,5 @@
 /**
- * Start, a bar that moves, and Cancel.
+ * Start, and the quick look's sentence above it.
  *
  * Choosing a picture used to begin converting it immediately, with the words
  * "Converting to SVG..." as the only sign anything was happening and no way to
@@ -7,56 +7,40 @@
  * back. Both other tools people know do it the other way round: Illustrator
  * waits for Image Trace and then Expand, Inkscape waits for Update or OK.
  *
- * So: the person starts it, the bar says which stage it has reached, and
- * Cancel works at any moment.
+ * So: the person starts it. The bar, the stage sentence and Cancel used to
+ * live here too; since DP-52 they live in the conversion dialog
+ * (conversion-dialog.js), which stands in front of the page for the whole
+ * job - one place for the progress, never two. What stays here is the Start
+ * button, the quick look's note, and the busy mark on the region while a
+ * conversion runs.
  *
  * Accessibility, deliberately:
  *
- *   - A native <progress>, not a div wearing role="progressbar". It carries an
- *     accessible name of its own and the browser already knows what it is.
- *   - Indeterminate (no `value`) because imagetracerjs offers no progress hook;
- *     what moves is the STAGE, and that is reported honestly rather than as a
- *     fake percentage. The element gets `value` only across stages, where the
- *     count really is known.
- *   - The stage sentence is VISIBLE and is not announced. DP-32's law: one
- *     action, one announcement. Start, cancel and completion speak; the
- *     progress line does not, or a single conversion would say four things.
- *   - The region carries aria-busy while it works, and aria-describedby points
- *     at the bar, so a screen reader that lands inside is told why the content
- *     is not settled.
- *   - Under prefers-reduced-motion the bar is de-emphasised rather than
- *     removed: it still changes, because a person who asked for less motion
- *     did not ask to be left guessing.
+ *   - The quick look's sentence is a plain paragraph: never a modal, never a
+ *     warning the person cannot act on, and never something that has to be
+ *     dismissed before they can get on.
+ *   - The region carries aria-busy while a conversion runs, so a screen
+ *     reader that lands inside is told the content is not settled.
  *
  * @license GPL-3.0-or-later
  */
 
-/** What each worker stage is called, for the person watching. */
-const STAGE_TEXT = {
-  reading: 'Reading the picture',
-  ink: 'Finding the ink',
-  tracing: 'Tracing the shapes',
-};
-
 let panelSeq = 0;
 
 /**
- * Build the Start / progress / Cancel panel for one file control.
+ * Build the Start panel for one file control.
  *
  * @param {object} handlers
  * @param {Function} handlers.onStart - Called when the person presses Start
- * @param {Function} handlers.onCancel - Called when the person presses Cancel
  * @returns {object} The panel and the calls that drive it
  */
-export function createTraceProgress({ onStart, onCancel }) {
+export function createTraceProgress({ onStart }) {
   const id = `trace-progress-${++panelSeq}`;
 
   const root = document.createElement('div');
   root.className = 'trace-progress';
 
-  // The quick look's sentence, above Start. It is a plain paragraph: never a
-  // modal, never a warning the person cannot act on, and never something that
-  // has to be dismissed before they can get on.
+  // The quick look's sentence, above Start.
   const note = document.createElement('p');
   note.className = 'trace-progress-note';
   note.id = `${id}-note`;
@@ -68,74 +52,21 @@ export function createTraceProgress({ onStart, onCancel }) {
   startButton.textContent = 'Start conversion';
   startButton.addEventListener('click', () => onStart && onStart());
 
-  const running = document.createElement('div');
-  running.className = 'trace-progress-running';
-  running.hidden = true;
-
-  const label = document.createElement('label');
-  label.className = 'trace-progress-label';
-  label.id = `${id}-label`;
-  label.setAttribute('for', `${id}-bar`);
-  label.textContent = 'Converting your picture';
-
-  const bar = document.createElement('progress');
-  bar.className = 'trace-progress-bar';
-  bar.id = `${id}-bar`;
-  bar.max = 3;
-  // The <label for> above is kept, because it is the right markup and it is
-  // what a person sees. It is NOT what names the bar, though: MEASURED in
-  // Chromium, a <label for> pointing at a <progress> renders as loose text
-  // beside it and the progressbar reaches the accessibility tree with no name
-  // at all. aria-labelledby is the repair, pointing at that same visible label
-  // so the two can never say different things.
-  bar.setAttribute('aria-labelledby', label.id);
-
-  const stageText = document.createElement('p');
-  stageText.className = 'trace-progress-stage';
-  stageText.id = `${id}-stage`;
-
-  const cancelButton = document.createElement('button');
-  cancelButton.type = 'button';
-  cancelButton.className = 'btn trace-progress-cancel';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.addEventListener('click', () => onCancel && onCancel());
-
-  running.append(label, bar, stageText, cancelButton);
-  root.append(note, startButton, running);
+  root.append(note, startButton);
 
   /** The element whose content is not settled while a trace runs. */
   let describedRegion = null;
+  let running = false;
 
   function markBusy(busy) {
     if (!describedRegion) return;
-    if (busy) {
-      describedRegion.setAttribute('aria-busy', 'true');
-      const described = describedRegion.getAttribute('aria-describedby');
-      if (!described || !described.includes(bar.id)) {
-        describedRegion.setAttribute(
-          'aria-describedby',
-          described ? `${described} ${bar.id}` : bar.id
-        );
-      }
-    } else {
-      describedRegion.removeAttribute('aria-busy');
-      const described = describedRegion.getAttribute('aria-describedby');
-      if (described) {
-        const rest = described
-          .split(/\s+/)
-          .filter((token) => token && token !== bar.id)
-          .join(' ');
-        if (rest) describedRegion.setAttribute('aria-describedby', rest);
-        else describedRegion.removeAttribute('aria-describedby');
-      }
-    }
+    if (busy) describedRegion.setAttribute('aria-busy', 'true');
+    else describedRegion.removeAttribute('aria-busy');
   }
 
   return {
     root,
     startButton,
-    cancelButton,
-    bar,
 
     /** The region to mark busy while a trace runs. */
     describeRegion(element) {
@@ -159,38 +90,22 @@ export function createTraceProgress({ onStart, onCancel }) {
       startButton.textContent = text;
       startButton.hidden = false;
       startButton.disabled = false;
-      running.hidden = true;
-      stageText.textContent = '';
+      running = false;
       markBusy(false);
     },
 
-    /** A trace has begun. The bar starts indeterminate. */
+    /** A trace has begun: Start goes away, the region is busy. */
     begin() {
       startButton.hidden = true;
-      running.hidden = false;
-      bar.removeAttribute('value');
-      stageText.textContent = STAGE_TEXT.reading;
+      running = true;
       markBusy(true);
-    },
-
-    /** One stage reached. `index` counts from zero. */
-    stage({ stage, index, total }) {
-      stageText.textContent = STAGE_TEXT[stage] || STAGE_TEXT.reading;
-      // Determinate ACROSS stages, where the count is genuinely known, and
-      // indeterminate within one, where it is not.
-      if (Number.isFinite(index) && Number.isFinite(total) && total > 0) {
-        bar.max = total;
-        bar.value = index;
-      }
     },
 
     /** The trace is over, however it ended. */
     finish() {
-      running.hidden = true;
       startButton.hidden = false;
       startButton.disabled = false;
-      stageText.textContent = '';
-      bar.removeAttribute('value');
+      running = false;
       markBusy(false);
     },
 
@@ -199,6 +114,7 @@ export function createTraceProgress({ onStart, onCancel }) {
       root.hidden = true;
       note.textContent = '';
       note.hidden = true;
+      running = false;
       markBusy(false);
     },
 
@@ -206,6 +122,6 @@ export function createTraceProgress({ onStart, onCancel }) {
       root.hidden = false;
     },
 
-    isRunning: () => !running.hidden,
+    isRunning: () => running,
   };
 }

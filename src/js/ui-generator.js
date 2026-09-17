@@ -35,7 +35,9 @@ import {
 } from './svg-preparer-workspace.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createTraceProgress } from './trace-progress.js';
-import { quickLook, quickLookSentence } from './quick-look.js';
+import { createConversionJob } from './conversion-job.js';
+import { createConversionDialog } from './conversion-dialog.js';
+import { quickLook, quickLookSentence, COST_BANDS } from './quick-look.js';
 import { checkHolePlacement } from './hole-placement.js';
 import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
 import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
@@ -2728,8 +2730,8 @@ function createFileControl(
   // auto-start rule and the sentence agree with each other.
   let currentQuickLook = null;
   const traceProgress = createTraceProgress({
-    onStart: () => startConversion({ announceResult: true }),
-    onCancel: () => cancelConversion(),
+    onStart: () =>
+      startConversion({ announceResult: true, startedBy: 'person' }),
   });
   traceProgress.hide();
   let traceRunner = null;
@@ -2737,6 +2739,40 @@ function createFileControl(
   function ensureTraceRunner() {
     if (!traceRunner) traceRunner = createTraceRunner();
     return traceRunner;
+  }
+
+  // DP-52: one conversion job behind one dialog. Both are built on first use;
+  // a project with no picture never pays for them.
+  let conversionDialog = null;
+  let conversionJob = null;
+
+  function ensureConversionDialog() {
+    if (!conversionDialog) {
+      conversionDialog = createConversionDialog({
+        onCancel: () => cancelConversion(),
+      });
+    }
+    return conversionDialog;
+  }
+
+  function ensureConversionJob() {
+    if (!conversionJob) {
+      const dialog = ensureConversionDialog();
+      conversionJob = createConversionJob({
+        runner: ensureTraceRunner(),
+        onStage: (s) => dialog.stage(s),
+      });
+    }
+    return conversionJob;
+  }
+
+  // The editor's opening, held back by processSvgForOpenScad while a
+  // conversion dialog stands in front of the page (see applyTracedImage).
+  let deferredEditorOpen = null;
+  function takeDeferredEditorOpen() {
+    const fn = deferredEditorOpen;
+    deferredEditorOpen = null;
+    return fn;
   }
 
   // ── The drawing editor (DP-19) ─────────────────────────────────────────
@@ -3124,10 +3160,11 @@ function createFileControl(
    * tick follows immediately. Before, there was no thread to run this on.
    */
   function cancelConversion() {
-    if (!traceRunner || !traceRunner.isRunning()) return;
-    traceRunner.cancel();
+    if (!conversionJob || !conversionJob.isRunning()) return;
+    conversionJob.cancel();
     traceProgress.finish();
     traceProgress.offer('Start conversion');
+    if (conversionDialog) conversionDialog.close();
     fileInfo.textContent = 'Conversion canceled';
     fileInfo.removeAttribute('aria-busy');
     fileButton.disabled = false;
@@ -3173,71 +3210,143 @@ function createFileControl(
     );
   }
 
-  async function applyTracedImage(settings, { announceResult = false } = {}) {
+  /**
+   * Trace the held pixels with the given ink settings and mount the result as
+   * this parameter's value: one job, behind one dialog (DP-52).
+   *
+   * The dialog stands in front of the page from the moment a conversion is
+   * under way until the charm has taken the result, with the stage the page
+   * is actually in and a Cancel that lands between stages. The editor, when
+   * the drawing needs a look, opens only AFTER the dialog has gone: an editor
+   * opened behind an inert page could neither take focus nor say it had
+   * opened.
+   *
+   * @param {Object} settings - From the ink panel
+   * @param {Object} [options]
+   * @param {boolean} [options.announceResult]
+   * @param {'person'|'self'} [options.startedBy] - Who started it. A press on
+   *   Start shows the dialog at once; a conversion that started by itself
+   *   (DP-Q32: a small picture the quick look called quick) shows it only if
+   *   the job is still running after the quick band, so a sub-second
+   *   conversion never flashes a dialog at somebody who pressed nothing.
+   */
+  async function applyTracedImage(
+    settings,
+    { announceResult = false, startedBy = 'self' } = {}
+  ) {
     if (!inkSourceImageData) return;
+    // Read BEFORE Start is hidden: focus leaves a hidden button for the body,
+    // and the dialog needs to know where to put it back.
+    const focusBefore = document.activeElement;
     if (inkControls) inkControls.setBusy(true);
     traceProgress.show();
     traceProgress.begin();
+    const job = ensureConversionJob();
+    const dialog = ensureConversionDialog();
+    const showDialog = () => {
+      if (!dialog.isOpen()) {
+        dialog.open(sourceFileLabel || inkSourceFileName, {
+          returnTo: focusBefore,
+        });
+      }
+    };
+    let graceTimer = null;
+    if (startedBy === 'person') {
+      showDialog();
+    } else {
+      graceTimer = setTimeout(() => {
+        if (job.isRunning()) showDialog();
+      }, COST_BANDS.quickMs);
+    }
+    let openEditorAfter = null;
     try {
-      const { svg: traced, summary } = await ensureTraceRunner().start(
-        inkSourceImageData,
+      const outcome = await job.run({
+        imageData: inkSourceImageData,
         // D-138. A two-color logo used to arrive as 553 shapes because the
         // anti-aliased edge between the two colors was quantized into four
         // colors of its own. They are folded back into the colors they sit
         // between, RELIEF ONLY: a stencil is painted by hand, and a cat's
         // green eyes at under a percent are the point of it.
-        {
+        settings: {
           ...settings,
           ...(plateParams.length === 0
             ? { shareFloor: RELIEF_COLOUR_SHARE_FLOOR }
             : {}),
         },
-        { onStage: (s) => traceProgress.stage(s) }
-      );
-      // A stock icon arrives with its attribution printed along the bottom, and
-      // traced that is forty-odd shapes of unreadable specks rather than a
-      // caption. Taking it off is the default the owner signed (DP-Q31), and
-      // Undo below puts the whole drawing back exactly as it was traced.
-      const credit = removeCreditLine(traced);
-      const svg = credit.svg;
-      currentFileName = inkSourceFileName;
-      const processedSvg = processSvgForOpenScad(svg);
-      const svgDataUrl = svgToDataUrl(processedSvg);
+        // Preparing the drawing: the credit line and the analysis, on the
+        // main thread, under a stage of their own. The editor's opening is
+        // held back (deferOpen) until the dialog is gone.
+        prepare: ({ svg: traced, summary }) => {
+          // A stock icon arrives with its attribution printed along the
+          // bottom, and traced that is forty-odd shapes of unreadable specks
+          // rather than a caption. Taking it off is the default the owner
+          // signed (DP-Q31), and Undo below puts the whole drawing back
+          // exactly as it was traced.
+          const credit = removeCreditLine(traced);
+          const svg = credit.svg;
+          currentFileName = inkSourceFileName;
+          const processedSvg = processSvgForOpenScad(svg, { deferOpen: true });
+          openEditorAfter = takeDeferredEditorOpen();
+          const pathCount = countTracedShapes(svg);
+          if (inkControls) {
+            // The Colors mode has its own sentence: the ink summary is about
+            // how much of a picture counted as a line, which is not a
+            // question this mode asks. It also feeds the wall-colour list,
+            // which cannot be offered until the colors are known.
+            if (summary && summary.mode === 'colours') {
+              inkControls.setColourResult(summary.colours, {
+                factor: summary.downscale ? summary.downscale.factor : null,
+              });
+            } else {
+              inkControls.setSummary(summary, pathCount, {
+                creditLine:
+                  credit.removed > 0
+                    ? {
+                        removed: credit.removed,
+                        onUndo: () => emitTracedSvg(credit.original, summary),
+                      }
+                    : null,
+              });
+            }
+          }
+          return { processedSvg, pathCount };
+        },
+        // Updating the charm: the emit.
+        update: async ({ processedSvg, pathCount }) => {
+          // ★ D-139: A CONVERSION THAT KEPT NOTHING IS NOT A DESIGN. The file
+          // value stays as it was: the picture is still there, the settings
+          // are still there, and Convert again is the next thing to press.
+          if (pathCount === 0) return { pathCount, emitted: false };
+          const convertedFile = {
+            name: inkSourceFileName,
+            size: processedSvg.length,
+            type: 'image/svg+xml',
+            data: svgToDataUrl(processedSvg),
+          };
+          // D-132: wait for the ring engine before emitting, so the layer
+          // companions are flattened by it rather than by the retired
+          // pairwise chain. The chunk is already on its way (started when
+          // the file was chosen), so this costs nothing on the second
+          // picture and a chunk fetch on the first.
+          if (layerParams.length > 0) await ensureRingEngine();
+          emitFileValue(convertedFile);
+          if (fileUploadListener) {
+            fileUploadListener(param.name, convertedFile);
+          }
+          return { pathCount, emitted: true };
+        },
+      });
 
-      const pathCount = countTracedShapes(svg);
-      if (inkControls) {
-        // The Colors mode has its own sentence: the ink summary is about how
-        // much of a picture counted as a line, which is not a question this
-        // mode asks. It also feeds the wall-colour list, which cannot be
-        // offered until the colors are known.
-        if (summary && summary.mode === 'colours') {
-          inkControls.setColourResult(summary.colours, {
-            factor: summary.downscale ? summary.downscale.factor : null,
-          });
-        } else {
-          inkControls.setSummary(summary, pathCount, {
-            creditLine:
-              credit.removed > 0
-                ? {
-                    removed: credit.removed,
-                    onUndo: () => emitTracedSvg(credit.original, summary),
-                  }
-                : null,
-          });
-        }
-      }
+      // Start is back on screen BEFORE the dialog closes, so the focus the
+      // dialog took from it has somewhere visible to return to; then the page
+      // is live again before anything is said or opened.
+      clearTimeout(graceTimer);
+      traceProgress.finish();
+      traceProgress.offer('Convert again');
+      dialog.close();
+      const { pathCount, emitted } = outcome;
 
-      // ★ D-139: A CONVERSION THAT KEPT NOTHING IS NOT A DESIGN.
-      //
-      // Line art on the owner's logo produced an 85-byte SVG with no shapes
-      // in it, and the app emitted that as `design_file`, relabeled the
-      // control "converted from ...png" and badged it "SVG Ready". The charm
-      // rendered bare and nothing said why. The advice for fixing it was
-      // already on screen (the ink panel's "Almost nothing was kept" line),
-      // which is why the file value simply stays as it was: the picture is
-      // still there, the settings are still there, and Convert again is the
-      // next thing to press.
-      if (pathCount === 0) {
+      if (!emitted) {
         if (sourceFileLabel) {
           fileInfo.textContent = `${sourceFileLabel}: nothing was kept from this picture.`;
           fileInfo.title = sourceFileLabel;
@@ -3249,27 +3358,9 @@ function createFileControl(
             'Nothing was kept from this picture. Try another setting, or another mode, and convert again.'
           );
         }
-        traceProgress.finish();
-        traceProgress.offer('Convert again');
         return;
       }
 
-      const convertedFile = {
-        name: inkSourceFileName,
-        size: processedSvg.length,
-        type: 'image/svg+xml',
-        data: svgDataUrl,
-      };
-      // D-132: wait for the ring engine before emitting, so the layer
-      // companions are flattened by it rather than by the retired pairwise
-      // chain. The chunk is already on its way (started when the file was
-      // chosen), so this costs nothing on the second picture and a chunk
-      // fetch on the first.
-      if (layerParams.length > 0) await ensureRingEngine();
-      emitFileValue(convertedFile);
-      if (fileUploadListener) {
-        fileUploadListener(param.name, convertedFile);
-      }
       // The converted name belongs here, not in one caller, so that every way
       // of starting a conversion - the button, a re-run after a settings
       // change, or the small picture that starts itself - ends with the file
@@ -3288,11 +3379,13 @@ function createFileControl(
           `Converted: ${pathCount} ${pathCount === 1 ? 'shape' : 'shapes'}`
         );
       }
-      traceProgress.finish();
-      traceProgress.offer('Convert again');
+      // Last, with the page live: the editor, when the drawing needs a look.
+      if (openEditorAfter) openEditorAfter();
     } catch (err) {
+      clearTimeout(graceTimer);
       traceProgress.finish();
       traceProgress.offer('Start conversion');
+      dialog.close();
       // A cancel is not a failure and must not be reported as one. Its one
       // announcement was already made by cancelConversion, which is the action
       // the person took.
@@ -3320,7 +3413,14 @@ function createFileControl(
     }
   }
 
-  function processSvgForOpenScad(rawSvgText) {
+  function processSvgForOpenScad(rawSvgText, { deferOpen = false } = {}) {
+    // DP-52: while a conversion dialog stands in front of the page, the
+    // editor's opening is handed back to the caller instead of started here,
+    // so it opens once the page is live again.
+    const requestOpen = (extra) => {
+      if (deferOpen) deferredEditorOpen = () => openEditor(extra);
+      else openEditor(extra);
+    };
     currentRawSvg = rawSvgText;
     // A new drawing has no plan yet; the plates start from the first pass.
     currentPlan = null;
@@ -3371,7 +3471,7 @@ function createFileControl(
           // The surface says what it found as it opens ("21 regions found,
           // no colors yet: every one starts as the base coat"), so there is
           // no second sentence to write here.
-          openEditor();
+          requestOpen({});
         }
         return rawSvgText;
       }
@@ -3386,7 +3486,7 @@ function createFileControl(
       if (analysis.recommendation === 'open_editor') {
         // Keep the original until the user explicitly applies a
         // prepared version from the editor.
-        openEditor({
+        requestOpen({
           openedSentence:
             'Drawing editor open. This drawing needs a look before it is used.',
         });
@@ -3522,6 +3622,9 @@ function createFileControl(
             fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
             await applyTracedImage(inkControls.getSettings(), {
               announceResult: true,
+              // "Use as design" is a press; a picture that starts itself is
+              // not, and gets the dialog only if it turns out to take a while.
+              startedBy: askedForElsewhere ? 'person' : 'self',
             });
           } else {
             // The quick look's sentence already says the picture is large and
