@@ -1383,12 +1383,29 @@ export function createSvgPrepWorkspace(containerEl) {
     return overlay;
   }
 
+  /**
+   * The wall behind a Colors drawing, while it is left out. MEASURED on the
+   * owner's logo (DP-R5 session 4): that element is the whole canvas, so its
+   * hit target sat under every point of the picture - pointing at the
+   * background washed the whole drawing in the hover color, and a click on
+   * empty space chose "Path 1, Ignore" instead of clearing the choice. Its row
+   * stays, and a wall somebody raises is a shape again and can be pointed at.
+   * Every other ignored shape keeps its target (DP-47 P4's rule).
+   */
+  function isIgnoredWall(el, i) {
+    return (
+      (roles[i] || 'ignore') === 'ignore' &&
+      typeof el.element?.getAttribute === 'function' &&
+      el.element.getAttribute('data-background') === 'true'
+    );
+  }
+
   function buildHitLayer() {
     const layer = document.createElementNS(SVG_NS, 'g');
     layer.setAttribute('class', 'svg-prep-hit-layer');
     layer.setAttribute('aria-hidden', 'true');
     liveElements.forEach((el, i) => {
-      if (!el.pathData) return;
+      if (!el.pathData || isIgnoredWall(el, i)) return;
       const p = document.createElementNS(SVG_NS, 'path');
       p.setAttribute('d', el.pathData);
       p.setAttribute('class', 'svg-prep-hit-path');
@@ -2293,6 +2310,15 @@ export function createSvgPrepWorkspace(containerEl) {
       for (const index of selected) {
         const el = liveElements[index];
         if (!el || !el.pathData) continue;
+        // A light halo under the outline, so the mark shows on a shape painted
+        // in the ink color as well as on the paper. LOOKED AT on the owner's
+        // logo (DP-R5 session 4): an outline in the ink color over shapes in
+        // the ink color marked nothing a person could see - the DOM said six
+        // marks, the eyes said none.
+        const halo = document.createElementNS(SVG_NS, 'path');
+        halo.setAttribute('d', el.pathData);
+        halo.setAttribute('class', 'svg-prep-selected-halo');
+        layer.appendChild(halo);
         const p = document.createElementNS(SVG_NS, 'path');
         p.setAttribute('d', el.pathData);
         p.setAttribute('class', 'svg-prep-selected-path');
@@ -2395,6 +2421,28 @@ export function createSvgPrepWorkspace(containerEl) {
       toggle: e.ctrlKey || e.metaKey,
       range: e.shiftKey,
     });
+  }
+
+  /**
+   * A Shift-click chooses a range of rows. The browser's own Shift-click
+   * extends a TEXT selection from wherever the caret was, and MEASURED on the
+   * built app (DP-R5 session 4) it painted 49 characters of the rows' own text
+   * blue across two rows. The default is stopped for that one modifier, and
+   * the row still takes focus, which is the part of the default worth keeping.
+   */
+  function handleRowMousedown(e) {
+    if (!e.shiftKey) return;
+    const row = e.target.closest('.svg-prep-object');
+    if (!row || !refs.objects.contains(row)) return;
+    if (
+      e.target.closest(
+        'input, button, select, label, .svg-prep-more-panel, .svg-prep-role-group'
+      )
+    ) {
+      return;
+    }
+    e.preventDefault();
+    row.focus({ preventScroll: true });
   }
 
   /** The same three choices from the keyboard, on the focused row. */
@@ -3350,6 +3398,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
     refs.renderCancelBtn.addEventListener('click', cancelRender);
     refs.objects.addEventListener('click', handleRowClick);
+    refs.objects.addEventListener('mousedown', handleRowMousedown);
     refs.objects.addEventListener('keydown', handleRowKeydown);
     refs.objects.addEventListener('keydown', handleShortcutKeydown);
     refs.objects.addEventListener('click', handleMoreClick);
@@ -3443,7 +3492,9 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.renderBtn.removeEventListener('click', renderPreviewOnDemand);
     refs.objects.removeEventListener('click', handleRowClick);
+    refs.objects.removeEventListener('mousedown', handleRowMousedown);
     refs.objects.removeEventListener('keydown', handleRowKeydown);
+    refs.objects.removeEventListener('keydown', handleShortcutKeydown);
     refs.objects.removeEventListener('click', handleMoreClick);
     refs.objects.removeEventListener('click', handleDeleteClick);
     refs.bulkBar.removeEventListener('click', handleDeleteClick);

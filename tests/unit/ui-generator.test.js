@@ -49,6 +49,31 @@ vi.mock('../../src/js/svg-preparer.js', () => ({
   })),
 }));
 
+// The editor itself is not under test here. A drawing whose recommendation is
+// `open_editor` makes the host open the real workspace by itself, and the real
+// workspace reads the svg-preparer module that is mocked above - which surfaced
+// as an unhandled rejection the first time a test used the recommendation the
+// app actually emits (DP-R5 session 4). Only the workspace factory is stubbed,
+// with what the host calls on it; the module's other exports stay real.
+vi.mock('../../src/js/svg-preparer-workspace.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    createSvgPrepWorkspace: vi.fn(() => ({
+      open: vi.fn(),
+      close: vi.fn(),
+      dismiss: vi.fn(),
+      destroy: vi.fn(),
+      getRoleOverrides: vi.fn(() => null),
+      getOffsetOverrides: vi.fn(() => null),
+      getDeletedIndices: vi.fn(() => null),
+      getLayerAssignments: vi.fn(() => ({ layers: [], limit: 0, problems: [] })),
+      getPlan: vi.fn(() => null),
+      getRingEngine: vi.fn(() => null),
+    })),
+  };
+});
+
 const buildParams = ({ groups = null, params = [] }) => {
   const resolvedGroups = groups || [
     { id: 'General', label: 'General', order: 0 },
@@ -1779,6 +1804,72 @@ describe('UI Generator', () => {
       expect(editBtn.type).toBe('button');
       expect(editBtn.classList.contains('btn')).toBe(true);
       expect(editBtn.classList.contains('btn-ghost')).toBe(true);
+    });
+
+    // ── Session 4 of DP-R5: the way back into the editor ───────────────────
+    //
+    // MEASURED on the owner's CREATE logo in Colors, on the built app: after
+    // Apply (or Close) the status card was EMPTY - no badge, no "Open the
+    // drawing editor" - and Convert again did not reopen it either. A person
+    // who had applied once could never get back in to change one more shape.
+    // The cause: DP-3 (DP-Q33) downgrades `auto_prepare` to `open_editor` when
+    // the flatten prediction outruns the budget, but leaves `status` at
+    // 'ready', and updateStatusCard had a branch for every status except
+    // that pairing. DP-48's wall rule made the logo's drawing confident enough
+    // to take exactly that path, which is when the card went blank.
+
+    it('★ a ready drawing sent to the editor for its size still offers the editor', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'ready',
+        recommendation: 'open_editor',
+        elements: [{ type: 'path' }, { type: 'path' }, { type: 'path' }],
+        warnings: [],
+      });
+
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
+
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(fileInput);
+
+      const statusCard = container.querySelector('.svg-prep-status');
+      const editBtn = statusCard.querySelector('.svg-prep-edit-btn');
+      expect(editBtn, 'the card must offer the editor').toBeTruthy();
+      const badge = statusCard.querySelector('.svg-prep-status-badge');
+      expect(badge, 'the card must say what the drawing is').toBeTruthy();
+      expect(badge.dataset.level).toBe('review');
+      // DP-Q40: the things in the list are shapes, and "elements" is a code word.
+      expect(badge.textContent).toBe('Needs review (3 shapes)');
+    });
+
+    it('★ a drawing prepared in the editor says so, and offers the editor again', async () => {
+      const raw = '<svg><path/><circle/></svg>';
+      // What Apply leaves behind: the raw drawing and the prepared one, under
+      // the file's name. A saved project reopens through this same path.
+      setSvgPrepMetadata('test.svg', {
+        rawSvg: raw,
+        preparedSvg: '<svg><path/></svg>',
+        prepOverrides: ['foreground', 'ignore'],
+      });
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'ready',
+        recommendation: 'open_editor',
+        elements: [{ type: 'path' }, { type: 'circle' }],
+        warnings: [],
+      });
+
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
+
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(fileInput, raw);
+
+      const statusCard = container.querySelector('.svg-prep-status');
+      const badge = statusCard.querySelector('.svg-prep-status-badge');
+      expect(badge.textContent).toBe('Prepared in the drawing editor.');
+      expect(badge.dataset.level).toBe('ready');
+      expect(statusCard.querySelector('.svg-prep-edit-btn')).toBeTruthy();
+      setSvgPrepMetadata('test.svg', null);
     });
   });
 });
