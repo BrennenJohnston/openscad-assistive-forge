@@ -559,4 +559,72 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.start).toBeVisible();
     await expect(p.start).toHaveText('Convert again');
   });
+  test('★ the page keeps answering while the charm takes a heavy design (D-143, DP-52 P4)', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
+    test.setTimeout(300_000);
+
+    // MEASURED before this: the logo's Line art design (211,700 triangles)
+    // held the main thread for 6.4 s at 4x while the preview parsed it,
+    // classified its faces and built its edges. A grid of 400 filled circles
+    // is a 25 KB drawing that renders to a mesh of the same kind (about
+    // 130,000 triangles at $fn=64), so this measures the preview's stage
+    // alone. A traced noise picture was tried first: its multi-megabyte SVG
+    // pays seconds more for its own hand-off (the data URL round trips, the
+    // URL hash sync and the storage save, D-150), which hid the preview's
+    // stage behind another defect.
+    await openCharm(page);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+
+    const circles = [];
+    for (let row = 0; row < 20; row++) {
+      for (let col = 0; col < 20; col++) {
+        const cx = 25 + col * 50;
+        const cy = 25 + row * 50;
+        circles.push(
+          `<path d="M${cx - 18},${cy} a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z"/>`
+        );
+      }
+    }
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">' +
+      `<g fill="#000000">${circles.join('')}</g></svg>`;
+    await page.locator('#param-design_file').setInputFiles({
+      name: 'dots.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from(svg),
+    });
+
+    // From the moment the drawing goes in until the preview says ready
+    // again, ask the page a trivial question every 100 ms and keep the
+    // longest wait for an answer.
+    let worst = 0;
+    let sawWork = false;
+    const deadline = Date.now() + 240_000;
+    while (Date.now() < deadline) {
+      const sent = Date.now();
+      const state = await page.evaluate(
+        () =>
+          document
+            .querySelector('.preview-state-indicator')
+            ?.textContent?.trim() || ''
+      );
+      const took = Date.now() - sent;
+      if (took > worst) worst = took;
+      if (!/ready/i.test(state)) sawWork = true;
+      else if (sawWork) break;
+      await page.waitForTimeout(100);
+    }
+    expect(
+      sawWork,
+      'the preview never left ready, so the design was not rendered'
+    ).toBe(true);
+    expect(
+      worst,
+      `the page took ${worst} ms to answer while the charm took the design`
+    ).toBeLessThan(1500);
+  });
 });

@@ -1164,3 +1164,66 @@ describe('DisplayOptionsController — UF-7 zoom-adaptive distance', () => {
     expect(ctrl._cameraDistanceMm(ctrl.getPreviewManager())).toBe(200);
   });
 });
+
+describe('DisplayOptionsController — edges from the preview worker (DP-52 P4, D-143)', () => {
+  let ctrl;
+  let mockThree;
+  let mockPm;
+  let mockMesh;
+
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+    mockThree = createMockThree();
+    mockMesh = createMockMesh();
+    mockPm = createMockPreviewManager(mockMesh);
+    ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+    ctrl.state.edges = true;
+  });
+
+  it('★ builds the overlay from the segments the worker made, without three.js EdgesGeometry', () => {
+    mockMesh.geometry.userData = {
+      edgeSegments: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 0]),
+      edgeTotal: 2,
+    };
+    ctrl.refreshOverlays();
+    expect(mockThree.EdgesGeometry).not.toHaveBeenCalled();
+    expect(ctrl._edgesOverlay).not.toBeNull();
+    const built = ctrl._edgesOverlay.geometry;
+    expect(built.attributes.position.array.length).toBe(12);
+    expect(ctrl._edgeStats).toEqual({ total: 2, shown: 2 });
+  });
+
+  it('applies the budget to the worker\'s segments, longest first', () => {
+    mockMesh.geometry.userData = {
+      edgeSegments: new Float32Array([
+        0, 0, 0, 1, 0, 0, // 1
+        0, 0, 0, 3, 0, 0, // 3
+        0, 0, 0, 0, 2, 0, // 2
+      ]),
+      edgeTotal: 3,
+    };
+    ctrl._edgeBudget = 2;
+    ctrl.refreshOverlays();
+    const arr = Array.from(ctrl._edgesOverlay.geometry.attributes.position.array);
+    expect(arr).toEqual([0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 2, 0]);
+    expect(ctrl._edgeStats).toEqual({ total: 3, shown: 2 });
+  });
+
+  it('★ while the worker is still at it, the overlay is empty rather than the page held', () => {
+    mockMesh.geometry.userData = { extrasPending: true };
+    ctrl.refreshOverlays();
+    expect(mockThree.EdgesGeometry).not.toHaveBeenCalled();
+    expect(ctrl._edgeStats).toEqual({ total: 0, shown: 0 });
+  });
+
+  it('a small mesh with nothing on userData still takes three.js\' own EdgesGeometry', () => {
+    mockMesh.geometry.userData = {};
+    ctrl.refreshOverlays();
+    expect(mockThree.EdgesGeometry).toHaveBeenCalledWith(mockMesh.geometry, 15);
+  });
+});
