@@ -116,6 +116,17 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
 
 ### Changed
 
+- **A shape is On, Cut out or Off** (DP-57, DP-Q59) - the switch on every row said Raised, Hole
+  and Ignore (Include and Exclude on a compound path), and a "hole" is not always a hole in the
+  object: with the engraved style a hole stands up as an island and a raised shape is cut in.
+  The words now say what the shape is in the drawing and leave the direction to the layer's
+  style; one vocabulary on both kinds of drawing. "Ignore those" became "Turn those off".
+- **The picture shows the layers** (DP-57, DP-Q60) - with a design that has layers, every On
+  shape is painted in its layer's color (layer 1 deep blue, layer 2 orange, layer 3
+  yellow-green, each a step lighter than the last, apart for every kind of color vision), a
+  Cut out is paper with a dashed edge, and a shape turned Off is its layer's color muted under
+  a diagonal hatch, so it is plainly there and plainly off. The combined result carries the
+  same paint, the union as layer 1 with the deeper layers over it. The legend names each.
 - **American English, everywhere a person reads or hears it** (DP-45) - 1,213 replacements
   in 129 files, and a guard (`scripts/us-english-scan.mjs`, run by a unit test) that reads
   every string and comment in the source, the page, the tiles and the documents, and reports
@@ -169,14 +180,14 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
   about 75 ms, while 200 real traced shapes were 34,382 points and 14.7 seconds. In practice
   210 shapes now combine by themselves where the old rule stopped to ask
 - **The shapes panel, rebuilt around one signed row** (DP-39) - each row is the shape's name, a
-  Raised / Hole / Ignore switch and a More button, and the row says when it has run out of room
+  On / Cut out / Off switch (Raised / Hole / Ignore until DP-57) and a More button, and the row says when it has run out of room
   instead of taking the space out of the name. Measured on the same drawing before and after:
   at 1280 a name went from 82 px cut to 210 px whole; at 768 all seven names rendered at zero
   pixels and all seven Delete buttons were clipped, and now nothing is clipped. The list points
   at the picture again, and on a phone it is a sheet rather than 99.8 % of the drawing
 - **One vocabulary, wherever a person meets it** (DP-Q40) - what the panel is called, what a row
   is called, what the color key says and what a screen reader hears are now the same words:
-  "Shapes", "Shape 3", and the roles Raised / Hole / Ignore (Include / Exclude where a compound
+  "Shapes", "Shape 3", and the roles, then Raised / Hole / Ignore (Include / Exclude where a compound
   path has no holes to offer). Eight strings across four files were still saying the retired
   ones, four of them only to people who cannot see the control that disagreed
 - **The CI shard planner knows what CI skips** (#211) - three of six Chromium shards were each

@@ -1713,13 +1713,13 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
     // three radios in a fieldset.
     await expect(row.getByRole('radio', { name: 'Raised' })).toBeVisible()
     await expect(row.getByRole('radio', { name: 'Hole' })).toBeVisible()
-    await expect(row.getByRole('radio', { name: 'Ignore' })).toBeVisible()
+    await expect(row.getByRole('radio', { name: 'Off' })).toBeVisible()
     await expect(row.locator('text=Foreground')).toHaveCount(0)
 
     // And the row's own accessible name reads the word on screen, so a
     // screen reader and an eye get the same answer to "what is this shape".
     await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Hole/)
-    await row.getByRole('radio', { name: 'Ignore' }).check()
+    await row.getByRole('radio', { name: 'Off' }).check()
     await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Ignore/)
   })
 
@@ -1771,7 +1771,7 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
     const targets = [
       row.getByRole('radio', { name: 'Raised' }),
       row.getByRole('radio', { name: 'Hole' }),
-      row.getByRole('radio', { name: 'Ignore' }),
+      row.getByRole('radio', { name: 'Off' }),
       row.locator('.svg-prep-more-btn'),
     ]
     for (const t of targets) {

@@ -52,6 +52,7 @@ import {
   thinLineSentence,
   THIN_LINE_MM,
 } from '../../src/js/svg-preparer-workspace.js';
+import { analyzeSvg } from '../../src/js/svg-preparer.js';
 import { createDocumentFocusTrap } from '../../src/js/focus-trap.js';
 import { announce } from '../../src/js/announcer.js';
 import { isEnabled } from '../../src/js/feature-flags.js';
@@ -414,7 +415,7 @@ describe('createSvgPrepWorkspace', () => {
       ws.open(SIMPLE_SVG, makeAnalysis(1));
 
       const item = ws._root.querySelector('.svg-prep-object');
-      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*Raised/);
+      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*On/);
 
       ws.destroy();
     });
@@ -435,12 +436,12 @@ describe('createSvgPrepWorkspace', () => {
       ).find((r) => r.value === 'hole');
       holeRadio.checked = true;
       holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
-      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*Hole/);
+      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*Cut out/);
 
       ws._root.querySelector('[data-action="reset"]').click();
 
       const after = ws._root.querySelector('.svg-prep-object');
-      expect(after.getAttribute('aria-label')).toMatch(/Circle 1.*Raised/);
+      expect(after.getAttribute('aria-label')).toMatch(/Circle 1.*On/);
       expect(after.getAttribute('aria-label')).not.toMatch(/role:/);
 
       ws.destroy();
@@ -492,7 +493,7 @@ describe('createSvgPrepWorkspace', () => {
       holeRadio.checked = true;
       holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
 
-      expect(item.getAttribute('aria-label')).toMatch(/Hole/);
+      expect(item.getAttribute('aria-label')).toMatch(/Cut out/);
 
       ws.destroy();
     });
@@ -1101,7 +1102,7 @@ describe('Phase 3: role change updates result preview', () => {
     );
     expect(liveRegion.textContent).toMatch(/preview updated/i);
     // The word a person reads on the control, not the value underneath it.
-    expect(liveRegion.textContent).toMatch(/raised/i);
+    expect(liveRegion.textContent).toMatch(/\bon\b/);
     expect(liveRegion.textContent).not.toMatch(/foreground/i);
 
     ws.destroy();
@@ -1248,7 +1249,7 @@ describe('role color-coding layer and legend', () => {
     const ws = createSvgPrepWorkspace(container);
 
     ws.open(SIMPLE_SVG, makeAnalysis(2));
-    expect(legendWords(ws)).toEqual(['Raised', 'Hole', 'Ignore']);
+    expect(legendWords(ws)).toEqual(['On', 'Cut out', 'Off']);
 
     const compoundSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
@@ -1279,7 +1280,7 @@ describe('role color-coding layer and legend', () => {
       isCompoundPathOnly: true,
     });
     // A compound path is never offered Hole, so the legend must not offer it.
-    expect(legendWords(ws)).toEqual(['Include', 'Exclude']);
+    expect(legendWords(ws)).toEqual(['On', 'Off']);
 
     ws.destroy();
   });
@@ -1789,7 +1790,7 @@ describe('compound-path mode (Include/Exclude)', () => {
     const labels = Array.from(item.querySelectorAll('fieldset label')).map(
       (l) => l.textContent
     );
-    expect(labels).toEqual(['Include', 'Exclude']);
+    expect(labels).toEqual(['On', 'Off']);
 
     ws.destroy();
   });
@@ -1814,7 +1815,7 @@ describe('compound-path mode (Include/Exclude)', () => {
     // Compound mode has its own two words: a subpath is included or excluded,
     // and "Hole" would be a lie because subpaths are concatenated, not
     // subtracted. The name reads whichever table is in force.
-    expect(labels[0]).toBe('Shape 1, Include');
+    expect(labels[0]).toBe('Shape 1, On');
 
     ws.destroy();
   });
@@ -2061,8 +2062,8 @@ describe('Phase 5: open() with initialOverrides', () => {
     });
 
     const items = ws._root.querySelectorAll('.svg-prep-object');
-    expect(items[0].getAttribute('aria-label')).toContain('Ignore');
-    expect(items[1].getAttribute('aria-label')).toContain('Raised');
+    expect(items[0].getAttribute('aria-label')).toContain('Off');
+    expect(items[1].getAttribute('aria-label')).toContain('On');
     expect(items[0].getAttribute('aria-label')).not.toContain('role:');
     expect(items[1].getAttribute('aria-label')).not.toContain('role:');
 
@@ -3744,7 +3745,7 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     expect(roleOf(ws, 2)).not.toBe('ignore');
     // One sentence for the whole action, not one per shape.
     const said = announce.mock.calls.map((c) => c[0]);
-    expect(said).toEqual(['2 shapes set to Ignore.']);
+    expect(said).toEqual(['2 shapes set to Off.']);
     // And the press is spent here: the app never sees it.
     expect(e.defaultPrevented).toBe(true);
     ws.destroy();
@@ -3764,7 +3765,7 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     press(rows(ws)[1], 'Delete');
     expect(roleOf(ws, 1)).toBe('ignore');
     expect(roleOf(ws, 0)).not.toBe('ignore');
-    expect(announce.mock.calls.map((c) => c[0])[0]).toMatch(/set to Ignore\.$/);
+    expect(announce.mock.calls.map((c) => c[0])[0]).toMatch(/set to Off\.$/);
     ws.destroy();
   });
 
@@ -4180,7 +4181,7 @@ describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () =>
     await ws.whenReady();
     await ws.whenCombined();
     const btn = ws._root.querySelector('[data-action="ignore-thin"]');
-    expect(btn.textContent).toBe('Ignore those');
+    expect(btn.textContent).toBe('Turn those off');
     expect(btn.getAttribute('aria-label')).toBe('Ignore the shapes thinner than this');
     const undo = ws._root.querySelector('[data-action="undo-ignore"]');
     expect(undo.disabled).toBe(true);
@@ -4189,7 +4190,7 @@ describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () =>
     expect(roleOf(ws, 1)).toBe('ignore');
     expect(roleOf(ws, 2)).toBe('foreground');
     expect(ws._root.querySelector('.svg-prep-live, [aria-live="polite"].sr-only')?.textContent).toBe(
-      '2 thin shapes set to Ignore. Each can be turned back on in the list.'
+      '2 thin shapes turned off. Each can be turned back on in the list.'
     );
     expect(undo.disabled).toBe(false);
     undo.click();
@@ -4446,6 +4447,131 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
       expect(zoom.querySelector('.svg-prep-pan-up').getAttribute('aria-label')).toBe(`Move the ${pane} view up`);
       expect(zoom.querySelector('.svg-prep-pan-down').getAttribute('aria-label')).toBe(`Move the ${pane} view down`);
     }
+    ws.destroy();
+  });
+});
+
+// ── DP-57 P5: the words On / Cut out / Off, and the layer colors (DP-Q59,
+// DP-Q60, signed 2026-09-17) ─────────────────────────────────────────────────
+describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => {
+  const legendWords = (ws) =>
+    [...ws._root.querySelectorAll('.svg-prep-legend-item')].map((el) =>
+      el.textContent.trim()
+    );
+  const openLayered = (count = 3) => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(count);
+    ws.open(svgString, analysis, { layersEnabled: true });
+    return ws;
+  };
+  const setRole = (ws, i, role) => {
+    const radio = ws._refs.objects.querySelector(
+      `input[name="svg-prep-role-${i}"][value="${role}"]`
+    );
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  it('the legend and the rows say On, Cut out and Off', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(2);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    expect(legendWords(ws)).toEqual(['On', 'Cut out', 'Off']);
+    const labels = [...ws._refs.objects.querySelectorAll('.svg-prep-object[data-index="0"] label')]
+      .map((l) => l.textContent.trim())
+      .filter((t) => ['On', 'Cut out', 'Off', 'Raised', 'Hole', 'Ignore'].includes(t));
+    expect(labels).toEqual(['On', 'Cut out', 'Off']);
+    expect(
+      ws._refs.objects.querySelector('.svg-prep-object[data-index="0"]').getAttribute('aria-label')
+    ).toMatch(/, On$/);
+    setRole(ws, 0, 'ignore');
+    expect(
+      ws._refs.objects.querySelector('.svg-prep-object[data-index="0"]').getAttribute('aria-label')
+    ).toMatch(/, Off$/);
+    ws.destroy();
+  });
+
+  it('with layers, the legend names the layers and every shape is painted in its layer', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    setLayer(ws, 1, 2);
+    setLayer(ws, 2, 3);
+    expect(legendWords(ws)).toEqual(['Layer 1', 'Layer 2', 'Layer 3', 'Cut out', 'Off']);
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const raised = (i) =>
+      pane.querySelector(`.svg-prep-standin-path--raised[data-index="${i}"]`);
+    // Layer 1 is the ink itself (the stand-in's path, or the combined union).
+    expect(pane.querySelector('.svg-prep-standin-layer-1')).not.toBeNull();
+    expect(raised(1).classList.contains('svg-prep-standin-layer-2')).toBe(true);
+    expect(raised(2).classList.contains('svg-prep-standin-layer-3')).toBe(true);
+    // A layer change repaints at once, without a recombine.
+    setLayer(ws, 2, 2);
+    expect(raised(2).classList.contains('svg-prep-standin-layer-2')).toBe(true);
+    ws.destroy();
+  });
+
+  it('a shape turned off is hatched in its layer color: a pattern in the picture, a fill that points at it', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    setLayer(ws, 2, 3);
+    setRole(ws, 2, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const off = pane.querySelector('.svg-prep-standin-path--ignore[data-index="2"]');
+    expect(off).not.toBeNull();
+    const fill = off.getAttribute('fill');
+    const id = /^url\(#(.+)\)$/.exec(fill || '')?.[1];
+    expect(id, `fill was ${fill}`).toBeTruthy();
+    const pattern = pane.querySelector(`pattern[id="${id}"]`);
+    expect(pattern).not.toBeNull();
+    expect(pattern.querySelector('.svg-prep-hatch-3')).not.toBeNull();
+    expect(off.classList.contains('svg-prep-standin-layer-3')).toBe(true);
+    ws.destroy();
+  });
+
+  it('without layers the hatch is neutral and the legend says On', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(2);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    setRole(ws, 1, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const off = pane.querySelector('.svg-prep-standin-path--ignore[data-index="1"]');
+    const id = /^url\(#(.+)\)$/.exec(off.getAttribute('fill') || '')?.[1];
+    expect(pane.querySelector(`pattern[id="${id}"] .svg-prep-hatch-0`)).not.toBeNull();
+    expect(legendWords(ws)).toEqual(['On', 'Cut out', 'Off']);
+    ws.destroy();
+  });
+
+  it('the combined result carries the layer paint: the union in layer 1, deeper layers over it', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    // A role press asks for the combine; the layer is set once it has landed
+    // and repaints the result by itself.
+    setRole(ws, 0, 'foreground');
+    await ws.whenCombined();
+    setLayer(ws, 2, 3);
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(pane.querySelector('svg.svg-prep-standin')).toBeNull();
+    const union = pane.querySelector('.svg-prep-result-ink');
+    expect(union).not.toBeNull();
+    expect(union.classList.contains('svg-prep-standin-layer-1')).toBe(true);
+    const over = pane.querySelector('.svg-prep-standin-path--raised.svg-prep-standin-layer-3[data-index="2"]');
+    expect(over).not.toBeNull();
+    // A layer 1 shape is the union itself, not a second coat.
+    expect(pane.querySelector('.svg-prep-standin-path--raised.svg-prep-standin-layer-1')).toBeNull();
+    ws.destroy();
+  });
+
+  it('a compound path says On and Off', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M0 0 H40 V40 H0 Z M60 60 H100 V100 H60 Z" fill="black"/></svg>';
+    const analysis = analyzeSvg(svg);
+    ws.open(svg, analysis);
+    await ws.whenReady();
+    expect(legendWords(ws)).toEqual(['On', 'Off']);
     ws.destroy();
   });
 });
