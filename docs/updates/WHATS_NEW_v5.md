@@ -75,7 +75,7 @@ folder instead of a mystery string.
 
 ## A charm from a drawing
 
-![The Charm Designer's design file control with a bird drawing chosen. Under the file name it reads "Looks like a line drawing. Converting should take under a second.", then a Start conversion button, then four choices for what to keep from the picture: Line art, Solid shape, Light and dark, and Colors, each with a sentence explaining when to use it](images/charm-customizer.png)
+![The Charm Designer's design file control with a bird drawing chosen: the six gallery designs above it, a Choose File button with a small bird thumbnail beside it, the file line "bird-drawing.png (60.9 KB). Ready to convert.", the sentence "Looks like a line drawing. Converting should take a few seconds.", a Start conversion button, and under the heading "What to keep from the picture" four choices, Line art (chosen), Solid shape, Light and dark and Colors, each with a sentence on when to use it. To the right, the charm preview reads Preview ready](images/charm-customizer.png)
 
 The Charm Designer turns a simple drawing into a wearable pendant,
 and feeding it your own art is now a documented job rather than a
