@@ -2846,14 +2846,17 @@ describe('the wall on a charm (D-137, DP-Q53)', () => {
       'data-colour-name="White" d="M20 20 L80 20 L80 80 L20 80 Z"/>' +
       '</svg>';
     const analysis = analyzeSvg(svg);
-    // Three rings: the canvas, the letter-shaped hole in the wall, the letter.
-    expect(analysis.elements).toHaveLength(3);
+    // D-159 went one step further: a traced region is ONE row, its outer
+    // ring, so the letter-shaped hole in the wall is not a row at all. Two
+    // rows: the canvas and the letter.
+    expect(analysis.elements).toHaveLength(2);
     const roles = analysis.elements.map((el) => el.autoRole);
     expect(roles[0]).toBe('ignore');
-    expect(roles[1], 'a hole in the wall must not become a shape').toBe(
-      'ignore'
-    );
-    expect(roles[2]).toBe('foreground');
+    expect(roles[1]).toBe('foreground');
+    expect(
+      (analysis.elements[0].pathData.match(/M/g) || []).length,
+      'a hole in the wall must not become a shape'
+    ).toBe(1);
   });
 
   it('leaves an ordinary drawing exactly as it was', () => {

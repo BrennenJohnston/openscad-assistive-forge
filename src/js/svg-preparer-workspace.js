@@ -28,7 +28,6 @@ import {
 import {
   buildNestingTree,
   layerLimit,
-  validateLayers,
   estimateRingPoints,
 } from './svg-nesting.js';
 import { getPathBBox } from 'svg-path-commander';
@@ -898,13 +897,6 @@ function populateObjectList(
       }
       if (role === 'ignore') layerSelect.disabled = true;
       morePanel.appendChild(layerSelect);
-
-      // Filled in by validateAndMarkLayers(); an empty node keeps the row's
-      // layout from jumping when a warning appears under it.
-      const layerNote = document.createElement('span');
-      layerNote.className = 'svg-prep-layer-note';
-      layerNote.hidden = true;
-      morePanel.appendChild(layerNote);
     } else {
       layers.push(1);
     }
@@ -1401,8 +1393,10 @@ export function createSvgPrepWorkspace(containerEl) {
     // sits in, and painting it under would show nothing at all.
     const art = document.createElementNS(SVG_NS, 'g');
     art.setAttribute('class', 'svg-prep-standin-art');
+    const order = paintOrder();
     const paint = (wanted, className) => {
-      liveElements.forEach((el, i) => {
+      order.forEach((i) => {
+        const el = liveElements[i];
         if (!el.pathData || (roles[i] || 'ignore') !== wanted) return;
         const p = document.createElementNS(SVG_NS, 'path');
         p.setAttribute('d', el.pathData);
@@ -1511,7 +1505,8 @@ export function createSvgPrepWorkspace(containerEl) {
     const layer = document.createElementNS(SVG_NS, 'g');
     layer.setAttribute('class', 'svg-prep-standin-left-out');
     layer.setAttribute('aria-hidden', 'true');
-    liveElements.forEach((el, i) => {
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
       if (!el.pathData || (roles[i] || 'ignore') !== 'ignore') return;
       if (isIgnoredWall(el, i)) return;
       const p = document.createElementNS(SVG_NS, 'path');
@@ -1524,11 +1519,43 @@ export function createSvgPrepWorkspace(containerEl) {
     return layer;
   }
 
+  /**
+   * D-159: the order the picture is painted and hit-tested in. Containers
+   * first and islands last, by the box each outline fills, so the navy dot
+   * inside the figure's arm is painted over the figure and is what a click
+   * there finds. Element order put the wall's islands under everything.
+   */
+  function paintOrder() {
+    const area = (el) => {
+      if (!el.pathData) return 0;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      const nums = el.pathData.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
+      if (!nums) return 0;
+      for (let k = 0; k + 1 < nums.length; k += 2) {
+        const x = Number(nums[k]);
+        const y = Number(nums[k + 1]);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      return Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+    };
+    return liveElements
+      .map((el, i) => ({ i, a: area(el) }))
+      .sort((p, q) => q.a - p.a || p.i - q.i)
+      .map((p) => p.i);
+  }
+
   function buildHitLayer() {
     const layer = document.createElementNS(SVG_NS, 'g');
     layer.setAttribute('class', 'svg-prep-hit-layer');
     layer.setAttribute('aria-hidden', 'true');
-    liveElements.forEach((el, i) => {
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
       if (!el.pathData || isIgnoredWall(el, i)) return;
       const p = document.createElementNS(SVG_NS, 'path');
       p.setAttribute('d', el.pathData);
@@ -2738,7 +2765,7 @@ export function createSvgPrepWorkspace(containerEl) {
       if (layerSelect) layerSelect.disabled = role === 'ignore';
     }
 
-    if (layersEnabled) validateAndMarkLayers();
+    if (layersEnabled) updateLayerSummary();
     renderRoleLayer();
     requestResultPreview();
 
@@ -2764,58 +2791,14 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * Re-check every assignment against the containment law and mark the rows
-   * that break it. NOTHING is reassigned: a row the person set stays as they
-   * set it, wearing the reason it will not build.
+   * D-160: the containment law that used to be checked here ("Nothing
+   * surrounds this shape, so layer 3 would print with nothing under it") is
+   * gone. Every shape on layer N or deeper is written into layer N's file and
+   * the model extrudes each raised pass from below every floor, so a layer 3
+   * shape carries its own column wherever it sits; the warning was false and
+   * the owner believed it.
    */
-  function validateAndMarkLayers() {
-    if (!layersEnabled || !nestingTree) return [];
-    const problems = validateLayers(nestingTree, layers);
-    const byIndex = new Map(problems.map((pr) => [pr.index, pr]));
-
-    const items = refs.objects.querySelectorAll('.svg-prep-object');
-    for (const item of items) {
-      const idx = parseInt(item.dataset.index, 10);
-      const note = item.querySelector('.svg-prep-layer-note');
-      const select = item.querySelector('.svg-prep-layer-select');
-      if (!note || !select) continue;
-      const problem = byIndex.get(idx);
-      if (problem) {
-        note.textContent = layerProblemText(problem);
-        note.hidden = false;
-        item.classList.add('svg-prep-layer-problem');
-        select.setAttribute('aria-invalid', 'true');
-        select.setAttribute('aria-describedby', ensureNoteId(note, idx));
-      } else {
-        note.textContent = '';
-        note.hidden = true;
-        item.classList.remove('svg-prep-layer-problem');
-        select.removeAttribute('aria-invalid');
-        select.removeAttribute('aria-describedby');
-      }
-    }
-    updateLayerSummary(problems.length);
-    return problems;
-  }
-
-  function ensureNoteId(note, idx) {
-    if (!note.id) note.id = `svg-prep-layer-note-${idx}`;
-    return note.id;
-  }
-
-  /**
-   * The containment law, said to a person rather than quoted at them.
-   * STRINGS: owner review pending (accessibility-critical, DP-R1 text pack).
-   */
-  function layerProblemText(problem) {
-    const below = problem.layer - 1;
-    if (problem.reason === 'not-enclosed') {
-      return `Nothing surrounds this shape, so layer ${problem.layer} would print with nothing under it. Put it on layer 1, or place it inside a shape on layer ${below}.`;
-    }
-    return `The shape around this one is not on layer ${below}, so it is cut away before layer ${problem.layer} is built. This shape would print with nothing under it.`;
-  }
-
-  function updateLayerSummary(problemCount) {
+  function updateLayerSummary() {
     if (!refs.layerSummary) return;
     if (!layersEnabled || layerCount === 0) {
       refs.layerSummary.hidden = true;
@@ -2842,18 +2825,7 @@ export function createSvgPrepWorkspace(containerEl) {
       layersTouched && layerCount > 1
         ? ' Layers show on the charm after you press Apply.'
         : '';
-    const problemText =
-      problemCount === 0
-        ? ''
-        : problemCount === 1
-          ? ' 1 shape needs a different layer.'
-          : ` ${problemCount} shapes need a different layer.`;
-    refs.layerSummary.textContent =
-      limitText + startText + builtText + problemText;
-    refs.layerSummary.classList.toggle(
-      'svg-prep-layer-summary-problem',
-      problemCount > 0
-    );
+    refs.layerSummary.textContent = limitText + startText + builtText;
   }
 
   function handleLayerChange(e) {
@@ -2865,24 +2837,8 @@ export function createSvgPrepWorkspace(containerEl) {
     const idx = parseInt(match[1], 10);
     layers[idx] = parseInt(target.value, 10) || 1;
     layersTouched = true;
-
-    const problems = validateAndMarkLayers();
-    const mine = problems.find((pr) => pr.index === idx);
-    if (mine) {
-      announce(layerProblemText(mine));
-    } else if (problems.length > 0) {
-      // Moving one shape can strand a DIFFERENT one - lift the middle square
-      // to layer 1 and it is the inner square that ends up standing on air.
-      // Announcing only this row would report success while the design broke
-      // somewhere the person is not looking.
-      announce(
-        problems.length === 1
-          ? `Layer ${layers[idx]} set. 1 other shape now needs a different layer.`
-          : `Layer ${layers[idx]} set. ${problems.length} other shapes now need a different layer.`
-      );
-    } else {
-      announce(`Layer ${layers[idx]} set. This shape has something under it.`);
-    }
+    updateLayerSummary();
+    announce(`Layer ${layers[idx]} set.`);
   }
 
   function handleRolesToggle() {
@@ -3066,7 +3022,7 @@ export function createSvgPrepWorkspace(containerEl) {
   /** Push the current layer array back into the selects, then re-check. */
   function applyLayerSelections() {
     if (!layersEnabled || layerCount === 0) {
-      updateLayerSummary(0);
+      updateLayerSummary();
       return;
     }
     const items = refs.objects.querySelectorAll('.svg-prep-object');
@@ -3075,7 +3031,7 @@ export function createSvgPrepWorkspace(containerEl) {
       const select = item.querySelector('.svg-prep-layer-select');
       if (select && layers[idx]) select.value = String(layers[idx]);
     }
-    validateAndMarkLayers();
+    updateLayerSummary();
   }
 
   /**
@@ -3571,10 +3527,7 @@ export function createSvgPrepWorkspace(containerEl) {
     originalIndex.forEach((original, live) => {
       out[original] = layers[live] || 1;
     });
-    const problems = validateLayers(nestingTree, layers).map((pr) => ({
-      ...pr,
-      index: originalIndex[pr.index],
-    }));
+    const problems = [];
     return { layers: out, limit: layerCount, problems };
   }
 

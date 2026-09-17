@@ -3305,11 +3305,14 @@ describe('the Layer column (DP-7)', () => {
     });
   });
 
-  describe('the containment law', () => {
+  describe('layers are height classes, and no row is ever marked (D-160)', () => {
     /**
      * Open the nested squares and BUILD the stack, the way a person does
      * since D-142: the column starts at all ones, so the middle square is
-     * put on layer 2 and the inner one on layer 3 by hand.
+     * put on layer 2 and the inner one on layer 3 by hand. The containment
+     * law that used to mark a stranded row is gone: the emission writes a
+     * layer 3 shape into every layer's file and the model extrudes each
+     * raised pass from below every floor, so nothing floats.
      */
     function openNested(count = 3) {
       const ws = createSvgPrepWorkspace(container);
@@ -3323,100 +3326,41 @@ describe('the Layer column (DP-7)', () => {
       const ws = openNested();
       expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '2', '3']);
       expect(ws.getLayerAssignments().problems).toEqual([]);
-      expect(
-        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
-      ).toHaveLength(0);
     });
 
-    it('breaks no law while every shape is still on layer 1', () => {
-      const ws = createSvgPrepWorkspace(container);
-      const { svgString, analysis } = makeNestedAnalysis(3);
-      ws.open(svgString, analysis, { layersEnabled: true });
+    it('a layer 3 shape with nothing on layer 2 around it is not a problem: nothing floats', () => {
+      const ws = openNested();
+      // The middle square back on layer 1: the inner one is on layer 3 with
+      // no layer 2 around it. It carries its own column from the face now.
+      announce.mockClear();
+      setLayer(ws, 1, 1);
       expect(ws.getLayerAssignments().problems).toEqual([]);
-      expect(
-        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
-      ).toHaveLength(0);
-    });
-
-    it('marks a shape whose support was cut away, and says why', () => {
-      const ws = openNested();
-      // Put the middle square on layer 1: the inner one now has nothing on
-      // layer 2 around it, so layer 3 would print it standing on air.
-      setLayer(ws, 1, 1);
-
-      const rows = ws._refs.objects.querySelectorAll('.svg-prep-layer-problem');
-      expect(rows).toHaveLength(1);
-      expect(rows[0].dataset.index).toBe('2');
-
-      const note = rows[0].querySelector('.svg-prep-layer-note');
-      expect(note.hidden).toBe(false);
-      expect(note.textContent).toContain('nothing under it');
-      expect(note.textContent).not.toContain('—');
-    });
-
-    it('points the select at its own explanation', () => {
-      const ws = openNested();
-      setLayer(ws, 1, 1);
-      const select = layerSelects(ws)[2];
-      expect(select.getAttribute('aria-invalid')).toBe('true');
-      const noteId = select.getAttribute('aria-describedby');
-      expect(noteId).toBeTruthy();
-      expect(ws._root.querySelector(`#${noteId}`).textContent).toContain(
-        'layer'
+      expect(ws._refs.objects.querySelectorAll('[aria-invalid]')).toHaveLength(
+        0
       );
+      expect(ws._refs.objects.querySelectorAll('.svg-prep-layer-note')).toHaveLength(
+        0
+      );
+      expect(ws._refs.layerSummary.textContent).not.toMatch(/different layer/);
+      expect(ws._refs.layerSummary.textContent).not.toMatch(/nothing under/);
+      const said = announce.mock.calls.map((c) => c[0]);
+      expect(said).toContain('Layer 1 set.');
+      expect(said.join(' ')).not.toMatch(/under it|different layer/);
     });
 
     it('NEVER reassigns the layer the person chose', () => {
       const ws = openNested();
       setLayer(ws, 1, 1);
-      // The row is marked, and the value it was given is still the value.
       expect(layerSelects(ws)[2].value).toBe('3');
       expect(ws.getLayerAssignments().layers[2]).toBe(3);
     });
 
-    it('clears the mark when the problem is fixed', () => {
+    it('no row wears the retired warning text', () => {
       const ws = openNested();
       setLayer(ws, 1, 1);
-      expect(
-        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
-      ).toHaveLength(1);
-      setLayer(ws, 1, 2);
-      expect(
-        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
-      ).toHaveLength(0);
-      expect(layerSelects(ws)[2].getAttribute('aria-invalid')).toBeNull();
-    });
-
-    it('announces the problem, not merely the new value', () => {
-      const ws = openNested();
-      announce.mockClear();
-      setLayer(ws, 1, 1);
-      const said = announce.mock.calls.map((c) => c[0]).join(' ');
-      // The row that CHANGED is legal; the one it stranded is not, and that
-      // is the fact worth hearing.
-      expect(said).toMatch(/1 other shape now needs a different layer/);
-    });
-
-    it('counts the problems in the summary', () => {
-      const ws = openNested();
-      setLayer(ws, 1, 1);
-      expect(ws._refs.layerSummary.textContent).toContain(
-        '1 shape needs a different layer'
+      expect(ws._refs.objects.textContent).not.toMatch(
+        /nothing under it|cut away before layer/
       );
-      expect(
-        ws._refs.layerSummary.classList.contains(
-          'svg-prep-layer-summary-problem'
-        )
-      ).toBe(true);
-    });
-
-    it('reports problems in ORIGINAL indices, like every other override', () => {
-      const ws = openNested();
-      setLayer(ws, 1, 1);
-      const { problems } = ws.getLayerAssignments();
-      expect(problems).toHaveLength(1);
-      expect(problems[0].index).toBe(2);
-      expect(problems[0].layer).toBe(3);
     });
   });
 

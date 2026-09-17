@@ -37,6 +37,8 @@ import {
   boundsOf,
   buildNestingTree,
   estimateRingPoints,
+  signedArea,
+  pointInPolygon,
 } from './svg-nesting.js';
 import {
   pathFromPathData,
@@ -642,10 +644,17 @@ export function getEffectivePaint(element, prop) {
 export function countTracedShapes(svgString) {
   if (!svgString) return 0;
   let count = 0;
-  const withD = /\sd\s*=\s*"([^"]*)"/g;
+  const tags = /<path\b[^>]*>/g;
   let match;
-  while ((match = withD.exec(svgString)) !== null) {
-    const moves = match[1].match(/[Mm]/g);
+  while ((match = tags.exec(svgString)) !== null) {
+    const tag = match[0];
+    // D-159: a traced region is one shape, whatever its holes.
+    if (/\sdata-colour=/.test(tag)) {
+      count += 1;
+      continue;
+    }
+    const d = /\sd\s*=\s*"([^"]*)"/.exec(tag);
+    const moves = d && d[1].match(/[Mm]/g);
     if (moves) count += moves.length;
   }
   return count;
@@ -670,6 +679,80 @@ function splitSubpaths(pathData) {
 }
 
 /**
+ * The rings of one compound path, measured: polygon, winding sign, a point
+ * inside. Shared by the two ring rules below (D-159).
+ */
+function measureRings(subpaths) {
+  return subpaths.map((sp) => {
+    const { points } = polygonFromPathData(sp);
+    const usable = points.length >= 3;
+    const area = usable ? signedArea(points) : 0;
+    // The probe for "is this ring inside that one" is the ring's own leftmost
+    // vertex, not a point of its interior: the interior of a letter O's outer
+    // ring is mostly its counter, and a probe there would put the outer ring
+    // inside its own hole. A vertex is outside every ring nested in this one
+    // and inside every ring around it, as long as rings do not touch.
+    let probe = null;
+    if (usable) {
+      probe = points[0];
+      for (const pt of points) {
+        if (pt.x < probe.x || (pt.x === probe.x && pt.y < probe.y)) probe = pt;
+      }
+    }
+    return {
+      points,
+      usable,
+      area: Math.abs(area),
+      sign: Math.sign(area),
+      probe,
+    };
+  });
+}
+
+/**
+ * The ring of a traced region that is the region: the one with the largest
+ * area. A tracer writes a region's holes as further rings of the same path;
+ * whatever sits in those holes is a region of its own, with its own path.
+ */
+function outerRingOf(subpaths) {
+  const rings = measureRings(subpaths);
+  let best = 0;
+  rings.forEach((r, i) => {
+    if (r.area > rings[best].area) best = i;
+  });
+  return subpaths[best];
+}
+
+/**
+ * Which rings of a drawn compound path are holes, under the path's own fill
+ * rule: under even-odd a ring inside an odd number of the path's other rings;
+ * under nonzero (the SVG default) a ring where the winding number, its own
+ * turn plus every ring around it, comes to zero. The drawing's meaning, kept
+ * when the rings become rows.
+ *
+ * @param {string[]} subpaths
+ * @param {string|null} fillRule - The effective fill-rule, null for nonzero
+ * @returns {boolean[]} One flag per ring
+ */
+function ringHoleFlags(subpaths, fillRule) {
+  const rings = measureRings(subpaths);
+  const evenOdd = String(fillRule || '').toLowerCase() === 'evenodd';
+  return rings.map((ring, j) => {
+    if (!ring.probe) return false;
+    let depth = 0;
+    let winding = ring.sign;
+    rings.forEach((other, k) => {
+      if (k === j || !other.usable) return;
+      if (pointInPolygon(ring.probe, other.points)) {
+        depth += 1;
+        winding += other.sign;
+      }
+    });
+    return evenOdd ? depth % 2 === 1 : winding === 0;
+  });
+}
+
+/**
  * Parse an SVG string into an array of shape element descriptors.
  *
  * Each descriptor contains the DOM element, its path data string,
@@ -678,7 +761,14 @@ function splitSubpaths(pathData) {
  * Compound paths (a single `<path>` whose `d` attribute contains
  * multiple M-command subpaths) are expanded so each subpath becomes
  * its own descriptor. This lets analyzeSvg and the workspace treat
- * each visual subpath as an independent element.
+ * each visual subpath as an independent element. Two rules keep that
+ * honest (D-159): a TRACED region, a path carrying `data-colour`, is one
+ * descriptor, its outer ring, because a tracer writes the region's holes as
+ * rings of the same path and whatever sits in them is a region of its own
+ * already (the CREATE logo's figure split into a solid disc over the navy
+ * dot's own Hole, and no role on the disc could change anything); and a
+ * DRAWN compound path's rings carry `ringHole` from the path's fill rule, so
+ * a letter O's counter is a Hole and not a Raised disc that fills it.
  *
  * @param {string} svgString - Complete SVG markup
  * @returns {Array<{element: Element, pathData: string, fill: string, stroke: string, luminance: number|null, subpathIndex?: number}>}
@@ -712,7 +802,21 @@ export function parseSvgElements(svgString) {
       resolvedFill !== null ? parseLuminance(resolvedFill) : null;
 
     const subpaths = splitSubpaths(pathData);
-    if (subpaths.length > 1) {
+    if (subpaths.length > 1 && element.hasAttribute('data-colour')) {
+      result.push({
+        element,
+        pathData: outerRingOf(subpaths),
+        fill,
+        stroke,
+        luminance,
+        transformBaked: baking.baked,
+        transformBakeFailed: baking.failed,
+      });
+    } else if (subpaths.length > 1) {
+      const holes = ringHoleFlags(
+        subpaths,
+        getEffectivePaint(element, 'fill-rule')
+      );
       subpaths.forEach((sp, idx) => {
         result.push({
           element,
@@ -721,6 +825,7 @@ export function parseSvgElements(svgString) {
           stroke,
           luminance,
           subpathIndex: idx,
+          ringHole: holes[idx] === true,
           transformBaked: baking.baked,
           transformBakeFailed: baking.failed,
         });
@@ -815,7 +920,7 @@ export function wallRoleOverrides(elements, nestingTree = null) {
     out[i] = d > 0 ? 'hole' : 'ignore';
   }
   elements.forEach((el, i) => {
-    if (out[i] === undefined) out[i] = 'foreground';
+    if (out[i] === undefined) out[i] = el.ringHole ? 'hole' : 'foreground';
   });
   return out;
 }
@@ -869,6 +974,9 @@ export function classifyElements(elements, options = {}) {
         return { ...el, pathData: expandedPath, role, strokeConverted: true };
       }
       role = strokeHandling;
+    } else if (el.ringHole) {
+      // D-159: a ring the drawing itself cuts out of its path.
+      role = 'hole';
     } else if (el.luminance !== null && el.luminance > luminanceThreshold) {
       role = 'hole';
     } else {
@@ -1537,6 +1645,7 @@ export function analyzeSvg(svgString) {
       autoRole: el.role,
       strokeConverted: el.strokeConverted || false,
       subpathIndex: el.subpathIndex,
+      ringHole: el.ringHole === true,
       warnings: elWarnings,
     };
   });

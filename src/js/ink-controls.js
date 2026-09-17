@@ -14,6 +14,45 @@
 
 import { INK_DEFAULTS } from './ink-extraction.js';
 
+/**
+ * The words that differ between the two hosts (D-156). One panel serves a
+ * charm's file control and the stencil tile, and it used to speak only the
+ * stencil's language: "a plate for each" color, "the surface behind the
+ * stencil", on a charm where no stencil is possible. Relief is the default
+ * because it is the purpose of every host but the tile.
+ */
+const PURPOSE_WORDS = {
+  relief: {
+    coloursDescription:
+      'Separate the picture into flat colors, one shape per color, with the color behind the picture as the wall, which is left out. Best for a colored drawing or a logo whose colors are the point.',
+    countHelp:
+      'One group of shapes per color. Ask for more than you think you need: leaving a color out later is easy, and a color that was never found is not there to keep.',
+    wallHelp:
+      'The color of the surface behind the picture. It is left out; every other color is the artwork.',
+    colourHead: (painted) =>
+      painted === 1
+        ? '1 color in the artwork, and the wall:'
+        : `${painted} colors in the artwork, and the wall:`,
+  },
+  stencil: {
+    coloursDescription:
+      'Separate the picture into flat colors, one region per color, ready to paint a plate for each. Best for a photo or a colored drawing you want as a spray stencil.',
+    countHelp:
+      'One plate per color. Ask for more than you think you need: taking a color out later is easy, and a color that was never found is not there to take.',
+    wallHelp:
+      'The color that is the surface behind the stencil, not paint on it. It gets no plate.',
+    colourHead: (painted) =>
+      painted === 1
+        ? '1 color to paint, and the wall:'
+        : `${painted} colors to paint, and the wall:`,
+  },
+};
+
+const wordsFor = (purpose) => PURPOSE_WORDS[purpose] || PURPOSE_WORDS.relief;
+
+/** What a change ends with when the run waits for a press (D-157). */
+export const WAITING_SENTENCE = 'Convert again when you are ready.';
+
 /** What each mode is called and what it does, in the order they are offered. */
 export const INK_MODE_CHOICES = [
   {
@@ -37,10 +76,22 @@ export const INK_MODE_CHOICES = [
   {
     value: 'colours',
     label: 'Colors',
-    description:
-      'Separate the picture into flat colors, one region per color, ready to paint a plate for each. Best for a photo or a colored drawing you want as a spray stencil.',
+    description: PURPOSE_WORDS.relief.coloursDescription,
   },
 ];
+
+/**
+ * The mode choices with the one description that depends on the host.
+ * @param {'relief'|'stencil'} [purpose]
+ */
+export function inkModeChoices(purpose = 'relief') {
+  const words = wordsFor(purpose);
+  return INK_MODE_CHOICES.map((choice) =>
+    choice.value === 'colours'
+      ? { ...choice, description: words.coloursDescription }
+      : choice
+  );
+}
 
 /** Not bundled, not endorsed - signposts to sets that are free to use. */
 export const OPEN_SYMBOL_SETS = [
@@ -59,9 +110,11 @@ export const OPEN_SYMBOL_SETS = [
  * @param {Array<{name: string, hex: string, share: number,
  *   isBackground: boolean}>} colors
  * @param {{downscaledFrom?: number, factor?: number}} [notes]
+ * @param {'relief'|'stencil'} [purpose] - Whose words: a charm counts colors
+ *   in the artwork, a stencil counts colors to paint
  * @returns {string}
  */
-export function colourSentence(colours, notes = {}) {
+export function colourSentence(colours, notes = {}, purpose = 'relief') {
   const list = colours || [];
   if (list.length === 0) return 'No colors were found in this picture.';
   const parts = list.map(
@@ -69,10 +122,7 @@ export function colourSentence(colours, notes = {}) {
       `${c.name} ${Math.round(c.share * 100)}%${c.isBackground ? ' (the wall)' : ''}`
   );
   const painted = list.filter((c) => !c.isBackground).length;
-  const head =
-    painted === 1
-      ? '1 color to paint, and the wall:'
-      : `${painted} colors to paint, and the wall:`;
+  const head = wordsFor(purpose).colourHead(painted);
   const downscale = notes.factor
     ? ` The picture was ${notes.factor} times too big to trace, so it was made ${notes.factor} times smaller first.`
     : '';
@@ -146,12 +196,23 @@ export function warningSentences(summary) {
  * blue field averages to that blue, while a card of four different fills
  * averages to a color that is in none of them.
  *
+ * A stencil's sentence: the plate is printed in the color the lines sat on.
+ * A charm is one material and has no plate, so there is nothing to suggest
+ * and the relief purpose gets nothing (D-156).
+ *
  * @param {Object|null} summary
  * @param {number} [minCoherence]
  * @param {number} [minShare]
+ * @param {'relief'|'stencil'} [purpose]
  * @returns {string|null}
  */
-export function filamentSentence(summary, minCoherence = 0.6, minShare = 0.05) {
+export function filamentSentence(
+  summary,
+  minCoherence = 0.6,
+  minShare = 0.05,
+  purpose = 'relief'
+) {
+  if (purpose !== 'stencil') return null;
   const color = summary?.rejectedColor;
   if (!color) return null;
   if (color.coherence < minCoherence || color.share < minShare) return null;
@@ -168,10 +229,24 @@ export function filamentSentence(summary, minCoherence = 0.6, minShare = 0.05) {
  * @param {string} deps.idPrefix - Unique per host, so two panels can coexist
  * @param {Function} deps.onChange - Called with the settings on every change
  * @param {Function} [deps.announce] - Speak a sentence
+ * @param {'relief'|'stencil'} [deps.purpose] - Whose words the panel speaks
+ *   (D-156): a charm's, or the stencil tile's
+ * @param {Function} [deps.runsBySelf] - Asked at every change: will the host
+ *   re-run the conversion by itself? When not, the change's own sentence
+ *   ends by saying that Convert again is the next press (D-157), so the
+ *   change and what it waits for are ONE announcement
  * @returns {{element: HTMLElement, getSettings: Function, setSummary: Function, setBusy: Function}}
  */
-export function createInkControls({ idPrefix, onChange, announce }) {
+export function createInkControls({
+  idPrefix,
+  onChange,
+  announce,
+  purpose = 'relief',
+  runsBySelf = () => true,
+}) {
   const id = (suffix) => `${idPrefix}-${suffix}`;
+  const words = wordsFor(purpose);
+  const choices = inkModeChoices(purpose);
   const settings = {
     mode: 'lineart',
     lightnessMax: INK_DEFAULTS.lightnessMax,
@@ -189,7 +264,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   legend.textContent = 'What to keep from the picture';
   fieldset.appendChild(legend);
 
-  for (const choice of INK_MODE_CHOICES) {
+  for (const choice of choices) {
     const row = document.createElement('div');
     row.className = 'ink-mode-row';
 
@@ -276,11 +351,11 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     'How many colors',
     INK_DEFAULTS.colourCountRange,
     INK_DEFAULTS.colourCount,
-    'One plate per color. Ask for more than you think you need: taking a color out later is easy, and a color that was never found is not there to take.'
+    words.countHelp
   );
   sliders.append(lightness.wrap, chroma.wrap, colourCount.wrap);
 
-  // Which color is the wall behind the stencil, rather than paint on it.
+  // Which color is the wall behind the picture, rather than the artwork.
   // "Work it out" votes along the border of the picture, which is where a
   // wall shows; color alone cannot answer it, because a dark background is
   // still a background.
@@ -301,8 +376,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   const wallHelp = document.createElement('span');
   wallHelp.className = 'ink-slider-help';
   wallHelp.id = id('wall-help');
-  wallHelp.textContent =
-    'The color that is the surface behind the stencil, not paint on it. It gets no plate.';
+  wallHelp.textContent = words.wallHelp;
   wallWrap.append(wallLabel, wallSelect, wallHelp);
   sliders.appendChild(wallWrap);
 
@@ -388,6 +462,23 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     if (typeof announce === 'function' && message) announce(message);
   };
 
+  /**
+   * A change the person made, said with what happens next. When the host
+   * will not re-run by itself, the sentence ends with the press that will.
+   * STRINGS: owner review pending (A11Y, DP-57 text pack).
+   */
+  const sayChange = (message) => {
+    let waits = false;
+    try {
+      waits = !runsBySelf();
+    } catch {
+      waits = false;
+    }
+    if (!waits) return say(message);
+    const base = /[.!?]$/.test(message) ? message : `${message}.`;
+    say(`${base} ${WAITING_SENTENCE}`);
+  };
+
   const emit = () => {
     // Only line art uses the colourfulness gate; leaving it live in the other
     // modes would offer a control that changes nothing.
@@ -429,8 +520,8 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   fieldset.addEventListener('change', (event) => {
     if (event.target.type !== 'radio') return;
     settings.mode = event.target.value;
-    const choice = INK_MODE_CHOICES.find((c) => c.value === settings.mode);
-    say(`${choice.label}. ${choice.description}`);
+    const choice = choices.find((c) => c.value === settings.mode);
+    sayChange(`${choice.label}. ${choice.description}`);
     emit();
   });
 
@@ -442,7 +533,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
       pair.range.value = String(value);
       pair.number.value = String(value);
       if (fromSlider)
-        say(`${pair.range.previousSibling.textContent}: ${value}`);
+        sayChange(`${pair.range.previousSibling.textContent}: ${value}`);
       emit();
     };
     pair.range.addEventListener('input', (e) => apply(e.target.value, false));
@@ -458,7 +549,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     const label =
       wallSelect.options[wallSelect.selectedIndex]?.textContent ||
       'Work it out';
-    say(`Wall color: ${label}`);
+    sayChange(`Wall color: ${label}`);
     emit();
   });
 
@@ -475,7 +566,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
      */
     setColourResult(colours, notes = {}) {
       setColours(colours);
-      summaryEl.textContent = colourSentence(colours, notes);
+      summaryEl.textContent = colourSentence(colours, notes, purpose);
       warningsEl.replaceChildren();
       warningsEl.hidden = true;
     },
@@ -525,7 +616,7 @@ export function createInkControls({ idPrefix, onChange, announce }) {
      */
     setSummary(summary, pathCount, extras = {}) {
       const sentence = summarySentence(summary, pathCount);
-      const filament = filamentSentence(summary);
+      const filament = filamentSentence(summary, undefined, undefined, purpose);
       // DP-32's law: one action, one announcement. Choosing a picture and
       // converting it is one action, so what was traced and what was taken off
       // it are one sentence - not a second announcement arriving behind the

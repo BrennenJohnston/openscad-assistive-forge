@@ -606,19 +606,36 @@ describe('q-charm layered design (DP-8)', () => {
     expect(byName.design_scale.default).toBe(60);
   });
 
-  it('anchors each pass at the one before it, in both directions', () => {
-    // The containment law as arithmetic. Raised travels up, engraved down,
-    // and a layer with no file travels nowhere.
-    expect(source).toContain('layer_base_1 = charm_top_z;');
-    expect(source).toContain('layer_base_2 = layer_base_1 + layer_1_rise;');
-    expect(source).toContain('layer_base_3 = layer_base_2 + layer_2_rise;');
+  it('stacks the layers as height classes, each direction from the face (D-160)', () => {
+    // The owner's rule: raised tops accumulate upward from the face,
+    // engraved floors downward, and a layer with no file travels nowhere.
+    // MEASURED on the STLs, face at 8.65: raised 0.5 / 0.5 / 1.0 tops out at
+    // 10.65; layer 2 at 1.0 moves it to 11.15; raised 1.0 beside engraved
+    // 1.0 leaves 9.65 over 7.65, two millimeters between the surfaces.
+    expect(source).toContain('layer_top_1 = charm_top_z + layer_1_up;');
+    expect(source).toContain('layer_top_2 = layer_top_1 + layer_2_up;');
+    expect(source).toContain('layer_top_3 = layer_top_2 + layer_3_up;');
+    expect(source).toContain('layer_floor_1 = charm_top_z - layer_1_down;');
+    expect(source).toContain('layer_floor_2 = layer_floor_1 - layer_2_down;');
+    expect(source).toContain('layer_floor_3 = layer_floor_2 - layer_3_down;');
     for (let n = 1; n <= 3; n++) {
-      expect(source).toMatch(
-        new RegExp(
-          `layer_${n}_rise = layer_${n}_on \\? \\(\\(design_layer_${n}_style == "raised"\\)`
-        )
+      expect(source).toContain(
+        `layer_${n}_up = (layer_${n}_on && design_layer_${n}_style == "raised") ? design_layer_${n}_depth : 0;`
+      );
+      expect(source).toContain(
+        `layer_${n}_down = (layer_${n}_on && design_layer_${n}_style != "raised") ? design_layer_${n}_depth : 0;`
       );
     }
+    // The passes apply in layer order around the base, so a raised layer 3
+    // inside an engraved layer 2 stands in the pit instead of being cut away.
+    expect(source).toContain(
+      'layer_pass(3) layer_pass(2) layer_pass(1) q_charm_base();'
+    );
+    // A raised pass is extruded from below every floor: nothing floats.
+    expect(source).toContain('layer_stack_floor - layer_eps');
+    expect(source).toContain(
+      'echo(str("layer levels mm: top1=", layer_top_1'
+    );
   });
 
   it('joins the total-height accounting, so attachments still cut at the true top', () => {
@@ -630,11 +647,15 @@ describe('q-charm layered design (DP-8)', () => {
 
   it('overlaps every boolean by the epsilon, never exactly touching', () => {
     expect(source).toContain('layer_eps = 0.01;');
-    for (let n = 1; n <= 3; n++) {
-      expect(source).toContain(
-        `linear_extrude(height = design_layer_${n}_depth + layer_eps)`
-      );
-    }
+    // D-160: one pass module for the three layers. A raised pass reaches
+    // from below the stack's floor to its own top, an engraved one from its
+    // own floor through the stack's top; both carry the epsilon.
+    expect(source).toContain(
+      'linear_extrude(height = top - layer_stack_floor + layer_eps)'
+    );
+    expect(source).toContain(
+      'linear_extrude(height = layer_stack_top - floor + layer_eps)'
+    );
   });
 
   it('names the canvas span the app writes, as a contract', () => {

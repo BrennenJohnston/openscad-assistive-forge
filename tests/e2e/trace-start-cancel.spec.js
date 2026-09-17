@@ -509,7 +509,7 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.info).not.toContainText(/already running/);
 
     // The conversion that finishes is the Colors one.
-    await expect(summary).toContainText(/colors? to paint, and the wall/, {
+    await expect(summary).toContainText(/colors? in the artwork, and the wall/, {
       timeout: 240_000,
     });
     await expect(p.info).toContainText('converted from');
@@ -626,5 +626,81 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
       worst,
       `the page took ${worst} ms to answer while the charm took the design`
     ).toBeLessThan(1500);
+  });
+});
+
+// ── DP-57: a setting changed on a picture that is not quick waits for the
+// press (D-157) ──────────────────────────────────────────────────────────────
+//
+// The owner's fourth walk: "The colors processing option … is still auto
+// processing rather than prompting the user to start the process which
+// results in long processing times that are not user driven." MEASURED at 6x
+// on a phone-sized page: Colors chosen, a conversion running 300 ms later,
+// with no dialog for its first second (a self-start's grace), on a picture
+// the same rule had just refused to start by itself when chosen. One rule
+// now, in both places. RED on the build before this release.
+test.describe('a changed setting waits for the press where the picture is not quick (DP-57, D-157)', () => {
+  test('★ D-157: after a slow conversion, Colors chosen offers Convert again and starts nothing', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
+    test.setTimeout(300_000);
+    await openCharm(page);
+    await page.evaluate(() => {
+      window.__heard = [];
+      const node = document.getElementById('srAnnouncer');
+      if (!node) return;
+      new MutationObserver(() => {
+        const t = node.textContent.trim();
+        if (t) window.__heard.push(t);
+      }).observe(node, { childList: true, characterData: true, subtree: true });
+    });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+
+    // 2000 x 2000 is 4 MP: never quick, always the person's press.
+    await choosePicture(page, 2000, 'plain');
+    const p = panel(page);
+    await expect(p.start).toBeVisible({ timeout: 120_000 });
+    await p.start.click();
+    await expect(p.info).toContainText('converted from', { timeout: 240_000 });
+    await expect(p.running).toBeHidden();
+    await expect(p.start).toHaveText('Convert again');
+
+    // The change: Colors, on the card, as the owner did.
+    const colours = page.locator('input[type="radio"][value="colours"]');
+    await colours.evaluate((el) => {
+      el.checked = true;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // Nothing starts: no dialog, no re-read, and the summary is still the
+    // Line art sentence; a run would have replaced it with the Colors one.
+    await page.waitForTimeout(2500);
+    await expect(p.running).toBeHidden();
+    await expect(page.locator('.ink-controls-summary')).toContainText(
+      /shapes? traced/
+    );
+    await expect(page.locator('.ink-controls-summary')).not.toContainText(
+      /and the wall|Re-reading/
+    );
+    await expect(p.start).toBeVisible();
+    await expect(p.start).toHaveText('Convert again');
+    await expect(p.note).toContainText('Convert again when you are ready.');
+    const heard = await page.evaluate(() => window.__heard ?? []);
+    expect(
+      heard.some((t) => /^Colors\. .*Convert again when you are ready\.$/.test(t)),
+      `heard: ${heard.join(' | ')}`
+    ).toBe(true);
+
+    // The press is the person's: the dialog stands at once, and the run is
+    // the Colors one.
+    await p.start.click();
+    await expect(p.running).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.ink-controls-summary')).toContainText(
+      /colors? in the artwork, and the wall/,
+      { timeout: 240_000 }
+    );
+    await expect(p.note).not.toContainText('Convert again when you are ready.');
   });
 });

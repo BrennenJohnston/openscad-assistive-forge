@@ -23,7 +23,6 @@ import {
   buildNestingTree,
   suggestLayers,
   layerLimit,
-  validateLayers,
   distanceToEdge,
   holeFits,
 } from '../../src/js/svg-nesting.js';
@@ -304,54 +303,6 @@ describe('suggestLayers and layerLimit', () => {
   it('an empty design offers no layers', () => {
     expect(layerLimit(buildNestingTree([]))).toBe(0);
     expect(layerLimit(null)).toBe(0);
-  });
-});
-
-describe('validateLayers - the containment law', () => {
-  const tree = () => buildNestingTree(nestedSquares(3));
-
-  it('accepts the suggestion it made itself', () => {
-    expect(validateLayers(tree(), [1, 2, 3])).toEqual([]);
-  });
-
-  it('accepts everything on layer 1', () => {
-    expect(validateLayers(tree(), [1, 1, 1])).toEqual([]);
-  });
-
-  it('rejects layer 3 sitting on layer 1, with the reason named', () => {
-    // The middle square is gone by layer 3, so the inner one stands on air.
-    const problems = validateLayers(tree(), [1, 1, 3]);
-    expect(problems).toHaveLength(1);
-    expect(problems[0].index).toBe(2);
-    expect(problems[0].reason).toBe('enclosing-shape-on-wrong-layer');
-  });
-
-  it('rejects a layer 2 element that nothing encloses', () => {
-    const t = buildNestingTree([
-      { pathData: square(0, 0, 10) },
-      { pathData: square(50, 0, 10) },
-    ]);
-    const problems = validateLayers(t, [1, 2]);
-    expect(problems).toHaveLength(1);
-    expect(problems[0].reason).toBe('not-enclosed');
-  });
-
-  it('accepts support from a grandparent on the layer below', () => {
-    // Layer 2 may be carried by any enclosing shape on layer 1, not only the
-    // immediate one - the law is about surviving material, not adjacency.
-    const t = buildNestingTree(nestedSquares(3));
-    expect(validateLayers(t, [1, 1, 2])).toEqual([]);
-  });
-
-  it('never reassigns anything', () => {
-    const layers = [1, 1, 3];
-    validateLayers(tree(), layers);
-    expect(layers).toEqual([1, 1, 3]);
-  });
-
-  it('says nothing about a design with no layers set', () => {
-    expect(validateLayers(tree(), [])).toEqual([]);
-    expect(validateLayers(null, [1, 2, 3])).toEqual([]);
   });
 });
 

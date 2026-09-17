@@ -1743,3 +1743,83 @@ test.describe('the shapes you left out, and a view you can steer (DP-56)', () =>
     for (const h of sizes) expect(h).toBeGreaterThanOrEqual(44)
   })
 })
+
+// ── DP-57: the dot inside the figure's arm (D-159) ──────────────────────────
+//
+// The owner's fourth walk (2026-09-17): "a small black circle path on the
+// CREATE logo that is nested within the arm of the logo character that when
+// turned to ignore, achieved no difference in 2d representation or in 3d
+// rendering". MEASURED: the figure's own inner ring was split into a row of
+// its own, a solid Raised disc painted over the navy dot's Hole, so the
+// click on the dot found the disc and no role on it could change anything.
+// A traced region is one row now, its outer ring; the dot is the wall's
+// island, one Hole row; islands are painted last, so the click finds it; and
+// Ignore on it fills the figure. RED on the build before this release.
+test.describe('the dot inside the figure (DP-57, D-159)', () => {
+  test('★ D-159: the click on the dot finds one Hole row, and Ignore on it fills the figure', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(111)
+
+    const pane = editor.locator('.svg-prep-result-pane')
+    await expect(pane.locator('.svg-prep-hit-path').first()).toBeAttached({
+      timeout: 30000,
+    })
+    // The hit path under the dot, in the drawing's own units.
+    const dot = await pane.locator('svg').first().evaluate((svg) => {
+      const pt = svg.createSVGPoint()
+      pt.x = 145
+      pt.y = 135
+      const hits = [...svg.querySelectorAll('.svg-prep-hit-path')].filter((p) =>
+        p.isPointInFill(pt)
+      )
+      // The last one painted is the one a click finds.
+      const top = hits[hits.length - 1]
+      return top ? { index: top.dataset.index, count: hits.length } : null
+    })
+    expect(dot).not.toBeNull()
+    const row = page.locator(`.svg-prep-object[data-index="${dot.index}"]`)
+    await expect(
+      row.locator('input[type=radio][value="hole"]')
+    ).toBeChecked()
+
+    const filledAtDot = () =>
+      pane.locator('svg').first().evaluate((svg) => {
+        const pt = svg.createSVGPoint()
+        pt.x = 145
+        pt.y = 135
+        return [...svg.querySelectorAll('path')]
+          .filter((p) => !p.closest('.svg-prep-hit-layer, .svg-prep-role-layer'))
+          .filter((p) => !p.classList.contains('svg-prep-standin-path--ignore'))
+          .filter((p) => p.isPointInFill(pt))
+          .map((p) => p.getAttribute('class') || 'result')
+      })
+    // Before: the hole is painted as paper over the ink, or the result has
+    // the hole; either way the dot is not solid ink.
+    const before = await filledAtDot()
+    expect(before.some((c) => /hole/.test(c)) || before.length === 0).toBe(true)
+
+    await pane.locator(`.svg-prep-hit-path[data-index="${dot.index}"]`).dispatchEvent('click')
+    await expect(
+      editor.locator('.svg-prep-live, [aria-live="polite"].sr-only').first()
+    ).toContainText(/1 of 111 shapes selected\./, { timeout: 10000 })
+
+    await row.locator('input[type=radio][value="ignore"]').check({ force: true })
+    // The combined result arrives after the settle: the dot is solid ink.
+    await expect
+      .poll(
+        async () => {
+          const classes = await filledAtDot()
+          return classes.some((c) => /raised|result/.test(c)) && !classes.some((c) => /hole/.test(c))
+        },
+        { timeout: 60000 }
+      )
+      .toBe(true)
+  })
+})
