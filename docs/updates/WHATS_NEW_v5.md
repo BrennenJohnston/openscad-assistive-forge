@@ -105,7 +105,7 @@ particular step that used to dominate everything was replaced: a
 drawing that took nineteen seconds to come back now takes about one
 and a half.
 
-![The drawing editor over the charm preview: a bird line drawing fills the left side under the heading "Will print as", with Fit, plus and minus buttons and a color key reading On, Cut out and Off beneath it. The toolbar holds a Drawing / Charm switch with Drawing chosen, then Crop, Apply, Save SVG, Keep original, Reset and More. On the right, a Shapes panel lists the shapes: each row has the shape's name, a Raised / Hole / Ignore switch with one choice highlighted and a More button, and four of the rows carry a small mark reading thin beside the name](images/drawing-editor.png)
+![The drawing editor over the charm preview: a bird line drawing in deep blue, the color of layer 1, fills the left side under the heading "Will print as", with Fit, plus and minus buttons, four arrow buttons that move the view, and a color key reading Layer 1, Layer 2, Cut out and Off beneath it. The toolbar holds a Drawing / Charm switch with Drawing chosen, then Crop, Apply, Save SVG, Keep original, Reset and More. On the right, a Shapes panel lists the shapes: each row has the shape's name, an On / Cut out / Off switch with one choice highlighted and a More button, and four of the rows carry a small mark reading thin beside the name](images/drawing-editor.png)
 
 The editor itself got the change I care most about: it is **one
 picture** now. The drawing you are editing fills the space, and
