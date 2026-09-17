@@ -3984,11 +3984,20 @@ body.high-contrast .param-tooltip {
   gap: var(--space-md);
 }
 
+/* DP-Q55 (answered app-wide, 2026-09-17): the range's hit box is 44 px tall,
+   the touch floor, with the 6 px track painted across its middle so nothing
+   about the look changes; the thumb stays the browser's own, in the app's
+   accent. It was a 6 px element, which was the whole target. */
 .slider-container input[type='range'] {
   flex: 1;
-  height: 6px;
+  height: 44px;
+  margin: 0;
   border-radius: var(--border-radius-xs);
-  background: var(--color-bg-secondary);
+  background: linear-gradient(
+      var(--color-bg-secondary),
+      var(--color-bg-secondary)
+    )
+    center / 100% 6px no-repeat;
   outline: none;
 }
 
@@ -4017,6 +4026,9 @@ body.high-contrast .param-tooltip {
 .slider-spinbox {
   width: 80px;
   min-width: 80px;
+  /* DP-Q55: the box meets the 44 px floor (it was 42 in the customizer and
+     38 in the drawing editor's font size). */
+  min-height: 44px;
   padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
