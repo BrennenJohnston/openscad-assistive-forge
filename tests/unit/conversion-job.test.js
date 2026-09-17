@@ -221,14 +221,29 @@ describe('the conversion job (DP-52)', () => {
     expect(job.isRunning()).toBe(false);
   });
 
-  it('runs one conversion at a time', async () => {
+  it('★ a second run supersedes the first: the first ends as superseded, the second runs (D-151)', async () => {
     const runner = fakeRunner();
     const job = createConversionJob({ runner, yieldToPage: () => Promise.resolve() });
-    const first = job.run({ imageData: {}, settings: null, prepare: () => 1, update: () => 1 });
-    await expect(
-      job.run({ imageData: {}, settings: null, prepare: () => 2, update: () => 2 })
-    ).rejects.toThrow(/already running/);
+    const first = job.run({ imageData: {}, settings: { a: 1 }, prepare: () => 1, update: () => 1 });
+    const second = job.run({ imageData: {}, settings: { a: 2 }, prepare: () => 2, update: () => 2 });
+    await expect(first).rejects.toMatchObject({ name: 'TraceCancelled', reason: 'superseded' });
+    // The runner was stopped once, and the second trace began only after the
+    // first had let go, with the second's own settings.
+    expect(runner.cancelled).toBe(1);
+    expect(runner.calls).toHaveLength(2);
+    expect(runner.calls[1].settings).toEqual({ a: 2 });
+    expect(job.isRunning()).toBe(true);
     runner.pending.resolve({ svg: '' });
-    await expect(first).resolves.toBe(1);
+    await expect(second).resolves.toBe(2);
+    expect(job.isRunning()).toBe(false);
+  });
+
+  it('a Cancel pressed by a person keeps its own reason', async () => {
+    const runner = fakeRunner();
+    const job = createConversionJob({ runner, yieldToPage: () => Promise.resolve() });
+    const run = job.run({ imageData: {}, settings: null, prepare: () => 1, update: () => 1 });
+    job.cancel();
+    await expect(run).rejects.toMatchObject({ name: 'TraceCancelled', reason: 'cancelled' });
+    expect(job.isRunning()).toBe(false);
   });
 });

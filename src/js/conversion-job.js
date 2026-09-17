@@ -51,7 +51,10 @@ export function createConversionJob({ runner, onStage, yieldToPage } = {}) {
   }
   const pause = typeof yieldToPage === 'function' ? yieldToPage : defaultYield;
   let running = false;
+  // false while nothing has stopped the run; otherwise why it was stopped,
+  // which is the reason the run rejects with.
   let cancelled = false;
+  let current = null;
 
   const report = (stage) => {
     if (typeof onStage !== 'function') return;
@@ -69,7 +72,13 @@ export function createConversionJob({ runner, onStage, yieldToPage } = {}) {
    */
   async function checkpoint() {
     await pause();
-    if (cancelled) throw new TraceCancelled('cancelled');
+    if (cancelled) throw new TraceCancelled(cancelled);
+  }
+
+  /** Stop the run in flight, for the reason given. */
+  function stop(reason) {
+    cancelled = reason;
+    if (typeof runner.cancel === 'function') runner.cancel();
   }
 
   /**
@@ -85,10 +94,31 @@ export function createConversionJob({ runner, onStage, yieldToPage } = {}) {
    * @param {Function} steps.update - The emit: `(prepared) => result`
    * @returns {Promise<*>} What `update` returned
    */
-  async function run({ imageData, settings, traceOptions, prepare, update }) {
-    if (running) throw new Error('A conversion is already running');
+  async function run(steps) {
+    if (running) {
+      // D-151. A conversion asked for while one runs is the person changing
+      // their mind - a setting moved, another mode chosen - and the newest
+      // settings win, as the runner's own start() always had it. The one in
+      // flight ends as superseded (never as a failure, never with a word),
+      // and this one begins once it has let go. Refusing it lost the change:
+      // "Conversion failed: A conversion is already running", and the old
+      // result stood.
+      stop('superseded');
+      await current.catch(() => {});
+    }
     running = true;
     cancelled = false;
+    current = execute(steps);
+    return current;
+  }
+
+  async function execute({
+    imageData,
+    settings,
+    traceOptions,
+    prepare,
+    update,
+  }) {
     try {
       report('reading');
       const traced = await runner.start(imageData, settings, {
@@ -101,6 +131,16 @@ export function createConversionJob({ runner, onStage, yieldToPage } = {}) {
       await checkpoint();
       report('updating');
       return await update(prepared);
+    } catch (err) {
+      // The runner says "canceled" whatever the reason; the job knows which.
+      if (
+        cancelled &&
+        err instanceof TraceCancelled &&
+        err.reason !== cancelled
+      ) {
+        throw new TraceCancelled(cancelled);
+      }
+      throw err;
     } finally {
       running = false;
     }
@@ -114,8 +154,7 @@ export function createConversionJob({ runner, onStage, yieldToPage } = {}) {
      * one stage away.
      */
     cancel() {
-      cancelled = true;
-      if (typeof runner.cancel === 'function') runner.cancel();
+      stop('cancelled');
     },
     isRunning: () => running,
   };

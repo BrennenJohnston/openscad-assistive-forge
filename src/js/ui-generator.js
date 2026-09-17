@@ -3383,6 +3383,10 @@ function createFileControl(
       if (openEditorAfter) openEditorAfter();
     } catch (err) {
       clearTimeout(graceTimer);
+      // D-151. Superseded by a newer conversion (a setting changed while this
+      // one ran): the newer one owns the panel and the dialog from here, so
+      // this one leaves without touching either, and without a word.
+      if (err instanceof TraceCancelled && err.reason === 'superseded') return;
       traceProgress.finish();
       traceProgress.offer('Start conversion');
       dialog.close();
