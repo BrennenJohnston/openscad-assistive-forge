@@ -1611,3 +1611,48 @@ test.describe('crop on the charm host (DP-49)', () => {
     await expect(undo).toBeHidden()
   })
 })
+
+// ── DP-Q55: every slider row meets the 44 px floor ──────────────────────────
+//
+// The customizer's slider row was reported under the touch floor at the
+// round 4 closeout (a 42 px box, a 6 px track), and the crop view reuses that
+// row. The owner answered DP-Q55 app-wide: the number box and the range's hit
+// box are 44 px tall everywhere, the 6 px track painted inside the box so the
+// look stays. RED before: 42 and 6.
+test.describe('every slider row meets the 44 px floor (DP-Q55)', () => {
+  // The row's own range, and the box beside it: the page carries hidden
+  // panel sliders first in document order, so the range is named, not found.
+  const heights = (page, rangeSelector) =>
+    page.evaluate((sel) => {
+      const range = document.querySelector(sel)
+      const spin = range?.closest('.slider-container')?.querySelector('.slider-spinbox')
+      const h = (el) => (el ? Math.round(el.getBoundingClientRect().height) : null)
+      return { range: h(range), spin: h(spin) }
+    }, rangeSelector)
+
+  test('★ in the customizer and in the crop view, the range and the box are 44 px tall', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.locator('#param-design_scale').scrollIntoViewIfNeeded()
+    const customizer = await heights(page, '#param-design_scale')
+    expect(customizer.range, 'the customizer range').toBeGreaterThanOrEqual(44)
+    expect(customizer.spin, 'the customizer box').toBeGreaterThanOrEqual(44)
+
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(10)
+    await editor.locator('.drawing-editor-crop-btn').click()
+    await expect(editor.locator('.drawing-editor-crop')).toBeVisible()
+    const crop = await heights(
+      page,
+      '#drawingEditorSurface .drawing-editor-crop input[type="range"]'
+    )
+    expect(crop.range, 'the crop view range').toBeGreaterThanOrEqual(44)
+    expect(crop.spin, 'the crop view box').toBeGreaterThanOrEqual(44)
+  })
+})
