@@ -15630,12 +15630,35 @@ body.tutorial-body-locked {
    file, so a shape set to Ignore leaves the picture at once. Ink and paper
    rather than the drawing's own colors: this pane answers "what will print",
    and what prints is one material. */
+/* D-155: literal ink and paper, like the combined result's own black, because
+   the dark theme inverts the whole picture: the theme's light text token
+   turned dark on a dark pane and the stand-in all but vanished while the
+   shapes combined. Black inverts to white there, as the result does. */
 .svg-prep-standin-path--raised {
-  fill: var(--color-text-primary);
+  fill: #000;
 }
 
+/* D-154: a hole is paper cut out of ink, and paper on paper shows nothing, so
+   a hole carries a fine dashed outline in a neutral color (it survives the
+   dark theme's inversion). */
 .svg-prep-standin-path--hole {
-  fill: var(--color-bg-secondary);
+  fill: #fff;
+  stroke: #666;
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* D-154: a shape left out stays in the picture in the left-out style, the
+   warning color with a dashed edge: there, and not printing. Above the ink,
+   under the marks. */
+.svg-prep-standin-path--ignore {
+  fill: var(--color-warning);
+  fill-opacity: 0.6;
+  stroke: var(--color-warning-text);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
 }
 
 .svg-prep-role--foreground {
@@ -15688,33 +15711,38 @@ body.tutorial-body-locked {
   flex-shrink: 0;
 }
 
+/* D-154: the legend says what the picture paints: ink, paper with a dashed
+   edge, and the left-out warning color with a dashed edge. */
 .svg-prep-legend-chip--foreground {
-  background: var(--color-success-text);
-  opacity: 0.55;
+  background: var(--color-text-primary);
 }
 
 .svg-prep-legend-chip--hole {
-  background: var(--color-error-text);
-  opacity: 0.55;
-  border: 1px dashed var(--color-error-text);
+  background: var(--color-bg-primary);
+  border: 1px dashed var(--color-text-secondary);
 }
 
 .svg-prep-legend-chip--ignore {
-  background: var(--color-text-secondary);
-  opacity: 0.35;
+  background: var(--color-warning);
+  opacity: 0.7;
+  border: 1px dashed var(--color-warning-text);
 }
 
 /* ── Zoom controls ───────────────────────────────────────────────────────── */
 .svg-prep-zoom-controls {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-xs);
   margin-top: var(--space-xs);
   align-self: center;
 }
 
+/* D-153: seven buttons now, every one a 44 px target (the shared token is
+   36 px); the row wraps where it must. */
 .svg-prep-zoom-controls button {
-  min-width: var(--size-touch-target);
-  min-height: var(--size-touch-target);
+  min-width: 44px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -16515,6 +16543,35 @@ body.tutorial-body-locked {
   :root:not([data-theme='light']) .svg-prep-source-pane svg,
   :root:not([data-theme='light']) .svg-prep-result-pane svg {
     filter: invert(1);
+  }
+
+  :root:not([data-theme='light'])
+    .svg-prep-result-pane
+    .svg-prep-standin-left-out {
+    filter: invert(1);
+  }
+}
+
+:root[data-theme='dark'] .svg-prep-result-pane .svg-prep-standin-left-out {
+  filter: invert(1);
+}
+
+/* Forced colors: the left-out shapes in the link color with a dashed edge,
+   the holes outlined in the text color. */
+@media (forced-colors: active) {
+  .svg-prep-standin-path--ignore {
+    fill: Canvas;
+    stroke: LinkText;
+    stroke-width: 2;
+  }
+
+  .svg-prep-standin-path--hole {
+    stroke: CanvasText;
+  }
+
+  .svg-prep-legend-chip--ignore {
+    background: Canvas;
+    border: 2px dashed LinkText;
   }
 }
 

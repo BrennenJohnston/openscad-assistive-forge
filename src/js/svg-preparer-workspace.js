@@ -719,7 +719,25 @@ function buildZoomControls(pane) {
   zoomOutBtn.setAttribute('aria-label', `Zoom out ${pane}`);
   zoomOutBtn.textContent = '\u2212';
 
-  container.append(fitBtn, zoomInBtn, zoomOutBtn);
+  // D-153: once the picture is zoomed there was no way to move the view on a
+  // desktop, and only two fingers on a phone. Four buttons, a quarter of a
+  // view each; the arrow keys do the same with the picture focused.
+  const pan = (dir, glyph, label) => {
+    const btn = document.createElement('button');
+    btn.className = `svg-prep-pan svg-prep-pan-${dir}`;
+    btn.setAttribute('aria-label', label);
+    btn.textContent = glyph;
+    return btn;
+  };
+  container.append(
+    fitBtn,
+    zoomInBtn,
+    zoomOutBtn,
+    pan('left', '\u25C0', `Move the ${pane} view left`),
+    pan('up', '\u25B2', `Move the ${pane} view up`),
+    pan('down', '\u25BC', `Move the ${pane} view down`),
+    pan('right', '\u25B6', `Move the ${pane} view right`)
+  );
   return container;
 }
 
@@ -1397,6 +1415,11 @@ export function createSvgPrepWorkspace(containerEl) {
     paint('hole', 'svg-prep-standin-path--hole');
     svg.appendChild(art);
 
+    // D-154: a shape set to Ignore used to leave the picture entirely, so
+    // there was nothing to point at to bring it back. It stays, painted in
+    // the left-out style, above the ink so it can be seen where it was.
+    svg.appendChild(buildLeftOutLayer());
+
     const roleLayer = document.createElementNS(SVG_NS, 'g');
     roleLayer.setAttribute('class', 'svg-prep-role-layer');
     roleLayer.setAttribute('aria-hidden', 'true');
@@ -1477,6 +1500,28 @@ export function createSvgPrepWorkspace(containerEl) {
       typeof el.element?.getAttribute === 'function' &&
       el.element.getAttribute('data-background') === 'true'
     );
+  }
+
+  /**
+   * D-154: the shapes left out, painted so they can be seen and chosen
+   * again. Every ignored shape but the wall of a Colors drawing, which is
+   * the whole canvas and would flood the picture; its row still turns it on.
+   */
+  function buildLeftOutLayer() {
+    const layer = document.createElementNS(SVG_NS, 'g');
+    layer.setAttribute('class', 'svg-prep-standin-left-out');
+    layer.setAttribute('aria-hidden', 'true');
+    liveElements.forEach((el, i) => {
+      if (!el.pathData || (roles[i] || 'ignore') !== 'ignore') return;
+      if (isIgnoredWall(el, i)) return;
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('fill-rule', 'evenodd');
+      p.setAttribute('class', 'svg-prep-standin-path--ignore');
+      p.dataset.index = String(i);
+      layer.appendChild(p);
+    });
+    return layer;
   }
 
   function buildHitLayer() {
@@ -1897,6 +1942,10 @@ export function createSvgPrepWorkspace(containerEl) {
       // the combined result the moment they moved into groups - which is a
       // third copy of the same three lines, and exactly how the first two
       // copies drifted apart.
+      // D-154: the combined result is what will print, and the shapes left
+      // out are drawn over it in the left-out style, so they can be seen and
+      // chosen again here too.
+      imported.appendChild(buildLeftOutLayer());
       imported.appendChild(buildOverlay());
       imported.appendChild(buildHitLayer());
       markAsPicture(imported, 'Prepared result');
@@ -1970,6 +2019,34 @@ export function createSvgPrepWorkspace(containerEl) {
       });
     }
 
+    /**
+     * D-153: move the view by a share of itself. The view's middle never
+     * leaves the drawing's box, so the picture cannot be steered out of
+     * sight; Fit brings the whole drawing back.
+     */
+    function handlePan(fx, fy) {
+      const svg = getSvg();
+      if (!svg) return;
+      const cur = parseViewBox(svg.getAttribute('viewBox')) || { ...naturalVB };
+      const x = cur.x + cur.w * fx;
+      const y = cur.y + cur.h * fy;
+      const minX = naturalVB.x - cur.w / 2;
+      const maxX = naturalVB.x + naturalVB.w - cur.w / 2;
+      const minY = naturalVB.y - cur.h / 2;
+      const maxY = naturalVB.y + naturalVB.h - cur.h / 2;
+      applyVB({
+        x: Math.min(Math.max(x, minX), maxX),
+        y: Math.min(Math.max(y, minY), maxY),
+        w: cur.w,
+        h: cur.h,
+      });
+    }
+    const PAN_STEP = 0.25;
+    const handlePanLeft = () => handlePan(-PAN_STEP, 0);
+    const handlePanRight = () => handlePan(PAN_STEP, 0);
+    const handlePanUp = () => handlePan(0, -PAN_STEP);
+    const handlePanDown = () => handlePan(0, PAN_STEP);
+
     function handlePaneKeydown(e) {
       if (e.key === '+' || e.key === '=') {
         e.preventDefault();
@@ -1977,16 +2054,36 @@ export function createSvgPrepWorkspace(containerEl) {
       } else if (e.key === '-') {
         e.preventDefault();
         handleZoomOut();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePanLeft();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handlePanRight();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        handlePanUp();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        handlePanDown();
       }
     }
 
     const fitBtn = zoomEl.querySelector('.svg-prep-zoom-fit');
     const zoomInBtn = zoomEl.querySelector('.svg-prep-zoom-in');
     const zoomOutBtn = zoomEl.querySelector('.svg-prep-zoom-out');
+    const panLeftBtn = zoomEl.querySelector('.svg-prep-pan-left');
+    const panRightBtn = zoomEl.querySelector('.svg-prep-pan-right');
+    const panUpBtn = zoomEl.querySelector('.svg-prep-pan-up');
+    const panDownBtn = zoomEl.querySelector('.svg-prep-pan-down');
 
     fitBtn.addEventListener('click', handleFit);
     zoomInBtn.addEventListener('click', handleZoomIn);
     zoomOutBtn.addEventListener('click', handleZoomOut);
+    panLeftBtn?.addEventListener('click', handlePanLeft);
+    panRightBtn?.addEventListener('click', handlePanRight);
+    panUpBtn?.addEventListener('click', handlePanUp);
+    panDownBtn?.addEventListener('click', handlePanDown);
     pane.addEventListener('keydown', handlePaneKeydown);
 
     // ── DP-40 P2: two fingers, signed at DP-Q37 ─────────────────────────
@@ -2085,6 +2182,10 @@ export function createSvgPrepWorkspace(containerEl) {
       fitBtn.removeEventListener('click', handleFit);
       zoomInBtn.removeEventListener('click', handleZoomIn);
       zoomOutBtn.removeEventListener('click', handleZoomOut);
+      panLeftBtn?.removeEventListener('click', handlePanLeft);
+      panRightBtn?.removeEventListener('click', handlePanRight);
+      panUpBtn?.removeEventListener('click', handlePanUp);
+      panDownBtn?.removeEventListener('click', handlePanDown);
       pane.removeEventListener('keydown', handlePaneKeydown);
       pane.removeEventListener('pointerdown', onPointerDown);
       pane.removeEventListener('pointermove', onPointerMove);
