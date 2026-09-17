@@ -97,6 +97,19 @@ export const EDITOR_STRINGS = Object.freeze({
    * A11Y.
    */
   draftNote: 'Previews are drawn at draft quality while you edit.',
+  /**
+   * DP-53: the charm view's Render preview. The drawing combines by itself;
+   * the charm is rendered on request, as a draft that touches nothing.
+   * STRINGS: owner review pending.
+   */
+  renderCharm: 'Render preview',
+  renderCharmLabel: 'Render the charm with the drawing as it is now',
+  charmNote:
+    'The charm shows your drawing as of the last Render preview, at draft quality while you edit.',
+  renderCharmWaiting:
+    'Waiting for the shapes to be combined, then rendering the charm.',
+  renderCharmStarted: 'Rendering the charm with the drawing as it is now.',
+  renderCharmNothing: 'Nothing to render: no shapes are included.',
 
   sectionColours: 'Colors',
   sectionRegions: 'Regions',

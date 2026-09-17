@@ -254,6 +254,16 @@ test.describe('Sharing the values on screen', () => {
       // no save prompt for this upload
     }
 
+    // The uploaded design renders by itself, and its "Preview ready" is
+    // written into the same status area this test reads. On a slow runner
+    // (PR #240's board, Edge, three attempts of three) that render finished
+    // after the link was copied and overwrote the sentence under test, so the
+    // preview is waited for first.
+    await expect(page.locator('.preview-state-indicator')).toHaveText(
+      /Preview ready|Preview \(cached\)/,
+      { timeout: 120000 }
+    )
+
     await openActionsDrawer(page)
     await page.locator('#copySettingsLinkBtn').click()
 

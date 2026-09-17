@@ -46,6 +46,7 @@ vi.mock('../../src/js/feature-flags.js', () => ({
 }));
 
 import {
+  COMBINE_SETTLE_MS,
   createSvgPrepWorkspace,
   describeElement,
   thinLineSentence,
@@ -1049,8 +1050,10 @@ describe('Phase 3: role change updates result preview', () => {
     ignoreRadio.checked = true;
     ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
 
+    // DP-53: the pane is never empty. The stand-in stands in for the result
+    // that does not exist (DP-Q34).
     const resultSvg = ws._root.querySelector('.svg-prep-result-pane svg');
-    expect(resultSvg).toBeFalsy();
+    expect(resultSvg.classList.contains('svg-prep-standin')).toBe(true);
     expect(ws.getResult()).toBeNull();
 
     ws.destroy();
@@ -1696,9 +1699,10 @@ describe('Apply button disabled state', () => {
     ws.destroy();
   });
 
-  it('re-enables Apply when the preview becomes non-empty again', () => {
+  it('re-enables Apply when the preview becomes non-empty again', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const radios = ws._root.querySelectorAll('input[type="radio"]');
     const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
@@ -1708,6 +1712,8 @@ describe('Apply button disabled state', () => {
     ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
     fgRadio.checked = true;
     fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    // DP-53: the combine follows the settle.
+    await ws.whenCombined();
 
     const applyBtn = ws._root.querySelector('[data-action="apply"]');
     expect(applyBtn.disabled).toBe(false);
@@ -1813,7 +1819,7 @@ describe('compound-path mode (Include/Exclude)', () => {
     ws.destroy();
   });
 
-  it('excluding a subpath removes it from the result', () => {
+  it('excluding a subpath removes it from the result', async () => {
     const { svg, analysis } = makeCompoundAnalysis();
     const ws = createSvgPrepWorkspace(container);
     ws.open(svg, analysis);
@@ -1824,6 +1830,7 @@ describe('compound-path mode (Include/Exclude)', () => {
     ).find((r) => r.value === 'ignore');
     excludeRadio.checked = true;
     excludeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await ws.whenCombined();
 
     const result = ws.getResult();
     expect(result).toContain('M10,10');
@@ -1879,6 +1886,7 @@ describe('viewBox fallback and zoom preservation', () => {
     ).find((r) => r.value === 'foreground');
     fgRadio.checked = true;
     fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await ws.whenCombined();
 
     const newSvg = ws._root.querySelector('.svg-prep-result-pane svg');
     expect(newSvg.getAttribute('viewBox')).toBe(zoomedVB);
@@ -1910,6 +1918,8 @@ describe('preview error handling', () => {
       expect(() =>
         fgRadio.dispatchEvent(new Event('change', { bubbles: true }))
       ).not.toThrow();
+      // DP-53: the combine, and so the throw, comes after the settle.
+      await ws.whenCombined();
     } finally {
       globalThis.DOMParser = RealDOMParser;
     }
@@ -1928,6 +1938,7 @@ describe('preview error handling', () => {
     ).find((r) => r.value === 'hole');
     holeRadio.checked = true;
     holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await ws.whenCombined();
 
     expect(ws._root.querySelector('.svg-prep-result-error')).toBeFalsy();
     expect(applyBtn.disabled).toBe(false);
@@ -2102,7 +2113,11 @@ describe('Phase 5: open() with initialOverrides', () => {
       initialOverrides: ['ignore', 'ignore'],
     });
 
-    expect(ws._root.querySelector('.svg-prep-result-pane svg')).toBeFalsy();
+    // DP-53: the pane is never empty; with every shape ignored the stand-in
+    // stands in and there is no result.
+    const picture = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(picture.classList.contains('svg-prep-standin')).toBe(true);
+    expect(ws.getResult()).toBeNull();
 
     ws.destroy();
   });
@@ -4047,6 +4062,111 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     radio.checked = true;
     radio.dispatchEvent(new Event('change', { bubbles: true }));
     expect(hits()).toBe(100);
+    ws.destroy();
+  });
+});
+
+describe('DP-53 P1: the drawing view combines by itself', () => {
+  // The band the button lived in: over DP-Q33's 300 ms budget (see the
+  // arithmetic on ABOVE_BUDGET in the describe above this one).
+  const OVER = 100;
+  const settle = () =>
+    new Promise((resolve) => setTimeout(resolve, COMBINE_SETTLE_MS + 30));
+
+  it('★ a drawing over the old budget combines on open, with no button to press', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(OVER));
+    await ws.whenReady();
+    await ws.whenCombined();
+
+    expect(ws.getResult()).toBeTruthy();
+    const picture = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(picture.classList.contains('svg-prep-standin')).toBe(false);
+    expect(ws._refs.applyBtn.disabled).toBe(false);
+    expect(ws._refs.renderBtn.hidden).toBe(true);
+    expect(ws._refs.renderRow.hidden).toBe(true);
+    ws.destroy();
+  });
+
+  it('★ a change goes stale at once, says the combine is coming, and combines once the changes settle', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    await ws.whenReady();
+    await ws.whenCombined();
+    expect(ws.isCombining()).toBe(false);
+
+    const radio = ws._root.querySelector('.svg-prep-object input[type=radio][value="foreground"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(ws.isCombining()).toBe(true);
+    expect(ws.getResult()).toBeNull();
+    expect(ws._refs.applyBtn.disabled).toBe(true);
+    expect(ws._refs.applyHint.textContent).toMatch(
+      /^Combining 3 shapes, about a second\. Apply is ready when they are combined\.$/
+    );
+    expect(ws._root.querySelector('.svg-prep-result-pane svg').classList.contains('svg-prep-standin')).toBe(true);
+
+    await ws.whenCombined();
+    await ws.whenCombined();
+    expect(ws.isCombining()).toBe(false);
+    expect(ws.getResult()).toBeTruthy();
+    expect(ws._refs.applyBtn.disabled).toBe(false);
+    ws.destroy();
+  });
+
+  it('three quick changes make one combine, after the last of them settles', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(3));
+      await ws.whenReady();
+      const radios = ws._root.querySelectorAll('.svg-prep-object input[type=radio][value="foreground"]');
+      for (let i = 0; i < 3; i++) {
+        radios[i].checked = true;
+        radios[i].dispatchEvent(new Event('change', { bubbles: true }));
+        vi.advanceTimersByTime(100);
+      }
+      // 200 ms after the last change: still settling.
+      vi.advanceTimersByTime(200);
+      expect(ws.isCombining()).toBe(true);
+      expect(ws.getResult()).toBeNull();
+      // 350 ms after it: combined, once.
+      vi.advanceTimersByTime(COMBINE_SETTLE_MS - 200 + 5);
+      expect(ws.isCombining()).toBe(false);
+      expect(ws.getResult()).toBeTruthy();
+      ws.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('whenCombined resolves at once when nothing is combining', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    await ws.whenReady();
+    await ws.whenCombined();
+    let resolved = false;
+    await ws.whenCombined().then(() => {
+      resolved = true;
+    });
+    expect(resolved).toBe(true);
+    ws.destroy();
+  });
+
+  it('closing with a combine pending leaves nothing waiting', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    await ws.whenReady();
+    await ws.whenCombined();
+    const radio = ws._root.querySelector('.svg-prep-object input[type=radio][value="foreground"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    const waited = ws.whenCombined();
+    ws.close();
+    await waited;
+    expect(ws.isCombining()).toBe(false);
+    await settle();
     ws.destroy();
   });
 });

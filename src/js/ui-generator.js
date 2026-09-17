@@ -229,6 +229,7 @@ const galleryListboxRefs = {};
 
 // Optional listener called when a user uploads an SVG via the file picker
 let fileUploadListener = null;
+let draftRenderer = null;
 
 // SVG preparation metadata keyed by filename — persisted to saved projects
 // so that reopening a project restores the exact preparation state.
@@ -300,6 +301,17 @@ export function getGalleryParamNames() {
  */
 export function setFileUploadListener(fn) {
   fileUploadListener = fn;
+}
+
+/**
+ * DP-53: how the app draws a DRAFT of the charm with a drawing that has not
+ * been applied. `(paramName, value, extra)` are exactly what `emitFileValue`
+ * would hand `onChange` for the same drawing, and the app renders them
+ * through the preview alone: no state change, no undo entry, no project flag.
+ * @param {Function|null} fn
+ */
+export function setDraftRenderer(fn) {
+  draftRenderer = typeof fn === 'function' ? fn : null;
 }
 
 /**
@@ -2651,7 +2663,13 @@ function createFileControl(
     return out;
   }
 
-  function emitFileValue(value, assignments = null, ringEngine = null) {
+  /**
+   * The companions that ride with a design's value: the aspect, the layer
+   * files, the silhouette, the plates. Built here for the emit AND for a
+   * draft render (DP-53), so a draft is drawn from exactly what Apply would
+   * emit.
+   */
+  function buildEmissionExtra(value, assignments = null, ringEngine = null) {
     let extra = null;
     if (aspectParam) {
       let aspect = null;
@@ -2691,6 +2709,11 @@ function createFileControl(
         ...buildPlateCompanions(value, currentParameterValues),
       };
     }
+    return extra;
+  }
+
+  function emitFileValue(value, assignments = null, ringEngine = null) {
+    const extra = buildEmissionExtra(value, assignments, ringEngine);
     onChange(param.name, value, extra);
   }
 
@@ -2840,6 +2863,12 @@ function createFileControl(
       onKeepOriginal: handleEditorKeep,
       // D-149: Close leaves the design as it stands, applied or not.
       onClose: handleEditorClose,
+      // DP-53: the charm view's Render preview, on a charm host with an app
+      // behind it. A stencil tile makes plates, not a charm; the standalone
+      // door has no app.
+      ...(plateParams.length === 0 && draftRenderer
+        ? { onDraftRender: handleEditorDraft }
+        : {}),
       sourceName: currentFileName,
       initialOverrides: storedMeta?.prepOverrides || null,
       initialOffsets: storedMeta?.prepOffsets || null,
@@ -3076,6 +3105,33 @@ function createFileControl(
    * whether that is the original drawing or a version applied earlier. Only
    * the card is redrawn, so it says what the drawing is and offers the editor.
    */
+  /**
+   * DP-53: the editor's charm view asked for a draft of the charm with the
+   * drawing as it is now. The file object and its companions are built as
+   * Apply builds them, and the app draws them through the preview alone -
+   * nothing is written, so Undo never steps through drafts and Close leaves
+   * the committed design standing.
+   */
+  function handleEditorDraft(result, prepLayers = null) {
+    if (!result || !draftRenderer) return;
+    const svgDataUrl = svgToDataUrl(result);
+    const fileObj = {
+      name: currentFileName || 'prepared.svg',
+      size: result.length,
+      type: 'image/svg+xml',
+      data: svgDataUrl,
+    };
+    const ringEngine =
+      workspace && typeof workspace.getRingEngine === 'function'
+        ? workspace.getRingEngine()
+        : null;
+    draftRenderer(
+      param.name,
+      fileObj,
+      buildEmissionExtra(fileObj, prepLayers, ringEngine)
+    );
+  }
+
   function handleEditorClose() {
     if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
   }

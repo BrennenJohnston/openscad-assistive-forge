@@ -17,6 +17,7 @@ import {
   locateParameterKey,
   setParameterValue as _setParameterValue,
   setStarterParameters,
+  setDraftRenderer,
 } from './js/ui-generator.js';
 import {
   normalizeStarterList,
@@ -1312,6 +1313,10 @@ async function initApp() {
    * preview slower in the name of speed.
    */
   let editorDraftQuality = false;
+  // DP-53: the parameter hash of the charm drawn as a draft of the drawing
+  // being edited, while that draft stands; null once anything else is drawn
+  // or committed. The badge reads from it.
+  let draftPreviewHash = null;
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
   // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
@@ -5378,6 +5383,8 @@ async function initApp() {
   window.addEventListener('drawing-editor:close', () => {
     previewManager?.hideEditorSurface?.(drawingEditorSurface());
     editorDraftQuality = false;
+    // DP-53: whatever draft stood, the committed design comes back below.
+    draftPreviewHash = null;
     applyPreviewQualityMode();
     // Changing the quality marks the preview stale, which is honest and, on
     // its own, useless: the person gets their own quality back as a LABEL on
@@ -5390,6 +5397,20 @@ async function initApp() {
       }
     }
   });
+  // DP-53: a draft of the charm with the drawing as it is now, asked for from
+  // the editor's charm view. Drawn through the preview alone: the state, the
+  // undo history and the project are not touched, so nothing is written
+  // until Apply, and closing without it leaves the committed design standing
+  // (the close handler above re-renders it, from the cache when it can).
+  setDraftRenderer((paramName, value, extra) => {
+    if (!autoPreviewController) return;
+    const state = stateManager.getState();
+    if (!state?.parameters) return;
+    const draft = { ...state.parameters, [paramName]: value, ...(extra || {}) };
+    draftPreviewHash = hashParams(draft);
+    autoPreviewController.forcePreview(draft);
+  });
+
   // DP-38: the editor's Charm view is this preview, seen through an editor
   // that has stopped painting over it.
   window.addEventListener('drawing-editor:view', (event) => {
@@ -7156,6 +7177,17 @@ async function initApp() {
       [PREVIEW_STATE.ERROR]: '✗ Preview failed',
     };
     previewStateIndicator.textContent = stateMessages[state] || state;
+    // DP-53: a draft of the drawing is not the design, and the badge says so
+    // for as long as it is what is on screen.
+    const draftStands =
+      state === PREVIEW_STATE.CURRENT &&
+      draftPreviewHash !== null &&
+      autoPreviewController?.previewParamHash === draftPreviewHash;
+    if (draftStands) {
+      previewStateIndicator.textContent =
+        'Draft of the drawing, not yet applied';
+    }
+    previewStateIndicator.classList.toggle('preview-draft', draftStands);
 
     // Update preview container border state
     previewContainer.classList.remove(
@@ -8980,6 +9012,8 @@ if (rounded) {
                 state.schema,
                 parametersContainer,
                 (values) => {
+                  // DP-53: a committed change ends whatever draft stood.
+                  draftPreviewHash = null;
                   stateManager.setState({ parameters: values });
                   if (autoPreviewController) {
                     autoPreviewController.onParameterChange(values);

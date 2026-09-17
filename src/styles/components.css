@@ -17269,6 +17269,16 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
+/* DP-53: the charm view's Render preview. */
+.drawing-editor-render-charm {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.drawing-editor-render-charm[hidden] {
+  display: none;
+}
+
 /* ── Showing the charm ──────────────────────────────────────────────────── */
 
 /* The charm is not drawn by this editor. It is the 3D preview the surface is
