@@ -274,6 +274,11 @@ test.describe('The drawing editor door', () => {
       ).toHaveAttribute('aria-label', /Exclude$/)
     }
 
+    // DP-53: the combine follows the last change once it settles, and Save
+    // is not a Tab stop until there is a result to save.
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled({
+      timeout: 60000,
+    })
     await tabUntil(
       page,
       (s) => s?.text === 'Save SVG',
@@ -439,106 +444,53 @@ test.describe('The drawing editor door', () => {
    * Before this, anything over 50 got no table at all - the exact inverse of
    * being able to delete elements down to something usable.
    */
-  test('a drawing over the old cap opens, with its table, and does not render itself', async ({
+  test('★ a drawing over the old cap opens, with its table, and combines by itself (DP-53)', async ({
     page,
   }) => {
     test.setTimeout(180000)
     await openApp(page)
+
+    // RE-PINNED at DP-53: this used to assert the boolean had NOT run and a
+    // Render button waited. The combine runs by itself now, whatever the
+    // drawing is predicted to cost; what a person sees meanwhile is the
+    // drawing itself marked as not yet combined, Apply and Save refused, and
+    // a sentence saying the combine is coming and how long. All of that is
+    // over in about a second on this drawing, so it is recorded as it
+    // happens rather than looked for afterwards.
+    await page.evaluate(() => {
+      window.__seen = { hints: [], standIn: false, busy: false }
+      new MutationObserver(() => {
+        const hint = document.querySelector('.svg-prep-apply-hint')
+        const t = (hint?.textContent || '').trim()
+        if (t && !window.__seen.hints.includes(t)) window.__seen.hints.push(t)
+        if (document.querySelector('.svg-prep-result-pane svg.svg-prep-standin')) window.__seen.standIn = true
+        if (document.querySelector('.svg-prep-result-pane')?.getAttribute('aria-busy') === 'true') window.__seen.busy = true
+      }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true })
+    })
     await openEditorByKeyboard(page, OVER_BUDGET_300)
 
     // The whole table is there. It used to be nothing.
     await expect(page.locator('.svg-prep-object')).toHaveCount(300)
 
-    // And the boolean has NOT run.
-    //
-    // RE-PINNED at DP-37: this used to assert the pane was EMPTY, which pinned
-    // the defect as if it were the behaviour. An empty pane was never the
-    // point - it was the symptom. What matters is that no combined result
-    // exists, and that is now evidenced by what the pane holds: the drawing
-    // itself, marked as not yet combined, with the Render row still offered
-    // and Save still refused.
-    const standIn = page.locator('.svg-prep-result-pane svg.svg-prep-standin')
-    await expect(standIn).toHaveCount(1)
-    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
-    const row = page.locator('.svg-prep-render-row')
-    await expect(row).toBeVisible()
-    await expect(page.locator('.svg-prep-render-note')).toContainText('300 shapes')
+    // And the result arrives with nobody asked: no button, a result, Save.
+    const picture = page.locator('.svg-prep-result-pane svg').first()
+    await expect(picture).not.toHaveClass(/svg-prep-standin/, { timeout: 120000 })
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled()
+    await expect(page.locator('.svg-prep-render-btn')).toBeHidden()
+    await expect(page.locator('.svg-prep-render-row')).toBeHidden()
 
-    // Applying a result nobody has seen is refused, and the reason says so
-    // rather than claiming there is nothing to apply.
-    const apply = page.locator('.svg-prep-footer button[data-action="apply"]')
-    if (await apply.isVisible()) await expect(apply).toBeDisabled()
-    await expect(page.locator('.svg-prep-apply-hint')).toContainText('Render the preview')
-  })
-
-  test('Render preview is keyboard-operable, meets the target floor, and announces both ends', async ({
-    page,
-  }) => {
-    test.setTimeout(300000)
-    await openApp(page)
-    await openEditorByKeyboard(page, OVER_BUDGET_300)
-
-    const btn = page.locator('.svg-prep-render-btn')
-    const box = await btn.boundingBox()
-    expect(box.height, '44px target floor').toBeGreaterThanOrEqual(44)
-    expect(box.width, '44px target floor').toBeGreaterThanOrEqual(44)
-
-    // Record everything the live region says across the whole render, so a
-    // start message that is swallowed by the finish message cannot pass.
-    // The busy window is recorded the same way: the ring flatten made a
-    // 210-rect render near-instant, so POLLING for disabled raced a window
-    // narrower than one expect poll (CI Firefox caught it already enabled).
-    await page.evaluate(() => {
-      window.__live = []
-      const el = document.querySelector('.svg-prep-workspace > .sr-only[aria-live]')
-      new MutationObserver(() => {
-        const t = (el.textContent || '').trim()
-        if (t) window.__live.push(t)
-      }).observe(el, { childList: true, characterData: true, subtree: true })
-      // RE-PINNED at DP-37 P2: the button used to be DISABLED while the
-      // combine ran on this thread. The combine is in a worker now, so the
-      // button is replaced by a bar and a Cancel and comes back when the work
-      // is done. The transition to watch is hidden, not disabled.
-      window.__busy = []
-      const renderBtn = document.querySelector('.svg-prep-render-btn')
-      new MutationObserver(() => {
-        window.__busy.push(renderBtn.hidden)
-      }).observe(renderBtn, { attributes: true, attributeFilter: ['hidden'] })
-    })
-
-    // The editor opens fullscreen and its focus trap takes focus as it
-    // activates, so a single focus() can be undone a frame later. Retrying
-    // until it sticks still proves the button can hold focus - which is what
-    // this is about - without racing the trap.
-    await expect
-      .poll(
-        async () => {
-          await btn.focus()
-          return btn.evaluate((el) => el === document.activeElement)
-        },
-        { timeout: 15000 }
-      )
-      .toBe(true)
-    await page.keyboard.press('Enter')
-
-    // Busy first, then done - asserted from the RECORD, because the live
-    // state can close the window faster than one poll.
-    await expect(btn).toBeVisible({ timeout: 300000 })
-    await expect(btn).toBeEnabled()
-
-    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
-    const busy = await page.evaluate(() => window.__busy)
+    const seen = await page.evaluate(() => window.__seen)
+    expect(seen.standIn, 'the drawing stood in while it combined').toBe(true)
+    expect(seen.busy, 'the combine reported itself as busy').toBe(true)
     expect(
-      busy[0] === true && busy[busy.length - 1] === false,
-      `hidden transitions recorded: ${busy.join(' -> ')}`
+      seen.hints.some((h) => /^Combining 300 shapes, about (a second|\d+ seconds)\. Apply is ready when they are combined\.$/.test(h)),
+      `the sentence while combining: ${JSON.stringify(seen.hints)}`
     ).toBe(true)
-    // And the bar and its Cancel are gone with it.
-    await expect(page.locator('.svg-prep-render-progress')).toBeHidden()
-    await expect(page.locator('.svg-prep-render-cancel')).toBeHidden()
-    const said = await page.evaluate(() => window.__live)
-    expect(said.some((t) => /Combining 300 shapes/.test(t)), said.join(' | ')).toBe(true)
-    expect(said.some((t) => /Preview ready/.test(t)), said.join(' | ')).toBe(true)
   })
+
+  // DP-53: the door's Render preview button is gone - the combine runs by
+  // itself - and its keyboard, target-floor and announcement pins moved with
+  // the button to the charm view's Render preview, in drawing-editor.spec.js.
 
   test('above the cap it says the real reason, with the real numbers (D-117)', async ({
     page,
@@ -719,31 +671,49 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     // MEASURED before this release: the pane was 1268 x 160 with no svg in it
     // at all. "Will print as", an empty rectangle, two zoom buttons floating
     // in it, and a sentence telling you to press a button.
-    const pane = page.locator('.svg-prep-result-pane')
-    const picture = pane.locator('svg').first()
-    await expect(picture).toBeVisible()
-    await expect(picture).toHaveClass(/svg-prep-standin/)
+    // RE-PINNED at DP-53: the combine follows by itself and replaces the
+    // stand-in in about a second on this drawing, so the stand-in is read the
+    // moment it appears, by an observer, rather than looked for afterwards.
+    const standIn = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const read = () => {
+            const picture = document.querySelector('.svg-prep-result-pane svg.svg-prep-standin')
+            if (!picture) return false
+            resolve({
+              label: picture.getAttribute('aria-label') || '',
+              tinted: picture.querySelectorAll('.svg-prep-role-path').length,
+              painted: picture.querySelectorAll('.svg-prep-standin-path--raised, .svg-prep-standin-path--hole').length,
+              saveDisabled: document.querySelector('button[data-action="save"]')?.disabled === true,
+            })
+            return true
+          }
+          if (read()) return
+          const observer = new MutationObserver(() => {
+            if (read()) observer.disconnect()
+          })
+          observer.observe(document.body, { subtree: true, childList: true })
+          setTimeout(() => resolve(null), 60000)
+        })
+    )
+    expect(standIn, 'the drawing never stood in for its result').not.toBeNull()
     // DP-47 P4: the name counts what is in the picture, because the picture is
     // painted from the roles now and an ignored shape leaves it at once.
-    await expect(picture).toHaveAttribute(
-      'aria-label',
+    expect(standIn.label).toMatch(
       /^The drawing as it is now: \d+ raised, \d+ holes?, \d+ left out, not yet combined$/
     )
-
-    // It is a picture of what you HAVE, not of what you will get, and nothing
-    // about the pane holding something says otherwise: the Render row is still
-    // offered and Save is still refused, because there is no result yet.
-    await expect(page.locator('.svg-prep-render-row')).toBeVisible()
-    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
-
+    // It is a picture of what you HAVE, not of what you will get: Save was
+    // refused while it stood, because there was no result yet.
+    expect(standIn.saveDisabled).toBe(true)
     // And it is the drawing, not an empty frame: the tints are on it, and so
     // are the painted shapes themselves (DP-47 P4).
-    const tinted = await picture.locator('.svg-prep-role-path').count()
-    expect(tinted).toBe(300)
-    const painted = await picture
-      .locator('.svg-prep-standin-path--raised, .svg-prep-standin-path--hole')
-      .count()
-    expect(painted).toBe(300)
+    expect(standIn.tinted).toBe(300)
+    expect(standIn.painted).toBe(300)
+    // Then the result follows, with nobody asked.
+    await expect(page.locator('.svg-prep-result-pane svg').first()).not.toHaveClass(
+      /svg-prep-standin/,
+      { timeout: 120000 }
+    )
   })
 
   test('a drawing under the budget still shows its combined result', async ({
@@ -997,16 +967,22 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
 })
 
 test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () => {
-  test('★ the Design width box asks before it combines, like everything else', async ({
+  test('★ the Design width box combines by itself, like everything else (DP-53)', async ({
     page,
   }) => {
-    // It called the combine straight, with no budget in the way at all, so
-    // typing in this box on a thousand-shape drawing started a flatten nobody
-    // had asked for. Every other change in this editor asks first.
+    // RE-PINNED at DP-53. Before, every change asked first on a drawing this
+    // size and a width change that combined straight away was the odd one
+    // out. Now every change combines by itself once it settles, and the width
+    // box is no different: it waits its 300 ms, then the settle, then runs.
     test.setTimeout(300000)
     await openApp(page)
     await openEditorByKeyboard(page, OVER_BUDGET_300)
-    await expect(page.locator('.svg-prep-render-btn')).toBeVisible()
+    // The first combine, from the open, lands first.
+    await expect(page.locator('.svg-prep-result-pane svg').first()).not.toHaveClass(
+      /svg-prep-standin/,
+      { timeout: 120000 }
+    )
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled()
 
     // Watch for a combine rather than sampling for one: this drawing's
     // combine is 923 ms and would begin and end inside a naive wait.
@@ -1023,17 +999,16 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
     // DP-46: Design width is one of the three tools behind More.
     await page.locator('.drawing-editor-more-btn').click()
     await page.locator('.svg-prep-design-width-input').fill('20')
-    // Well past the 300 ms the box waits on.
+    // The box waits 300 ms, the settle 350 ms; well past both.
     await page.waitForTimeout(2500)
 
     expect(
       await page.evaluate(() => window.__combineStarted),
-      'a combine started from a width change'
-    ).toBe(false)
-    // And the pane says what it is: out of date, with the way to fix it.
-    await expect(page.locator('.svg-prep-render-row')).toBeVisible()
-    await expect(page.locator('.svg-prep-render-btn')).toBeEnabled()
-    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
+      'a combine started from the width change'
+    ).toBe(true)
+    // And no button is offered for it, then or after.
+    await expect(page.locator('.svg-prep-render-btn')).toBeHidden()
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled({ timeout: 120000 })
   })
 
   test('★ what a real combine measured is remembered for the next visit', async ({
@@ -1049,8 +1024,8 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
     await page.evaluate((k) => localStorage.removeItem(k), KEY)
 
     await openEditorByKeyboard(page, OVER_BUDGET_300)
-    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
-    await expect(page.locator('.svg-prep-render-cancel')).toBeHidden({
+    // DP-53: the combine runs by itself on open; it is over when Save is.
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled({
       timeout: 300000,
     })
 
@@ -1065,17 +1040,29 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
     expect(value).toBeLessThan(1e-1)
   })
 
-  test('the waiting sentence gives the wait without the extra word', async ({
+  test('the combining sentence gives the wait without the extra word (DP-53)', async ({
     page,
   }) => {
-    // It wrapped to a fourth line and overran the charm host's panel by 6 px.
+    // "here" wrapped the old sentence to a fourth line and overran the charm
+    // host's panel by 6 px. The sentence is the status line's now, while the
+    // combine runs, and it is recorded as it shows since the combine is over
+    // in about a second on this drawing.
     test.setTimeout(180000)
     await openApp(page)
+    await page.evaluate(() => {
+      window.__hints = []
+      new MutationObserver(() => {
+        const t = (document.querySelector('.svg-prep-apply-hint')?.textContent || '').trim()
+        if (t && !window.__hints.includes(t)) window.__hints.push(t)
+      }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true })
+    })
     await openEditorByKeyboard(page, OVER_BUDGET_300)
-    const note = page.locator('.svg-prep-render-note')
-    await expect(note).toContainText('300 shapes')
-    await expect(note).toContainText(/may take about \d+ seconds, so Forge waits until you ask\./)
-    await expect(note).not.toContainText('here')
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled({ timeout: 120000 })
+    const hints = await page.evaluate(() => window.__hints)
+    const sentence = hints.find((h) => h.startsWith('Combining 300 shapes'))
+    expect(sentence, `no combining sentence among ${JSON.stringify(hints)}`).toBeTruthy()
+    expect(sentence).toMatch(/^Combining 300 shapes, about (a second|\d+ seconds)\. Apply is ready when they are combined\.$/)
+    expect(sentence).not.toContain('here')
   })
 })
 
@@ -1894,40 +1881,46 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    await openEditorByKeyboard(page, OVER_BUDGET_300)
-
-    const render = page.locator('.svg-prep-render-btn')
-    await expect(render).toBeVisible()
-
+    // DP-53: the combine starts by itself the moment the editor opens, so the
+    // watcher is set before the open and reads what it saw afterwards.
     await page.evaluate(() => {
       window.__answered = null
-      const el = document.querySelector('.svg-prep-render-cancel')
+      window.__seen = { progress: false, cancel: false, labelled: null, svgs: null }
       new MutationObserver(async () => {
-        if (el.hidden || window.__answered !== null) return
+        const cancel = document.querySelector('.svg-prep-render-cancel')
+        const progress = document.querySelector('.svg-prep-render-progress')
+        if (!cancel || cancel.hidden) return
+        window.__seen.cancel = true
+        if (progress && !progress.hidden) {
+          window.__seen.progress = true
+          window.__seen.labelled = progress.getAttribute('aria-labelledby')
+        }
+        window.__seen.svgs = document.querySelectorAll('.svg-prep-result-pane svg').length
+        if (window.__answered !== null) return
+        window.__answered = -1
         // The work is running. Can the page still do anything?
         const t0 = performance.now()
         await new Promise((r) => requestAnimationFrame(r))
         window.__answered = Math.round(performance.now() - t0)
-      }).observe(el, { attributes: true, attributeFilter: ['hidden'] })
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden'] })
     })
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    await expect(page.locator('.svg-prep-render-btn')).toBeHidden()
 
-    await render.click({ noWaitAfter: true })
-    // While it runs there is a bar, and a way to stop it.
-    await expect(page.locator('.svg-prep-render-progress')).toBeVisible()
-    await expect(page.locator('.svg-prep-render-cancel')).toBeVisible()
-    // The bar is named, because a <label for> does not name a <progress>.
-    await expect(page.locator('.svg-prep-render-progress')).toHaveAttribute(
-      'aria-labelledby',
-      /render/i
-    )
-    // And the drawing is still on screen: nothing goes blank while it works.
-    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
-
-    await expect(page.locator('.svg-prep-render-cancel')).toBeHidden({
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled({
       timeout: 300000,
     })
+    const seen = await page.evaluate(() => window.__seen)
+    // While it ran there was a bar, and a way to stop it.
+    expect(seen.cancel, 'Cancel was never offered while it combined').toBe(true)
+    expect(seen.progress, 'no bar was shown while it combined').toBe(true)
+    // The bar is named, because a <label for> does not name a <progress>.
+    expect(seen.labelled).toMatch(/render/i)
+    // And the drawing was still on screen: nothing went blank while it worked.
+    expect(seen.svgs).toBe(1)
     const answered = await page.evaluate(() => window.__answered)
     expect(answered, `a frame took ${answered} ms mid-combine`).not.toBeNull()
+    expect(answered).toBeGreaterThanOrEqual(0)
     expect(answered).toBeLessThan(1000)
   })
 
@@ -1936,9 +1929,19 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
+    // DP-53: the combine starts on open. Every busy stretch is counted, so the
+    // one that answers the change can be told from the one it replaced.
+    await page.evaluate(() => {
+      window.__busyRuns = 0
+      let busy = false
+      new MutationObserver(() => {
+        const pane = document.querySelector('.svg-prep-result-pane')
+        const now = pane?.getAttribute('aria-busy') === 'true'
+        if (now && !busy) window.__busyRuns += 1
+        busy = now
+      }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-busy'] })
+    })
     await openEditorByKeyboard(page, OVER_BUDGET_300)
-
-    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
     const cancel = page.locator('.svg-prep-render-cancel')
     await expect(cancel).toBeVisible()
 
@@ -1954,16 +1957,16 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
 
     // It has to be dropped, not left to land: a result built from the choice
     // that was just replaced is the "picture of older choices" the stale pane
-    // exists to prevent, and it must never arm Apply.
-    await expect(cancel).toBeHidden({ timeout: 60000 })
-    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
-    const render = page.locator('.svg-prep-render-btn')
-    await expect(render).toBeVisible()
-    await expect(render).toBeEnabled()
+    // exists to prevent, and it must never arm Apply. What arms Apply is the
+    // combine that follows the change, once it has settled (DP-53).
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled({ timeout: 120000 })
+    await expect(cancel).toBeHidden()
     await expect(page.locator('.svg-prep-result-pane')).toHaveAttribute(
       'aria-busy',
       'false'
     )
+    expect(await page.evaluate(() => window.__busyRuns), 'the change ran its own combine').toBeGreaterThanOrEqual(2)
+    await expect(page.locator('.svg-prep-render-btn')).toBeHidden()
   })
 
   test('★ closing the editor mid-combine stops the work it was doing', async ({
@@ -1979,7 +1982,8 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     // looking at any more - MEASURED at 419 ms on this fixture, and minutes on
     // the biggest drawings this app accepts - and then drew its result into
     // the closed editor and announced it.
-    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
+    // DP-53: the combine is already running, from the open.
+    await expect(page.locator('.svg-prep-render-cancel')).toBeVisible()
     await page.locator('.drawing-editor-close').click()
 
     // A closed editor draws nothing and says nothing. 419 ms is the whole
@@ -1999,13 +2003,14 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     await openApp(page)
     await openEditorByKeyboard(page, OVER_BUDGET_300)
 
-    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
+    // DP-53: the combine is already running, from the open.
     const cancel = page.locator('.svg-prep-render-cancel')
     await expect(cancel).toBeVisible()
     await cancel.click()
 
     await expect(cancel).toBeHidden()
-    await expect(page.locator('.svg-prep-render-btn')).toBeVisible()
+    // No button comes back: the way back is any change, which combines again.
+    await expect(page.locator('.svg-prep-render-btn')).toBeHidden()
     await expect(page.locator('.svg-prep-render-note')).toHaveText(
       'Combining canceled.'
     )

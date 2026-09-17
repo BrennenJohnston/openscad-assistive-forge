@@ -1228,3 +1228,142 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
     await expect(door).toBeVisible()
   })
 })
+
+// ── DP-53: two previews - the drawing by itself, the charm on request ────────
+//
+// The drawing view combines by itself after every change (no Render button;
+// a sentence says the combine is coming and how long; Apply waits for the
+// result). The charm view has Render preview: a DRAFT of the charm with the
+// drawing as it is now, drawn through the preview alone, so nothing is
+// written until Apply - no undo entry, no project change - and Close leaves
+// the committed design standing. The fixture is the app's own Colors output
+// from the owner's logo, which analyzes as `ready` with `open_editor`.
+test.describe('two previews: the drawing by itself, the charm on request (DP-53)', () => {
+  const LOGO_TRACE = path.join(
+    process.cwd(),
+    'tests',
+    'fixtures',
+    'svg-edit',
+    'create-logo-colors-trace.svg'
+  )
+
+  async function openLogoInTheEditor(page) {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.selectOption('#charmVariantSelect', 'q-charm')
+    await page.click('#openCharmMakerBtn')
+    await page.waitForFunction(
+      () =>
+        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+        0,
+      null,
+      { timeout: 120000 }
+    )
+    for (let i = 0; i < 2; i++) {
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click()
+        await page.waitForTimeout(300)
+      }
+    }
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    await page.evaluate(() => {
+      let d = document.querySelector('#param-design_file')?.closest('details')
+      while (d) {
+        d.open = true
+        d = d.parentElement?.closest('details')
+      }
+    })
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(10)
+  }
+
+  const committed = (page) =>
+    page.evaluate(() => {
+      const sm = window.stateManager
+      const design = sm?.getState()?.parameters?.design_file
+      return {
+        size: design && typeof design === 'object' ? design.size : null,
+        undo: sm?.history?.undoStack?.length ?? null,
+        canUndo: sm?.canUndo?.() ?? null,
+      }
+    })
+
+  test('★ the drawing combines by itself, the charm renders a draft on request, and Close leaves the design and its history alone', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openLogoInTheEditor(page)
+    const editor = surface(page)
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+
+    // 1. No button in the drawing view; the first combine lands by itself.
+    await expect(editor.locator('.svg-prep-render-btn')).toBeHidden()
+    await expect(apply).toBeEnabled({ timeout: 180000 })
+
+    // 2. A change goes stale, says the combine is coming and how long, and
+    //    combines again by itself.
+    const hint = editor.locator('.svg-prep-apply-hint')
+    // A row that is raised now, so the change is a change.
+    const raised = page
+      .locator('.svg-prep-object', {
+        has: page.locator('.svg-prep-role-group input[value="foreground"]:checked'),
+      })
+      .first()
+    await raised.locator('.svg-prep-role-group input[value="ignore"]').check()
+    await expect(hint).toBeVisible()
+    await expect(hint).toHaveText(
+      /^Combining \d+ shapes, about (a second|\d+ seconds)\. Apply is ready when they are combined\.$/,
+      { timeout: 10000 }
+    )
+    await expect(apply).toBeDisabled()
+    await expect(apply).toBeEnabled({ timeout: 180000 })
+
+    // 3. What is committed, before any draft.
+    const before = await committed(page)
+    expect(before.size).toBeGreaterThan(0)
+
+    // 4. The charm view: Render preview is there, at the target floor, and
+    //    works from the keyboard.
+    await editor.locator('.drawing-editor-view-switch input[value="charm"]').check({ force: true })
+    const render = editor.locator('.drawing-editor-render-charm')
+    await expect(render).toBeVisible()
+    await expect(render).toHaveAttribute(
+      'aria-label',
+      'Render the charm with the drawing as it is now'
+    )
+    const box = await render.boundingBox()
+    expect(box.height, '44px target floor').toBeGreaterThanOrEqual(44)
+    expect(box.width, '44px target floor').toBeGreaterThanOrEqual(44)
+    await render.focus()
+    await page.keyboard.press('Enter')
+
+    // 5. The badge says what is on screen is a draft, the note says which
+    //    drawing it shows, and nothing was written.
+    const badge = page.locator('.preview-state-indicator')
+    await expect(badge).toHaveText('Draft of the drawing, not yet applied', {
+      timeout: 240000,
+    })
+    await expect(editor.locator('.drawing-editor-draft-note')).toHaveText(
+      'The charm shows your drawing as of the last Render preview, at draft quality while you edit.'
+    )
+    expect(await committed(page)).toEqual(before)
+
+    // 6. Close without applying: the committed charm comes back, and still
+    //    nothing was written.
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
+    await expect(badge).toHaveText(/Preview ready|Preview \(cached\)/, {
+      timeout: 240000,
+    })
+    expect(await committed(page)).toEqual(before)
+  })
+})

@@ -450,3 +450,121 @@ describe('the panel drawer and the two-row toolbar (DP-24)', () => {
     expect(compare.hidden).toBe(false)
   })
 })
+
+describe('DP-53 P2: the charm view renders the charm on request', () => {
+  let surface
+  let editor
+  let announce
+
+  beforeEach(() => {
+    surface = document.createElement('div')
+    surface.id = 'drawingEditorSurface'
+    document.body.appendChild(surface)
+    announce = vi.fn()
+    editor = createDrawingEditor({ surfaceEl: surface, announce })
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  const openRelief = (callbacks) => {
+    editor.open(CAT_SVG, analyzeSvg(CAT_SVG), {
+      purpose: 'relief',
+      onApply: vi.fn(),
+      onKeepOriginal: vi.fn(),
+      onClose: vi.fn(),
+      ...callbacks,
+    })
+  }
+  const showCharm = () => {
+    const radio = surface.querySelector('.drawing-editor-view-switch input[value="charm"]')
+    radio.checked = true
+    radio.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+  const combined = async () => {
+    await editor._workspace.whenReady()
+    await editor._workspace.whenCombined()
+  }
+
+  it('★ Render preview belongs to the charm view of a host that can draw a draft', () => {
+    openRelief({ onDraftRender: vi.fn() })
+    const btn = surface.querySelector('.drawing-editor-render-charm')
+    expect(btn).not.toBeNull()
+    expect(btn.hidden).toBe(true)
+    showCharm()
+    expect(btn.hidden).toBe(false)
+    expect(btn.textContent).toBe(S.renderCharm)
+    expect(btn.getAttribute('aria-label')).toBe(S.renderCharmLabel)
+    expect(surface.querySelector('.drawing-editor-draft-note').textContent).toBe(S.draftNote)
+  })
+
+  it('a host with no draft to offer (the door) shows no Render preview in either view', () => {
+    openRelief({})
+    const btn = surface.querySelector('.drawing-editor-render-charm')
+    expect(btn.hidden).toBe(true)
+    showCharm()
+    expect(btn.hidden).toBe(true)
+  })
+
+  it('★ pressing it hands the host the combined result and the layers, and the note says what the charm shows', async () => {
+    const onDraftRender = vi.fn()
+    openRelief({ onDraftRender })
+    await combined()
+    showCharm()
+    surface.querySelector('.drawing-editor-render-charm').click()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onDraftRender).toHaveBeenCalledTimes(1)
+    const [svg, layers] = onDraftRender.mock.calls[0]
+    expect(svg).toBe(editor._workspace.getResult())
+    expect(svg).toContain('<svg')
+    expect(layers).toBeNull()
+    expect(surface.querySelector('.drawing-editor-draft-note').textContent).toBe(S.charmNote)
+    expect(announce).toHaveBeenCalledWith(S.renderCharmStarted)
+  })
+
+  it('★ while the shapes are still combining it waits, says so, and renders once they are', async () => {
+    const onDraftRender = vi.fn()
+    openRelief({ onDraftRender })
+    await combined()
+    // The surface moves the shapes list out of the workspace root (session 3),
+    // so the rows are found from the surface.
+    const radio = surface.querySelector('.svg-prep-object input[type=radio][value="ignore"]')
+    radio.checked = true
+    radio.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(editor._workspace.isCombining()).toBe(true)
+    showCharm()
+    surface.querySelector('.drawing-editor-render-charm').click()
+    await Promise.resolve()
+    expect(announce).toHaveBeenCalledWith(S.renderCharmWaiting)
+    expect(onDraftRender).not.toHaveBeenCalled()
+    await editor._workspace.whenCombined()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onDraftRender).toHaveBeenCalledTimes(1)
+    expect(onDraftRender.mock.calls[0][0]).toBe(editor._workspace.getResult())
+  })
+
+  it('the note keeps saying what the charm shows until a reopen, and the button leaves with the view', async () => {
+    const onDraftRender = vi.fn()
+    openRelief({ onDraftRender })
+    await combined()
+    showCharm()
+    surface.querySelector('.drawing-editor-render-charm').click()
+    await Promise.resolve()
+    await Promise.resolve()
+    const note = surface.querySelector('.drawing-editor-draft-note')
+    expect(note.textContent).toBe(S.charmNote)
+    const drawing = surface.querySelector('.drawing-editor-view-switch input[value="drawing"]')
+    drawing.checked = true
+    drawing.dispatchEvent(new Event('change', { bubbles: true }))
+    // The note is the charm view's (the stylesheet hides it elsewhere); the
+    // drawing the charm shows has not changed, so neither has the sentence.
+    expect(note.textContent).toBe(S.charmNote)
+    expect(surface.querySelector('.drawing-editor-render-charm').hidden).toBe(true)
+    surface.querySelector('.drawing-editor-close').click()
+    openRelief({ onDraftRender })
+    expect(surface.querySelector('.drawing-editor-draft-note').textContent).toBe(S.draftNote)
+  })
+})

@@ -22,6 +22,8 @@ import {
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isEnabled } from '../../src/js/feature-flags.js';
+import * as uiGenerator from '../../src/js/ui-generator.js';
+import { createSvgPrepWorkspace } from '../../src/js/svg-preparer-workspace.js';
 import {
   analyzeSvg,
   prepareSvg,
@@ -1871,6 +1873,67 @@ describe('UI Generator', () => {
       expect(statusCard.querySelector('.svg-prep-edit-btn')).toBeTruthy();
       setSvgPrepMetadata('test.svg', null);
     });
+
+    // ── DP-53 P3: a draft of the charm, drawn without emitting ─────────────
+    //
+    // The editor's charm view asks the host for a draft; the host builds the
+    // file object and the companions exactly as Apply would and hands them to
+    // the app's draft renderer, and NOTHING goes through onChange: no state
+    // change, no undo entry, no project flag until Apply.
+
+    it('★ on a charm host with an app behind it, the editor gets a draft renderer that draws what Apply would emit and writes nothing', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'ready',
+        recommendation: 'open_editor',
+        elements: [{ type: 'path' }],
+        warnings: [],
+      });
+      const drawDraft = vi.fn();
+      uiGenerator.setDraftRenderer?.(drawDraft);
+      try {
+        const onChange = vi.fn();
+        renderParameterUI(svgFileSchema, container, onChange, {});
+        const fileInput = container.querySelector('input[type="file"]');
+        await uploadSvg(fileInput);
+
+        const factory = vi.mocked(createSvgPrepWorkspace);
+        const stub = factory.mock.results[factory.mock.results.length - 1].value;
+        expect(stub.open).toHaveBeenCalled();
+        const options = stub.open.mock.calls[0][2];
+        expect(typeof options.onDraftRender, 'the editor must be offered a draft renderer').toBe('function');
+
+        onChange.mockClear();
+        options.onDraftRender('<svg><path d="M0 0h1v1z"/></svg>', null);
+
+        expect(drawDraft).toHaveBeenCalledTimes(1);
+        const [name, value, extra] = drawDraft.mock.calls[0];
+        expect(name).toBe(fileInput.id.replace(/^param-/, ''));
+        expect(value.name).toBe('test.svg');
+        expect(value.type).toBe('image/svg+xml');
+        expect(value.data.startsWith('data:image/svg+xml;base64,')).toBe(true);
+        expect(extra === null || typeof extra === 'object').toBe(true);
+        expect(onChange).not.toHaveBeenCalled();
+      } finally {
+        uiGenerator.setDraftRenderer?.(null);
+      }
+    });
+
+    it('with no draft renderer set (no app behind the host), the editor is offered none', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'ready',
+        recommendation: 'open_editor',
+        elements: [{ type: 'path' }],
+        warnings: [],
+      });
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(fileInput);
+      const factory = vi.mocked(createSvgPrepWorkspace);
+      const stub = factory.mock.results[factory.mock.results.length - 1].value;
+      const options = stub.open.mock.calls[0][2];
+      expect(options.onDraftRender).toBeUndefined();
+    });
   });
 });
 
@@ -2424,7 +2487,20 @@ describe('per-layer design companions (DP-7)', () => {
       const emitEnd = body.indexOf('\n  }', emitStart);
       const emitBody = body.slice(emitStart, emitEnd);
       expect(emitBody).toContain('onChange(param.name');
-      expect(emitBody).toContain('buildLayerCompanions');
+      // DP-53: the companions are built in ONE place for the emit AND for a
+      // draft render, so a draft draws exactly what Apply would emit - and
+      // the draft never reports a value.
+      expect(emitBody).toContain('buildEmissionExtra');
+      const extraStart = body.indexOf('function buildEmissionExtra(');
+      const extraEnd = body.indexOf('\n  }', extraStart);
+      const extraBody = body.slice(extraStart, extraEnd);
+      expect(extraBody).toContain('buildLayerCompanions');
+      const draftStart = body.indexOf('function handleEditorDraft(');
+      expect(draftStart).toBeGreaterThan(-1);
+      const draftEnd = body.indexOf('\n  }', draftStart);
+      const draftBody = body.slice(draftStart, draftEnd);
+      expect(draftBody).toContain('buildEmissionExtra');
+      expect(draftBody).not.toContain('onChange(');
 
       // And the six callers really are six.
       const calls = body.match(/emitFileValue\(/g) || [];

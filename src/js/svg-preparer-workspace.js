@@ -16,7 +16,6 @@ import { announce } from './announcer.js';
 import {
   classifyElements,
   applyPerPathOffsets,
-  FLATTEN_BUDGET_MS,
   FLATTEN_COST_DEFAULT,
   predictFlattenMs,
   flattenCostFrom,
@@ -428,6 +427,9 @@ function buildWorkspaceDom() {
   renderBtn.dataset.action = 'render-preview';
   renderBtn.textContent = 'Render preview';
   renderBtn.setAttribute('aria-describedby', renderNote.id);
+  // DP-53: the combine runs by itself, so the drawing view has no button
+  // to ask for it. The row still carries the bar and Cancel while it runs.
+  renderBtn.hidden = true;
 
   // DP-37 P2: while the combine runs it runs in a worker, so there is a bar to
   // watch and a way to stop it. A native <progress> with no value: the ring
@@ -992,6 +994,13 @@ function markAsPicture(svgEl, label) {
   svgEl.setAttribute('aria-label', label);
 }
 
+/**
+ * DP-53: how long the changes have to settle before the combine runs by
+ * itself. A person clicking through a column of radios makes one combine,
+ * not one per click; a change during a combine supersedes it.
+ */
+export const COMBINE_SETTLE_MS = 350;
+
 export function createSvgPrepWorkspace(containerEl) {
   const { root, refs } = buildWorkspaceDom();
   containerEl.appendChild(refs.backdrop);
@@ -1019,6 +1028,13 @@ export function createSvgPrepWorkspace(containerEl) {
   let highlightCleanup = null;
   let picturePointerCleanup = null;
   let offsetDebounceTimer = null;
+  // DP-53: the combine runs by itself after every change, once the changes
+  // settle. The owner's instruction of 2026-09-16 (plan §1.6, item 1)
+  // superseded DP-Q33's budget for the decision to RUN it; the prediction now
+  // phrases the wait instead of gating the work, and DP-Q34 stands (the
+  // painted stand-in is the picture until a result exists).
+  let combineSettleTimer = null;
+  let combineWaiters = [];
   // True once Apply or Keep original has fired; closing without either
   // triggers the keep-original callback so the original is never silently
   // replaced by an auto-prepared version.
@@ -1513,43 +1529,48 @@ export function createSvgPrepWorkspace(containerEl) {
    * predictor is calibrated by this session's own flattens.
    */
   function setPreviewBand() {
-    const { shapes, points } = flattenSizeOf();
-    const predictedFlattenMs = predictFlattenMs(shapes, points, flattenCost);
-    // No guard on the count. A drawing with nothing left to combine predicts
-    // nothing, which is under any budget, so it runs and the result pane says
-    // in its own words that there is no foreground. Deferring it instead would
-    // offer a button to spend time on no work, under a sentence that reads
-    // "This drawing has 0 shapes. Combining them may take about a second."
-    autoPreview = predictedFlattenMs <= FLATTEN_BUDGET_MS;
-    refs.renderRow.hidden = autoPreview;
+    // DP-53: every drawing combines by itself, whatever it is predicted to
+    // cost. The prediction is still made, to say how long the wait is.
+    autoPreview = true;
+    refs.renderRow.hidden = true;
   }
 
   /**
-   * Ask for the result preview the way this drawing's size allows.
+   * A change was made: the pane goes stale at once, and the combine follows
+   * once the changes settle.
    *
-   * DP-3: `updateResultPreview` IS the boolean flatten - the "Will print as"
-   * pane is its output - and DP-0 measured that flatten at 1.0 s for 50
-   * shapes, 56.7 s for 200 and 447.9 s for 400, roughly 7.5x per doubling.
-   * Running it on open and again on every role change is what made the
-   * owner's 831-shape drawing take 64.7 SECONDS to appear. Above tier A the
-   * pane goes stale instead, and waits to be asked.
+   * DP-3 measured the flatten at 1.0 s for 50 shapes, 56.7 s for 200 and
+   * 447.9 s for 400 (the retired pairwise chain; the ring engine and the
+   * worker have since replaced it), and DP-Q33 gated the automatic run on a
+   * predicted 300 ms. DP-53 retires the gate: the combine always runs by
+   * itself, in the worker, after the settle, and a change made while one is
+   * in flight supersedes it (the runner's start() does that). A person who
+   * keeps changing a very large drawing gets a result when they pause for
+   * the predicted wait, and the status sentence says so.
    */
   function requestResultPreview() {
-    if (autoPreview) {
-      updateResultPreview();
-      return;
-    }
     markPreviewStale();
+    clearTimeout(combineSettleTimer);
+    combineSettleTimer = setTimeout(() => {
+      combineSettleTimer = null;
+      updateResultPreview();
+    }, COMBINE_SETTLE_MS);
   }
 
   /**
-   * Show that the result pane is out of date and offer to bring it up to
-   * date, rather than silently showing a picture of older choices.
+   * Show that the result pane is out of date, rather than silently showing a
+   * picture of older choices, and say that the combine is on its way.
    */
-  function markPreviewStale() {
+  function markPreviewStale({ keepZoom = true } = {}) {
     // currentResult === null IS "stale": Apply and Save already refuse on it,
     // so a second flag saying the same thing could only drift from it.
     currentResult = null;
+    // The person's zoom outlives the picture: the stand-in that replaces the
+    // result keeps the viewBox the result had, as the result keeps the
+    // stand-in's when it lands.
+    const previousViewBox = keepZoom
+      ? refs.resultPane.querySelector('svg')?.getAttribute('viewBox') || null
+      : null;
     // A combine already in flight is answering a question nobody is asking any
     // more: it was built from the choices as they stood BEFORE this change, so
     // letting it land would put the very picture of older choices into the
@@ -1563,13 +1584,38 @@ export function createSvgPrepWorkspace(containerEl) {
     clearResultError();
     // The pane is REPLACED, never emptied. See renderStandInResult.
     renderStandInResult();
-    setApplyEnabled(
-      false,
-      'Render the preview before applying it, so you can see what you get.'
+    if (previousViewBox) {
+      const picture = refs.resultPane.querySelector('svg');
+      if (picture) picture.setAttribute('viewBox', previousViewBox);
+    }
+    setApplyEnabled(false, combiningSentence());
+  }
+
+  /** Whether a combine is pending or in flight. */
+  function isCombining() {
+    return (
+      combineSettleTimer !== null ||
+      Boolean(flattenRunner && flattenRunner.isRunning())
     );
-    refs.renderRow.hidden = false;
-    refs.renderNote.textContent = staleNoteText();
-    refs.renderBtn.disabled = false;
+  }
+
+  /**
+   * Resolves once no combine is pending or in flight: the charm view's
+   * Render preview waits on this before it asks for the current result.
+   * @returns {Promise<void>}
+   */
+  function whenCombined() {
+    if (!isCombining()) return Promise.resolve();
+    return new Promise((resolve) => {
+      combineWaiters.push(resolve);
+    });
+  }
+
+  function settleCombineWaiters() {
+    if (isCombining()) return;
+    const waiting = combineWaiters;
+    combineWaiters = [];
+    waiting.forEach((resolve) => resolve());
   }
 
   /**
@@ -1587,20 +1633,17 @@ export function createSvgPrepWorkspace(containerEl) {
     return `about ${Math.round(ms / 60000)} minutes`;
   }
 
-  /** The sentence under the Render preview button. */
-  function staleNoteText() {
-    // Both numbers read fresh. Holding the prediction from when the band was
-    // last set would let the count move while the duration stood still, so
-    // deleting 260 of 300 shapes would say "40 shapes" and still quote the
-    // wait for 300.
+  /**
+   * The status sentence while the shapes are being combined (DP-53). Both
+   * numbers read fresh: holding the prediction from when the band was last set
+   * would let the count move while the duration stood still.
+   */
+  function combiningSentence() {
     const { shapes, points } = flattenSizeOf();
     const ms = predictFlattenMs(shapes, points, flattenCost);
-    // "here" is gone (the owner, 2026-09-14): it wrapped the sentence to a
-    // fourth line and overran the charm host's panel by 6 px, MEASURED at
-    // 1280x900, and "may take" already says the number is an estimate.
     return (
-      `This drawing has ${shapes} shapes. Combining them may take ` +
-      `${waitInWords(ms)}, so Forge waits until you ask.`
+      `Combining ${shapes} shapes, ${waitInWords(ms)}. ` +
+      'Apply is ready when they are combined.'
     );
   }
 
@@ -1613,7 +1656,6 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.renderRow.hidden = busy ? false : autoPreview;
     refs.renderProgress.hidden = !busy;
     refs.renderCancelBtn.hidden = !busy;
-    refs.renderBtn.hidden = busy;
     refs.resultPane.setAttribute('aria-busy', String(busy));
     if (busy) {
       const { shapes } = flattenSizeOf();
@@ -1622,6 +1664,14 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   async function updateResultPreview() {
+    try {
+      await runResultPreview();
+    } finally {
+      settleCombineWaiters();
+    }
+  }
+
+  async function runResultPreview() {
     if (!currentAnalysis || !currentSvgMeta) return;
 
     // Preserve the user's zoom level across preview re-renders.
@@ -1673,10 +1723,7 @@ export function createSvgPrepWorkspace(containerEl) {
         // Apply's handler refuses on a null result by RETURNING - so the
         // button sat enabled and did nothing at all when pressed. Firefox on
         // CI pressed it in that window and the stack was never built.
-        setApplyEnabled(
-          false,
-          'Still combining the shapes. Apply is ready when the result appears.'
-        );
+        setApplyEnabled(false, combiningSentence());
         try {
           const size = flattenSizeOf();
           const out = await getFlattenRunner().start(
@@ -1714,12 +1761,10 @@ export function createSvgPrepWorkspace(containerEl) {
               false,
               'Combining was stopped, so there is no result to apply.'
             );
-            // The way back is the Render button, and on an auto-preview
-            // drawing the row holding it is hidden the rest of the time.
-            refs.renderRow.hidden = false;
-            refs.renderBtn.disabled = false;
+            // The way back is any change: the combine runs again by itself.
             refs.renderNote.textContent = 'Combining canceled.';
-            liveRegion.textContent = 'Combining canceled.';
+            liveRegion.textContent =
+              'Combining canceled. Change anything and it runs again.';
             return;
           }
           setRenderBusy(false);
@@ -2750,58 +2795,6 @@ export function createSvgPrepWorkspace(containerEl) {
     announce('Combining canceled');
   }
 
-  async function renderPreviewOnDemand() {
-    if (!currentAnalysis) return;
-    const { shapes: count } = flattenSizeOf();
-    const started = performance.now();
-
-    // No frame dance before the work any more. There used to be two, so the
-    // busy state was painted before the main thread was taken for the boolean;
-    // the boolean is in a worker now (DP-37 P2) and the thread is never taken,
-    // so the ceremony documented behavior this code no longer has.
-    const message = `Combining ${count} shapes.`;
-    liveRegion.textContent = message;
-    announce(message);
-
-    // D-120 aftercare: an on-demand render WAITS for the ring engine rather
-    // than deferring. Deferred, this body became instant and wrong.
-    if (
-      !ringEngine &&
-      !currentAnalysis?.isCompoundPathOnly &&
-      !canUseWorker()
-    ) {
-      try {
-        await loadRingEngine();
-      } catch {
-        // updateResultPreview reports the empty result honestly below.
-      }
-    }
-
-    // ★ AWAITED. It used to be called and left, which was harmless while the
-    // combine finished inside the same turn. Once it moved to a worker the
-    // lines below ran IMMEDIATELY, so pressing the button announced "Preview
-    // could not be built from these choices" while the work was still running
-    // - measured, three seconds before it finished. An announcement that is
-    // wrong is worse than no announcement.
-    await updateResultPreview();
-
-    // Canceled: the action the person took has already spoken for itself.
-    if (!currentResult && flattenRunner && flattenRunner.isRunning()) return;
-
-    const seconds = Math.max(
-      1,
-      Math.round((performance.now() - started) / 1000)
-    );
-    refs.renderBtn.disabled = false;
-    if (currentResult) {
-      refs.renderNote.textContent =
-        'Preview is up to date. Change anything and you can render it again.';
-      const done = `Preview ready. It took ${seconds} seconds.`;
-      liveRegion.textContent = done;
-      announce(done);
-    }
-  }
-
   // ── DP-4: deleting rows, and keeping the saved metadata honest ──────────
 
   /**
@@ -3363,16 +3356,14 @@ export function createSvgPrepWorkspace(containerEl) {
 
     renderSourcePane();
     renderRoleLayer();
-    // DP-3: tier decides whether the boolean may run without being asked.
-    // Anything the analyzer did not label is treated as tier A, so an older
-    // caller keeps exactly the behavior it had.
+    // DP-53: the first combine runs at once (there is nothing to settle);
+    // every change after it waits for the settle. The stand-in goes up
+    // first, so the pane is never empty while the engine loads or the
+    // worker works (DP-37 P1's rule).
     setPreviewBand();
     clearSelection();
-    if (autoPreview) {
-      updateResultPreview();
-    } else {
-      markPreviewStale();
-    }
+    markPreviewStale({ keepZoom: false });
+    updateResultPreview();
 
     sourceZoomCleanup = setupPaneZoom(
       refs.sourcePane,
@@ -3393,9 +3384,6 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.addEventListener('input', handleOffsetChange);
     refs.designWidthInput.addEventListener('input', handleDesignWidthChange);
     refs.footer.addEventListener('click', handleFooterClick);
-    // The render control lives under the result pane, not in the footer, so
-    // the footer's delegated handler cannot see it.
-    refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
     refs.renderCancelBtn.addEventListener('click', cancelRender);
     refs.objects.addEventListener('click', handleRowClick);
     refs.objects.addEventListener('mousedown', handleRowMousedown);
@@ -3484,13 +3472,18 @@ export function createSvgPrepWorkspace(containerEl) {
 
     clearTimeout(offsetDebounceTimer);
     offsetDebounceTimer = null;
+    clearTimeout(combineSettleTimer);
+    combineSettleTimer = null;
+    // Nothing may wait on a combine the closing editor will never run.
+    const waiting = combineWaiters;
+    combineWaiters = [];
+    waiting.forEach((resolve) => resolve());
 
     root.removeEventListener('keydown', handleKeydown);
     refs.objects.removeEventListener('change', handleRoleChange);
     refs.objects.removeEventListener('input', handleOffsetChange);
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
-    refs.renderBtn.removeEventListener('click', renderPreviewOnDemand);
     refs.objects.removeEventListener('click', handleRowClick);
     refs.objects.removeEventListener('mousedown', handleRowMousedown);
     refs.objects.removeEventListener('keydown', handleRowKeydown);
@@ -3615,6 +3608,8 @@ export function createSvgPrepWorkspace(containerEl) {
     getOffsetOverrides,
     getDeletedIndices,
     getLayerAssignments,
+    isCombining,
+    whenCombined,
     /**
      * The ring engine, once the lazy chunk is in; null while it is not.
      * D-132: the file control's layer companions flatten with the same engine

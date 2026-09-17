@@ -323,6 +323,28 @@ export function createDrawingEditor({
   draftNote.className = 'drawing-editor-draft-note';
   draftNote.textContent = S.draftNote;
 
+  // DP-53: the charm on request. The drawing view combines by itself (the
+  // workspace's business); the charm view renders the charm with the drawing
+  // as it is now, as a DRAFT the host draws without touching the design, so
+  // Undo never steps through drafts and nothing is written until Apply. Shown
+  // in the charm view only, and only when a host offers `onDraftRender` (the
+  // standalone door has no charm). The note says which drawing the charm
+  // shows, since the person may have changed it since.
+  const renderCharmBtn = button(
+    S.renderCharm,
+    'btn btn-primary drawing-editor-render-charm',
+    'render-charm'
+  );
+  renderCharmBtn.setAttribute('aria-label', S.renderCharmLabel);
+  renderCharmBtn.hidden = true;
+  // The note under the charm view is ONE note in two states: draft quality
+  // (DP-38), and, once a draft was rendered, which drawing the charm shows.
+  let draftRendering = false;
+  const setCharmNote = (rendered) => {
+    draftNote.textContent = rendered ? S.charmNote : S.draftNote;
+    draftNote.dataset.draft = rendered ? 'rendered' : '';
+  };
+
   const applyBtn = button(
     S.applyColours,
     'btn btn-primary drawing-editor-apply',
@@ -542,6 +564,7 @@ export function createDrawingEditor({
   toolbarHeaderRow.append(title, panelToggleBtn, closeBtn);
   toolbarViewRow.append(
     viewSwitch,
+    renderCharmBtn,
     draftNote,
     viewGroup,
     zoomGroup,
@@ -803,6 +826,7 @@ export function createDrawingEditor({
     // a tile of plates, and a control labeled Charm would be naming something
     // that is not there. DP-38 is the charm's release.
     viewSwitch.hidden = rest.mode === 'file' || purpose !== 'relief';
+    syncRenderCharm();
     isOpen = true;
     currentSvg = svgString;
     initialPlan = savedPlan || null;
@@ -891,10 +915,51 @@ export function createDrawingEditor({
     // The stage is the box the charm has to fit inside: everything else in
     // this editor is laid over the canvas, not beside it.
     if (typeof onViewChange === 'function') onViewChange(view, stage);
+    syncRenderCharm();
     // DP-32, one action one announcement: one control pressed, one sentence
     // saying what is now on screen.
     say(view === 'charm' ? S.viewShowingCharm : S.viewShowingDrawing);
   }
+
+  /** Render preview belongs to the charm view of a host that can draw one. */
+  function syncRenderCharm() {
+    const offered = typeof callbacks.onDraftRender === 'function';
+    renderCharmBtn.hidden = !(view === 'charm' && offered);
+  }
+
+  /**
+   * Ask the host for a draft of the charm with the drawing as it is now:
+   * the current combined result (waiting for the combine if one is in
+   * flight, and saying so) and the Layer column (null unless built, D-142).
+   */
+  async function renderCharm() {
+    if (draftRendering || typeof callbacks.onDraftRender !== 'function') return;
+    draftRendering = true;
+    renderCharmBtn.disabled = true;
+    try {
+      if (workspace.isCombining()) {
+        say(S.renderCharmWaiting);
+        await workspace.whenCombined();
+      }
+      if (!isOpen) return;
+      const result = workspace.getResult();
+      if (!result) {
+        say(S.renderCharmNothing);
+        return;
+      }
+      const layerResult = workspace.getLayerAssignments();
+      const layers = layerResult?.limit ? layerResult.layers : null;
+      callbacks.onDraftRender(result, layers);
+      setCharmNote(true);
+      say(S.renderCharmStarted);
+    } finally {
+      draftRendering = false;
+      renderCharmBtn.disabled = false;
+    }
+  }
+  renderCharmBtn.addEventListener('click', () => {
+    renderCharm();
+  });
 
   /** Put the view back to the drawing, without announcing it. */
   function resetView() {
@@ -904,6 +969,8 @@ export function createDrawingEditor({
     if (viewRadios.drawing) viewRadios.drawing.checked = true;
     if (viewRadios.charm) viewRadios.charm.checked = false;
     panelOpenBeforeCharm = null;
+    setCharmNote(false);
+    syncRenderCharm();
     // Closing or re-opening on the charm view would otherwise leave the
     // preview showing underneath the next drawing.
     if (wasCharm && typeof onViewChange === 'function') {
