@@ -3098,11 +3098,23 @@ export function createSvgPrepWorkspace(containerEl) {
         mark = document.createElement('span');
         mark.className = 'svg-prep-thin-mark';
         mark.id = `${refs.thinMarkPrefix}-${i}`;
+        // A short badge to the eye, the full words to a screen reader as the
+        // row's description. The words themselves after the name wrapped the
+        // signed one-line row (DP-39) on CI's wider Firefox fonts (REPORTED
+        // by PR #242's board: "row 1 took 2 lines").
+        const badge = document.createElement('span');
+        badge.className = 'svg-prep-thin-mark-badge';
+        badge.setAttribute('aria-hidden', 'true');
+        badge.textContent = 'thin';
+        const wordsEl = document.createElement('span');
+        wordsEl.className = 'sr-only svg-prep-thin-mark-words';
+        mark.append(badge, wordsEl);
         const name = item.querySelector('.svg-prep-object-name');
         if (name) name.after(mark);
         else item.appendChild(mark);
       }
-      mark.textContent = words.join(', ');
+      mark.querySelector('.svg-prep-thin-mark-words').textContent =
+        words.join(', ');
       item.setAttribute('aria-describedby', mark.id);
     });
   }

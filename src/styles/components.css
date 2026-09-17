@@ -16064,6 +16064,18 @@ body.tutorial-body-locked {
   margin-left: var(--space-xs);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+  flex: 0 0 auto;
+}
+
+/* One short word to the eye; the row's full description is read out. */
+.svg-prep-thin-mark-badge {
+  display: inline-block;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 .svg-prep-thin-lines[hidden] {

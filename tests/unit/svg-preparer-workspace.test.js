@@ -4198,7 +4198,11 @@ describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () =>
   const markOf = (ws, i) => {
     const row = ws._root.querySelector(`.svg-prep-object[data-index="${i}"]`);
     const id = row?.getAttribute('aria-describedby');
-    return id ? document.getElementById(id)?.textContent : null;
+    if (!id) return null;
+    const mark = document.getElementById(id);
+    // The badge says "thin" to the eye; the description is the words.
+    expect(mark.querySelector('.svg-prep-thin-mark-badge').textContent).toBe('thin');
+    return mark.querySelector('.svg-prep-thin-mark-words')?.textContent ?? null;
   };
 
   it('★ the notice counts the shapes under the print floor at the design width, in a sentence', async () => {
