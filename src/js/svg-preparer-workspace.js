@@ -1810,8 +1810,14 @@ export function createSvgPrepWorkspace(containerEl) {
       setApplyEnabled(true);
 
       // Now, and not before: the old picture held the pane while the combine
-      // ran.
+      // ran. And the zoom is read NOW, from that picture, not from when the
+      // combine began: DP-53 runs the combine by itself and lets a person
+      // pinch the stand-in meanwhile, and PR #240's board found the result
+      // landing with the earlier viewBox, so two fingers did nothing.
       const stale = refs.resultPane.querySelector('svg');
+      const keptViewBox = stale
+        ? stale.getAttribute('viewBox') || previousViewBox
+        : previousViewBox;
       if (stale) stale.remove();
 
       const parser = new DOMParser();
@@ -1820,7 +1826,7 @@ export function createSvgPrepWorkspace(containerEl) {
       if (!svg) return;
 
       const imported = document.importNode(svg, true);
-      if (previousViewBox) imported.setAttribute('viewBox', previousViewBox);
+      if (keptViewBox) imported.setAttribute('viewBox', keptViewBox);
       // The picture a person is looking at is the one the list has to be able
       // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
       // the SAME builder as every other picture. This used to build a bare
