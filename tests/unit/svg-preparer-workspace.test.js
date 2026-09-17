@@ -3952,4 +3952,101 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     expect(announce).not.toHaveBeenCalled();
     ws.destroy();
   });
+
+  // ── Session 4 of DP-R5: what the owner's walk of the merged code found ─────
+
+  it('★ the selection mark is drawn so it shows on a dark shape: a light halo under the outline', () => {
+    // LOOKED AT on the owner's logo after DP-47: the outline was drawn in the
+    // ink color over shapes painted in the ink color, and three chosen letters
+    // showed no mark a person could see. The DOM count said 6; the eyes said 0.
+    const ws = openThree();
+    clickRow(ws, 0);
+    clickRow(ws, 2, { ctrlKey: true });
+    const halos = ws._root.querySelectorAll('.svg-prep-selected-halo');
+    expect(halos.length, 'one halo per selected shape, per picture').toBe(
+      selectionPaths(ws).length
+    );
+    expect(halos.length).toBeGreaterThanOrEqual(2);
+    // The halo sits UNDER its outline in the same layer.
+    const layer = ws._root.querySelector('.svg-prep-overlay-selection');
+    expect(layer.firstElementChild.classList.contains('svg-prep-selected-halo')).toBe(true);
+    ws.destroy();
+  });
+
+  it('the halo and the outline have rules of their own, in colors that are not the ink', () => {
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/styles/components.css'),
+      'utf8'
+    );
+    const block = (selector) => {
+      const at = css.indexOf(`${selector} {`);
+      if (at === -1) return null;
+      const open = css.indexOf('{', at);
+      return css.slice(open, css.indexOf('}', open));
+    };
+    const halo = block('.svg-prep-selected-halo');
+    expect(halo, '.svg-prep-selected-halo must have a rule of its own').not.toBeNull();
+    expect(halo).toMatch(/fill:\s*none/);
+    expect(halo).toMatch(/stroke:\s*var\(--color-bg-primary\)/);
+    expect(halo).toMatch(/vector-effect:\s*non-scaling-stroke/);
+    const mark = block('.svg-prep-selected-path');
+    // The outline must not be the ink color, or it vanishes on a raised shape.
+    expect(mark).not.toMatch(/stroke:\s*var\(--color-text-primary\)/);
+    expect(mark).toMatch(/stroke:\s*var\(--color-focus\)/);
+    // And a forced-colors theme keeps both.
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)[\s\S]{0,600}\.svg-prep-selected-halo/
+    );
+  });
+
+  it('★ a Shift-click extends the choice, not the page\'s text selection', () => {
+    // MEASURED on the built app: a Shift-click on a row left 49 characters of
+    // the rows' own text selected and painted blue across two rows, because
+    // the browser extends its text selection on Shift before the click lands.
+    const ws = openThree();
+    clickRow(ws, 0);
+    const name = rows(ws)[2].querySelector('.svg-prep-object-name');
+    const down = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      shiftKey: true,
+    });
+    name.dispatchEvent(down);
+    expect(down.defaultPrevented, 'the text selection must not start').toBe(true);
+    clickRow(ws, 2, { shiftKey: true });
+    expect(selectedRows(ws)).toHaveLength(3);
+    // A plain press is left alone: the row takes focus the ordinary way.
+    const plain = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    name.dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+    ws.destroy();
+  });
+
+  it('★ the wall behind a Colors drawing is not a pointer target while it is ignored', () => {
+    // MEASURED on the owner's logo: the navy wall is one element the size of
+    // the whole canvas, set to Ignore by the wall rule (D-137). Its hit path
+    // sat under every point of the picture, so pointing at the background
+    // washed the whole drawing in the hover color and a click on empty space
+    // chose "Path 1, Ignore" instead of clearing the choice.
+    const analysis = makeAnalysis(100);
+    analysis.elements[0].element.setAttribute('data-background', 'true');
+    analysis.elements[0].autoRole = 'ignore';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, analysis);
+    const hits = () =>
+      ws._refs.resultPane.querySelectorAll('.svg-prep-hit-path').length;
+    expect(roleOf(ws, 0)).toBe('ignore');
+    expect(hits(), 'the ignored wall has no hit path').toBe(99);
+    // Every other ignored shape keeps its target (DP-47 P4's rule).
+    clickRow(ws, 5);
+    press(rows(ws)[5], 'Delete');
+    expect(roleOf(ws, 5)).toBe('ignore');
+    expect(hits()).toBe(99);
+    // And a wall somebody RAISES is a shape again, and can be pointed at.
+    const radio = rows(ws)[0].querySelector('input[value="foreground"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(hits()).toBe(100);
+    ws.destroy();
+  });
 });

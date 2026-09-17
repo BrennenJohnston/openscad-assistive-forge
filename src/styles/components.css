@@ -15536,21 +15536,39 @@ body.tutorial-body-locked {
    which is a solid translucent fill of one shape: the two are on screen
    together whenever somebody points at a row while holding a selection.
 
-   non-scaling-stroke keeps it one width at every zoom, which matters here
+   A light halo sits UNDER the dashed outline (DP-R5 session 4). The outline
+   used to be drawn in the ink color, and the stand-in paints raised shapes in
+   the ink color, so on the owner's logo three chosen letters showed no mark a
+   person could see. The halo is the paper color and the outline the focus
+   color, which reads on ink and on paper alike.
+
+   non-scaling-stroke keeps both one width at every zoom, which matters here
    more than usual: a person zooms in to find the small shapes worth
    ignoring. */
+.svg-prep-selected-halo {
+  fill: none;
+  stroke: var(--color-bg-primary);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
 .svg-prep-selected-path {
   fill: none;
-  stroke: var(--color-text-primary);
+  stroke: var(--color-focus);
   stroke-width: 2;
   stroke-dasharray: 5 3;
+  stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  paint-order: stroke;
 }
 
 @media (forced-colors: active) {
   /* In a forced-colors theme the app's own colors are replaced, and an
      outline drawn in a system color is the only thing that survives. */
+  .svg-prep-selected-halo {
+    stroke: Canvas;
+  }
+
   .svg-prep-selected-path {
     stroke: Highlight;
     stroke-width: 3;
@@ -16388,6 +16406,10 @@ body.tutorial-body-locked {
 :root[data-high-contrast='true'] .svg-prep-highlight-path {
   fill-opacity: 0.5;
   stroke-width: 3;
+}
+
+:root[data-high-contrast='true'] .svg-prep-selected-halo {
+  stroke-width: 8;
 }
 
 :root[data-high-contrast='true'] .svg-prep-selected-path {

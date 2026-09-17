@@ -739,6 +739,23 @@ export function createDrawingEditor({
   }
 
   /**
+   * Leave without a verdict: Close, and Escape where Escape is the way out.
+   *
+   * ★ D-149 (DP-55). This used to be `finish('onKeepOriginal')`, so Close
+   * meant "the original stands" - and MEASURED on the owner's logo, a look at
+   * an APPLIED drawing ended with the charm reverting to the raw one: CREATE
+   * raised (53,490 triangles) became a raised slab (29,388). A host that
+   * offers `onClose` is asked to leave things as they are; one that does not
+   * (the Edit Drawing door) gets Keep original as before. The Keep original
+   * BUTTON is not routed through here and keeps its meaning.
+   */
+  function leave() {
+    finish(
+      typeof callbacks.onClose === 'function' ? 'onClose' : 'onKeepOriginal'
+    );
+  }
+
+  /**
    * Leave the editor with a verdict. Idempotent: the workspace's own close
    * and the surface's Escape can both arrive for the one gesture, and only
    * the first one counts.
@@ -828,7 +845,7 @@ export function createDrawingEditor({
         onEscape: () => {
           if (closeToolbarMore()) return;
           if (workspace.closeOpenMenu?.()) return;
-          finish('onKeepOriginal');
+          leave();
         },
       });
       trap.activate({ initialFocus: title, initialFocusDelay: 0 });
@@ -2007,9 +2024,9 @@ export function createDrawingEditor({
   });
 
   closeBtn.addEventListener('click', () => {
-    // Closing without Apply or Keep means the original stands: never silently
-    // replaced by an auto-prepared version.
-    finish('onKeepOriginal');
+    // Closing without Apply or Keep changes nothing: what the model holds is
+    // what it keeps, whether that is the original or a design applied earlier.
+    leave();
   });
 
   // Capture phase, so this runs before the workspace's own Escape handler and
@@ -2047,7 +2064,7 @@ export function createDrawingEditor({
       // drawer's own way shut is its toggle.
       event.preventDefault();
       event.stopPropagation();
-      finish('onKeepOriginal');
+      leave();
     },
     true
   );
@@ -2056,7 +2073,7 @@ export function createDrawingEditor({
 
   return {
     open,
-    close: () => finish('onKeepOriginal'),
+    close: () => leave(),
     dismiss: () => {
       if (!isOpen) return;
       isOpen = false;

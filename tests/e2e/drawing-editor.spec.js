@@ -1108,4 +1108,123 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
       )
       .toBe(3)
   })
+
+  // ── Session 4 of DP-R5: the way back into the editor ──────────────────────
+  //
+  // MEASURED on the built app with the owner's logo in Colors: after Apply
+  // (and after Close) the file control's status card was EMPTY - no badge and
+  // no "Open the drawing editor" - so once a person had applied they could
+  // never get back in to change one more shape, and Convert again did not
+  // reopen it either. The drawing analyzes as `ready` with `open_editor` (a
+  // sound drawing sent to the editor only because its combine outruns the
+  // budget), and the card had a branch for every status but that one. The
+  // fixture is the app's own Colors output from that logo.
+  test('★ after the editor closes, the file control still offers a way back in (a ready drawing sent to the editor for its size)', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    const LOGO_TRACE = path.join(
+      process.cwd(),
+      'tests',
+      'fixtures',
+      'svg-edit',
+      'create-logo-colors-trace.svg'
+    )
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.selectOption('#charmVariantSelect', 'q-charm')
+    await page.click('#openCharmMakerBtn')
+    await page.waitForFunction(
+      () =>
+        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+        0,
+      null,
+      { timeout: 120000 }
+    )
+    for (let i = 0; i < 2; i++) {
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click()
+        await page.waitForTimeout(300)
+      }
+    }
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    await page.evaluate(() => {
+      let d = document.querySelector('#param-design_file')?.closest('details')
+      while (d) {
+        d.open = true
+        d = d.parentElement?.closest('details')
+      }
+    })
+    // The editor opens by itself on this drawing.
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(10)
+
+    // Leave without applying, the way the owner did on their first look.
+    await surface(page).locator('.drawing-editor-close').click()
+    await expect(surface(page)).toBeHidden({ timeout: 30000 })
+
+    // ★ The card must still say what the drawing is and offer the editor.
+    const control = page.locator('.param-control--file', {
+      has: page.locator('#param-design_file'),
+    })
+    const badge = control.locator('.svg-prep-status-badge')
+    await expect(badge).toBeVisible({ timeout: 30000 })
+    await expect(badge).toHaveText(/shapes/)
+    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    await expect(door).toBeVisible({ timeout: 30000 })
+
+    // And it goes back in.
+    await door.scrollIntoViewIfNeeded()
+    await door.click()
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(10)
+
+    // Apply, and the card says the drawing was prepared, with the door still there.
+    const render = surface(page).locator('.svg-prep-render-btn')
+    if (await render.isVisible().catch(() => false)) {
+      await render.click()
+    }
+    const apply = surface(page).locator('.svg-prep-footer [data-action="apply"]')
+    await expect(apply).toBeEnabled({ timeout: 120000 })
+    await apply.click()
+    await expect(surface(page)).toBeHidden({ timeout: 30000 })
+    await expect(badge).toHaveText('Prepared in the drawing editor.', {
+      timeout: 30000,
+    })
+    await expect(door).toBeVisible()
+
+    // ★ Reopen to look, and leave with Close: the applied design STAYS. Close
+    // used to be wired as Keep original, so a look at an applied drawing
+    // ended with the charm reverting to the raw drawing - on the logo, a
+    // raised slab in place of the lettering (D-149).
+    const designSize = () =>
+      page.evaluate(() => {
+        const v = window.stateManager?.getState()?.parameters?.design_file
+        return v && typeof v === 'object' ? v.size : null
+      })
+    const applied = await designSize()
+    expect(applied).toBeGreaterThan(0)
+    await door.scrollIntoViewIfNeeded()
+    await door.click()
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(10)
+    await surface(page).locator('.drawing-editor-close').click()
+    await expect(surface(page)).toBeHidden({ timeout: 30000 })
+    await expect.poll(designSize).toBe(applied)
+    await expect(badge).toHaveText('Prepared in the drawing editor.')
+    await expect(door).toBeVisible()
+  })
 })

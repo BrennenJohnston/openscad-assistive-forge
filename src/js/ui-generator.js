@@ -2802,6 +2802,8 @@ function createFileControl(
       purpose: plateParams.length > 0 ? 'stencil' : 'relief',
       onApply: handleEditorApply,
       onKeepOriginal: handleEditorKeep,
+      // D-149: Close leaves the design as it stands, applied or not.
+      onClose: handleEditorClose,
       sourceName: currentFileName,
       initialOverrides: storedMeta?.prepOverrides || null,
       initialOffsets: storedMeta?.prepOffsets || null,
@@ -2868,8 +2870,22 @@ function createFileControl(
     const badge = document.createElement('span');
     badge.className = 'svg-prep-status-badge';
     const count = analysis.elements.length;
+    // A drawing a person has prepared in the editor says so, whatever the
+    // analyzer thought of it on the way in, and keeps the door open: once the
+    // editor has closed, this card is the only way back into it. Matched on
+    // the raw drawing as well as the name, so a new picture under an old name
+    // is not called prepared.
+    const stored = currentFileName ? getSvgPrepMetadata(currentFileName) : null;
+    const prepared = Boolean(
+      stored && stored.preparedSvg && stored.rawSvg === currentRawSvg
+    );
 
-    if (analysis.recommendation === 'pass_through') {
+    if (prepared && analysis.status !== 'too_complex') {
+      badge.textContent = 'Prepared in the drawing editor.';
+      badge.dataset.level = 'ready';
+      statusCard.appendChild(badge);
+      statusCard.appendChild(createStatusEditButton());
+    } else if (analysis.recommendation === 'pass_through') {
       // ★ D-124. "Using original, OpenSCAD merges these automatically" is
       // true for a charm, where a merge is the whole answer, and it is the
       // wrong sentence entirely for a stencil, where merging every shape into
@@ -2898,8 +2914,18 @@ function createFileControl(
       badge.dataset.level = 'ready';
       statusCard.appendChild(badge);
       statusCard.appendChild(createStatusEditButton());
-    } else if (analysis.status === 'needs_review') {
-      badge.textContent = `Needs review (${count} elements)`;
+    } else if (
+      analysis.status === 'needs_review' ||
+      // ★ DP-3 (DP-Q33) sends a sound drawing to the editor when its combine
+      // would outrun the budget, and leaves the status at 'ready'. That
+      // pairing had no branch here. MEASURED on the owner's logo in Colors
+      // (DP-R5 session 4, the built app): the card was BLANK while the editor
+      // was open, and after Apply or Close there was no way back into it -
+      // Convert again did not reopen it either.
+      (analysis.status === 'ready' && analysis.recommendation === 'open_editor')
+    ) {
+      // DP-Q40: the things in the list are shapes; "elements" is a code word.
+      badge.textContent = `Needs review (${count} shapes)`;
       badge.dataset.level = 'review';
       statusCard.appendChild(badge);
       statusCard.appendChild(createStatusEditButton());
@@ -2968,7 +2994,6 @@ function createFileControl(
       workspace && typeof workspace.getPlan === 'function'
         ? workspace.getPlan()
         : null;
-    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     const overrides = workspace ? workspace.getRoleOverrides() : null;
     const offsetOverrides = workspace ? workspace.getOffsetOverrides() : null;
     const deleted = workspace ? workspace.getDeletedIndices() : null;
@@ -2988,6 +3013,8 @@ function createFileControl(
         prepPlan: currentPlan,
       });
     }
+    // After the metadata, so the card can see the prepared drawing.
+    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     const svgDataUrl = svgToDataUrl(result);
     const fileObj = {
       name: currentFileName || 'prepared.svg',
@@ -3007,10 +3034,19 @@ function createFileControl(
     announceChange('SVG prepared for OpenSCAD');
   }
 
+  /**
+   * The editor was closed without Apply or Keep original (D-149). Nothing
+   * about the design changes: the value the model holds is the value it keeps,
+   * whether that is the original drawing or a version applied earlier. Only
+   * the card is redrawn, so it says what the drawing is and offers the editor.
+   */
+  function handleEditorClose() {
+    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
+  }
+
   function handleEditorKeep() {
     if (!currentRawSvg) return;
     currentPlan = null;
-    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     if (currentFileName) {
       setSvgPrepMetadata(currentFileName, {
         rawSvg: currentRawSvg,
@@ -3022,6 +3058,8 @@ function createFileControl(
         prepPlan: null,
       });
     }
+    // After the metadata, so the card no longer calls the drawing prepared.
+    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     const svgDataUrl = svgToDataUrl(currentRawSvg);
     const fileObj = {
       name: currentFileName || 'original.svg',

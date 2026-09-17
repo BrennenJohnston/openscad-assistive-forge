@@ -567,3 +567,62 @@ describe('the stencil purpose with tools (DP-20)', () => {
     expect(laid.assignment).toEqual(back.assignment)
   })
 })
+
+// ── Session 4 of DP-R5: Close leaves the editor and changes nothing ──────────
+//
+// MEASURED on the built app with the owner's logo: Apply (CREATE raised,
+// 53,490 triangles), reopen to look, press Close - and the charm became a
+// raised slab (29,388 triangles). Close was wired as Keep original, so a look
+// at an applied drawing ended by replacing it with the raw one. Close now
+// asks the host to leave things as they are (`onClose`) and falls back to
+// Keep original only for a host that offers nothing else; the Keep original
+// BUTTON keeps its meaning (D-149).
+
+describe('leaving the relief editor (D-149)', () => {
+  let surface
+  let editor
+
+  beforeEach(() => {
+    surface = document.createElement('div')
+    surface.id = 'drawingEditorSurface'
+    document.body.appendChild(surface)
+    editor = createDrawingEditor({ surfaceEl: surface, announce: vi.fn() })
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  const openRelief = (callbacks) => {
+    editor.open(CAT_SVG, analyzeSvg(CAT_SVG), { purpose: 'relief', ...callbacks })
+    expect(surface.hidden).toBe(false)
+  }
+
+  it('★ Close calls onClose, not onKeepOriginal, when the host offers it', () => {
+    const onClose = vi.fn()
+    const onKeepOriginal = vi.fn()
+    openRelief({ onApply: vi.fn(), onKeepOriginal, onClose })
+    surface.querySelector('.drawing-editor-close').click()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onKeepOriginal).not.toHaveBeenCalled()
+    expect(surface.hidden).toBe(true)
+  })
+
+  it('the Keep original button still means Keep original', () => {
+    const onClose = vi.fn()
+    const onKeepOriginal = vi.fn()
+    openRelief({ onApply: vi.fn(), onKeepOriginal, onClose })
+    editor._workspace._refs.keepBtn.click()
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(surface.hidden).toBe(true)
+  })
+
+  it('a host with no onClose gets Keep original from Close, as before', () => {
+    const onKeepOriginal = vi.fn()
+    openRelief({ onApply: vi.fn(), onKeepOriginal })
+    surface.querySelector('.drawing-editor-close').click()
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1)
+    expect(surface.hidden).toBe(true)
+  })
+})
