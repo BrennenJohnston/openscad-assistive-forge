@@ -1377,54 +1377,55 @@ test.describe('two previews: the drawing by itself, the charm on request (DP-53)
 // mm default), and "Ignore those" leaves them out in one press, each row
 // reversible. And the whole-drawing advisory, which the charm host never
 // showed (D-144), now speaks with the real width.
-test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
-  const LOGO_TRACE = path.join(
-    process.cwd(),
-    'tests',
-    'fixtures',
-    'svg-edit',
-    'create-logo-colors-trace.svg'
+const LOGO_TRACE = path.join(
+  process.cwd(),
+  'tests',
+  'fixtures',
+  'svg-edit',
+  'create-logo-colors-trace.svg'
+)
+
+async function openCharmHost(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+  })
+  await page.goto('/')
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    timeout: 240000,
+  })
+  await page.selectOption('#charmVariantSelect', 'q-charm')
+  await page.click('#openCharmMakerBtn')
+  await page.waitForFunction(
+    () =>
+      Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+      0,
+    null,
+    { timeout: 120000 }
   )
-
-  async function openCharmHost(page) {
-    await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    })
-    await page.goto('/')
-    await page.waitForSelector('body[data-wasm-ready="true"]', {
-      timeout: 240000,
-    })
-    await page.selectOption('#charmVariantSelect', 'q-charm')
-    await page.click('#openCharmMakerBtn')
-    await page.waitForFunction(
-      () =>
-        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
-        0,
-      null,
-      { timeout: 120000 }
-    )
-    for (let i = 0; i < 2; i++) {
-      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
-      if (await notNow.isVisible().catch(() => false)) {
-        await notNow.click()
-        await page.waitForTimeout(300)
-      }
+  for (let i = 0; i < 2; i++) {
+    const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+    if (await notNow.isVisible().catch(() => false)) {
+      await notNow.click()
+      await page.waitForTimeout(300)
     }
-    // The charm's first render carries the fit box; the host must have it.
-    await expect(page.locator('.preview-state-indicator')).toHaveText(
-      /Preview ready|Preview \(cached\)/,
-      { timeout: 240000 }
-    )
-    await page.evaluate(() => {
-      let d = document.querySelector('#param-design_file')?.closest('details')
-      while (d) {
-        d.open = true
-        d = d.parentElement?.closest('details')
-      }
-    })
   }
+  // The charm's first render carries the fit box; the host must have it.
+  await expect(page.locator('.preview-state-indicator')).toHaveText(
+    /Preview ready|Preview \(cached\)/,
+    { timeout: 240000 }
+  )
+  await page.evaluate(() => {
+    let d = document.querySelector('#param-design_file')?.closest('details')
+    while (d) {
+      d.open = true
+      d = d.parentElement?.closest('details')
+    }
+  })
+}
 
+
+test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
   test('★ the notice names the too-thin shapes at the width the charm prints, Ignore those leaves them out, and one comes back', async ({
     page,
   }) => {
@@ -1546,5 +1547,67 @@ test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
     await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
       /^9\.3/
     )
+  })
+})
+
+// ── DP-49: crop, on the charm host ──────────────────────────────────────────
+//
+// The same crop view on the host the charm lives on. A vector drawing is
+// clipped rather than traced again: every shape's rings against the kept
+// rectangle, the shapes the clip empties gone, the box rewritten. The logo's
+// wall carries its flag through the clip, so the wall rule still applies
+// and the raised shapes are the lettering. RED on the build before this
+// release: no Crop button in the toolbar.
+test.describe('crop on the charm host (DP-49)', () => {
+  test('★ the logo trace loses its lower half: fewer shapes, raised ones left, and Undo crop brings them back', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
+    const before = await rows.count()
+
+    const cropBtn = editor.locator('.drawing-editor-crop-btn')
+    await expect(cropBtn).toBeVisible()
+    await cropBtn.click()
+    const view = editor.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible()
+    await expect(
+      view.locator('input[type="range"][data-inset="top"]')
+    ).toBeFocused()
+    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50')
+    await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
+      'Keeping 100 % of the width and 50 % of the height.'
+    )
+    await view.locator('[data-action="save-crop"]').click()
+
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. \d+ shapes?\.$/,
+      { timeout: 120000 }
+    )
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeLessThan(before)
+    const raised = await page
+      .locator('.svg-prep-object input[type=radio][value="foreground"]:checked')
+      .count()
+    expect(raised).toBeGreaterThan(0)
+    // The charm's own width still rules the sentences: half the height makes
+    // the drawing wider than the box, so it is still width-limited.
+    await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
+      /^11\.9/
+    )
+
+    const undo = editor.locator('.drawing-editor-undo-crop')
+    await expect(undo).toBeVisible()
+    await undo.click()
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Crop undone\. \d+ shapes?\.$/,
+      { timeout: 60000 }
+    )
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(before)
+    await expect(undo).toBeHidden()
   })
 })

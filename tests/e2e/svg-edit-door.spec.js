@@ -2205,3 +2205,107 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
     expect((await whereIsReset()).count).toBe(1)
   })
 })
+
+// ── DP-49: crop, at the door ────────────────────────────────────────────────
+//
+// A photograph of a page is mostly page. The crop view takes the drawing's
+// place: the picture itself with the kept rectangle clear, four rows in the
+// customizer's own slider classes, Save crop and Cancel. The door owns the
+// pixels, so it crops them and traces again through the same dialog; Undo
+// crop puts the picture back. RED on the build before this release: no Crop
+// button in the toolbar.
+test.describe('crop at the door (DP-49)', () => {
+  test('★ the bird loses its bottom band: the crop view, Save crop, the trace again; Undo crop brings it back', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_PNG)
+    await expect
+      .poll(async () => (await focused(page))?.className ?? '', {
+        timeout: 10000,
+      })
+      .toContain('drawing-editor-title')
+    const host = page.locator('#svgEditStandaloneHost')
+    const rows = page.locator('.svg-prep-object')
+    const before = await rows.count()
+    expect(before).toBeGreaterThan(1)
+
+    const cropBtn = host.locator('.drawing-editor-crop-btn')
+    await expect(cropBtn).toBeVisible()
+    await expect(cropBtn).toHaveAttribute('aria-label', 'Crop the picture')
+    await cropBtn.click()
+    const view = host.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible()
+    await expect(host.locator('.drawing-editor-stage')).toBeHidden()
+    await expect(
+      view.locator('input[type="range"][data-inset="top"]')
+    ).toBeFocused()
+    // The picture in the crop view is the photograph itself, not its trace.
+    await expect(view.locator('image')).toHaveAttribute(
+      'href',
+      /^data:image\/png/
+    )
+    const bottom = view.locator('.slider-spinbox[data-inset="bottom"]')
+    await bottom.fill('50')
+    await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
+      'Keeping 100 % of the width and 50 % of the height.'
+    )
+    await view.locator('[data-action="save-crop"]').click()
+    await expect(view).toBeHidden()
+
+    // The trace runs again on the kept pixels and the editor comes back on
+    // the result, saying so.
+    await expect(host.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. \d+ shapes?\.$/,
+      { timeout: 180000 }
+    )
+    expect(await rows.count()).toBeGreaterThan(0)
+    await expect(host.locator('.drawing-editor-stage')).toBeVisible()
+
+    const undo = host.locator('.drawing-editor-undo-crop')
+    await expect(undo).toBeVisible()
+    await undo.click()
+    await expect(host.locator('.drawing-editor-status')).toHaveText(
+      /^Crop undone\. \d+ shapes?\.$/,
+      { timeout: 60000 }
+    )
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBe(before)
+    await expect(undo).toBeHidden()
+  })
+
+  test('axe finds nothing with the crop view open', async ({ page }) => {
+    test.setTimeout(240000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    const host = page.locator('#svgEditStandaloneHost')
+    await host.locator('.drawing-editor-crop-btn').click()
+    await expect(host.locator('.drawing-editor-crop')).toBeVisible()
+    const results = await new AxeBuilder({ page })
+      .include('#svgEditStandaloneHost')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    for (const v of results.violations) {
+      console.log('[axe]', v.id, v.impact, v.nodes.map((n) => n.target.join(' ')).join(' | '))
+    }
+    expect(results.violations).toEqual([])
+  })
+
+  test('Escape in the crop view cancels it and leaves the editor open', async ({
+    page,
+  }) => {
+    test.setTimeout(240000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    const host = page.locator('#svgEditStandaloneHost')
+    const cropBtn = host.locator('.drawing-editor-crop-btn')
+    await expect(cropBtn).toBeVisible()
+    await cropBtn.click()
+    const view = host.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(view).toBeHidden()
+    await expect(host).toBeVisible()
+    await expect(cropBtn).toBeFocused()
+  })
+})

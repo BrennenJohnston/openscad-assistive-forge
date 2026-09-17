@@ -18266,3 +18266,130 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   width: 100%;
   min-width: 6em;
 }
+
+/* ── The crop view (DP-49) ─────────────────────────────────────────────────
+   Takes the stage's place while it is open: the picture with the kept
+   rectangle clear and the rest shaded, four rows in the customizer's own
+   slider classes, Save crop and Cancel. */
+.drawing-editor-stage[hidden] {
+  display: none;
+}
+
+.drawing-editor-crop {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  container-type: inline-size;
+  /* The picture beside the rows when there is room for both (MEASURED: the
+     charm host's editor is 692 px wide at 1280, the door's 1268), one column
+     below that. Stacked, the view scrolled at every width and the Save button
+     sat below the fold. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.drawing-editor-crop-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* The customizer's number box keeps its own width here: a stretched box
+   pushed the slider down to 129 px of a 692 px row (MEASURED). */
+.drawing-editor-crop .slider-container .slider-spinbox {
+  width: 5.5em;
+  min-width: 5.5em;
+  flex: 0 0 auto;
+}
+
+.drawing-editor-crop-btn,
+.drawing-editor-undo-crop {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* The page-wide range rule gives a slider a full-width basis, which wrapped
+   the number box under it; here the slider takes what the box leaves. */
+.drawing-editor-crop .slider-container input[type='range'] {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 120px;
+}
+
+.drawing-editor-crop[hidden] {
+  display: none;
+}
+
+.drawing-editor-crop-picture svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 40vh;
+  background: var(--color-bg-secondary);
+}
+
+.drawing-editor-crop-shade {
+  fill: var(--color-text-primary);
+  fill-opacity: 0.55;
+}
+
+.drawing-editor-crop-frame {
+  fill: none;
+  stroke: var(--color-focus);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.drawing-editor-crop fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-crop legend {
+  font-weight: 600;
+  margin-bottom: var(--space-xs);
+}
+
+/* The label beside its slider on one line: four stacked rows put the Save
+   button 43 px below the fold in the charm host's editor at 1280 (MEASURED). */
+.drawing-editor-crop .param-control {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-sm);
+  margin: 0;
+}
+
+.drawing-editor-crop-keeping,
+.drawing-editor-crop-starts-over {
+  margin: 0;
+}
+
+.drawing-editor-crop-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-crop-buttons .btn {
+  min-height: 44px;
+}
+
+/* One column (a phone, or the charm host's editor beside a wide customizer):
+   the label on its own line, or the slider wraps and the label sits beside
+   the number box instead (MEASURED at 412). Last in this section: at equal specificity the later rule
+   wins, and this must beat the two-column rule above. */
+@container (max-width: 599px) {
+  .drawing-editor-crop .param-control {
+    grid-template-columns: 1fr;
+    row-gap: var(--space-xs);
+  }
+}

@@ -30,6 +30,7 @@ vi.mock('../../src/js/feature-flags.js', () => ({
 import { createRegionCanvas } from '../../src/js/drawing-editor/canvas.js'
 import { createDrawingEditor } from '../../src/js/drawing-editor/surface.js'
 import { EDITOR_STRINGS as S } from '../../src/js/drawing-editor/strings.js'
+import { readDrawingBox } from '../../src/js/svg-crop.js'
 import { analyzeSvg } from '../../src/js/svg-preparer.js'
 import { contrastRatio, relativeLuminance } from '../../src/js/color-utils.js'
 import { paintSequence } from '../../src/js/stencil-plates.js'
@@ -566,5 +567,119 @@ describe('DP-53 P2: the charm view renders the charm on request', () => {
     surface.querySelector('.drawing-editor-close').click()
     openRelief({ onDraftRender })
     expect(surface.querySelector('.drawing-editor-draft-note').textContent).toBe(S.draftNote)
+  })
+})
+
+describe('DP-49 P3: the crop view in the surface', () => {
+  let surface
+  let editor
+  let announce
+
+  beforeEach(() => {
+    surface = document.createElement('div')
+    surface.id = 'drawingEditorSurface'
+    document.body.appendChild(surface)
+    announce = vi.fn()
+    editor = createDrawingEditor({ surfaceEl: surface, announce })
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  const openRelief = (callbacks) => {
+    editor.open(CAT_SVG, analyzeSvg(CAT_SVG), {
+      purpose: 'relief',
+      onApply: vi.fn(),
+      onKeepOriginal: vi.fn(),
+      onClose: vi.fn(),
+      ...callbacks,
+    })
+  }
+  const showCharm = () => {
+    const radio = surface.querySelector('.drawing-editor-view-switch input[value="charm"]')
+    radio.checked = true
+    radio.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+  const escapeOn = (el) =>
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+
+  it('★ Crop belongs to the drawing view of a relief editor whose host can crop', () => {
+    openRelief({ onCrop: vi.fn() })
+    const btn = surface.querySelector('.drawing-editor-crop-btn')
+    expect(btn).not.toBeNull()
+    expect(btn.hidden).toBe(false)
+    expect(btn.textContent).toBe(S.crop)
+    expect(btn.getAttribute('aria-label')).toBe(S.cropLabel)
+    showCharm()
+    expect(btn.hidden).toBe(true)
+    editor.close()
+    openRelief({})
+    expect(surface.querySelector('.drawing-editor-crop-btn').hidden).toBe(true)
+  })
+
+  it('★ pressing Crop opens the view in place of the drawing with focus on Top; Escape brings the drawing back, focus on Crop, the editor still open', () => {
+    openRelief({ onCrop: vi.fn() })
+    const btn = surface.querySelector('.drawing-editor-crop-btn')
+    btn.click()
+    const view = surface.querySelector('.drawing-editor-crop')
+    expect(view.hidden).toBe(false)
+    expect(surface.querySelector('.drawing-editor-stage').hidden).toBe(true)
+    expect(announce).toHaveBeenLastCalledWith(S.cropViewOpen)
+    const top = view.querySelector('input[type="range"][data-inset="top"]')
+    expect(document.activeElement).toBe(top)
+    expect(view.querySelector('image').getAttribute('href')).toMatch(/^data:image\/svg\+xml/)
+    escapeOn(top)
+    expect(view.hidden).toBe(true)
+    expect(surface.querySelector('.drawing-editor-stage').hidden).toBe(false)
+    expect(document.activeElement).toBe(btn)
+    expect(surface.hidden).toBe(false)
+  })
+
+  it("★ Save crop hands the host the rectangle in the drawing's units and the insets, and the drawing comes back", () => {
+    const onCrop = vi.fn()
+    openRelief({ onCrop })
+    surface.querySelector('.drawing-editor-crop-btn').click()
+    const view = surface.querySelector('.drawing-editor-crop')
+    const top = view.querySelector('input[type="range"][data-inset="top"]')
+    top.value = '50'
+    top.dispatchEvent(new Event('input', { bubbles: true }))
+    view.querySelector('[data-action="save-crop"]').click()
+    expect(onCrop).toHaveBeenCalledTimes(1)
+    const [rect, insets] = onCrop.mock.calls[0]
+    const box = readDrawingBox(
+      new DOMParser().parseFromString(CAT_SVG, 'image/svg+xml').documentElement
+    )
+    expect(rect).toEqual({
+      x: box.x,
+      y: box.y + box.height / 2,
+      width: box.width,
+      height: box.height / 2,
+    })
+    expect(insets).toEqual({ top: 50, bottom: 0, left: 0, right: 0 })
+    expect(view.hidden).toBe(true)
+    expect(surface.querySelector('.drawing-editor-stage').hidden).toBe(false)
+  })
+
+  it('Undo crop shows when the host says a crop can be undone, and asks the host', () => {
+    const onUndoCrop = vi.fn()
+    openRelief({ onCrop: vi.fn(), onUndoCrop, cropUndoable: true })
+    const undo = surface.querySelector('.drawing-editor-undo-crop')
+    expect(undo.hidden).toBe(false)
+    expect(undo.textContent).toBe(S.undoCrop)
+    undo.click()
+    expect(onUndoCrop).toHaveBeenCalledTimes(1)
+    editor.close()
+    openRelief({ onCrop: vi.fn(), onUndoCrop })
+    expect(surface.querySelector('.drawing-editor-undo-crop').hidden).toBe(true)
+  })
+
+  it('closing the editor with the crop view open takes the view with it; the next open starts on the drawing', () => {
+    openRelief({ onCrop: vi.fn() })
+    surface.querySelector('.drawing-editor-crop-btn').click()
+    editor.close()
+    openRelief({ onCrop: vi.fn() })
+    expect(surface.querySelector('.drawing-editor-crop').hidden).toBe(true)
+    expect(surface.querySelector('.drawing-editor-stage').hidden).toBe(false)
   })
 })
