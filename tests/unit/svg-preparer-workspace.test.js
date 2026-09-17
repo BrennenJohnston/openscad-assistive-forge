@@ -4563,6 +4563,52 @@ describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => 
     ws.destroy();
   });
 
+  it("a cut-out that encloses the drawing goes under the ink, not over it (the bird's paper)", async () => {
+    // A paper rectangle around a black bar: the paper is a Cut out by its
+    // luminance and by far the biggest shape. Painted as a second pass over
+    // the ink, it hid the bar (and, in the journal picture, the whole bird).
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect width="100" height="100" fill="#efe9dc"/>' +
+      '<path d="M20 40 H80 V60 H20 Z" fill="black"/></svg>';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analyzeSvg(svg), { layersEnabled: true });
+    await ws.whenReady();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    // A role press puts the stand-in up while the combine runs; read it
+    // before anything is awaited.
+    setRole(ws, 1, 'foreground');
+    const art = pane.querySelector('.svg-prep-standin-art');
+    expect(art).not.toBeNull();
+    const painted = [...art.querySelectorAll('path')].map((p) => p.dataset.index);
+    expect(painted).toEqual(['0', '1']);
+    expect(art.querySelector('path[data-index="0"]').classList.contains('svg-prep-standin-path--hole')).toBe(true);
+    expect(art.querySelector('path[data-index="1"]').classList.contains('svg-prep-standin-path--raised')).toBe(true);
+    // Over the combined result, the paper is never painted again.
+    await ws.whenCombined();
+    expect(pane.querySelector('svg.svg-prep-standin')).toBeNull();
+    expect(pane.querySelectorAll('.svg-prep-result-layers path')).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('over the result, a cut-out inside a layer 2 shape is painted again as paper; the paper around everything is not', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    // Nested squares: the outer a Cut out around everything (a paper), the
+    // middle on layer 2, the inner a Cut out inside the middle.
+    setLayer(ws, 1, 2);
+    setRole(ws, 0, 'hole');
+    setRole(ws, 2, 'hole');
+    await ws.whenCombined();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const over = [...pane.querySelectorAll('.svg-prep-result-layers path')].map((p) => [p.dataset.index, p.getAttribute('class')]);
+    expect(over).toEqual([
+      ['1', 'svg-prep-standin-path--raised svg-prep-standin-layer-2'],
+      ['2', 'svg-prep-standin-path--hole'],
+    ]);
+    ws.destroy();
+  });
+
   it('a compound path says On and Off', async () => {
     const ws = createSvgPrepWorkspace(container);
     const svg =

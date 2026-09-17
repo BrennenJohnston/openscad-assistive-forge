@@ -1505,31 +1505,51 @@ export function createSvgPrepWorkspace(containerEl) {
     );
   }
 
+  const STANDIN_CLASS = {
+    foreground: 'svg-prep-standin-path--raised',
+    hole: 'svg-prep-standin-path--hole',
+  };
+
   /**
-   * The stand-in's art: On shapes first, cut-outs over them, because a
-   * cut-out is a shape cut OUT of what it sits in and painting it under
-   * would show nothing at all. DP-Q60: with layers, an On shape wears its
-   * layer's class and color. Rebuilt by itself when a layer changes.
+   * The stand-in's art, ONE painter's pass in area order: the biggest shape
+   * first, islands last. A cut-out inside a shape is smaller than the shape
+   * and lands over it, which is what "cut out of what it sits in" looks
+   * like; a cut-out that encloses the drawing (a bird's paper) is bigger
+   * than everything and lands under it, where it hid the whole bird when
+   * cut-outs were a second pass over the ink (the journal picture caught
+   * it). DP-Q60: with layers, an On shape wears its layer's class and color.
+   * Rebuilt by itself when a layer changes.
    */
   function buildStandinArt() {
     const art = document.createElementNS(SVG_NS, 'g');
     art.setAttribute('class', 'svg-prep-standin-art');
-    const order = paintOrder();
-    const paint = (wanted, className) => {
-      order.forEach((i) => {
-        const el = liveElements[i];
-        if (!el.pathData || (roles[i] || 'ignore') !== wanted) return;
-        const p = document.createElementNS(SVG_NS, 'path');
-        p.setAttribute('d', el.pathData);
-        p.setAttribute('fill-rule', 'evenodd');
-        p.setAttribute('class', className + layerClass(i, wanted));
-        p.dataset.index = String(i);
-        art.appendChild(p);
-      });
-    };
-    paint('foreground', 'svg-prep-standin-path--raised');
-    paint('hole', 'svg-prep-standin-path--hole');
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
+      const role = roles[i] || 'ignore';
+      const className = STANDIN_CLASS[role];
+      if (!el.pathData || !className) return;
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('fill-rule', 'evenodd');
+      p.setAttribute('class', className + layerClass(i, role));
+      p.dataset.index = String(i);
+      art.appendChild(p);
+    });
     return art;
+  }
+
+  /**
+   * The nearest On shape around a shape, by the nesting tree the layers
+   * keep; null at the top or without a tree.
+   */
+  function enclosingOn(i) {
+    if (!nestingTree || !nestingTree.nodes) return null;
+    let parent = nestingTree.nodes[i]?.parent;
+    while (parent !== null && parent !== undefined) {
+      if ((roles[parent] || 'ignore') === 'foreground') return parent;
+      parent = nestingTree.nodes[parent]?.parent;
+    }
+    return null;
   }
 
   /**
@@ -1641,22 +1661,27 @@ export function createSvgPrepWorkspace(containerEl) {
     layer.setAttribute('class', 'svg-prep-result-layers');
     layer.setAttribute('aria-hidden', 'true');
     if (!paintsByLayer()) return layer;
-    const order = paintOrder();
-    const paint = (wanted, className) => {
-      order.forEach((i) => {
-        const el = liveElements[i];
-        if (!el.pathData || (roles[i] || 'ignore') !== wanted) return;
-        if (wanted === 'foreground' && (layers[i] || 1) <= 1) return;
-        const p = document.createElementNS(SVG_NS, 'path');
-        p.setAttribute('d', el.pathData);
-        p.setAttribute('fill-rule', 'evenodd');
-        p.setAttribute('class', className + layerClass(i, wanted));
-        p.dataset.index = String(i);
-        layer.appendChild(p);
-      });
+    // The union already carries every cut-out; only a cut-out inside a
+    // deeper layer's shape, which this paint has just covered, is painted
+    // again as paper. A cut-out around the drawing (the paper) is not.
+    const wanted = (i) => {
+      const role = roles[i] || 'ignore';
+      if (role === 'foreground') return (layers[i] || 1) > 1;
+      if (role !== 'hole') return false;
+      const around = enclosingOn(i);
+      return around !== null && (layers[around] || 1) > 1;
     };
-    paint('foreground', 'svg-prep-standin-path--raised');
-    paint('hole', 'svg-prep-standin-path--hole');
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
+      if (!el.pathData || !wanted(i)) return;
+      const role = roles[i];
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('fill-rule', 'evenodd');
+      p.setAttribute('class', STANDIN_CLASS[role] + layerClass(i, role));
+      p.dataset.index = String(i);
+      layer.appendChild(p);
+    });
     return layer;
   }
 
