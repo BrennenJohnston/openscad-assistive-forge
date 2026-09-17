@@ -191,6 +191,39 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
 
 ### Fixed
 
+- **The stencil's words on a charm** (D-156) - the ink panel described the Colors choice as
+  "ready to paint a plate for each" color and the wall as "the surface behind the stencil" on
+  a charm, where no stencil is possible. The panel knows its host now: a charm and the
+  standalone editor get relief words (one shape per color, the wall left out, colors in the
+  artwork), the stencil tile keeps its own, and the filament hint stays a stencil sentence.
+- **A changed setting started a conversion by itself** (D-157) - the ink panel re-ran the
+  conversion after every change on any picture at any speed, where choosing the same picture
+  had waited for Start under the DP-Q32 rule (at most 0.5 MP and a quick look that calls it
+  quick). Measured at 6x on a phone-sized page: Colors chosen, a conversion running 300 ms
+  later, with no dialog for its first second. One rule now, in both places: a change on a
+  picture that is not quick offers Convert again, says so in the change's own sentence, and
+  the press is the person's, so the dialog and its Cancel stand at once.
+- **The freeze with nothing to cancel** (D-158) - the run above counted as a self-start, so the
+  dialog was held back by the grace while "Preparing the drawing" held the thread; D-157's fix
+  is its fix. The page's work after the dialog closes, the editor's opening, is D-150 (known).
+- **The ring that could not be turned off** (D-159) - every ring of a compound path became a
+  row of its own, judged by its fill's luminance alone, so a drawn letter O's counter was a
+  second Raised row and the combined result filled it, and a traced region's inner ring was a
+  solid Raised disc over the island of another color that sat in it: the click on the dot in
+  my logo's figure selected the disc, and no role on it changed anything. A traced region is
+  one row now, its outer ring, since whatever sits inside it is its own row already (the logo
+  lists 111 shapes, not 206); a drawn path's rings keep the drawing's fill rule, so a hole ring
+  starts as a Hole; and islands are painted last, so they can be seen and clicked.
+- **Layers as height classes, and a warning that was false** (D-160) - the editor warned that
+  a layer 3 shape with nothing on layer 2 around it "would print with nothing under it", but
+  every shape on a layer or deeper has been written into every layer's file below it since the
+  stack was built, so nothing ever floated; the warning is gone. The charm model now measures
+  each direction from the face: raised tops add up (0.5, 0.5 and 1.0 put a layer 3 shape
+  2.0 mm above the face; layer 2 at 1.0 moves it to 2.5), engraved floors add up the other
+  way, and a raised layer 1 at 1.0 beside an engraved layer 2 at 1.0 leaves 2.0 mm between
+  the surfaces, measured on the printed geometry. The passes apply in layer order, so a raised
+  layer 3 inside an engraved layer 2 stands in the pit. No parameter changed its name, unit or
+  default.
 - **The way back into the editor after Apply** (D-145) - the file control's status card had
   no branch for the pairing the analyzer really emits on a confident drawing (ready, open
   the editor), so after Apply or Close on my logo the card went blank and nothing reopened
