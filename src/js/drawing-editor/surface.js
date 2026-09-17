@@ -642,7 +642,12 @@ export function createDrawingEditor({
   bandObserver?.observe(root);
   const shapesBlock = document.createElement('div');
   shapesBlock.className = 'drawing-editor-shapes';
-  shapesBlock.append(refs.layerSummary, refs.bulkBar, refs.objects);
+  shapesBlock.append(
+    refs.thinNotice,
+    refs.layerSummary,
+    refs.bulkBar,
+    refs.objects
+  );
   sections.regions.content.append(shapesBlock, regionsBlock);
   sections.warnings.content.append(refs.warnings, islandsList);
 
@@ -2152,6 +2157,7 @@ export function createDrawingEditor({
     say,
     /** D-120: resolves once the workspace's ring engine is in. */
     whenReady: () => workspace.whenReady(),
+    setDesignWidthMm: (mm) => workspace.setDesignWidthMm(mm),
     getResult: () => workspace.getResult(),
     getRoleOverrides: () => workspace.getRoleOverrides(),
     getOffsetOverrides: () => workspace.getOffsetOverrides(),

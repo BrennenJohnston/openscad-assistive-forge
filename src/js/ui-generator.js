@@ -230,6 +230,11 @@ const galleryListboxRefs = {};
 // Optional listener called when a user uploads an SVG via the file picker
 let fileUploadListener = null;
 let draftRenderer = null;
+// DP-54 (D-144): the box the model fits a design into, in mm, from its own
+// echo ("design fit box mm: w=... h=..."); null until a render has said it.
+// Each file control applies its design's aspect to it.
+let designFitBoxMm = null;
+const fitBoxListeners = new Set();
 
 // SVG preparation metadata keyed by filename — persisted to saved projects
 // so that reopening a project restores the exact preparation state.
@@ -312,6 +317,40 @@ export function setFileUploadListener(fn) {
  */
 export function setDraftRenderer(fn) {
   draftRenderer = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * DP-54 (D-144): what the model just said its design box is, in mm. The
+ * app reads it from the render's echo and hands it here; every file control
+ * turns it into the width its own design prints at, and an open editor hears
+ * the new width at once.
+ * @param {{w: number, h: number}|null} box
+ */
+export function setDesignFitBoxMm(box) {
+  const next =
+    box &&
+    Number.isFinite(box.w) &&
+    Number.isFinite(box.h) &&
+    box.w > 0 &&
+    box.h > 0
+      ? { w: box.w, h: box.h }
+      : null;
+  // Every render says the box again; only a changed box is news, so a width
+  // the person typed into the editor is not overwritten by a draft render.
+  const same =
+    (next === null && designFitBoxMm === null) ||
+    (next !== null &&
+      designFitBoxMm !== null &&
+      next.w === designFitBoxMm.w &&
+      next.h === designFitBoxMm.h);
+  designFitBoxMm = next;
+  if (same) return;
+  fitBoxListeners.forEach((fn) => fn(designFitBoxMm));
+}
+
+/** For tests and the console: the box as last said. */
+export function getDesignFitBoxMm() {
+  return designFitBoxMm;
 }
 
 /**
@@ -2752,6 +2791,33 @@ function createFileControl(
   // What the quick look said about the picture now in hand, kept so the
   // auto-start rule and the sentence agree with each other.
   let currentQuickLook = null;
+  // DP-54 (D-144): the trace this drawing came from, if any, for the
+  // editor's whole-drawing advisory.
+  let lastTrace = null;
+
+  /**
+   * How wide this design prints, from the model's fit box and the design's
+   * own aspect (the model resizes the design into the box the way
+   * `resize([w, 0], auto = true)` does: the axis it hits first decides).
+   * @returns {number|null} null until a render has said the box
+   */
+  function knownDesignWidthMm() {
+    if (!designFitBoxMm || !currentRawSvg) return null;
+    const aspect = measureSvgAspect(currentRawSvg) || 1;
+    const { w, h } = designFitBoxMm;
+    return aspect >= w / h ? w : h * aspect;
+  }
+
+  fitBoxListeners.add(() => {
+    const mm = knownDesignWidthMm();
+    if (
+      mm != null &&
+      workspace &&
+      typeof workspace.setDesignWidthMm === 'function'
+    ) {
+      workspace.setDesignWidthMm(mm);
+    }
+  });
   const traceProgress = createTraceProgress({
     onStart: () =>
       startConversion({ announceResult: true, startedBy: 'person' }),
@@ -2869,6 +2935,18 @@ function createFileControl(
       ...(plateParams.length === 0 && draftRenderer
         ? { onDraftRender: handleEditorDraft }
         : {}),
+      // DP-54 (D-144): the trace's line widths and the width the design
+      // prints at, so the editor's advisory and its too-thin measure speak of
+      // the real size. Before this the charm host passed neither, and every
+      // sentence used the editor's own default width.
+      lineWidthPx: lastTrace
+        ? ((lastTrace.creditRemoved
+            ? lastTrace.summary?.lineWidthPxBody
+            : lastTrace.summary?.lineWidthPx) ?? null)
+        : null,
+      ...(knownDesignWidthMm() != null
+        ? { designWidthMm: knownDesignWidthMm(), designWidthKnown: true }
+        : { designWidthKnown: false }),
       sourceName: currentFileName,
       initialOverrides: storedMeta?.prepOverrides || null,
       initialOffsets: storedMeta?.prepOffsets || null,
@@ -3247,7 +3325,9 @@ function createFileControl(
    * @param {object|null} summary the ink summary that produced it
    */
   async function emitTracedSvg(svgText, summary) {
-    const processedSvg = processSvgForOpenScad(svgText);
+    const processedSvg = processSvgForOpenScad(svgText, {
+      trace: { summary, creditRemoved: false },
+    });
     const convertedFile = {
       name: inkSourceFileName,
       size: processedSvg.length,
@@ -3341,7 +3421,10 @@ function createFileControl(
           const credit = removeCreditLine(traced);
           const svg = credit.svg;
           currentFileName = inkSourceFileName;
-          const processedSvg = processSvgForOpenScad(svg, { deferOpen: true });
+          const processedSvg = processSvgForOpenScad(svg, {
+            deferOpen: true,
+            trace: { summary, creditRemoved: credit.removed > 0 },
+          });
           openEditorAfter = takeDeferredEditorOpen();
           const pathCount = countTracedShapes(svg);
           if (inkControls) {
@@ -3473,7 +3556,13 @@ function createFileControl(
     }
   }
 
-  function processSvgForOpenScad(rawSvgText, { deferOpen = false } = {}) {
+  function processSvgForOpenScad(
+    rawSvgText,
+    { deferOpen = false, trace = null } = {}
+  ) {
+    // DP-54 (D-144): the trace's line widths, when this drawing came from a
+    // trace, so the editor's advisory can speak; a plain upload has none.
+    lastTrace = trace;
     // DP-52: while a conversion dialog stands in front of the page, the
     // editor's opening is handed back to the caller instead of started here,
     // so it opens once the page is live again.
@@ -4132,6 +4221,8 @@ export function renderParameterUI(
   initialValues = null,
   options = {}
 ) {
+  // DP-54: the file controls of the UI being replaced listened for the fit box.
+  fitBoxListeners.clear();
   const {
     openGroupIds = null,
     useStoredState = false,

@@ -18,6 +18,7 @@ import {
   setParameterValue as _setParameterValue,
   setStarterParameters,
   setDraftRenderer,
+  setDesignFitBoxMm,
 } from './js/ui-generator.js';
 import {
   normalizeStarterList,
@@ -7383,6 +7384,15 @@ async function initApp() {
             typeof window.updateConsoleOutput === 'function'
           ) {
             window.updateConsoleOutput(consoleOutput);
+          }
+          // DP-54 (D-144): a model that says how wide it fits a design tells
+          // the file control, so the drawing editor measures against the size
+          // the design really prints at.
+          const fit = consoleOutput
+            ? /design fit box mm: w=([\d.]+) h=([\d.]+)/.exec(consoleOutput)
+            : null;
+          if (fit) {
+            setDesignFitBoxMm({ w: Number(fit[1]), h: Number(fit[2]) });
           }
         },
         onProgress: (percent, message, type) => {
