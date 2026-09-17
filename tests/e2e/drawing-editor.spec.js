@@ -1656,3 +1656,90 @@ test.describe('every slider row meets the 44 px floor (DP-Q55)', () => {
     expect(crop.spin, 'the crop view box').toBeGreaterThanOrEqual(44)
   })
 })
+
+// ── DP-56: the shapes you left out, and a view you can steer ────────────────
+//
+// Two things the owner's walk found after #245 (2026-09-17). A shape set to
+// Ignore left the picture entirely, so there was nothing to point at to bring
+// it back (D-154): it stays now, painted in the left-out style, still under
+// the pointer. And once the picture was zoomed there was no way to move the
+// view on a desktop, and only two fingers on a phone (D-153): four buttons
+// beside Fit, and the arrow keys with the picture focused, move it a quarter
+// of a view at a time. RED on the build before this release.
+test.describe('the shapes you left out, and a view you can steer (DP-56)', () => {
+  test('★ D-154: a shape set to Ignore stays in the picture, can be chosen there, and comes back', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
+
+    // A raised shape, chosen by its row: the first row set to Raised.
+    const raisedRow = page
+      .locator('.svg-prep-object', {
+        has: page.locator('input[type=radio][value="foreground"]:checked'),
+      })
+      .first()
+    const index = await raisedRow.getAttribute('data-index')
+    // Held by its index from here: the locator above would resolve to the
+    // next raised row once this one is set to Ignore.
+    const row = page.locator(`.svg-prep-object[data-index="${index}"]`)
+    await row.locator('input[type=radio][value="ignore"]').check({ force: true })
+
+    const pane = editor.locator('.svg-prep-result-pane')
+    const leftOut = pane.locator(`.svg-prep-standin-path--ignore`)
+    await expect(leftOut.first()).toBeAttached({ timeout: 30000 })
+    // Its hit path is still there, and choosing it through the picture says so.
+    const hit = pane.locator(`.svg-prep-hit-path[data-index="${index}"]`)
+    await expect(hit).toBeAttached()
+    await hit.dispatchEvent('click')
+    await expect(
+      editor.locator('.svg-prep-live, [aria-live="polite"].sr-only').first()
+    ).toContainText(/1 of \d+ shapes selected\./, { timeout: 10000 })
+    // Back to Raised from its row: it is ink again.
+    await row.locator('input[type=radio][value="foreground"]').check({ force: true })
+    await expect
+      .poll(() => pane.locator(`.svg-prep-standin-path--ignore[data-index="${index}"]`).count(), {
+        timeout: 30000,
+      })
+      .toBe(0)
+  })
+
+  test('★ D-153: once zoomed, the buttons move the view', async ({ page }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(10)
+    const pane = editor.locator('.svg-prep-result-pane')
+    const zoom = pane.locator('.svg-prep-zoom-controls')
+    const vb = () =>
+      pane.locator('svg').first().evaluate((el) =>
+        el.getAttribute('viewBox').split(/[\s,]+/).map(Number)
+      )
+    await zoom.locator('.svg-prep-zoom-in').click()
+    await zoom.locator('.svg-prep-zoom-in').click()
+    const [x0, y0, w] = await vb()
+    const right = zoom.getByRole('button', { name: 'Move the result view right' })
+    await expect(right).toBeVisible()
+    await right.click()
+    const [x1] = await vb()
+    expect(x1 - x0).toBeCloseTo(w / 4, 3)
+    await zoom.getByRole('button', { name: 'Move the result view up' }).click()
+    const [, y2] = await vb()
+    expect(y2).toBeLessThan(y0)
+    // Every one of the seven is a 44 px target.
+    const sizes = await zoom.locator('button').evaluateAll((els) =>
+      els.map((b) => Math.round(b.getBoundingClientRect().height))
+    )
+    expect(sizes.length).toBe(7)
+    for (const h of sizes) expect(h).toBeGreaterThanOrEqual(44)
+  })
+})

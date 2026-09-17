@@ -4377,3 +4377,131 @@ describe('DP-54 P3: the width the host knows (D-144)', () => {
     ws.destroy();
   });
 });
+
+describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154)', () => {
+  const BAR = 'M10,10h100v20h-100z';
+  const SQUARE = 'M120,20h40v40h-40z';
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"></svg>';
+  function analysisOf(paths) {
+    const doc = new DOMParser().parseFromString(SVG, 'image/svg+xml');
+    return {
+      status: 'ready',
+      confidence: 1,
+      isCompoundPathOnly: false,
+      elements: paths.map((d, i) => {
+        const el = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        el.setAttribute('d', d);
+        return { element: el, index: i, type: 'path', pathData: d, fill: '#000000', autoRole: 'foreground', warnings: [] };
+      }),
+      warnings: [],
+      unsupportedFeatures: [],
+    };
+  }
+  const setRole = (ws, i, role) => {
+    const radio = ws._root.querySelector(`.svg-prep-object[data-index="${i}"] input[type=radio][value="${role}"]`);
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const vbOf = (svg) => svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
+
+  it('★ D-154: a shape set to Ignore stays in the picture, in the left-out style, and keeps its hit path', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    setRole(ws, 0, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const leftOut = pane.querySelectorAll('.svg-prep-standin-path--ignore');
+    expect(leftOut).toHaveLength(1);
+    expect(leftOut[0].getAttribute('d')).toBe(BAR);
+    // Not painted as raised any more.
+    const raised = Array.from(pane.querySelectorAll('.svg-prep-standin-path--raised')).map((p) => p.getAttribute('d'));
+    expect(raised).toEqual([SQUARE]);
+    // And still a shape a pointer can choose.
+    expect(pane.querySelector('.svg-prep-hit-path[data-index="0"]')).not.toBeNull();
+    // Turned back on, it is ink again.
+    setRole(ws, 0, 'foreground');
+    expect(pane.querySelectorAll('.svg-prep-standin-path--ignore')).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('★ D-154: the combined result keeps the left-out shapes in view', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    setRole(ws, 1, 'ignore');
+    await ws.whenCombined();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(pane.querySelector('svg.svg-prep-standin')).toBeNull();
+    const leftOut = pane.querySelectorAll('.svg-prep-standin-path--ignore');
+    expect(leftOut).toHaveLength(1);
+    expect(leftOut[0].getAttribute('d')).toBe(SQUARE);
+    ws.destroy();
+  });
+
+  it('the ignored wall of a Colors drawing is not painted as left out', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const analysis = analysisOf([BAR, SQUARE]);
+    analysis.elements[0].element.setAttribute('data-background', 'true');
+    ws.open(SVG, analysis);
+    await ws.whenReady();
+    setRole(ws, 0, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(pane.querySelectorAll('.svg-prep-standin-path--ignore')).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('★ D-153: four buttons move the view by a quarter of it, and the arrow keys do the same', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const zoom = pane.querySelector('.svg-prep-zoom-controls');
+    const svg = () => pane.querySelector('svg');
+    zoom.querySelector('.svg-prep-zoom-in').click();
+    const [x0, y0, w, h] = vbOf(svg());
+    zoom.querySelector('.svg-prep-pan-right').click();
+    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 4, 5);
+    zoom.querySelector('.svg-prep-pan-down').click();
+    expect(vbOf(svg())[1]).toBeCloseTo(y0 + h / 4, 5);
+    zoom.querySelector('.svg-prep-pan-left').click();
+    zoom.querySelector('.svg-prep-pan-up').click();
+    expect(vbOf(svg())[0]).toBeCloseTo(x0, 5);
+    expect(vbOf(svg())[1]).toBeCloseTo(y0, 5);
+    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 4, 5);
+    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    expect(vbOf(svg())[1]).toBeCloseTo(y0 - h / 4, 5);
+    ws.destroy();
+  });
+
+  it('D-153: the view cannot be steered off the drawing', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const zoom = pane.querySelector('.svg-prep-zoom-controls');
+    const svg = () => pane.querySelector('svg');
+    zoom.querySelector('.svg-prep-zoom-in').click();
+    for (let i = 0; i < 40; i++) zoom.querySelector('.svg-prep-pan-right').click();
+    const [x, , w] = vbOf(svg());
+    // The view's middle never leaves the drawing's box (0..200 wide).
+    expect(x + w / 2).toBeLessThanOrEqual(200 + 1e-6);
+    for (let i = 0; i < 40; i++) zoom.querySelector('.svg-prep-pan-left').click();
+    const [x2, , w2] = vbOf(svg());
+    expect(x2 + w2 / 2).toBeGreaterThanOrEqual(0 - 1e-6);
+    ws.destroy();
+  });
+
+  it('D-153: the four buttons carry their names, in both panes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR]));
+    for (const pane of ['source', 'result']) {
+      const zoom = ws._root.querySelector(`.svg-prep-${pane}-pane .svg-prep-zoom-controls`);
+      expect(zoom.querySelector('.svg-prep-pan-left').getAttribute('aria-label')).toBe(`Move the ${pane} view left`);
+      expect(zoom.querySelector('.svg-prep-pan-right').getAttribute('aria-label')).toBe(`Move the ${pane} view right`);
+      expect(zoom.querySelector('.svg-prep-pan-up').getAttribute('aria-label')).toBe(`Move the ${pane} view up`);
+      expect(zoom.querySelector('.svg-prep-pan-down').getAttribute('aria-label')).toBe(`Move the ${pane} view down`);
+    }
+    ws.destroy();
+  });
+});
