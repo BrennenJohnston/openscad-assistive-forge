@@ -123,13 +123,17 @@ async function openCharm(page) {
 }
 
 /** The design control's own panel; q-charm declares two design files. */
+// DP-52: the bar, the stage sentence and Cancel live in the conversion
+// dialog, which stands in front of the page while a job runs. `running` is
+// the dialog itself, on screen.
 const panel = (page) => ({
   note: page.locator('.trace-progress-note').first(),
   start: page.locator('.trace-progress-start').first(),
-  cancel: page.locator('.trace-progress-cancel').first(),
-  bar: page.locator('.trace-progress-bar').first(),
-  stage: page.locator('.trace-progress-stage').first(),
-  running: page.locator('.trace-progress-running').first(),
+  cancel: page.locator('.conversion-dialog-cancel').first(),
+  bar: page.locator('.conversion-dialog-bar').first(),
+  stage: page.locator('.conversion-dialog-stage').first(),
+  running: page.locator('.conversion-dialog:not(.hidden)').first(),
+  dialog: page.locator('.conversion-dialog').first(),
   info: page.locator('.file-info').first(),
 });
 
@@ -205,25 +209,40 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.info).not.toContainText('converted from');
     await expect(p.running).toBeHidden();
 
-    // Every sentence the stage line ever shows, collected from before the
-    // start. A transient announcement cannot be sampled after the fact.
+    // Every sentence the stage line ever shows, collected from the moment the
+    // dialog exists (it is built on first use, so the observer waits for it).
+    // A transient sentence cannot be sampled after the fact.
     await page.evaluate(() => {
       window.__stages = [];
-      const el = document.querySelector('.trace-progress-stage');
-      const note = () => {
-        const t = (el.textContent || '').trim();
-        if (t && !window.__stages.includes(t)) window.__stages.push(t);
+      const attach = () => {
+        const el = document.querySelector('.conversion-dialog-stage');
+        if (!el) return false;
+        const note = () => {
+          const t = (el.textContent || '').trim();
+          if (t && !window.__stages.includes(t)) window.__stages.push(t);
+        };
+        new MutationObserver(note).observe(el, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+        note();
+        return true;
       };
-      new MutationObserver(note).observe(el, {
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
-      note();
+      if (!attach()) {
+        new MutationObserver((_, obs) => {
+          if (attach()) obs.disconnect();
+        }).observe(document.body, { childList: true });
+      }
     });
 
     await p.start.click();
+    // DP-52: a press on Start shows the dialog at once, in front of an inert
+    // page, with Cancel holding focus.
     await expect(p.running).toBeVisible({ timeout: 30_000 });
+    await expect(p.dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(page.locator('#app')).toHaveAttribute('inert', '');
+    await expect(p.cancel).toBeFocused();
 
     // ★ THE POINT: the page answers while the conversion runs. Before DP-34
     // this was a frozen tab for as long as the trace took.
@@ -238,8 +257,8 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
       `the page took ${Math.round(answered)} ms to answer a click mid-conversion`
     ).toBeLessThan(1000);
 
-    // The bar carries a name.
-    await expect(p.bar).toHaveAttribute('aria-labelledby', /trace-progress/);
+    // The bar carries a name: the dialog's own heading.
+    await expect(p.bar).toHaveAttribute('aria-labelledby', /conversion-dialog/);
 
     // Let it finish, then read what the stage line said along the way.
     await expect(p.info).toContainText('converted from', { timeout: 120_000 });
@@ -248,10 +267,23 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
       .toBeGreaterThan(0);
     for (const said of stages) {
       expect(
-        ['Reading the picture', 'Finding the ink', 'Tracing the shapes'],
+        [
+          'Reading the picture',
+          'Finding the ink',
+          'Tracing the shapes',
+          'Preparing the drawing',
+          'Updating the charm',
+        ],
         `stage read "${said}"`
       ).toContain(said);
     }
+    // DP-52: the page's own stages are shown, not only the worker's.
+    expect(stages, `stage line showed ${JSON.stringify(stages)}`).toContain(
+      'Preparing the drawing'
+    );
+    // And the dialog is gone, and the page is live, once the charm has it.
+    await expect(p.running).toBeHidden({ timeout: 30_000 });
+    await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
   });
 
   test('★ Cancel stops a conversion and says so, once', async ({
@@ -277,6 +309,7 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await p.cancel.click({ timeout: 10_000 });
 
     await expect(p.running).toBeHidden({ timeout: 15_000 });
+    await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
     await expect(p.start).toBeVisible();
     await expect(p.info).toHaveText('Conversion canceled');
     // Nothing is left claiming to be busy.
@@ -335,7 +368,9 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     // The stages are VISIBLE, never spoken: one action, one announcement.
     expect(
       heard.filter((t) =>
-        /Finding the ink|Tracing the shapes|Reading the picture/.test(t)
+        /Finding the ink|Tracing the shapes|Reading the picture|Preparing the drawing|Updating the charm/.test(
+          t
+        )
       ),
       `heard: ${heard.join(' | ')}`
     ).toEqual([]);
@@ -440,21 +475,27 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     expect(badges.join(' | ')).not.toMatch(/SVG Ready/);
   });
 
-  test('a picture small enough to be over in a moment starts itself, through the same bar', async ({
+  test('a picture small enough to be over in a moment starts itself, and the dialog waits to see if it takes a while', async ({
     page,
     browserName,
   }) => {
     test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
     test.setTimeout(300_000);
 
-    // DP-Q32, the owner's rule: at most 0.5 MP may start by itself, and it goes
-    // through the same panel and the same Cancel - there is no second,
-    // invisible path. 400 x 400 is 0.16 MP.
+    // DP-Q32, the owner's rule: at most 0.5 MP may start by itself, through
+    // the same job and the same Cancel - there is no second, invisible path.
+    // DP-52's grace: a conversion nobody pressed shows the dialog only once
+    // it has run for the quick band, so a sub-second one never flashes it.
+    // 400 x 400 is 0.16 MP.
     await openCharm(page);
     await choosePicture(page, 400, 'plain');
     const p = panel(page);
 
     await expect(p.info).toContainText('converted from', { timeout: 240_000 });
+    // Whatever the dialog did, it is gone and the page is live once the charm
+    // has the drawing.
+    await expect(p.running).toBeHidden();
+    await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
     // And Start stays, so a re-run after changing a setting is one click.
     await expect(p.start).toBeVisible();
     await expect(p.start).toHaveText('Convert again');
