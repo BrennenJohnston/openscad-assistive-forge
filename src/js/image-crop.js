@@ -130,3 +130,117 @@ function loadImage(dataUrl) {
     img.src = dataUrl;
   });
 }
+
+/**
+ * Cut a rectangle out of pixels, on the page, before a trace (DP-49).
+ *
+ * The picture a host holds for tracing is an ImageData and the worker takes
+ * whatever has a width, a height and pixels, so this is a copy of the rows
+ * between typed arrays and nothing else: no canvas, no decode, no worker
+ * change. The source is not touched.
+ *
+ * @param {{width: number, height: number, data: Uint8ClampedArray}} imageData
+ * @param {{x: number, y: number, width: number, height: number}} rect - In pixels
+ * @returns {{width: number, height: number, data: Uint8ClampedArray}} An
+ *   ImageData where the page has the constructor, the plain shape where not
+ */
+export function cropImageDataRect(imageData, rect) {
+  const { width: iw, height: ih, data } = imageData;
+  const box = clampCropRect(rect, iw, ih);
+  const out = new Uint8ClampedArray(box.width * box.height * 4);
+  const rowBytes = box.width * 4;
+  for (let row = 0; row < box.height; row++) {
+    const from = ((box.y + row) * iw + box.x) * 4;
+    out.set(data.subarray(from, from + rowBytes), row * rowBytes);
+  }
+  if (typeof ImageData === 'function') {
+    return new ImageData(out, box.width, box.height);
+  }
+  return { width: box.width, height: box.height, data: out };
+}
+
+/** The most any one inset may take, in percent: a tenth of each side stays. */
+export const INSET_MAX_PERCENT = 90;
+
+/**
+ * The rectangle four insets keep, each a share of the box's height or width.
+ *
+ * The crop view's rows are Top, Bottom, Left and Right in percent, because a
+ * share reads the same whatever the picture's size; the picture crop (in
+ * pixels) and the drawing crop (in the drawing's units) both start from this
+ * rectangle. When two opposite insets meet, a sliver of one percent stays at
+ * the near edge rather than a negative width.
+ *
+ * @param {{x?: number, y?: number, width: number, height: number}} box
+ * @param {{top?: number, bottom?: number, left?: number, right?: number}} [insets] - Percent
+ * @returns {{x: number, y: number, width: number, height: number}}
+ */
+export function insetRect(box, insets = {}) {
+  const share = (v) =>
+    Math.min(Math.max(Number.isFinite(v) ? v : 0, 0), INSET_MAX_PERCENT) / 100;
+  const x0 = box.x || 0;
+  const y0 = box.y || 0;
+  const left = box.width * share(insets.left);
+  const right = box.width * share(insets.right);
+  const top = box.height * share(insets.top);
+  const bottom = box.height * share(insets.bottom);
+  let width = box.width - left - right;
+  let height = box.height - top - bottom;
+  let x = x0 + left;
+  let y = y0 + top;
+  if (width <= 0) {
+    width = box.width / 100;
+    x = Math.min(x, x0 + box.width - width);
+  }
+  if (height <= 0) {
+    height = box.height / 100;
+    y = Math.min(y, y0 + box.height - height);
+  }
+  return { x, y, width, height };
+}
+
+/**
+ * A drawing's box, in its own units: the viewBox, else its width and height.
+ * Here beside the crop geometry rather than with the clip, because the clip
+ * needs the ring engine and the editor's crop view only needs the box.
+ *
+ * @param {Element} svgElement
+ * @returns {{x: number, y: number, width: number, height: number}|null}
+ */
+export function readDrawingBox(svgElement) {
+  const vb = (svgElement.getAttribute('viewBox') || '')
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0) {
+    return { x: vb[0], y: vb[1], width: vb[2], height: vb[3] };
+  }
+  const w = parseFloat(svgElement.getAttribute('width'));
+  const h = parseFloat(svgElement.getAttribute('height'));
+  if (w > 0 && h > 0) return { x: 0, y: 0, width: w, height: h };
+  return null;
+}
+
+/**
+ * Pixels back to a picture the crop view can show. Null where there is no
+ * canvas to draw on (a test page): the view then shows the drawing instead.
+ *
+ * @param {{width: number, height: number, data: Uint8ClampedArray}} imageData
+ * @returns {string|null} A PNG data URL
+ */
+export function imageDataToDataUrl(imageData) {
+  if (typeof document === 'undefined' || typeof ImageData !== 'function') {
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const pixels =
+    imageData instanceof ImageData
+      ? imageData
+      : new ImageData(imageData.data, imageData.width, imageData.height);
+  ctx.putImageData(pixels, 0, 0);
+  return canvas.toDataURL('image/png');
+}

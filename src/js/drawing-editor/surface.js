@@ -54,6 +54,8 @@ import { createDocumentFocusTrap } from '../focus-trap.js';
 import { parseSvgElements, classifyElements } from '../svg-preparer.js';
 import { boundsOf } from '../svg-nesting.js';
 import { EDITOR_STRINGS as S } from './strings.js';
+import { createCropPanel } from './crop-panel.js';
+import { readDrawingBox } from '../image-crop.js';
 import { createCommandStack } from './undo.js';
 import { createRegionCanvas, TOOLS } from './canvas.js';
 
@@ -337,6 +339,95 @@ export function createDrawingEditor({
   );
   renderCharmBtn.setAttribute('aria-label', S.renderCharmLabel);
   renderCharmBtn.hidden = true;
+
+  // DP-49: the crop. A relief editor whose host can crop shows the button in
+  // the drawing view; the view itself takes the stage's place while it is
+  // open, and Undo crop appears once the host says a crop can be taken back.
+  const cropBtn = button(
+    S.crop,
+    'btn btn-secondary drawing-editor-crop-btn',
+    'crop'
+  );
+  cropBtn.setAttribute('aria-label', S.cropLabel);
+  cropBtn.hidden = true;
+  const undoCropBtn = button(
+    S.undoCrop,
+    'btn btn-secondary drawing-editor-undo-crop',
+    'undo-crop'
+  );
+  undoCropBtn.hidden = true;
+  let panelOpenBeforeCrop = null;
+  const cropPanel = createCropPanel({
+    say: (text) => say(text),
+    onSave: (rect, insets) => {
+      leaveCropView();
+      if (typeof callbacks.onCrop === 'function')
+        callbacks.onCrop(rect, insets);
+    },
+    onCancel: () => leaveCropView(),
+  });
+
+  /** Crop and Undo crop belong to the drawing view of a relief editor. */
+  function syncCrop() {
+    const drawing = purpose === 'relief' && view === 'drawing';
+    cropBtn.hidden = !(drawing && typeof callbacks.onCrop === 'function');
+    undoCropBtn.hidden = !(
+      drawing &&
+      callbacks.cropUndoable === true &&
+      typeof callbacks.onUndoCrop === 'function'
+    );
+  }
+
+  function svgDataUrl(svg) {
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  /**
+   * The crop view in the stage's place. The drawer closes the way it does
+   * for the charm view and comes back as it was; the host's own picture
+   * (a photograph, for a traced one) is shown when it gives one, else the
+   * drawing itself.
+   */
+  function openCropView() {
+    if (!isOpen || cropPanel.isOpen() || typeof callbacks.onCrop !== 'function')
+      return;
+    const doc = new DOMParser().parseFromString(
+      currentSvg || '',
+      'image/svg+xml'
+    );
+    const svgRoot = doc.querySelector('svg');
+    const box = (svgRoot && readDrawingBox(svgRoot)) || {
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    };
+    panelOpenBeforeCrop =
+      panelToggleBtn.getAttribute('aria-expanded') === 'true';
+    setPanel(false);
+    stage.hidden = true;
+    root.dataset.crop = 'open';
+    cropPanel.open({
+      box,
+      previewHref: callbacks.cropPreviewHref || svgDataUrl(currentSvg || ''),
+      insets: callbacks.cropInsets || {},
+      returnTo: cropBtn,
+    });
+  }
+
+  function leaveCropView() {
+    stage.hidden = false;
+    delete root.dataset.crop;
+    if (panelOpenBeforeCrop !== null) {
+      setPanel(panelOpenBeforeCrop);
+      panelOpenBeforeCrop = null;
+    }
+  }
+
+  cropBtn.addEventListener('click', openCropView);
+  undoCropBtn.addEventListener('click', () => {
+    if (typeof callbacks.onUndoCrop === 'function') callbacks.onUndoCrop();
+  });
   // The note under the charm view is ONE note in two states: draft quality
   // (DP-38), and, once a draft was rendered, which drawing the charm shows.
   let draftRendering = false;
@@ -501,7 +592,7 @@ export function createDrawingEditor({
   }
   legend.hidden = true;
 
-  body.append(stage, panel);
+  body.append(stage, cropPanel.element, panel);
   // ★ D-140: two rows that never depend on state.
   //
   // Before this the header row held the title, Shapes, the whole workspace
@@ -564,6 +655,8 @@ export function createDrawingEditor({
   toolbarHeaderRow.append(title, panelToggleBtn, closeBtn);
   toolbarViewRow.append(
     viewSwitch,
+    cropBtn,
+    undoCropBtn,
     renderCharmBtn,
     draftNote,
     viewGroup,
@@ -757,6 +850,10 @@ export function createDrawingEditor({
       trap = null;
     }
     workspace.close();
+    if (cropPanel.isOpen()) {
+      cropPanel.close();
+      leaveCropView();
+    }
     bandObserver?.disconnect();
     hide();
     resetView();
@@ -847,6 +944,7 @@ export function createDrawingEditor({
     });
 
     applyPurpose();
+    syncCrop();
     setCount('warnings', analysis?.warnings?.length || null);
 
     if (purpose === 'stencil') {
@@ -872,6 +970,10 @@ export function createDrawingEditor({
         // Escape shuts. Without this, one press with a menu open left the
         // editor entirely - a long way further than anybody meant to go.
         onEscape: () => {
+          if (cropPanel.isOpen()) {
+            cropPanel.cancel();
+            return;
+          }
           if (closeToolbarMore()) return;
           if (workspace.closeOpenMenu?.()) return;
           leave();
@@ -894,6 +996,8 @@ export function createDrawingEditor({
   function setView(next) {
     const wanted = next === 'charm' ? 'charm' : 'drawing';
     if (wanted === view) return;
+    // The crop view is the innermost thing open; a view change ends it.
+    if (cropPanel.isOpen()) cropPanel.cancel();
     view = wanted;
     root.dataset.view = view;
     if (viewRadios[view] && !viewRadios[view].checked) {
@@ -921,6 +1025,7 @@ export function createDrawingEditor({
     // this editor is laid over the canvas, not beside it.
     if (typeof onViewChange === 'function') onViewChange(view, stage);
     syncRenderCharm();
+    syncCrop();
     // DP-32, one action one announcement: one control pressed, one sentence
     // saying what is now on screen.
     say(view === 'charm' ? S.viewShowingCharm : S.viewShowingDrawing);
@@ -976,6 +1081,7 @@ export function createDrawingEditor({
     panelOpenBeforeCharm = null;
     setCharmNote(false);
     syncRenderCharm();
+    syncCrop();
     // Closing or re-opening on the charm view would otherwise leave the
     // preview showing underneath the next drawing.
     if (wasCharm && typeof onViewChange === 'function') {
@@ -2115,6 +2221,13 @@ export function createDrawingEditor({
       // closed the whole editor here. MEASURED: the menu closed, focus landed
       // on the More button, and a tick later it was back on the door.
       if (event.defaultPrevented) return;
+      // DP-49: the crop view is the innermost thing open.
+      if (cropPanel.isOpen()) {
+        event.preventDefault();
+        event.stopPropagation();
+        cropPanel.cancel();
+        return;
+      }
       if (canvas.isDragging()) {
         event.preventDefault();
         event.stopPropagation();
@@ -2158,6 +2271,8 @@ export function createDrawingEditor({
     /** D-120: resolves once the workspace's ring engine is in. */
     whenReady: () => workspace.whenReady(),
     setDesignWidthMm: (mm) => workspace.setDesignWidthMm(mm),
+    /** DP-49: whether the crop view is what is on the stage. */
+    isCropOpen: () => cropPanel.isOpen(),
     getResult: () => workspace.getResult(),
     getRoleOverrides: () => workspace.getRoleOverrides(),
     getOffsetOverrides: () => workspace.getOffsetOverrides(),

@@ -315,4 +315,29 @@ export const EDITOR_STRINGS = Object.freeze({
     stacked
       ? 'plates set to cut later colors too'
       : 'plates set to their own color only',
+
+  /**
+   * The crop view (DP-49). Four insets in percent, because a share reads the
+   * same whatever the picture's size, and a sentence that says what stays.
+   */
+  crop: 'Crop',
+  cropLabel: 'Crop the picture',
+  cropTitle: 'Crop the picture',
+  cropTop: 'Top',
+  cropBottom: 'Bottom',
+  cropLeft: 'Left',
+  cropRight: 'Right',
+  cropSave: 'Save crop',
+  cropCancel: 'Cancel',
+  cropViewOpen: 'Crop view open. Four sliders take an edge off the picture.',
+  cropHelp: 'How much to take off this edge, as a share of the picture.',
+  cropCanceled: 'Crop canceled. Your drawing is unchanged.',
+  cropKeeping: (w, h) =>
+    `Keeping ${w} % of the width and ${h} % of the height.`,
+  cropStartsOver:
+    'A crop starts the shape list over: roles, layers and deletions belong to the shapes as they are now.',
+  cropped: (n) => `Cropped. ${count(n, 'shape', 'shapes')}.`,
+  cropNothing: 'The crop would keep nothing of the picture.',
+  undoCrop: 'Undo crop',
+  cropUndone: (n) => `Crop undone. ${count(n, 'shape', 'shapes')}.`,
 });

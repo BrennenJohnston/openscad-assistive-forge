@@ -1,3 +1,4 @@
+import { dataUrlToText } from '../../src/js/svg-text-encoding.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   renderParameterUI,
@@ -1982,6 +1983,64 @@ describe('UI Generator', () => {
         uiGenerator.setDesignFitBoxMm?.(null);
         vi.mocked(measureSvgAspect).mockReturnValue(1);
       }
+    });
+
+    // ── DP-49 P4: the crop, owned by the host ──────────────────────────────
+    //
+    // The editor says the rectangle; the host crops the drawing it holds,
+    // emits the result the way a chosen file is emitted, and reopens the
+    // editor on it with Undo crop offered. Undo puts the drawing back.
+
+    it('★ the charm host offers Crop, clips the drawing to the rectangle, emits it and reopens with Undo crop; Undo restores', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'ready',
+        recommendation: 'open_editor',
+        elements: [{ type: 'path' }],
+        warnings: [],
+      });
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(
+        fileInput,
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 224"><rect x="0" y="0" width="300" height="224"/></svg>'
+      );
+      const factory = vi.mocked(createSvgPrepWorkspace);
+      const stub = factory.mock.results[factory.mock.results.length - 1].value;
+      const first = stub.open.mock.calls[0][2];
+      expect(typeof first.onCrop).toBe('function');
+      expect(first.cropUndoable).toBeUndefined();
+
+      onChange.mockClear();
+      await first.onCrop(
+        { x: 0, y: 0, width: 300, height: 112 },
+        { top: 0, bottom: 50, left: 0, right: 0 }
+      );
+      await new Promise((r) => setTimeout(r, 0));
+      expect(stub.open).toHaveBeenCalledTimes(2);
+      const second = stub.open.mock.calls[1][2];
+      expect(second.cropUndoable).toBe(true);
+      expect(typeof second.onUndoCrop).toBe('function');
+      expect(second.openedSentence).toBe('Cropped. 1 shape.');
+      // The control's change handler gets a name-to-value map.
+      const valueOf = (calls) =>
+        calls
+          .map((c) => (c[0] && typeof c[0] === 'object' ? Object.values(c[0])[0] : null))
+          .find((v) => v && v.data);
+      const emitted = valueOf(onChange.mock.calls);
+      expect(emitted).toBeDefined();
+      expect(dataUrlToText(emitted.data)).toContain('viewBox="0 0 300 112"');
+
+      onChange.mockClear();
+      second.onUndoCrop();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(stub.open).toHaveBeenCalledTimes(3);
+      const third = stub.open.mock.calls[2][2];
+      expect(third.cropUndoable).toBeUndefined();
+      expect(third.openedSentence).toBe('Crop undone. 1 shape.');
+      const restored = valueOf(onChange.mock.calls);
+      expect(restored).toBeDefined();
+      expect(dataUrlToText(restored.data)).toContain('viewBox="0 0 300 224"');
     });
 
     it('with no box known, the editor keeps its own default and says so', async () => {

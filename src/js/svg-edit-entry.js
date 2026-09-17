@@ -22,6 +22,8 @@ import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createConversionJob } from './conversion-job.js';
 import { createConversionDialog } from './conversion-dialog.js';
 import { COST_BANDS } from './quick-look.js';
+import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
+import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
 
 // DP-34: the door's FIRST trace, the one that happens while the editor is
 // still being opened. It runs in the worker like every other trace, so a big
@@ -250,6 +252,11 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
   // the file, so the slider answers in about a tenth of a second.
   let currentImageData = null;
   let currentFileName = null;
+  // DP-49: the picture the pixels came from (for the crop view), the drawing
+  // as last shown (what a crop clips), and what a crop replaced (one undo).
+  let currentSourceDataUrl = null;
+  let currentShown = null;
+  let cropUndo = null;
   let inkControls = null;
   let retraceTimer = null;
   // The size the chosen DXF declared, kept so the saved file can be compared
@@ -306,6 +313,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     // The caller says which this is rather than this guessing.
     let shown = svg;
     let creditLine = null;
+    currentShown = { input: svg, summary, extraWarnings, removeCredit };
     if (removeCredit) {
       const credit = removeCreditLine(svg);
       if (credit.removed > 0) {
@@ -379,6 +387,13 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         summary && (creditLine ? summary.lineWidthPxBody : summary.lineWidthPx),
       designWidthKnown: false,
       tools: inkControls ? inkControls.element : null,
+      // DP-49: the crop. The door owns the pixels and the drawing, so it owns
+      // the operation; the editor says the rectangle.
+      onCrop: handleCrop,
+      ...(cropUndo ? { onUndoCrop: handleUndoCrop, cropUndoable: true } : {}),
+      ...(currentImageData && currentSourceDataUrl
+        ? { cropPreviewHref: currentSourceDataUrl }
+        : {}),
       // The surface announces its own opening; the door's sentence, which
       // names the file and counts its shapes, is the one worth hearing.
       openedSentence:
@@ -398,6 +413,84 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     if (inkControls)
       inkControls.setSummary(summary, shapeCount, { creditLine });
     return true;
+  }
+
+  /**
+   * DP-49: crop the source to the rectangle the editor said and show the
+   * result. A picture is cropped in its pixels and traced again, through the
+   * same dialog as the first trace; a drawing is clipped, the clip loading
+   * with the ring engine on demand. One level of undo, this session.
+   */
+  async function handleCrop(rect) {
+    if (!currentShown) return;
+    const before = {
+      imageData: currentImageData,
+      sourceDataUrl: currentSourceDataUrl,
+      shown: currentShown,
+    };
+    if (currentImageData) {
+      const cropped = cropImageDataRect(currentImageData, rect);
+      currentImageData = cropped;
+      currentSourceDataUrl = imageDataToDataUrl(cropped);
+      const settings = inkControls
+        ? inkControls.getSettings()
+        : { mode: 'lineart' };
+      if (inkControls) inkControls.setBusy(true);
+      try {
+        const { svg, summary } = await runTrace(currentImageData, settings, {
+          startedBy: 'person',
+        });
+        cropUndo = before;
+        await showSvg(svg, {
+          summary,
+          removeCredit: true,
+          announceOpen: (shapes) => EDITOR_S.cropped(shapes),
+        });
+      } catch (error) {
+        // Stopped, or failed: the pixels go back to what they were and the
+        // editor is still showing the drawing it showed.
+        currentImageData = before.imageData;
+        currentSourceDataUrl = before.sourceDataUrl;
+        if (error instanceof TraceCancelled) return;
+        fail(`Forge could not re-read ${currentFileName}: ${error.message}`);
+      } finally {
+        if (inkControls) inkControls.setBusy(false);
+      }
+      return;
+    }
+    const { cropSvgDrawing } = await import('./svg-crop.js');
+    const shownSvg = currentShown.removeCredit
+      ? removeCreditLine(currentShown.input).svg
+      : currentShown.input;
+    let clipped;
+    try {
+      clipped = cropSvgDrawing(shownSvg, rect);
+    } catch (error) {
+      say(EDITOR_S.cropNothing);
+      console.warn('[SVG Edit] crop refused:', error.message);
+      return;
+    }
+    cropUndo = before;
+    await showSvg(clipped.svg, {
+      summary: currentShown.summary,
+      extraWarnings: currentShown.extraWarnings,
+      announceOpen: (shapes) => EDITOR_S.cropped(shapes),
+    });
+  }
+
+  /** DP-49: put back what the last crop replaced. */
+  async function handleUndoCrop() {
+    if (!cropUndo) return;
+    const before = cropUndo;
+    cropUndo = null;
+    currentImageData = before.imageData;
+    currentSourceDataUrl = before.sourceDataUrl;
+    await showSvg(before.shown.input, {
+      summary: before.shown.summary,
+      extraWarnings: before.shown.extraWarnings,
+      removeCredit: before.shown.removeCredit,
+      announceOpen: (shapes) => EDITOR_S.cropUndone(shapes),
+    });
   }
 
   /**
@@ -481,7 +574,10 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         // A picture: through the job and the dialog. Choosing Edit Drawing
         // IS the deliberate act, so the dialog opens at once.
         currentFileName = file.name;
-        const imageData = await loadImageData(await readAsDataUrl(file));
+        const dataUrl = await readAsDataUrl(file);
+        currentSourceDataUrl = dataUrl;
+        cropUndo = null;
+        const imageData = await loadImageData(dataUrl);
         const { svg, summary } = await runTrace(
           imageData,
           { mode: 'lineart' },
@@ -500,6 +596,8 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
 
     currentFileName = file.name;
     currentImageData = prepared.imageData;
+    if (!prepared.imageData) currentSourceDataUrl = null;
+    cropUndo = null;
     sourceDxfSize = prepared.sourceSize || null;
     open = false;
 

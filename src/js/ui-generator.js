@@ -28,6 +28,8 @@ import {
 } from './svg-preparer.js';
 import { buildNestingTree, layerLimit, boundsOf } from './svg-nesting.js';
 import { removeCreditLine } from './credit-line.js';
+import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
+import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
@@ -2772,6 +2774,14 @@ function createFileControl(
   let inkControls = null;
   let inkSourceImageData = null;
   let inkSourceFileName = null;
+  // DP-49: the picture the pixels came from, for the crop view; what a crop
+  // replaced, for one level of undo; and the crop itself, for the project.
+  let inkSourceDataUrl = null;
+  let cropUndo = null;
+  let lastCrop = null;
+  // DP-49: set for the one analysis that follows a crop or its undo, so the
+  // editor reopens with that sentence whatever the analysis alone would do.
+  let reopenSentence = null;
   // The name of the PICTURE the drawing came from, for the "converted from"
   // line. Kept beside the pixels so every conversion path can say it.
   let sourceFileLabel = null;
@@ -2947,6 +2957,14 @@ function createFileControl(
       ...(knownDesignWidthMm() != null
         ? { designWidthMm: knownDesignWidthMm(), designWidthKnown: true }
         : { designWidthKnown: false }),
+      // DP-49: the crop, on the relief purpose; the host owns the operation
+      // and the one-level undo. A traced picture shows its own photograph in
+      // the crop view; a drawing shows itself.
+      ...(plateParams.length === 0 ? { onCrop: handleEditorCrop } : {}),
+      ...(cropUndo ? { onUndoCrop: handleUndoCrop, cropUndoable: true } : {}),
+      ...(lastTrace && inkSourceImageData && inkSourceDataUrl
+        ? { cropPreviewHref: inkSourceDataUrl }
+        : {}),
       sourceName: currentFileName,
       initialOverrides: storedMeta?.prepOverrides || null,
       initialOffsets: storedMeta?.prepOffsets || null,
@@ -3154,6 +3172,10 @@ function createFileControl(
         prepDeleted: deleted,
         prepLayers,
         prepPlan: currentPlan,
+        // DP-49: the crop this drawing went through, for the record. The
+        // drawing saved IS the cropped one, so nothing is re-clipped on the
+        // way back in.
+        prepCrop: lastCrop,
       });
     }
     // After the metadata, so the card can see the prepared drawing.
@@ -3190,6 +3212,109 @@ function createFileControl(
    * nothing is written, so Undo never steps through drafts and Close leaves
    * the committed design standing.
    */
+  /**
+   * DP-49: crop the drawing's source to the rectangle the editor said, then
+   * show the result. A traced picture is cropped in its pixels and traced
+   * again through the job and its dialog; a vector drawing is clipped (the
+   * clip loads with the ring engine, on demand). One level of undo, this
+   * session. The rectangle is in the drawing's units, which for a traced
+   * picture are its pixels.
+   */
+  async function handleEditorCrop(rect, insets) {
+    if (!currentRawSvg) return;
+    const before = {
+      rawSvg: currentRawSvg,
+      fileName: currentFileName,
+      imageData: inkSourceImageData,
+      sourceDataUrl: inkSourceDataUrl,
+      trace: lastTrace,
+      metadata: currentFileName ? getSvgPrepMetadata(currentFileName) : null,
+    };
+    if (lastTrace && inkSourceImageData && inkControls) {
+      const cropped = cropImageDataRect(inkSourceImageData, rect);
+      inkSourceImageData = cropped;
+      inkSourceDataUrl = imageDataToDataUrl(cropped);
+      currentQuickLook = quickLook(cropped);
+      cropUndo = before;
+      lastCrop = { rect, insets, source: 'picture' };
+      reopenSentence = (n) => EDITOR_S.cropped(n);
+      try {
+        await applyTracedImage(inkControls.getSettings(), {
+          announceResult: false,
+          startedBy: 'person',
+        });
+      } finally {
+        reopenSentence = null;
+      }
+      return;
+    }
+    const { cropSvgDrawing } = await import('./svg-crop.js');
+    let clipped;
+    try {
+      clipped = cropSvgDrawing(currentRawSvg, rect);
+    } catch (err) {
+      // The rectangle keeps nothing: said, and the editor stays as it was.
+      announceChange(EDITOR_S.cropNothing);
+      console.warn('[Crop] refused:', err.message);
+      return;
+    }
+    cropUndo = before;
+    lastCrop = { rect, insets, source: 'drawing' };
+    await showCroppedDrawing(clipped.svg, (n) => EDITOR_S.cropped(n), null);
+  }
+
+  /** DP-49: put back what the last crop replaced. */
+  async function handleUndoCrop() {
+    if (!cropUndo) return;
+    const before = cropUndo;
+    cropUndo = null;
+    lastCrop = null;
+    inkSourceImageData = before.imageData;
+    inkSourceDataUrl = before.sourceDataUrl;
+    if (before.imageData) currentQuickLook = quickLook(before.imageData);
+    currentFileName = before.fileName;
+    if (before.fileName) setSvgPrepMetadata(before.fileName, before.metadata);
+    await showCroppedDrawing(
+      before.rawSvg,
+      (n) => EDITOR_S.cropUndone(n),
+      before.trace
+    );
+  }
+
+  /**
+   * A drawing that replaced the current one by a crop or its undo: analyzed
+   * and emitted the way a chosen file is, then the editor on it. When the
+   * metadata already knows the drawing (an undo), the analysis path says
+   * nothing, so the editor is opened here with the sentence.
+   */
+  async function showCroppedDrawing(svg, sentence, trace) {
+    reopenSentence = sentence;
+    let processed;
+    try {
+      processed = processSvgForOpenScad(svg, { deferOpen: true, trace });
+    } finally {
+      reopenSentence = null;
+    }
+    const reopen = takeDeferredEditorOpen();
+    const fileObj = {
+      name: currentFileName || 'drawing.svg',
+      size: processed.length,
+      type: 'image/svg+xml',
+      data: svgToDataUrl(processed),
+    };
+    // D-132, as a chosen file does: the companions flatten with the ring
+    // engine, so wait for it rather than fall back to the pairwise chain.
+    if (layerParams.length > 0) await ensureRingEngine();
+    emitFileValue(fileObj);
+    if (fileUploadListener) fileUploadListener(param.name, fileObj);
+    if (reopen) reopen();
+    else {
+      openEditor({
+        openedSentence: sentence(currentSvgAnalysis?.elements?.length || 0),
+      });
+    }
+  }
+
   function handleEditorDraft(result, prepLayers = null) {
     if (!result || !draftRenderer) return;
     const svgDataUrl = svgToDataUrl(result);
@@ -3608,6 +3733,17 @@ function createFileControl(
       updateStatusCard(analysis);
       statusCard.style.display = '';
 
+      // DP-49: a crop, or its undo, reopens the editor on the result and says
+      // so, whatever the analysis alone would have done with the drawing.
+      const cropSentence = reopenSentence;
+      reopenSentence = null;
+      if (cropSentence && analysis.recommendation !== 'reject') {
+        requestOpen({
+          openedSentence: cropSentence(analysis.elements?.length || 0),
+        });
+        return rawSvgText;
+      }
+
       if (analysis.recommendation === 'pass_through') {
         // \u2605 D-124. For a charm there is nothing to decide about a plain
         // drawing: OpenSCAD fills every shape it is given. On a tile that
@@ -3728,6 +3864,9 @@ function createFileControl(
 
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           inkSourceImageData = await loadImageData(dataUrl);
+          inkSourceDataUrl = dataUrl;
+          cropUndo = null;
+          lastCrop = null;
           inkSourceFileName = svgName;
           sourceFileLabel = file.name;
           await ensureInkControls();
@@ -3810,6 +3949,8 @@ function createFileControl(
       if (isSvgFile) {
         const rawSvgText = dataUrlToText(dataUrl);
         currentFileName = file.name;
+        cropUndo = null;
+        lastCrop = null;
         const processed = processSvgForOpenScad(rawSvgText);
         if (processed !== rawSvgText) {
           uploadedFileObj.data = svgToDataUrl(processed);
@@ -3847,6 +3988,9 @@ function createFileControl(
     traceProgress.hide();
     inkSourceImageData = null;
     inkSourceFileName = null;
+    inkSourceDataUrl = null;
+    cropUndo = null;
+    lastCrop = null;
     sourceFileLabel = null;
     currentQuickLook = null;
     fileInput.value = '';
