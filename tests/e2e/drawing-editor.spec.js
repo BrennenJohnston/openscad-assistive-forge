@@ -1446,7 +1446,9 @@ test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
       /^\d+ shapes are thinner than 0\.5 mm at 12 mm wide and may not print\.$/
     )
     const count = Number((await notice.textContent()).match(/^(\d+)/)[1])
-    expect(count).toBeGreaterThan(150)
+    // D-159 made a traced region one row (111 for this logo, 206 before), and
+    // 109 of the 111 are under half a millimeter at 12 mm wide.
+    expect(count).toBeGreaterThan(100)
     await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
       /^11\.9/
     )

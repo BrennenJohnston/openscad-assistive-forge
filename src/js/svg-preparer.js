@@ -1685,12 +1685,17 @@ export function analyzeSvg(svgString) {
   // All-foreground SVGs need no flattening: OpenSCAD unions overlapping
   // filled shapes natively, so passing the original through is lossless.
   // Identical dark fills are unambiguous here, so no luminance penalty.
+  // D-159: a hole the drawing cuts out of its own path (a ring the path's
+  // fill rule makes a hole) needs no flattening either, because OpenSCAD
+  // honors the file's fill rule on import; only a hole drawn as a separate
+  // shape over another has to be cut by hand.
   const allForeground =
     elements.length > 0 &&
     unsupportedFeatures.length === 0 &&
     elements.every(
       (el) =>
-        el.autoRole === 'foreground' &&
+        (el.autoRole === 'foreground' ||
+          (el.autoRole === 'hole' && el.ringHole)) &&
         !el.strokeConverted &&
         !el.transformBakeFailed
     );

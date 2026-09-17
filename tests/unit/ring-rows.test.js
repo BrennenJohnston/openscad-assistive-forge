@@ -90,6 +90,22 @@ describe('a drawn compound path keeps the meaning of its rings (D-159)', () => {
     ).toEqual(['foreground', 'hole', 'foreground']);
   });
 
+  it('a drawing whose only holes are its own rings still passes through: nothing to flatten', () => {
+    const svg = wrap(
+      '<path d="M0,0 H100 V100 H0 Z M25,25 V75 H75 V25 Z" fill="black" fill-rule="evenodd"/>' +
+        '<rect x="10" y="90" width="5" height="5" fill="black"/>'
+    );
+    const analysis = analyzeSvg(svg);
+    expect(analysis.recommendation).toBe('pass_through');
+    expect(analysis.status).toBe('ready');
+    // A hole drawn as its own shape over another still needs the cut.
+    const drawn = wrap(
+      '<rect width="100" height="100" fill="black"/>' +
+        '<rect x="25" y="25" width="50" height="50" fill="white"/>'
+    );
+    expect(analyzeSvg(drawn).recommendation).not.toBe('pass_through');
+  });
+
   it('a person can still turn a hole ring on, and analyzeSvg reports the default', () => {
     const svg = wrap(
       '<path d="M0,0 H100 V100 H0 Z M25,25 V75 H75 V25 Z" fill="black" fill-rule="evenodd"/>'

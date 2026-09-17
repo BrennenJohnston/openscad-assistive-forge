@@ -247,7 +247,7 @@ test.describe('The drawing editor door', () => {
       'aria-label',
       // RE-PINNED at DP-39 P2: the name reads the word a sighted person reads,
       // and in compound mode that word is Include.
-      /Shape 1, Include/
+      /Shape 1, On/
     )
 
     // With no model behind the editor, Apply and Keep original would have
@@ -271,7 +271,7 @@ test.describe('The drawing editor door', () => {
       await page.keyboard.press('ArrowRight')
       await expect(
         page.locator(`.svg-prep-object[data-index="${i}"]`)
-      ).toHaveAttribute('aria-label', /Exclude$/)
+      ).toHaveAttribute('aria-label', /Off$/)
     }
 
     // DP-53: the combine follows the last change once it settles, and Save
@@ -334,7 +334,7 @@ test.describe('The drawing editor door', () => {
     expect(firstLabel).not.toMatch(/^Shape \d/)
     // RE-PINNED at DP-39 P2: the word, not the value. DP-Q40 made the visible
     // word "Raised" and the accessible name has to say the same thing.
-    expect(firstLabel).toMatch(/(Raised|Hole|Ignore)$/)
+    expect(firstLabel).toMatch(/(On|Cut out|Off)$/)
 
     // And it offers the full role choice, which compound mode cannot. Read off
     // the radios themselves: a fallback here would be a test that cannot fail.
@@ -1271,7 +1271,7 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
     await rowName(page, 1).click()
     await expect(chosen(page)).toHaveCount(1)
 
-    await row(page, 3).getByRole('radio', { name: 'Hole' }).check()
+    await row(page, 3).getByRole('radio', { name: 'Cut out' }).check()
     await expect(chosen(page), 'a role click moved the selection').toHaveCount(1)
 
     await row(page, 3).locator('.svg-prep-more-btn').click()
@@ -1711,16 +1711,16 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
     // Still a radio group: DP-Q36 signed a control drawn as a switch, not a
     // different control. Arrow keys walk it because it never stopped being
     // three radios in a fieldset.
-    await expect(row.getByRole('radio', { name: 'Raised' })).toBeVisible()
-    await expect(row.getByRole('radio', { name: 'Hole' })).toBeVisible()
+    await expect(row.getByRole('radio', { name: 'On' })).toBeVisible()
+    await expect(row.getByRole('radio', { name: 'Cut out' })).toBeVisible()
     await expect(row.getByRole('radio', { name: 'Off' })).toBeVisible()
     await expect(row.locator('text=Foreground')).toHaveCount(0)
 
     // And the row's own accessible name reads the word on screen, so a
     // screen reader and an eye get the same answer to "what is this shape".
-    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Hole/)
+    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Cut out/)
     await row.getByRole('radio', { name: 'Off' }).check()
-    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Ignore/)
+    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Off/)
   })
 
   test('★ More holds what left the line, and gives the row back', async ({
@@ -1769,8 +1769,8 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
     await openRows(page, 412)
     const row = page.locator('.svg-prep-object').first()
     const targets = [
-      row.getByRole('radio', { name: 'Raised' }),
-      row.getByRole('radio', { name: 'Hole' }),
+      row.getByRole('radio', { name: 'On' }),
+      row.getByRole('radio', { name: 'Cut out' }),
       row.getByRole('radio', { name: 'Off' }),
       row.locator('.svg-prep-more-btn'),
     ]
