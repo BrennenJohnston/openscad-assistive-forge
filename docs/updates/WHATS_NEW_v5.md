@@ -105,7 +105,7 @@ particular step that used to dominate everything was replaced: a
 drawing that took nineteen seconds to come back now takes about one
 and a half.
 
-![The drawing editor over the charm preview: a bird line drawing fills the left side under the heading "Will print as", with a color key reading Raised, Hole and Ignore beneath it. A Drawing / Charm switch sits in the toolbar with Drawing chosen. On the right, a Shapes panel lists seven shapes; each row has the shape's name and a Raised / Hole / Ignore switch with one choice highlighted](images/drawing-editor.png)
+![The drawing editor over the charm preview: a bird line drawing fills the left side under the heading "Will print as", with Fit, plus and minus buttons and a color key reading Raised, Hole and Ignore beneath it. The toolbar holds a Drawing / Charm switch with Drawing chosen, then Crop, Apply, Save SVG, Keep original, Reset and More. On the right, a Shapes panel lists the shapes: each row has the shape's name, a Raised / Hole / Ignore switch with one choice highlighted and a More button, and four of the rows carry a small mark reading thin beside the name](images/drawing-editor.png)
 
 The editor itself got the change I care most about: it is **one
 picture** now. The drawing you are editing fills the space, and
@@ -131,9 +131,30 @@ you close.
 On a phone or a tablet the drawing takes two fingers to zoom and pan,
 one finger still scrolls the page, and hovering or pressing a shape
 marks its row in the list. Combining a complicated drawing no longer
-freezes the page either: that work moved off the main thread, with a
-bar and a Cancel of its own, and Forge now measures how long it is
-likely to take and decides on that rather than on a count of shapes.
+freezes the page either: that work moved off the main thread, and the
+result now combines by itself a third of a second after your last
+change, with one sentence under the picture saying how long. In the
+Charm view a **Render preview** button draws the charm with the
+drawing as it stands, as a draft, without applying anything.
+
+The last weeks before this release were spent on the picture-to-charm
+job with my own logo in hand, and most of what I found was fixed by
+listening rather than by adding. A photograph's colored background
+arrives as one big shape now called the wall, and the editor leaves it
+out by itself so the charm carries the drawing rather than a plate
+with the drawing cut out of it. Every shape starts on layer 1, instead
+of the editor guessing a stack from how the shapes nest. Choosing
+several rows at once works with the keys you would expect, Ctrl+A and
+Delete among them, and the picture and the list point at each other.
+A conversion stands in front of the page as a dialog with its stages
+named and a Cancel that works at any of them. The editor knows how wide
+the charm will really print the drawing, measures every shape against
+half a millimeter at that width, says how many are too thin, and can
+set them all to Ignore in one press, reversibly. And **Crop**: four
+sliders take an edge off the picture, a photo is traced again from the
+kept part, and Undo crop puts it back. Underneath all of it, every word
+the app says is now American English, and every slider row in the
+customizer meets the 44 px touch floor.
 
 ## A stencil from a picture
 

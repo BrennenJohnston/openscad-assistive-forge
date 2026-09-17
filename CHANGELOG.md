@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [5.0.0] - 2026-09-15
+## [5.0.0] - 2026-09-17
 
 ### Three Interfaces, a Design Lane, and One-Link Sharing
 
@@ -22,11 +22,56 @@ accessibility and honesty pass over the whole surface. The last work before
 release rebuilt the picture-to-charm editor as one product: a conversion you
 start, watch and can stop, a second tracing engine built from source, an
 editor that no longer freezes the page, and a shapes panel with one
-vocabulary in front of every person who reads it. The complete engineering
-record is below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated
-version.
+vocabulary in front of every person who reads it. Then I walked the whole
+picture-to-charm job with my own logo, three times, and what those walks found
+is the last block of this section: the wall behind a picture, every shape on
+layer 1, choosing shapes together, a conversion that stands in front of the
+page as a dialog, a result that combines by itself, a too-thin check at the
+width the charm really prints, and crop. The complete engineering record is
+below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
 
 ### Added
+
+- **Crop, in the drawing editor** (DP-49) - a Crop button in the drawing view opens a crop
+  view in the drawing's place: the picture with the kept rectangle clear and the rest shaded,
+  four rows named Top, Bottom, Left and Right in the customizer's own slider classes, each a
+  share of the picture from 0 to 90 percent, Save crop and Cancel. A traced picture is cropped
+  in its pixels and traced again through the same dialog; a drawing I uploaded is clipped
+  shape by shape under its own fill rule, with the ring engine, loaded on demand. The editor
+  reopens on the result ("Cropped. 37 shapes." for my logo's upper half, from 206), the shape
+  list starts over, and Undo crop puts the picture back, one step. The crop rides with the
+  project as `prepCrop`. Eyes-on at 1280, 768 and 412 found five layout defects before the
+  checks did, and fixed them
+- **The too-thin check, opt-in** (DP-54) - every shape is measured at the width the charm
+  will really print the drawing: its rings drawn into a small mask and the ridge width read,
+  0.025 mm per cell, 65 ms for the logo's 206 shapes. A status notice above the list counts
+  the shapes under 0.5 mm ("33 shapes are thinner than 0.5 mm at 12 mm wide and may not
+  print."), each such row carries a small "thin" mark with the reason read to a screen
+  reader, and "Ignore those" sets them all to Ignore in one press with "Undo ignore" beside
+  it and every row still its own control. The floors (0.5 mm, 3 px) were asked and signed
+  (DP-Q58). At the default charm's 11.97 mm, 202 of the logo's 205 shapes are under the
+  floor, CREATE's letters among them: the lever is the design's scale, and now it says so
+- **Two previews** (DP-53) - the drawing combines by itself a third of a second after the
+  last change, off the main thread, with one sentence under the picture ("Combining 146
+  shapes, about 2 seconds. Apply is ready when they are combined."); there is no Render
+  button in the drawing view any more. In the Charm view a Render preview button draws the
+  charm with the drawing as it stands, as a draft that changes nothing, badged as such, and
+  Close puts the charm back. MEASURED on the logo: the combine 2.0 to 2.5 s in the worker at
+  1x and 4x, the page free (63 ms worst)
+- **One conversion job, behind a dialog** (DP-52) - a conversion stands in front of the page
+  as a dialog with its stages named (reading the picture, tracing the shapes, preparing the
+  drawing, updating the charm), a bar and a Cancel that works at any stage. A picture that
+  starts by itself gets the dialog only if it takes more than 700 ms (DP-Q57). The editor,
+  when the drawing needs a look, opens once the dialog has gone, because an editor opened
+  behind an inert page can neither take focus nor say it opened
+- **Choosing shapes and changing them together** (DP-47) - Ctrl or Cmd adds a row or a shape
+  to the choice, Shift takes a range, Ctrl+A chooses every shape and Delete or Backspace
+  removes the chosen ones, in the relief purpose where none of that worked (D-141: Ctrl+A
+  selected the page). The selection is drawn on the picture in its own overlay, and a
+  change to many rows is one repaint, one preview and one sentence
+- **Dial names in a tile** (DP-44) - `@label(text)` beside a parameter in a `.scad` tile
+  names its dial in the customizer ("Scale" for `design_scale`); the label is parsed out of
+  the comment before the unit is read, so a label can never invent a unit
 
 - **A second tracing engine, built from source** (DP-43) - Potrace is compiled to WebAssembly
   by a GitHub Actions workflow from a pinned source tarball, committed with its recipe and its
@@ -71,6 +116,39 @@ version.
 
 ### Changed
 
+- **American English, everywhere a person reads or hears it** (DP-45) - 1,213 replacements
+  in 129 files, and a guard (`scripts/us-english-scan.mjs`, run by a unit test) that reads
+  every string and comment in the source, the page, the tiles and the documents, and reports
+  0
+- **The editor's frame** (DP-46) - the stage reserves room for the shapes panel only while
+  the panel is open (D-136: the drawing goes from 374 to 678 px wide when the list shuts,
+  where before it stayed at 374), and the toolbar is two fixed rows with a More menu for the
+  secondary actions below 640 px (D-140: 170 px and a wrapped footer became 91 px at 1280,
+  401 became 97 px at 412, Close on the first row at every width). Signed as built at
+  DP-Q52
+- **Every shape starts on layer 1** (DP-51) - the Layer column no longer pre-fills a stack
+  from how the shapes nest (D-142: my logo opened as 1 / 394 / 158 shapes across three
+  layers and an untouched Apply built a field of spikes, 109,890 triangles against 53,620);
+  the panel says how many layers the design supports, and a layer is chosen under More
+- **What a picture becomes on a charm** (DP-48, DP-Q53) - in the Colors choice the wall
+  behind the picture is left out by its own flag rather than judged by brightness (D-137: a
+  dark ground came out Raised and light lettering came out Hole; the decision is per path,
+  never per ring, because a traced region is one path whose inner rings are its holes), a
+  color under 2 % of the picture is folded into its neighbor, relief only (D-138, DP-Q54: a
+  two-color logo had separated into six colors and 456 paths, 350 of them the anti-aliased
+  edge), and Line art tries the other side of the lightness line only when nothing passed
+  both gates (D-139: a light drawing on a dark colored ground traced to nothing, and the
+  empty result was emitted as the design). The charm host never emits a conversion that
+  kept nothing
+- **Every slider row meets the 44 px touch floor** (DP-Q55, asked at DP-49 with the
+  measurement) - the number box has a 44 px minimum and the range's hit box is 44 px tall
+  with the 6 px track painted across its middle, so the look stays; every customizer row is a
+  few pixels taller
+- **The charm says how wide it prints a design** (DP-54, D-144) - the model echoes its fit
+  box ("design fit box mm: w=11.97 h=9.3" on the default charm), the app reads it at every
+  render, and the drawing editor measures against that width instead of its own 14 mm
+  default; the whole-drawing thin-line advisory appears on the charm host for the first time
+
 - **The drawing editor is one picture, and it is never blank** (DP-37 P1) - the edited drawing
   fills the editor instead of sharing the room with a side-by-side comparison, which is still
   one button away. Three defects went with it: a preview that rendered 1268x160 with no drawing
@@ -112,6 +190,39 @@ version.
   the obligation it does not remove
 
 ### Fixed
+
+- **The way back into the editor after Apply** (D-145) - the file control's status card had
+  no branch for the pairing the analyzer really emits on a confident drawing (ready, open
+  the editor), so after Apply or Close on my logo the card went blank and nothing reopened
+  the editor. It offers the editor for that pairing now, and says "Prepared in the drawing
+  editor." once Apply has run
+- **Close kept the applied design** (D-149) - Close, Escape and the surface's own close were
+  wired as Keep original and threw the applied design away (CREATE raised, 53,490 triangles,
+  became a slab at 29,388). The editor leaves through the host's Close now, which changes
+  nothing; Keep original keeps its meaning as a button
+- **The selection you could not see** (D-146) - the selection outline was drawn in the ink
+  color over ink-colored shapes; a paper-colored halo now sits under a focus-colored dashed
+  outline
+- **Shift-click selected text** (D-147) and **the wall caught the pointer** (D-148) - a
+  Shift-click on a row no longer extends the browser's text selection, and an ignored wall
+  the size of the picture is no longer a pointer target, so a click on empty space clears
+  the choice instead of choosing the wall
+- **The freeze after a conversion** (D-143) - the preview's post-load work (the cavity tint
+  and the edges overlay) ran on the main thread in one task after a design was emitted, 6.4 s
+  at 4x CPU on my logo's Line art design; the whole OFF load runs in a worker above 10,000
+  triangles now (the longest wait 6,450 to 1,377 ms at 4x, 1,264 to 814 ms at 1x on the
+  built app)
+- **A setting changed mid-conversion was refused** (D-151) - the conversion job refused a
+  second run while the trace runner it wraps had always superseded one; the job supersedes
+  now, and a superseded run leaves without a word
+- **The too-thin mark on the signed one-line row** - the words after a too-thin shape's name
+  wrapped the row on CI's wider Firefox fonts; the mark is a short badge to the eye with the
+  full words for a screen reader
+
+Known and recorded, not fixed: a big traced photograph's hand-off holds the page in
+proportion to its size, all on the main thread (D-150: 14.6 s for a 1,400 px noise
+picture at 4x, milliseconds for the logo). The design travels in the share link, which is
+the sharing feature, so it needs a decision before a fix.
 
 - **A drawing took nineteen seconds to come back, and the page could not answer** (D-132) - the
   layer companions were flattened by a path engine that spent all of it computing point winding.

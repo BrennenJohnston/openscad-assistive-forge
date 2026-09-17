@@ -64,38 +64,67 @@ The app provides automatic announcements for:
 - `role="dialog"` for modal interactions
 - `aria-live="polite"` for non-disruptive updates
 
-### SVG Preparation Editor
+### The drawing editor
 
-The SVG Preparation Editor is fully keyboard accessible and screen reader friendly. When an uploaded SVG needs review, the editor opens automatically with focus moved into it.
+The drawing editor is keyboard accessible and built to be listened to. When a
+drawing needs a look, the editor opens with focus on its own name, "Drawing
+editor", and says so; through the standalone door (the **Edit a drawing or
+photo** line on the welcome screen, or **Edit Drawing** in the Actions drawer)
+it is the whole screen.
 
 #### Keyboard Controls
 
 | Key | Action |
 |-----|--------|
-| `Tab` / `Shift+Tab` | Move between objects, controls, and buttons |
-| `Arrow keys` | Switch between Raised / Hole / Ignore within a radio group (Include / Exclude on a traced picture) |
-| `+` or `=` | Zoom in (when a preview pane is focused) |
-| `-` | Zoom out (when a preview pane is focused) |
-| `Escape` | Exit fullscreen (if active), or close the editor |
+| `Tab` / `Shift+Tab` | Move between the toolbar, the picture's controls, the rows and their buttons |
+| `Arrow keys` | Switch between Raised / Hole / Ignore within a row's role group (Include / Exclude on a traced picture) |
+| `Ctrl+A` (`Cmd+A`) | Choose every shape, with the list focused |
+| `Delete` / `Backspace` | Remove the chosen shapes |
+| `Ctrl`-click / `Cmd`-click, `Shift`-click | Add a row or a shape to the choice, or take a range |
+| `+` / `-` | Zoom the picture in and out; **Fit**, **+** and **-** under the picture do the same |
+| `Escape` | Shut the innermost thing that is open: a row's **More** menu, then the crop view, then the editor |
+
+In the crop view the four rows are native sliders: arrow keys move them, and
+each has a number box beside it for an exact value. Focus lands on **Top**
+when the view opens and returns to **Crop** when it closes.
 
 #### Screen Reader Behavior
 
-- The editor is a labeled `region` landmark ("SVG Preparation Editor")
-- The list of shapes uses `role="list"` with `role="listitem"` children, and is named "Shapes"
-- Each shape's aria-label is its name and the role in the word the control uses (e.g., "Circle 1, Raised")
-- Role changes update the aria-label immediately
-- Preview updates are announced via an `aria-live="polite"` region: "Preview updated: N raised, M holes."
-- Warnings appear in a `role="status"` live region
-- Fullscreen and close state changes are announced ("SVG editor expanded to fullscreen", "Exited fullscreen SVG editor")
-- Each radio group has a screen-reader-only `<legend>` ("Role for Circle 1")
-- Color swatches are `aria-hidden="true"` (decorative only)
-- The fullscreen backdrop is `aria-hidden` (not perceived by screen readers)
+- The editor is a labeled `region` landmark named "Drawing editor"; the
+  shapes panel's list is named "Shapes" and each row is named by its shape
+  and its role in the word the control uses (for example "Shape 3, Raised")
+- A row's **More** button says which row it belongs to, and Escape shuts the
+  menu without leaving the editor
+- Choosing rows is said as a sentence, once per change ("3 of 7 shapes
+  selected.", "All 7 shapes selected.", "Nothing selected."), and **Delete
+  selected** carries the count in its own name
+- The result combines by itself after a change; the sentence under the
+  picture says how many shapes and about how long ("Combining 146 shapes,
+  about 2 seconds. Apply is ready when they are combined."), and "Preview
+  ready." follows once
+- Shapes too thin to print are counted in a status region above the list
+  ("33 shapes are thinner than 0.5 mm at 12 mm wide and may not print."), and
+  each such row is described as "too thin to print" or "too small to trace
+  clearly" after its name; **Ignore those** and **Undo ignore** say what they
+  did
+- The crop view announces "Crop view open. Four sliders take an edge off the
+  picture." on opening, each slider is described by one help sentence and by
+  the sentence that says what stays, and Save crop, Cancel and Undo crop each
+  say what happened ("Cropped. 37 shapes.", "Crop canceled. Your drawing is
+  unchanged.", "Crop undone. 206 shapes.")
+- The Drawing / Charm switch is a radio group named "View"; switching says
+  "Showing the charm." or "Showing the drawing." once, and the note under the
+  charm view is read once and stays findable
+- Warnings appear in a `role="status"` live region, and a shape carrying a
+  warning reads it beside its name
+- Color swatches are decorative (`aria-hidden="true"`)
 
-#### Fullscreen Mode
+#### The standalone door
 
-Fullscreen uses a focus trap — `Tab` and `Shift+Tab` cycle within the editor only. Press `Escape` to exit fullscreen (the editor stays open). Focus returns to the element that was focused before entering fullscreen.
-
-In fullscreen, the source and result previews remain pinned at the top (sticky) while only the object list scrolls. This keeps both previews visible at all times so you can see the effect of role changes immediately. The header, warnings, and footer also stay fixed outside the scrollable area.
+Through the standalone door there is no model behind the editor and nothing
+to Tab out to, so the editor traps focus: `Tab` and `Shift+Tab` cycle within
+it, and `Escape` is the way out once nothing smaller is open. Focus returns to
+the door that opened it.
 
 ### Forced Colors Mode (Windows High Contrast)
 

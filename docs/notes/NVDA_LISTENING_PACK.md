@@ -149,23 +149,30 @@ knowing it is real is worth more than the whole rest of the section.**
 | Ctrl and Shift on the rows sound like the count they produce, and clearing says "Nothing selected." | ☐ | |
 | "Delete selected" carries the count in its own name once rows are chosen | ☐ | |
 | A shape carrying a warning reads the warning beside its name, not after the More button | ☐ | |
+| Ctrl+A with the list focused says "All 7 shapes selected." once; Delete removes the chosen rows and says how many | ☐ | |
+| The notice above the list reads as a status when it changes: "5 shapes are thinner than 0.5 mm at 12 mm wide and may not print." | ☐ | |
+| A too-thin row's description is read after its name and role: "too thin to print", or "too small to trace clearly", or both; the word "thin" beside the name is NOT read a second time | ☐ | |
+| "Ignore those" says "5 thin shapes set to Ignore. Each can be turned back on in the list." once, and "Undo ignore" says "Undone. 5 shapes are back to how they were." | ☐ | |
+| The layer sentence under the notice ("This design supports up to 2 layers. Every shape starts on layer 1. Choose a layer under More to build a stack.") is findable by browsing and not announced at every change | ☐ | |
 
-## 9. Combining a big drawing (the work left the main thread)
+## 9. Combining a big drawing (it combines by itself now)
 
 The same editor, with a drawing of a few hundred shapes: the door's
-over-budget fixture, or any traced photograph.
+over-budget fixture, or any traced photograph. There is no Render preview
+button in the drawing view any more: the result combines by itself a third of
+a second after the last change, and the sentence under the picture is the
+only thing that says so.
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
-| The sentence under the result pane says how many shapes there are and roughly how long combining will take, in words ("about 9 seconds"), and is findable by browsing | ☐ | |
-| "Render preview" is described by that sentence rather than repeating it | ☐ | |
-| While it combines, Apply and Save report themselves disabled, and the reason ("Still combining the shapes...") is findable | ☐ | |
-| The bar carries the name "Combining N shapes" | ☐ | |
-| Cancel says "Combining canceled" once, and the Render button comes back | ☐ | |
-| ★ Cancel is the worst case of the doubling above, and the only one where the two copies are not identical: the press says "Combining canceled" and the stopped job says "Combining canceled." with a full stop. Count how many times you hear it | ☐ | |
+| After a change, the sentence under the picture says how many shapes and roughly how long, in words ("Combining 146 shapes, about 2 seconds. Apply is ready when they are combined."), and is findable by browsing rather than announced at every change | ☐ | |
+| While it combines, Apply and Save report themselves disabled, and the reason (the same sentence) is findable | ☐ | |
+| A second change made while it combines does not leave two sentences, one stale | ☐ | |
+| Cancel says "Combining canceled. Change anything to combine again." once | ☐ | |
+| ★ Cancel is the worst case of the doubling above, and the only one where the two copies are not identical: the press says its sentence and the stopped job says its own. Say whether you heard one or two, and which | ☐ | |
 | Finishing says "Preview ready. It took N seconds." once, and nothing says "Rendering" while it runs | ☐ | |
 | Changing a role while it combines does not leave a stale sentence about the role you replaced | ☐ | |
-| Four older sentences in this editor still carry an em dash and the old word: "Preview updated — 5 foreground, 2 holes". Say how the em dash sounds and whether "foreground" now jars against "Raised" | ☐ | |
+| The editor's own sentences say "raised", not "foreground", and carry no em dash; say if any older wording is still heard | ☐ | |
 
 ## 10. Drawing or Charm, and the draft note
 
@@ -195,6 +202,13 @@ list still say everything the picture now shows?
 | With the picture zoomed in, the list still reads the whole drawing: nothing in it depends on what is in view | ☐ | |
 | Fit, zoom in and zoom out have names, and work from the keyboard | ☐ | |
 | Nothing about the picture is announced twice because both the row and the shape were touched by one action | ☐ | |
+| Ctrl-click on a second shape says "2 of 7 shapes selected."; Shift-click says the range's count; a click on the background says "Nothing selected." | ☐ | |
+| "Crop" in the toolbar has the name "Crop the picture"; pressing it says "Crop view open. Four sliders take an edge off the picture." once and puts focus on the Top slider | ☐ | |
+| Each slider reads its label (Top, Bottom, Left, Right), its value in percent, and is described by "How much to take off this edge, as a share of the picture." and by "Keeping 100 % of the width and 50 % of the height." | ☐ | |
+| The number box beside a slider reads "Top value in percent, editable", and typing 50 moves the slider and the sentence | ☐ | |
+| Save crop: the editor comes back on the result and says "Cropped. N shapes." once; Cancel or Escape says "Crop canceled. Your drawing is unchanged." and puts focus back on Crop | ☐ | |
+| After a crop, "Undo crop" is in the toolbar; pressing it says "Crop undone. N shapes." once, and the button goes away | ☐ | |
+| The charm view's "Render preview" says "Rendering the charm with the drawing as it is now." once, and the note under the charm says which drawing it shows | ☐ | |
 
 ## What to send back
 

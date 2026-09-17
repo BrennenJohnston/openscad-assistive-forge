@@ -1,6 +1,6 @@
 # Release Notes
 
-## v5.0.0 (2026-09-15)
+## v5.0.0 (2026-09-17)
 
 The release where the workshop got big enough for everyone I built it for.
 Since 4.5.0 the app grew three switchable interfaces - Simplified, Standard,
@@ -10,10 +10,22 @@ sharing with provenance records, braille editing refinements, and a long
 accessibility pass driven by listening to a screen reader rather than
 measuring one. The last work before release went back over the
 picture-to-charm editor until it behaved like one product rather than five
-features that happened to share a screen. The illustrated version of this
-story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
+features that happened to share a screen, and then walked that job with my
+own logo, three times, fixing what each walk found. The illustrated version
+of this story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
 
 ### Highlights
+
+- **The picture-to-charm job, walked with my own logo**: a conversion stands
+  in front of the page as a dialog with its stages named and a Cancel at every
+  one; the wall behind a picture is left out by itself; every shape starts on
+  layer 1; shapes can be chosen together with the keys you would expect; the
+  result combines by itself after each change and the Charm view renders a
+  draft on request; every shape is measured against half a millimeter at the
+  width the charm really prints, with one press to set the too-thin ones to
+  Ignore, reversibly; and **Crop** takes an edge off a picture and traces it
+  again. Every word is American English now, and every slider row meets the
+  44 px touch floor.
 
 - **Three interfaces**: **Simplified** (the default - parameters, preview, one
   Generate button), **Standard** (adds the console, libraries, companion
