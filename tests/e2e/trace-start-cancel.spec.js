@@ -475,6 +475,49 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     expect(badges.join(' | ')).not.toMatch(/SVG Ready/);
   });
 
+  test('★ a setting changed while a conversion runs starts it over with the new setting (D-151)', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
+    test.setTimeout(300_000);
+
+    // MEASURED on PR #238's board: on a slow runner the Stencil Maker's
+    // Colors switch landed while the first conversion still ran, and the job
+    // refused it - "Conversion failed: A conversion is already running" - so
+    // the switch was lost and the first conversion's result stood. The trace
+    // runner always superseded a running trace; the job must too.
+    await openCharm(page);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+
+    await choosePicture(page, 2000, 'plain');
+    const p = panel(page);
+    await expect(p.start).toBeVisible({ timeout: 120_000 });
+    await p.start.click();
+    await expect(p.running).toBeVisible({ timeout: 30_000 });
+
+    // Colors, while the first conversion is still at work.
+    const colours = page.locator('input[type="radio"][value="colours"]');
+    await colours.evaluate((el) => {
+      el.checked = true;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const summary = page.locator('.ink-controls-summary');
+    await page.waitForTimeout(2000);
+    await expect(summary).not.toContainText(/already running/);
+    await expect(p.info).not.toContainText(/already running/);
+
+    // The conversion that finishes is the Colors one.
+    await expect(summary).toContainText(/colors? to paint, and the wall/, {
+      timeout: 240_000,
+    });
+    await expect(p.info).toContainText('converted from');
+    await expect(p.running).toBeHidden();
+    await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
+    await expect(p.start).toHaveText('Convert again');
+  });
+
   test('a picture small enough to be over in a moment starts itself, and the dialog waits to see if it takes a while', async ({
     page,
     browserName,
@@ -491,7 +534,23 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await choosePicture(page, 400, 'plain');
     const p = panel(page);
 
-    await expect(p.info).toContainText('converted from', { timeout: 240_000 });
+    // DP-Q32's other half: on a machine the quick look calls slow, nothing
+    // starts by itself, so the auto-start cannot be observed there. A slow
+    // CI runner is such a machine (PR #238's board, three attempts), and this
+    // test says so rather than fail for a rule it is not about.
+    let outcome = 'pending';
+    const deadline = Date.now() + 240_000;
+    while (outcome === 'pending' && Date.now() < deadline) {
+      const text = (await p.info.textContent()) || '';
+      if (/converted from/.test(text)) outcome = 'converted';
+      else if (/Ready to convert\./.test(text)) outcome = 'offered';
+      else await page.waitForTimeout(250);
+    }
+    test.skip(
+      outcome === 'offered',
+      "this machine's quick look called the picture slow (DP-Q32), so nothing starts by itself here"
+    );
+    expect(outcome).toBe('converted');
     // Whatever the dialog did, it is gone and the page is live once the charm
     // has the drawing.
     await expect(p.running).toBeHidden();
@@ -499,5 +558,73 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     // And Start stays, so a re-run after changing a setting is one click.
     await expect(p.start).toBeVisible();
     await expect(p.start).toHaveText('Convert again');
+  });
+  test('★ the page keeps answering while the charm takes a heavy design (D-143, DP-52 P4)', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
+    test.setTimeout(300_000);
+
+    // MEASURED before this: the logo's Line art design (211,700 triangles)
+    // held the main thread for 6.4 s at 4x while the preview parsed it,
+    // classified its faces and built its edges. A grid of 400 filled circles
+    // is a 25 KB drawing that renders to a mesh of the same kind (about
+    // 130,000 triangles at $fn=64), so this measures the preview's stage
+    // alone. A traced noise picture was tried first: its multi-megabyte SVG
+    // pays seconds more for its own hand-off (the data URL round trips, the
+    // URL hash sync and the storage save, D-150), which hid the preview's
+    // stage behind another defect.
+    await openCharm(page);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+
+    const circles = [];
+    for (let row = 0; row < 20; row++) {
+      for (let col = 0; col < 20; col++) {
+        const cx = 25 + col * 50;
+        const cy = 25 + row * 50;
+        circles.push(
+          `<path d="M${cx - 18},${cy} a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z"/>`
+        );
+      }
+    }
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">' +
+      `<g fill="#000000">${circles.join('')}</g></svg>`;
+    await page.locator('#param-design_file').setInputFiles({
+      name: 'dots.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from(svg),
+    });
+
+    // From the moment the drawing goes in until the preview says ready
+    // again, ask the page a trivial question every 100 ms and keep the
+    // longest wait for an answer.
+    let worst = 0;
+    let sawWork = false;
+    const deadline = Date.now() + 240_000;
+    while (Date.now() < deadline) {
+      const sent = Date.now();
+      const state = await page.evaluate(
+        () =>
+          document
+            .querySelector('.preview-state-indicator')
+            ?.textContent?.trim() || ''
+      );
+      const took = Date.now() - sent;
+      if (took > worst) worst = took;
+      if (!/ready/i.test(state)) sawWork = true;
+      else if (sawWork) break;
+      await page.waitForTimeout(100);
+    }
+    expect(
+      sawWork,
+      'the preview never left ready, so the design was not rendered'
+    ).toBe(true);
+    expect(
+      worst,
+      `the page took ${worst} ms to answer while the charm took the design`
+    ).toBeLessThan(1500);
   });
 });

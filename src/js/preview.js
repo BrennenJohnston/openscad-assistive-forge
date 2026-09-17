@@ -39,6 +39,7 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { classifyInnerFaces, offFaceCount, parseOFF } from './mesh-extras.js';
 import { buildAxisTriadOverlay } from './axis-triad-overlay.js';
 import { normalizeHexColor } from './color-utils.js';
 import { get2DStylePalette } from './state-colors.js';
@@ -130,6 +131,17 @@ export function getThreeModule() {
 /**
  * LOD (Level of Detail) configuration
  */
+/**
+ * D-143 (DP-52 P4). Above this many triangles the cavity-tint classification
+ * and the edge segments are computed in a worker and applied when they
+ * arrive; below it they run here, as they always did, in a few milliseconds.
+ * MEASURED: the two cost about 6 microseconds per triangle at 1x on this
+ * machine and four times that at 4x, so 10,000 triangles is about 60 ms here
+ * and 250 ms on a slow device - the most a load may hold the page. The
+ * logo's Line art design (211,700 triangles) held it for 6.4 s at 4x.
+ */
+export const SYNC_MESH_EXTRAS_MAX_TRIANGLES = 10_000;
+
 const LOD_CONFIG = {
   vertexWarningThreshold: 100000, // Warn above 100K vertices
   vertexCriticalThreshold: 500000, // Critical warning above 500K vertices
@@ -517,6 +529,12 @@ export class PreviewManager {
     this._axisTriad = null;
     this._postLoadHook = null; // Called after STL is loaded
     this._postLoadListeners = []; // Multi-listener post-load event
+    // D-143: the worker that computes a big mesh's extras, and the token of
+    // the mesh whose answer is still wanted (a mesh replaced before its
+    // answer arrives has its answer dropped).
+    this._extrasWorker = null;
+    this._extrasToken = 0;
+    this._pendingOFF = new Map();
     this._themeChangeListeners = []; // Multi-listener theme-change event (F20)
 
     // Reference overlay (screenshot/SVG image plane under the model)
@@ -1099,194 +1117,170 @@ export class PreviewManager {
     const posAttr = geometry.getAttribute('position');
     const normAttr = geometry.getAttribute('normal');
     if (!posAttr || !normAttr) return;
+    // The arithmetic lives in mesh-extras.js now (DP-52 P4), so a worker can
+    // run the same function for a mesh too big to run here.
+    const isInner = classifyInnerFaces(posAttr.array, normAttr.array);
+    geometry.setAttribute('aIsInner', new Float32BufferAttribute(isInner, 1));
+  }
 
-    const pos = posAttr.array;
-    const norm = normAttr.array;
-    const vertCount = posAttr.count;
-    const faceCount = vertCount / 3;
-    const faceIsInner = new Uint8Array(faceCount);
-    const faceDot = new Float32Array(faceCount);
-    const faceNx = new Float32Array(faceCount);
-    const faceNy = new Float32Array(faceCount);
-    const faceNz = new Float32Array(faceCount);
-    const faceCx = new Float32Array(faceCount);
-    const faceCy = new Float32Array(faceCount);
-    const faceCz = new Float32Array(faceCount);
-
-    let minX = Infinity,
-      minY = Infinity,
-      minZ = Infinity;
-    let maxX = -Infinity,
-      maxY = -Infinity,
-      maxZ = -Infinity;
-    for (let i = 0; i < pos.length; i += 3) {
-      if (pos[i] < minX) minX = pos[i];
-      if (pos[i] > maxX) maxX = pos[i];
-      if (pos[i + 1] < minY) minY = pos[i + 1];
-      if (pos[i + 1] > maxY) maxY = pos[i + 1];
-      if (pos[i + 2] < minZ) minZ = pos[i + 2];
-      if (pos[i + 2] > maxZ) maxZ = pos[i + 2];
-    }
-    const mcx = (minX + maxX) / 2;
-    const mcy = (minY + maxY) / 2;
-    const mcz = (minZ + maxZ) / 2;
-
-    for (let f = 0; f < faceCount; f++) {
-      const b = f * 9;
-      const cx = (pos[b] + pos[b + 3] + pos[b + 6]) / 3;
-      const cy = (pos[b + 1] + pos[b + 4] + pos[b + 7]) / 3;
-      const cz = (pos[b + 2] + pos[b + 5] + pos[b + 8]) / 3;
-      const nx = norm[b];
-      const ny = norm[b + 1];
-      const nz = norm[b + 2];
-
-      faceNx[f] = nx;
-      faceNy[f] = ny;
-      faceNz[f] = nz;
-      faceCx[f] = cx;
-      faceCy[f] = cy;
-      faceCz[f] = cz;
-
-      const rcx = cx - mcx,
-        rcy = cy - mcy,
-        rcz = cz - mcz;
-      const cLen = Math.sqrt(rcx * rcx + rcy * rcy + rcz * rcz) || 1;
-      const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
-      faceDot[f] =
-        (nx / nLen) * (rcx / cLen) +
-        (ny / nLen) * (rcy / cLen) +
-        (nz / nLen) * (rcz / cLen);
-    }
-
-    const edgeMap = new Map();
-    const r = (v) => v.toFixed(4);
-
-    for (let f = 0; f < faceCount; f++) {
-      const b = f * 9;
-      const v0 = `${r(pos[b])},${r(pos[b + 1])},${r(pos[b + 2])}`;
-      const v1 = `${r(pos[b + 3])},${r(pos[b + 4])},${r(pos[b + 5])}`;
-      const v2 = `${r(pos[b + 6])},${r(pos[b + 7])},${r(pos[b + 8])}`;
-
-      const edges = [
-        v0 < v1 ? `${v0}|${v1}` : `${v1}|${v0}`,
-        v1 < v2 ? `${v1}|${v2}` : `${v2}|${v1}`,
-        v2 < v0 ? `${v2}|${v0}` : `${v0}|${v2}`,
-      ];
-
-      for (const key of edges) {
-        const list = edgeMap.get(key);
-        if (list) list.push(f);
-        else edgeMap.set(key, [f]);
-      }
-    }
-
-    const smoothAdj = Array.from({ length: faceCount }, () => []);
-    const concaveAdj = Array.from({ length: faceCount }, () => []);
-    const concaveNdot = Array.from({ length: faceCount }, () => []);
-    const concaveEdgeCount = new Uint8Array(faceCount);
-
-    for (const faces of edgeMap.values()) {
-      if (faces.length !== 2) continue;
-      const [a, b] = faces;
-
-      const l1 =
-        Math.sqrt(
-          faceNx[a] * faceNx[a] + faceNy[a] * faceNy[a] + faceNz[a] * faceNz[a]
-        ) || 1;
-      const l2 =
-        Math.sqrt(
-          faceNx[b] * faceNx[b] + faceNy[b] * faceNy[b] + faceNz[b] * faceNz[b]
-        ) || 1;
-      const nDot =
-        (faceNx[a] / l1) * (faceNx[b] / l2) +
-        (faceNy[a] / l1) * (faceNy[b] / l2) +
-        (faceNz[a] / l1) * (faceNz[b] / l2);
-
-      if (nDot > 0.999) {
-        smoothAdj[a].push(b);
-        smoothAdj[b].push(a);
-      }
-
-      if (nDot < -0.5) {
-        concaveAdj[a].push(b);
-        concaveAdj[b].push(a);
-        concaveNdot[a].push(nDot);
-        concaveNdot[b].push(nDot);
-        concaveEdgeCount[a]++;
-        concaveEdgeCount[b]++;
-      }
-    }
-
-    for (let f = 0; f < faceCount; f++) {
-      faceIsInner[f] = faceDot[f] < 0 ? 1 : 0;
-    }
-
-    let promotionCount = 0;
-    const bfsQueue = [];
-    for (let f = 0; f < faceCount; f++) {
-      if (faceIsInner[f]) bfsQueue.push(f);
-    }
-
-    while (bfsQueue.length) {
-      const src = bfsQueue.pop();
-      for (let i = 0; i < concaveAdj[src].length; i++) {
-        const tgt = concaveAdj[src][i];
-        if (faceIsInner[tgt] || faceDot[tgt] >= 0.85) continue;
-        faceIsInner[tgt] = 1;
-        promotionCount++;
-        bfsQueue.push(tgt);
-      }
-    }
-
-    if (faceCount && promotionCount / faceCount > 0.15) {
-      console.warn(
-        `[Preview] Concave-edge BFS promoted ${((promotionCount / faceCount) * 100).toFixed(1)}% — reverting to baseline`
-      );
-      promotionCount = 0;
-      for (let f = 0; f < faceCount; f++) {
-        faceIsInner[f] = faceDot[f] < 0 ? 1 : 0;
-      }
-    }
-
-    const componentId = new Int32Array(faceCount).fill(-1);
-    let numComponents = 0;
-    for (let f = 0; f < faceCount; f++) {
-      if (componentId[f] >= 0) continue;
-      const cid = numComponents++;
-      const queue = [f];
-      componentId[f] = cid;
-      while (queue.length) {
-        const cur = queue.pop();
-        for (const neighbor of smoothAdj[cur]) {
-          if (componentId[neighbor] >= 0) continue;
-          componentId[neighbor] = cid;
-          queue.push(neighbor);
+  /**
+   * The extras a mesh gets after it loads - the cavity tint's per-vertex flag
+   * and the edge overlay's segments - where the mesh's size says they should
+   * be computed (D-143, DP-52 P4).
+   *
+   * A small mesh is classified here at once, as before. A big one is handed
+   * to a worker with copies of its positions and normals; the mesh is shown
+   * meanwhile with no tint and no edges, and both arrive together, after
+   * which the post-load listeners run again so the edges overlay is built
+   * from the segments the worker made (display-options-controller reads them
+   * from `geometry.userData.edgeSegments`).
+   *
+   * @param {BufferGeometry} geometry - centered, with computed vertex normals
+   * @param {{wantInner?: boolean}} [options]
+   */
+  _scheduleMeshExtras(geometry, { wantInner = true } = {}) {
+    const posAttr = geometry.getAttribute('position');
+    if (!posAttr) return;
+    const triangles = Math.floor(posAttr.count / 3);
+    const token = ++this._extrasToken;
+    if (
+      triangles <= SYNC_MESH_EXTRAS_MAX_TRIANGLES ||
+      typeof Worker === 'undefined'
+    ) {
+      if (wantInner) {
+        try {
+          this._classifyInnerFaces(geometry);
+        } catch (e) {
+          console.warn(
+            '[Preview] Face classification failed, using default coloring:',
+            e
+          );
         }
       }
+      return;
     }
-
-    const compInnerCount = new Uint32Array(numComponents);
-    const compFaceCount = new Uint32Array(numComponents);
-    for (let f = 0; f < faceCount; f++) {
-      compFaceCount[componentId[f]]++;
-      if (faceIsInner[f]) compInnerCount[componentId[f]]++;
+    geometry.userData.extrasPending = true;
+    const normAttr = geometry.getAttribute('normal');
+    const positions = posAttr.array.slice();
+    const normals = wantInner && normAttr ? normAttr.array.slice() : null;
+    const request = {
+      id: token,
+      positions,
+      normals,
+      wantInner: Boolean(normals),
+      wantEdges: true,
+      thresholdDeg: 15,
+      edgeBudget: 0,
+    };
+    const worker = this._ensureExtrasWorker();
+    if (!worker) {
+      delete geometry.userData.extrasPending;
+      if (wantInner) this._classifyInnerFaces(geometry);
+      return;
     }
+    const transfers = [positions.buffer];
+    if (normals) transfers.push(normals.buffer);
+    worker.postMessage(request, transfers);
+  }
 
-    for (let f = 0; f < faceCount; f++) {
-      const cid = componentId[f];
-      const majorityInner = compInnerCount[cid] * 2 > compFaceCount[cid];
-      faceIsInner[f] = majorityInner ? 1 : 0;
+  _ensureExtrasWorker() {
+    if (this._extrasWorker) return this._extrasWorker;
+    try {
+      const worker = new Worker(
+        new URL('./preview-geometry-worker.js', import.meta.url),
+        { type: 'module' }
+      );
+      worker.onmessage = (event) =>
+        this._onGeometryWorkerMessage(event.data || {});
+      worker.onerror = (event) => {
+        console.warn('[Preview] The geometry worker stopped:', event?.message);
+        this._extrasWorker = null;
+        this._failPendingOFF('The geometry worker stopped');
+      };
+      this._extrasWorker = worker;
+    } catch (e) {
+      console.warn('[Preview] No geometry worker; extras run inline:', e);
+      this._extrasWorker = null;
     }
+    return this._extrasWorker;
+  }
 
-    const isInner = new Float32Array(vertCount);
-    for (let f = 0; f < faceCount; f++) {
-      const val = faceIsInner[f];
-      isInner[f * 3] = val;
-      isInner[f * 3 + 1] = val;
-      isInner[f * 3 + 2] = val;
+  /**
+   * Post an OFF text to the geometry worker and wait for its answer: the
+   * parsed, centered soup with its normals, tint and edges. Resolves
+   * `{ stale: true }` when a newer load took the token meanwhile, so the
+   * caller leaves the scene alone; rejects when the worker could not parse
+   * it or stopped.
+   *
+   * @param {string} text
+   * @returns {Promise<object>}
+   */
+  _prepareOFFInWorker(text) {
+    const worker = this._ensureExtrasWorker();
+    const id = ++this._extrasToken;
+    return new Promise((resolve, reject) => {
+      this._pendingOFF.set(id, { resolve, reject });
+      worker.postMessage({
+        id,
+        type: 'off',
+        text,
+        wantEdges: true,
+        thresholdDeg: 15,
+        edgeBudget: 0,
+      });
+    });
+  }
+
+  /** Every answer from the geometry worker, routed by what was asked. */
+  _onGeometryWorkerMessage(message) {
+    if (message.type === 'off-done' || message.type === 'off-error') {
+      const pending = this._pendingOFF.get(message.id);
+      if (!pending) return;
+      this._pendingOFF.delete(message.id);
+      if (message.id !== this._extrasToken) {
+        pending.resolve({ stale: true });
+      } else if (message.type === 'off-error') {
+        pending.reject(new Error(message.message));
+      } else {
+        pending.resolve(message);
+      }
+      return;
     }
+    this._onMeshExtras(message);
+  }
 
-    geometry.setAttribute('aIsInner', new Float32BufferAttribute(isInner, 1));
+  /** The worker stopped: nothing waiting on it may wait forever. */
+  _failPendingOFF(reason) {
+    for (const pending of this._pendingOFF.values()) {
+      pending.reject(new Error(reason));
+    }
+    this._pendingOFF.clear();
+  }
+
+  /** The worker's answer for one mesh, applied only if that mesh is still up. */
+  _onMeshExtras(message) {
+    if (message.id !== this._extrasToken) return;
+    const geometry = this.mesh?.isGroup
+      ? this.mesh.children[0]?.geometry
+      : this.mesh?.geometry;
+    if (!geometry || !geometry.userData.extrasPending) return;
+    delete geometry.userData.extrasPending;
+    if (message.type === 'error') {
+      console.warn('[Preview] Mesh extras failed:', message.message);
+      this._firePostLoadListeners();
+      return;
+    }
+    if (message.isInner) {
+      geometry.setAttribute(
+        'aIsInner',
+        new Float32BufferAttribute(new Float32Array(message.isInner), 1)
+      );
+    }
+    if (message.edges) {
+      geometry.userData.edgeSegments = new Float32Array(message.edges);
+      geometry.userData.edgeTotal = message.edgeTotal;
+    }
+    this._firePostLoadListeners();
   }
 
   /**
@@ -1656,14 +1650,8 @@ export class PreviewManager {
         geometry.computeVertexNormals();
         geometry.center();
 
-        try {
-          this._classifyInnerFaces(geometry);
-        } catch (e) {
-          console.warn(
-            '[Preview] Face classification failed, using default coloring:',
-            e
-          );
-        }
+        // D-143: inline for a small mesh, in a worker for a big one.
+        this._scheduleMeshExtras(geometry);
 
         // Apply auto-bed if enabled (place object on Z=0 build plate)
         if (this.autoBedEnabled) {
@@ -1754,303 +1742,222 @@ export class PreviewManager {
    * @param {number} options.debugHighlight.opacity Highlight opacity (0–1)
    * @returns {Promise<{parseMs: number, hasColors: boolean}>}
    */
-  loadOFF(offData, options = {}) {
+  async loadOFF(offData, options = {}) {
     this.hide2DPreview();
     const { preserveCamera = false, debugHighlight = null } = options;
-    return new Promise((resolve, reject) => {
-      try {
-        const parseStartTime = performance.now();
+    const parseStartTime = performance.now();
+    try {
+      const text =
+        typeof offData === 'string'
+          ? offData
+          : new TextDecoder().decode(offData);
 
-        const text =
-          typeof offData === 'string'
-            ? offData
-            : new TextDecoder().decode(offData);
-
-        const lines = text
-          .split('\n')
-          .map((l) => l.trim())
-          .filter((l) => l.length > 0 && !l.startsWith('#'));
-
-        if (lines.length === 0) {
-          throw new Error('OFF data is empty');
+      // D-143: a big OFF is parsed, centered and given its normals, tint and
+      // edges in the worker, and comes back as arrays the page only has to
+      // wrap; a small one is done inline, as before. The header alone decides,
+      // read without splitting the text.
+      const faces = offFaceCount(text);
+      let parsed = null;
+      if (
+        faces > SYNC_MESH_EXTRAS_MAX_TRIANGLES &&
+        typeof Worker !== 'undefined' &&
+        this._ensureExtrasWorker()
+      ) {
+        try {
+          parsed = await this._prepareOFFInWorker(text);
+        } catch (workerError) {
+          console.warn(
+            '[Preview] The geometry worker could not take the OFF; parsing inline:',
+            workerError
+          );
+          parsed = null;
         }
-
-        const firstLine = lines[0].toUpperCase();
-        const isCOFF = firstLine.startsWith('COFF');
-        const isOFF = firstLine.startsWith('OFF');
-        if (!isOFF && !isCOFF) {
-          throw new Error(`Not a valid OFF file (header: "${lines[0]}")`);
-        }
-
-        // OFF/COFF format allows counts on the header line ("OFF 100 200 0")
-        // or on a separate second line. Detect which format we have.
-        const headerParts = lines[0].split(/\s+/);
-        let countLineIdx;
-        if (headerParts.length >= 3 && !isNaN(Number(headerParts[1]))) {
-          countLineIdx = 0;
-        } else {
-          countLineIdx = 1;
-        }
-        const countParts =
-          countLineIdx === 0
-            ? headerParts.slice(1)
-            : lines[countLineIdx].split(/\s+/);
-        const numVerts = Number(countParts[0]);
-        const numFaces = Number(countParts[1]);
-        const dataStartLine = countLineIdx + 1;
-        console.log(
-          `[Preview] Loading ${isCOFF ? 'COFF' : 'OFF'} — ${numVerts} verts, ${numFaces} faces`
-        );
-
-        // Parse vertices
-        const vertices = [];
-        for (let i = 0; i < numVerts; i++) {
-          const [x, y, z] = lines[dataStartLine + i].split(/\s+/).map(Number);
-          vertices.push(x, y, z);
-        }
-
-        // Parse faces + detect colors.
-        // OpenSCAD export_off.cc writes colors inline after face vertex indices
-        // with an "OFF" header (not "COFF"). Colors are integer 0-255 values.
-        // COFF files from other tools use float 0-1 values. We auto-detect.
-        const positions = [];
-        const colors = [];
-        const rawColors = [];
-        let hasColors = false;
-        let colorScale = 1;
-        let rawColorMax = 0;
-
-        const faceStart = dataStartLine + numVerts;
-        for (let i = 0; i < numFaces; i++) {
-          const parts = lines[faceStart + i].split(/\s+/).map(Number);
-          const n = parts[0]; // vertex count for this face
-          if (n < 3) continue;
-
-          // RGB only — per-face alpha (parts[n+4]) intentionally not read;
-          // transparency is controlled via debugHighlight overlay material.
-          const hasInlineColor = parts.length >= n + 4;
-
-          // Fan-triangulate the face
-          const v0 = parts[1];
-          for (let t = 1; t < n - 1; t++) {
-            const va = parts[1 + t];
-            const vb = parts[1 + t + 1];
-            positions.push(
-              vertices[v0 * 3],
-              vertices[v0 * 3 + 1],
-              vertices[v0 * 3 + 2],
-              vertices[va * 3],
-              vertices[va * 3 + 1],
-              vertices[va * 3 + 2],
-              vertices[vb * 3],
-              vertices[vb * 3 + 1],
-              vertices[vb * 3 + 2]
-            );
-            if (hasInlineColor) {
-              const rawR = parts[n + 1];
-              const rawG = parts[n + 2];
-              const rawB = parts[n + 3];
-              rawColorMax = Math.max(rawColorMax, rawR, rawG, rawB);
-              rawColors.push(
-                rawR,
-                rawG,
-                rawB,
-                rawR,
-                rawG,
-                rawB,
-                rawR,
-                rawG,
-                rawB
-              );
-              hasColors = true;
-            }
-          }
-        }
-        if (hasColors && rawColors.length > 0) {
-          // Uniform inline colors carry no visual information (e.g. a
-          // colorless model rendered with --enable=render-colors, or a
-          // model wrapped in a single color() call). Drop them so the
-          // cavity classifier below can tint inner faces instead — this
-          // replaces the old strip-and-re-render fallback, which mutated
-          // the user's source and cost a second render.
-          const uniqueFaceColors = new Set();
-          for (let i = 0; i < rawColors.length; i += 9) {
-            uniqueFaceColors.add(
-              `${rawColors[i]},${rawColors[i + 1]},${rawColors[i + 2]}`
-            );
-            if (uniqueFaceColors.size > 1) break;
-          }
-          if (uniqueFaceColors.size <= 1) {
-            console.log(
-              '[Preview] OFF colors are uniform — using viewer-side cavity tinting'
-            );
-            hasColors = false;
-            rawColors.length = 0;
-          }
-        }
-        if (hasColors && rawColors.length > 0) {
-          // Use global max across all inline colors to avoid first-face-black misdetection.
-          colorScale = rawColorMax > 1 ? 1 / 255 : 1;
-          for (let i = 0; i < rawColors.length; i += 3) {
-            const r = rawColors[i] * colorScale;
-            const g = rawColors[i + 1] * colorScale;
-            const b = rawColors[i + 2] * colorScale;
-            colors.push(r, g, b);
-          }
-        }
-
-        if (positions.length === 0) {
-          console.warn('[Preview] OFF has no triangulated geometry');
-          this.clear();
-          resolve({
+        if (parsed && parsed.stale) {
+          return {
             parseMs: Math.round(performance.now() - parseStartTime),
             hasColors: false,
-          });
-          return;
+            stale: true,
+          };
         }
+      }
+      if (!parsed) {
+        parsed = parseOFF(text);
+      }
+      const { positions, colors, hasColors, numVerts, numFaces } = parsed;
+      console.log(
+        `[Preview] Loading ${parsed.isCOFF ? 'COFF' : 'OFF'} — ${numVerts} verts, ${numFaces} faces`
+      );
 
-        const geometry = new BufferGeometry();
+      if (positions.length === 0) {
+        console.warn('[Preview] OFF has no triangulated geometry');
+        this.clear();
+        return {
+          parseMs: Math.round(performance.now() - parseStartTime),
+          hasColors: false,
+        };
+      }
+
+      const geometry = new BufferGeometry();
+      geometry.setAttribute(
+        'position',
+        new Float32BufferAttribute(positions, 3)
+      );
+      if (hasColors && colors && colors.length === positions.length) {
+        geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+      }
+      if (parsed.normals) {
+        // The worker centered the soup, computed the flat normals three.js
+        // would have, and classified and edged it; the token it answered
+        // under is the current one, so an older extras answer is dropped.
         geometry.setAttribute(
-          'position',
-          new Float32BufferAttribute(positions, 3)
+          'normal',
+          new Float32BufferAttribute(parsed.normals, 3)
         );
-        if (hasColors && colors.length === positions.length) {
-          geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+        if (parsed.bounds) {
+          geometry.boundingBox = new Box3(
+            new Vector3(...parsed.bounds.min),
+            new Vector3(...parsed.bounds.max)
+          );
+        } else {
+          geometry.computeBoundingBox();
         }
+        if (parsed.isInner) {
+          geometry.setAttribute(
+            'aIsInner',
+            new Float32BufferAttribute(parsed.isInner, 1)
+          );
+        }
+        if (parsed.edges) {
+          geometry.userData.edgeSegments = parsed.edges;
+          geometry.userData.edgeTotal = parsed.edgeTotal;
+        }
+      } else {
         geometry.computeVertexNormals();
         geometry.center();
-
-        if (!hasColors) {
-          try {
-            this._classifyInnerFaces(geometry);
-          } catch (e) {
-            console.warn(
-              '[Preview] Face classification failed, using default coloring:',
-              e
-            );
-          }
-        }
-
-        if (this.autoBedEnabled) {
-          this.applyAutoBed(geometry);
-        }
-
-        if (this.mesh) {
-          this.scene.remove(this.mesh);
-          this._disposeMeshResources();
-          this.mesh = null;
-        }
-
-        if (debugHighlight) {
-          // Dual-render: normal mesh + semi-transparent highlight overlay.
-          // Desktop OpenSCAD F5 renders #-marked geometry at full color with
-          // a pink {255,81,81,128} overlay on top.
-          const normalMaterial = hasColors
-            ? new MeshPhongMaterial({
-                vertexColors: true,
-                specular: 0x000000,
-                shininess: DESKTOP_SHININESS,
-                flatShading: false,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1,
-              })
-            : new MeshPhongMaterial({
-                color: parseInt(this._resolveModelColor().slice(1), 16),
-                specular: 0x000000,
-                shininess: DESKTOP_SHININESS,
-                flatShading: false,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1,
-              });
-          this._applyBackfaceColoring(
-            normalMaterial,
-            this._resolveModelBackColor()
-          );
-
-          const highlightGeometry = geometry.clone();
-          const highlightMaterial = new MeshPhongMaterial({
-            color: parseInt(debugHighlight.hex.replace('#', ''), 16),
-            specular: 0x000000,
-            shininess: DESKTOP_SHININESS,
-            flatShading: false,
-            transparent: true,
-            opacity: debugHighlight.opacity,
-            depthWrite: false,
-          });
-
-          const normalMesh = new Mesh(geometry, normalMaterial);
-          const highlightMesh = new Mesh(highlightGeometry, highlightMaterial);
-          highlightMesh.userData.isHighlightOverlay = true;
-          highlightMesh.renderOrder = 1;
-
-          this.mesh = new Group();
-          this.mesh.add(normalMesh);
-          this.mesh.add(highlightMesh);
-        } else {
-          const useVertexColors =
-            hasColors && !(this.colorOverrideEnabled && this.colorOverride);
-          const material = useVertexColors
-            ? new MeshPhongMaterial({
-                vertexColors: true,
-                specular: 0x000000,
-                shininess: DESKTOP_SHININESS,
-                flatShading: false,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1,
-              })
-            : new MeshPhongMaterial({
-                color: parseInt(this._resolveModelColor().slice(1), 16),
-                specular: 0x000000,
-                shininess: DESKTOP_SHININESS,
-                flatShading: false,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1,
-              });
-          this._applyBackfaceColoring(material, this._resolveModelBackColor());
-          this.mesh = new Mesh(geometry, material);
-        }
-        this.scene.add(this.mesh);
-
-        const vertexCount = positions.length / 3;
-        const triangleCount = vertexCount / 3;
-        this.lastVertexCount = vertexCount;
-        this.lastTriangleCount = triangleCount;
-
-        if (!hasColors && this.colorOverrideEnabled && this.colorOverride) {
-          this.applyColorToMesh();
-        }
-
-        this.rotationCenteringEnabled = false;
-        if (!preserveCamera) {
-          this.fitCameraToModel();
-        }
-        if (this._postLoadHook) {
-          this._postLoadHook();
-        }
-        this._firePostLoadListeners();
-        // DP-5: "Top of the model" is a promise about THIS model, so it is
-        // re-resolved whenever one arrives. Any other preset is a constant and
-        // this returns immediately.
-        this.refreshOverlayZ();
-        if (this.measurementsEnabled) {
-          this.showMeasurements();
-        }
-        this.updateModelSummary();
-
-        const parseMs = Math.round(performance.now() - parseStartTime);
-        console.log(
-          `[Preview] OFF loaded in ${parseMs}ms — ${triangleCount} triangles, hasColors=${hasColors}`
-        );
-        resolve({ parseMs, hasColors });
-      } catch (error) {
-        console.error('[Preview] Failed to load OFF:', error);
-        reject(error);
+        // Inline for a small mesh, in a worker for a big one; a mesh with its
+        // own face colors gets no tint, only the edges.
+        this._scheduleMeshExtras(geometry, { wantInner: !hasColors });
       }
-    });
+
+      if (this.autoBedEnabled) {
+        this.applyAutoBed(geometry);
+      }
+
+      if (this.mesh) {
+        this.scene.remove(this.mesh);
+        this._disposeMeshResources();
+        this.mesh = null;
+      }
+
+      if (debugHighlight) {
+        // Dual-render: normal mesh + semi-transparent highlight overlay.
+        // Desktop OpenSCAD F5 renders #-marked geometry at full color with
+        // a pink {255,81,81,128} overlay on top.
+        const normalMaterial = hasColors
+          ? new MeshPhongMaterial({
+              vertexColors: true,
+              specular: 0x000000,
+              shininess: DESKTOP_SHININESS,
+              flatShading: false,
+              polygonOffset: true,
+              polygonOffsetFactor: 1,
+              polygonOffsetUnits: 1,
+            })
+          : new MeshPhongMaterial({
+              color: parseInt(this._resolveModelColor().slice(1), 16),
+              specular: 0x000000,
+              shininess: DESKTOP_SHININESS,
+              flatShading: false,
+              polygonOffset: true,
+              polygonOffsetFactor: 1,
+              polygonOffsetUnits: 1,
+            });
+        this._applyBackfaceColoring(
+          normalMaterial,
+          this._resolveModelBackColor()
+        );
+
+        const highlightGeometry = geometry.clone();
+        const highlightMaterial = new MeshPhongMaterial({
+          color: parseInt(debugHighlight.hex.replace('#', ''), 16),
+          specular: 0x000000,
+          shininess: DESKTOP_SHININESS,
+          flatShading: false,
+          transparent: true,
+          opacity: debugHighlight.opacity,
+          depthWrite: false,
+        });
+
+        const normalMesh = new Mesh(geometry, normalMaterial);
+        const highlightMesh = new Mesh(highlightGeometry, highlightMaterial);
+        highlightMesh.userData.isHighlightOverlay = true;
+        highlightMesh.renderOrder = 1;
+
+        this.mesh = new Group();
+        this.mesh.add(normalMesh);
+        this.mesh.add(highlightMesh);
+      } else {
+        const useVertexColors =
+          hasColors && !(this.colorOverrideEnabled && this.colorOverride);
+        const material = useVertexColors
+          ? new MeshPhongMaterial({
+              vertexColors: true,
+              specular: 0x000000,
+              shininess: DESKTOP_SHININESS,
+              flatShading: false,
+              polygonOffset: true,
+              polygonOffsetFactor: 1,
+              polygonOffsetUnits: 1,
+            })
+          : new MeshPhongMaterial({
+              color: parseInt(this._resolveModelColor().slice(1), 16),
+              specular: 0x000000,
+              shininess: DESKTOP_SHININESS,
+              flatShading: false,
+              polygonOffset: true,
+              polygonOffsetFactor: 1,
+              polygonOffsetUnits: 1,
+            });
+        this._applyBackfaceColoring(material, this._resolveModelBackColor());
+        this.mesh = new Mesh(geometry, material);
+      }
+      this.scene.add(this.mesh);
+
+      const vertexCount = positions.length / 3;
+      const triangleCount = vertexCount / 3;
+      this.lastVertexCount = vertexCount;
+      this.lastTriangleCount = triangleCount;
+
+      if (!hasColors && this.colorOverrideEnabled && this.colorOverride) {
+        this.applyColorToMesh();
+      }
+
+      this.rotationCenteringEnabled = false;
+      if (!preserveCamera) {
+        this.fitCameraToModel();
+      }
+      if (this._postLoadHook) {
+        this._postLoadHook();
+      }
+      this._firePostLoadListeners();
+      // DP-5: "Top of the model" is a promise about THIS model, so it is
+      // re-resolved whenever one arrives. Any other preset is a constant and
+      // this returns immediately.
+      this.refreshOverlayZ();
+      if (this.measurementsEnabled) {
+        this.showMeasurements();
+      }
+      this.updateModelSummary();
+
+      const parseMs = Math.round(performance.now() - parseStartTime);
+      console.log(
+        `[Preview] OFF loaded in ${parseMs}ms — ${triangleCount} triangles, hasColors=${hasColors}`
+      );
+      return { parseMs, hasColors };
+    } catch (error) {
+      console.error('[Preview] Failed to load OFF:', error);
+      throw error;
+    }
   }
 
   /**

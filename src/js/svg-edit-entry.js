@@ -214,13 +214,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    */
   const runTrace = async (imageData, ink, { startedBy = 'person' } = {}) => {
     const { job, dialog } = ensureConversion();
+    const show = () => {
+      if (!dialog.isOpen()) dialog.open(currentFileName);
+    };
     let graceTimer = null;
-    if (startedBy === 'person') dialog.open(currentFileName);
+    if (startedBy === 'person') show();
     else {
       graceTimer = setTimeout(() => {
-        if (job.isRunning()) dialog.open(currentFileName);
+        if (job.isRunning()) show();
       }, COST_BANDS.quickMs);
     }
+    // D-151. A run superseded by a newer one (a slider moved while it ran)
+    // leaves the dialog to that newer run.
+    let superseded = false;
     try {
       return await job.run({
         imageData,
@@ -228,9 +234,13 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         prepare: (traced) => traced,
         update: (traced) => traced,
       });
+    } catch (error) {
+      superseded =
+        error instanceof TraceCancelled && error.reason === 'superseded';
+      throw error;
     } finally {
       clearTimeout(graceTimer);
-      dialog.close();
+      if (!superseded) dialog.close();
     }
   };
   let container = null;

@@ -680,6 +680,31 @@ export class DisplayOptionsController {
    * @private
    */
   _buildEdgeGeometry(T, sourceGeometry) {
+    // D-143 (DP-52 P4): a big mesh's segments are computed in the preview's
+    // worker and arrive on `userData`; until they do, the overlay is empty
+    // rather than the page held for seconds. A small mesh takes three.js'
+    // own EdgesGeometry here, as it always did.
+    const ready = sourceGeometry?.userData?.edgeSegments;
+    if (ready) {
+      const geo = new T.BufferGeometry();
+      const total = sourceGeometry.userData.edgeTotal ?? ready.length / 6;
+      const budget = this._edgeBudget;
+      const canClip = T.Float32BufferAttribute && budget > 0;
+      let segments = ready;
+      let shown = Math.floor(ready.length / 6);
+      if (canClip && shown > budget) {
+        const clipped = this._clipSegments(ready, budget);
+        segments = clipped.segments;
+        shown = clipped.shown;
+      }
+      geo.setAttribute('position', new T.Float32BufferAttribute(segments, 3));
+      this._edgeStats = { total, shown };
+      return geo;
+    }
+    if (sourceGeometry?.userData?.extrasPending) {
+      this._edgeStats = { total: 0, shown: 0 };
+      return new T.BufferGeometry();
+    }
     const edgesGeo = new T.EdgesGeometry(sourceGeometry, 15);
 
     const position = edgesGeo.attributes?.position;
@@ -728,6 +753,39 @@ export class DisplayOptionsController {
 
     this._edgeStats = { total, shown };
     return clipped;
+  }
+
+  /**
+   * The longest `budget` segments of a set (the same rule the inline path
+   * applies to three.js' segments).
+   * @param {Float32Array} src - 6 numbers per segment
+   * @param {number} budget
+   * @returns {{segments: Float32Array, shown: number}}
+   */
+  _clipSegments(src, budget) {
+    const total = Math.floor(src.length / 6);
+    const lengthsSq = new Float32Array(total);
+    for (let i = 0; i < total; i++) {
+      const a = i * 6;
+      const dx = src[a + 3] - src[a];
+      const dy = src[a + 4] - src[a + 1];
+      const dz = src[a + 5] - src[a + 2];
+      lengthsSq[i] = dx * dx + dy * dy + dz * dz;
+    }
+    const cutoff = lengthsSq.slice().sort()[total - budget];
+    const kept = new Float32Array(budget * 6);
+    let shown = 0;
+    for (let i = 0; i < total && shown < budget; i++) {
+      if (lengthsSq[i] < cutoff) continue;
+      const a = i * 6;
+      const o = shown * 6;
+      for (let k = 0; k < 6; k++) kept[o + k] = src[a + k];
+      shown++;
+    }
+    return {
+      segments: shown === budget ? kept : kept.subarray(0, shown * 6),
+      shown,
+    };
   }
 
   /** Detach and dispose the edges overlay (parented to the mesh). */

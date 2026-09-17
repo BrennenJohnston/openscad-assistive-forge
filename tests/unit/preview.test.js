@@ -9,7 +9,13 @@ import {
   Mesh,
   Vector3,
 } from 'three'
-import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS, CORNFIELD_BACK_COLOR } from '../../src/js/preview.js'
+import {
+  PreviewManager,
+  isThreeJsLoaded,
+  DESKTOP_SHININESS,
+  CORNFIELD_BACK_COLOR,
+  SYNC_MESH_EXTRAS_MAX_TRIANGLES,
+} from '../../src/js/preview.js'
 
 describe('PreviewManager', () => {
   let container
@@ -3611,4 +3617,154 @@ describe('loadOFF() heuristic skip — CSG color preprocessing', () => {
     })
   })
 
+})
+
+// ── DP-52 P4 / D-143: a big mesh's extras are computed off the main thread ──
+//
+// MEASURED on the built app: the cavity-tint classification and three.js'
+// edge geometry ran in ONE main-thread task after a mesh loaded - 6.4 s at 4x
+// CPU for the logo's Line art design (211,700 triangles). Above the threshold
+// both go to a worker; below it the classifier runs inline as it always did.
+
+describe('mesh extras off the main thread (DP-52 P4, D-143)', () => {
+  let container
+  let manager
+  let realWorker
+
+  class FakeWorker {
+    constructor() {
+      this.posted = []
+      this.transfers = []
+      this.onmessage = null
+      this.onerror = null
+      FakeWorker.instances.push(this)
+    }
+    postMessage(message, transfer) {
+      this.posted.push(message)
+      this.transfers.push(transfer)
+    }
+    terminate() {}
+    reply(data) {
+      if (this.onmessage) this.onmessage({ data })
+    }
+  }
+  FakeWorker.instances = []
+
+  /** A flat fan of `triangles` triangles: the size is the point, not the shape. */
+  function geometryOf(triangles) {
+    const positions = new Float32Array(triangles * 9)
+    for (let t = 0; t < triangles; t++) {
+      const b = t * 9
+      positions[b] = t
+      positions[b + 1] = 0
+      positions[b + 2] = 0
+      positions[b + 3] = t + 1
+      positions[b + 4] = 0
+      positions[b + 5] = 0
+      positions[b + 6] = t
+      positions[b + 7] = 1
+      positions[b + 8] = 0
+    }
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    geometry.computeVertexNormals()
+    return geometry
+  }
+
+  beforeEach(async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    manager = new PreviewManager(container)
+    await manager.init()
+    realWorker = globalThis.Worker
+    FakeWorker.instances = []
+    globalThis.Worker = FakeWorker
+  })
+
+  afterEach(() => {
+    globalThis.Worker = realWorker
+    document.body.removeChild(container)
+  })
+
+  it('names the threshold', () => {
+    expect(SYNC_MESH_EXTRAS_MAX_TRIANGLES).toBe(10_000)
+  })
+
+  it('a small mesh is classified inline, at once, and no worker is made', () => {
+    const geometry = geometryOf(12)
+    manager._scheduleMeshExtras(geometry)
+    expect(geometry.getAttribute('aIsInner')).toBeDefined()
+    expect(geometry.userData.extrasPending).toBeUndefined()
+    expect(FakeWorker.instances).toHaveLength(0)
+  })
+
+  it('★ a big mesh goes to the worker: no tint yet, the answer applied when it comes, the listeners run again', () => {
+    const geometry = geometryOf(SYNC_MESH_EXTRAS_MAX_TRIANGLES + 1)
+    manager.mesh = { geometry }
+    const listener = vi.fn()
+    manager.addPostLoadListener(listener)
+
+    manager._scheduleMeshExtras(geometry)
+
+    expect(geometry.getAttribute('aIsInner')).toBeUndefined()
+    expect(geometry.userData.extrasPending).toBe(true)
+    expect(FakeWorker.instances).toHaveLength(1)
+    const worker = FakeWorker.instances[0]
+    const request = worker.posted[0]
+    expect(request.wantInner).toBe(true)
+    expect(request.wantEdges).toBe(true)
+    expect(request.positions.length).toBe(geometry.getAttribute('position').array.length)
+    // Copies travel, never the geometry's own buffers.
+    expect(request.positions).not.toBe(geometry.getAttribute('position').array)
+    expect(worker.transfers[0]).toContain(request.positions.buffer)
+
+    const isInner = new Float32Array(request.positions.length / 3)
+    worker.reply({
+      id: request.id,
+      type: 'done',
+      isInner,
+      edges: new Float32Array([0, 0, 0, 1, 0, 0]),
+      edgeTotal: 1,
+      edgeShown: 1,
+    })
+    expect(geometry.getAttribute('aIsInner')).toBeDefined()
+    expect(geometry.getAttribute('aIsInner').count).toBe(isInner.length)
+    expect(geometry.userData.extrasPending).toBeUndefined()
+    expect(Array.from(geometry.userData.edgeSegments)).toEqual([0, 0, 0, 1, 0, 0])
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('an answer for a mesh that has been replaced is dropped', () => {
+    const first = geometryOf(SYNC_MESH_EXTRAS_MAX_TRIANGLES + 1)
+    manager.mesh = { geometry: first }
+    manager._scheduleMeshExtras(first)
+    const worker = FakeWorker.instances[0]
+    const stale = worker.posted[0]
+
+    const second = geometryOf(SYNC_MESH_EXTRAS_MAX_TRIANGLES + 2)
+    manager.mesh = { geometry: second }
+    manager._scheduleMeshExtras(second)
+
+    worker.reply({ id: stale.id, type: 'done', isInner: new Float32Array(3), edges: new Float32Array(0), edgeTotal: 0, edgeShown: 0 })
+    expect(second.getAttribute('aIsInner')).toBeUndefined()
+    expect(second.userData.extrasPending).toBe(true)
+    expect(first.getAttribute('aIsInner')).toBeUndefined()
+  })
+
+  it('a mesh with its own colors asks for edges only', () => {
+    const geometry = geometryOf(SYNC_MESH_EXTRAS_MAX_TRIANGLES + 1)
+    manager.mesh = { geometry }
+    manager._scheduleMeshExtras(geometry, { wantInner: false })
+    const request = FakeWorker.instances[0].posted[0]
+    expect(request.wantInner).toBe(false)
+    expect(request.normals).toBeNull()
+  })
+
+  it('without a Worker, a big mesh is classified inline as before', () => {
+    globalThis.Worker = undefined
+    const geometry = geometryOf(SYNC_MESH_EXTRAS_MAX_TRIANGLES + 1)
+    manager._scheduleMeshExtras(geometry)
+    expect(geometry.getAttribute('aIsInner')).toBeDefined()
+    expect(geometry.userData.extrasPending).toBeUndefined()
+  })
 })
