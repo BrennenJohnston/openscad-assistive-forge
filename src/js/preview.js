@@ -1650,13 +1650,15 @@ export class PreviewManager {
         geometry.computeVertexNormals();
         geometry.center();
 
-        // D-143: inline for a small mesh, in a worker for a big one.
-        this._scheduleMeshExtras(geometry);
-
         // Apply auto-bed if enabled (place object on Z=0 build plate)
         if (this.autoBedEnabled) {
           this.applyAutoBed(geometry);
         }
+
+        // D-143: inline for a small mesh, in a worker for a big one. D-152:
+        // after the bed, so the positions the worker copies are the ones the
+        // mesh is drawn with and its edges land where the model is.
+        this._scheduleMeshExtras(geometry);
 
         // Create material using render-state-aware color resolution.
         // polygonOffset pushes the shaded surface fractionally back in
@@ -1834,13 +1836,19 @@ export class PreviewManager {
       } else {
         geometry.computeVertexNormals();
         geometry.center();
+      }
+
+      // D-152: the bed before the extras are scheduled, so a copy the worker
+      // takes is bedded; the worker branch's segments above were made on the
+      // centered soup and applyAutoBed moves them with the positions.
+      if (this.autoBedEnabled) {
+        this.applyAutoBed(geometry);
+      }
+
+      if (!parsed.normals) {
         // Inline for a small mesh, in a worker for a big one; a mesh with its
         // own face colors gets no tint, only the edges.
         this._scheduleMeshExtras(geometry, { wantInner: !hasColors });
-      }
-
-      if (this.autoBedEnabled) {
-        this.applyAutoBed(geometry);
       }
 
       if (this.mesh) {
@@ -3705,6 +3713,17 @@ export class PreviewManager {
 
     // Store the offset for rotation centering feature
     this.autoBedOffset = offset;
+
+    // D-152: the edges overlay is built from segments stored beside the
+    // geometry (the worker's, for a big mesh), in the frame the positions
+    // were in when they were made. The positions just moved; the segments
+    // move with them, or the overlay draws below the model by this offset.
+    const segments = geometry.userData?.edgeSegments;
+    if (segments && segments.length) {
+      for (let i = 2; i < segments.length; i += 3) {
+        segments[i] += offset;
+      }
+    }
 
     // Mark the position attribute as needing update
     positions.needsUpdate = true;

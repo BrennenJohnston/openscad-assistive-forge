@@ -16678,6 +16678,14 @@ if (typeof window !== 'undefined') {
   window.stateManager = stateManager;
   window.presetManager = presetManager;
   window.themeManager = themeManager;
+  // D-152: for a spec that reads the preview's mesh and its overlays.
+  window.previewManager = previewManager;
+  // D-152: for a spec that reads the preview's mesh and its overlays. A
+  // getter, because the manager is made after this line runs.
+  Object.defineProperty(window, 'previewManager', {
+    get: () => previewManager,
+    configurable: true,
+  });
   window.libraryManager = libraryManager;
 
   window.__forgeDebug = {

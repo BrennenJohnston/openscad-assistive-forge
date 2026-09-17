@@ -3768,3 +3768,76 @@ describe('mesh extras off the main thread (DP-52 P4, D-143)', () => {
     expect(geometry.userData.extrasPending).toBeUndefined()
   })
 })
+
+// ── D-152: the edges overlay follows the auto-bed ────────────────────────────
+//
+// The overlay's segments are built from the mesh's positions: by the
+// geometry worker (a big mesh, D-143) from the centered soup, and by the
+// extras request from a copy taken at scheduling time. The auto-bed then
+// shifts the geometry up onto the build plate and the stored segments stayed
+// where they were, so the overlay drew below the model by the bed offset:
+// the charm's edges in a different place from the charm (REPORTED by the
+// owner's walk, 2026-09-17; every mesh over 10,000 triangles).
+describe('D-152: the edges overlay follows the auto-bed', () => {
+  let container
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+  })
+  afterEach(() => {
+    container.remove()
+  })
+
+  const fakeGeometry = () => ({
+    attributes: {
+      position: {
+        // Two triangles, one at z = -5 and one at z = 5.
+        array: new Float32Array([0, 0, -5, 1, 0, -5, 0, 1, -5, 0, 0, 5, 1, 0, 5, 0, 1, 5]),
+        needsUpdate: false,
+      },
+    },
+    userData: {
+      // One stored segment along the lower triangle's edge.
+      edgeSegments: new Float32Array([0, 0, -5, 1, 0, -5]),
+    },
+    computeBoundingBox() {},
+    computeBoundingSphere() {},
+  })
+
+  it('★ the auto-bed moves the stored edge segments with the geometry', () => {
+    const manager = new PreviewManager(container)
+    const geometry = fakeGeometry()
+    manager.applyAutoBed(geometry)
+    expect(manager.autoBedOffset).toBe(5)
+    expect(geometry.attributes.position.array[2]).toBe(0)
+    expect(geometry.attributes.position.array[17]).toBe(10)
+    expect(Array.from(geometry.userData.edgeSegments)).toEqual([0, 0, 0, 1, 0, 0])
+  })
+
+  it('a geometry already on the plate leaves the segments alone', () => {
+    const manager = new PreviewManager(container)
+    const geometry = fakeGeometry()
+    for (let i = 2; i < geometry.attributes.position.array.length; i += 3) {
+      geometry.attributes.position.array[i] += 5
+    }
+    geometry.userData.edgeSegments = new Float32Array([0, 0, 0, 1, 0, 0])
+    manager.applyAutoBed(geometry)
+    expect(manager.autoBedOffset).toBe(0)
+    expect(Array.from(geometry.userData.edgeSegments)).toEqual([0, 0, 0, 1, 0, 0])
+  })
+
+  it('★ the extras are scheduled after the bed, so the worker gets bedded positions', async () => {
+    const manager = new PreviewManager(container)
+    manager.autoBedEnabled = true
+    manager.scene = { add: vi.fn(), remove: vi.fn() }
+    const order = []
+    manager.applyAutoBed = vi.fn(() => order.push('bed'))
+    manager._scheduleMeshExtras = vi.fn(() => order.push('extras'))
+    // A small OFF (inline parse): two triangles.
+    const off = ['OFF', '4 2 0', '0 0 -5', '1 0 -5', '0 1 -5', '0 0 5', '3 0 1 2', '3 1 2 3', ''].join(
+      String.fromCharCode(10)
+    )
+    await manager.loadOFF(off).catch(() => {})
+    expect(order.slice(0, 2)).toEqual(['bed', 'extras'])
+  })
+})
