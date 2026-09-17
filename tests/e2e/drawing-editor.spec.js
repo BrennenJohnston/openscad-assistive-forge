@@ -1367,3 +1367,184 @@ test.describe('two previews: the drawing by itself, the charm on request (DP-53)
     expect(await committed(page)).toEqual(before)
   })
 })
+
+// ── DP-54: the too-thin check, on the charm host ─────────────────────────────
+//
+// Two things a person meets. The notice above the list counts the shapes
+// thinner than 0.5 mm at the width the charm really prints the design (the
+// model echoes its fit box, the host applies the design's aspect: D-144 was
+// that no host ever passed a width, so every sentence used the editor's 14
+// mm default), and "Ignore those" leaves them out in one press, each row
+// reversible. And the whole-drawing advisory, which the charm host never
+// showed (D-144), now speaks with the real width.
+test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
+  const LOGO_TRACE = path.join(
+    process.cwd(),
+    'tests',
+    'fixtures',
+    'svg-edit',
+    'create-logo-colors-trace.svg'
+  )
+
+  async function openCharmHost(page) {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    })
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 240000,
+    })
+    await page.selectOption('#charmVariantSelect', 'q-charm')
+    await page.click('#openCharmMakerBtn')
+    await page.waitForFunction(
+      () =>
+        Object.keys(window.stateManager?.getState()?.parameters || {}).length >
+        0,
+      null,
+      { timeout: 120000 }
+    )
+    for (let i = 0; i < 2; i++) {
+      const notNow = page.getByRole('button', { name: 'Not now', exact: true })
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click()
+        await page.waitForTimeout(300)
+      }
+    }
+    // The charm's first render carries the fit box; the host must have it.
+    await expect(page.locator('.preview-state-indicator')).toHaveText(
+      /Preview ready|Preview \(cached\)/,
+      { timeout: 240000 }
+    )
+    await page.evaluate(() => {
+      let d = document.querySelector('#param-design_file')?.closest('details')
+      while (d) {
+        d.open = true
+        d = d.parentElement?.closest('details')
+      }
+    })
+  }
+
+  test('★ the notice names the too-thin shapes at the width the charm prints, Ignore those leaves them out, and one comes back', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(10)
+
+    // The width is the charm's, not the editor's default: 11.97 mm for this
+    // logo on the default charm (P0), said as 12.
+    const notice = editor.locator('.svg-prep-thin-notice')
+    await expect(notice).toBeVisible({ timeout: 30000 })
+    await expect(notice).toHaveText(
+      /^\d+ shapes are thinner than 0\.5 mm at 12 mm wide and may not print\.$/
+    )
+    const count = Number((await notice.textContent()).match(/^(\d+)/)[1])
+    expect(count).toBeGreaterThan(150)
+    await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
+      /^11\.9/
+    )
+
+    // A too-thin row says so, read with its name.
+    const marked = editor.locator('.svg-prep-object[aria-describedby]').first()
+    await expect(marked).toBeVisible()
+    const markId = await marked.getAttribute('aria-describedby')
+    await expect(page.locator(`#${markId}`)).toContainText('too thin to print')
+
+    // Ignore those: one press, N rows to Ignore, the stand-in loses them.
+    const raisedBefore = await editor
+      .locator('.svg-prep-result-pane .svg-prep-standin-path--raised')
+      .count()
+    await editor.locator('[data-action="ignore-thin"]').click()
+    await expect
+      .poll(
+        () =>
+          editor
+            .locator('.svg-prep-object input[type=radio][value="ignore"]:checked')
+            .count(),
+        { timeout: 30000 }
+      )
+      .toBeGreaterThanOrEqual(count)
+    await expect
+      .poll(
+        () =>
+          editor
+            .locator('.svg-prep-result-pane .svg-prep-standin-path--raised')
+            .count(),
+        { timeout: 30000 }
+      )
+      .toBeLessThan(raisedBefore)
+
+    // One row turned back to Raised comes back.
+    const first = editor.locator('.svg-prep-object[aria-describedby]').first()
+    await first.locator('input[type=radio][value="foreground"]').check({ force: true })
+    await expect(first.locator('input[type=radio][value="foreground"]')).toBeChecked()
+    await expect(editor.locator('[data-action="undo-ignore"]')).toBeEnabled()
+  })
+
+  test('★ D-144: the whole-drawing advisory appears on the charm host, at the width the charm prints', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    // A traced picture, since the advisory reads the trace's line widths: a
+    // 400 px square on white, which the quick look calls quick.
+    await page.evaluate(async () => {
+      const n = 400
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(n * 0.25, n * 0.25, n * 0.5, n * 0.5)
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(new File([blob], 'square.png', { type: 'image/png' }))
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const control = page.locator('.param-control--file', {
+      has: page.locator('#param-design_file'),
+    })
+    // Converts by itself, or waits for Start on a slow machine (DP-Q32).
+    const start = control.locator('.trace-progress-start')
+    for (let i = 0; i < 60; i++) {
+      const info = (await control.locator('.file-info').textContent()) || ''
+      if (/converted from/.test(info)) break
+      if (/Ready to convert\./.test(info) && (await start.isVisible().catch(() => false))) {
+        await start.click()
+      }
+      await page.waitForTimeout(1000)
+    }
+    await expect(control.locator('.file-info')).toContainText('converted from', {
+      timeout: 120000,
+    })
+    // A traced picture never opens the editor by itself; the card's door does.
+    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    await expect(door).toBeVisible({ timeout: 30000 })
+    await door.scrollIntoViewIfNeeded()
+    await door.click()
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+
+    // RED before this: the charm host passed no line widths and no width, so
+    // this sentence never existed here, and the width was the editor's own.
+    // A square is height-limited in the charm's 11.97 by 9.3 mm box, so it
+    // prints 9.3 mm wide, and the sentence says so.
+    const advisory = editor.locator('.svg-prep-thin-lines')
+    await expect(advisory).toBeVisible({ timeout: 30000 })
+    await expect(advisory).toHaveText(/at 9\.3 mm wide|thick enough to print/)
+    await expect(advisory).not.toContainText("the editor's default width")
+    await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
+      /^9\.3/
+    )
+  })
+})

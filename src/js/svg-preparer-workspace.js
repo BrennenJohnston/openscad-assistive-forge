@@ -14,6 +14,11 @@
 import { createDocumentFocusTrap } from './focus-trap.js';
 import { announce } from './announcer.js';
 import {
+  measureAllThickness,
+  THIN_PRINT_MM,
+  THIN_PICTURE_PX,
+} from './shape-thickness.js';
+import {
   classifyElements,
   applyPerPathOffsets,
   FLATTEN_COST_DEFAULT,
@@ -334,7 +339,7 @@ function buildWorkspaceDom() {
   const bulkBar = document.createElement('div');
   bulkBar.className = 'svg-prep-bulk-bar';
   bulkBar.setAttribute('role', 'group');
-  bulkBar.setAttribute('aria-label', 'Remove shapes from the list');
+  bulkBar.setAttribute('aria-label', 'Remove or ignore shapes');
 
   const bulkCount = document.createElement('span');
   bulkCount.className = 'svg-prep-bulk-count';
@@ -380,6 +385,38 @@ function buildWorkspaceDom() {
   keepLargestBtn.dataset.action = 'keep-largest';
   keepLargestBtn.textContent = 'Delete the rest';
 
+  // DP-54: the shapes too thin to print, and one press to leave them out.
+  // Opt-in: nothing is ignored until the button is pressed, every row keeps
+  // its own Raised / Hole / Ignore control, and Undo ignore is one level.
+  const thinLabel = document.createElement('label');
+  thinLabel.className = 'svg-prep-bulk-field';
+  thinLabel.append(document.createTextNode('Thinner than '));
+  const thinInput = document.createElement('input');
+  thinInput.type = 'number';
+  thinInput.className = 'svg-prep-bulk-input svg-prep-thin-input';
+  thinInput.min = '0';
+  thinInput.step = '0.1';
+  thinInput.value = String(THIN_PRINT_MM);
+  thinInput.setAttribute('aria-describedby', bulkHelp.id);
+  thinLabel.append(thinInput, document.createTextNode(' mm'));
+
+  const ignoreThinBtn = document.createElement('button');
+  ignoreThinBtn.type = 'button';
+  ignoreThinBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
+  ignoreThinBtn.dataset.action = 'ignore-thin';
+  ignoreThinBtn.textContent = 'Ignore those';
+  ignoreThinBtn.setAttribute(
+    'aria-label',
+    'Ignore the shapes thinner than this'
+  );
+
+  const undoIgnoreBtn = document.createElement('button');
+  undoIgnoreBtn.type = 'button';
+  undoIgnoreBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
+  undoIgnoreBtn.dataset.action = 'undo-ignore';
+  undoIgnoreBtn.textContent = 'Undo ignore';
+  undoIgnoreBtn.disabled = true;
+
   // DP-39 P2. A selection nobody can act on is not a feature, and Delete is
   // the thing people said they wanted it for. It says how many, because "3"
   // is the whole reason somebody selected rather than deleted one at a time.
@@ -403,6 +440,9 @@ function buildWorkspaceDom() {
     deleteSmallBtn,
     keepLabel,
     keepLargestBtn,
+    thinLabel,
+    ignoreThinBtn,
+    undoIgnoreBtn,
     deleteSelectedBtn,
     undoDeleteBtn,
     bulkHelp
@@ -467,6 +507,16 @@ function buildWorkspaceDom() {
   const layerSummary = document.createElement('p');
   layerSummary.className = 'svg-prep-layer-summary';
   layerSummary.hidden = true;
+
+  // DP-54: how many shapes are under the print floor at the design width,
+  // said above the list. A status region, so a screen reader hears the count
+  // change as the width or the floor moves.
+  const thinNotice = document.createElement('p');
+  thinNotice.className = 'svg-prep-thin-notice';
+  thinNotice.setAttribute('role', 'status');
+  thinNotice.setAttribute('aria-live', 'polite');
+  thinNotice.hidden = true;
+  const thinMarkPrefix = `svg-prep-thin-${Math.random().toString(36).slice(2, 8)}`;
 
   // Object list
   const objects = document.createElement('div');
@@ -577,6 +627,7 @@ function buildWorkspaceDom() {
     thinLines,
     legendRow,
     toolsSlot,
+    thinNotice,
     layerSummary,
     bulkBar,
     objects,
@@ -617,6 +668,11 @@ function buildWorkspaceDom() {
       bulkCount,
       smallInput,
       keepInput,
+      thinNotice,
+      thinInput,
+      ignoreThinBtn,
+      undoIgnoreBtn,
+      thinMarkPrefix,
       deleteSmallBtn,
       keepLargestBtn,
       undoDeleteBtn,
@@ -916,8 +972,11 @@ function renderWarnings(warningsEl, warnings) {
  * @param {string|null} sourceName - The file the editor was opened on
  * @returns {string}
  */
-/** Under this, a 0.4 mm nozzle cannot be relied on to lay a line down. */
-export const THIN_LINE_MM = 0.5;
+/**
+ * Under this, a 0.4 mm nozzle cannot be relied on to lay a line down. One
+ * number, kept where the per-shape measure lives (DP-54); DP-Q58 signed it.
+ */
+export const THIN_LINE_MM = THIN_PRINT_MM;
 
 /**
  * What to say about how thin the lines are, at the size this will be printed.
@@ -1158,6 +1217,10 @@ export function createSvgPrepWorkspace(containerEl) {
   // One level, this session only. A stack that rode prepMetadata into saved
   // projects would grow without bound in a 2 MB localStorage lane.
   let lastDeletion = null;
+  // DP-54: every row's thickness at the width and floor as they stand, and
+  // the last batch Ignore those made, for one level of undo.
+  let thickness = null;
+  let lastIgnore = null;
   // DP-7. The layer column appears only for a tile that asked for it, so a
   // non-layered editor is byte-for-byte what it was before.
   let layersEnabled = false;
@@ -2773,7 +2836,43 @@ export function createSvgPrepWorkspace(containerEl) {
     }, 300);
   }
 
+  /**
+   * The whole-drawing advisory (DP-36) at the width as it stands: the trace's
+   * line widths against the box beside it, saying which width it used.
+   */
+  function updateThinLineSentence() {
+    const thin = thinLineSentence(
+      currentCallbacks.lineWidthPx,
+      parseFloat(currentSvgMeta?.width) || 0,
+      currentDesignWidthMm(),
+      currentCallbacks.designWidthKnown !== false
+    );
+    refs.thinLines.textContent = thin;
+    refs.thinLines.hidden = thin === '';
+  }
+
+  /**
+   * The width the host has learned since the editor opened (D-144: the charm
+   * re-renders and its fit box arrives after the drawing was chosen). Sets
+   * the box and everything that reads it.
+   * @param {number} mm
+   */
+  function setDesignWidthMm(mm) {
+    if (!Number.isFinite(mm) || mm <= 0) return;
+    const next = String(+mm.toFixed(2));
+    if (refs.designWidthInput.value === next) return;
+    refs.designWidthInput.value = next;
+    if (!isOpen) return;
+    currentCallbacks = { ...currentCallbacks, designWidthKnown: true };
+    handleDesignWidthChange();
+  }
+
   function handleDesignWidthChange() {
+    // DP-54: the print floor is a width away; the marks, the notice and the
+    // advisory follow the box at once (65 ms on the logo), the combine after
+    // the settle.
+    measureThickness();
+    updateThinLineSentence();
     clearTimeout(offsetDebounceTimer);
     // Through the GATE, not straight at the combine (the owner, 2026-09-14).
     // This called `updateResultPreview` directly and so obeyed no budget at
@@ -2860,6 +2959,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // chose. It goes rather than lies.
     clearSelection();
     requestResultPreview();
+    measureThickness();
   }
 
   /** Push the current layer array back into the selects, then re-check. */
@@ -2931,6 +3031,137 @@ export function createSvgPrepWorkspace(containerEl) {
     const message = `Undone. ${liveElements.length} shapes.`;
     liveRegion.textContent = message;
     announce(message);
+  }
+
+  // ── DP-54: the shapes too thin to print ──────────────────────────────────
+
+  function thinFloorMm() {
+    const v = parseFloat(refs.thinInput.value);
+    return Number.isFinite(v) && v >= 0 ? v : THIN_PRINT_MM;
+  }
+
+  function currentDesignWidthMm() {
+    return parseFloat(refs.designWidthInput.value) || DEFAULT_DESIGN_WIDTH_MM;
+  }
+
+  /**
+   * Measure every row at the width and the floor as they stand, then show
+   * it: the marks on the rows and the notice above the list. MEASURED at P0:
+   * about 65 ms for the logo's 206 shapes, 95 ms for 1,200.
+   */
+  function measureThickness() {
+    const vb = parseViewBox(currentSvgMeta?.viewBox);
+    if (!currentAnalysis || !vb || !vb.w) {
+      thickness = null;
+    } else {
+      thickness = measureAllThickness(
+        liveElements.map((el) => el.pathData || ''),
+        {
+          viewBoxWidth: vb.w,
+          designWidthMm: currentDesignWidthMm(),
+          thinPrintMm: thinFloorMm(),
+          thinPicturePx: THIN_PICTURE_PX,
+        }
+      );
+    }
+    refreshThinMarks();
+    updateThinNotice();
+  }
+
+  /** The rows under the print floor, in list order. */
+  function thinRows() {
+    const out = [];
+    if (!thickness) return out;
+    thickness.shapes.forEach((shape, i) => {
+      if (shape.tooThinToPrint) out.push(i);
+    });
+    return out;
+  }
+
+  /** Each too-thin row says so beside its name, read with it. */
+  function refreshThinMarks() {
+    refs.objects.querySelectorAll('.svg-prep-object').forEach((item) => {
+      const i = parseInt(item.dataset.index, 10);
+      const shape = thickness && thickness.shapes[i];
+      const words = [];
+      if (shape && shape.tooThinToPrint) words.push('too thin to print');
+      if (shape && shape.tooSmallToTrace) {
+        words.push('too small to trace clearly');
+      }
+      let mark = item.querySelector('.svg-prep-thin-mark');
+      if (words.length === 0) {
+        if (mark) mark.remove();
+        item.removeAttribute('aria-describedby');
+        return;
+      }
+      if (!mark) {
+        mark = document.createElement('span');
+        mark.className = 'svg-prep-thin-mark';
+        mark.id = `${refs.thinMarkPrefix}-${i}`;
+        const name = item.querySelector('.svg-prep-object-name');
+        if (name) name.after(mark);
+        else item.appendChild(mark);
+      }
+      mark.textContent = words.join(', ');
+      item.setAttribute('aria-describedby', mark.id);
+    });
+  }
+
+  function updateThinNotice() {
+    const n = thinRows().length;
+    if (n === 0) {
+      refs.thinNotice.hidden = true;
+      refs.thinNotice.textContent = '';
+      return;
+    }
+    const floor = thinFloorMm();
+    const at = `${+currentDesignWidthMm().toFixed(1)} mm wide`;
+    refs.thinNotice.textContent =
+      n === 1
+        ? `1 shape is thinner than ${floor} mm at ${at} and may not print.`
+        : `${n} shapes are thinner than ${floor} mm at ${at} and may not print.`;
+    refs.thinNotice.hidden = false;
+  }
+
+  /** One press: every row under the floor to Ignore, through applyRole. */
+  function ignoreThin() {
+    const rows = thinRows().filter((i) => roles[i] !== 'ignore');
+    if (rows.length === 0) {
+      const nothing = `Nothing is thinner than ${thinFloorMm()} mm.`;
+      liveRegion.textContent = nothing;
+      announce(nothing);
+      return;
+    }
+    lastIgnore = { rows, roles: rows.map((i) => roles[i]) };
+    applyRole(rows, 'ignore');
+    refs.undoIgnoreBtn.disabled = false;
+    const sentence =
+      rows.length === 1
+        ? '1 thin shape set to Ignore. It can be turned back on in the list.'
+        : `${rows.length} thin shapes set to Ignore. Each can be turned back on in the list.`;
+    liveRegion.textContent = sentence;
+    announce(sentence);
+  }
+
+  /** The last batch back to the roles it had. One level, by design. */
+  function undoIgnore() {
+    if (!lastIgnore) return;
+    const groups = new Map();
+    lastIgnore.rows.forEach((i, k) => {
+      const role = lastIgnore.roles[k];
+      if (!groups.has(role)) groups.set(role, []);
+      groups.get(role).push(i);
+    });
+    for (const [role, rows] of groups) applyRole(rows, role);
+    const n = lastIgnore.rows.length;
+    lastIgnore = null;
+    refs.undoIgnoreBtn.disabled = true;
+    const sentence =
+      n === 1
+        ? 'Undone. 1 shape is back to how it was.'
+        : `Undone. ${n} shapes are back to how they were.`;
+    liveRegion.textContent = sentence;
+    announce(sentence);
   }
 
   /**
@@ -3012,6 +3243,10 @@ export function createSvgPrepWorkspace(containerEl) {
     }
     if (btn.dataset.action === 'undo-delete') {
       undoDelete();
+    } else if (btn.dataset.action === 'ignore-thin') {
+      ignoreThin();
+    } else if (btn.dataset.action === 'undo-ignore') {
+      undoIgnore();
     } else if (btn.dataset.action === 'delete-small') {
       const limit = parseFloat(refs.smallInput.value);
       if (!Number.isFinite(limit) || limit < 0) return;
@@ -3258,19 +3493,18 @@ export function createSvgPrepWorkspace(containerEl) {
     paintLegend(refs.legendRow, currentRoleOptions());
     currentSvgMeta = extractSvgMeta(svgString);
 
+    // DP-54 (D-144): a host that knows how wide the design prints says so,
+    // and the box starts there rather than at the editor's default.
+    if (
+      Number.isFinite(callbacks.designWidthMm) &&
+      callbacks.designWidthMm > 0
+    ) {
+      refs.designWidthInput.value = String(+callbacks.designWidthMm.toFixed(2));
+    }
     // How thin the thinnest lines are, at the width this will be printed. The
     // measurement comes from the trace; the width comes from the control right
     // beside this sentence, so the two numbers are read together.
-    const designWidthMm =
-      parseFloat(refs.designWidthInput.value) || DEFAULT_DESIGN_WIDTH_MM;
-    const thin = thinLineSentence(
-      callbacks.lineWidthPx,
-      parseFloat(currentSvgMeta.width) || 0,
-      designWidthMm,
-      callbacks.designWidthKnown !== false
-    );
-    refs.thinLines.textContent = thin;
-    refs.thinLines.hidden = thin === '';
+    updateThinLineSentence();
 
     // With no model behind the editor there is nothing for Apply to apply to,
     // and "Keep original" would keep it where? Saving is the whole task.
@@ -3370,6 +3604,7 @@ export function createSvgPrepWorkspace(containerEl) {
     clearSelection();
     markPreviewStale({ keepZoom: false });
     updateResultPreview();
+    measureThickness();
 
     sourceZoomCleanup = setupPaneZoom(
       refs.sourcePane,
@@ -3389,6 +3624,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.addEventListener('change', handleLayerChange);
     refs.objects.addEventListener('input', handleOffsetChange);
     refs.designWidthInput.addEventListener('input', handleDesignWidthChange);
+    refs.thinInput.addEventListener('input', measureThickness);
     refs.footer.addEventListener('click', handleFooterClick);
     refs.renderCancelBtn.addEventListener('click', cancelRender);
     refs.objects.addEventListener('click', handleRowClick);
@@ -3489,6 +3725,12 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.removeEventListener('change', handleRoleChange);
     refs.objects.removeEventListener('input', handleOffsetChange);
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
+    refs.thinInput.removeEventListener('input', measureThickness);
+    thickness = null;
+    lastIgnore = null;
+    refs.undoIgnoreBtn.disabled = true;
+    refs.thinNotice.hidden = true;
+    refs.thinNotice.textContent = '';
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.objects.removeEventListener('click', handleRowClick);
     refs.objects.removeEventListener('mousedown', handleRowMousedown);
@@ -3616,6 +3858,7 @@ export function createSvgPrepWorkspace(containerEl) {
     getLayerAssignments,
     isCombining,
     whenCombined,
+    setDesignWidthMm,
     /**
      * The ring engine, once the lazy chunk is in; null while it is not.
      * D-132: the file control's layer companions flatten with the same engine

@@ -16049,6 +16049,23 @@ body.tutorial-body-locked {
   line-height: 1.4;
 }
 
+/* DP-54: the too-thin notice above the list, and a row's mark beside its name. */
+.svg-prep-thin-notice {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.svg-prep-thin-notice[hidden] {
+  display: none;
+}
+
+.svg-prep-thin-mark {
+  margin-left: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
 .svg-prep-thin-lines[hidden] {
   display: none;
 }

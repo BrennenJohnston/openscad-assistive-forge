@@ -230,6 +230,10 @@ design_fit_w = face_y * design_scale / 100;
 design_fit_h = face_x * design_scale / 100;
 design_fit_w_2 = face_y * design_scale_2 / 100;
 design_fit_h_2 = face_x * design_scale_2 / 100;
+// The app reads this line to learn how wide a design prints, so the drawing
+// editor can measure each shape against the nozzle (DP-54). The box, not the
+// design: the app applies the design's own aspect the way resize() does.
+echo(str("design fit box mm: w=", design_fit_w, " h=", design_fit_h));
 assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
 assert(design_file_2_aspect > 0, "design_file_2_aspect must be positive (width divided by height)");
 // ── Layered design (prototype) ──────────────────────────────────────────────

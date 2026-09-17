@@ -63,6 +63,7 @@ vi.mock('../../src/js/svg-preparer-workspace.js', async (importOriginal) => {
     ...actual,
     createSvgPrepWorkspace: vi.fn(() => ({
       open: vi.fn(),
+      setDesignWidthMm: vi.fn(),
       close: vi.fn(),
       dismiss: vi.fn(),
       destroy: vi.fn(),
@@ -1933,6 +1934,71 @@ describe('UI Generator', () => {
       const stub = factory.mock.results[factory.mock.results.length - 1].value;
       const options = stub.open.mock.calls[0][2];
       expect(options.onDraftRender).toBeUndefined();
+    });
+
+    // ── DP-54 P3, D-144: the width the charm host knows ────────────────────
+    //
+    // The model echoes the box it fits a design into; the host applies the
+    // design's own aspect and hands the editor the width it will print at,
+    // so the too-thin measure and the advisory speak of the real size. A
+    // width that arrives while the editor is open reaches it.
+
+    it("★ with the model's fit box known, the editor opens at the design's printed width", async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'ready',
+        recommendation: 'open_editor',
+        elements: [{ type: 'path' }],
+        warnings: [],
+      });
+      uiGenerator.setDesignFitBoxMm?.({ w: 11.97, h: 9.3 });
+      vi.mocked(measureSvgAspect).mockReturnValue(1.339);
+      try {
+        renderParameterUI(svgFileSchema, container, vi.fn(), {});
+        const fileInput = container.querySelector('input[type="file"]');
+        // The drawn content is what the model's resize fits, so its aspect
+        // decides: 600 by 448 is 1.339, wider than the box's 1.287, and the
+        // width is the box's width.
+        await uploadSvg(
+          fileInput,
+          '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="448" viewBox="0 0 600 448"><path d="M0,0h600v448h-600z"/></svg>'
+        );
+        const factory = vi.mocked(createSvgPrepWorkspace);
+        const stub = factory.mock.results[factory.mock.results.length - 1].value;
+        const options = stub.open.mock.calls[0][2];
+        expect(options.designWidthKnown).toBe(true);
+        expect(options.designWidthMm).toBeCloseTo(11.97, 2);
+
+        // The charm is re-rendered smaller: the box shrinks and the open
+        // editor hears the new width.
+        uiGenerator.setDesignFitBoxMm?.({ w: 6, h: 9.3 });
+        expect(stub.setDesignWidthMm).toHaveBeenCalledWith(6);
+
+        // Every render says the box again. The same box is not news, so a
+        // width the person typed into the editor is left alone.
+        stub.setDesignWidthMm.mockClear();
+        uiGenerator.setDesignFitBoxMm?.({ w: 6, h: 9.3 });
+        expect(stub.setDesignWidthMm).not.toHaveBeenCalled();
+      } finally {
+        uiGenerator.setDesignFitBoxMm?.(null);
+        vi.mocked(measureSvgAspect).mockReturnValue(1);
+      }
+    });
+
+    it('with no box known, the editor keeps its own default and says so', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'ready',
+        recommendation: 'open_editor',
+        elements: [{ type: 'path' }],
+        warnings: [],
+      });
+      renderParameterUI(svgFileSchema, container, vi.fn(), {});
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(fileInput);
+      const factory = vi.mocked(createSvgPrepWorkspace);
+      const stub = factory.mock.results[factory.mock.results.length - 1].value;
+      const options = stub.open.mock.calls[0][2];
+      expect(options.designWidthKnown).toBe(false);
+      expect(options.designWidthMm).toBeUndefined();
     });
   });
 });

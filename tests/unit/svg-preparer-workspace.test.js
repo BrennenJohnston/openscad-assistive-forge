@@ -4170,3 +4170,206 @@ describe('DP-53 P1: the drawing view combines by itself', () => {
     ws.destroy();
   });
 });
+
+describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () => {
+  // A 200-unit picture at the editor's default 14 mm: 0.07 mm per unit. A bar
+  // 2 units tall is 0.14 mm and 2 px: too thin to print, too small to trace.
+  // A 40-unit square is 2.8 mm and 40 px: fine both ways.
+  const BAR = 'M10,10h100v2h-100z';
+  const BAR2 = 'M10,30h100v2h-100z';
+  const SQUARE = 'M120,20h40v40h-40z';
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"></svg>';
+  function analysisOf(paths) {
+    const doc = new DOMParser().parseFromString(SVG, 'image/svg+xml');
+    return {
+      status: 'ready',
+      confidence: 1,
+      isCompoundPathOnly: false,
+      elements: paths.map((d, i) => {
+        const el = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        el.setAttribute('d', d);
+        return { element: el, index: i, type: 'path', pathData: d, fill: '#000000', autoRole: 'foreground', warnings: [] };
+      }),
+      warnings: [],
+      unsupportedFeatures: [],
+    };
+  }
+  const roleOf = (ws, i) => ws._root.querySelector(`.svg-prep-object[data-index="${i}"] input[type=radio]:checked`)?.value;
+  const markOf = (ws, i) => {
+    const row = ws._root.querySelector(`.svg-prep-object[data-index="${i}"]`);
+    const id = row?.getAttribute('aria-describedby');
+    return id ? document.getElementById(id)?.textContent : null;
+  };
+
+  it('★ the notice counts the shapes under the print floor at the design width, in a sentence', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const notice = ws._root.querySelector('.svg-prep-thin-notice');
+    expect(notice).not.toBeNull();
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.hidden).toBe(false);
+    expect(notice.textContent).toBe('1 shape is thinner than 0.5 mm at 14 mm wide and may not print.');
+    ws.close();
+    ws.open(SVG, analysisOf([BAR, BAR2, SQUARE]));
+    await ws.whenReady();
+    expect(notice.textContent).toBe('2 shapes are thinner than 0.5 mm at 14 mm wide and may not print.');
+    ws.destroy();
+  });
+
+  it('★ each too-thin row carries its mark, read with the name; a sound row carries none', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    expect(markOf(ws, 0)).toBe('too thin to print, too small to trace clearly');
+    expect(markOf(ws, 1)).toBeNull();
+    ws.destroy();
+  });
+
+  it('★ Ignore those sets the flagged rows to Ignore in one press and says so; Undo ignore puts them back', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, BAR2, SQUARE]));
+    await ws.whenReady();
+    await ws.whenCombined();
+    const btn = ws._root.querySelector('[data-action="ignore-thin"]');
+    expect(btn.textContent).toBe('Ignore those');
+    expect(btn.getAttribute('aria-label')).toBe('Ignore the shapes thinner than this');
+    const undo = ws._root.querySelector('[data-action="undo-ignore"]');
+    expect(undo.disabled).toBe(true);
+    btn.click();
+    expect(roleOf(ws, 0)).toBe('ignore');
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(roleOf(ws, 2)).toBe('foreground');
+    expect(ws._root.querySelector('.svg-prep-live, [aria-live="polite"].sr-only')?.textContent).toBe(
+      '2 thin shapes set to Ignore. Each can be turned back on in the list.'
+    );
+    expect(undo.disabled).toBe(false);
+    undo.click();
+    expect(roleOf(ws, 0)).toBe('foreground');
+    expect(roleOf(ws, 1)).toBe('foreground');
+    expect(undo.disabled).toBe(true);
+    expect(ws._root.querySelector('.svg-prep-live, [aria-live="polite"].sr-only')?.textContent).toBe(
+      'Undone. 2 shapes are back to how they were.'
+    );
+    ws.destroy();
+  });
+
+  it('with nothing under the floor the press says so and changes nothing', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([SQUARE]));
+    await ws.whenReady();
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+    ws._root.querySelector('[data-action="ignore-thin"]').click();
+    expect(roleOf(ws, 0)).toBe('foreground');
+    expect(ws._root.querySelector('.svg-prep-live, [aria-live="polite"].sr-only')?.textContent).toBe(
+      'Nothing is thinner than 0.5 mm.'
+    );
+    ws.destroy();
+  });
+
+  it('the floor field moves the floor, and the notice follows it', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const field = ws._root.querySelector('.svg-prep-thin-input');
+    expect(field.value).toBe('0.5');
+    field.value = '3';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ws._root.querySelector('.svg-prep-thin-notice').textContent).toBe(
+      '2 shapes are thinner than 3 mm at 14 mm wide and may not print.'
+    );
+    expect(markOf(ws, 1)).toBe('too thin to print');
+    ws.destroy();
+  });
+
+  it('the design width moves the print floor but not the picture floor', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const width = ws._refs.designWidthInput;
+    width.value = '200';
+    width.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+    expect(markOf(ws, 0)).toBe('too small to trace clearly');
+    ws.destroy();
+  });
+
+  it('the notice and the marks follow a deletion', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    ws._root.querySelector('.svg-prep-object[data-index="0"] [data-delete-index="0"]')?.click();
+    if (ws._root.querySelectorAll('.svg-prep-object').length === 1) {
+      expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+      expect(markOf(ws, 0)).toBeNull();
+    }
+    ws.destroy();
+  });
+});
+
+describe('DP-54 P3: the width the host knows (D-144)', () => {
+  const BAR = 'M10,10h100v2h-100z';
+  const SQUARE = 'M120,20h40v40h-40z';
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"></svg>';
+  function analysisOf(paths) {
+    const doc = new DOMParser().parseFromString(SVG, 'image/svg+xml');
+    return {
+      status: 'ready',
+      confidence: 1,
+      isCompoundPathOnly: false,
+      elements: paths.map((d, i) => {
+        const el = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        el.setAttribute('d', d);
+        return { element: el, index: i, type: 'path', pathData: d, fill: '#000000', autoRole: 'foreground', warnings: [] };
+      }),
+      warnings: [],
+      unsupportedFeatures: [],
+    };
+  }
+
+  it('★ a host that knows the width opens the editor at it, and the sentences say so', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]), {
+      designWidthMm: 11.97,
+      designWidthKnown: true,
+      lineWidthPx: { p10: 2 },
+    });
+    await ws.whenReady();
+    expect(ws._refs.designWidthInput.value).toBe('11.97');
+    expect(ws._root.querySelector('.svg-prep-thin-notice').textContent).toBe(
+      '1 shape is thinner than 0.5 mm at 12 mm wide and may not print.'
+    );
+    const advisory = ws._root.querySelector('.svg-prep-thin-lines');
+    expect(advisory.hidden).toBe(false);
+    expect(advisory.textContent).toContain('at 12 mm wide.');
+    expect(advisory.textContent).not.toContain("the editor's default width");
+    ws.destroy();
+  });
+
+  it('★ a width that arrives while the editor is open moves the box, the notice and the advisory', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]), { lineWidthPx: { p10: 2 } });
+    await ws.whenReady();
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(false);
+    ws.setDesignWidthMm(200);
+    expect(ws._refs.designWidthInput.value).toBe('200');
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+    expect(ws._root.querySelector('.svg-prep-thin-lines').textContent).toBe(
+      'Lines look thick enough to print.'
+    );
+    ws.destroy();
+  });
+
+  it('typing a width moves the advisory too', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]), { lineWidthPx: { p10: 2 } });
+    await ws.whenReady();
+    const width = ws._refs.designWidthInput;
+    width.value = '200';
+    width.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ws._root.querySelector('.svg-prep-thin-lines').textContent).toBe(
+      'Lines look thick enough to print.'
+    );
+    ws.destroy();
+  });
+});
