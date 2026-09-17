@@ -343,21 +343,21 @@ as you move tells you which shape you are about to choose.
 
 Each row has a **More** button holding that shape's offset, its layer where the
 design has a choice of layers, and **Delete**. It keeps the row down to one
-line so the shape's name has room to be read.
+line so the shape's name has room to be read. Every shape starts on layer 1;
+Forge does not guess a stack from how the shapes nest. The panel says how many
+layers the design supports, and you choose a layer under More to build one.
 
-**Bigger drawings: the preview waits to be asked**
+**Bigger drawings: the result combines by itself**
 
 Combining shapes into one outline is the expensive step, and how long it takes
 depends on how complicated the shapes are rather than on how many there are:
 the same two hundred shapes take a tenth of a second as rectangles and half a
-second as curves. So Forge predicts the wait, and combines the drawing by
-itself when that prediction is under about a third of a second.
-
-Above that, the drawing itself is shown where the result will go — marked as
-not yet combined — with a **Render preview** button and a sentence saying about
-how long it will take. Press it when you want the result. Apply and Save wait
-until you have, so you are never applying something you have not seen, and
-**Cancel** stops a combine you would rather not wait for.
+second as curves. Forge combines the drawing by itself a third of a second
+after your last change, off the page's own thread, and says so under the
+picture: "Combining 146 shapes, about 2 seconds. Apply is ready when they are
+combined." You can keep reading and choosing while it works. Apply and Save
+wait until the result has landed, so you are never applying something you have
+not seen, and a change made while it combines simply starts it again.
 
 The prediction learns from your machine: after the first real combine, Forge
 knows how fast this computer and this kind of drawing are, and says so more
@@ -386,21 +386,39 @@ under the budget, the preview starts updating on its own again.
 Removals are remembered with the project, so reopening it later shows the list
 you left behind rather than starting over.
 
+**Shapes too thin to print**
+
+Forge measures every shape at the width the charm will really print the
+drawing: the charm says how wide its design box is, and the editor's width box
+starts there. It counts the shapes under half a millimeter and says so above
+the list: "33 shapes are thinner than 0.5 mm at 12 mm wide and may not print."
+Each of those rows carries a small **thin** mark beside its name, and a screen
+reader hears why: too thin to print, or too small to trace clearly, which
+means under three pixels in the picture. Nothing is changed for you. In the
+shapes panel, **Thinner than … mm** and **Ignore those** set every flagged
+shape to Ignore in one press, **Undo ignore** puts them back, and any single
+row can be turned back on by hand. The floor is a number you can change. The
+width follows the charm, and you can type another to see what a bigger charm
+would do.
+
 **Editor controls:**
 
 | Action | How |
 |--------|-----|
 | Change a role | Click **Raised**, **Hole** or **Ignore**, or use arrow keys |
 | Choose a shape | Click its row or the shape itself; Ctrl or Cmd adds, Shift takes a range |
-| See the effect | The result updates on its own, or after **Render preview** on a slower drawing |
+| Choose every shape | Ctrl+A (Cmd+A on a Mac) with the list focused |
+| Remove the chosen shapes | Delete or Backspace, or **Delete selected** |
+| See the effect | The result combines on its own after each change |
 | See the charm instead of the drawing | The **Drawing / Charm** switch in the toolbar |
-| Apply changes | Click "Apply prepared SVG" |
-| Save it as a file | Click "Save edited SVG" |
-| Keep the original | Click "Keep original" (bypasses preparation) |
-| Reset roles | Click "Reset" to return to auto-classification (this does not bring deleted shapes back) |
-| Shut a row's **More** menu | `Escape` (the editor stays open) |
-| Expand to fullscreen | Click the fullscreen button (top-right) |
-| Exit fullscreen | Press `Escape` or click the fullscreen button again |
+| Draw the charm with the drawing as it stands | **Render preview**, in the Charm view |
+| Crop the picture | **Crop** in the toolbar, then **Save crop** |
+| Apply changes | **Apply** |
+| Save it as a file | **Save SVG** (and **Save DXF** through the standalone door) |
+| Keep the original | **Keep original** (bypasses preparation) |
+| Reset roles | **Reset** returns to the automatic first pass (this does not bring deleted shapes back) |
+| Shut what is open | `Escape` shuts the innermost thing: a row's **More** menu, the crop view, then the editor |
+| Close the editor | **Close**, or `Escape` when nothing smaller is open |
 
 **Looking at the charm while you work**
 
@@ -413,12 +431,46 @@ quarter of the work for a charm that differs only in how round the clip's edges
 are. Your own quality setting comes back the moment you close the editor, and
 the preview is redrawn at it.
 
+In the Charm view, **Render preview** draws the charm with the drawing as it
+stands, at draft quality, without applying anything: a note says it is a draft
+of the drawing, not yet applied, and Close puts the charm back the way it was.
+Apply is still the only thing that changes your design.
+
+**The wall behind a picture**
+
+A picture with a colored background arrives with that background as one big
+shape, the wall. Forge leaves the wall out by itself: its row starts as
+**Ignore**. A patch of the wall closed in by the artwork, the inside of an A,
+becomes a **Hole**, and every other color is **Raised**, so the charm carries
+the drawing rather than a plate with the drawing cut out of it. Turn the wall
+on if you want it.
+
+**Crop**
+
+**Crop** in the toolbar opens a crop view in the drawing's place: the picture
+with the kept rectangle clear and the rest shaded, and four rows named
+**Top**, **Bottom**, **Left** and **Right**, each a share of the picture from 0
+to 90 percent, with a slider and a number box like every other slider in the
+app. The sentence under the picture says what stays. **Save crop** applies it
+and the editor reopens on the result: a traced picture is cropped in its
+pixels and traced again through the same dialog, and a drawing you uploaded is
+clipped shape by shape. A crop starts the shape list over, so roles, layers and
+removals belong to the shapes as they are now; **Undo crop** puts the picture
+back, one step, for this session. **Cancel** or `Escape` leaves the drawing as
+it was.
+
 **If the result looks like a solid blob:** the preparer merges everything set to
 Raised into one shape. When a drawing has an outline around its detail --
 the outline of a bird with an eye and feather strokes inside it, say -- merging
 them fills the outline in and swallows the detail. That is not a bug, it is what
 "print this as one shape" means. Set the interior shapes to **Ignore**, or to
 **Hole** if you want them cut out, and the result comes back.
+
+**Warnings:**
+
+The editor surfaces warnings for unsupported features. For example, stroked paths (paths with only a `stroke` and no `fill`) cannot participate in boolean operations and are flagged with a warning badge. These elements are automatically set to "Ignore."
+
+Your role assignments and prepared output are saved with the project, so reopening a saved project restores exactly where you left off.
 
 ### Opening and saving a DXF
 
@@ -454,7 +506,7 @@ drawing you already have.
 ### Choosing what to keep from a photo
 
 A photo is traced before it becomes a shape, and tracing has to decide what
-counts as a line. Three answers, offered as **What to keep from the picture**
+counts as a line. Four answers, offered as **What to keep from the picture**
 wherever a picture enters Forge:
 
 | Choice | What it keeps | Best for |
@@ -462,6 +514,7 @@ wherever a picture enters Forge:
 | **Line art** (the default) | The drawn lines. The color behind them is dropped. | Communication symbols, and any drawing on a colored background |
 | **Solid shape** | The outline of the whole picture, filled in. | Very small pieces, where detail could not be felt anyway |
 | **Light and dark** | Whatever is darker than the background. What Forge did before. | A plain pencil drawing on white paper |
+| **Colors** | The picture separated into flat colors, one shape per color, with the color behind the picture as the wall. | A colored drawing or a logo whose colors are the point |
 
 **Why Line art is the default.** Professional communication symbols are black
 line work over a saturated fill, and the fill color carries meaning. Judging by
@@ -493,9 +546,14 @@ colors is a color that is in none of them.
 
 A big picture takes real time to trace, and it used to start the moment you
 chose one, with nothing to show for it and no way out. Now the picture is shown
-with a **Start conversion** button under it. While it works there is a bar and
-a **Cancel**, and the page goes on answering: you can scroll, read, change your
-mind. Cancel gives you the picture back exactly as it was.
+with a **Start conversion** button under it. While it works, a dialog stands in
+front of the page with the stages by name (reading the picture, tracing the
+shapes, preparing the drawing, updating the charm), a moving bar and a
+**Cancel** that stops it at any stage and gives you the picture back exactly as
+it was. A picture small enough to be over before you could press the button
+still starts by itself, and shows the dialog only if it turns out to take more
+than a moment. When the drawing needs a look, the editor opens once the dialog
+has gone.
 
 Before you commit, Forge takes a **quick look** at a thumbnail of the picture
 and tells you roughly what it will find — how busy the drawing is, and how much
@@ -519,11 +577,12 @@ look like a caption: enough of them, all small, all low down, all in one band.
 to credit its author, you still have to, wherever your project says who made
 what. Forge says this in the panel too.
 
-**Lines too thin to print.** Forge measures the thinnest line in the drawing and
-tells you how wide it will be in millimeters at the size you are printing. Under
-about half a millimeter a line may not come out at all, or may come out too
-faint to feel. It is a sentence, not an action: Forge does not change your
-drawing, it tells you what to expect so you can make it bigger or accept it.
+**Lines too thin to print.** Forge measures the thinnest line in the drawing at
+the width the charm will print it, and says so in the editor: under about half
+a millimeter a line may not come out at all, or may come out too faint to feel.
+On a charm every shape is measured too, and the ones under the floor can be set
+to Ignore in one press (see "Shapes too thin to print" above). It is a
+sentence, not an action: Forge does not change your drawing.
 
 **Nothing is uploaded.** The tracing and every choice above happen in your
 browser. You are responsible for having the right to use any image you bring.
@@ -549,13 +608,6 @@ after the one you opened -- `bird-drawing.png` comes back as
 
 Nothing is uploaded anywhere. The tracing, the editing and the saving all happen
 in your browser, and your original file is never changed.
-| Close the editor | Press `Escape` or click the close button |
-
-**Warnings:**
-
-The editor surfaces warnings for unsupported features. For example, stroked paths (paths with only a `stroke` and no `fill`) cannot participate in boolean operations and are flagged with a warning badge. These elements are automatically set to "Ignore."
-
-Your role assignments and prepared output are saved with the project, so reopening a saved project restores exactly where you left off.
 
 ---
 
