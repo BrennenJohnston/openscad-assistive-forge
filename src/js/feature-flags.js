@@ -210,7 +210,6 @@ export const FLAGS = {
   // File System Access API. Chromium-only, gated dark by default until
   // Spike S1 has been verified on real Chrome / Edge instances. Phase B
   // (file-change watcher / F14) and Phase C (write-back) extend this.
-  // See `.cursor/plans/volkswitch_2026-05-15_feedback_triage_a7bd79c7.plan.md`.
   local_folder_sync: {
     id: 'local_folder_sync',
     name: 'Persistent Local Folder Sync (Chromium only)',

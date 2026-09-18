@@ -61,10 +61,24 @@ screenshot-*.png
 # Editor workspace files
 *.code-workspace
 
-# Editor workspace state stays local, but the agent rules ship with the
-# repository (they are documentation, not workspace state).
-.cursor/*
-!.cursor/rules/
+# AI coding assistants' files are local development files, never public:
+# rules, plans and workspace state for any assistant stay on this machine.
+.cursor/
+.claude/
+.clinerules/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.cursorrules
+.windsurfrules
+.windsurf/
+.aider*
+.codex/
+.roo/
+.continue/
+.github/copilot-instructions.md
+.mcp.json
 
 # Local testing reference files
 .volkswitch/

@@ -128,7 +128,6 @@ const ROOT_PAPERS = [
   'README.md',
   'CHANGELOG.md',
   'CREDITS.md',
-  'AGENTS.md',
   // The community papers live where GitHub reads them (DP-64); the rest of
   // the project's papers are under docs/project and the docs walk finds them.
   join('.github', 'CONTRIBUTING.md'),

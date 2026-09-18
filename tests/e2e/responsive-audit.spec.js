@@ -3,8 +3,6 @@
  *
  * Discovery spec: 9 viewports x 10 UI surfaces. Failures are expected and
  * will be triaged in Phase 3. WASM-dependent tests are skipped in CI.
- *
- * @see .cursor/plans/responsive_ui_bug_audit_122efc11.plan.md  Phase 1
  */
 import { test, expect } from '@playwright/test'
 import path from 'path'
