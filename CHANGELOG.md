@@ -52,6 +52,16 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
   an engraved layer 2 stands at 4 over a floor at 2, with a 2.5 mm raised design asked for
   underneath and not printed. All three shapes of the Charm Designer build the stack now
 
+- **A drawing can arrive by a link** (DP-62) - `?drawing=<url>` on any link that opens a design
+  fetches an SVG, DXF, PNG or JPG from the hosts a project may come from, puts it into the
+  design's picture setting as if it had been chosen, converts a picture or a DXF behind the same
+  dialog and Cancel without a press, and opens the drawing editor on the result. Alone, it
+  opens the standalone editor. A host off the list, a kind the editor cannot take, or a file over
+  20 MB is refused with a sentence. The design parameters of all three charm shapes take `.dxf`
+  now, converted through the app's own engine when chosen. The drawing waits for the "Save
+  this file" prompt to be answered before it lands, so the editor never opens behind an inert
+  page. The handoff contract, the stability contract and the capabilities file carry the lane
+
 - **Crop, in the drawing editor** (DP-49) - a Crop button in the drawing view opens a crop
   view in the drawing's place: the picture with the kept rectangle clear and the rest shaded,
   four rows named Top, Bottom, Left and Right in the customizer's own slider classes, each a

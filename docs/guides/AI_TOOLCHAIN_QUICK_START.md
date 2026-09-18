@@ -37,6 +37,18 @@ person clicks one button to download the named STL. Exports carry a
 `forge-provenance.json` countersignature so the downstream end of a
 pipeline can verify where a file came from.
 
+A tool that makes drawings sends one the same way. Host the PNG, SVG or
+DXF anywhere the CSP allows and compose:
+
+```text
+https://openscad-assistive-forge.pages.dev/?example=logo-plate&drawing=https%3A%2F%2Fraw.githubusercontent.com%2Fyou%2Frepo%2Fmain%2Flogo.png
+```
+
+The Logo Plate opens with the drawing already in it, converted, and the
+drawing editor open on it. The person edits what they want, applies, sees
+the plate with their edits, and exports the STL or the edited drawing.
+`FORGE_HANDOFF_CONTRACT.md` section 2.5 has the rules.
+
 ## Door two: develop this repository with an agent
 
 The rules an agent must follow here are short and they are real — each

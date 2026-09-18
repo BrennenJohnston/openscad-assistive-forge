@@ -323,6 +323,27 @@ export function setDraftRenderer(fn) {
 }
 
 /**
+ * DP-62: the engine's render, for a DXF chosen for a design parameter. main.js
+ * lends it as a provider rather than a function, because the controller that
+ * renders is built after the first file controls are; asking at the moment of
+ * choosing means the order they came up in does not matter.
+ */
+let dxfRenderProvider = null;
+export function setDxfRenderProvider(fn) {
+  dxfRenderProvider = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * The extension of a file name, lowercased, without the dot.
+ * @param {string} name
+ * @returns {string}
+ */
+function fileExtensionOf(name) {
+  const match = String(name || '').match(/\.([^.\\/]+)$/);
+  return match ? match[1].toLowerCase() : '';
+}
+
+/**
  * DP-54 (D-144): what the model just said its design box is, in mm. The
  * app reads it from the render's echo and hands it here; every file control
  * turns it into the width its own design prints at, and an open editor hears
@@ -2919,6 +2940,8 @@ function createFileControl(
   // The editor's opening, held back by processSvgForOpenScad while a
   // conversion dialog stands in front of the page (see applyTracedImage).
   let deferredEditorOpen = null;
+  // DP-62: a drawing that arrived by a link asked for the editor.
+  let linkAsksEditor = false;
   function takeDeferredEditorOpen() {
     const fn = deferredEditorOpen;
     deferredEditorOpen = null;
@@ -3833,6 +3856,24 @@ function createFileControl(
       updateStatusCard(analysis);
       statusCard.style.display = '';
 
+      // DP-62: a drawing that arrived by a link opens the editor whatever the
+      // analysis would have decided, because editing it is what the link was
+      // for. A drawing with nothing in it is the one exception: there is
+      // nothing to edit, and the status card says so.
+      const askedByLink = linkAsksEditor;
+      linkAsksEditor = false;
+      if (
+        askedByLink &&
+        analysis.recommendation !== 'reject' &&
+        (analysis.elements?.length || 0) > 0
+      ) {
+        requestOpen({
+          openedSentence:
+            'Drawing editor open. The drawing from your link is ready to edit.',
+        });
+        return rawSvgText;
+      }
+
       // DP-49: a crop, or its undo, reopens the editor on the result and says
       // so, whatever the analysis alone would have done with the drawing.
       const cropSentence = reopenSentence;
@@ -3918,6 +3959,65 @@ function createFileControl(
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    handleChosenFile(file);
+  });
+
+  /**
+   * DP-62: a DXF chosen for a design parameter is converted to SVG through
+   * the app's own engine, the way the standalone door converts one, and then
+   * takes the SVG path under its own name with the extension changed. The
+   * engine's warnings go to the console; the sentence says how long it took.
+   */
+  async function convertChosenDxf(file) {
+    const render = dxfRenderProvider ? dxfRenderProvider() : null;
+    const { svgTextForFile } = await import('./svg-edit-entry.js');
+    fileInfo.textContent = `Converting ${file.name}\u2026`;
+    fileInfo.setAttribute('aria-busy', 'true');
+    fileButton.disabled = true;
+    try {
+      const result = await svgTextForFile(file, null, render);
+      const name = file.name.replace(/\.[^.]+$/, '.svg');
+      const svgFile = new File([result.svg], name, { type: 'image/svg+xml' });
+      const seconds = result.ms ? (result.ms / 1000).toFixed(1) : null;
+      announceChange(
+        seconds
+          ? `${file.name} converted in ${seconds} seconds.`
+          : `${file.name} converted.`
+      );
+      if (result.warnings && result.warnings.length > 0) {
+        console.warn(
+          '[DXF] The engine warned while converting:',
+          result.warnings
+        );
+      }
+      return svgFile;
+    } finally {
+      fileInfo.removeAttribute('aria-busy');
+      fileButton.disabled = false;
+    }
+  }
+
+  async function handleChosenFile(chosen) {
+    // DP-62: a drawing sent by a link asks for two things a hand-picked file
+    // does not: the conversion starts without a press (the flag the overlay's
+    // "Use as design" already sets, read further down), and the editor opens
+    // whatever the analysis would have decided. Read once and cleared, so it
+    // never leaks into the next file a person picks by hand.
+    linkAsksEditor = fileInput.dataset.forgeOpenEditor === '1';
+    delete fileInput.dataset.forgeOpenEditor;
+    let file = chosen;
+    if (fileExtensionOf(file.name) === 'dxf' && acceptsSvg) {
+      try {
+        file = await convertChosenDxf(file);
+      } catch (err) {
+        fileInfo.textContent = `Conversion failed: ${err.message}`;
+        fileInfo.className = 'file-info file-info--error';
+        announceChange(`DXF conversion failed: ${err.message}`);
+        console.error('[DXF] Conversion error:', err);
+        linkAsksEditor = false;
+        return;
+      }
+    }
 
     // D-132: start the ring engine's chunk now, while the file is still being
     // read and (for a picture) traced. By the time the companions are built it
@@ -4078,7 +4178,7 @@ function createFileControl(
       fileInfo.className = 'file-info file-info--error';
     };
     reader.readAsDataURL(file);
-  });
+  }
 
   // Clear file
   clearButton.addEventListener('click', () => {

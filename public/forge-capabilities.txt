@@ -12,7 +12,7 @@
 # Additive only: entries may be added; existing entries keep their meaning.
 
 version: 1
-updated: 2026-09-15
+updated: 2026-09-18
 # Which build answered. The same string the service worker names its cache
 # after, so a bug report and a cache entry can be matched to each other.
 # Written at build time; in a source checkout it is the literal token.
@@ -28,6 +28,13 @@ build: __BUILD_STAMP__
 ?preset=<name>       select a named preset after the project loads
 ?uiMode=<mode>       open in a named interface mode
 ?skipWelcome=true    skip the welcome screen
+
+## SEND A DRAWING (query parameter, stable)
+
+?drawing=<url>       fetch a .svg .dxf .png or .jpg into the design the link
+                     opened; a picture or DXF is converted; the editor opens on
+                     it. Alone, opens the standalone editor. Same hosts as
+                     below; 20 MB; data: with #name.ext for an inline drawing
 
 ## CARRY SETTINGS (URL fragment)
 

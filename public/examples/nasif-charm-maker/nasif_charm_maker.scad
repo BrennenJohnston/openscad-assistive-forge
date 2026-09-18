@@ -20,8 +20,8 @@ charm_thickness = 3; // [1.5:0.5:8]
 corner_radius = 4; // [0:0.5:15]
 
 /* [Design] */
-// Image file for the design (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion) @label(Image file)
-design_file = "heart.svg"; // [file:svg,png,jpg]
+// Image file for the design (SVG, DXF, PNG, or JPG. A picture is converted to SVG when you press Start conversion; a DXF is converted when you choose it) @label(Image file)
+design_file = "heart.svg"; // [file:svg,png,jpg,dxf]
 
 // Engraving depth (or raise height). A layered design uses the layer dials below instead @label(Engrave depth)
 engrave_depth = 0.8; // [0.2:0.1:3.0]

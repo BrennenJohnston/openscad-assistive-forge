@@ -7,7 +7,7 @@
 
 /* [Design] */
 // Image file for the design (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion; simple single-path SVGs work best) @label(Image file)
-design_file = ""; // [file:svg,png,jpg]
+design_file = ""; // [file:svg,png,jpg,dxf]
 
 // Depth of engraving (or height of raised design). A drawing with layers uses the layer depths below instead @label(Engrave depth)
 engrave_depth = 0.8; // [0.2:0.1:3.0]

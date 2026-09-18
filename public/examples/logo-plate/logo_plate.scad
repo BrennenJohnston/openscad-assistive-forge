@@ -19,8 +19,8 @@ plate_thickness = 4; // [2:0.5:10]
 corner_radius = 3; // [0:0.5:10]
 
 /* [Logo] */
-// Image file for engraving (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion)
-logo_file = "sample-logo.svg"; // [file:svg,png,jpg]
+// Image file for engraving (SVG, DXF, PNG, or JPG. A picture is converted to SVG when you press Start conversion; a DXF is converted when you choose it)
+logo_file = "sample-logo.svg"; // [file:svg,png,jpg,dxf]
 
 // Engraving depth. A layered logo uses the layer dials below instead
 cut_depth = 1.0; // [0.3:0.1:3.0]

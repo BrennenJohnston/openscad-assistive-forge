@@ -18,6 +18,7 @@ import {
   setParameterValue as _setParameterValue,
   setStarterParameters,
   setDraftRenderer,
+  setDxfRenderProvider,
   setDesignFitBoxMm,
 } from './js/ui-generator.js';
 import {
@@ -5403,6 +5404,16 @@ async function initApp() {
   // undo history and the project are not touched, so nothing is written
   // until Apply, and closing without it leaves the committed design standing
   // (the close handler above re-renders it, from the cache when it can).
+  // DP-62: a DXF chosen for a design parameter converts through the same
+  // engine the standalone door uses. Asked at the moment of choosing, so a
+  // control built before the controller exists still gets it.
+  setDxfRenderProvider(() =>
+    renderController
+      ? (scad, params, options) =>
+          renderController.render(scad, params, options)
+      : null
+  );
+
   setDraftRenderer((paramName, value, extra) => {
     if (!autoPreviewController) return;
     const state = stateManager.getState();
@@ -8485,6 +8496,64 @@ if (rounded) {
     initUrlParams.toString()
       ? `${window.location.pathname}?${initUrlParams}${window.location.hash}`
       : `${window.location.pathname}${window.location.hash}`;
+  // DP-62: a drawing sent by a link. `?drawing=<url>` fetches a PNG, JPG,
+  // SVG or DXF from a host a project may come from and hands it to the design
+  // parameter of whatever the link opened, as if the person had chosen it:
+  // the conversion starts behind the dialog and its Cancel, and the editor
+  // opens on the result. With nothing else in the link, the standalone
+  // editor opens on it instead.
+  const drawingParam = initUrlParams.get('drawing');
+  async function applyLinkedDrawing({ door = false } = {}) {
+    if (!drawingParam) return;
+    initUrlParams.delete('drawing');
+    history.replaceState(null, '', cleanUrlKeepingFragment());
+    const {
+      parseDrawingLink,
+      fetchDrawingFile,
+      waitForDrawingTarget,
+      waitForNoModal,
+      waitForDoorReady,
+      deliverDrawing,
+    } = await import('./js/linked-drawing.js');
+    try {
+      const link = parseDrawingLink(drawingParam, {
+        origin: window.location.origin,
+      });
+      updateStatus(`Fetching ${link.name} from the link\u2026`);
+      const file = await fetchDrawingFile(link);
+      if (door) {
+        const doorInput = document.getElementById('svgEditFileInput');
+        if (!doorInput || !(await waitForDoorReady())) {
+          throw new Error('The drawing editor is not available on this page.');
+        }
+        await waitForNoModal();
+        deliverDrawing(doorInput, file);
+        announceImmediate(
+          `${link.name} from the link is opening in the drawing editor.`
+        );
+        return;
+      }
+      const target = await waitForDrawingTarget(link.ext);
+      if (!target) {
+        const message = `This design has no picture setting that takes a .${link.ext} file, so ${link.name} was not loaded.`;
+        updateStatus(message, 'error');
+        announceImmediate(message);
+        return;
+      }
+      // The example's own "Save this file for quick access?" comes up right
+      // after the controls do. The drawing waits for it (DP-52: an editor
+      // opened behind an inert page can neither take focus nor say so).
+      await waitForNoModal();
+      deliverDrawing(target, file);
+      announceImmediate(`${link.name} from the link is being loaded.`);
+    } catch (error) {
+      console.error('[DeepLink] Failed to load the drawing:', error);
+      const message = `Couldn't load the drawing from the link. ${error.message}`;
+      updateStatus(message, 'error');
+      announceImmediate(message);
+    }
+  }
+
   // Support both ?example= and ?load= (alias for website embedding)
   const exampleParam =
     initUrlParams.get('example') || initUrlParams.get('load');
@@ -8509,6 +8578,7 @@ if (rounded) {
           announceImmediate(
             `${EXAMPLE_DEFINITIONS[exampleParam]?.name || 'Example'} loaded from URL link`
           );
+          await applyLinkedDrawing();
         } catch (error) {
           console.error('[DeepLink] Failed to load example:', error);
           updateStatus(`Failed to load example: ${exampleParam}`);
@@ -8979,6 +9049,8 @@ if (rounded) {
         // Show the manifest info banner
         showManifestInfoBanner(manifest.name, manifest.author);
 
+        await applyLinkedDrawing();
+
         // --- ?uiMode= or manifest defaults.uiMode / defaults.hiddenPanels ---
         const manifestUiMode = initUrlParams.get('uiMode') || defaults?.uiMode;
         const manifestHiddenPanels = defaults?.hiddenPanels;
@@ -9213,6 +9285,7 @@ if (rounded) {
         console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
         updateStatus(`Loaded ${urlFileName} from URL`);
         announceImmediate(`${urlFileName} loaded from URL link`);
+        await applyLinkedDrawing();
       } catch (error) {
         console.error('[DeepLink] Failed to load project:', error);
         const friendlyMsg =
@@ -9225,6 +9298,11 @@ if (rounded) {
         );
       }
     }, 500);
+  }
+
+  // DP-62: a drawing with no design to put it on opens the standalone editor.
+  if (drawingParam && !exampleParam && !manifestParam && !projectParam) {
+    setTimeout(() => applyLinkedDrawing({ door: true }), 500);
   }
 
   /**
@@ -12338,6 +12416,10 @@ if (rounded) {
       const entry = await getSvgEditEntry();
       await entry.openFile(file);
     });
+
+    // DP-62: a drawing sent by a link with no design to put it on waits for
+    // this listener before it is handed to the input.
+    document.body.dataset.drawingDoorReady = '1';
 
     const openPicker = () => svgEditFileInput.click();
     if (editDrawingSpotlightBtn) {
