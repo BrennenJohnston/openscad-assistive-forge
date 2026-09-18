@@ -495,14 +495,18 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
     await p.start.click();
-    await expect(p.running).toBeVisible({ timeout: 30_000 });
 
-    // Colors, while the first conversion is still at work.
+    // Colors, while the first conversion is still at work: dispatched right
+    // behind the press. DP-57 (D-157) made a change AFTER a run wait for the
+    // person's press, so a change that lands after a quick first run would
+    // prove nothing about superseding; the press opens the dialog at once
+    // and the change's 180 ms debounce lands inside a run that takes seconds.
     const colours = page.locator('input[type="radio"][value="colours"]');
     await colours.evaluate((el) => {
       el.checked = true;
       el.dispatchEvent(new Event('change', { bubbles: true }));
     });
+    await expect(p.running).toBeVisible({ timeout: 30_000 });
     const summary = page.locator('.ink-controls-summary');
     await page.waitForTimeout(2000);
     await expect(summary).not.toContainText(/already running/);

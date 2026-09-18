@@ -217,9 +217,16 @@ test.describe('The Stencil Maker makes plates', () => {
         async () => {
           const text = (await summary.textContent().catch(() => '')) || ''
           if (/colors to paint, and the wall/.test(text)) return 'done'
-          if (await start.isVisible().catch(() => false)) {
-            await start.click({ noWaitAfter: true }).catch(() => {})
-          }
+          // Pressed on the element: the panel lives inside a disclosure that
+          // may be closed, so a visibility check would never let a press
+          // through on a machine where the picture is not quick (CI's Edge).
+          await start
+            .evaluate((el) => {
+              if (el.hidden || el.disabled) return false
+              el.click()
+              return true
+            })
+            .catch(() => false)
           return text.slice(0, 40)
         },
         { timeout: 180000, intervals: [1000] }
