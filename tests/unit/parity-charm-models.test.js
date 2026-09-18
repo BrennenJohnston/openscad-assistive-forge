@@ -230,7 +230,8 @@ const DETECT = {
   },
   attachment: (p) => !!p.attachment_type,
   design2: (p, key) => !!p[`${pre(key)}_file_2`],
-  layers: (p) => !!p.design_layer_1 && !!p.design_layer_1_depth,
+  layers: (p, key) =>
+    !!p[`${pre(key)}_layer_1`] && !!p[`${pre(key)}_layer_1_depth`],
   clipfit: (p) => !!p.gap_width || !!p.inner_height,
   shapefromdesign: (p) =>
     !!p.design_silhouette &&

@@ -1,7 +1,7 @@
 {
   "name": "Logo Plate (SVG Import)",
   "description": "A parametric plate with an engraved logo loaded from an SVG file. Upload your own SVG or use the bundled sample.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "CC0-1.0",
   "main": "logo_plate.scad",
@@ -15,7 +15,10 @@
     "crown.svg",
     "sun.svg",
     "presets/large-plate.json",
-    "presets/small-plate.json"
+    "presets/small-plate.json",
+    "logo_layer_1.svg",
+    "logo_layer_2.svg",
+    "logo_layer_3.svg"
   ],
   "program": "charm-customizer",
   "tags": [
