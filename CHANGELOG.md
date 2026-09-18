@@ -370,12 +370,9 @@ the sharing feature, so it needs a decision before a fix.
   directive-by-directive table, the data-handling story (nothing leaves the browser), exactly
   which hosts the site connects to, the supply-chain controls, and the accessibility conformance
   work. Every claim cites the file that proves it. The old IT approval guide now points here
-- **Golden rules for AI coding agents** (DP-28) - `AGENTS.md` at the repository root carries the
-  rules any AI assistant working on this codebase must follow (protected vendored files, the
-  accessibility bar, commit conventions, quality gates), with the same rules in Cursor's format
-  under `.cursor/rules/` and a pointer in `CLAUDE.md`. A new quick-start guide,
-  `docs/guides/AI_TOOLCHAIN_QUICK_START.md`, covers both doors: pointing a pipeline tool at
-  Forge, and developing this repository with an agent
+- **A quick start for tools that point at Forge** (DP-28) - `docs/guides/AI_TOOLCHAIN_QUICK_START.md`
+  shows a pipeline tool how to compose a link that opens a model with a preset, or sends a
+  drawing into the Logo Plate, and how the file comes back
 - **A photo journal of the release** (DP-30) - `docs/updates/WHATS_NEW_v5.md` walks what changed
   since 4.5.0 in eight pictures and plain words, linked from the README
 - **What a screen reader actually hears, written down** (DP-32) - `docs/notes/SCREEN_READER_LESSONS.md`
