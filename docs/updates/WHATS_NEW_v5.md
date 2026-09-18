@@ -1,9 +1,3 @@
-<!--
-  DRAFT - this journal and every image alt text in it are awaiting my
-  review pass before release. Do not link from released surfaces until
-  this banner is removed.
--->
-
 # What's new in version 5
 
 What changed since version 4.5.0 shipped in July 2026, with pictures of the
