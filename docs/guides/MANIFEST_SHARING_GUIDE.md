@@ -183,8 +183,8 @@ project's files, the `forge-manifest.json` that describes them, and a small
 selected, and the values that differed from the defaults. Unzip it into your
 repository and everything is already in the right place.
 
-`forge-provenance.json` is new and nothing reads it back yet. It is there so a
-file that comes home can say where it has been.
+`forge-provenance.json` is new and nothing reads it back yet. It records
+where the design came from.
 
 ---
 

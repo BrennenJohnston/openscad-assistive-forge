@@ -36,15 +36,15 @@ The rest of this guide describes the **Assistive Forge** interface.
 
 ## Opening Your First Design
 
-### Option 1: Load an Example
+### Option 1: Open an example
 
-1. Open the app at your hosted URL
-2. Once past the interface choice, look for the **Welcome Panel** in the center
-   of the screen
-3. Click **"Load Example"** to see available sample models
-4. Select any example to load it
+1. Open the app
+2. Once past the interface choice, the welcome screen shows four cards
+3. Press **Beginners Start Here** to load the simple box example with a short
+   tour, or open the **Charm Designer** or the **Braille Card Designer**
 
-The example loads with default settings. You'll see a 3D preview on the right (or below on mobile).
+The example loads with default settings. The 3D preview is on the right, or
+below on a phone.
 
 ### Option 2: Upload Your Own File
 
@@ -159,7 +159,7 @@ The preview settings area has two tools for working with reference images:
 ## Getting Help
 
 - **Parameter help**: Click the ? button next to any parameter
-- **Error messages**: Read carefully—they explain what went wrong
+- **Error messages**: they say what went wrong
 - **GitHub Issues**: Report bugs or request features
 
 ---

@@ -221,7 +221,7 @@ flat profile. You never have to remember which combination of settings is needed
 | "Your model produces 2D geometry" warning during preview | This is normal — it means the model is already in 2D export mode. Click Generate to export the file. |
 | SVG file is empty or shows only a dot | Your generate value may be set to a 3D mode. Use the SVG/DXF auto-adjust (it sets the right value automatically). |
 | File opens in Inkscape but has no visible paths | Check that units in Inkscape's Document Properties are set to mm, and that the scale is 1.0 (not scaled to fit the page). |
-| DXF opens in LibreCAD but lines look doubled | This is the BUG-D fix release — duplicate lines are now removed in post-processing. |
+| DXF opens in LibreCAD but lines look doubled | Duplicate lines are removed after export. If you still see them, report it with the file. |
 | DXF coordinates look wrong (very small or very large) | Verify the tablet model is selected correctly — the model uses physical mm dimensions. |
 
 ### 10. Test and iterate

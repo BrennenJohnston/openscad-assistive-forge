@@ -20,7 +20,7 @@ If you just want to customize models, start here:
 ### Specialized workflows
 
 - [Keyguard Workflow](./guides/KEYGUARD_WORKFLOW_GUIDE.md) -- AAC keyguard customization for clinicians
-- [Braille Card Customizer](./guides/BRAILLE_CARD_GUIDE.md) -- type text, get a 3D-printable braille card (on-device liblouis translation)
+- [Braille Card Designer](./guides/BRAILLE_CARD_GUIDE.md) -- type text, get a 3D-printable braille card (on-device liblouis translation)
 - [One-Link Sharing](./guides/MANIFEST_SHARING_GUIDE.md) -- publish a design so one link opens it ready to customize
 - [Welcome Screen](./guides/WELCOME_SCREEN.md) -- the tutorial and role cards on the front page
 - [Forge or the official Playground?](./guides/CHOOSING_FORGE_VS_PLAYGROUND.md) -- which tool fits which job

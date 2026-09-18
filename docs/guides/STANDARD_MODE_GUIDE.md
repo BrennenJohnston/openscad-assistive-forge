@@ -1,6 +1,6 @@
 # Standard Mode Guide
 
-Standard Mode is the default interface. This guide covers everything you can do here: parameter types, presets, exports, image measurement, and the reference overlay.
+Standard Mode is the full view of the Assistive Forge interface; Simplified, the default, hides the working panels. This guide covers parameter types, presets, exports, image measurement, the reference overlay, and the drawing editor.
 
 ---
 
@@ -294,128 +294,94 @@ Opening a folder warns you above 200 files or 150 MB. That is a warning, not a
 refusal -- large projects simply render more slowly, because every file the
 model depends on has to be handed to the OpenSCAD engine before it can start.
 
-### SVG Preparation
+### The drawing editor
 
-When you upload an SVG file (or select one from the gallery), the app analyzes it to determine whether it needs preparation for OpenSCAD. OpenSCAD imports SVG as 2D geometry, so multi-element SVGs need to be combined into a single compound path using boolean operations (union for foreground shapes, difference for holes).
+When you give a design an SVG, the app checks whether it needs preparation.
+OpenSCAD imports an SVG as one 2D shape, so a drawing with several shapes
+needs a decision about each one. A badge next to the file input says what
+happened:
 
-**What happens automatically:**
+- **SVG Ready** (green): one shape, or prepared without questions
+- **Needs review** (amber): several shapes, so the editor opens for you
+- **Unsupported features** (red): gradients, clip paths or other features
+  that cannot be flattened
 
-1. The SVG is analyzed for complexity (number of elements, fills, strokes, transforms)
-2. A status badge appears next to the file input:
-   - **SVG Ready** (green): Single-element SVG or successfully auto-prepared
-   - **Needs review** (amber): Multiple elements detected — the editor opens for you to review
-   - **Unsupported features** (red): Gradients, clip-paths, or other features that cannot be flattened
-3. Simple SVGs are auto-prepared silently. Complex or ambiguous SVGs open the preparation editor
+**One picture.** The editor shows what your drawing will print as, with the
+list of shapes beside it. **Compare with original** shows the before and
+after side by side.
 
-**The drawing editor:**
+**Roles.** Each shape has one of three roles:
 
-The editor shows **one picture** — what your drawing will print as — with the
-list of shapes beside it. Press **Compare with original** when you want the
-before and after side by side; the rest of the time one picture is the point.
-
-Each shape in the list has a role:
-
-- **On**: the shape prints, at its layer, standing up or cut in as the
-  layer's style says
-- **Cut out**: cut out of the shape it sits in, the inside of an O
-- **Off**: left out entirely, as if it had never been drawn
-
-The switch used to say Raised, Hole and Ignore. I changed it because a "hole"
-is not always a hole in the object: with the engraved style a hole stands up
-as an island and a raised shape is cut in. These words say what the shape is
-in the drawing, and the layer's style says which way it goes.
-
-With layers, the picture paints every On shape in its layer's color, layer 1
-deep blue, layer 2 orange, layer 3 yellow-green, each a step lighter than the
-last so the order reads in grayscale too; a Cut out is paper with a dashed
-edge, and a shape turned Off is its layer's color muted under a diagonal
-hatch, so you can see it is still there. The legend under the picture names
-each.
+- **On**: the shape prints, at its layer, raised or engraved as the layer's
+  style says
+- **Cut out**: cut out of the shape it sits in, like the inside of an O
+- **Off**: left out
 
 The role control shows all three words, so what you read and what a screen
-reader reads are the same three words. Arrow keys move between them.
+reader reads are the same. Arrow keys move between them.
 
-**Pointing at a shape**
+With layers, the picture paints every On shape in its layer's color: layer 1
+deep blue, layer 2 orange, layer 3 yellow-green, each lighter than the last
+so the order reads in grayscale too. A Cut out is paper with a dashed edge.
+A shape turned Off keeps its layer's color, muted under a diagonal hatch, so
+you can see it is still there. The legend under the picture names each.
 
-The list and the picture point at each other. Move over a row and that shape
-lights up in the drawing; move over the drawing and its row is marked. Click
-either one to choose it — hold Ctrl (or Cmd) to add and remove, Shift to take
-a range — and **Delete selected** appears in the shapes panel with the number
-you have chosen. With several shapes chosen, the switch on any one of them
-speaks for all of them: press **Off** on one chosen row and every chosen
-shape turns off, and the editor says how many.
+**Choosing shapes.** The list and the picture point at each other: move over
+a row and its shape lights up in the drawing; move over the drawing and its
+row is marked. Click either to choose it. Ctrl (Cmd on a Mac) adds or removes
+a shape, Shift takes a range, and Ctrl+A chooses every shape while the list
+is focused. **Delete selected** appears with the number chosen. With several
+shapes chosen, the switch on any chosen row sets all of them, and the editor
+says how many.
 
-On a touch screen, one finger scrolls the page and two fingers zoom and pan the
-picture. A tap chooses a shape. **Fit**, **+** and **−** do the same job
-for anyone who would rather not pinch.
+On a touch screen, one finger scrolls the page and two fingers zoom and pan
+the picture. A tap chooses a shape. **Fit**, **+** and **−** do the same
+without pinching. Pressing inside an outline chooses whatever is under your
+finger, usually the background behind it, because an outline is the line
+itself, not the space inside it. The mark that appears as you move shows
+which shape you are about to choose.
 
-One thing to know: pressing inside an outline chooses whatever is really under
-your finger, which is usually the background behind it rather than the outline.
-An outline is the line itself, not the space inside it. The mark that appears
-as you move tells you which shape you are about to choose.
+**More, on each row.** Each row has a **More** button holding the shape's
+offset, its layer where the design has layers, and **Delete**. Every shape
+starts on layer 1, and three layers are always offered, each with its own
+height on the charm. Choose a layer under More.
 
-**More, on each row**
+**The result combines by itself.** Combining shapes into one outline is the
+slow step, and its cost depends on how complicated the shapes are, not on how
+many there are: two hundred rectangles take a tenth of a second, two hundred
+curves half a second. Forge combines the drawing a third of a second after
+your last change, off the page's own thread, and says so under the picture:
+"Combining 146 shapes, about 2 seconds. Apply is ready when they are
+combined." You can keep choosing while it works. Apply and Save wait for the
+result, and a change made while it combines starts it again. After the first
+combine on your machine, the estimate is based on that measurement. Above a
+thousand shapes, Forge asks you to simplify the drawing first and names both
+numbers.
 
-Each row has a **More** button holding that shape's offset, its layer where the
-design has a choice of layers, and **Delete**. It keeps the row down to one
-line so the shape's name has room to be read. Every shape starts on layer 1
-and three layers are always offered;
-Forge does not guess a stack from how the shapes nest. The panel says how many
-layers the design supports, and you choose a layer under More to build one.
-
-**Bigger drawings: the result combines by itself**
-
-Combining shapes into one outline is the expensive step, and how long it takes
-depends on how complicated the shapes are rather than on how many there are:
-the same two hundred shapes take a tenth of a second as rectangles and half a
-second as curves. Forge combines the drawing by itself a third of a second
-after your last change, off the page's own thread, and says so under the
-picture: "Combining 146 shapes, about 2 seconds. Apply is ready when they are
-combined." You can keep reading and choosing while it works. Apply and Save
-wait until the result has landed, so you are never applying something you have
-not seen, and a change made while it combines simply starts it again.
-
-The prediction learns from your machine: after the first real combine, Forge
-knows how fast this computer and this kind of drawing are, and says so more
-accurately from then on.
-
-Above a thousand shapes Forge says so and asks you to simplify the drawing
-first, naming both numbers.
-
-**Removing shapes you do not want**
-
-"Off" leaves a shape in the list but out of the result. To take shapes out of
-the *list* as well, which is what you want when there are hundreds of them:
+**Removing shapes.** Off leaves a shape in the list but out of the result. To
+take shapes out of the list:
 
 | Action | How |
 |--------|-----|
 | Remove one shape | **More** on its row, then **Delete** |
-| Remove the shapes you have chosen | Choose them on the list or the picture, then **Delete selected** |
+| Remove the chosen shapes | Choose them, then **Delete selected** |
 | Remove every shape below a size | Type a size in **Smaller than … mm²** and press **Delete those** |
-| Keep only the biggest ones | Type a number in **Keep largest …** and press **Delete the rest** |
-| Put the last removal back | **Undo delete** (one step, and only for this session) |
+| Keep only the biggest | Type a number in **Keep largest …** and press **Delete the rest** |
+| Put the last removal back | **Undo delete** (one step, this session only) |
 
-Sizes are measured against the design width in the editor's header, so they are
-the size the shape will really print. If removing shapes brings the drawing back
-under the budget, the preview starts updating on its own again.
+Sizes are measured at the design width in the editor's header, so they are
+the size the shape will print. Removals are saved with the project.
 
-Removals are remembered with the project, so reopening it later shows the list
-you left behind rather than starting over.
-
-**Shapes too thin to print**
-
-Forge measures every shape at the width the charm will really print the
-drawing: the charm says how wide its design box is, and the editor's width box
-starts there. It counts the shapes under half a millimeter and says so above
-the list: "33 shapes are thinner than 0.5 mm at 12 mm wide and may not print."
-Each of those rows carries a small **thin** mark beside its name, and a screen
-reader hears why: too thin to print, or too small to trace clearly, which
-means under three pixels in the picture. Nothing is changed for you. In the
-shapes panel, **Thinner than … mm** and **Turn those off** set every flagged
-shape to Off in one press, **Turn those back on** puts them back, and any single
-row can be turned back on by hand. The floor is a number you can change. The
-width follows the charm, and you can type another to see what a bigger charm
-would do.
+**Shapes too thin to print.** Forge measures every shape at the width the
+charm will print the drawing: the charm's design box, which the editor's
+width box starts at. It counts the shapes under half a millimeter and says so
+above the list: "33 shapes are thinner than 0.5 mm at 12 mm wide and may not
+print." Each such row carries a **thin** mark, and a screen reader hears why:
+too thin to print, or too small to trace clearly, which means under three
+pixels in the picture. Nothing is changed for you. **Turn those off** sets
+every flagged shape to Off in one press, **Turn those back on** puts them
+back, and any single row can be turned back on by hand. The floor and the
+width are numbers you can change.
 
 **Editor controls:**
 
@@ -436,93 +402,69 @@ would do.
 | Shut what is open | `Escape` shuts the innermost thing: a row's **More** menu, the crop view, then the editor |
 | Close the editor | **Close**, or `Escape` when nothing smaller is open |
 
-**Looking at the charm while you work**
-
-The **Drawing / Charm** switch in the editor's toolbar swaps between the drawing
-you are editing and the charm it makes. Nothing is lost by switching: every role,
-removal and layer is still there when you switch back.
-
-While the editor is open, previews are drawn at draft quality, which is about a
-quarter of the work for a charm that differs only in how round the clip's edges
-are. Your own quality setting comes back the moment you close the editor, and
-the preview is redrawn at it.
-
+**The Drawing / Charm switch.** The switch in the editor's toolbar swaps
+between the drawing and the charm it makes. Every role, removal and layer is
+still there when you switch back. While the editor is open, previews are
+drawn at draft quality; your own quality setting returns when you close it.
 In the Charm view, **Render preview** draws the charm with the drawing as it
-stands, at draft quality, without applying anything: a note says it is a draft
-of the drawing, not yet applied, and Close puts the charm back the way it was.
-Apply is still the only thing that changes your design.
+stands, without applying anything. A note says it is a draft, and Close puts
+the charm back. Apply is the only thing that changes your design.
 
-**The wall behind a picture**
+**The wall.** A picture with a colored background arrives with that
+background as one big shape, the wall. Its row starts as **Off**. A patch of
+wall closed in by the artwork, like the inside of an A, becomes a **Cut
+out**, and every other color is **On**, so the charm carries the drawing
+rather than a plate with the drawing cut out of it. Turn the wall on if you
+want it.
 
-A picture with a colored background arrives with that background as one big
-shape, the wall. Forge leaves the wall out by itself: its row starts as
-**Off**. A patch of the wall closed in by the artwork, the inside of an A,
-becomes a **Cut out**, and every other color is **On**, so the charm carries
-the drawing rather than a plate with the drawing cut out of it. Turn the wall
-on if you want it.
+**Crop.** **Crop** in the toolbar opens a crop view in the drawing's place:
+the kept rectangle clear, the rest shaded, and four sliders named **Top**,
+**Bottom**, **Left** and **Right**, each a share of the picture from 0 to 90
+percent, with a number box beside each. The sentence under the picture says
+what stays. **Save crop** applies it: a traced picture is cropped in its
+pixels and traced again, and an uploaded drawing is clipped shape by shape. A
+crop starts the shape list over. **Undo crop** puts the picture back, one
+step, for this session. **Cancel** or `Escape` leaves the drawing as it was.
 
-**Crop**
+**If the result looks like a solid blob:** everything set to On is merged
+into one shape. When a drawing has an outline around its detail, merging
+fills the outline and swallows the detail. Set the interior shapes to
+**Off**, or to **Cut out** to cut them out.
 
-**Crop** in the toolbar opens a crop view in the drawing's place: the picture
-with the kept rectangle clear and the rest shaded, and four rows named
-**Top**, **Bottom**, **Left** and **Right**, each a share of the picture from 0
-to 90 percent, with a slider and a number box like every other slider in the
-app. The sentence under the picture says what stays. **Save crop** applies it
-and the editor reopens on the result: a traced picture is cropped in its
-pixels and traced again through the same dialog, and a drawing you uploaded is
-clipped shape by shape. A crop starts the shape list over, so roles, layers and
-removals belong to the shapes as they are now; **Undo crop** puts the picture
-back, one step, for this session. **Cancel** or `Escape` leaves the drawing as
-it was.
+**Warnings.** Unsupported features are listed in the editor's warnings. A
+path with only a stroke and no fill cannot take part in the combining, and
+its row carries a warning.
 
-**If the result looks like a solid blob:** the preparer merges everything set to
-On into one shape. When a drawing has an outline around its detail --
-the outline of a bird with an eye and feather strokes inside it, say -- merging
-them fills the outline in and swallows the detail. That is not a bug, it is what
-"print this as one shape" means. Set the interior shapes to **Off**, or to
-**Cut out** if you want them cut out, and the result comes back.
-
-**Warnings:**
-
-The editor surfaces warnings for unsupported features. For example, stroked paths (paths with only a `stroke` and no `fill`) cannot participate in boolean operations and are flagged with a warning badge. These elements are automatically set to "Ignore."
-
-Your role assignments and prepared output are saved with the project, so reopening a saved project restores exactly where you left off.
+Your roles and the prepared drawing are saved with the project.
 
 ### Opening and saving a DXF
 
-The drawing editor takes `.dxf` as well as SVG and photos, and can give one
-back. Forge's own OpenSCAD engine does the converting, so nothing is uploaded
-and no extra software is needed. MEASURED on a 40 x 25 mm drawing: DXF in took
-about 0.3 seconds, DXF out about the same.
+The editor takes `.dxf` as well as SVG and photos, and can save one back.
+Forge's own OpenSCAD engine does the converting, in your browser. On a 40 x
+25 mm drawing, DXF in and DXF out each took about 0.3 seconds.
 
-Open a DXF the way you would open anything else, from the welcome screen's
-**Edit a drawing or photo** line or **Edit Drawing** in the Actions drawer.
-Forge says it is converting, then the editor opens on the drawing with each
-shape listed. When you are done, **Save as DXF** sits beside **Save edited
-SVG**; you can take either, or both.
+Open a DXF from the welcome screen's **Edit a drawing or photo** line or
+**Edit Drawing** in the Actions drawer. Forge says it is converting, then
+the editor opens with each shape listed. **Save as DXF** sits beside **Save
+edited SVG**.
 
-**Forge tells you the size it saved.** A drawing that has been through the
-editor is rebuilt from its shapes, and rebuilding is not perfectly exact:
-MEASURED on that same 40 x 25 mm file, the saved DXF came back 40.3 by 25.35.
-Small, and it matters if you are cutting to a fit, so the app says the
-measurement out loud rather than leaving you to find it at the machine. If the
-number has moved and that is a problem, take the SVG instead and convert it
-with your own tool.
+A drawing that has been through the editor is rebuilt from its shapes, and
+the rebuilt size can differ slightly: that 40 x 25 mm file came back 40.3 by
+25.35. The app reports the saved size. If the difference matters for a fit,
+take the SVG instead and convert it with your own tool.
 
-**What Forge cannot read from a DXF.** OpenSCAD's DXF import reads drawing
-entities. Text, dimensions and other annotation entities are outside that, so a
-file made only of those arrives empty. Forge says so plainly instead of handing
-you a blank drawing. Export the drawing again with its outlines as geometry, or
+OpenSCAD's DXF import reads drawing entities only. Text, dimensions and other
+annotations are not read, so a file made only of those arrives empty, and
+Forge says so. Export the drawing again with its outlines as geometry, or
 send an SVG.
 
-This is separate from **9a. Export for laser cutting** in the keyguard guide,
-which is about exporting a MODEL you are customizing. This section is about a
-drawing you already have.
+This is separate from **Export for laser cutting** in the keyguard guide,
+which exports a model you are customizing.
 
 ### Choosing what to keep from a photo
 
 A photo is traced before it becomes a shape, and tracing has to decide what
-counts as a line. Four answers, offered as **What to keep from the picture**
+counts as a line. **What to keep from the picture** offers four answers
 wherever a picture enters Forge:
 
 | Choice | What it keeps | Best for |
@@ -532,80 +474,63 @@ wherever a picture enters Forge:
 | **Light and dark** | Whatever is darker than the background. What Forge did before. | A plain pencil drawing on white paper |
 | **Colors** | The picture separated into flat colors, one shape per color, with the color behind the picture as the wall. | A colored drawing or a logo whose colors are the point |
 
-**Why Line art is the default.** Professional communication symbols are black
-line work over a saturated fill, and the fill color carries meaning. Judging by
-brightness alone puts a blue field and the black drawing on top of it in the
-same bucket, and they merge into one shape: MEASURED on a black person symbol
-inside a blue square, the old tracing returned a plain blue square with the
-person gone, and said nothing. Line art asks two questions instead of one - is
-it dark, and is it close to gray - so black strokes survive and colored fills
-do not.
+**Why Line art is the default.** Communication symbols are black line work
+over a colored fill, and the fill carries meaning. Judging by brightness
+alone puts a blue field and the black drawing on it in the same bucket, and
+they merge: a black person symbol inside a blue square came back as a plain
+blue square with the person gone. Line art asks two questions, is it dark and
+is it close to gray, so black strokes survive and colored fills do not.
 
-Both sliders can be moved, each with a number box beside it for setting an
-exact value:
+Two sliders, each with a number box beside it:
 
-- **How dark counts as a line** - higher keeps more of the picture, lower keeps
-  only the darkest strokes.
-- **How colorful is still a line** - lower rejects colored fills more firmly.
-  Raise it if a colored line is being dropped. It only applies to Line art.
+- **How dark counts as a line**: higher keeps more of the picture, lower
+  keeps only the darkest strokes.
+- **How colorful is still a line**: lower rejects colored fills more firmly.
+  Raise it if a colored line is being dropped. Line art only.
 
-After every change Forge says what happened: how many shapes it found, how much
-of the picture became ink, and whether anything looked wrong - almost nothing
-kept, or so much kept that the result will print as one block.
+After every change Forge says what happened: how many shapes it found, how
+much of the picture became ink, and whether anything looks wrong, such as
+almost nothing kept, or so much kept that the result will print as one
+block. If the picture had a single color behind its lines, Forge names it,
+so you can pick a filament near it. It says nothing when the picture has
+several fills, because their average is a color that is in none of them.
 
-If the picture had a single color behind its lines, Forge also names it, so you
-can pick a filament near that color and keep the symbol recognizable. It stays
-quiet when the picture has several different fills, because an average of four
-colors is a color that is in none of them.
-
-**Tracing starts when you say so, and stops when you say so.**
-
-A big picture takes real time to trace, and it used to start the moment you
-chose one, with nothing to show for it and no way out. Now the picture is shown
-with a **Start conversion** button under it. While it works, a dialog stands in
+**Tracing starts and stops when you say so.** The picture is shown with a
+**Start conversion** button under it. While it works, a dialog stands in
 front of the page with the stages by name (reading the picture, tracing the
 shapes, preparing the drawing, updating the charm), a moving bar and a
-**Cancel** that stops it at any stage and gives you the picture back exactly as
-it was. A picture small enough to be over before you could press the button
-still starts by itself, and shows the dialog only if it turns out to take more
-than a moment. When the drawing needs a look, the editor opens once the dialog
-has gone.
+**Cancel** that stops it at any stage and gives you the picture back. A
+picture small enough to be done in a moment starts by itself when chosen,
+and shows the dialog only if it takes longer. A setting changed afterwards
+never starts a conversion by itself: it offers **Convert again**. When the
+drawing needs a look, the editor opens once the dialog has gone.
 
-Before you commit, Forge takes a **quick look** at a thumbnail of the picture
-and tells you roughly what it will find — how busy the drawing is, and how much
-of it is likely to become ink. It costs a few milliseconds and it is a
-forecast, not a promise, which is why it is offered before the conversion
-rather than instead of it.
+Before you commit, Forge takes a **quick look** at a thumbnail and says
+roughly what it will find: how busy the drawing is and how much of it will
+become ink. It is a forecast, not a promise.
 
-**Stock icons: the caption comes off.**
+**Stock icons: the caption comes off.** Icons from symbol libraries usually
+carry a line of credit along the bottom, and across nine of them the caption
+was 76 to 97 percent of the shapes in the drawing. Traced as it is, it
+becomes forty-odd tiny specks along the bottom edge of a charm. Forge finds
+that line and takes it off, says so, and offers **Undo** in case the drawing
+really did end in a row of small marks. It only fires when the marks look
+like a caption: enough of them, all small, all low down, all in one band.
+Removing the caption removes no obligation: if the icon's license asks for
+credit, you still owe it, and the panel says so.
 
-Icons downloaded from symbol libraries usually carry a line of credit along the
-bottom, and it is a surprising amount of the file: MEASURED across nine of
-them, the caption was between 76 and 97 per cent of the shapes in the drawing.
-Traced as-is it becomes forty-odd tiny raised specks along the bottom edge of a
-charm, which nobody can read with a finger and everybody has to delete by hand.
+**Lines too thin to print.** Forge measures the thinnest line at the width
+the charm will print it and says so in the editor: under about half a
+millimeter a line may not print, or may be too faint to feel. On a charm
+every shape is measured too (see "Shapes too thin to print" above). It is a
+sentence, not an action.
 
-Forge finds that line and takes it off, then says so, with **Undo** beside it if
-the drawing really did end in a row of small marks. It only fires when the marks
-look like a caption: enough of them, all small, all low down, all in one band.
-
-**Removing a caption removes no obligation.** If the license on an icon asks you
-to credit its author, you still have to, wherever your project says who made
-what. Forge says this in the panel too.
-
-**Lines too thin to print.** Forge measures the thinnest line in the drawing at
-the width the charm will print it, and says so in the editor: under about half
-a millimeter a line may not come out at all, or may come out too faint to feel.
-On a charm every shape is measured too, and the ones under the floor can be set
-to Off in one press (see "Shapes too thin to print" above). It is a
-sentence, not an action: Forge does not change your drawing.
-
-**Nothing is uploaded.** The tracing and every choice above happen in your
-browser. You are responsible for having the right to use any image you bring.
-If you need symbols you can share freely, [ARASAAC](https://arasaac.org/),
+**Nothing is uploaded.** Tracing and every choice above happen in your
+browser. You are responsible for having the right to use any image you
+bring. [ARASAAC](https://arasaac.org/),
 [Mulberry Symbols](https://mulberrysymbols.org/) and
-[Blissymbolics](https://blissymbolics.org/) publish openly licensed sets; check
-each set's own license before you share what you make.
+[Blissymbolics](https://blissymbolics.org/) publish openly licensed sets;
+check each set's license before you share what you make.
 
 ### Editing a drawing with no design open
 
@@ -655,7 +580,7 @@ The image dimensions show up next to the Browse button so you can verify the fil
 
 ## Reference Image
 
-Want to see how your model lines up against a reference image? The Reference Image puts any image behind the 3D model in the preview so you can compare visually.
+The Reference Image puts any image behind the 3D model in the preview so you can compare visually.
 
 ### Setting it up
 
@@ -702,7 +627,7 @@ would: a photograph is traced, the preparation editor opens if the drawing
 needs it, and the design's proportions are measured at the same moment. If the
 model has more than one design slot, you choose which one.
 
-### Forge remembers where you put it
+### The position is saved with the project
 
 The image's position, rotation, size and chosen surface are saved **with the
 project**, so reopening it later puts the reference back where you left it.
