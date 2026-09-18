@@ -496,21 +496,38 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.start).toBeVisible({ timeout: 120_000 });
     await p.start.click();
 
-    // Colors, while the first conversion is still at work: dispatched right
-    // behind the press. DP-57 (D-157) made a change AFTER a run wait for the
-    // person's press, so a change that lands after a quick first run would
-    // prove nothing about superseding; the press opens the dialog at once
-    // and the change's 180 ms debounce lands inside a run that takes seconds.
+    // Colors, dispatched right behind the press. When the change lands while
+    // the first run is still going, the job supersedes it (the unit case
+    // pins that); on a runner where the plain square is over before the
+    // change's 180 ms debounce fires, the change waits for the person's press
+    // (DP-57, D-164) and the press is made here. Either way the conversion
+    // that finishes has to be the Colors one, and nothing may say "already
+    // running", which is the refusal D-151 removed.
     const colours = page.locator('input[type="radio"][value="colours"]');
     await colours.evaluate((el) => {
       el.checked = true;
       el.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await expect(p.running).toBeVisible({ timeout: 30_000 });
     const summary = page.locator('.ink-controls-summary');
     await page.waitForTimeout(2000);
     await expect(summary).not.toContainText(/already running/);
     await expect(p.info).not.toContainText(/already running/);
+    await expect
+      .poll(
+        async () => {
+          const text = (await summary.textContent().catch(() => '')) || '';
+          if (/colors? in the artwork, and the wall/.test(text)) return 'done';
+          const label = (await p.start.textContent().catch(() => '')) || '';
+          const offered =
+            (await p.start.isVisible().catch(() => false)) &&
+            /Convert again/.test(label) &&
+            !(await p.running.isVisible().catch(() => false));
+          if (offered) await p.start.click({ noWaitAfter: true }).catch(() => {});
+          return text.slice(0, 40);
+        },
+        { timeout: 240_000, intervals: [1000] }
+      )
+      .toBe('done');
 
     // The conversion that finishes is the Colors one.
     await expect(summary).toContainText(/colors? in the artwork, and the wall/, {
