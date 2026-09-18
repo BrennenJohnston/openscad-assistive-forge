@@ -250,7 +250,7 @@ why the feature does not belong to that model.
 | Large and small presets | presets | yes | yes | yes |
 | Choice of attachment | attachment | yes | yes | N-A the plate has one keychain hole and controls to place it, not a choice of fitting |
 | Second design layer | design2 | yes | N-A superseded by the layered engine, which does the same job for any number of passes | N-A superseded by the layered engine |
-| Layered design passes | layers | yes | N-A the pendant's stack is the next release, DP-61 | yes |
+| Layered design passes | layers | yes | yes | yes |
 | Shape taken from the design | shapefromdesign | N-A the clip's shape is what grips the band, so it is not the design's to choose | yes | N-A a plate is a plate; its whole point is the rectangle |
 | Clip fit for a silicone band | clipfit | yes | N-A a flat pendant is not a clip | N-A a plate is not a clip |
 

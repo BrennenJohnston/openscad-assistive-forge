@@ -99,6 +99,13 @@ const EXAMPLES = {
       '/examples/nasif-charm-maker/heart.svg',
       '/examples/nasif-charm-maker/presets/large-pendant.json',
       '/examples/nasif-charm-maker/presets/small-pendant.json',
+      // DP-61. Example passes for the layered mode, as q-charm carries, so
+      // desktop OpenSCAD has something to point the layer parameters at. The
+      // parameters default to empty: the stack is off until someone fills
+      // one in.
+      '/examples/nasif-charm-maker/design_layer_1.svg',
+      '/examples/nasif-charm-maker/design_layer_2.svg',
+      '/examples/nasif-charm-maker/design_layer_3.svg',
       '/examples/nasif-charm-maker/svg-library/heart.svg',
       '/examples/nasif-charm-maker/svg-library/star.svg',
       '/examples/nasif-charm-maker/svg-library/paw.svg',
