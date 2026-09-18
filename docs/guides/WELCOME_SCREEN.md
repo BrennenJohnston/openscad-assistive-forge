@@ -4,21 +4,20 @@ The welcome screen is what you land on with no project open. It offers a few
 things to start with, and a collapsed section explaining who the app is built
 for.
 
-*Verified against `index.html` on 2026-08-26.*
+*Verified against `index.html` on 2026-09-18.*
 
 ## What is on it
 
 ### Cards you see straight away
 
-Five, in this order:
+Four, in this order:
 
 | Card | Its button does |
 |---|---|
 | **Welcome Page Tour** | Starts a guided tour of the welcome page itself. Loads no model. |
 | **Beginners Start Here** | Loads the `simple-box` example and starts the introductory tour. Also has an "Open Help" link to the Workflow page. |
-| **Charm Customizer** | Opens the `q-charm` example -- design a charm, pendant or zipper pull. |
-| **Braille Card Customizer** | Opens the `braille-sign` example -- type text, get printable braille. |
-| **Stencil Maker** | Opens the `stencil-maker` example -- turn a picture into a spray-paint stencil for 3D printing or laser cutting. Its card credits the Stencil Forge project by name; there is no link, because that repository is private. |
+| **Charm Designer** | Opens the `q-charm` example -- design a charm, pendant or zipper pull. |
+| **Braille Card Designer** | Opens the `braille-sign` example -- type text, get printable braille. |
 
 Only the first two start a tutorial. The others open a ready-made tool.
 
@@ -42,11 +41,9 @@ reading a manual.
 
 ## Why it is shaped this way
 
-Showing four things and hiding six keeps the first screen short, which matters
-most for the people the app is built for: a long screen is a long way to travel
-with a screen reader or a switch. The six that are hidden are reference
-material rather than something to do, so they are one keystroke away rather than
-in the way.
+Showing four things and hiding six keeps the first screen short. A long
+screen is a long way to travel with a screen reader or a switch, and the six
+hidden cards are reference material, one keystroke away.
 
 ## Implementation
 

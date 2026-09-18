@@ -2,113 +2,97 @@
 
 ## v5.0.0 (2026-09-17)
 
-The release where the workshop got big enough for everyone I built it for.
-Since 4.5.0 the app grew three switchable interfaces - Simplified, Standard,
-and a Classic layout that rebuilds desktop OpenSCAD in the browser - plus a
-drawing lane that round-trips SVG and DXF, a Stencil Maker, one-link project
-sharing with provenance records, braille editing refinements, and a long
-accessibility pass driven by listening to a screen reader rather than
-measuring one. The last work before release went back over the
-picture-to-charm editor until it behaved like one product rather than five
-features that happened to share a screen, and then walked that job with my
-own logo, three times, fixing what each walk found. The illustrated version
-of this story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
+Since 4.5.0 the app gained three switchable interfaces (Simplified, Standard,
+and a Classic layout that reproduces desktop OpenSCAD in the browser), a
+drawing lane that opens and saves SVG and DXF, one-link project sharing with
+provenance records, a braille editor, and an accessibility pass made by
+listening to a screen reader. The last work before release went over the
+picture-to-charm editor, walked with my own logo five times. The illustrated
+version is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
 
 ### Highlights
 
-- **The picture-to-charm job, walked with my own logo**: a conversion stands
-  in front of the page as a dialog with its stages named and a Cancel at every
-  one; the wall behind a picture is left out by itself; every shape starts on
-  layer 1; shapes can be chosen together with the keys you would expect; the
-  result combines by itself after each change and the Charm view renders a
-  draft on request; every shape is measured against half a millimeter at the
-  width the charm really prints, with one press to set the too-thin ones to
-  Off, reversibly; and **Crop** takes an edge off a picture and traces it
-  again. Every word is American English now, and every slider row meets the
-  44 px touch floor.
-
-- **Three interfaces**: **Simplified** (the default - parameters, preview, one
-  Generate button), **Standard** (adds the console, libraries, companion
-  files, reference images and measurement), and **Classic** (the desktop
-  OpenSCAD layout: menu bar, icon toolbar, axis viewport). Switch any time
-  without losing work
-- **A drawing lane**: open a drawing, clean it up, and save it back - as SVG
-  or DXF - even with no 3D design involved; symbols keep their pictures, and
-  opt-in folder write-back can land your edits where a desktop program is
-  watching
-- **Stencil Maker**: a shape or drawing becomes printable stencil plates with
-  bridges, corner registration marks, and parameterized dimensions
+- **The picture-to-charm job**: a conversion runs in a dialog with its stages
+  named and a Cancel at each; the wall behind a picture is left out by
+  itself; every shape starts on layer 1, and three layers are always offered,
+  each with its own height; shapes can be chosen together, and one switch
+  sets them all; the drawing combines by itself after each change, and the
+  Charm view renders a draft on request; every shape is measured against half
+  a millimeter at the width the charm prints, with one press to set the
+  too-thin ones to Off; **Crop** takes an edge off a picture and traces it
+  again. Every word is American English, and every slider row meets the 44 px
+  touch floor.
+- **Three interfaces**: **Simplified** (parameters, preview, one Generate
+  button), **Standard** (adds the console, libraries, companion files,
+  reference images and measurement), and **Classic** (the desktop OpenSCAD
+  layout). Switch any time without losing work.
+- **A drawing lane**: open a drawing, clean it up, and save it back as SVG or
+  DXF, with no 3D design involved. Symbols keep their pictures. Opt-in folder
+  write-back saves your edits where a desktop program is watching.
 - **One-link sharing**: the Publish dialog writes a `forge-manifest.json`,
-  bundles the whole project as one ZIP, and composes a link that opens Forge
-  pre-loaded - optionally with your current settings; every export carries a
-  `forge-provenance.json` record of where the design came from
+  bundles the project as one ZIP, and composes a link that opens Forge
+  pre-loaded, with your settings if you choose. Every export carries a
+  `forge-provenance.json` record of where the design came from.
 - **A contract for pipelines**: `docs/specs/FORGE_HANDOFF_CONTRACT.md` and
   `/forge-capabilities.txt` give tool builders one stable page to build
-  against
-- **Braille refinements**: a Unicode braille editor on the Card and Sign,
-  auto-sizing cards, multi-charm printing, and downloads named after what
-  they are
-- **Heard, not just measured**: screen-reader fixes found by listening -
-  descriptions that deliver their first sentence instead of an 80-word
-  paragraph, an auto-preview that announces its completion instead of its
-  progress, a drawing editor that reads correctly
+  against.
+- **Braille**: a Unicode braille editor on the Card and Sign, auto-sizing
+  cards, several charms in one print, and downloads named after their
+  content.
+- **Screen reader fixes found by listening**: descriptions deliver their
+  first sentence instead of an 80-word paragraph, the auto-preview announces
+  its completion instead of its progress, and the drawing editor reads
+  correctly.
 - **Site facts in one page**: `docs/SITE_FACTS.md` states the Content
-  Security Policy, data handling, connections, and supply-chain controls,
-  every claim citing the file that proves it
-- **Security**: three high-severity transitive advisories patched
+  Security Policy, data handling, connections and supply-chain controls, each
+  claim citing the file that proves it.
+- **Security**: three high-severity transitive advisories patched.
 
-### The picture-to-charm editor, gone over one more time
+### The picture-to-charm editor
 
-- **A conversion you start, watch and can stop**: choosing a picture used to
-  hand the page over for as long as the work took. Tracing runs on a worker
-  thread now, with a moving bar and a Cancel that really stops it, and one
-  sentence tells you what the picture appears to be and roughly what it will
-  cost before any of it begins. A picture small and simple enough to be quick
-  still starts by itself, through the same bar and the same Cancel
-- **Far faster, and no longer a freeze**: one step was doing nineteen seconds
-  of work on the main thread where 637 milliseconds were needed. Conversion
-  went from about nineteen seconds to about one and a half, an eight
-  megapixel photograph from 5,413 ms to 1,207, and combining a complicated
-  drawing moved off the main thread entirely, with its own bar and Cancel and
-  a budget measured in milliseconds rather than a count of shapes
-- **A second tracing engine, built from source**: Potrace, compiled to
-  WebAssembly by a workflow from a pinned tarball and committed with its
-  recipe and checksums, is now the default for Line art and Solid shape. I
-  did not choose it for speed - the two engines draw the same picture, and
-  on a clean vector-derived icon I cannot tell them apart. I chose it for
-  the edge: magnified, the old one returns a stroke made of straight
-  segments and a round dot as a ten-sided polygon, and this one returns a
-  curve and a circle. That edge is what a finger runs along. It is faster
-  too, and it costs more in mesh - on one measured icon, 54 % more facets
+- **A conversion you start, watch and can stop**: tracing runs on a worker
+  thread with a progress bar and a Cancel that stops it. One sentence says
+  what the picture appears to be and roughly what it will cost before
+  anything starts. A small, simple picture starts by itself, through the same
+  bar and Cancel.
+- **Faster, and no freeze**: one step did nineteen seconds of work on the
+  main thread where 637 milliseconds were needed. A conversion went from
+  about nineteen seconds to about one and a half, an eight megapixel
+  photograph from 5,413 ms to 1,207 ms, and combining a complicated drawing
+  moved off the main thread with its own bar and Cancel.
+- **A second tracing engine**: Potrace, compiled to WebAssembly from a pinned
+  tarball and committed with its recipe and checksums, is the default for
+  Line art and Solid shape. Magnified, the old engine returned a stroke made
+  of straight segments and a round dot as a ten-sided polygon; Potrace
+  returns a curve and a circle, which is what a finger runs along. It is
+  faster, and it costs more mesh: 54 % more facets on one measured icon.
 - **An editor that shows the drawing**: the drawing fills the editor as one
-  picture, the side panel no longer sits on top of it, the picture comes
-  before the settings for it, and a Drawing / Charm switch shows the charm it
-  will become without leaving. While you edit, previews are drawn at draft
-  quality and go back to full on close
-- **A shapes panel you can read**: one row per shape - its name, an On /
-  Cut out / Off switch, and More - and the row says when it has run out of
-  room instead of eating the name, which at 768 pixels wide it used to do to
-  every name at once. Hover marks a row, a press chooses it, two fingers
-  pinch and pan while one finger still scrolls the page
-- **One vocabulary**: what the panel is called, what a row is called, what
-  the color key says, and what a screen reader hears are the same words
-- **Credit lines left where they belong**: a downloaded icon usually carries
-  its attribution baked into the picture, and converting it produced the icon
-  plus fifty letters of caption. The caption is recognized and left out, with
-  an Undo beside the sentence saying so - which changes nothing about the
-  attribution you still owe the designer
+  picture, the side panel no longer covers it, and a Drawing / Charm switch
+  shows the charm it will become. While you edit, previews are drawn at draft
+  quality and return to full on close.
+- **A shapes panel you can read**: one row per shape with its name, an On /
+  Cut out / Off switch, and More. The row says when it has run out of room
+  instead of cutting the name short. Hover marks a row, a press chooses it,
+  and two fingers pinch and pan while one finger scrolls the page.
+- **One vocabulary**: the panel, the rows, the color key and the screen
+  reader use the same words.
+- **Credit lines left out**: a downloaded icon usually carries its
+  attribution in the picture, and converting it produced the icon plus fifty
+  letters of caption. The caption is recognized and left out, with an Undo
+  beside the sentence that says so. The attribution you owe the designer is
+  unchanged.
 
 ### Upgrade Notes
 
 The version number marks the scale of the change, not a compatibility break:
 
-1. Clear browser cache (or accept the update prompt) for best experience
-2. All existing saved projects and presets remain compatible
-3. For contributors: the Pixi environment layer is gone - npm is the one
-   toolchain (`npm ci`, `npm run dev`)
-4. The About dialog now carries a build stamp beside the version, and the
-   same string appears in `/forge-capabilities.txt` - quote it in a bug
-   report and two builds of one version can be told apart
+1. Clear the browser cache, or accept the update prompt.
+2. Existing saved projects and presets remain compatible.
+3. For contributors: the Pixi environment layer is gone. npm is the one
+   toolchain (`npm ci`, `npm run dev`).
+4. The About dialog carries a build stamp beside the version, and the same
+   string appears in `/forge-capabilities.txt`. Quote it in a bug report so
+   two builds of one version can be told apart.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
 
