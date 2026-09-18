@@ -1,9 +1,3 @@
-<!--
-  DRAFT - this journal and every image alt text in it are awaiting my
-  review pass before release. Do not link from released surfaces until
-  this banner is removed.
--->
-
 # What's new in version 5
 
 What changed since version 4.5.0 shipped in July 2026, with pictures of the
@@ -110,6 +104,23 @@ are too thin, and can turn them all off in one press, reversibly. **Crop**:
 four sliders take an edge off the picture, a photo is traced again from the
 kept part, and Undo crop puts it back. Every word in the app is American
 English, and every slider row meets the 44 px touch floor.
+
+### Two heights from one drawing
+
+![The charm preview from above and to one side: a bird line drawing stands on the face as one low raised layer, its outline, eye, three feather strokes and beak all the same height. The face inside the outline is shaded green by the preview](images/charm-bird-raised.png)
+
+Every shape starts on layer 1, so a line drawing comes out at one height.
+
+![The drawing editor with the bird's outline moved to layer 2. In the Shapes panel the row for the background rectangle reads Off, the outline's row has More open with Layer 2 chosen, and the eye, the feathers and the beak stay on layer 1. In the picture the eye, the feathers and the beak are solid blue, the color of layer 1; the outline band carries a darker hatch over the blue, the mark of layer 2 on top of layer 1; and the background rectangle is a light hatch, the mark for Off](images/drawing-editor-layers.png)
+
+To raise the outline above the rest, open the drawing editor, press **More**
+on the outline's row, choose **Layer 2**, and press **Apply**. Layer 2 stands
+on layer 1.
+
+![The charm preview after Apply, from the same angle: the outline now stands about twice as tall as the eye and the three feather strokes inside it](images/charm-bird-layers.png)
+
+Each layer has its own height and can be raised or engraved, in the
+**Layered design** group under the design.
 
 ## Share it with one link
 
