@@ -246,13 +246,7 @@ export const MEASURED_SECONDS = {
   'svg-edit-door.spec.js': 129.8,
   'overlay-placement.spec.js': 107.9,
 
-  // Design Pipeline Round 2. Booked from a LOCAL run rather than from CI,
-  // which is a weaker measurement and is said so here: four cases in 14.5 s
-  // on this machine, against an engine that was already warm. The 60 s
-  // default would have been closer to the truth than a local number pretending
-  // to be a CI one, so this is booked at three times what was measured and
-  // re-weighted from a green CI run at the round's close.
-  'stencil-plates.spec.js': 60.0,
+  // stencil-plates.spec.js left with the Stencil Maker tile (DP-63).
   // DP-19..21, RE-MEASURED at DP-38 and again at DP-41. It was ONE case - one
   // load of the stencil tile, every walk the editor has on it - measured
   // locally at 42 s after DP-21 (8.5 s at DP-19) and booked at the same

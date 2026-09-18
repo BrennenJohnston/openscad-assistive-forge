@@ -2571,7 +2571,8 @@ function createFileControl(
   /**
    * The stencil plates, for a tile that builds them (DP-12, DP-17).
    *
-   * A CONTRACT with public/examples/stencil-maker/stencil_maker.scad: the
+   * A CONTRACT with the shelved Stencil Maker's stencil_maker.scad (the
+   * branch shelf/stencil-maker-2026-09-18, DP-63): the
    * plate size is read from `plate_width`, `plate_height` and `margin`, and
    * the jig from `registration` and its five numbers, because the app writes
    * plates that are already mm-true and the model is a dumb extruder. Change

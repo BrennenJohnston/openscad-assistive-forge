@@ -2274,9 +2274,12 @@ the sharing feature, so it needs a decision before a fix.
   or a picture into spray-stencil plates: bridges to hold the islands, registration marks in
   the corners, up to eight plates with a jig to hold them still, and the first tools of the
   drawing editor, checked against a six-plate stencil one user cut by hand. The work grew
-  bigger than I expected, so I have shelved it. The Stencil Maker is not part of this release.
-  Its code stays in the repository for when I pick it up again, and the parts the charm's
-  drawing lane shares with it, the Colors reading and the editor's surface, are described above
+  bigger than I expected, so I have shelved it. The Stencil Maker is not part of this release:
+  its welcome card, its example and its own tests are out of the app (DP-63), and
+  `?example=stencil-maker` is an unknown example now. The engine stays in the repository,
+  dormant behind plate parameters no shipped design declares, for when I pick it up again; the
+  parts the charm's drawing lane shares with it, the Colors reading and the editor's surface,
+  are described above. The work as it stood is kept on the branch `shelf/stencil-maker-2026-09-18`
 
 ## [4.5.0] - 2026-07-12
 
