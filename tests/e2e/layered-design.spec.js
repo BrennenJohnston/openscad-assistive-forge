@@ -31,12 +31,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-async function openCharm(page) {
+async function openCharm(page, shape = 'q-charm') {
   await page.goto('/');
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     timeout: 120000,
   });
-  await page.selectOption('#charmVariantSelect', 'q-charm');
+  await page.selectOption('#charmVariantSelect', shape);
   await page.click('#openCharmMakerBtn');
   await page.waitForFunction(
     () =>
@@ -53,16 +53,16 @@ async function openCharm(page) {
   }
 }
 
-const layerState = (page) =>
-  page.evaluate(() => {
+const layerState = (page, prefix = 'design') =>
+  page.evaluate((pre) => {
     const p = window.stateManager?.getState()?.parameters || {};
     const nm = (v) => (v && typeof v === 'object' ? v.name : v);
     return {
-      design: nm(p.design_file),
-      layers: [1, 2, 3].map((n) => nm(p[`design_layer_${n}`])),
-      aspects: [1, 2, 3].map((n) => p[`design_layer_${n}_aspect`]),
+      design: nm(p[`${pre}_file`]),
+      layers: [1, 2, 3].map((n) => nm(p[`${pre}_layer_${n}`])),
+      aspects: [1, 2, 3].map((n) => p[`${pre}_layer_${n}_aspect`]),
     };
-  });
+  }, prefix);
 
 /**
  * Build the stack the way a person does: open the editor, SET a layer on each
@@ -75,17 +75,17 @@ const layerState = (page) =>
  * this helper does what the person does, rather than pressing Apply over a
  * column the app filled in.
  */
-async function openTheEditor(page) {
+async function openTheEditor(page, fileParam = 'design_file') {
   // The editor's door lives in the design control's status card, inside the
   // Design group, which ships collapsed like every other parameter group.
-  await page.evaluate(() => {
-    const input = document.querySelector('#param-design_file');
+  await page.evaluate((id) => {
+    const input = document.querySelector(`#param-${id}`);
     let d = input?.closest('details');
     while (d) {
       d.open = true;
       d = d.parentElement?.closest('details');
     }
-  });
+  }, fileParam);
   const door = page
     .getByRole('button', { name: 'Open the drawing editor' })
     .first();
@@ -94,8 +94,8 @@ async function openTheEditor(page) {
   await door.click({ timeout: 30000 });
 }
 
-async function buildStackInTheEditor(page) {
-  await openTheEditor(page);
+async function buildStackInTheEditor(page, fileParam = 'design_file') {
+  await openTheEditor(page, fileParam);
   const layerSelects = page.locator('.svg-prep-layer-select');
   await expect
     .poll(() => layerSelects.count(), { timeout: 60000 })
@@ -457,5 +457,81 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
         .getAttribute('min');
       expect(Number(min)).toBe(0.4);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DP-60: the Logo Plate builds the same stack under its own prefix.
+// ---------------------------------------------------------------------------
+
+test.describe('The Logo Plate builds a stack too (DP-60)', () => {
+  test('the plate declares three passes, and none is on by default', async ({
+    page,
+  }) => {
+    await openCharm(page, 'logo-plate');
+    const declared = await page.evaluate(() => {
+      const p = window.stateManager?.getState()?.parameters || {};
+      return Object.keys(p)
+        .filter((k) => /^logo_layer_\d(_aspect|_depth|_style)?$/.test(k))
+        .sort();
+    });
+    expect(declared).toHaveLength(12);
+    const before = await layerState(page, 'logo');
+    expect(before.design).toBe('sample-logo.svg');
+    expect(before.layers).toEqual(['', '', '']);
+  });
+
+  test('the generated companions are hidden, the dials are shown', async ({
+    page,
+  }) => {
+    await openCharm(page, 'logo-plate');
+    for (const n of [1, 2, 3]) {
+      await expect(page.locator(`#param-logo_layer_${n}`)).toHaveCount(0);
+      await expect(page.locator(`#param-logo_layer_${n}_aspect`)).toHaveCount(
+        0
+      );
+    }
+    await expect(page.locator('#param-logo_layer_1_depth')).toHaveCount(1);
+    await expect(page.locator('#param-logo_layer_1_style')).toHaveCount(1);
+  });
+
+  test('\u2605 three nested squares become three passes on the plate, and it renders', async ({
+    page,
+    browserName,
+  }) => {
+    // The walk runs on Chromium only, like the editor's own walk: the Edge and
+    // Firefox lanes are near their time ceilings, and the geometry is the
+    // model's, not the browser's.
+    test.skip(browserName !== 'chromium', 'Chromium only');
+    test.slow();
+    await openCharm(page, 'logo-plate');
+    await page.setInputFiles('#param-logo_file', SQUARES);
+    await expect
+      .poll(async () => (await layerState(page, 'logo')).design, {
+        timeout: 90000,
+      })
+      .toBe('nested-squares.svg');
+
+    await buildStackInTheEditor(page, 'logo_file');
+    await expect
+      .poll(
+        async () =>
+          (await layerState(page, 'logo')).layers.filter(Boolean).length,
+        { timeout: 90000 }
+      )
+      .toBe(3);
+
+    const after = await layerState(page, 'logo');
+    expect(after.layers).toEqual([
+      'nested-squares_layer_1.svg',
+      'nested-squares_layer_2.svg',
+      'nested-squares_layer_3.svg',
+    ]);
+    for (const a of after.aspects) expect(a).toBeCloseTo(1, 2);
+
+    // The engine is the judge: a stack that does not close would not render.
+    await expect(page.locator('text=Preview ready').first()).toBeVisible({
+      timeout: 120000,
+    });
   });
 });

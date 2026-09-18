@@ -76,6 +76,13 @@ const EXAMPLES = {
       '/examples/logo-plate/sun.svg',
       '/examples/logo-plate/presets/large-plate.json',
       '/examples/logo-plate/presets/small-plate.json',
+      // DP-60. Example passes for the layered mode, as q-charm carries, so
+      // desktop OpenSCAD has something to point the layer parameters at. The
+      // parameters default to empty: the stack is off until someone fills
+      // one in.
+      '/examples/logo-plate/logo_layer_1.svg',
+      '/examples/logo-plate/logo_layer_2.svg',
+      '/examples/logo-plate/logo_layer_3.svg',
     ],
   },
   'nasif-charm-maker': {

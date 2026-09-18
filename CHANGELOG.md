@@ -32,6 +32,16 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
 
 ### Added
 
+- **The Logo Plate builds a layered design** (DP-60) - the same three passes as the Bracelet
+  Clip Charm, under its own names: `logo_layer_1` to `logo_layer_3`, each with an aspect, a
+  depth and a style, a Layered design group in the customizer, and the fit-box echo the drawing
+  editor's thin check reads. Each layer's own shapes are built once in their own band, raised
+  bands upward from the plate face and engraved bands downward; the single logo is skipped when
+  layer files are present, and the keychain hole is cut through whatever the stack raises over
+  it. Measured on the printed geometry, face at 4 mm: raised 0.5 / 0.5 / 1.0 tops at 4.5, 5 and
+  6; engraved 0.8 x 3 floors at 3.2, 2.4 and 1.6; a raised layer 1 beside an engraved layer 2
+  stands at 5 over a floor at 3, with a 2.5 mm raised logo asked for underneath and not printed
+
 - **Crop, in the drawing editor** (DP-49) - a Crop button in the drawing view opens a crop
   view in the drawing's place: the picture with the kept rectangle clear and the rest shaded,
   four rows named Top, Bottom, Left and Right in the customizer's own slider classes, each a
