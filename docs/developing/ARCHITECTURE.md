@@ -228,7 +228,7 @@ flowchart LR
     Root --> Vars[CSS custom properties update]
     Vars --> UI[All components re-render colors]
     
-    Note[Colors defined once in<br/>src/styles/semantic-tokens.css<br/>Components reference<br/>var(--color-text)]
+    Note["Colors defined once in<br/>src/styles/semantic-tokens.css<br/>Components reference<br/>var(--color-text)"]
 ```
 
 The theme manager sets `data-theme="high-contrast"` on the root element, and all colors update instantly. This works even if JavaScript is disabled after initial load.
@@ -391,12 +391,12 @@ Side-by-side rendering with shared controls:
 ```mermaid
 flowchart LR
     UI[comparison-view.js / comparison-controller.js] --> State[state.js]
-    State --> RenderA[render-controller (A)]
-    State --> RenderB[render-controller (B)]
+    State --> RenderA["render-controller (A)"]
+    State --> RenderB["render-controller (B)"]
     RenderA --> Worker[openscad-worker.js]
     RenderB --> Worker
-    RenderA --> PreviewA[preview.js (left)]
-    RenderB --> PreviewB[preview.js (right)]
+    RenderA --> PreviewA["preview.js (left)"]
+    RenderB --> PreviewB["preview.js (right)"]
     UI -->|toggle / swap / sync| State
 ```
 

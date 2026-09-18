@@ -45,6 +45,7 @@
     "parity:compare": "node scripts/parity/run-parity.mjs --compare --profile cross-version",
     "parity:ci": "node scripts/parity/run-parity.mjs --wasm --compare --profile golden --ci-only",
     "check-bundle": "node scripts/check-bundle-budget.js dist",
+    "check-mermaid": "node scripts/check-mermaid.mjs",
     "validate:html": "vnu --also-check-css --also-check-svg index.html",
     "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html",
     "validate:example": "node scripts/validate-example.mjs",
