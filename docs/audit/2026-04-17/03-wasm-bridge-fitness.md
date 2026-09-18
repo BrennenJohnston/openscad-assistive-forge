@@ -2,14 +2,14 @@
 
 **Date**: 2026-04-17
 **Author**: Audit run (read-only)
-**Inputs**: `src/worker/openscad-worker.js`, `src/js/error-translator.js`, `src/js/design-panel-controller.js`, `src/js/preview.js`, `src/main.js`, `src/js/render-controller.js`, `src/js/auto-preview-controller.js`, `src/js/download.js`, `docs/source-code-foundation-assessment.md`
+**Inputs**: `src/worker/openscad-worker.js`, `src/js/error-translator.js`, `src/js/design-panel-controller.js`, `src/js/preview.js`, `src/main.js`, `src/js/render-controller.js`, `src/js/auto-preview-controller.js`, `src/js/download.js`, `docs/archive/source-code-foundation-assessment.md`
 **Conventions**:
 - `OBSERVED` — verified directly in code with file:line citation.
 - `INFERRED` — derived by combining two or more observations.
 - `UNVERIFIED` — claim from documentation not re-checked in this audit.
 - "Bridging" = JS code that fakes a WASM capability the binary does not natively expose.
 
-> Charter: classify each "simulated" feature in `docs/source-code-foundation-assessment.md` as
+> Charter: classify each "simulated" feature in `docs/archive/source-code-foundation-assessment.md` as
 > **Adequate-as-simulated** / **Stop-bridging** / **Consider-upstreaming**, map
 > `error-translator.js` coverage of WASM stderr, and recommend additions to the
 > upstream contribution candidate list.
@@ -55,7 +55,7 @@ OBSERVED:
 INFERRED:
 - The doc statement "Not implemented (menu item disabled)" conflates two things: there is no **inline display** of the CSG tree (true), but **export to .csg is functional** (the doc misses this).
 
-Recommendation: **Doc fix only**. Update `docs/source-code-foundation-assessment.md` table row to: *"In-app display: not implemented. Export-to-`.csg`: works today via the standard download path."* No code change needed.
+Recommendation: **Doc fix only**. Update `docs/archive/source-code-foundation-assessment.md` table row to: *"In-app display: not implemented. Export-to-`.csg`: works today via the standard download path."* No code change needed.
 
 ### 1.3 Check Validity — `design-panel-controller.js:115–156`
 
@@ -302,7 +302,7 @@ Existing doc (`source-code-foundation-assessment.md` §7) already prioritizes **
 
 ## 4. Doc inaccuracies to correct
 
-The following statements in `docs/source-code-foundation-assessment.md` should be updated based on direct code observation:
+The following statements in `docs/archive/source-code-foundation-assessment.md` should be updated based on direct code observation:
 
 | Doc location | Doc says | Reality (cite) |
 |---|---|---|

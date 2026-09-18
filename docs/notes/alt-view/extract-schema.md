@@ -10,7 +10,7 @@ plan or an older note disagrees with what is written here, the code is the
 authority and this file follows the code.
 
 If you only want to regenerate one of the bundled cities, see
-[the extract README](../public/examples/ascii-city/README.md); it carries the
+[the extract README](../../../public/examples/ascii-city/README.md); it carries the
 exact commands and the provenance of the four files that ship. This document is
 for anyone writing an extract from scratch, or writing a second consumer of one.
 

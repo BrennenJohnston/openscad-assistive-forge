@@ -10,10 +10,10 @@ This file lists the authors and copyright holders of OpenSCAD Assistive Forge.
 
 ## Contributors
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) for guidelines.
 
 Contributors who submit accepted pull requests will be recognized here.
 
 ---
 
-For licensing information, see [LICENSE](LICENSE).
+For licensing information, see [LICENSE](../../LICENSE).

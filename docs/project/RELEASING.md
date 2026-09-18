@@ -36,7 +36,7 @@ git push origin develop
 Then open a pull request from `develop` into `main` and let it go green. Both
 branches are guarded by rulesets and both need an approving review; `main` also
 requires signed commits and linear history. See
-[`.github/BRANCH_PROTECTION.md`](../.github/BRANCH_PROTECTION.md) for the exact
+[`.github/BRANCH_PROTECTION.md`](../../.github/BRANCH_PROTECTION.md) for the exact
 required checks on each.
 
 If a pull request into `main` ever sits waiting on a check that never arrives

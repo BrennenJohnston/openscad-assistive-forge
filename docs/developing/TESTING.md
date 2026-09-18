@@ -48,7 +48,7 @@ npx playwright install
 ### E2E feels flaky locally
 
 - Try `npm run test:e2e:ui` and rerun the single test while watching the page.
-- If you’re on Windows and things hang, see `docs/TROUBLESHOOTING.md`.
+- If you’re on Windows and things hang, see `docs/developing/TROUBLESHOOTING.md`.
 
 ## Coverage (optional)
 

@@ -115,4 +115,4 @@ already seen does not offer itself again.
 
 - [Accessibility Guide](ACCESSIBILITY_GUIDE.md) - Full accessibility features reference
 - [Keyguard Workflow Guide](KEYGUARD_WORKFLOW_GUIDE.md) - Keyboard-first workflow
-- [Testing](../TESTING.md) - Test commands
+- [Testing](../developing/TESTING.md) - Test commands

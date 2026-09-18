@@ -510,6 +510,6 @@ If you encounter an accessibility barrier:
 ## Additional Resources
 
 - [Keyguard Workflow Guide](./KEYGUARD_WORKFLOW_GUIDE.md) - Detailed AAC keyguard customization
-- [Testing](../TESTING.md) - How to run unit/e2e tests
+- [Testing](../developing/TESTING.md) - How to run unit/e2e tests
 - [Standard Mode Guide](./STANDARD_MODE_GUIDE.md) - Overview of all features
-- [Deployment](../DEPLOYMENT.md) - Cloudflare Pages notes
+- [Deployment](../deploying/DEPLOYMENT.md) - Cloudflare Pages notes

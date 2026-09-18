@@ -123,7 +123,7 @@ Goal: for every shipped runtime dependency, verify that we are using it (not re-
 | `parseLuminance` re-implements hex → RGB | `src/js/image-import.js:130-154` re-implements the hex-parsing already in `src/js/color-utils.js:46-70` (`hexToRgb`). The two paths produce identical RGB triples for the same input. | **Quick Win** — replace the inline hex math in `parseLuminance` with `hexToRgb` and a luminance helper. ~12 lines removed, no behavior change. |
 | Per-call `try { localStorage.getItem(KEY) } catch {}` | 27 files use `localStorage.{getItem,setItem,removeItem}` directly (see `Grep -count` table below). 3 verified samples (`src/js/param-detail-controller.js:60-89`, `src/js/theme-manager.js:77-124`, `src/js/edit-actions-controller.js:224-244`) all wrap each call in an identical try/catch with a `console.warn` fallback. There is **no** central `safeGet`/`safeSet` helper. `src/js/storage-manager.js` exists but only wraps IndexedDB. | **Quick Win** — add `safeGetItem(key, default)` / `safeSetItem(key, value)` to `storage-keys.js` (or a sibling `storage-keys-helpers.js`), migrate all 27 files. Estimate: 60-100 lines removed, 1 single error-policy decision instead of 27 ad-hoc ones. |
 | Per-call inline `setTimeout` / `clearTimeout` debounce | 15 files contain `clearTimeout`/`setTimeout` pairs (see counts below). `announcer.js` does the work correctly internally but exposes no `debounce(fn, ms)` factory. The other 14 files roll their own ad-hoc debounce. | **Worth-considering** — extract a 6-line `debounce(fn, ms)` helper. Effect on LOC is small (~30 lines); the real benefit is *one place to fix* the AbortController + flush-on-blur edge cases. |
-| `formatParamName` / `createLabelContainer` consolidation | Already done in `src/js/ui-generator.js` (per [docs/notes/2026-01-26/CODE_AUDIT_FINDINGS.md:36-44](../../../docs/notes/2026-01-26/CODE_AUDIT_FINDINGS.md)). | **No-op.** Recorded for completeness. |
+| `formatParamName` / `createLabelContainer` consolidation | Already done in `src/js/ui-generator.js` (per [docs/notes/2026-01-26/CODE_AUDIT_FINDINGS.md:36-44](../../notes/2026-01-26/CODE_AUDIT_FINDINGS.md)). | **No-op.** Recorded for completeness. |
 
 `localStorage` direct-call counts per file (from `Grep -count`):
 
@@ -253,7 +253,7 @@ None of the 14 ESLint warnings fall into this category — every "for testing" r
 
 ### 4.3 Reserved API — preserve
 
-[docs/notes/RELEASE_AUDIT_CHECKLIST.md:602](../../../docs/notes/RELEASE_AUDIT_CHECKLIST.md) records "Three `@reserved` exports in `validation-schemas.js` are intentional API reservations, preserved per API boundary rule." Those exports do **not** appear in the ESLint warning list (they are referenced, just not by any *internal* caller — Ajv consumes them via schema name lookup). **No action.**
+[docs/notes/RELEASE_AUDIT_CHECKLIST.md:602](../../notes/RELEASE_AUDIT_CHECKLIST.md) records "Three `@reserved` exports in `validation-schemas.js` are intentional API reservations, preserved per API boundary rule." Those exports do **not** appear in the ESLint warning list (they are referenced, just not by any *internal* caller — Ajv consumes them via schema name lookup). **No action.**
 
 ### 4.4 Future-work placeholder — mark explicitly
 

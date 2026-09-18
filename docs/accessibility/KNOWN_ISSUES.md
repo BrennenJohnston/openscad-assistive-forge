@@ -286,4 +286,4 @@ Create a [new GitHub issue](https://github.com/BrennenJohnston/openscad-assistiv
 
 ## Contact
 
-For urgent issues affecting accessibility or security, please follow the contact procedures in [SECURITY.md](../SECURITY.md).
+For urgent issues affecting accessibility or security, please follow the contact procedures in [SECURITY.md](../../.github/SECURITY.md).

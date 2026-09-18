@@ -108,13 +108,13 @@ two of them agree:
 
 | Document | What it claims |
 |---|---|
-| `docs/ACCESSIBILITY_CONFORMANCE.md:147-153` | A table: NVDA 2024.4, JAWS 2024, VoiceOver/Safari 17 — result "Functional" |
+| `docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:147-153` | A table: NVDA 2024.4, JAWS 2024, VoiceOver/Safari 17 — result "Functional" |
 | `docs/vpat/VPAT-2.5-WCAG.md:157-164` | A different table: NVDA 2025.1, JAWS 2025, VoiceOver/Safari 18 and iOS 18 — result "Full support" |
-| `docs/BROWSER_SUPPORT.md:106-111` | A third table: NVDA / JAWS / VoiceOver "Full", TalkBack "Partial" |
+| `docs/accessibility/BROWSER_SUPPORT.md:106-111` | A third table: NVDA / JAWS / VoiceOver "Full", TalkBack "Partial" |
 | `docs/guides/ACCESSIBILITY_GUIDE.md:141-146` | A fourth list: all three "Fully supported" |
 | `RELEASE_NOTES.md:130` | "Screen Reader Testing: Verified with NVDA, JAWS, and VoiceOver" |
 
-`docs/ACCESSIBILITY_CONFORMANCE.md:157-169` goes further and says an eight-step
+`docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:157-169` goes further and says an eight-step
 core workflow "has been verified with assistive technology".
 
 Against that, MEASURED:
@@ -165,12 +165,12 @@ Still advertising it:
 - `docs/specs/PARAMETER_SCHEMA_SPEC.md:9` — "Usage in v2 (CLI Toolchain): The
   `forge extract` command generates `params.schema.json` files following this
   specification."
-- `docs/ARCHITECTURE.md:403-430` — a "CLI tool" section with a diagram of seven
+- `docs/developing/ARCHITECTURE.md:403-430` — a "CLI tool" section with a diagram of seven
   commands and five framework templates, none of which exist.
 - `docs/guides/MANIFEST_SHARING_GUIDE.md:232-247` — "CLI Quickstart", telling a
   user to run `npx openscad-forge manifest ...`. This is a user-facing
   instruction that cannot work.
-- `docs/OPEN_SOURCE_PROJECTS.md:71-81` — lists Chalk and Commander as runtime
+- `docs/reference/OPEN_SOURCE_PROJECTS.md:71-81` — lists Chalk and Commander as runtime
   dependencies. MEASURED: neither is in `package.json` at all; both went with
   the CLI. Neither was in `THIRD_PARTY_NOTICES.md`, so the licence record is
   unaffected.
@@ -204,12 +204,12 @@ So these instructions cannot be followed:
   your internet connection (Monaco loads from CDN)". Nothing loads from a CDN;
   the Content Security Policy would refuse it.
 - `docs/guides/TROUBLESHOOTING_USER_GUIDE.md:204,207,226` — the same advice.
-- `docs/KNOWN_ISSUES.md:40` — "Enable 'Use accessible text editor' in Settings".
-- `docs/BROWSER_SUPPORT.md:115-119` — "If you experience issues with the Monaco
+- `docs/accessibility/KNOWN_ISSUES.md:40` — "Enable 'Use accessible text editor' in Settings".
+- `docs/accessibility/BROWSER_SUPPORT.md:115-119` — "If you experience issues with the Monaco
   code editor... Open Settings (gear icon), Enable 'Use accessible text editor'".
 
 This one matters more than the others because of where it lands. Both
-`docs/ACCESSIBILITY_CONFORMANCE.md:70-76` and `docs/vpat/VPAT-2.5-WCAG.md:153,170`
+`docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:70-76` and `docs/vpat/VPAT-2.5-WCAG.md:153,170`
 offer that same setting as the **mitigation** for the code editor's assistive
 technology limitations. A mitigation that does not exist is a conformance claim
 resting on nothing. Flagged, not fixed — see section 6.
@@ -245,23 +245,23 @@ this correctly and says `setup-wasm` downloads **Liberation fonts**.
 
 Contradicting it:
 
-- `docs/TROUBLESHOOTING.md:39-43` — tells you to run `npm run setup-wasm` to fix
+- `docs/developing/TROUBLESHOOTING.md:39-43` — tells you to run `npm run setup-wasm` to fix
   missing WASM, then `ls public/wasm/` and expect
   "openscad.wasm, openscad.js, openscad.worker.js". Two of those three are one
   directory down and the third does not exist.
-- `docs/DEV_QUICK_START.md:13` — "`npm run setup-wasm` # downloads OpenSCAD WASM
+- `docs/developing/DEV_QUICK_START.md:13` — "`npm run setup-wasm` # downloads OpenSCAD WASM
   (~15-30MB)". It downloads fonts, about 2 MB.
 
-`docs/DEPLOYMENT.md` repeats the "~15-30 MB WASM files" figure; the actual
+`docs/deploying/DEPLOYMENT.md` repeats the "~15-30 MB WASM files" figure; the actual
 binary is 10.7 MB.
 
 ### F6. Three GitHub links point at the wrong organisation
 
 MEASURED — these 404:
 
-- `docs/BROWSER_SUPPORT.md:148`
-- `docs/KNOWN_ISSUES.md:215`
-- `docs/KNOWN_ISSUES.md:221`
+- `docs/accessibility/BROWSER_SUPPORT.md:148`
+- `docs/accessibility/KNOWN_ISSUES.md:215`
+- `docs/accessibility/KNOWN_ISSUES.md:221`
 
 All three use `github.com/openscad/openscad-assistive-forge`. The repository is
 `github.com/BrennenJohnston/openscad-assistive-forge`. `KNOWN_ISSUES.md:3` gets
@@ -275,12 +275,12 @@ agrees.
 
 | Document | Says |
 |---|---|
-| `docs/ACCESSIBILITY_CONFORMANCE.md:4` | 4.4.0 |
+| `docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:4` | 4.4.0 |
 | `docs/vpat/VPAT-2.5-WCAG.md:7` | 4.4.0 |
 | `docs/vpat/VPAT-2.5-WCAG.md:130` | 4.3.0 — *in the same document* |
-| `docs/BROWSER_SUPPORT.md:3` | 4.3.0 |
-| `docs/ROLLBACK_RUNBOOK.md:3` | 4.3.0 |
-| `docs/PERFORMANCE.md:7` | 4.3.0 |
+| `docs/accessibility/BROWSER_SUPPORT.md:3` | 4.3.0 |
+| `docs/deploying/ROLLBACK_RUNBOOK.md:3` | 4.3.0 |
+| `docs/developing/PERFORMANCE.md:7` | 4.3.0 |
 
 The VPAT contradicts itself twice over: its header says version 4.4.0 dated
 2026-04-06, and its own "Report Information" table says version 4.3.0 dated
@@ -298,21 +298,21 @@ decisions log.
 None of these is dangerous on its own; together they are why the docs read as
 untrustworthy.
 
-- `docs/TESTING.md:114` — "all unit tests pass (1982+)". The suite is at
+- `docs/developing/TESTING.md:114` — "all unit tests pass (1982+)". The suite is at
   **3,957** tests across 108 files.
 - `PROJECT_STATUS.md:23` — "3,426 unit tests". Same.
-- `docs/TESTING.md:120` — "Bundle size is within the 153KB gzipped budget". The
+- `docs/developing/TESTING.md:120` — "Bundle size is within the 153KB gzipped budget". The
   budget in `scripts/check-bundle-budget.js` is **500 KB** for the core app and
   150 KB for the second chunk; 153 KB was a measured value years of releases
   ago, not the budget.
-- `docs/PERFORMANCE.md:137` and `docs/research/WASM_THREADING_ANALYSIS.md` both
+- `docs/developing/PERFORMANCE.md:137` and `docs/research/WASM_THREADING_ANALYSIS.md` both
   analyse `openscad-wasm-prebuilt@1.2.0`. `public/wasm/README.txt` says that
   package was **replaced** by the official 2026.04.03 Manifold build, and names
   the reason. Their conclusion about threading may still hold, but it was
   reached about a different binary.
-- `docs/KNOWN_ISSUES.md:5` — "Last updated: 2026-07-05". Nothing from the last
+- `docs/accessibility/KNOWN_ISSUES.md:5` — "Last updated: 2026-07-05". Nothing from the last
   five weeks of work is in it.
-- `docs/RENDER_TRIGGER_MAP.md` — "Last audited: 2026-03-03", and it names itself
+- `docs/developing/RENDER_TRIGGER_MAP.md` — "Last audited: 2026-03-03", and it names itself
   the ground truth for BUG-B and BUG-C, both of which `KNOWN_ISSUES.md` records
   as resolved.
 - `docs/guides/SECURITY_TESTING.md:3` — "Recent fixes (2026-01-27)".
@@ -330,12 +330,12 @@ untrustworthy.
   asking whether they want the Assistive Forge or the Classic interface. **No
   user guide describes it.** The Classic interface is the whole subject of the
   last five releases and `docs/README.md` does not link its guide.
-- `docs/design-d1-preset-companion-files.md:3` — "Status: Design approved, not
+- `docs/developing/design-d1-preset-companion-files.md:3` — "Status: Design approved, not
   yet implemented." MEASURED: `applyCompanionAliases` (`zip-handler.js:881`),
   `buildPresetCompanionMap` (`file-handler.js:31`) and 22 further
   `presetCompanion` references are live. It was implemented, and a bug in that
   exact code was KI-012's root cause.
-- `docs/specs/CAMERA_CONTROLS_ACCESSIBILITY.md` documents `#cameraControlsBody`,
+- `docs/accessibility/CAMERA_CONTROLS_ACCESSIBILITY.md` documents `#cameraControlsBody`,
   `.camera-control-btn` and a "Panel position (bottom-right, bottom-left,
   top-right, top-left)" preference. MEASURED: those selectors appear in CSS and
   JavaScript but **not once in `index.html`**. This is the dead floating-camera
@@ -357,13 +357,13 @@ untrustworthy.
 
   `Ctrl+Shift+Z` for redo is bound on Linux and macOS but not on Windows, where
   `Ctrl+Y` is the binding.
-- `docs/ACCESSIBILITY_CONFORMANCE.md:45` — "All text meets 4.5:1 minimum ratio".
+- `docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:45` — "All text meets 4.5:1 minimum ratio".
   Your ledger still carries D-13 open: the saved-project Delete button measures
   3.81:1.
 
 ### F10. The deployment guide told IT departments the app would not work on their servers
 
-Found while rewriting, not in the first pass. `docs/DEPLOYMENT.md:92` said:
+Found while rewriting, not in the first pass. `docs/deploying/DEPLOYMENT.md:92` said:
 
 > **Why needed:** OpenSCAD WASM uses SharedArrayBuffer for performance. Without
 > these headers, `window.crossOriginIsolated` is `false` and WASM fails.
@@ -447,7 +447,7 @@ for the rewrites:
   `src/styles/variables.css` and all ten match exactly. One nit: the deprecated
   alias row says `--radius-sm` is 6px; it is defined as
   `var(--border-radius-sm)`, which is 4px.
-- `docs/RESPONSIVE_UI.md` — all four breakpoints match `variables.css`
+- `docs/developing/RESPONSIVE_UI.md` — all four breakpoints match `variables.css`
   (480 / 768 / 1024 / 1440).
 - `docs/guides/STANDARD_MODE_GUIDE.md` export table — matches the shipped
   output select exactly, including 3MF marked unavailable. The Export Quality
@@ -455,7 +455,7 @@ for the rewrites:
 - `docs/vpat/conformance-decisions.md` — honest throughout about resting on code
   audit rather than AT testing. It is the document the others should have
   followed.
-- `CONTRIBUTING.md`, `docs/DEVELOPMENT_WORKFLOW.md`, `SECURITY.md`,
+- `CONTRIBUTING.md`, `docs/developing/DEVELOPMENT_WORKFLOW.md`, `SECURITY.md`,
   `CODE_OF_CONDUCT.md` — accurate; every command named exists in
   `package.json`.
 
@@ -488,7 +488,7 @@ deliberately left unsigned because you had not read them. Here is the evidence.
 |---|---|---|---|
 | `docs/plans/lighting-visual-parity.plan.md` | 36,837 | All five phases carry `status: completed` in its own front matter. Zero inbound references from any tracked file. Its "Playbook basis" section points at five files under `ai-at-playbook/`, which is not in this repository. | **Archive** |
 | `docs/plans/qa_parity_fix_plan_validation_report.md` | 6,427 | Validates a plan file at `C:\Users\WATAP\.cursor\plans\qa_parity_fix_plan_84e638ba.plan.md` — a path outside the repository, in a git-ignored folder. Zero inbound references. Same family as the two you already signed. | **Archive** |
-| `docs/plans/lwfl-csg-bypass-test-protocol.md` | 3,321 | **Do not archive.** See below. | **Keep, with a status line** |
+| `docs/archive/plans/lwfl-csg-bypass-test-protocol.md` | 3,321 | **Do not archive.** See below. | **Keep, with a status line** |
 
 On the third one, which your signature specifically told me to check before
 proposing anything: it belongs to the **live** keyguard workstream. MEASURED —
@@ -555,7 +555,7 @@ testing whether the file is there.
 **Result across the whole repository: 301 relative links, 22 broken.** None of
 them is in a file this release touched. They break down as:
 
-- **8** image paths in `docs/OPENSCAD_LANGUAGE_REFERENCE.md` — vendored upstream
+- **8** image paths in `docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md` — vendored upstream
   reference text whose images were never copied. Expected.
 - **12** in dated audit records pointing into `.audit-scratch/` and `.cursor/`,
   both git-ignored working directories. Expected for a record of a day's work.
@@ -632,34 +632,34 @@ description. The other twelve scripts are all reachable from `package.json`,
 | File | Disposition | Note |
 |---|---|---|
 | `docs/README.md` | **STALE-REWRITE** | The index misses 9 of the 19 guides — including `CLASSIC_UI_GUIDE.md` and `LIBRARIES_GUIDE.md`, the two newest and best. Lists a git-ignored folder. |
-| `docs/ACCESSIBILITY_CONFORMANCE.md` | **STALE-REWRITE — D-35, needs your sign-off** | F1, F3, F7, and the 4.5:1 claim against open D-13. Its Classic and console sections are recent and accurate. |
-| `docs/KNOWN_ISSUES.md` | **STALE-REWRITE** | F3, F6, F8. Five weeks stale; nothing from Rounds 1–5. |
-| `docs/BROWSER_SUPPORT.md` | **STALE-REWRITE** | F1, F3, F6, F7. |
-| `docs/TESTING.md` | **STALE-REWRITE** | F8. Also omits half the test surface: `test:e2e:prod`, `test:visual`, the parity suite and the never-started guard. Its `$t` parity row needs re-checking now that an Animate panel exists. |
-| `docs/TROUBLESHOOTING.md` | **STALE-REWRITE** | F5. "Node 18+" is unsourced — `package.json` has no `engines` field. |
-| `docs/DEV_QUICK_START.md` | **STALE-REWRITE** | F5. Its project-structure block omits `tests/e2e-prod/` and `tests/visual/`. |
-| `docs/PERFORMANCE.md` | **STALE-REWRITE** | F7, F8. Bundle figures and the WASM package are both from a superseded build. |
-| `docs/DEPLOYMENT.md` | **STALE-REWRITE** | F10 — it told IT teams headerless hosting fails, which the project's own spike disproved. Plus F5 (WASM size). |
-| `docs/ROLLBACK_RUNBOOK.md` | **STALE-REWRITE** | F7 (version/date header). Procedure itself looks sound. |
-| `docs/RENDER_TRIGGER_MAP.md` | **STALE-REWRITE** | F8. Calls itself single-source-of-truth while being five months unaudited, for two resolved bugs. |
-| `docs/RELEASING.md` | **STALE-REWRITE** | Never mentions merging `develop` into `main`, though `DEVELOPMENT_WORKFLOW.md` says `main` is what deploys. The release procedure has a hole in it. |
-| `docs/QUICK_REFERENCE.md` | ACCURATE-KEEP, but redundant | 331 bytes, all of it accurate, all of it duplicating three sections of `DEVELOPMENT_WORKFLOW.md`. Left alone — deleting a file is your call, and duplication is not an error. |
-| `docs/DEVELOPMENT_WORKFLOW.md` | ACCURATE-KEEP | |
-| `docs/RESPONSIVE_UI.md` | ACCURATE-KEEP | Breakpoints verified. |
-| `docs/MOBILE_LIMITATIONS.md` | **STALE-REWRITE** | "Solved in v1.4" uses a version scheme that no longer exists. Does not mention the mobile entry gate or that Classic is desktop-only. |
-| `docs/ARCHITECTURE.md` | **STALE-REWRITE** | F2: carried a whole "CLI tool" section. The rest of the high-level description matches; its module map still deserves a line-by-line check. |
-| `docs/SECURITY_ADMIN_GUIDE.md` | ACCURATE-KEEP (UNVERIFIED in detail) | Names the permanent CodeMirror CSP violation, which is correct and deliberate. |
-| `docs/OPEN_SOURCE_PROJECTS.md` | **STALE-REWRITE** | F2: listed Chalk and Commander as runtime dependencies; both left with the CLI. |
-| `docs/OPEN_SOURCE_GUIDES.md` | DATED RECORD | 151 KB of collected external reference material. |
-| `docs/OPENSCAD_LANGUAGE_REFERENCE.md` | DATED RECORD | 585 KB of upstream OpenSCAD language reference; explicitly excluded from Markdown linting. Not ours to rewrite. |
+| `docs/accessibility/ACCESSIBILITY_CONFORMANCE.md` | **STALE-REWRITE — D-35, needs your sign-off** | F1, F3, F7, and the 4.5:1 claim against open D-13. Its Classic and console sections are recent and accurate. |
+| `docs/accessibility/KNOWN_ISSUES.md` | **STALE-REWRITE** | F3, F6, F8. Five weeks stale; nothing from Rounds 1–5. |
+| `docs/accessibility/BROWSER_SUPPORT.md` | **STALE-REWRITE** | F1, F3, F6, F7. |
+| `docs/developing/TESTING.md` | **STALE-REWRITE** | F8. Also omits half the test surface: `test:e2e:prod`, `test:visual`, the parity suite and the never-started guard. Its `$t` parity row needs re-checking now that an Animate panel exists. |
+| `docs/developing/TROUBLESHOOTING.md` | **STALE-REWRITE** | F5. "Node 18+" is unsourced — `package.json` has no `engines` field. |
+| `docs/developing/DEV_QUICK_START.md` | **STALE-REWRITE** | F5. Its project-structure block omits `tests/e2e-prod/` and `tests/visual/`. |
+| `docs/developing/PERFORMANCE.md` | **STALE-REWRITE** | F7, F8. Bundle figures and the WASM package are both from a superseded build. |
+| `docs/deploying/DEPLOYMENT.md` | **STALE-REWRITE** | F10 — it told IT teams headerless hosting fails, which the project's own spike disproved. Plus F5 (WASM size). |
+| `docs/deploying/ROLLBACK_RUNBOOK.md` | **STALE-REWRITE** | F7 (version/date header). Procedure itself looks sound. |
+| `docs/developing/RENDER_TRIGGER_MAP.md` | **STALE-REWRITE** | F8. Calls itself single-source-of-truth while being five months unaudited, for two resolved bugs. |
+| `docs/project/RELEASING.md` | **STALE-REWRITE** | Never mentions merging `develop` into `main`, though `DEVELOPMENT_WORKFLOW.md` says `main` is what deploys. The release procedure has a hole in it. |
+| `docs/developing/QUICK_REFERENCE.md` | ACCURATE-KEEP, but redundant | 331 bytes, all of it accurate, all of it duplicating three sections of `DEVELOPMENT_WORKFLOW.md`. Left alone — deleting a file is your call, and duplication is not an error. |
+| `docs/developing/DEVELOPMENT_WORKFLOW.md` | ACCURATE-KEEP | |
+| `docs/developing/RESPONSIVE_UI.md` | ACCURATE-KEEP | Breakpoints verified. |
+| `docs/accessibility/MOBILE_LIMITATIONS.md` | **STALE-REWRITE** | "Solved in v1.4" uses a version scheme that no longer exists. Does not mention the mobile entry gate or that Classic is desktop-only. |
+| `docs/developing/ARCHITECTURE.md` | **STALE-REWRITE** | F2: carried a whole "CLI tool" section. The rest of the high-level description matches; its module map still deserves a line-by-line check. |
+| `docs/deploying/SECURITY_ADMIN_GUIDE.md` | ACCURATE-KEEP (UNVERIFIED in detail) | Names the permanent CodeMirror CSP violation, which is correct and deliberate. |
+| `docs/reference/OPEN_SOURCE_PROJECTS.md` | **STALE-REWRITE** | F2: listed Chalk and Commander as runtime dependencies; both left with the CLI. |
+| `docs/reference/OPEN_SOURCE_GUIDES.md` | DATED RECORD | 151 KB of collected external reference material. |
+| `docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md` | DATED RECORD | 585 KB of upstream OpenSCAD language reference; explicitly excluded from Markdown linting. Not ours to rewrite. |
 
 Plus three files that sit loose in `docs/` rather than in a subfolder:
 
 | File | Disposition | Note |
 |---|---|---|
-| `docs/design-d1-preset-companion-files.md` | **STALE-REWRITE** | F9: says "not yet implemented" about code that is live. |
-| `docs/source-code-foundation-assessment.md` | DATED RECORD | Decision document, 2026-02-21. |
-| `docs/testing-guide-stakeholder-bugs.md` | DATED RECORD | Verification steps for a specific past fix set. |
+| `docs/developing/design-d1-preset-companion-files.md` | **STALE-REWRITE** | F9: says "not yet implemented" about code that is live. |
+| `docs/archive/source-code-foundation-assessment.md` | DATED RECORD | Decision document, 2026-02-21. |
+| `docs/archive/testing-guide-stakeholder-bugs.md` | DATED RECORD | Verification steps for a specific past fix set. |
 
 ### `docs/guides/` (19)
 
@@ -690,7 +690,7 @@ Plus three files that sit loose in `docs/` rather than in a subfolder:
 | File | Disposition | Note |
 |---|---|---|
 | `docs/specs/UI_STANDARDS.md` | ACCURATE-KEEP | Ten tokens verified. One nit on the deprecated `--radius-sm` value. |
-| `docs/specs/CAMERA_CONTROLS_ACCESSIBILITY.md` | **STALE-REWRITE** | F9: documents the unreachable floating-controls widget. |
+| `docs/accessibility/CAMERA_CONTROLS_ACCESSIBILITY.md` | **STALE-REWRITE** | F9: documents the unreachable floating-controls widget. |
 | `docs/specs/PARAMETER_SCHEMA_SPEC.md` | **STALE-REWRITE** | F2: the "v2 (CLI Toolchain)" framing. The schema itself is sound; the nested-vector note is pinned to v4.2.0 and wants re-checking. |
 | `docs/specs/MANIFEST_STABILITY_CONTRACT.md` | ACCURATE-KEEP | A stability promise to outside authors — exactly the kind of document that should not be edited casually. |
 
@@ -761,7 +761,7 @@ header, which is what makes it a record rather than a stale instruction.
 | `docs/plans/qa_parity_executor_prompt.md` | **OBSOLETE-ARCHIVE — done** | Q-62b, signed. Zero inbound references. Now at `docs/archive/qa_parity_executor_prompt.md` with a dated note. |
 | `docs/plans/lighting-visual-parity.plan.md` | **OBSOLETE-ARCHIVE — awaiting your signature** | All phases completed; zero inbound references. |
 | `docs/plans/qa_parity_fix_plan_validation_report.md` | **OBSOLETE-ARCHIVE — awaiting your signature** | Validates a plan outside this repository; zero inbound references. |
-| `docs/plans/lwfl-csg-bypass-test-protocol.md` | **ACCURATE-KEEP** (with a status line to add) | Live workstream tooling. Evidence in section 6. |
+| `docs/archive/plans/lwfl-csg-bypass-test-protocol.md` | **ACCURATE-KEEP** (with a status line to add) | Live workstream tooling. Evidence in section 6. |
 
 ### `docs/archive/` (2)
 

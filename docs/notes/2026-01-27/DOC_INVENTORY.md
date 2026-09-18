@@ -22,15 +22,15 @@ This is the decision log for the documentation style audit. Each file gets a sta
 | File | Decision | Notes |
 |------|----------|-------|
 | docs/README.md | Rewrite | Remove emoji markers, make it a real index |
-| docs/DEV_QUICK_START.md | Rewrite | Heavy emoji, over-structured |
-| docs/TESTING.md | Keep | Already good style |
-| docs/DEPLOYMENT.md | Keep | Clean and minimal |
-| docs/PERFORMANCE.md | Rewrite | Too formal, checkbox lists, template patterns |
-| docs/TROUBLESHOOTING.md | Rewrite | Emoji markers, checkbox formatting |
-| docs/QUICK_REFERENCE.md | Keep | Short, useful |
-| docs/DEVELOPMENT_WORKFLOW.md | Verify | Check tone |
-| docs/RELEASING.md | Verify | Check tone |
-| docs/MOBILE_LIMITATIONS.md | Verify | Check tone |
+| docs/developing/DEV_QUICK_START.md | Rewrite | Heavy emoji, over-structured |
+| docs/developing/TESTING.md | Keep | Already good style |
+| docs/deploying/DEPLOYMENT.md | Keep | Clean and minimal |
+| docs/developing/PERFORMANCE.md | Rewrite | Too formal, checkbox lists, template patterns |
+| docs/developing/TROUBLESHOOTING.md | Rewrite | Emoji markers, checkbox formatting |
+| docs/developing/QUICK_REFERENCE.md | Keep | Short, useful |
+| docs/developing/DEVELOPMENT_WORKFLOW.md | Verify | Check tone |
+| docs/project/RELEASING.md | Verify | Check tone |
+| docs/accessibility/MOBILE_LIMITATIONS.md | Verify | Check tone |
 | docs/CAMERA_CONTROLS_ACCESSIBILITY.md | Move to specs/ | Technical spec, not a guide |
 
 ## docs/guides/
@@ -98,10 +98,10 @@ All files in `.github/` stay as-is. Templates and config.
 1. docs/README.md (set the story first)
 2. Root README.md (verify claims)
 3. scripts/README.md (high-touch, emoji heavy)
-4. docs/DEV_QUICK_START.md (new devs see this)
-5. docs/TROUBLESHOOTING.md
-6. docs/PERFORMANCE.md
+4. docs/developing/DEV_QUICK_START.md (new devs see this)
+5. docs/developing/TROUBLESHOOTING.md
+6. docs/developing/PERFORMANCE.md
 7. docs/guides/SECURITY_TESTING.md
 8. docs/guides/KEYGUARD_WORKFLOW_GUIDE.md
 9. public/libraries/README.md
-10. Create docs/ARCHITECTURE.md (diagrams)
+10. Create docs/developing/ARCHITECTURE.md (diagrams)

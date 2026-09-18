@@ -8,7 +8,7 @@ A browser based OpenSCAD "Customizer" that tries to be usable with keyboards, sc
 
 - **Live demo**: `https://openscad-assistive-forge.pages.dev/`
 - **Docs index**: `docs/README.md`
-- **Project status**: `PROJECT_STATUS.md`
+- **Project status**: `docs/project/PROJECT_STATUS.md`
 
 ## Why this exists
 
@@ -81,7 +81,7 @@ See `docs/guides/RUN_OFFLINE_GUIDE.md` for full instructions, including a
 
 ## Curious how it handles safety and privacy?
 
-`docs/SITE_FACTS.md` lays it out: the Content Security Policy verbatim,
+`docs/deploying/SITE_FACTS.md` lays it out: the Content Security Policy verbatim,
 the (very short) data-handling story, exactly what the site connects to,
 the supply-chain controls, and the accessibility conformance work. All of
 it is verifiable against the files it cites.
@@ -105,16 +105,16 @@ version 4.5.0 -- the short, illustrated version of the CHANGELOG.
 ## Docs (where to start)
 
 - `docs/README.md` (index)
-- `docs/DEPLOYMENT.md`
-- `docs/TESTING.md`
-- `docs/TROUBLESHOOTING.md`
+- `docs/deploying/DEPLOYMENT.md`
+- `docs/developing/TESTING.md`
+- `docs/developing/TROUBLESHOOTING.md`
 - `docs/specs/PARAMETER_SCHEMA_SPEC.md`
 
 ## Contributing
 
 If you found a bug, confusing UI, or a missing accessibility affordance: please open an issue. PRs are welcome too -- small and focused is easiest for me to review.
 
-`CONTRIBUTING.md` has the details.
+`.github/CONTRIBUTING.md` has the details.
 
 ## License
 

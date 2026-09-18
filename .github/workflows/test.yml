@@ -1093,10 +1093,16 @@ jobs:
             --exclude '^https://www\.bestbuy\.com'
             --exclude '^https://www\.sovol\.tech'
             --exclude '^https://operations\.osmfoundation\.org'
-            --exclude-path docs/OPENSCAD_LANGUAGE_REFERENCE.md
+            --exclude-path docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md
             'README.md'
-            'docs/*.md'
+            'docs/README.md'
             'docs/guides/**/*.md'
+            'docs/developing/*.md'
+            'docs/deploying/*.md'
+            'docs/accessibility/*.md'
+            'docs/reference/*.md'
+            'docs/project/*.md'
+            'docs/notes/alt-view/*.md'
             'docs/specs/FORGE_HANDOFF_CONTRACT.md'
           fail: true
 

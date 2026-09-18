@@ -2,7 +2,7 @@
 
 This is the paper trail for getting Cloudflare Pages working with OpenSCAD WASM.
 
-If you just want to deploy the app, start with `docs/DEPLOYMENT.md`.
+If you just want to deploy the app, start with `docs/deploying/DEPLOYMENT.md`.
 
 ---
 
@@ -253,7 +253,7 @@ server: {
 
 ## Deployment Guide Verification
 
-**Guide Location**: `docs/DEPLOYMENT.md`
+**Guide Location**: `docs/deploying/DEPLOYMENT.md`
 
 **Guide Review Date**: January 17, 2026
 
@@ -623,7 +623,7 @@ Based on:
 ### Internal Documentation
 - [WASM Threading Analysis](./WASM_THREADING_ANALYSIS.md)
 - [Comparable Projects Research](./COMPARABLE_PROJECTS.md)
-- [Deployment](../DEPLOYMENT.md)
+- [Deployment](../deploying/DEPLOYMENT.md)
 
 ### External Resources
 - [Cloudflare Pages Documentation](https://developers.cloudflare.com/pages/)

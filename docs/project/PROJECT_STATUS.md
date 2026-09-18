@@ -45,5 +45,5 @@ In no particular order:
 - Bugs + accessibility regressions: please file issues.
 - PRs are welcome, but smaller PRs are more likely to land.
 
-See `CONTRIBUTING.md` and `docs/DEVELOPMENT_WORKFLOW.md`.
+See `.github/CONTRIBUTING.md` and `docs/developing/DEVELOPMENT_WORKFLOW.md`.
 

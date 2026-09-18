@@ -118,7 +118,7 @@ const DIR_SKIP = new Set([
 ])
 
 const PATH_SKIP = [
-  join('docs', 'OPENSCAD_LANGUAGE_REFERENCE.md'),
+  join('docs', 'reference', 'OPENSCAD_LANGUAGE_REFERENCE.md'),
   join('docs', 'vpat', 'evidence'),
   join('docs', 'audit'),
   join('public', 'examples', 'ascii-city'),
@@ -127,13 +127,13 @@ const PATH_SKIP = [
 const ROOT_PAPERS = [
   'README.md',
   'CHANGELOG.md',
-  'RELEASE_NOTES.md',
-  'PROJECT_STATUS.md',
-  'CONTRIBUTING.md',
   'CREDITS.md',
-  'MAINTAINERS.md',
-  'SECURITY.md',
-  'CODE_OF_CONDUCT.md',
+  'AGENTS.md',
+  // The community papers live where GitHub reads them (DP-64); the rest of
+  // the project's papers are under docs/project and the docs walk finds them.
+  join('.github', 'CONTRIBUTING.md'),
+  join('.github', 'SECURITY.md'),
+  join('.github', 'CODE_OF_CONDUCT.md'),
 ]
 
 const skipped = (rel) =>
