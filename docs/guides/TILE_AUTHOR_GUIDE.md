@@ -36,7 +36,7 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. If something goes wrong here, it is almost always
-`npm install`, and `docs/TROUBLESHOOTING.md` has the usual suspects.
+`npm install`, and `docs/developing/TROUBLESHOOTING.md` has the usual suspects.
 
 ## 2. Copy the template
 
@@ -378,8 +378,8 @@ over all of it.
 
 ## If you get stuck
 
-- `CONTRIBUTING.md` - the general contribution notes
+- `.github/CONTRIBUTING.md` - the general contribution notes
 - `docs/guides/GETTING_STARTED.md` - using the app itself
-- `docs/OPENSCAD_LANGUAGE_REFERENCE.md` - the language
+- `docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md` - the language
 - `public/examples/_template/template_tile.scad` - the template, commented line
   by line

@@ -78,7 +78,7 @@ Run this periodically to catch vulnerable dependencies.
 
 ## Reporting security issues
 
-Don't create a public GitHub issue. Email the maintainer directly (see `SECURITY.md`). Include:
+Don't create a public GitHub issue. Email the maintainer directly (see `.github/SECURITY.md`). Include:
 - Description of the vulnerability
 - Steps to reproduce
 - Potential impact

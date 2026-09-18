@@ -93,4 +93,4 @@ When adding new scripts:
 Removing one means undoing all of those in the same change, or the repository
 is left with orphan references.
 
-See `docs/TROUBLESHOOTING.md` for common issues.
+See `docs/developing/TROUBLESHOOTING.md` for common issues.

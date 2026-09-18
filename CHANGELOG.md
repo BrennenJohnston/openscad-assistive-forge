@@ -365,7 +365,7 @@ the sharing feature, so it needs a decision before a fix.
 
 ### Added
 
-- **One page of verifiable site facts** (DP-29) - `docs/SITE_FACTS.md` states what the deployed
+- **One page of verifiable site facts** (DP-29) - `docs/deploying/SITE_FACTS.md` states what the deployed
   site is made of and what it does with your data: the Content Security Policy verbatim with a
   directive-by-directive table, the data-handling story (nothing leaves the browser), exactly
   which hosts the site connects to, the supply-chain controls, and the accessibility conformance
@@ -504,7 +504,7 @@ the sharing feature, so it needs a decision before a fix.
   eleventh of twelve. Each city now carries seven landmarks drafted from its own landmark
   register - Seattle's Landmarks Preservation Board list, Denver's landmark register, the
   Albuquerque Landmarks Commission, Heritage Burnaby - in a fixed order, each row keyed to its
-  map element and cited in `docs/CITY_WALK_LANDMARKS.md`. A row that loses its map element in a
+  map element and cited in `docs/notes/alt-view/landmarks.md`. A row that loses its map element in a
   rebake fails a test instead of quietly shortening the legend. The old scoring survives for a
   city without a table, with a mapped wikidata identity now breaking ties
 
@@ -808,7 +808,7 @@ the sharing feature, so it needs a decision before a fix.
 - **The white and the ink turned out to be two problems, not one** (CW-71) - turning on the white gate
   alone, with no floor, removes every white cell and changes nothing else: the same large flat fields
   are still there, in teal instead of white. That says plainly that the flatness was never only about
-  white. Three settings are measured and photographed side by side in `docs/CITY_WALK_ROADMAP.md`, so
+  white. Three settings are measured and photographed side by side in `docs/notes/alt-view/roadmap.md`, so
   the choice of how empty color mode should be is made from pictures rather than from a hunch
 
 - **Three selectable treatments of the solid bright layer, measured side by side** (CW-70) - the
@@ -840,7 +840,7 @@ the sharing feature, so it needs a decision before a fix.
   Only removing the pattern entirely reached zero. **So the ground was left exactly as it is**: what
   looked like a filtering bug is what a fine pattern does when you walk through it, and the
   frame-to-frame memory added in the previous release already takes it to zero, including on a
-  ten-frames-a-second machine. The whole table is in `docs/CITY_WALK_ROADMAP.md`, so the next person
+  ten-frames-a-second machine. The whole table is in `docs/notes/alt-view/roadmap.md`, so the next person
   to look at the pavement starts from a measurement instead of a hypothesis
 
 - **Walking through the city no longer re-rolls the picture underneath you** (CW-68) - the converter
@@ -2616,11 +2616,11 @@ Security hardening, saved projects, documentation overhaul, and accessibility im
 
 ### Documentation
 
-- **Added `docs/ARCHITECTURE.md`** - Complete system architecture with 10 Mermaid diagrams
+- **Added `docs/developing/ARCHITECTURE.md`** - Complete system architecture with 10 Mermaid diagrams
   - Module map, render pipeline, saved projects flow, validation pipeline
   - Service worker caching, tutorial sandbox, comparison mode, CLI structure
 - **Added `docs/guides/SECURITY_TESTING.md`** - Security audit procedures
-- **Added `docs/DEV_QUICK_START.md`** - Developer onboarding guide
+- **Added `docs/developing/DEV_QUICK_START.md`** - Developer onboarding guide
 - **Documentation style audit** - Rewrote docs to single-maintainer voice
   - Removed boilerplate patterns and excessive emoji
   - Consolidated docs into predictable `docs/` structure
@@ -3394,7 +3394,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 - **Repository**: [GitHub](https://github.com/BrennenJohnston/openscad-assistive-forge)
 - **Live Demo**: [Cloudflare Pages](https://openscad-assistive-forge.pages.dev/)
-- **Documentation**: [docs/](docs/)
+- **Documentation**: [docs/](docs)
 - **License**: GPL-3.0-or-later
 
 ---

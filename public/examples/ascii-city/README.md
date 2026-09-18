@@ -46,7 +46,7 @@ the attribution wherever the data is shown.
 
 The wrapper fields, the element shapes, the full kept-tag list and the
 versioning promise are written up in
-[docs/ASCII_CITY_EXTRACT_SCHEMA.md](../../../docs/ASCII_CITY_EXTRACT_SCHEMA.md).
+[docs/notes/alt-view/extract-schema.md](../../../docs/notes/alt-view/extract-schema.md).
 That document is the contract; this one is the provenance of the four files
 that ship here.
 

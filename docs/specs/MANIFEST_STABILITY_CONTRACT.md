@@ -304,4 +304,4 @@ For questions about the manifest feature:
 - **GitHub Discussions**: For questions and community support
 - **MANIFEST_SHARING_GUIDE.md**: Step-by-step setup instructions
 
-For security vulnerabilities, see `SECURITY.md`.
+For security vulnerabilities, see `.github/SECURITY.md`.

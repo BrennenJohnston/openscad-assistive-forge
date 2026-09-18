@@ -38,7 +38,7 @@ So the summary documents claim something their own source of truth does not.
 
 ---
 
-## 2. `docs/ACCESSIBILITY_CONFORMANCE.md`
+## 2. `docs/accessibility/ACCESSIBILITY_CONFORMANCE.md`
 
 ### 2a. The manual testing table
 
@@ -269,7 +269,7 @@ guide someone actually reads does not.
 
 ---
 
-## 5. `docs/BROWSER_SUPPORT.md`
+## 5. `docs/accessibility/BROWSER_SUPPORT.md`
 
 **Currently** (lines 104-111): a third AT table — NVDA "Full", JAWS "Full",
 VoiceOver "Full", TalkBack "Partial".

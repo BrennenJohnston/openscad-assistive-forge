@@ -77,5 +77,5 @@ The three things agents get wrong most often here, spelled out:
    the bundle budgets — a task is done when its named check has run
    and passed with real output, not when the code looks right.
 
-Start with `CONTRIBUTING.md` for the human conventions, then
+Start with `.github/CONTRIBUTING.md` for the human conventions, then
 `AGENTS.md` for the agent-specific ones.

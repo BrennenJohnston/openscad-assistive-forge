@@ -56,7 +56,7 @@ data to go.
 ## The Content Security Policy
 
 Every response carries this CSP, configured in
-[`public/_headers`](../public/_headers) — the single line as shipped:
+[`public/_headers`](../../public/_headers) — the single line as shipped:
 
 ```
 Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
@@ -107,12 +107,12 @@ There are no other outbound connections.
 - JavaScript dependencies are pinned by `package-lock.json` (`npm ci`
   in CI).
 - CI fails the build on high or critical `npm audit` findings (see
-  [`.github/workflows/test.yml`](../.github/workflows/test.yml)).
+  [`.github/workflows/test.yml`](../../.github/workflows/test.yml)).
 - A **CycloneDX SBOM** is generated on every CI run and uploaded as a
   build artifact — downloadable from any successful run on the
   repository's Actions tab. No stale copy is kept in the repository.
 - The OpenSCAD WASM engine is committed under
-  [`public/wasm/openscad-official/`](../public/wasm/openscad-official/)
+  [`public/wasm/openscad-official/`](../../public/wasm/openscad-official)
   with SHA-256 pins in `INTEGRITY.json`, so the binary served matches a
   specific, reviewable upstream build.
 - Nothing is signed as a download because nothing is downloaded — the
@@ -121,8 +121,8 @@ There are no other outbound connections.
 ## Accessibility
 
 The app targets **WCAG 2.2 Level AA** and publishes its conformance
-work: [VPAT 2.5 (WCAG 2.2)](vpat/VPAT-2.5-WCAG.md) and the
-[Accessibility Conformance Statement](ACCESSIBILITY_CONFORMANCE.md),
+work: [VPAT 2.5 (WCAG 2.2)](../vpat/VPAT-2.5-WCAG.md) and the
+[Accessibility Conformance Statement](../accessibility/ACCESSIBILITY_CONFORMANCE.md),
 with per-criterion decisions and evidence under `docs/vpat/`.
 
 ## Installing on managed devices (reference)
@@ -146,10 +146,10 @@ plain reference material:
 References: [Chrome Enterprise — WebAppInstallForceList](https://chromeenterprise.google/policies/#WebAppInstallForceList),
 [Microsoft Learn — WebAppInstallForceList](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#webappinstallforcelist).
 User-facing install steps live in the
-[Run Offline Guide](guides/RUN_OFFLINE_GUIDE.md).
+[Run Offline Guide](../guides/RUN_OFFLINE_GUIDE.md).
 
 ## Pointers
 
-- Vulnerability disclosure: [`SECURITY.md`](../SECURITY.md)
-- Self-hosting: [`docs/DEPLOYMENT.md`](DEPLOYMENT.md)
-- Security walkthrough for deployers: [`docs/SECURITY_ADMIN_GUIDE.md`](SECURITY_ADMIN_GUIDE.md)
+- Vulnerability disclosure: [`SECURITY.md`](../../.github/SECURITY.md)
+- Self-hosting: [`docs/deploying/DEPLOYMENT.md`](DEPLOYMENT.md)
+- Security walkthrough for deployers: [`docs/deploying/SECURITY_ADMIN_GUIDE.md`](SECURITY_ADMIN_GUIDE.md)

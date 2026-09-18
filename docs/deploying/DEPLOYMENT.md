@@ -97,7 +97,7 @@ sending no COOP or COEP headers at all: `crossOriginIsolated` was `false` and
 `SharedArrayBuffer` was unavailable, and the WASM engine still initialized, the
 preview still rendered real geometry, and there were no console errors -- both
 on a cold visit and on an offline reload afterwards. The full record is in
-[`audit/offline-pwa-spike-results.md`](./audit/offline-pwa-spike-results.md).
+[`audit/offline-pwa-spike-results.md`](../audit/offline-pwa-spike-results.md).
 
 This matters for anyone hosting on an intranet share or a locked-down file
 server that cannot set headers: **that works.** Serve the contents of `dist/`
@@ -343,8 +343,8 @@ Key metrics to track:
 ### Operational Runbooks
 
 For incident response procedures, see:
-- `docs/ROLLBACK_RUNBOOK.md` -- rollback and recovery procedures
-- `docs/SECURITY_ADMIN_GUIDE.md` -- security configuration and incident handling
+- `docs/deploying/ROLLBACK_RUNBOOK.md` -- rollback and recovery procedures
+- `docs/deploying/SECURITY_ADMIN_GUIDE.md` -- security configuration and incident handling
 
 ---
 
@@ -471,5 +471,5 @@ owner-approved before release.
 ---
 
 ## Related Documentation- [Security Admin Guide](./SECURITY_ADMIN_GUIDE.md) - Security configuration details
-- [Testing](./TESTING.md) - Pre-deployment testing
-- [Troubleshooting](./TROUBLESHOOTING.md) - Developer troubleshooting
+- [Testing](../developing/TESTING.md) - Pre-deployment testing
+- [Troubleshooting](../developing/TROUBLESHOOTING.md) - Developer troubleshooting

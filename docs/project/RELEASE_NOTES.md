@@ -8,7 +8,7 @@ drawing lane that opens and saves SVG and DXF, one-link project sharing with
 provenance records, a braille editor, and an accessibility pass made by
 listening to a screen reader. The last work before release went over the
 picture-to-charm editor, walked with my own logo five times. The illustrated
-version is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
+version is [docs/updates/WHATS_NEW_v5.md](../updates/WHATS_NEW_v5.md).
 
 ### Highlights
 
@@ -43,7 +43,7 @@ version is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
   first sentence instead of an 80-word paragraph, the auto-preview announces
   its completion instead of its progress, and the drawing editor reads
   correctly.
-- **Site facts in one page**: `docs/SITE_FACTS.md` states the Content
+- **Site facts in one page**: `docs/deploying/SITE_FACTS.md` states the Content
   Security Policy, data handling, connections and supply-chain controls, each
   claim citing the file that proves it.
 - **Security**: three high-severity transitive advisories patched.
@@ -94,7 +94,7 @@ The version number marks the scale of the change, not a compatibility break:
    string appears in `/forge-capabilities.txt`. Quote it in a bug report so
    two builds of one version can be told apart.
 
-See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+See [CHANGELOG.md](../../CHANGELOG.md) for the full list of changes.
 
 ---
 
@@ -121,7 +121,7 @@ This is a backward-compatible upgrade with no breaking changes:
 2. All existing saved projects and presets remain compatible
 3. The braille tools are available from the welcome screen or via `?example=braille-wedge-card`, `?example=braille-charm`, and `?example=braille-sign`
 
-See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+See [CHANGELOG.md](../../CHANGELOG.md) for the full list of changes.
 
 ---
 
@@ -147,7 +147,7 @@ This is a backward-compatible upgrade with no breaking changes:
 2. All existing saved projects and presets remain compatible
 3. New features (`project_presets`, `svg_path_offset`) are behind feature flags — disabled by default
 
-See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+See [CHANGELOG.md](../../CHANGELOG.md) for the full list of changes.
 
 ---
 
@@ -175,7 +175,7 @@ This is a backward-compatible upgrade with no breaking changes:
 2. All existing saved projects remain compatible
 3. Expert Mode now uses CodeMirror 6 (Monaco Editor was dead code and has been removed)
 
-See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+See [CHANGELOG.md](../../CHANGELOG.md) for the full list of changes.
 
 ---
 
@@ -281,7 +281,7 @@ New features are controlled by feature flags:
 
 ## Known Issues
 
-See [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) for current limitations and workarounds.
+See [KNOWN_ISSUES.md](../accessibility/KNOWN_ISSUES.md) for current limitations and workarounds.
 
 ---
 

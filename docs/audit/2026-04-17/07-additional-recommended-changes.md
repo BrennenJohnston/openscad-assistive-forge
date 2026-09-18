@@ -18,7 +18,7 @@ Provenance flags `OBSERVED` / `INFERRED` / `UNVERIFIED` as in prior phases.
 | # | Item | Bucket | Mission impact |
 | --- | --- | --- | --- |
 | 1 | **Keyboard shortcuts are not advertised to assistive technology** (`aria-keyshortcuts` count = 0 across the entire codebase) | **Mission-critical** | High — the app ships F4-F12, Ctrl+E, etc.; a screen-reader user has no way to discover them from the UI |
-| 2 | **`docs/source-code-foundation-assessment.md` contains 4 inaccuracies** about how the WASM bridge actually works | **Mission-critical** | High — design decisions downstream of the doc are made on false premises |
+| 2 | **`docs/archive/source-code-foundation-assessment.md` contains 4 inaccuracies** about how the WASM bridge actually works | **Mission-critical** | High — design decisions downstream of the doc are made on false premises |
 | 3 | **No human screen-reader walkthrough has been performed in this audit cycle** | **Mission-critical** | High — the project's audience deserves human verification, not just axe-core / Lighthouse |
 | 4 | **Service-worker hardcodes `Version: 4.3.0` in a JSDoc comment** while `package.json` is `4.4.0` | Worth considering | Low (the runtime `CACHE_VERSION` is templated correctly; only the comment drifts) |
 | 5 | **Cross-browser parity (Firefox, WebKit/Safari) is configured but `webkit-logs.txt` is the only artifact** | Worth considering | Medium — WebKit accessibility differs subtly from Chromium |
@@ -67,7 +67,7 @@ Provenance flags `OBSERVED` / `INFERRED` / `UNVERIFIED` as in prior phases.
 - After the change, an NVDA user navigating to the Render button hears "Render, button, F 6."
 - Lighthouse / axe-core do not currently flag missing `aria-keyshortcuts` (the spec calls it "recommended," not "required") — manual NVDA verification is the test.
 
-### 1.2 Correct doc inaccuracies in `docs/source-code-foundation-assessment.md`
+### 1.2 Correct doc inaccuracies in `docs/archive/source-code-foundation-assessment.md`
 
 **OBSERVED** (consolidated from [Phase 3 §4](./03-wasm-bridge-fitness.md#4-doc-inaccuracies-to-correct)):
 

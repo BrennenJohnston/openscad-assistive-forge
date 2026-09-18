@@ -21,7 +21,7 @@ attached, can be drawn on a screen, or measured for something else entirely.
 The moment the model starts assuming a canvas, both futures get much harder.
 
 The file format that model is loaded from is written down in
-[the extract schema](ASCII_CITY_EXTRACT_SCHEMA.md).
+[the extract schema](extract-schema.md).
 
 ## Part one: cities the player chooses
 
@@ -70,11 +70,11 @@ update all of them together or the docs start lying about the deployed headers.
 The copies at the time of writing:
 
 - `public/_headers` (the one that is actually served)
-- `docs/DEPLOYMENT.md`
-- `docs/SECURITY_ADMIN_GUIDE.md`
-- `docs/SITE_FACTS.md`
+- `docs/deploying/DEPLOYMENT.md`
+- `docs/deploying/SECURITY_ADMIN_GUIDE.md`
+- `docs/deploying/SITE_FACTS.md`
 - `docs/specs/MANIFEST_STABILITY_CONTRACT.md`
-- `RELEASE_NOTES.md`
+- `docs/project/RELEASE_NOTES.md`
 
 Re-check that list before relying on it; documents move.
 

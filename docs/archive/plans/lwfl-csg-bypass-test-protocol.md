@@ -2,7 +2,7 @@
 
 > **Status (2026-09-01):** the two original bugs this protocol was written
 > around were settled on a different cause (see KI-012 in
-> `docs/KNOWN_ISSUES.md`) — the H1 hypothesis below is historical framing,
+> `docs/accessibility/KNOWN_ISSUES.md`) — the H1 hypothesis below is historical framing,
 > not an open question. The protocol itself stays current: the three debug
 > hooks it documents are live in the app, and the procedure remains the way
 > to isolate CSG color injection when a keyguard geometry question comes up.
