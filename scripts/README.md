@@ -12,6 +12,7 @@ listed below.
 | `import-check.js` | Fails if any `import` resolves to nothing. Required CI gate | `npm run import-check` |
 | `css-variable-audit.js` | Fails if a `--color-*` / `--focus-*` token is missing from the mono block. Required CI gate | `npm run css-variable-audit` |
 | `check-bundle-budget.js` | Fails if a gzipped bundle exceeds its budget. Required CI gate | `npm run check-bundle` |
+| `check-mermaid.mjs` | Parses every Mermaid diagram in the tracked Markdown with Mermaid itself, the way GitHub renders them; fails on the first one it rejects | `npm run check-mermaid` |
 | `check-e2e-complete.mjs` | Fails a Playwright run that reports tests which never started, so a run the clock cut short cannot report green | CI only, per browser lane |
 | `inject-sw-version.js` | Writes the build's cache version into `dist/sw.js` | automatically, from `vite.config.js` |
 | `generate-icons.js` | Generates the PWA icon set | by hand, when the icons change |
