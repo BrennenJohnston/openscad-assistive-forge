@@ -4581,6 +4581,9 @@ describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => 
     ws.open(svg, analyzeSvg(svg), { layersEnabled: true });
     await ws.whenReady();
     const pane = ws._root.querySelector('.svg-prep-result-pane');
+    // D-167 starts the paper Off; a person can still call it a Cut out, and
+    // this is what that press paints.
+    setRole(ws, 0, 'hole');
     // A role press puts the stand-in up while the combine runs; read it
     // before anything is awaited.
     setRole(ws, 1, 'foreground');

@@ -33,3 +33,13 @@ side of a line the app draws.
   the band was a count of shapes rather than a measured cost.
 
 All three are generated from plain geometry, original to this repository.
+
+## The two papers
+
+`two-papers.svg` is two light squares side by side, each with a dark bar on
+it. Neither square is a frame around the whole drawing, so both are cut-outs
+by their luminance, and the automatic preparation subtracts them from the
+bars and keeps nothing. It exists so the app's answer to that, opening the
+drawing editor and saying so instead of applying an empty design, has a
+drawing to be measured on (D-167). Plain geometry, original to this
+repository.
