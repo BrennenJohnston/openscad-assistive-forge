@@ -37,7 +37,7 @@ In no particular order:
 
 - Keep polishing the “first run” experience and error messages (OpenSCAD failures can be weird).
 - More real-world examples in `public/examples/`.
-- Finish tightening the documentation. A full review in August 2026 found that most guides written before May described a version of the app that no longer exists; the inventory and the fixes are in `docs/audit/2026-08-16-documentation-inventory.md`.
+- Finish tightening the documentation. A full review in August 2026 found that most guides written before May described a version of the app that no longer exists; the inventory and the fixes are in `docs/archive/audit/2026-08-16-documentation-inventory.md`.
 - A real screen-reader listening run with NVDA — the script is written (`docs/notes/NVDA_LISTENING_PACK.md`); measurement got the page as far as it can.
 
 ## If you’re reading this as a contributor

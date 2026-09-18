@@ -394,7 +394,7 @@ Round 4 feedback embedded images (base64):
 
 A comprehensive theory of how OpenSCAD Desktop produces the colors observed by the stakeholder has been developed and validated. The full theory document is at:
 
-**[`docs/audit/desktop-coloring-theory.md`](desktop-coloring-theory.md)**
+**[`docs/archive/audit/desktop-coloring-theory.md`](desktop-coloring-theory.md)**
 
 ### Three-System Model
 

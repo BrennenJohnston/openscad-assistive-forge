@@ -104,7 +104,7 @@ Provenance flags `OBSERVED` / `INFERRED` / `UNVERIFIED` as in prior phases.
   - VoiceOver + Safari on iOS (mobile pairing)
   - TalkBack + Chrome on Android (Android pairing)
 - Each walkthrough exercises the "core 5" journeys: first-visit, file upload, parameter change + preview, render + download, save project + reload.
-- Document each session in `docs/vpat/evidence/m{milestone}/` (the directory already exists with templates from m0 + m1 — see `docs/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md`).
+- Document each session in `docs/accessibility/vpat/evidence/m{milestone}/` (the directory already exists with templates from m0 + m1 — see `docs/accessibility/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md`).
 - Effort: ~4-6 hours per platform per quarter; the template makes documentation mechanical.
 
 ---
@@ -323,7 +323,7 @@ Not gaps — but worth recording so future audits don't re-investigate:
 - **`prefers-reduced-data`** detection: `prefersReducedData()` defined in `storage-manager.js:305-312`. (Underused — see §2.7 above.) **OBSERVED**.
 - **Touch targets**: 25 rules with `min-width/height: 44px` or `48px`. **OBSERVED**.
 - **Heading hierarchy**: 37 heading elements with consistent H1 → H2 → H3 cascade. **OBSERVED**.
-- **VPAT documentation**: 8 markdown files under `docs/vpat/` including milestone evidence templates. **OBSERVED**.
+- **VPAT documentation**: 8 markdown files under `docs/accessibility/vpat/` including milestone evidence templates. **OBSERVED**.
 - **WCAG token system**: `--focus-ring`, `--color-focus`, `--color-text-secondary` tokens with HC + dark + forced-colors variants. (Phase 4 confirmed.) **OBSERVED**.
 
 These pieces are in place; the recommendations above are about strengthening what's already a strong foundation.
@@ -344,7 +344,7 @@ These pieces are in place; the recommendations above are about strengthening wha
 This phase concludes the 2026-04-17 read-only audit. The artifacts produced:
 
 ```
-docs/audit/2026-04-17/
+docs/archive/audit/2026-04-17/
 ├── 00-baseline.md
 ├── 01-architecture-redundancy.md
 ├── 02-complexity-hotspots.md

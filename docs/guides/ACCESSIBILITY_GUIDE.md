@@ -482,7 +482,7 @@ For detailed information:
 
 The target is WCAG 2.2 Level AA, which also covers Section 508 and EN 301
 549. The status of each criterion is recorded in the VPAT and the conformance
-decisions under `docs/vpat/`.
+decisions under `docs/accessibility/vpat/`.
 
 ### Browser Recommendations
 

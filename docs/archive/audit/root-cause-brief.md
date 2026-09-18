@@ -219,7 +219,7 @@ The following gaps **cannot be resolved by any correction path** without either 
 | **Virtual FS warning behavior** | S-012 | Emscripten's MEMFS may not trigger the same warning as desktop's filesystem when an `include` file is missing. | Synthetic warning: detect missing companion files before render and inject a warning into the console output. |
 | **Image format support** | S-013 | The WASM build may not include image parsing libraries needed for `surface()` with PNG/JPEG inputs. | No JS-layer workaround for `surface()` image import. A pre-processing step that converts images to height-map `.dat` files is theoretically possible but complex. |
 
-**Critical determination required:** A single runtime test (documented in `docs/audit/parity-probe-results.md`, Probe 1 Manual Verification Procedure) will resolve the COFF question and immediately reclassify S-001 through S-004 and S-006 as either **resolved** or **Layer 1 blocked**.
+**Critical determination required:** A single runtime test (documented in `docs/archive/audit/parity-probe-results.md`, Probe 1 Manual Verification Procedure) will resolve the COFF question and immediately reclassify S-001 through S-004 and S-006 as either **resolved** or **Layer 1 blocked**.
 
 ---
 
@@ -428,10 +428,10 @@ These items surfaced during the investigation and should be addressed regardless
 
 ### Phase 1–4 Deliverables
 
-- **Scenario matrix:** `docs/audit/scenario-matrix.md` — 16 scenarios with corpus extraction and desktop verification
-- **Desktop coloring theory:** `docs/audit/desktop-coloring-theory.md` — three-system model with GitHub source validation
-- **Browser pipeline trace:** `docs/audit/browser-pipeline-trace.md` — 16 scenarios traced through 5 stages with code citations
-- **Parity probe results:** `docs/audit/parity-probe-results.md` — 5 probes, 57 unit tests, manual COFF verification procedure
+- **Scenario matrix:** `docs/archive/audit/scenario-matrix.md` — 16 scenarios with corpus extraction and desktop verification
+- **Desktop coloring theory:** `docs/archive/audit/desktop-coloring-theory.md` — three-system model with GitHub source validation
+- **Browser pipeline trace:** `docs/archive/audit/browser-pipeline-trace.md` — 16 scenarios traced through 5 stages with code citations
+- **Parity probe results:** `docs/archive/audit/parity-probe-results.md` — 5 probes, 57 unit tests, manual COFF verification procedure
 
 ### Key Source Files
 

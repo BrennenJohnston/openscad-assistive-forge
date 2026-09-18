@@ -30,10 +30,10 @@ So the summary documents claim something their own source of truth does not.
 
 | Where | What it says |
 |---|---|
-| `docs/vpat/conformance-decisions.md` | Every Evidence cell reads "Code audit", "Code review" or "E2E tests". For 2.1.1 Keyboard and 2.4.3 Focus Order it adds: *"Manual AT verification recommended."* |
-| `docs/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md` | A blank form. `**Date**: YYYY-MM-DD`, `**Tester**: [Your Name]`, every Pass/Fail cell empty, "Tested by: _______" unsigned. |
-| `docs/vpat/evidence/m1/validation-summary-2026-02-02.md` line 88 | *"Manual screen reader testing with NVDA+Chrome required for full M1 exit criteria."* |
-| `docs/vpat/conformance-decisions.md` lines 121-122 | Names two example evidence files, `m1/nvda-chrome-vectors-2026-03-15.md` and `m2/voiceover-safari-expert-2026-04-01.md`. **Neither exists.** |
+| `docs/accessibility/vpat/conformance-decisions.md` | Every Evidence cell reads "Code audit", "Code review" or "E2E tests". For 2.1.1 Keyboard and 2.4.3 Focus Order it adds: *"Manual AT verification recommended."* |
+| `docs/accessibility/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md` | A blank form. `**Date**: YYYY-MM-DD`, `**Tester**: [Your Name]`, every Pass/Fail cell empty, "Tested by: _______" unsigned. |
+| `docs/accessibility/vpat/evidence/m1/validation-summary-2026-02-02.md` line 88 | *"Manual screen reader testing with NVDA+Chrome required for full M1 exit criteria."* |
+| `docs/accessibility/vpat/conformance-decisions.md` lines 121-122 | Names two example evidence files, `m1/nvda-chrome-vectors-2026-03-15.md` and `m2/voiceover-safari-expert-2026-04-01.md`. **Neither exists.** |
 | Your release ledger | "No NVDA validation" against R-III, R-IV and every release since. |
 
 ---
@@ -82,7 +82,7 @@ What has been done instead:
 What that cannot tell us is whether the app is *usable* with a screen reader.
 Roles and names being present and correct is not the same as a person being able
 to get their work done. A structured session plan is ready at
-`docs/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md` and we are looking
+`docs/accessibility/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md` and we are looking
 for people to run it.
 ```
 
@@ -146,7 +146,7 @@ this one is load-bearing for a conformance claim.
 
 ---
 
-## 3. `docs/vpat/VPAT-2.5-WCAG.md`
+## 3. `docs/accessibility/vpat/VPAT-2.5-WCAG.md`
 
 This is the formal procurement document, so it needs the most care. It has four
 separate problems.
@@ -300,7 +300,7 @@ not find an uncorrected claim.
 
 ---
 
-## 7. `docs/vpat/conformance-decisions.md`
+## 7. `docs/accessibility/vpat/conformance-decisions.md`
 
 One line only, 1.4.10 Reflow: *"3D preview canvas and Monaco editor may require
 horizontal scrolling at very narrow widths."*

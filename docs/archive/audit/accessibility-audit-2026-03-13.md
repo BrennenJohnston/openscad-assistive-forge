@@ -58,7 +58,7 @@ The project claims WCAG 2.2 AA conformance, but axe-core E2E tests only specifie
 
 ### FIX-4: Conformance Decisions Log — 29 Criteria Evaluated
 
-**File**: `docs/vpat/conformance-decisions.md`  
+**File**: `docs/accessibility/vpat/conformance-decisions.md`  
 **Impact**: Incomplete conformance documentation
 
 29 out of 55 applicable WCAG criteria were listed as "Not Evaluated" despite clear evidence in the codebase. Updated with evaluations based on code audit evidence, reducing "Not Evaluated" count from 29 to 1.
@@ -72,12 +72,12 @@ The project claims WCAG 2.2 AA conformance, but axe-core E2E tests only specifie
 **WCAG**: Multiple criteria  
 **Status**: All screen reader test results in `ACCESSIBILITY_CONFORMANCE.md` are `[VERIFY]`
 
-No actual assistive technology testing evidence exists in `docs/vpat/evidence/`. The conformance statement lists NVDA, JAWS, and VoiceOver combinations but all are unverified. Automated testing (axe-core, Lighthouse) cannot replace real AT testing.
+No actual assistive technology testing evidence exists in `docs/accessibility/vpat/evidence/`. The conformance statement lists NVDA, JAWS, and VoiceOver combinations but all are unverified. Automated testing (axe-core, Lighthouse) cannot replace real AT testing.
 
 **Recommendation**: Conduct and document testing with at minimum:
 - NVDA + Chrome (Windows) — primary target audience
 - VoiceOver + Safari (macOS) — secondary
-- Document results in `docs/vpat/evidence/` per the established template
+- Document results in `docs/accessibility/vpat/evidence/` per the established template
 
 ### ACTION-2: Text Spacing Override Testing (Medium Priority)
 
@@ -193,4 +193,4 @@ The 3D preview canvas (WebGL) and Monaco code editor may require horizontal scro
 | `index.html` | Fixed heading hierarchy: h3→h2, h4→h3 for welcome screen |
 | `src/styles/components.css` | Updated selector `.features-overview h3` → `.features-overview h2` |
 | `tests/e2e/accessibility.spec.js` | Added `wcag22aa` tag to all axe scans; updated describe label |
-| `docs/vpat/conformance-decisions.md` | Evaluated 29 criteria with evidence; updated change log |
+| `docs/accessibility/vpat/conformance-decisions.md` | Evaluated 29 criteria with evidence; updated change log |

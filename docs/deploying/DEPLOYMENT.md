@@ -97,7 +97,7 @@ sending no COOP or COEP headers at all: `crossOriginIsolated` was `false` and
 `SharedArrayBuffer` was unavailable, and the WASM engine still initialized, the
 preview still rendered real geometry, and there were no console errors -- both
 on a cold visit and on an offline reload afterwards. The full record is in
-[`audit/offline-pwa-spike-results.md`](../audit/offline-pwa-spike-results.md).
+[`audit/offline-pwa-spike-results.md`](../archive/audit/offline-pwa-spike-results.md).
 
 This matters for anyone hosting on an intranet share or a locked-down file
 server that cannot set headers: **that works.** Serve the contents of `dist/`

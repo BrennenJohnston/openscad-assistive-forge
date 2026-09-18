@@ -4,10 +4,10 @@
  * Automated gate that verifies all 14 RESOLVED parity scenarios from the
  * desktop-vs-browser audit remain functional. Each test.describe block
  * maps to one or more scenario IDs (S-001 through S-016) from
- * docs/audit/scenario-matrix.md.
+ * docs/archive/audit/scenario-matrix.md.
  *
  * Fixture: keyguard-minimal (tests/fixtures/, multi-preset, companion files, color() + # modifier)
- * Reference: docs/audit/parity-remediation-validation-report.md
+ * Reference: docs/archive/audit/parity-remediation-validation-report.md
  *
  * @license GPL-3.0-or-later
  */

@@ -5,7 +5,7 @@
 > desktop. This is the critical test that prior investigations never performed.
 >
 > **Prerequisite:** Phase 2 capture bundles (`baseline-capture/`, `bug-a-capture/`,
-> `bug-b-capture/`) are extracted in `docs/audit/ki-012-investigation/`.
+> `bug-b-capture/`) are extracted in `docs/archive/audit/ki-012-investigation/`.
 >
 > **Date:** 2026-04-05
 > **Investigation:** KI-012 — LWFL Keyguard Geometry Discrepancies
@@ -294,7 +294,7 @@ Ensure proper escaping:
 Save all generated STLs alongside the capture bundles:
 
 ```
-docs/audit/ki-012-investigation/
+docs/archive/audit/ki-012-investigation/
 ├── baseline-capture/
 │   └── work/
 │       ├── baseline-apr2026.stl

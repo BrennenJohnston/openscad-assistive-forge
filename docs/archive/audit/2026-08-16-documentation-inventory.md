@@ -109,7 +109,7 @@ two of them agree:
 | Document | What it claims |
 |---|---|
 | `docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:147-153` | A table: NVDA 2024.4, JAWS 2024, VoiceOver/Safari 17 — result "Functional" |
-| `docs/vpat/VPAT-2.5-WCAG.md:157-164` | A different table: NVDA 2025.1, JAWS 2025, VoiceOver/Safari 18 and iOS 18 — result "Full support" |
+| `docs/accessibility/vpat/VPAT-2.5-WCAG.md:157-164` | A different table: NVDA 2025.1, JAWS 2025, VoiceOver/Safari 18 and iOS 18 — result "Full support" |
 | `docs/accessibility/BROWSER_SUPPORT.md:106-111` | A third table: NVDA / JAWS / VoiceOver "Full", TalkBack "Partial" |
 | `docs/guides/ACCESSIBILITY_GUIDE.md:141-146` | A fourth list: all three "Fully supported" |
 | `RELEASE_NOTES.md:130` | "Screen Reader Testing: Verified with NVDA, JAWS, and VoiceOver" |
@@ -119,18 +119,18 @@ core workflow "has been verified with assistive technology".
 
 Against that, MEASURED:
 
-- `docs/vpat/conformance-decisions.md` — which `docs/README.md:52` names as the
+- `docs/accessibility/vpat/conformance-decisions.md` — which `docs/README.md:52` names as the
   source of truth — cites **"Code audit"**, **"Code review"** or **"E2E tests"**
   in every single Evidence cell, and for 2.1.1 Keyboard and 2.4.3 Focus Order it
   says in as many words: *"Manual AT verification recommended."* Its own change
   log contains only code audits.
-- The only NVDA evidence file that exists, `docs/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md`,
+- The only NVDA evidence file that exists, `docs/accessibility/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md`,
   is a blank template: `**Date**: YYYY-MM-DD`, `**Tester**: [Your Name]`, every
   Pass/Fail cell empty, and an unsigned "Tested by: _______" line at the bottom.
-- `docs/vpat/evidence/m1/validation-summary-2026-02-02.md:88` says
+- `docs/accessibility/vpat/evidence/m1/validation-summary-2026-02-02.md:88` says
   *"Manual screen reader testing with NVDA+Chrome required for full M1 exit
   criteria."*
-- `docs/vpat/conformance-decisions.md:121-122` gives two example evidence
+- `docs/accessibility/vpat/conformance-decisions.md:121-122` gives two example evidence
   filenames, `m1/nvda-chrome-vectors-2026-03-15.md` and
   `m2/voiceover-safari-expert-2026-04-01.md`. **Neither file exists.**
 - Your own project ledger records "No NVDA validation" against R-III, R-IV and
@@ -209,7 +209,7 @@ So these instructions cannot be followed:
   code editor... Open Settings (gear icon), Enable 'Use accessible text editor'".
 
 This one matters more than the others because of where it lands. Both
-`docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:70-76` and `docs/vpat/VPAT-2.5-WCAG.md:153,170`
+`docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:70-76` and `docs/accessibility/vpat/VPAT-2.5-WCAG.md:153,170`
 offer that same setting as the **mitigation** for the code editor's assistive
 technology limitations. A mitigation that does not exist is a conformance claim
 resting on nothing. Flagged, not fixed — see section 6.
@@ -276,8 +276,8 @@ agrees.
 | Document | Says |
 |---|---|
 | `docs/accessibility/ACCESSIBILITY_CONFORMANCE.md:4` | 4.4.0 |
-| `docs/vpat/VPAT-2.5-WCAG.md:7` | 4.4.0 |
-| `docs/vpat/VPAT-2.5-WCAG.md:130` | 4.3.0 — *in the same document* |
+| `docs/accessibility/vpat/VPAT-2.5-WCAG.md:7` | 4.4.0 |
+| `docs/accessibility/vpat/VPAT-2.5-WCAG.md:130` | 4.3.0 — *in the same document* |
 | `docs/accessibility/BROWSER_SUPPORT.md:3` | 4.3.0 |
 | `docs/deploying/ROLLBACK_RUNBOOK.md:3` | 4.3.0 |
 | `docs/developing/PERFORMANCE.md:7` | 4.3.0 |
@@ -369,7 +369,7 @@ Found while rewriting, not in the first pass. `docs/deploying/DEPLOYMENT.md:92` 
 > these headers, `window.crossOriginIsolated` is `false` and WASM fails.
 
 The project ran an experiment on 2026-08-04 to answer exactly that question, and
-got the opposite answer. From `docs/audit/offline-pwa-spike-results.md`, against
+got the opposite answer. From `docs/archive/audit/offline-pwa-spike-results.md`, against
 a static server sending no COOP or COEP headers at all:
 
 | Check | Cold, headerless | Offline reload |
@@ -452,7 +452,7 @@ for the rewrites:
 - `docs/guides/STANDARD_MODE_GUIDE.md` export table — matches the shipped
   output select exactly, including 3MF marked unavailable. The Export Quality
   section, which was previously wrong, now reads correctly.
-- `docs/vpat/conformance-decisions.md` — honest throughout about resting on code
+- `docs/accessibility/vpat/conformance-decisions.md` — honest throughout about resting on code
   audit rather than AT testing. It is the document the others should have
   followed.
 - `CONTRIBUTING.md`, `docs/developing/DEVELOPMENT_WORKFLOW.md`, `SECURITY.md`,
@@ -495,7 +495,7 @@ proposing anything: it belongs to the **live** keyguard workstream. MEASURED —
 all three debug hooks it documents are live in the app right now
 (`toggleCsgBypass` at `main.js:16128`, `exportScadSource` at `main.js:16225`,
 `dumpRenderArgs` at `main.js:16266`), and the untracked capture
-`docs/audit/lwfl-parity-reproduction/lwfl-parity-results.json`, taken on
+`docs/archive/audit/lwfl-parity-reproduction/lwfl-parity-results.json`, taken on
 2026-08-16, re-investigates the exact two parameters this protocol is written
 around (`expose_home_button`, `expose_upper_message_bar`). Its only fault is a
 framing line: it presents "CSG colour injection is the root cause" as an open
@@ -504,7 +504,7 @@ different cause four months ago. That is a status line to add, not a reason to
 archive.
 
 A fourth group, which I am raising rather than recommending: four files under
-`docs/audit/ki-012-investigation/` are **empty result templates for tests that
+`docs/archive/audit/ki-012-investigation/` are **empty result templates for tests that
 were never run**, on an issue that was resolved by a different route.
 `playground-comparison-results.md` and `version-bisect-results.md` both read
 `Date executed: ___________ / Executed by: ___________`;
@@ -694,20 +694,20 @@ Plus three files that sit loose in `docs/` rather than in a subfolder:
 | `docs/specs/PARAMETER_SCHEMA_SPEC.md` | **STALE-REWRITE** | F2: the "v2 (CLI Toolchain)" framing. The schema itself is sound; the nested-vector note is pinned to v4.2.0 and wants re-checking. |
 | `docs/specs/MANIFEST_STABILITY_CONTRACT.md` | ACCURATE-KEEP | A stability promise to outside authors — exactly the kind of document that should not be edited casually. |
 
-### `docs/vpat/` (8)
+### `docs/accessibility/vpat/` (8)
 
 | File | Disposition | Note |
 |---|---|---|
-| `docs/vpat/VPAT-2.5-WCAG.md` | **STALE-REWRITE — D-35, needs your sign-off** | F1, F3, F7. Contradicts itself on version and date, and contradicts `conformance-decisions.md` on four criteria. |
-| `docs/vpat/conformance-decisions.md` | ACCURATE-KEEP | One line to fix: 1.4.10's remark still says "Monaco editor". Otherwise the honest document of the set. |
-| `docs/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md` | ACCURATE-KEEP | A blank template, correctly named as one. It is evidence that the testing has not been done, so it should stay exactly as it is. |
-| `docs/vpat/evidence/m0/validation-summary-2026-02-02.md` | DATED RECORD | |
-| `docs/vpat/evidence/m1/validation-summary-2026-02-02.md` | DATED RECORD | Its line 88 is the counter-evidence in F1. |
-| `docs/vpat/evidence/m2/validation-summary-2026-02-02.md` | DATED RECORD | Describes Monaco; correct for its date. |
-| `docs/vpat/evidence/m3/validation-summary-2026-02-02.md` | DATED RECORD | |
-| `docs/vpat/evidence/m5/validation-summary-2026-02-02.md` | DATED RECORD | |
+| `docs/accessibility/vpat/VPAT-2.5-WCAG.md` | **STALE-REWRITE — D-35, needs your sign-off** | F1, F3, F7. Contradicts itself on version and date, and contradicts `conformance-decisions.md` on four criteria. |
+| `docs/accessibility/vpat/conformance-decisions.md` | ACCURATE-KEEP | One line to fix: 1.4.10's remark still says "Monaco editor". Otherwise the honest document of the set. |
+| `docs/accessibility/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md` | ACCURATE-KEEP | A blank template, correctly named as one. It is evidence that the testing has not been done, so it should stay exactly as it is. |
+| `docs/accessibility/vpat/evidence/m0/validation-summary-2026-02-02.md` | DATED RECORD | |
+| `docs/accessibility/vpat/evidence/m1/validation-summary-2026-02-02.md` | DATED RECORD | Its line 88 is the counter-evidence in F1. |
+| `docs/accessibility/vpat/evidence/m2/validation-summary-2026-02-02.md` | DATED RECORD | Describes Monaco; correct for its date. |
+| `docs/accessibility/vpat/evidence/m3/validation-summary-2026-02-02.md` | DATED RECORD | |
+| `docs/accessibility/vpat/evidence/m5/validation-summary-2026-02-02.md` | DATED RECORD | |
 
-### `docs/audit/` (36)
+### `docs/archive/audit/` (36)
 
 All **DATED RECORD** unless noted. Each carries its date and scope in its own
 header, which is what makes it a record rather than a stale instruction.
@@ -737,10 +737,10 @@ header, which is what makes it a record rather than a stale instruction.
 | `docs/notes/README.md` | ACCURATE-KEEP | Explains the folder honestly. |
 | `docs/notes/RELEASE_AUDIT_CHECKLIST.md` | DATED RECORD | 99 KB, closed 2026-02-24. |
 | `docs/notes/COLOR_PASSTHROUGH.md` | DATED RECORD | |
-| `docs/notes/2026-01-25/README.md`, `SUMMARY.md` | DATED RECORD | |
-| `docs/notes/2026-01-26/CODE_AUDIT_FINDINGS.md` | DATED RECORD | |
-| `docs/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md` | DATED RECORD | |
-| `docs/notes/2026-01-27/DOC_INVENTORY.md` | DATED RECORD | The 2026-01-27 documentation audit — the direct ancestor of this document. Worth reading beside it: several of its rewrites landed, and its "verify claims" note against `README.md` is the one that was never finished. |
+| `docs/archive/notes/2026-01-25/README.md`, `SUMMARY.md` | DATED RECORD | |
+| `docs/archive/notes/2026-01-26/CODE_AUDIT_FINDINGS.md` | DATED RECORD | |
+| `docs/archive/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md` | DATED RECORD | |
+| `docs/archive/notes/2026-01-27/DOC_INVENTORY.md` | DATED RECORD | The 2026-01-27 documentation audit — the direct ancestor of this document. Worth reading beside it: several of its rewrites landed, and its "verify claims" note against `README.md` is the one that was never finished. |
 
 ### `docs/research/` (6)
 

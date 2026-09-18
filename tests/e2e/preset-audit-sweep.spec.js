@@ -5,7 +5,7 @@
  * dropdown, and records structured audit data: active preset name, effective
  * parameter set, resolved companion alias targets, and geometry stats.
  *
- * Artifacts are written to docs/audit/testing-round-8/reference-data/browser-audit/.
+ * Artifacts are written to docs/archive/audit/testing-round-8/reference-data/browser-audit/.
  *
  * Environment variables for filtering:
  *   PRESET_FILTER  — regex pattern to filter preset names (default: all)
@@ -35,7 +35,7 @@ const KEYGUARD_ZIP_PATH = path.resolve(
 const fixtureAvailable = fs.existsSync(KEYGUARD_ZIP_PATH)
 
 const AUDIT_OUTPUT_DIR = path.resolve(
-  __dirname, '..', '..', 'docs', 'audit', 'testing-round-8',
+  __dirname, '..', '..', 'docs', 'archive', 'audit', 'testing-round-8',
   'reference-data', 'browser-audit'
 )
 
