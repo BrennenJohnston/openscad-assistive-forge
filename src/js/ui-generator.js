@@ -26,7 +26,7 @@ import {
   flattenToCompoundPath,
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
-import { buildNestingTree, layerLimit, boundsOf } from './svg-nesting.js';
+import { buildNestingTree, LAYER_CAP, boundsOf } from './svg-nesting.js';
 import { removeCreditLine } from './credit-line.js';
 import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
 import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
@@ -2030,6 +2030,29 @@ export function isAspectCompanionParam(name, parameters) {
 }
 
 /**
+ * Width over height of a layer file's viewBox: the shared canvas
+ * normalizeLayerStack writes, which is what the model fits (D-163). The
+ * content's own aspect was sent before, which is the canvas's for layer 1
+ * and something else for a layer holding a few shapes: the owner's layer 2
+ * came out at another size in another place.
+ *
+ * @param {string} svg - A layer file
+ * @returns {number|null}
+ */
+export function layerCanvasAspect(svg) {
+  const m =
+    /viewBox="\s*[-\d.eE+]+\s+[-\d.eE+]+\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s*"/.exec(
+      svg || ''
+    );
+  if (!m) return null;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  return Number.isFinite(w) && Number.isFinite(h) && h > 0 && w > 0
+    ? w / h
+    : null;
+}
+
+/**
  * The per-layer companions a layered tile declares (DP-7).
  *
  * A file parameter named `design_file` looks for `design_layer_1`,
@@ -2436,8 +2459,8 @@ function createFileControl(
     let svgs = [];
     try {
       const elements = classifyElements(parseSvgElements(currentRawSvg));
-      const tree = buildNestingTree(elements);
-      const limit = layerLimit(tree);
+      // D-162: three layers whatever the drawing nests to.
+      const limit = LAYER_CAP;
       const layers = elements.map((_, i) => assignments[i] || 1);
       const meta = extractSvgMeta(currentRawSvg);
       // ★ D-132: THIS is where the page froze. The stack was flattened with
@@ -2480,7 +2503,9 @@ function createFileControl(
         type: 'image/svg+xml',
       };
       if (aspect) {
-        out[aspect.name] = measureSvgAspect(svg) ?? aspect.default ?? 1;
+        // D-163: the model fits the layer file by its CANVAS, the shared one
+        // every layer is written on, so the aspect it needs is the canvas's.
+        out[aspect.name] = layerCanvasAspect(svg) ?? aspect.default ?? 1;
       }
     });
     return out;
@@ -2815,13 +2840,17 @@ function createFileControl(
   // auto-start rule and the sentence agree with each other.
   let currentQuickLook = null;
 
-  /** D-157: would a change on this picture, at this speed, run by itself? */
+  /**
+   * D-157, then D-164: a setting changed on the ink panel never starts a
+   * conversion by itself. D-157 let a change run where a chosen picture
+   * would have (small and quick), and the owner's fifth walk met exactly
+   * that on the logo: Colors chosen after a render, a run they had not
+   * asked for, no dialog for its first second. The one self-start left is
+   * the small picture at the moment it is chosen (DP-Q32); a change is a
+   * decision, and the press is the person's.
+   */
   function changeRunsBySelf() {
-    if (!inkSourceImageData) return false;
-    return startsBySelf({
-      pixelCount: inkSourceImageData.width * inkSourceImageData.height,
-      costBand: currentQuickLook ? currentQuickLook.costBand : undefined,
-    });
+    return false;
   }
   // DP-54 (D-144): the trace this drawing came from, if any, for the
   // editor's whole-drawing advisory.
@@ -2929,6 +2958,24 @@ function createFileControl(
         await import('./drawing-editor/surface.js');
       // Two uploads in quick succession can both be waiting on the chunk.
       if (workspace) return workspace;
+      // D-165: the surface element is one, and this control is not. The
+      // customizer is rendered again on a preset, an undo, a reset, a
+      // restored project, and every render is a new file control with no
+      // editor of its own; each one built a new editor INTO the same element
+      // beside the last, and the owner's screenshots showed three and four
+      // toolbars side by side. The editor bound to the element goes before
+      // another is built.
+      const previous = surfaceEl.__forgeDrawingEditor;
+      if (previous && typeof previous.destroy === 'function') {
+        try {
+          previous.destroy();
+        } catch (err) {
+          console.warn(
+            '[Drawing editor] the previous editor did not close cleanly:',
+            err
+          );
+        }
+      }
       workspace = createDrawingEditor({
         surfaceEl,
         announce: announceChange,
@@ -2944,6 +2991,7 @@ function createFileControl(
             new CustomEvent('drawing-editor:view', { detail: { view, host } })
           ),
       });
+      surfaceEl.__forgeDrawingEditor = workspace;
     } else {
       workspace = createSvgPrepWorkspace(workspaceContainer);
     }

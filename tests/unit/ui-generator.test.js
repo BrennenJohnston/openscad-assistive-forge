@@ -2654,3 +2654,18 @@ describe('per-layer design companions (DP-7)', () => {
     });
   });
 });
+
+// ── DP-58, D-163: a layer file's aspect is its canvas's, not its content's ──
+describe('layerCanvasAspect (D-163)', () => {
+  it('reads width over height from the normalized canvas the model fits', async () => {
+    const { layerCanvasAspect } = await import('../../src/js/ui-generator.js');
+    const layer2 =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="62.5mm" viewBox="0 0 100 62.5">' +
+      '<g transform="translate(-10,-20) scale(2)"><path d="M40 40 H50 V45 H40 Z" fill="black"/></g></svg>';
+    // The content is a 10 x 5 bar (aspect 2); the canvas is 100 x 62.5 (1.6).
+    expect(layerCanvasAspect(layer2)).toBeCloseTo(1.6, 6);
+    expect(layerCanvasAspect('<svg viewBox="0 0 100 100"><path d="M0 0h1v1z"/></svg>')).toBe(1);
+    expect(layerCanvasAspect('<svg><path d="M0 0h1v1z"/></svg>')).toBeNull();
+    expect(layerCanvasAspect('')).toBeNull();
+  });
+});

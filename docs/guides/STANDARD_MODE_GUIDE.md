@@ -341,7 +341,9 @@ The list and the picture point at each other. Move over a row and that shape
 lights up in the drawing; move over the drawing and its row is marked. Click
 either one to choose it — hold Ctrl (or Cmd) to add and remove, Shift to take
 a range — and **Delete selected** appears in the shapes panel with the number
-you have chosen.
+you have chosen. With several shapes chosen, the switch on any one of them
+speaks for all of them: press **Off** on one chosen row and every chosen
+shape turns off, and the editor says how many.
 
 On a touch screen, one finger scrolls the page and two fingers zoom and pan the
 picture. A tap chooses a shape. **Fit**, **+** and **−** do the same job
@@ -356,7 +358,8 @@ as you move tells you which shape you are about to choose.
 
 Each row has a **More** button holding that shape's offset, its layer where the
 design has a choice of layers, and **Delete**. It keeps the row down to one
-line so the shape's name has room to be read. Every shape starts on layer 1;
+line so the shape's name has room to be read. Every shape starts on layer 1
+and three layers are always offered;
 Forge does not guess a stack from how the shapes nest. The panel says how many
 layers the design supports, and you choose a layer under More to build one.
 

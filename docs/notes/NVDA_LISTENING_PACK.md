@@ -153,7 +153,7 @@ knowing it is real is worth more than the whole rest of the section.**
 | The notice above the list reads as a status when it changes: "5 shapes are thinner than 0.5 mm at 12 mm wide and may not print." | ☐ | |
 | A too-thin row's description is read after its name and role: "too thin to print", or "too small to trace clearly", or both; the word "thin" beside the name is NOT read a second time | ☐ | |
 | "Turn those off" says "5 thin shapes turned off. Each can be turned back on in the list." once, and "Turn those back on" says "Undone. 5 shapes are back to how they were." | ☐ | |
-| The layer sentence under the notice ("This design supports up to 2 layers. Every shape starts on layer 1. Choose a layer under More to build a stack.") is findable by browsing and not announced at every change | ☐ | |
+| The layer sentence under the notice ("3 layers, each with its own height on the charm. Every shape starts on layer 1. Choose a layer under More to build a stack.") is findable by browsing and not announced at every change | ☐ | |
 
 ## 9. Combining a big drawing (it combines by itself now)
 

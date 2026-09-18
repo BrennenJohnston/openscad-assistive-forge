@@ -27,7 +27,7 @@ import {
 } from './svg-preparer.js';
 import {
   buildNestingTree,
-  layerLimit,
+  LAYER_CAP,
   estimateRingPoints,
 } from './svg-nesting.js';
 import { getPathBBox } from 'svg-path-commander';
@@ -2965,9 +2965,17 @@ export function createSvgPrepWorkspace(containerEl) {
     if (e.target.type !== 'radio') return;
     const match = e.target.name.match(/^svg-prep-role-(\d+)$/);
     if (!match) return;
-    // The radio is the control the person operated and says its own name and
-    // state; applyRole does the rest of the work for one row.
-    applyRole([parseInt(match[1], 10)], e.target.value);
+    const idx = parseInt(match[1], 10);
+    // D-161: a role pressed on a row that is part of the selection is pressed
+    // for the whole selection. The owner chose several shapes and found no
+    // action that reached them all; the row's own switch is that action, and
+    // the announcement counts the rows it changed. A row outside the
+    // selection is just itself, and the radio says its own name and state.
+    if (selected.size > 1 && selected.has(idx)) {
+      applyRole([...selected], e.target.value, { announce: true });
+      return;
+    }
+    applyRole([idx], e.target.value);
   }
 
   /**
@@ -2989,14 +2997,11 @@ export function createSvgPrepWorkspace(containerEl) {
     // only what the drawing could carry: until somebody builds a stack every
     // shape is on layer 1, and the way to build one is worth saying once,
     // because the selects live behind each row's More button.
-    const limitText =
-      layerCount === 1
-        ? 'This design supports 1 layer.'
-        : `This design supports up to ${layerCount} layers.`;
-    const startText =
-      layersTouched || layerCount === 1
-        ? ''
-        : ' Every shape starts on layer 1. Choose a layer under More to build a stack.';
+    // D-162: three layers, always; the sentence says what they are for.
+    const limitText = `${layerCount} layers, each with its own height on the charm.`;
+    const startText = layersTouched
+      ? ''
+      : ' Every shape starts on layer 1. Choose a layer under More to build a stack.';
     // DP-47: once a stack exists, the thing worth knowing is WHEN it shows.
     // The charm behind the editor is the last APPLIED design, so a person who
     // has just built a stack and is looking at an unchanged charm is owed the
@@ -3160,7 +3165,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // would not be on every role click.
     if (layersEnabled) {
       nestingTree = buildNestingTree(liveElements);
-      layerCount = layerLimit(nestingTree);
+      layerCount = LAYER_CAP;
     }
     const populated = populateObjectList(
       refs.objects,
@@ -3799,7 +3804,11 @@ export function createSvgPrepWorkspace(containerEl) {
     layersTouched = false;
     if (layersEnabled) {
       nestingTree = buildNestingTree(liveElements);
-      layerCount = layerLimit(nestingTree);
+      // D-162: the layers are height classes a person assigns (D-160), so a
+      // host with layers offers all three whatever the drawing nests to; the
+      // nesting depth used to cap them, and the owner's line drawing offered
+      // one or two.
+      layerCount = LAYER_CAP;
     } else {
       nestingTree = null;
       layerCount = 0;

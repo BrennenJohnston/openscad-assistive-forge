@@ -674,6 +674,11 @@ export function createDrawingEditor({
   statusLine.className = 'drawing-editor-statusline';
   statusLine.append(status);
   root.append(skipToTable, toolbar, statusLine, body);
+  // D-165: whatever else is in the element is an editor nobody destroyed;
+  // the surface owns the element and there is one editor in it.
+  surfaceEl
+    .querySelectorAll(':scope > .drawing-editor')
+    .forEach((stale) => stale.remove());
   surfaceEl.appendChild(root);
 
   // ── Mount the workspace, then put its pieces where the surface wants them

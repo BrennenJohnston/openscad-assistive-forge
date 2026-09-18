@@ -708,3 +708,49 @@ test.describe('a changed setting waits for the press where the picture is not qu
     await expect(p.note).not.toContainText('Convert again when you are ready.');
   });
 });
+
+// ── DP-58, D-164: a changed setting never starts by itself, quick or not ────
+//
+// The owner's fifth walk: "if the user decides to select Colors after
+// rendering … it appears to cause a lot of confusion and autoprocesses the
+// image without the user input. The loading modal is not present and no
+// cancel button is available". D-157 had let a change run where a chosen
+// picture would have run by itself (small and quick), and on their desktop
+// the logo is both. A change is a decision now; the press is the person's.
+test.describe('a changed setting waits for the press, quick picture or not (DP-58, D-164)', () => {
+  test('★ D-164: on a small quick picture, Colors chosen after a conversion starts nothing and offers Convert again', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'the quick look calls the picture quick on this lane; the others are slower and would prove less');
+    test.setTimeout(240_000);
+    await openCharm(page);
+    // 400 x 400 is 0.16 MP: under the half-megapixel line, and quick on a
+    // desktop, so it converts by itself when chosen (DP-Q32).
+    await choosePicture(page, 400, 'plain');
+    const p = panel(page);
+    await expect(p.info).toContainText('converted from', { timeout: 120_000 });
+    await expect(p.start).toHaveText('Convert again');
+
+    const colours = page.locator('input[type="radio"][value="colours"]');
+    await colours.evaluate((el) => {
+      el.checked = true;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await page.waitForTimeout(2500);
+    await expect(p.running).toBeHidden();
+    await expect(page.locator('.ink-controls-summary')).not.toContainText(
+      /and the wall|Re-reading/
+    );
+    await expect(p.start).toBeVisible();
+    await expect(p.start).toHaveText('Convert again');
+    await expect(p.note).toContainText('Press Convert again when you are ready.');
+
+    // The press runs the Colors conversion, with the dialog in front.
+    await p.start.click();
+    await expect(page.locator('.ink-controls-summary')).toContainText(
+      /colors? in the artwork, and the wall/,
+      { timeout: 120_000 }
+    );
+  });
+});

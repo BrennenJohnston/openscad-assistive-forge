@@ -9,10 +9,10 @@
 // Image file for the design (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion; simple single-path SVGs work best) @label(Image file)
 design_file = ""; // [file:svg,png,jpg]
 
-// Depth of engraving (or height of raised design) @label(Engrave depth)
+// Depth of engraving (or height of raised design). A drawing with layers uses the layer depths below instead @label(Engrave depth)
 engrave_depth = 0.8; // [0.2:0.1:3.0]
 
-// Design style on the charm surface @label(Style)
+// Design style on the charm surface. A drawing with layers uses the layer styles below instead @label(Style)
 design_style = "raised"; // [raised, engraved]
 
 // Design size as a percentage of the charm's flat top face; 100 fills it @label(Scale)
@@ -58,7 +58,7 @@ design_rotation_2 = 0; // [-180:5:180]
 // Thickness offset for second design (height relative to the charm surface) @label(Thickness)
 design_2_thickness = 0; // [-3:0.1:3]
 
-/* [Layered design (prototype)] */
+/* [Layered design] */
 // Build the design as a stack of passes instead of one. Leave every file empty
 // to keep the charm exactly as it was; fill layer 1 in to turn the stack on.
 // The Assistive Forge app writes these files and their aspects for you from
@@ -236,19 +236,28 @@ design_fit_h_2 = face_x * design_scale_2 / 100;
 echo(str("design fit box mm: w=", design_fit_w, " h=", design_fit_h));
 assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
 assert(design_file_2_aspect > 0, "design_file_2_aspect must be positive (width divided by height)");
-// ── Layered design (prototype) ──────────────────────────────────────────────
-// The layers are height classes (D-160, the owner's rule): a raised layer N
-// stands on the charm face and rises to the sum of every raised depth up to
-// and including its own, so layer 1 at 0.5, layer 2 at 0.5 and layer 3 at
-// 1.0 put a layer 3 shape 2.0 mm above the face, and changing layer 2 to 1.0
+// ── Layered design ──────────────────────────────────────────────────────────
+// The layers are height classes (D-160, D-163, the owner's rule, with the
+// braille dot as the picture: a trunk whose height one dial sets for every
+// dot, a dome that starts where the trunk ends). A raised layer N stands on
+// the charm face and rises to the sum of every raised depth up to and
+// including its own, so layer 1 at 0.5, layer 2 at 0.5 and layer 3 at 1.0
+// put a layer 3 shape 2.0 mm above the face, and changing layer 2 to 1.0
 // moves it to 2.5; an engraved layer N cuts from the face down to the sum of
 // every engraved depth up to its own, so a raised layer 1 at 1.0 beside an
-// engraved layer 2 at 1.0 leaves 2.0 mm between the two surfaces. The app
-// writes every shape on layer N or deeper into layer N's file, and each
-// raised pass is extruded from below every floor, so a layer 3 shape carries
-// its own column and nothing floats, whatever sits around it. The passes
-// apply in layer order (see layer_pass below), so a raised layer 3 inside an
-// engraved layer 2 stands in the pit rather than being cut away by it.
+// engraved layer 2 at 1.0 leaves 2.0 mm between the two surfaces.
+//
+// The app writes every shape on layer N or deeper into layer N's file, so the
+// shapes on EXACTLY layer n are file n minus file n+1 (layer_exact_2d). A
+// layer 3 shape is then built as three slabs, one per band: the layer 1 band
+// from the face to layer 1's top, the layer 2 band from there to layer 2's
+// top, the layer 3 band from there to its own top. Each band holds the shapes
+// of every layer at or above it that goes the same way, and nothing is drawn
+// twice: no slab overlaps another, no column is extruded from the floor
+// under a slab already there (D-163, "a fantastic waste"). When layer files
+// are present the stack IS the design: the single design pass is skipped,
+// or the design would print once more at Engrave depth beneath the stack
+// (D-135's mechanism, seen by the owner as a duplicate at another height).
 //
 // The app writes each layer file onto one shared canvas layer_canvas_span wide
 // (a CONTRACT with src/js/svg-preparer.js: change one and you change both), so
@@ -273,15 +282,22 @@ layer_2_down = (layer_2_on && design_layer_2_style != "raised") ? design_layer_2
 layer_3_down = (layer_3_on && design_layer_3_style != "raised") ? design_layer_3_depth : 0;
 
 // Where each layer's surface ends up: raised tops accumulate upward from the
-// face, engraved floors accumulate downward from it.
-layer_top_1 = charm_top_z + layer_1_up;
+// face, engraved floors accumulate downward from it. Band n is what layer n
+// adds: from layer_top_(n-1) to layer_top_n going up, from layer_floor_n to
+// layer_floor_(n-1) going down.
+layer_top_0 = charm_top_z;
+layer_top_1 = layer_top_0 + layer_1_up;
 layer_top_2 = layer_top_1 + layer_2_up;
 layer_top_3 = layer_top_2 + layer_3_up;
-layer_floor_1 = charm_top_z - layer_1_down;
+layer_floor_0 = charm_top_z;
+layer_floor_1 = layer_floor_0 - layer_1_down;
 layer_floor_2 = layer_floor_1 - layer_2_down;
 layer_floor_3 = layer_floor_2 - layer_3_down;
 layer_stack_top = layer_top_3;
 layer_stack_floor = layer_floor_3;
+layer_raised_1 = layer_1_on && design_layer_1_style == "raised";
+layer_raised_2 = layer_2_on && design_layer_2_style == "raised";
+layer_raised_3 = layer_3_on && design_layer_3_style == "raised";
 
 // A pass thinner than layer_depth_min will not survive a 0.4 mm nozzle; one
 // thicker than layer_depth_max stops reading as relief and starts snagging.
@@ -305,7 +321,7 @@ echo(str("layer levels mm: top1=", layer_top_1, " top2=", layer_top_2, " top3=",
 
 total_top_z = charm_top_z
     + max(
-        (design_style == "raised") ? engrave_depth : 0,
+        (!layered_mode && design_style == "raised") ? engrave_depth : 0,
         (design_file_2 != "" && design_style_2 == "raised") ? max(0, engrave_depth + design_2_thickness) : 0,
         (text_content != "" && text_style == "raised") ? text_depth : 0,
         (text_content_2 != "" && text_style_2 == "raised") ? max(0, text_depth_2 + text_2_thickness) : 0,
@@ -456,38 +472,61 @@ module text_2d() {
     }
 }
 
-// One layer applied to whatever stands below it (D-160). A raised pass is
-// extruded from below every floor of the stack up to its own top, so it
-// stands on the face, on a lower layer, or on the floor of an engraved pit,
-// and never on air; an engraved pass cuts from its own floor up through
-// everything above it. The passes nest in layer order, so pass 3 sees the
-// result of passes 1 and 2.
-module layer_pass(n) {
-    on    = (n == 1) ? layer_1_on : (n == 2) ? layer_2_on : layer_3_on;
-    style = (n == 1) ? design_layer_1_style : (n == 2) ? design_layer_2_style : design_layer_3_style;
-    file  = (n == 1) ? design_layer_1 : (n == 2) ? design_layer_2 : design_layer_3;
-    asp   = (n == 1) ? design_layer_1_aspect : (n == 2) ? design_layer_2_aspect : design_layer_3_aspect;
-    top   = (n == 1) ? layer_top_1 : (n == 2) ? layer_top_2 : layer_top_3;
-    floor = (n == 1) ? layer_floor_1 : (n == 2) ? layer_floor_2 : layer_floor_3;
-    if (!on) {
-        children();
-    } else if (style == "raised") {
-        union() {
-            children();
-            translate([profile_center_x, 0, layer_stack_floor - layer_eps])
-                linear_extrude(height = top - layer_stack_floor + layer_eps)
-                    intersection() {
-                        design_layer_2d(file, asp);
-                        top_face_2d();
-                    }
-        }
-    } else {
-        difference() {
-            children();
-            translate([profile_center_x, 0, floor])
-                linear_extrude(height = layer_stack_top - floor + layer_eps)
-                    design_layer_2d(file, asp);
-        }
+// Layer n's file, placed like the single design.
+module layer_file_2d(n) {
+    if (n == 1 && layer_1_on) design_layer_2d(design_layer_1, design_layer_1_aspect);
+    if (n == 2 && layer_2_on) design_layer_2d(design_layer_2, design_layer_2_aspect);
+    if (n == 3 && layer_3_on) design_layer_2d(design_layer_3, design_layer_3_aspect);
+}
+
+// The shapes on EXACTLY layer n: the app writes every shape on layer n or
+// deeper into file n, so file n minus file n+1 is layer n's own shapes, with
+// a hole wherever a deeper layer's shape sits inside one of them.
+module layer_exact_2d(n) {
+    difference() {
+        layer_file_2d(n);
+        if (n < 3) layer_file_2d(n + 1);
+    }
+}
+
+// What band n carries, going one way: the shapes of every layer at or above
+// n whose own direction is that way. A layer 3 shape that is raised fills the
+// raised bands 1, 2 and 3; an engraved layer 2 shape fills the engraved bands
+// 1 and 2 and none of the raised ones, so a raised layer 1 beside it stands
+// full height while the engraved shape is cut from the face down.
+module layer_band_2d(n, raised) {
+    union() {
+        if (n <= 1 && layer_1_on && (layer_raised_1 == raised)) layer_exact_2d(1);
+        if (n <= 2 && layer_2_on && (layer_raised_2 == raised)) layer_exact_2d(2);
+        if (n <= 3 && layer_3_on && (layer_raised_3 == raised)) layer_exact_2d(3);
+    }
+}
+
+// One band, raised: the slab from the top below it to its own top, clamped
+// to the flat face like the single design. Overlaps the band under it by the
+// epsilon so the slabs are one body.
+module layer_raised_band(n) {
+    up   = (n == 1) ? layer_1_up : (n == 2) ? layer_2_up : layer_3_up;
+    base = (n == 1) ? layer_top_0 : (n == 2) ? layer_top_1 : layer_top_2;
+    if (up > 0) {
+        translate([profile_center_x, 0, base - layer_eps])
+            linear_extrude(height = up + layer_eps)
+                intersection() {
+                    layer_band_2d(n, true);
+                    top_face_2d();
+                }
+    }
+}
+
+// One band, engraved: the cut from its own floor up to the floor above it,
+// through the face on band 1.
+module layer_engraved_band(n) {
+    down = (n == 1) ? layer_1_down : (n == 2) ? layer_2_down : layer_3_down;
+    top  = (n == 1) ? layer_floor_0 : (n == 2) ? layer_floor_1 : layer_floor_2;
+    if (down > 0) {
+        translate([profile_center_x, 0, top - down])
+            linear_extrude(height = down + layer_eps)
+                layer_band_2d(n, false);
     }
 }
 
@@ -541,7 +580,8 @@ module q_charm_base() {
         union() {
             charm_body();
             bail_loop();
-            if (design_style == "raised") {
+            // With layer files present the stack is the design (D-163).
+            if (!layered_mode && design_style == "raised") {
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = engrave_depth)
                         intersection() {
@@ -576,7 +616,7 @@ module q_charm_base() {
                         }
             }
         }
-        if (design_style != "raised") {
+        if (!layered_mode && design_style != "raised") {
             translate([profile_center_x, 0, charm_top_z - engrave_depth])
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d();
@@ -611,9 +651,21 @@ module q_charm_base() {
     }
 }
 
-// The layer stack, applied in order around the base (D-160).
+// The layer stack around the base (D-160, D-163): the raised bands added,
+// the engraved bands cut. The two never share a footprint (a shape is one
+// layer, and a layer goes one way), so the order does not matter.
 module q_charm() {
-    layer_pass(3) layer_pass(2) layer_pass(1) q_charm_base();
+    difference() {
+        union() {
+            q_charm_base();
+            layer_raised_band(1);
+            layer_raised_band(2);
+            layer_raised_band(3);
+        }
+        layer_engraved_band(1);
+        layer_engraved_band(2);
+        layer_engraved_band(3);
+    }
 }
 
 rotate([0, 0, -90]) q_charm();

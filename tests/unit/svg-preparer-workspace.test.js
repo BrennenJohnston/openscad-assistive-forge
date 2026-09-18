@@ -3164,7 +3164,7 @@ describe('the Layer column (DP-7)', () => {
       expect(ws._refs.layerSummary.hidden).toBe(false);
     });
 
-    it('offers a single layer when nothing encloses anything', () => {
+    it('offers three layers when nothing encloses anything (D-162)', () => {
       const ws = createSvgPrepWorkspace(container);
       const parser = new DOMParser();
       const a = 'M 0 0 L 10 0 L 10 10 L 0 10 Z';
@@ -3190,8 +3190,8 @@ describe('the Layer column (DP-7)', () => {
         recommendation: 'open_editor',
       };
       ws.open(svgString, analysis, { layersEnabled: true });
-      expect(ws.getLayerAssignments().limit).toBe(1);
-      expect(ws._refs.layerSummary.textContent).toContain('1 layer');
+      expect(ws.getLayerAssignments().limit).toBe(3);
+      expect(ws._refs.layerSummary.textContent).toContain('3 layers');
     });
   });
 
@@ -3207,14 +3207,20 @@ describe('the Layer column (DP-7)', () => {
       expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
     });
 
-    it('offers exactly as many layers as the artwork supports', () => {
+    it('offers three layers whatever the artwork nests to (D-162)', () => {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(2);
       ws.open(svgString, analysis, { layersEnabled: true });
       for (const s of layerSelects(ws)) {
-        expect(Array.from(s.options).map((o) => o.value)).toEqual(['1', '2']);
+        expect(Array.from(s.options).map((o) => o.value)).toEqual([
+          '1',
+          '2',
+          '3',
+        ]);
       }
-      expect(ws._refs.layerSummary.textContent).toContain('up to 2 layers');
+      expect(ws._refs.layerSummary.textContent).toContain(
+        '3 layers, each with its own height on the charm.'
+      );
     });
 
     it('says the default in the summary, and how to build a stack', () => {
@@ -3234,7 +3240,7 @@ describe('the Layer column (DP-7)', () => {
       setLayer(ws, 1, 2);
       const said = ws._refs.layerSummary.textContent;
       expect(said).not.toContain('Every shape starts on layer 1');
-      expect(said).toContain('up to 3 layers');
+      expect(said).toContain('3 layers, each with its own height on the charm.');
       // DP-47: the charm behind the editor is the last APPLIED design, so a
       // stack that has not been applied is not on it yet.
       expect(said).toContain('Layers show on the charm after you press Apply.');
@@ -3395,9 +3401,9 @@ describe('the Layer column (DP-7)', () => {
       const { svgString, analysis } = makeNestedAnalysis(2);
       ws.open(svgString, analysis, {
         layersEnabled: true,
-        initialLayers: [1, 3],
+        initialLayers: [1, 5],
       });
-      expect(layerSelects(ws)[1].value).toBe('2');
+      expect(layerSelects(ws)[1].value).toBe('3');
     });
 
     it('keys assignments by ORIGINAL index, so a delete cannot shift them', () => {
@@ -4618,6 +4624,77 @@ describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => 
     ws.open(svg, analysis);
     await ws.whenReady();
     expect(legendWords(ws)).toEqual(['On', 'Off']);
+    ws.destroy();
+  });
+});
+
+// ── DP-58: the owner's fifth walk (D-161, D-162) ─────────────────────────────
+describe('a role pressed on a chosen row is pressed for the selection (D-161)', () => {
+  const clickRow = (ws, i, opts = {}) =>
+    ws._refs.objects
+      .querySelectorAll('.svg-prep-object')[i]
+      .querySelector('.svg-prep-object-name')
+      .dispatchEvent(new MouseEvent('click', { bubbles: true, ...opts }));
+
+  it('two chosen rows both turn Off from one row\u2019s switch, and the announcement counts them', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(3);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    clickRow(ws, 0);
+    clickRow(ws, 2, { ctrlKey: true });
+    announce.mockClear();
+    const radio = ws._refs.objects.querySelector(
+      'input[name="svg-prep-role-2"][value="ignore"]'
+    );
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    const checked = (i) =>
+      ws._refs.objects.querySelector(`input[name="svg-prep-role-${i}"]:checked`)
+        .value;
+    expect(checked(0)).toBe('ignore');
+    expect(checked(2)).toBe('ignore');
+    expect(checked(1)).toBe('foreground');
+    expect(announce.mock.calls.map((c) => c[0])).toContain('2 shapes set to Off.');
+    ws.destroy();
+  });
+
+  it('a row outside the selection is only itself', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(3);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    clickRow(ws, 0);
+    clickRow(ws, 1, { ctrlKey: true });
+    const radio = ws._refs.objects.querySelector(
+      'input[name="svg-prep-role-2"][value="hole"]'
+    );
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    const checked = (i) =>
+      ws._refs.objects.querySelector(`input[name="svg-prep-role-${i}"]:checked`)
+        .value;
+    expect(checked(2)).toBe('hole');
+    expect(checked(0)).toBe('foreground');
+    expect(checked(1)).toBe('foreground');
+    ws.destroy();
+  });
+});
+
+describe('three layers, whatever the drawing nests to (D-162)', () => {
+  it('two shapes side by side still offer layers 1, 2 and 3, and the summary says so', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect x="0" y="0" width="40" height="40" fill="black"/>' +
+      '<rect x="60" y="60" width="40" height="40" fill="black"/></svg>';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analyzeSvg(svg), { layersEnabled: true });
+    await ws.whenReady();
+    const options = [...ws._refs.objects.querySelectorAll('.svg-prep-object[data-index="0"] .svg-prep-layer-select option')]
+      .map((o) => o.value);
+    expect(options).toEqual(['1', '2', '3']);
+    expect(ws._refs.layerSummary.textContent).toMatch(/^3 layers/);
+    expect(ws._refs.layerSummary.textContent).not.toMatch(/supports/);
     ws.destroy();
   });
 });
