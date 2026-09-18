@@ -535,3 +535,72 @@ test.describe('The Logo Plate builds a stack too (DP-60)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// DP-61: the Flat Pendant builds the same stack under the design prefix.
+// ---------------------------------------------------------------------------
+
+test.describe('The Flat Pendant builds a stack too (DP-61)', () => {
+  test('the pendant declares three passes, and none is on by default', async ({
+    page,
+  }) => {
+    await openCharm(page, 'nasif-charm-maker');
+    const declared = await page.evaluate(() => {
+      const p = window.stateManager?.getState()?.parameters || {};
+      return Object.keys(p)
+        .filter((k) => /^design_layer_\d(_aspect|_depth|_style)?$/.test(k))
+        .sort();
+    });
+    expect(declared).toHaveLength(12);
+    const before = await layerState(page);
+    expect(before.design).toBe('heart.svg');
+    expect(before.layers).toEqual(['', '', '']);
+  });
+
+  test('the generated companions are hidden, the dials are shown', async ({
+    page,
+  }) => {
+    await openCharm(page, 'nasif-charm-maker');
+    for (const n of [1, 2, 3]) {
+      await expect(page.locator(`#param-design_layer_${n}`)).toHaveCount(0);
+      await expect(page.locator(`#param-design_layer_${n}_aspect`)).toHaveCount(
+        0
+      );
+    }
+    await expect(page.locator('#param-design_layer_1_depth')).toHaveCount(1);
+    await expect(page.locator('#param-design_layer_1_style')).toHaveCount(1);
+  });
+
+  test('\u2605 three nested squares become three passes on the pendant, and it renders', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'Chromium only');
+    test.slow();
+    await openCharm(page, 'nasif-charm-maker');
+    await page.setInputFiles('#param-design_file', SQUARES);
+    await expect
+      .poll(async () => (await layerState(page)).design, { timeout: 90000 })
+      .toBe('nested-squares.svg');
+
+    await buildStackInTheEditor(page);
+    await expect
+      .poll(
+        async () => (await layerState(page)).layers.filter(Boolean).length,
+        { timeout: 90000 }
+      )
+      .toBe(3);
+
+    const after = await layerState(page);
+    expect(after.layers).toEqual([
+      'nested-squares_layer_1.svg',
+      'nested-squares_layer_2.svg',
+      'nested-squares_layer_3.svg',
+    ]);
+    for (const a of after.aspects) expect(a).toBeCloseTo(1, 2);
+
+    await expect(page.locator('text=Preview ready').first()).toBeVisible({
+      timeout: 120000,
+    });
+  });
+});

@@ -42,6 +42,16 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
   6; engraved 0.8 x 3 floors at 3.2, 2.4 and 1.6; a raised layer 1 beside an engraved layer 2
   stands at 5 over a floor at 3, with a 2.5 mm raised logo asked for underneath and not printed
 
+- **The Flat Pendant builds a layered design** (DP-61) - the same three passes under its own
+  names, `design_layer_1` to `design_layer_3`, with the aspect, depth and style dials, the fit-box
+  echo the thin check reads, and the band stack: raised bands stand on the pendant face, engraved
+  bands cut into it, every band clipped to the face inside the border ring like the text, the
+  single design skipped when layer files are present, and the hole or slot cut through whatever
+  the stack raises over it. Measured on the printed geometry, face at 3 mm: raised 0.5 / 0.5 /
+  1.0 tops at 3.5, 4 and 5; engraved 0.8 x 3 floors at 2.2, 1.4 and 0.6; a raised layer 1 beside
+  an engraved layer 2 stands at 4 over a floor at 2, with a 2.5 mm raised design asked for
+  underneath and not printed. All three shapes of the Charm Designer build the stack now
+
 - **Crop, in the drawing editor** (DP-49) - a Crop button in the drawing view opens a crop
   view in the drawing's place: the picture with the kept rectangle clear and the rest shaded,
   four rows named Top, Bottom, Left and Right in the customizer's own slider classes, each a

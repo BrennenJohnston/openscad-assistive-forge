@@ -1,7 +1,7 @@
 {
   "name": "Charm Customizer",
   "description": "Create custom charms and pendants with engraved or raised designs. Upload your own SVG/PNG or pick from the built-in design library.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "CC0-1.0",
   "main": "nasif_charm_maker.scad",
@@ -21,27 +21,74 @@
     "svg-library/diamond.svg",
     "svg-library/crown.svg",
     "svg-library/leaf.svg",
-    "svg-library/sun.svg"
+    "svg-library/sun.svg",
+    "design_layer_1.svg",
+    "design_layer_2.svg",
+    "design_layer_3.svg"
   ],
   "svgLibrary": {
     "paramName": "design_file",
     "options": [
-      { "file": "heart.svg", "label": "Heart" },
-      { "file": "star.svg", "label": "Star" },
-      { "file": "paw.svg", "label": "Paw print" },
-      { "file": "lightning.svg", "label": "Lightning bolt" },
-      { "file": "music-note.svg", "label": "Music note" },
-      { "file": "smiley.svg", "label": "Smiley face" },
-      { "file": "moon.svg", "label": "Crescent moon" },
-      { "file": "flower.svg", "label": "Flower" },
-      { "file": "diamond.svg", "label": "Diamond" },
-      { "file": "crown.svg", "label": "Crown" },
-      { "file": "leaf.svg", "label": "Leaf" },
-      { "file": "sun.svg", "label": "Sun" }
+      {
+        "file": "heart.svg",
+        "label": "Heart"
+      },
+      {
+        "file": "star.svg",
+        "label": "Star"
+      },
+      {
+        "file": "paw.svg",
+        "label": "Paw print"
+      },
+      {
+        "file": "lightning.svg",
+        "label": "Lightning bolt"
+      },
+      {
+        "file": "music-note.svg",
+        "label": "Music note"
+      },
+      {
+        "file": "smiley.svg",
+        "label": "Smiley face"
+      },
+      {
+        "file": "moon.svg",
+        "label": "Crescent moon"
+      },
+      {
+        "file": "flower.svg",
+        "label": "Flower"
+      },
+      {
+        "file": "diamond.svg",
+        "label": "Diamond"
+      },
+      {
+        "file": "crown.svg",
+        "label": "Crown"
+      },
+      {
+        "file": "leaf.svg",
+        "label": "Leaf"
+      },
+      {
+        "file": "sun.svg",
+        "label": "Sun"
+      }
     ]
   },
   "program": "charm-customizer",
-  "tags": ["charm", "pendant", "keychain", "svg", "import", "engraving", "nasif"],
+  "tags": [
+    "charm",
+    "pendant",
+    "keychain",
+    "svg",
+    "import",
+    "engraving",
+    "nasif"
+  ],
   "inspired_by": {
     "name": "Nasif Zaman",
     "github": "Znasif",

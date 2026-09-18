@@ -37,6 +37,11 @@ const LAYERED = {
     prefix: 'logo',
     face: 'plate_2d',
   },
+  'nasif-charm-maker': {
+    file: 'examples/nasif-charm-maker/nasif_charm_maker.scad',
+    prefix: 'design',
+    face: 'face_2d',
+  },
 };
 
 const sourceOf = (key) =>
@@ -169,7 +174,7 @@ describe('the Logo Plate’s own rules (DP-60)', () => {
   );
 
   it('reports the box Logo width sets, when it is set', () => {
-    // An exact width in millimetres is the more specific instruction and wins
+    // An exact width in millimeters is the more specific instruction and wins
     // over the auto-fit box, in the echo as in the geometry.
     expect(source).toContain(
       'fit_box_w = logo_width > 0 ? logo_width : scaled_fit_w;'
@@ -186,5 +191,34 @@ describe('the Logo Plate’s own rules (DP-60)', () => {
 
   it('places a layer pass at Logo width when that is set', () => {
     expect(source).toContain('? logo_width / layer_canvas_span');
+  });
+});
+
+describe('the Flat Pendant\u2019s own rules (DP-61)', () => {
+  const source = readFileSync(
+    join(PUBLIC_DIR, LAYERED['nasif-charm-maker'].file),
+    'utf8'
+  );
+
+  it('cuts the hole and the slot through whatever the stack raised over them', () => {
+    expect(source).toContain('cylinder(d = hole_diameter, h = charm_top_z + 0.02);');
+    expect(source).toContain('linear_extrude(height = charm_top_z + 0.02)');
+    expect(source).toMatch(
+      /charm_top_z = charm_thickness[\s\S]*layer_stack_top - charm_thickness/
+    );
+  });
+
+  it('clips every band to the face inside the border ring, like the text', () => {
+    const body = source.slice(
+      source.indexOf('module layer_band_on_face_2d('),
+      source.indexOf('module layer_raised_band(')
+    );
+    expect(body).toContain('face_2d()');
+  });
+
+  it('keeps the design-shaped pendant: the face follows the outline', () => {
+    // face_2d() derives from charm_base_2d(), which is the silhouette when the
+    // shape is "design"; the bands are clipped to that same face.
+    expect(source).toContain('offset(r = -border_width) charm_base_2d();');
   });
 });
