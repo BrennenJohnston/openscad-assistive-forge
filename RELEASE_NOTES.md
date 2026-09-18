@@ -23,7 +23,7 @@ of this story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
   result combines by itself after each change and the Charm view renders a
   draft on request; every shape is measured against half a millimeter at the
   width the charm really prints, with one press to set the too-thin ones to
-  Ignore, reversibly; and **Crop** takes an edge off a picture and traces it
+  Off, reversibly; and **Crop** takes an edge off a picture and traces it
   again. Every word is American English now, and every slider row meets the
   44 px touch floor.
 
@@ -85,8 +85,8 @@ of this story is [docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
   before the settings for it, and a Drawing / Charm switch shows the charm it
   will become without leaving. While you edit, previews are drawn at draft
   quality and go back to full on close
-- **A shapes panel you can read**: one row per shape - its name, a Raised /
-  Hole / Ignore switch, and More - and the row says when it has run out of
+- **A shapes panel you can read**: one row per shape - its name, an On /
+  Cut out / Off switch, and More - and the row says when it has run out of
   room instead of eating the name, which at 768 pixels wide it used to do to
   every name at once. Hover marks a row, a press chooses it, two fingers
   pinch and pan while one finger still scrolls the page

@@ -237,9 +237,18 @@ echo(str("design fit box mm: w=", design_fit_w, " h=", design_fit_h));
 assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
 assert(design_file_2_aspect > 0, "design_file_2_aspect must be positive (width divided by height)");
 // ── Layered design (prototype) ──────────────────────────────────────────────
-// The containment law from the directive, as arithmetic: each pass is anchored
-// where the previous one FINISHED, so a raised layer 2 stands on layer 1's top
-// and an engraved layer 2 cuts down from layer 1's floor. Nothing floats.
+// The layers are height classes (D-160, the owner's rule): a raised layer N
+// stands on the charm face and rises to the sum of every raised depth up to
+// and including its own, so layer 1 at 0.5, layer 2 at 0.5 and layer 3 at
+// 1.0 put a layer 3 shape 2.0 mm above the face, and changing layer 2 to 1.0
+// moves it to 2.5; an engraved layer N cuts from the face down to the sum of
+// every engraved depth up to its own, so a raised layer 1 at 1.0 beside an
+// engraved layer 2 at 1.0 leaves 2.0 mm between the two surfaces. The app
+// writes every shape on layer N or deeper into layer N's file, and each
+// raised pass is extruded from below every floor, so a layer 3 shape carries
+// its own column and nothing floats, whatever sits around it. The passes
+// apply in layer order (see layer_pass below), so a raised layer 3 inside an
+// engraved layer 2 stands in the pit rather than being cut away by it.
 //
 // The app writes each layer file onto one shared canvas layer_canvas_span wide
 // (a CONTRACT with src/js/svg-preparer.js: change one and you change both), so
@@ -255,16 +264,24 @@ layer_2_on = design_layer_2 != "";
 layer_3_on = design_layer_3 != "";
 layered_mode = layer_1_on || layer_2_on || layer_3_on;
 
-// Signed travel: up for a raised pass, down for an engraved one, nothing at
-// all for a layer with no file.
-layer_1_rise = layer_1_on ? ((design_layer_1_style == "raised") ? design_layer_1_depth : -design_layer_1_depth) : 0;
-layer_2_rise = layer_2_on ? ((design_layer_2_style == "raised") ? design_layer_2_depth : -design_layer_2_depth) : 0;
-layer_3_rise = layer_3_on ? ((design_layer_3_style == "raised") ? design_layer_3_depth : -design_layer_3_depth) : 0;
+// Each layer's travel in its own direction, nothing for a layer with no file.
+layer_1_up = (layer_1_on && design_layer_1_style == "raised") ? design_layer_1_depth : 0;
+layer_2_up = (layer_2_on && design_layer_2_style == "raised") ? design_layer_2_depth : 0;
+layer_3_up = (layer_3_on && design_layer_3_style == "raised") ? design_layer_3_depth : 0;
+layer_1_down = (layer_1_on && design_layer_1_style != "raised") ? design_layer_1_depth : 0;
+layer_2_down = (layer_2_on && design_layer_2_style != "raised") ? design_layer_2_depth : 0;
+layer_3_down = (layer_3_on && design_layer_3_style != "raised") ? design_layer_3_depth : 0;
 
-layer_base_1 = charm_top_z;
-layer_base_2 = layer_base_1 + layer_1_rise;
-layer_base_3 = layer_base_2 + layer_2_rise;
-layer_stack_top = max(charm_top_z, layer_base_2, layer_base_3, layer_base_3 + layer_3_rise);
+// Where each layer's surface ends up: raised tops accumulate upward from the
+// face, engraved floors accumulate downward from it.
+layer_top_1 = charm_top_z + layer_1_up;
+layer_top_2 = layer_top_1 + layer_2_up;
+layer_top_3 = layer_top_2 + layer_3_up;
+layer_floor_1 = charm_top_z - layer_1_down;
+layer_floor_2 = layer_floor_1 - layer_2_down;
+layer_floor_3 = layer_floor_2 - layer_3_down;
+layer_stack_top = layer_top_3;
+layer_stack_floor = layer_floor_3;
 
 // A pass thinner than layer_depth_min will not survive a 0.4 mm nozzle; one
 // thicker than layer_depth_max stops reading as relief and starts snagging.
@@ -279,11 +296,12 @@ assert(design_layer_2_aspect > 0, "design_layer_2_aspect must be positive (width
 assert(design_layer_3_aspect > 0, "design_layer_3_aspect must be positive (width divided by height)");
 // A pass may not cut through the charm: the stack's floor has to stay inside
 // the material it is carved from.
-assert(!layered_mode || min(layer_base_1, layer_base_2, layer_base_3, layer_base_3 + layer_3_rise) > 0,
+assert(!layered_mode || layer_stack_floor > 0,
        "layered design cuts through the charm - reduce the engraved depths");
 
-echo(str("layer anchors mm: base1=", layer_base_1, " base2=", layer_base_2,
-         " base3=", layer_base_3, " stack_top=", layer_stack_top));
+echo(str("layer levels mm: top1=", layer_top_1, " top2=", layer_top_2, " top3=", layer_top_3,
+         " floor1=", layer_floor_1, " floor2=", layer_floor_2, " floor3=", layer_floor_3,
+         " stack_top=", layer_stack_top));
 
 total_top_z = charm_top_z
     + max(
@@ -438,6 +456,41 @@ module text_2d() {
     }
 }
 
+// One layer applied to whatever stands below it (D-160). A raised pass is
+// extruded from below every floor of the stack up to its own top, so it
+// stands on the face, on a lower layer, or on the floor of an engraved pit,
+// and never on air; an engraved pass cuts from its own floor up through
+// everything above it. The passes nest in layer order, so pass 3 sees the
+// result of passes 1 and 2.
+module layer_pass(n) {
+    on    = (n == 1) ? layer_1_on : (n == 2) ? layer_2_on : layer_3_on;
+    style = (n == 1) ? design_layer_1_style : (n == 2) ? design_layer_2_style : design_layer_3_style;
+    file  = (n == 1) ? design_layer_1 : (n == 2) ? design_layer_2 : design_layer_3;
+    asp   = (n == 1) ? design_layer_1_aspect : (n == 2) ? design_layer_2_aspect : design_layer_3_aspect;
+    top   = (n == 1) ? layer_top_1 : (n == 2) ? layer_top_2 : layer_top_3;
+    floor = (n == 1) ? layer_floor_1 : (n == 2) ? layer_floor_2 : layer_floor_3;
+    if (!on) {
+        children();
+    } else if (style == "raised") {
+        union() {
+            children();
+            translate([profile_center_x, 0, layer_stack_floor - layer_eps])
+                linear_extrude(height = top - layer_stack_floor + layer_eps)
+                    intersection() {
+                        design_layer_2d(file, asp);
+                        top_face_2d();
+                    }
+        }
+    } else {
+        difference() {
+            children();
+            translate([profile_center_x, 0, floor])
+                linear_extrude(height = layer_stack_top - floor + layer_eps)
+                    design_layer_2d(file, asp);
+        }
+    }
+}
+
 module text_2d_layer2() {
     if (text_content_2 != "") {
         translate([-text_2_up_down, text_2_left_right])
@@ -482,7 +535,8 @@ module bail_loop() {
     }
 }
 
-module q_charm() {
+// The charm with its single designs and text, before the layer stack.
+module q_charm_base() {
     difference() {
         union() {
             charm_body();
@@ -500,30 +554,6 @@ module q_charm() {
                     linear_extrude(height = engrave_depth)
                         intersection() {
                             design_2d_layer2();
-                            top_face_2d();
-                        }
-            }
-            if (layer_1_on && design_layer_1_style == "raised") {
-                translate([profile_center_x, 0, layer_base_1 - layer_eps])
-                    linear_extrude(height = design_layer_1_depth + layer_eps)
-                        intersection() {
-                            design_layer_2d(design_layer_1, design_layer_1_aspect);
-                            top_face_2d();
-                        }
-            }
-            if (layer_2_on && design_layer_2_style == "raised") {
-                translate([profile_center_x, 0, layer_base_2 - layer_eps])
-                    linear_extrude(height = design_layer_2_depth + layer_eps)
-                        intersection() {
-                            design_layer_2d(design_layer_2, design_layer_2_aspect);
-                            top_face_2d();
-                        }
-            }
-            if (layer_3_on && design_layer_3_style == "raised") {
-                translate([profile_center_x, 0, layer_base_3 - layer_eps])
-                    linear_extrude(height = design_layer_3_depth + layer_eps)
-                        intersection() {
-                            design_layer_2d(design_layer_3, design_layer_3_aspect);
                             top_face_2d();
                         }
             }
@@ -556,21 +586,6 @@ module q_charm() {
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d_layer2();
         }
-        if (layer_1_on && design_layer_1_style != "raised") {
-            translate([profile_center_x, 0, layer_base_1 - design_layer_1_depth])
-                linear_extrude(height = design_layer_1_depth + layer_eps)
-                    design_layer_2d(design_layer_1, design_layer_1_aspect);
-        }
-        if (layer_2_on && design_layer_2_style != "raised") {
-            translate([profile_center_x, 0, layer_base_2 - design_layer_2_depth])
-                linear_extrude(height = design_layer_2_depth + layer_eps)
-                    design_layer_2d(design_layer_2, design_layer_2_aspect);
-        }
-        if (layer_3_on && design_layer_3_style != "raised") {
-            translate([profile_center_x, 0, layer_base_3 - design_layer_3_depth])
-                linear_extrude(height = design_layer_3_depth + layer_eps)
-                    design_layer_2d(design_layer_3, design_layer_3_aspect);
-        }
         if (text_content != "" && text_style != "raised") {
             // Clamped like the raised case. WIDER than the signed repair,
             // which named raised text only: an engraved cut that runs off the
@@ -594,6 +609,11 @@ module q_charm() {
         }
         attachment_cutout();
     }
+}
+
+// The layer stack, applied in order around the base (D-160).
+module q_charm() {
+    layer_pass(3) layer_pass(2) layer_pass(1) q_charm_base();
 }
 
 rotate([0, 0, -90]) q_charm();

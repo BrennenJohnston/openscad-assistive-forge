@@ -28,7 +28,6 @@ import {
 import {
   buildNestingTree,
   layerLimit,
-  validateLayers,
   estimateRingPoints,
 } from './svg-nesting.js';
 import { getPathBBox } from 'svg-path-commander';
@@ -63,16 +62,22 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * changing a parameter is a different decision from changing a label.
  */
 const ROLE_OPTIONS = [
-  { value: 'foreground', label: 'Raised' },
-  { value: 'hole', label: 'Hole' },
-  { value: 'ignore', label: 'Ignore' },
+  // DP-Q59 (2026-09-17): On, Cut out, Off. "Raised" and "Hole" named a 3D
+  // outcome the style decides (with the engraved style a "hole" stands up
+  // as an island and a "raised" shape is cut in); these name what the shape
+  // IS in the drawing: printed at its layer, cut out of what it sits in, or
+  // as if it had never been drawn.
+  { value: 'foreground', label: 'On' },
+  { value: 'hole', label: 'Cut out' },
+  { value: 'ignore', label: 'Off' },
 ];
 
 // Compound paths only distinguish included vs excluded subpaths —
 // "Hole" is meaningless because subpaths are concatenated, not subtracted.
 const COMPOUND_ROLE_OPTIONS = [
-  { value: 'foreground', label: 'Include' },
-  { value: 'ignore', label: 'Exclude' },
+  // DP-Q59: one vocabulary; Include / Exclude were the same two states.
+  { value: 'foreground', label: 'On' },
+  { value: 'ignore', label: 'Off' },
 ];
 
 /**
@@ -86,16 +91,35 @@ const COMPOUND_ROLE_OPTIONS = [
  * @param {HTMLElement} legendRow
  * @param {Array<{value: string, label: string}>} options
  */
-function paintLegend(legendRow, options) {
+/**
+ * The legend under the picture says what the picture paints. With layers
+ * (DP-Q60) an On shape is painted in its layer's color, so the On chip
+ * becomes one chip per layer the design supports; Cut out and Off keep
+ * their one chip each.
+ *
+ * @param {HTMLElement} legendRow
+ * @param {Array<{value: string, label: string}>} options
+ * @param {number} [layerCount] - 0 or 1 paints ink, more paints per layer
+ */
+function paintLegend(legendRow, options, layerCount = 0) {
   legendRow.replaceChildren();
-  options.forEach(({ value: role, label }) => {
+  const chip = (className, label) => {
     const chipWrap = document.createElement('span');
     chipWrap.className = 'svg-prep-legend-item';
-    const chip = document.createElement('span');
-    chip.className = `svg-prep-legend-chip svg-prep-legend-chip--${role}`;
-    chip.setAttribute('aria-hidden', 'true');
-    chipWrap.append(chip, document.createTextNode(label));
+    const swatch = document.createElement('span');
+    swatch.className = `svg-prep-legend-chip ${className}`;
+    swatch.setAttribute('aria-hidden', 'true');
+    chipWrap.append(swatch, document.createTextNode(label));
     legendRow.appendChild(chipWrap);
+  };
+  options.forEach(({ value: role, label }) => {
+    if (role === 'foreground' && layerCount > 1) {
+      for (let n = 1; n <= layerCount; n++) {
+        chip(`svg-prep-legend-chip--layer-${n}`, `Layer ${n}`);
+      }
+      return;
+    }
+    chip(`svg-prep-legend-chip--${role}`, label);
   });
 }
 
@@ -404,7 +428,7 @@ function buildWorkspaceDom() {
   ignoreThinBtn.type = 'button';
   ignoreThinBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
   ignoreThinBtn.dataset.action = 'ignore-thin';
-  ignoreThinBtn.textContent = 'Ignore those';
+  ignoreThinBtn.textContent = 'Turn those off';
   ignoreThinBtn.setAttribute(
     'aria-label',
     'Ignore the shapes thinner than this'
@@ -414,7 +438,7 @@ function buildWorkspaceDom() {
   undoIgnoreBtn.type = 'button';
   undoIgnoreBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
   undoIgnoreBtn.dataset.action = 'undo-ignore';
-  undoIgnoreBtn.textContent = 'Undo ignore';
+  undoIgnoreBtn.textContent = 'Turn those back on';
   undoIgnoreBtn.disabled = true;
 
   // DP-39 P2. A selection nobody can act on is not a feature, and Delete is
@@ -535,7 +559,7 @@ function buildWorkspaceDom() {
   objectsHelp.id = `svg-prep-objects-help-${Math.random().toString(36).slice(2, 8)}`;
   objectsHelp.textContent =
     'Click a shape to choose it. Ctrl or Cmd adds one, Shift takes a range, ' +
-    'Ctrl+A takes all. Delete sets the chosen shapes to Ignore.';
+    'Ctrl+A takes all. Delete turns the chosen shapes off.';
   objects.setAttribute('aria-describedby', objectsHelp.id);
 
   // Warning summary
@@ -898,13 +922,6 @@ function populateObjectList(
       }
       if (role === 'ignore') layerSelect.disabled = true;
       morePanel.appendChild(layerSelect);
-
-      // Filled in by validateAndMarkLayers(); an empty node keeps the row's
-      // layout from jumping when a warning appears under it.
-      const layerNote = document.createElement('span');
-      layerNote.className = 'svg-prep-layer-note';
-      layerNote.hidden = true;
-      morePanel.appendChild(layerNote);
     } else {
       layers.push(1);
     }
@@ -1397,28 +1414,14 @@ export function createSvgPrepWorkspace(containerEl) {
       })();
     if (viewBox) svg.setAttribute('viewBox', viewBox);
 
-    // Raised first, holes over them: a hole is a shape cut OUT of what it
-    // sits in, and painting it under would show nothing at all.
-    const art = document.createElementNS(SVG_NS, 'g');
-    art.setAttribute('class', 'svg-prep-standin-art');
-    const paint = (wanted, className) => {
-      liveElements.forEach((el, i) => {
-        if (!el.pathData || (roles[i] || 'ignore') !== wanted) return;
-        const p = document.createElementNS(SVG_NS, 'path');
-        p.setAttribute('d', el.pathData);
-        p.setAttribute('fill-rule', 'evenodd');
-        p.setAttribute('class', className);
-        art.appendChild(p);
-      });
-    };
-    paint('foreground', 'svg-prep-standin-path--raised');
-    paint('hole', 'svg-prep-standin-path--hole');
-    svg.appendChild(art);
+    svg.appendChild(buildHatchDefs(viewBox));
+    svg.dataset.hatch = hatchPrefix;
+    svg.appendChild(buildStandinArt());
 
-    // D-154: a shape set to Ignore used to leave the picture entirely, so
+    // D-154: a shape set to Off used to leave the picture entirely, so
     // there was nothing to point at to bring it back. It stays, painted in
     // the left-out style, above the ink so it can be seen where it was.
-    svg.appendChild(buildLeftOutLayer());
+    svg.appendChild(buildLeftOutLayer(hatchPrefix));
 
     const roleLayer = document.createElementNS(SVG_NS, 'g');
     roleLayer.setAttribute('class', 'svg-prep-role-layer');
@@ -1502,33 +1505,223 @@ export function createSvgPrepWorkspace(containerEl) {
     );
   }
 
+  const STANDIN_CLASS = {
+    foreground: 'svg-prep-standin-path--raised',
+    hole: 'svg-prep-standin-path--hole',
+  };
+
   /**
-   * D-154: the shapes left out, painted so they can be seen and chosen
-   * again. Every ignored shape but the wall of a Colors drawing, which is
-   * the whole canvas and would flood the picture; its row still turns it on.
+   * The stand-in's art, ONE painter's pass in area order: the biggest shape
+   * first, islands last. A cut-out inside a shape is smaller than the shape
+   * and lands over it, which is what "cut out of what it sits in" looks
+   * like; a cut-out that encloses the drawing (a bird's paper) is bigger
+   * than everything and lands under it, where it hid the whole bird when
+   * cut-outs were a second pass over the ink (the journal picture caught
+   * it). DP-Q60: with layers, an On shape wears its layer's class and color.
+   * Rebuilt by itself when a layer changes.
    */
-  function buildLeftOutLayer() {
+  function buildStandinArt() {
+    const art = document.createElementNS(SVG_NS, 'g');
+    art.setAttribute('class', 'svg-prep-standin-art');
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
+      const role = roles[i] || 'ignore';
+      const className = STANDIN_CLASS[role];
+      if (!el.pathData || !className) return;
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('fill-rule', 'evenodd');
+      p.setAttribute('class', className + layerClass(i, role));
+      p.dataset.index = String(i);
+      art.appendChild(p);
+    });
+    return art;
+  }
+
+  /**
+   * The nearest On shape around a shape, by the nesting tree the layers
+   * keep; null at the top or without a tree.
+   */
+  function enclosingOn(i) {
+    if (!nestingTree || !nestingTree.nodes) return null;
+    let parent = nestingTree.nodes[i]?.parent;
+    while (parent !== null && parent !== undefined) {
+      if ((roles[parent] || 'ignore') === 'foreground') return parent;
+      parent = nestingTree.nodes[parent]?.parent;
+    }
+    return null;
+  }
+
+  /**
+   * DP-Q60: a layer change repaints what the layers decide, in whichever
+   * picture the pane holds, without combining again: the geometry did not
+   * change, only its colors did.
+   */
+  function refreshLayerPaint() {
+    const svg = refs.resultPane.querySelector('svg');
+    if (!svg) return;
+    const prefix = svg.dataset.hatch || hatchPrefix;
+    const art = svg.querySelector('.svg-prep-standin-art');
+    if (art) art.replaceWith(buildStandinArt());
+    const layersGroup = svg.querySelector('.svg-prep-result-layers');
+    if (layersGroup) layersGroup.replaceWith(buildLayerPaint());
+    const leftOut = svg.querySelector('.svg-prep-standin-left-out');
+    if (leftOut) leftOut.replaceWith(buildLeftOutLayer(prefix));
+    svg.querySelectorAll('.svg-prep-result-ink').forEach((p) => {
+      p.classList.toggle('svg-prep-standin-layer-1', paintsByLayer());
+    });
+  }
+
+  /** DP-Q60: colors follow the layers only where the host offers layers. */
+  function paintsByLayer() {
+    return layersEnabled && layerCount > 1;
+  }
+
+  /** The layer class an On or Off shape wears, or nothing without layers. */
+  function layerClass(i, role) {
+    if (!paintsByLayer() || role === 'hole') return '';
+    return ` svg-prep-standin-layer-${layers[i] || 1}`;
+  }
+
+  // Each painted picture carries its own hatch patterns, so their ids never
+  // collide between the two panes or across re-renders.
+  let hatchSeq = 0;
+  let hatchPrefix = '';
+
+  /**
+   * DP-Q60: the hatch an Off shape wears, one pattern per layer (and one
+   * neutral pattern where there are no layers), sized to the drawing so the
+   * texture reads at every scale: a hundredth of the drawing's width.
+   */
+  function buildHatchDefs(viewBox) {
+    hatchPrefix = `svg-prep-hatch-${++hatchSeq}`;
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    const vbWidth = (parseViewBox(viewBox) || {}).width || 600;
+    const size = Math.max(vbWidth / 100, 1e-3);
+    const bands = paintsByLayer() ? [1, 2, 3].slice(0, layerCount) : [0];
+    for (const n of bands) {
+      const pattern = document.createElementNS(SVG_NS, 'pattern');
+      pattern.setAttribute('id', `${hatchPrefix}-${n}`);
+      pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+      pattern.setAttribute('width', String(size));
+      pattern.setAttribute('height', String(size));
+      pattern.setAttribute('patternTransform', 'rotate(45)');
+      const ground = document.createElementNS(SVG_NS, 'rect');
+      ground.setAttribute('width', String(size));
+      ground.setAttribute('height', String(size));
+      ground.setAttribute('class', `svg-prep-hatch-ground svg-prep-hatch-${n}`);
+      const line = document.createElementNS(SVG_NS, 'rect');
+      line.setAttribute('width', String(size / 3));
+      line.setAttribute('height', String(size));
+      line.setAttribute('class', `svg-prep-hatch-line svg-prep-hatch-${n}`);
+      pattern.append(ground, line);
+      defs.appendChild(pattern);
+    }
+    return defs;
+  }
+
+  /**
+   * D-154: the shapes turned off, painted so they can be seen and chosen
+   * again. Every Off shape but the wall of a Colors drawing, which is the
+   * whole canvas and would flood the picture; its row still turns it on.
+   * DP-Q60: the paint is the layer's color muted under a hatch, the texture
+   * the owner asked for, so the shape is plainly there and plainly off.
+   */
+  function buildLeftOutLayer(prefix = hatchPrefix) {
     const layer = document.createElementNS(SVG_NS, 'g');
     layer.setAttribute('class', 'svg-prep-standin-left-out');
     layer.setAttribute('aria-hidden', 'true');
-    liveElements.forEach((el, i) => {
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
       if (!el.pathData || (roles[i] || 'ignore') !== 'ignore') return;
       if (isIgnoredWall(el, i)) return;
       const p = document.createElementNS(SVG_NS, 'path');
       p.setAttribute('d', el.pathData);
       p.setAttribute('fill-rule', 'evenodd');
-      p.setAttribute('class', 'svg-prep-standin-path--ignore');
+      p.setAttribute(
+        'class',
+        'svg-prep-standin-path--ignore' + layerClass(i, 'ignore')
+      );
+      const band = paintsByLayer() ? layers[i] || 1 : 0;
+      p.setAttribute('fill', `url(#${prefix}-${band})`);
       p.dataset.index = String(i);
       layer.appendChild(p);
     });
     return layer;
   }
 
+  /**
+   * DP-Q60, over the combined result: the union is painted as layer 1, and
+   * every On shape on a deeper layer is painted over it in its own color,
+   * with the cut-outs as paper over those, so the picture shows the stack
+   * the way the model builds it. Nothing without layers.
+   */
+  function buildLayerPaint() {
+    const layer = document.createElementNS(SVG_NS, 'g');
+    layer.setAttribute('class', 'svg-prep-result-layers');
+    layer.setAttribute('aria-hidden', 'true');
+    if (!paintsByLayer()) return layer;
+    // The union already carries every cut-out; only a cut-out inside a
+    // deeper layer's shape, which this paint has just covered, is painted
+    // again as paper. A cut-out around the drawing (the paper) is not.
+    const wanted = (i) => {
+      const role = roles[i] || 'ignore';
+      if (role === 'foreground') return (layers[i] || 1) > 1;
+      if (role !== 'hole') return false;
+      const around = enclosingOn(i);
+      return around !== null && (layers[around] || 1) > 1;
+    };
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
+      if (!el.pathData || !wanted(i)) return;
+      const role = roles[i];
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('fill-rule', 'evenodd');
+      p.setAttribute('class', STANDIN_CLASS[role] + layerClass(i, role));
+      p.dataset.index = String(i);
+      layer.appendChild(p);
+    });
+    return layer;
+  }
+
+  /**
+   * D-159: the order the picture is painted and hit-tested in. Containers
+   * first and islands last, by the box each outline fills, so the navy dot
+   * inside the figure's arm is painted over the figure and is what a click
+   * there finds. Element order put the wall's islands under everything.
+   */
+  function paintOrder() {
+    const area = (el) => {
+      if (!el.pathData) return 0;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      const nums = el.pathData.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
+      if (!nums) return 0;
+      for (let k = 0; k + 1 < nums.length; k += 2) {
+        const x = Number(nums[k]);
+        const y = Number(nums[k + 1]);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      return Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+    };
+    return liveElements
+      .map((el, i) => ({ i, a: area(el) }))
+      .sort((p, q) => q.a - p.a || p.i - q.i)
+      .map((p) => p.i);
+  }
+
   function buildHitLayer() {
     const layer = document.createElementNS(SVG_NS, 'g');
     layer.setAttribute('class', 'svg-prep-hit-layer');
     layer.setAttribute('aria-hidden', 'true');
-    liveElements.forEach((el, i) => {
+    paintOrder().forEach((i) => {
+      const el = liveElements[i];
       if (!el.pathData || isIgnoredWall(el, i)) return;
       const p = document.createElementNS(SVG_NS, 'path');
       p.setAttribute('d', el.pathData);
@@ -1935,6 +2128,19 @@ export function createSvgPrepWorkspace(containerEl) {
 
       const imported = document.importNode(svg, true);
       if (keptViewBox) imported.setAttribute('viewBox', keptViewBox);
+      // DP-Q60: the union is layer 1's paint; deeper layers go over it.
+      imported.insertBefore(
+        buildHatchDefs(keptViewBox || currentSvgMeta.viewBox),
+        imported.firstChild
+      );
+      imported.dataset.hatch = hatchPrefix;
+      imported.querySelectorAll('path').forEach((p) => {
+        p.setAttribute(
+          'class',
+          'svg-prep-result-ink' +
+            (paintsByLayer() ? ' svg-prep-standin-layer-1' : '')
+        );
+      });
       // The picture a person is looking at is the one the list has to be able
       // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
       // the SAME builder as every other picture. This used to build a bare
@@ -1945,7 +2151,8 @@ export function createSvgPrepWorkspace(containerEl) {
       // D-154: the combined result is what will print, and the shapes left
       // out are drawn over it in the left-out style, so they can be seen and
       // chosen again here too.
-      imported.appendChild(buildLeftOutLayer());
+      imported.appendChild(buildLayerPaint());
+      imported.appendChild(buildLeftOutLayer(hatchPrefix));
       imported.appendChild(buildOverlay());
       imported.appendChild(buildHitLayer());
       markAsPicture(imported, 'Prepared result');
@@ -1958,8 +2165,8 @@ export function createSvgPrepWorkspace(containerEl) {
         (el) => el.role === 'ignore'
       ).length;
       liveRegion.textContent = isCompound
-        ? `Preview updated: ${fgCount} shapes included, ${ignoredCount} ignored.`
-        : `Preview updated: ${fgCount} raised, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} holes.`;
+        ? `Preview updated: ${fgCount} shapes on, ${ignoredCount} off.`
+        : `Preview updated: ${fgCount} on, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} cut out.`;
     } catch (err) {
       console.error('[SVG Prep] Preview failed:', err);
       currentResult = null;
@@ -2738,7 +2945,7 @@ export function createSvgPrepWorkspace(containerEl) {
       if (layerSelect) layerSelect.disabled = role === 'ignore';
     }
 
-    if (layersEnabled) validateAndMarkLayers();
+    if (layersEnabled) updateLayerSummary();
     renderRoleLayer();
     requestResultPreview();
 
@@ -2764,58 +2971,14 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * Re-check every assignment against the containment law and mark the rows
-   * that break it. NOTHING is reassigned: a row the person set stays as they
-   * set it, wearing the reason it will not build.
+   * D-160: the containment law that used to be checked here ("Nothing
+   * surrounds this shape, so layer 3 would print with nothing under it") is
+   * gone. Every shape on layer N or deeper is written into layer N's file and
+   * the model extrudes each raised pass from below every floor, so a layer 3
+   * shape carries its own column wherever it sits; the warning was false and
+   * the owner believed it.
    */
-  function validateAndMarkLayers() {
-    if (!layersEnabled || !nestingTree) return [];
-    const problems = validateLayers(nestingTree, layers);
-    const byIndex = new Map(problems.map((pr) => [pr.index, pr]));
-
-    const items = refs.objects.querySelectorAll('.svg-prep-object');
-    for (const item of items) {
-      const idx = parseInt(item.dataset.index, 10);
-      const note = item.querySelector('.svg-prep-layer-note');
-      const select = item.querySelector('.svg-prep-layer-select');
-      if (!note || !select) continue;
-      const problem = byIndex.get(idx);
-      if (problem) {
-        note.textContent = layerProblemText(problem);
-        note.hidden = false;
-        item.classList.add('svg-prep-layer-problem');
-        select.setAttribute('aria-invalid', 'true');
-        select.setAttribute('aria-describedby', ensureNoteId(note, idx));
-      } else {
-        note.textContent = '';
-        note.hidden = true;
-        item.classList.remove('svg-prep-layer-problem');
-        select.removeAttribute('aria-invalid');
-        select.removeAttribute('aria-describedby');
-      }
-    }
-    updateLayerSummary(problems.length);
-    return problems;
-  }
-
-  function ensureNoteId(note, idx) {
-    if (!note.id) note.id = `svg-prep-layer-note-${idx}`;
-    return note.id;
-  }
-
-  /**
-   * The containment law, said to a person rather than quoted at them.
-   * STRINGS: owner review pending (accessibility-critical, DP-R1 text pack).
-   */
-  function layerProblemText(problem) {
-    const below = problem.layer - 1;
-    if (problem.reason === 'not-enclosed') {
-      return `Nothing surrounds this shape, so layer ${problem.layer} would print with nothing under it. Put it on layer 1, or place it inside a shape on layer ${below}.`;
-    }
-    return `The shape around this one is not on layer ${below}, so it is cut away before layer ${problem.layer} is built. This shape would print with nothing under it.`;
-  }
-
-  function updateLayerSummary(problemCount) {
+  function updateLayerSummary() {
     if (!refs.layerSummary) return;
     if (!layersEnabled || layerCount === 0) {
       refs.layerSummary.hidden = true;
@@ -2842,18 +3005,7 @@ export function createSvgPrepWorkspace(containerEl) {
       layersTouched && layerCount > 1
         ? ' Layers show on the charm after you press Apply.'
         : '';
-    const problemText =
-      problemCount === 0
-        ? ''
-        : problemCount === 1
-          ? ' 1 shape needs a different layer.'
-          : ` ${problemCount} shapes need a different layer.`;
-    refs.layerSummary.textContent =
-      limitText + startText + builtText + problemText;
-    refs.layerSummary.classList.toggle(
-      'svg-prep-layer-summary-problem',
-      problemCount > 0
-    );
+    refs.layerSummary.textContent = limitText + startText + builtText;
   }
 
   function handleLayerChange(e) {
@@ -2865,24 +3017,9 @@ export function createSvgPrepWorkspace(containerEl) {
     const idx = parseInt(match[1], 10);
     layers[idx] = parseInt(target.value, 10) || 1;
     layersTouched = true;
-
-    const problems = validateAndMarkLayers();
-    const mine = problems.find((pr) => pr.index === idx);
-    if (mine) {
-      announce(layerProblemText(mine));
-    } else if (problems.length > 0) {
-      // Moving one shape can strand a DIFFERENT one - lift the middle square
-      // to layer 1 and it is the inner square that ends up standing on air.
-      // Announcing only this row would report success while the design broke
-      // somewhere the person is not looking.
-      announce(
-        problems.length === 1
-          ? `Layer ${layers[idx]} set. 1 other shape now needs a different layer.`
-          : `Layer ${layers[idx]} set. ${problems.length} other shapes now need a different layer.`
-      );
-    } else {
-      announce(`Layer ${layers[idx]} set. This shape has something under it.`);
-    }
+    updateLayerSummary();
+    refreshLayerPaint();
+    announce(`Layer ${layers[idx]} set.`);
   }
 
   function handleRolesToggle() {
@@ -3066,7 +3203,7 @@ export function createSvgPrepWorkspace(containerEl) {
   /** Push the current layer array back into the selects, then re-check. */
   function applyLayerSelections() {
     if (!layersEnabled || layerCount === 0) {
-      updateLayerSummary(0);
+      updateLayerSummary();
       return;
     }
     const items = refs.objects.querySelectorAll('.svg-prep-object');
@@ -3075,7 +3212,7 @@ export function createSvgPrepWorkspace(containerEl) {
       const select = item.querySelector('.svg-prep-layer-select');
       if (select && layers[idx]) select.value = String(layers[idx]);
     }
-    validateAndMarkLayers();
+    updateLayerSummary();
   }
 
   /**
@@ -3250,8 +3387,8 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.undoIgnoreBtn.disabled = false;
     const sentence =
       rows.length === 1
-        ? '1 thin shape set to Ignore. It can be turned back on in the list.'
-        : `${rows.length} thin shapes set to Ignore. Each can be turned back on in the list.`;
+        ? '1 thin shape turned off. It can be turned back on in the list.'
+        : `${rows.length} thin shapes turned off. Each can be turned back on in the list.`;
     liveRegion.textContent = sentence;
     announce(sentence);
   }
@@ -3571,10 +3708,7 @@ export function createSvgPrepWorkspace(containerEl) {
     originalIndex.forEach((original, live) => {
       out[original] = layers[live] || 1;
     });
-    const problems = validateLayers(nestingTree, layers).map((pr) => ({
-      ...pr,
-      index: originalIndex[pr.index],
-    }));
+    const problems = [];
     return { layers: out, limit: layerCount, problems };
   }
 
@@ -3603,7 +3737,6 @@ export function createSvgPrepWorkspace(containerEl) {
     hosted = callbacks.hosted === true;
     currentSvgString = svgString;
     currentAnalysis = analysis;
-    paintLegend(refs.legendRow, currentRoleOptions());
     currentSvgMeta = extractSvgMeta(svgString);
 
     // DP-54 (D-144): a host that knows how wide the design prints says so,
@@ -3671,6 +3804,9 @@ export function createSvgPrepWorkspace(containerEl) {
       nestingTree = null;
       layerCount = 0;
     }
+    // The legend follows the role table AND the layers (DP-Q60), so it is
+    // painted once both are known.
+    paintLegend(refs.legendRow, currentRoleOptions(), layerCount);
 
     const populated = populateObjectList(
       refs.objects,

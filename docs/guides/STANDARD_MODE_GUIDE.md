@@ -315,9 +315,22 @@ before and after side by side; the rest of the time one picture is the point.
 
 Each shape in the list has a role:
 
-- **Raised**: stands up off the face, which is the part a finger finds
-- **Hole**: cut out of the raised shape
-- **Ignore**: left out of the result entirely
+- **On**: the shape prints, at its layer, standing up or cut in as the
+  layer's style says
+- **Cut out**: cut out of the shape it sits in, the inside of an O
+- **Off**: left out entirely, as if it had never been drawn
+
+The switch used to say Raised, Hole and Ignore. I changed it because a "hole"
+is not always a hole in the object: with the engraved style a hole stands up
+as an island and a raised shape is cut in. These words say what the shape is
+in the drawing, and the layer's style says which way it goes.
+
+With layers, the picture paints every On shape in its layer's color, layer 1
+deep blue, layer 2 orange, layer 3 yellow-green, each a step lighter than the
+last so the order reads in grayscale too; a Cut out is paper with a dashed
+edge, and a shape turned Off is its layer's color muted under a diagonal
+hatch, so you can see it is still there. The legend under the picture names
+each.
 
 The role control shows all three words, so what you read and what a screen
 reader reads are the same three words. Arrow keys move between them.
@@ -368,7 +381,7 @@ first, naming both numbers.
 
 **Removing shapes you do not want**
 
-"Ignore" leaves a shape in the list but out of the result. To take shapes out of
+"Off" leaves a shape in the list but out of the result. To take shapes out of
 the *list* as well, which is what you want when there are hundreds of them:
 
 | Action | How |
@@ -395,8 +408,8 @@ the list: "33 shapes are thinner than 0.5 mm at 12 mm wide and may not print."
 Each of those rows carries a small **thin** mark beside its name, and a screen
 reader hears why: too thin to print, or too small to trace clearly, which
 means under three pixels in the picture. Nothing is changed for you. In the
-shapes panel, **Thinner than … mm** and **Ignore those** set every flagged
-shape to Ignore in one press, **Undo ignore** puts them back, and any single
+shapes panel, **Thinner than … mm** and **Turn those off** set every flagged
+shape to Off in one press, **Turn those back on** puts them back, and any single
 row can be turned back on by hand. The floor is a number you can change. The
 width follows the charm, and you can type another to see what a bigger charm
 would do.
@@ -405,7 +418,7 @@ would do.
 
 | Action | How |
 |--------|-----|
-| Change a role | Click **Raised**, **Hole** or **Ignore**, or use arrow keys |
+| Change a role | Click **On**, **Cut out** or **Off**, or use arrow keys |
 | Choose a shape | Click its row or the shape itself; Ctrl or Cmd adds, Shift takes a range |
 | Choose every shape | Ctrl+A (Cmd+A on a Mac) with the list focused |
 | Remove the chosen shapes | Delete or Backspace, or **Delete selected** |
@@ -440,8 +453,8 @@ Apply is still the only thing that changes your design.
 
 A picture with a colored background arrives with that background as one big
 shape, the wall. Forge leaves the wall out by itself: its row starts as
-**Ignore**. A patch of the wall closed in by the artwork, the inside of an A,
-becomes a **Hole**, and every other color is **Raised**, so the charm carries
+**Off**. A patch of the wall closed in by the artwork, the inside of an A,
+becomes a **Cut out**, and every other color is **On**, so the charm carries
 the drawing rather than a plate with the drawing cut out of it. Turn the wall
 on if you want it.
 
@@ -460,11 +473,11 @@ back, one step, for this session. **Cancel** or `Escape` leaves the drawing as
 it was.
 
 **If the result looks like a solid blob:** the preparer merges everything set to
-Raised into one shape. When a drawing has an outline around its detail --
+On into one shape. When a drawing has an outline around its detail --
 the outline of a bird with an eye and feather strokes inside it, say -- merging
 them fills the outline in and swallows the detail. That is not a bug, it is what
-"print this as one shape" means. Set the interior shapes to **Ignore**, or to
-**Hole** if you want them cut out, and the result comes back.
+"print this as one shape" means. Set the interior shapes to **Off**, or to
+**Cut out** if you want them cut out, and the result comes back.
 
 **Warnings:**
 
@@ -581,7 +594,7 @@ what. Forge says this in the panel too.
 the width the charm will print it, and says so in the editor: under about half
 a millimeter a line may not come out at all, or may come out too faint to feel.
 On a charm every shape is measured too, and the ones under the floor can be set
-to Ignore in one press (see "Shapes too thin to print" above). It is a
+to Off in one press (see "Shapes too thin to print" above). It is a
 sentence, not an action: Forge does not change your drawing.
 
 **Nothing is uploaded.** The tracing and every choice above happen in your

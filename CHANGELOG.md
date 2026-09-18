@@ -116,6 +116,17 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
 
 ### Changed
 
+- **A shape is On, Cut out or Off** (DP-57, DP-Q59) - the switch on every row said Raised, Hole
+  and Ignore (Include and Exclude on a compound path), and a "hole" is not always a hole in the
+  object: with the engraved style a hole stands up as an island and a raised shape is cut in.
+  The words now say what the shape is in the drawing and leave the direction to the layer's
+  style; one vocabulary on both kinds of drawing. "Ignore those" became "Turn those off".
+- **The picture shows the layers** (DP-57, DP-Q60) - with a design that has layers, every On
+  shape is painted in its layer's color (layer 1 deep blue, layer 2 orange, layer 3
+  yellow-green, each a step lighter than the last, apart for every kind of color vision), a
+  Cut out is paper with a dashed edge, and a shape turned Off is its layer's color muted under
+  a diagonal hatch, so it is plainly there and plainly off. The combined result carries the
+  same paint, the union as layer 1 with the deeper layers over it. The legend names each.
 - **American English, everywhere a person reads or hears it** (DP-45) - 1,213 replacements
   in 129 files, and a guard (`scripts/us-english-scan.mjs`, run by a unit test) that reads
   every string and comment in the source, the page, the tiles and the documents, and reports
@@ -169,14 +180,14 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
   about 75 ms, while 200 real traced shapes were 34,382 points and 14.7 seconds. In practice
   210 shapes now combine by themselves where the old rule stopped to ask
 - **The shapes panel, rebuilt around one signed row** (DP-39) - each row is the shape's name, a
-  Raised / Hole / Ignore switch and a More button, and the row says when it has run out of room
+  On / Cut out / Off switch (Raised / Hole / Ignore until DP-57) and a More button, and the row says when it has run out of room
   instead of taking the space out of the name. Measured on the same drawing before and after:
   at 1280 a name went from 82 px cut to 210 px whole; at 768 all seven names rendered at zero
   pixels and all seven Delete buttons were clipped, and now nothing is clipped. The list points
   at the picture again, and on a phone it is a sheet rather than 99.8 % of the drawing
 - **One vocabulary, wherever a person meets it** (DP-Q40) - what the panel is called, what a row
   is called, what the color key says and what a screen reader hears are now the same words:
-  "Shapes", "Shape 3", and the roles Raised / Hole / Ignore (Include / Exclude where a compound
+  "Shapes", "Shape 3", and the roles, then Raised / Hole / Ignore (Include / Exclude where a compound
   path has no holes to offer). Eight strings across four files were still saying the retired
   ones, four of them only to people who cannot see the control that disagreed
 - **The CI shard planner knows what CI skips** (#211) - three of six Chromium shards were each
@@ -191,6 +202,39 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
 
 ### Fixed
 
+- **The stencil's words on a charm** (D-156) - the ink panel described the Colors choice as
+  "ready to paint a plate for each" color and the wall as "the surface behind the stencil" on
+  a charm, where no stencil is possible. The panel knows its host now: a charm and the
+  standalone editor get relief words (one shape per color, the wall left out, colors in the
+  artwork), the stencil tile keeps its own, and the filament hint stays a stencil sentence.
+- **A changed setting started a conversion by itself** (D-157) - the ink panel re-ran the
+  conversion after every change on any picture at any speed, where choosing the same picture
+  had waited for Start under the DP-Q32 rule (at most 0.5 MP and a quick look that calls it
+  quick). Measured at 6x on a phone-sized page: Colors chosen, a conversion running 300 ms
+  later, with no dialog for its first second. One rule now, in both places: a change on a
+  picture that is not quick offers Convert again, says so in the change's own sentence, and
+  the press is the person's, so the dialog and its Cancel stand at once.
+- **The freeze with nothing to cancel** (D-158) - the run above counted as a self-start, so the
+  dialog was held back by the grace while "Preparing the drawing" held the thread; D-157's fix
+  is its fix. The page's work after the dialog closes, the editor's opening, is D-150 (known).
+- **The ring that could not be turned off** (D-159) - every ring of a compound path became a
+  row of its own, judged by its fill's luminance alone, so a drawn letter O's counter was a
+  second Raised row and the combined result filled it, and a traced region's inner ring was a
+  solid Raised disc over the island of another color that sat in it: the click on the dot in
+  my logo's figure selected the disc, and no role on it changed anything. A traced region is
+  one row now, its outer ring, since whatever sits inside it is its own row already (the logo
+  lists 111 shapes, not 206); a drawn path's rings keep the drawing's fill rule, so a hole ring
+  starts as a Hole; and islands are painted last, so they can be seen and clicked.
+- **Layers as height classes, and a warning that was false** (D-160) - the editor warned that
+  a layer 3 shape with nothing on layer 2 around it "would print with nothing under it", but
+  every shape on a layer or deeper has been written into every layer's file below it since the
+  stack was built, so nothing ever floated; the warning is gone. The charm model now measures
+  each direction from the face: raised tops add up (0.5, 0.5 and 1.0 put a layer 3 shape
+  2.0 mm above the face; layer 2 at 1.0 moves it to 2.5), engraved floors add up the other
+  way, and a raised layer 1 at 1.0 beside an engraved layer 2 at 1.0 leaves 2.0 mm between
+  the surfaces, measured on the printed geometry. The passes apply in layer order, so a raised
+  layer 3 inside an engraved layer 2 stands in the pit. No parameter changed its name, unit or
+  default.
 - **The way back into the editor after Apply** (D-145) - the file control's status card had
   no branch for the pairing the analyzer really emits on a confident drawing (ready, open
   the editor), so after Apply or Close on my logo the card went blank and nothing reopened

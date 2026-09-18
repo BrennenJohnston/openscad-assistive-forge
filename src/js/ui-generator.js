@@ -40,6 +40,7 @@ import { createTraceProgress } from './trace-progress.js';
 import { createConversionJob } from './conversion-job.js';
 import { createConversionDialog } from './conversion-dialog.js';
 import { quickLook, quickLookSentence, COST_BANDS } from './quick-look.js';
+import { startsBySelf } from './conversion-start-rule.js';
 import { checkHolePlacement } from './hole-placement.js';
 import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
 import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
@@ -2789,18 +2790,39 @@ function createFileControl(
 
   // ── Start, the bar, and Cancel (DP-34) ─────────────────────────────────
   // The conversion no longer begins by itself for anything but a picture small
-  // enough that it is over before a person could have pressed the button
-  // (AUTO_START_MAX_PIXELS). Everything else waits to be started, reports the
-  // stage it has reached, and can be canceled at any moment.
+  // enough that it is over before a person could have pressed the button.
+  // Everything else waits to be started, reports the stage it has reached,
+  // and can be canceled at any moment.
   //
-  // AUTO_START_MAX_PIXELS is the owner's number, signed at DP-Q32: at most
-  // 0.5 MP may start by itself, through the same bar and the same Cancel. Above
-  // it, Start is the rule. Start stays on screen either way, because re-running
-  // after a settings change is the common case.
-  const AUTO_START_MAX_PIXELS = 500_000;
+  // The owner's number, signed at DP-Q32, and the rule around it live in
+  // conversion-start-rule.js (`startsBySelf`), because D-157 found the rule
+  // applied where a file is chosen and NOT where a setting changes: a change
+  // re-ran the conversion by itself on any picture at any speed. Start stays
+  // on screen either way, because re-running after a change is the common
+  // case, and the press is the person's when the picture is not quick.
+  let runningStartedBy = 'self';
+  let settingsNoteShown = false;
+  // Whether this picture has been converted once: the waiting button and
+  // the waiting sentence say Start conversion until it has, Convert again
+  // after (a CI run pressed nothing because a change before the first run
+  // had relabeled Start as Convert again).
+  let convertedOnce = false;
+  const startLabel = () =>
+    convertedOnce ? 'Convert again' : 'Start conversion';
+  const settingsChangedNote = () =>
+    `Settings changed. Press ${startLabel()} when you are ready.`;
   // What the quick look said about the picture now in hand, kept so the
   // auto-start rule and the sentence agree with each other.
   let currentQuickLook = null;
+
+  /** D-157: would a change on this picture, at this speed, run by itself? */
+  function changeRunsBySelf() {
+    if (!inkSourceImageData) return false;
+    return startsBySelf({
+      pixelCount: inkSourceImageData.width * inkSourceImageData.height,
+      costBand: currentQuickLook ? currentQuickLook.costBand : undefined,
+    });
+  }
   // DP-54 (D-144): the trace this drawing came from, if any, for the
   // editor's whole-drawing advisory.
   let lastTrace = null;
@@ -3387,14 +3409,37 @@ function createFileControl(
     inkControls = createInkControls({
       idPrefix: `ink-${param.name}`,
       announce: announceChange,
+      // D-156: the tile that declares plates is a stencil; every other host
+      // of this control is relief, and its words say so.
+      purpose: plateParams.length > 0 ? 'stencil' : 'relief',
+      runsBySelf: () =>
+        (conversionJob && conversionJob.isRunning()) || changeRunsBySelf(),
+      startLabel,
       onChange: (settings) => {
         clearTimeout(inkRetraceTimer);
         inkRetraceTimer = setTimeout(() => {
+          // D-157: a change re-runs by itself only where the picture would
+          // have started by itself when chosen (DP-Q32, one rule). Otherwise
+          // Convert again is offered and the press is the person's. A
+          // conversion already running is superseded either way (D-151): the
+          // person is waiting on it, and the newest settings are what they
+          // want; it keeps the standing it had, so a person-started run's
+          // dialog stays.
+          const running = conversionJob && conversionJob.isRunning();
+          if (!running && !changeRunsBySelf()) {
+            traceProgress.offer(startLabel());
+            traceProgress.setNote(settingsChangedNote());
+            settingsNoteShown = true;
+            return;
+          }
           // applyTracedImage re-throws after reporting (D-119), and this call
           // is a timer callback with nobody to await it. The catch exists only
           // so a re-trace failure cannot become an unhandled rejection - the
           // user has already been shown and told, in applyTracedImage itself.
-          applyTracedImage(settings, { announceResult: false }).catch(() => {});
+          applyTracedImage(settings, {
+            announceResult: false,
+            startedBy: running ? runningStartedBy : 'self',
+          }).catch(() => {});
         }, 180);
       },
     });
@@ -3496,12 +3541,18 @@ function createFileControl(
     { announceResult = false, startedBy = 'self' } = {}
   ) {
     if (!inkSourceImageData) return;
+    runningStartedBy = startedBy;
     // Read BEFORE Start is hidden: focus leaves a hidden button for the body,
     // and the dialog needs to know where to put it back.
     const focusBefore = document.activeElement;
     if (inkControls) inkControls.setBusy(true);
     traceProgress.show();
     traceProgress.begin();
+    // The change the note announced is being converted now.
+    if (settingsNoteShown) {
+      traceProgress.setNote('');
+      settingsNoteShown = false;
+    }
     const job = ensureConversionJob();
     const dialog = ensureConversionDialog();
     const showDialog = () => {
@@ -3605,6 +3656,7 @@ function createFileControl(
       // dialog took from it has somewhere visible to return to; then the page
       // is live again before anything is said or opened.
       clearTimeout(graceTimer);
+      convertedOnce = true;
       traceProgress.finish();
       traceProgress.offer('Convert again');
       dialog.close();
@@ -3864,6 +3916,7 @@ function createFileControl(
 
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           inkSourceImageData = await loadImageData(dataUrl);
+          convertedOnce = false;
           inkSourceDataUrl = dataUrl;
           cropUndo = null;
           lastCrop = null;
@@ -3901,9 +3954,11 @@ function createFileControl(
           // quick, and the whole point is not to start work nobody asked for on
           // a device that cannot afford it.
           if (
-            askedForElsewhere ||
-            (pixelCount <= AUTO_START_MAX_PIXELS &&
-              currentQuickLook.costBand === 'quick')
+            startsBySelf({
+              pixelCount,
+              costBand: currentQuickLook.costBand,
+              asked: askedForElsewhere,
+            })
           ) {
             // Small enough to start itself, and it still goes through the same
             // bar and the same Cancel - there is no second, invisible path.

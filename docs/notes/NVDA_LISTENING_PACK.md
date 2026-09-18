@@ -118,9 +118,9 @@ the old words anywhere and want to know they are wrong:
 - the list is named **"Shapes"** now, not "SVG objects"
 - the skip link says **"Skip to the shapes list"** on a charm, and keeps
   "Skip to the regions table" on a stencil, where a region is the right word
-- the tint legend under the picture says **Raised · Hole · Ignore**, the same
+- the tint legend under the picture says **On · Cut out · Off** (or **Layer 1 · Layer 2 · Layer 3 · Cut out · Off** where the design has layers), the same
   words as the control on the row - and on a traced picture, where the rows
-  say Include / Exclude, the legend says **Include · Exclude** to match
+  say On / Off, the legend says **On · Off** to match
 
 One is unchanged and still worth knowing:
 
@@ -141,7 +141,7 @@ knowing it is real is worth more than the whole rest of the section.**
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
-| A row reads as its name, then its role, then a group of three radio buttons named Raised, Hole and Ignore | ☐ | |
+| A row reads as its name, then its role, then a group of three radio buttons named On, Cut out and Off | ☐ | |
 | Arrow keys inside the role group move between the three and say which is chosen, without leaving the row | ☐ | |
 | "More" reads with the row it belongs to ("More for Shape 3"), says collapsed or expanded, and opening it puts the offset box, Layer and Delete in reach | ☐ | |
 | Escape shuts an open More menu and leaves the editor open | ☐ | |
@@ -152,7 +152,7 @@ knowing it is real is worth more than the whole rest of the section.**
 | Ctrl+A with the list focused says "All 7 shapes selected." once; Delete removes the chosen rows and says how many | ☐ | |
 | The notice above the list reads as a status when it changes: "5 shapes are thinner than 0.5 mm at 12 mm wide and may not print." | ☐ | |
 | A too-thin row's description is read after its name and role: "too thin to print", or "too small to trace clearly", or both; the word "thin" beside the name is NOT read a second time | ☐ | |
-| "Ignore those" says "5 thin shapes set to Ignore. Each can be turned back on in the list." once, and "Undo ignore" says "Undone. 5 shapes are back to how they were." | ☐ | |
+| "Turn those off" says "5 thin shapes turned off. Each can be turned back on in the list." once, and "Turn those back on" says "Undone. 5 shapes are back to how they were." | ☐ | |
 | The layer sentence under the notice ("This design supports up to 2 layers. Every shape starts on layer 1. Choose a layer under More to build a stack.") is findable by browsing and not announced at every change | ☐ | |
 
 ## 9. Combining a big drawing (it combines by itself now)

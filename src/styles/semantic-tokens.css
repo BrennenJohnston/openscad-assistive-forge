@@ -187,6 +187,17 @@
   --shadow-sm: 0 1px 3px var(--slate-a4);
   --shadow-md: 0 4px 6px var(--slate-a5);
   --shadow-lg: 0 10px 20px var(--slate-a6);
+
+  /* ========================================================================
+     Drawing editor layer colors (DP-Q60, 2026-09-17): one hue per layer,
+     each a step lighter than the last, apart for every kind of color
+     vision. The dark theme's values are the inverses, because the editor's
+     panes are inverted there and the inversion hands the true color back.
+     ======================================================================== */
+  --svg-prep-layer-1: #1f5fa8;
+  --svg-prep-layer-2: #e07a1f;
+  --svg-prep-layer-3: #a6c72b;
+  --svg-prep-off-ink: #666666;
 }
 
 /* ============================================================================
@@ -282,6 +293,12 @@
   --shadow-sm: 0 1px 3px var(--slate-a6);
   --shadow-md: 0 4px 6px var(--slate-a7);
   --shadow-lg: 0 10px 20px var(--slate-a8);
+
+  /* Drawing editor layer colors: the inverses, see the light block */
+  --svg-prep-layer-1: #e0a057;
+  --svg-prep-layer-2: #1f85e0;
+  --svg-prep-layer-3: #5938d4;
+  --svg-prep-off-ink: #999999;
 }
 
 /* Dark Mode - System Preference (when no manual override) */
@@ -366,6 +383,12 @@
     --shadow-sm: 0 1px 3px var(--slate-a6);
     --shadow-md: 0 4px 6px var(--slate-a7);
     --shadow-lg: 0 10px 20px var(--slate-a8);
+
+    /* Drawing editor layer colors: the inverses, see the light block */
+    --svg-prep-layer-1: #e0a057;
+    --svg-prep-layer-2: #1f85e0;
+    --svg-prep-layer-3: #5938d4;
+    --svg-prep-off-ink: #999999;
   }
 }
 
@@ -443,4 +466,15 @@
   --shadow-sm: 0 1px 3px var(--slate-a4);
   --shadow-md: 0 4px 6px var(--slate-a5);
   --shadow-lg: 0 10px 20px var(--slate-a6);
+
+  /* ========================================================================
+     Drawing editor layer colors (DP-Q60, 2026-09-17): one hue per layer,
+     each a step lighter than the last, apart for every kind of color
+     vision. The dark theme's values are the inverses, because the editor's
+     panes are inverted there and the inversion hands the true color back.
+     ======================================================================== */
+  --svg-prep-layer-1: #1f5fa8;
+  --svg-prep-layer-2: #e07a1f;
+  --svg-prep-layer-3: #a6c72b;
+  --svg-prep-off-ink: #666666;
 }

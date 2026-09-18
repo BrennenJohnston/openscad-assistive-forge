@@ -77,7 +77,7 @@ it is the whole screen.
 | Key | Action |
 |-----|--------|
 | `Tab` / `Shift+Tab` | Move between the toolbar, the picture's controls, the rows and their buttons |
-| `Arrow keys` | Switch between Raised / Hole / Ignore within a row's role group (Include / Exclude on a traced picture) |
+| `Arrow keys` | Switch between On / Cut out / Off within a row's role group (On / Off where the drawing is one compound path) |
 | `Ctrl+A` (`Cmd+A`) | Choose every shape, with the list focused |
 | `Delete` / `Backspace` | Remove the chosen shapes |
 | `Ctrl`-click / `Cmd`-click, `Shift`-click | Add a row or a shape to the choice, or take a range |
@@ -92,7 +92,7 @@ when the view opens and returns to **Crop** when it closes.
 
 - The editor is a labeled `region` landmark named "Drawing editor"; the
   shapes panel's list is named "Shapes" and each row is named by its shape
-  and its role in the word the control uses (for example "Shape 3, Raised")
+  and its role in the word the control uses (for example "Shape 3, On")
 - A row's **More** button says which row it belongs to, and Escape shuts the
   menu without leaving the editor
 - Choosing rows is said as a sentence, once per change ("3 of 7 shapes
@@ -105,7 +105,7 @@ when the view opens and returns to **Crop** when it closes.
 - Shapes too thin to print are counted in a status region above the list
   ("33 shapes are thinner than 0.5 mm at 12 mm wide and may not print."), and
   each such row is described as "too thin to print" or "too small to trace
-  clearly" after its name; **Ignore those** and **Undo ignore** say what they
+  clearly" after its name; **Turn those off** and **Turn those back on** say what they
   did
 - The crop view announces "Crop view open. Four sliders take an edge off the
   picture." on opening, each slider is described by one help sentence and by

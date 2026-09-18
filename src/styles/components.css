@@ -15649,16 +15649,70 @@ body.tutorial-body-locked {
   vector-effect: non-scaling-stroke;
 }
 
-/* D-154: a shape left out stays in the picture in the left-out style, the
-   warning color with a dashed edge: there, and not printing. Above the ink,
+/* DP-Q60 (2026-09-17): with layers, an On shape is painted in its layer's
+   color, each a step lighter than the last. The tokens' dark values are the
+   inverses, so the panes' inversion in the dark theme gives the true color
+   back. Two classes beat the one-class ink rule above. */
+.svg-prep-standin-path--raised.svg-prep-standin-layer-1,
+.svg-prep-result-ink.svg-prep-standin-layer-1 {
+  fill: var(--svg-prep-layer-1, #1f5fa8);
+}
+
+.svg-prep-standin-path--raised.svg-prep-standin-layer-2 {
+  fill: var(--svg-prep-layer-2, #e07a1f);
+}
+
+.svg-prep-standin-path--raised.svg-prep-standin-layer-3 {
+  fill: var(--svg-prep-layer-3, #a6c72b);
+}
+
+/* D-154, DP-Q60: a shape turned off stays in the picture, its layer's color
+   muted under a diagonal hatch with a dashed edge: there, and not printing.
+   The fill is the pattern the picture carries (a presentation attribute, so
+   no fill is set here); the edge takes the layer's color. Above the ink,
    under the marks. */
 .svg-prep-standin-path--ignore {
-  fill: var(--color-warning);
-  fill-opacity: 0.6;
-  stroke: var(--color-warning-text);
+  stroke: var(--svg-prep-off-ink, #666);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
   vector-effect: non-scaling-stroke;
+}
+
+.svg-prep-standin-path--ignore.svg-prep-standin-layer-1 {
+  stroke: var(--svg-prep-layer-1, #1f5fa8);
+}
+
+.svg-prep-standin-path--ignore.svg-prep-standin-layer-2 {
+  stroke: var(--svg-prep-layer-2, #e07a1f);
+}
+
+.svg-prep-standin-path--ignore.svg-prep-standin-layer-3 {
+  stroke: var(--svg-prep-layer-3, #a6c72b);
+}
+
+/* The hatch: the layer's color at a quarter behind a stripe at four fifths. */
+.svg-prep-hatch-ground {
+  fill-opacity: 0.25;
+}
+
+.svg-prep-hatch-line {
+  fill-opacity: 0.8;
+}
+
+.svg-prep-hatch-0 {
+  fill: var(--svg-prep-off-ink, #666);
+}
+
+.svg-prep-hatch-1 {
+  fill: var(--svg-prep-layer-1, #1f5fa8);
+}
+
+.svg-prep-hatch-2 {
+  fill: var(--svg-prep-layer-2, #e07a1f);
+}
+
+.svg-prep-hatch-3 {
+  fill: var(--svg-prep-layer-3, #a6c72b);
 }
 
 .svg-prep-role--foreground {
@@ -15711,10 +15765,25 @@ body.tutorial-body-locked {
   flex-shrink: 0;
 }
 
-/* D-154: the legend says what the picture paints: ink, paper with a dashed
-   edge, and the left-out warning color with a dashed edge. */
+/* D-154, DP-Q60: the legend says what the picture paints: ink (or one chip
+   per layer), paper with a dashed edge for Cut out, a hatch for Off. The
+   chips sit OUTSIDE the inverted panes, so they take the true colors: in
+   the dark theme the tokens hold the inverses, and the chips invert them
+   back themselves. */
 .svg-prep-legend-chip--foreground {
   background: var(--color-text-primary);
+}
+
+.svg-prep-legend-chip--layer-1 {
+  background: var(--svg-prep-layer-1, #1f5fa8);
+}
+
+.svg-prep-legend-chip--layer-2 {
+  background: var(--svg-prep-layer-2, #e07a1f);
+}
+
+.svg-prep-legend-chip--layer-3 {
+  background: var(--svg-prep-layer-3, #a6c72b);
 }
 
 .svg-prep-legend-chip--hole {
@@ -15723,9 +15792,13 @@ body.tutorial-body-locked {
 }
 
 .svg-prep-legend-chip--ignore {
-  background: var(--color-warning);
-  opacity: 0.7;
-  border: 1px dashed var(--color-warning-text);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--svg-prep-off-ink, #666) 0 2px,
+    transparent 2px 5px
+  );
+  opacity: 0.8;
+  border: 1px dashed var(--svg-prep-off-ink, #666);
 }
 
 /* ── Zoom controls ───────────────────────────────────────────────────────── */
@@ -16036,24 +16109,6 @@ body.tutorial-body-locked {
   cursor: not-allowed;
 }
 
-/* The row keeps its shape and the note wraps under it, so a warning never
-   squeezes the controls a person is reaching for. */
-.svg-prep-layer-note {
-  flex-basis: 100%;
-  font-size: var(--font-size-sm);
-  color: var(--color-warning-text);
-}
-
-.svg-prep-layer-note[hidden] {
-  display: none;
-}
-
-/* Colour is not the only signal: the border carries it too, for anyone who
-   cannot separate these two hues. */
-.svg-prep-object.svg-prep-layer-problem {
-  border-inline-start: var(--border-width-thick, 3px) solid var(--color-warning);
-}
-
 .svg-prep-layer-summary {
   margin: var(--space-xs) 0 0;
   font-size: var(--font-size-sm);
@@ -16062,10 +16117,6 @@ body.tutorial-body-locked {
 
 .svg-prep-layer-summary[hidden] {
   display: none;
-}
-
-.svg-prep-layer-summary-problem {
-  color: var(--color-warning-text);
 }
 
 /* ── Design width input (header) ────────────────────────────────────────── */
@@ -16544,25 +16595,57 @@ body.tutorial-body-locked {
   :root:not([data-theme='light']) .svg-prep-result-pane svg {
     filter: invert(1);
   }
+}
 
-  :root:not([data-theme='light'])
-    .svg-prep-result-pane
-    .svg-prep-standin-left-out {
+/* DP-Q60: the chips take the tokens' dark values, which are the inverses
+   meant for the inverted panes; outside the panes they invert themselves. */
+:root[data-theme='dark'] .svg-prep-legend-chip--layer-1,
+:root[data-theme='dark'] .svg-prep-legend-chip--layer-2,
+:root[data-theme='dark'] .svg-prep-legend-chip--layer-3,
+:root[data-theme='dark'] .svg-prep-legend-chip--ignore {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .svg-prep-legend-chip--layer-1,
+  :root:not([data-theme='light']) .svg-prep-legend-chip--layer-2,
+  :root:not([data-theme='light']) .svg-prep-legend-chip--layer-3,
+  :root:not([data-theme='light']) .svg-prep-legend-chip--ignore {
     filter: invert(1);
   }
 }
 
-:root[data-theme='dark'] .svg-prep-result-pane .svg-prep-standin-left-out {
-  filter: invert(1);
-}
-
-/* Forced colors: the left-out shapes in the link color with a dashed edge,
-   the holes outlined in the text color. */
+/* Forced colors: the layers in system colors, the shapes turned off in the
+   gray text color under their hatch with a dashed edge, the cut-outs
+   outlined in the text color. */
 @media (forced-colors: active) {
+  .svg-prep-standin-path--raised.svg-prep-standin-layer-1,
+  .svg-prep-result-ink.svg-prep-standin-layer-1,
+  .svg-prep-legend-chip--layer-1 {
+    fill: CanvasText;
+    background: CanvasText;
+  }
+
+  .svg-prep-standin-path--raised.svg-prep-standin-layer-2,
+  .svg-prep-legend-chip--layer-2 {
+    fill: LinkText;
+    background: LinkText;
+  }
+
+  .svg-prep-standin-path--raised.svg-prep-standin-layer-3,
+  .svg-prep-legend-chip--layer-3 {
+    fill: Highlight;
+    background: Highlight;
+  }
+
   .svg-prep-standin-path--ignore {
-    fill: Canvas;
-    stroke: LinkText;
+    stroke: GrayText;
     stroke-width: 2;
+  }
+
+  .svg-prep-hatch-ground,
+  .svg-prep-hatch-line {
+    fill: GrayText;
   }
 
   .svg-prep-standin-path--hole {
@@ -16571,7 +16654,7 @@ body.tutorial-body-locked {
 
   .svg-prep-legend-chip--ignore {
     background: Canvas;
-    border: 2px dashed LinkText;
+    border: 2px dashed GrayText;
   }
 }
 
@@ -16628,17 +16711,6 @@ body.tutorial-body-locked {
 
   .svg-prep-swatch {
     border: 2px solid ButtonText;
-  }
-
-  /* The row carries a written note as well, so nothing here is the only way
-     to learn a shape breaks the law - this just keeps the marker visible. */
-  .svg-prep-object.svg-prep-layer-problem {
-    border-inline-start: 3px solid Highlight;
-  }
-
-  .svg-prep-layer-note,
-  .svg-prep-layer-summary-problem {
-    color: CanvasText;
   }
 
   .svg-prep-layer-select {

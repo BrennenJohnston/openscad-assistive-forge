@@ -105,7 +105,7 @@ particular step that used to dominate everything was replaced: a
 drawing that took nineteen seconds to come back now takes about one
 and a half.
 
-![The drawing editor over the charm preview: a bird line drawing fills the left side under the heading "Will print as", with Fit, plus and minus buttons and a color key reading Raised, Hole and Ignore beneath it. The toolbar holds a Drawing / Charm switch with Drawing chosen, then Crop, Apply, Save SVG, Keep original, Reset and More. On the right, a Shapes panel lists the shapes: each row has the shape's name, a Raised / Hole / Ignore switch with one choice highlighted and a More button, and four of the rows carry a small mark reading thin beside the name](images/drawing-editor.png)
+![The drawing editor over the charm preview: a bird line drawing in deep blue, the color of layer 1, fills the left side under the heading "Will print as", with Fit, plus and minus buttons, four arrow buttons that move the view, and a color key reading Layer 1, Layer 2, Cut out and Off beneath it. The toolbar holds a Drawing / Charm switch with Drawing chosen, then Crop, Apply, Save SVG, Keep original, Reset and More. On the right, a Shapes panel lists the shapes: each row has the shape's name, an On / Cut out / Off switch with one choice highlighted and a More button, and four of the rows carry a small mark reading thin beside the name](images/drawing-editor.png)
 
 The editor itself got the change I care most about: it is **one
 picture** now. The drawing you are editing fills the space, and
@@ -117,7 +117,7 @@ and anything the engine has to say about a file shows up in the
 editor's own warnings list instead of disappearing.
 
 The panel beside the drawing was rebuilt around a single row. Each
-shape gets its name, one switch reading **Raised · Hole · Ignore**,
+shape gets its name, one switch reading **On · Cut out · Off**,
 and a **More** button for the rest - and the row can say when it has
 run out of room instead of quietly eating the name, which is what it
 used to do on a narrow screen. The words changed too: what the panel
@@ -150,7 +150,7 @@ A conversion stands in front of the page as a dialog with its stages
 named and a Cancel that works at any of them. The editor knows how wide
 the charm will really print the drawing, measures every shape against
 half a millimeter at that width, says how many are too thin, and can
-set them all to Ignore in one press, reversibly. And **Crop**: four
+turn them all off in one press, reversibly. And **Crop**: four
 sliders take an edge off the picture, a photo is traced again from the
 kept part, and Undo crop puts it back. Underneath all of it, every word
 the app says is now American English, and every slider row in the

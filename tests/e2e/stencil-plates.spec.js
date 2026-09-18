@@ -206,9 +206,34 @@ test.describe('The Stencil Maker makes plates', () => {
       el.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
+    // DP-57 (D-157): a change on a picture that is not quick waits for the
+    // press, so the press is made here as a person would make it; a picture
+    // quick enough runs by itself and the button is simply not there to
+    // press. Either way the sentence is what is waited for.
+    const start = page.locator('.trace-progress-start').first()
+    const summary = page.locator('.ink-controls-summary')
+    await expect
+      .poll(
+        async () => {
+          const text = (await summary.textContent().catch(() => '')) || ''
+          if (/colors to paint, and the wall/.test(text)) return 'done'
+          // Pressed on the element: the panel lives inside a disclosure that
+          // may be closed, so a visibility check would never let a press
+          // through on a machine where the picture is not quick (CI's Edge).
+          await start
+            .evaluate((el) => {
+              if (el.hidden || el.disabled) return false
+              el.click()
+              return true
+            })
+            .catch(() => false)
+          return text.slice(0, 40)
+        },
+        { timeout: 180000, intervals: [1000] }
+      )
+      .toBe('done')
     // The summary names every colour and its share, so a person can SEE that
     // a colour they wanted is missing and ask for one more.
-    const summary = page.locator('.ink-controls-summary')
     await expect(summary).toContainText(/colors to paint, and the wall/, {
       timeout: 180000,
     })

@@ -608,6 +608,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       inkControls = createInkControls({
         idPrefix: 'svg-edit-ink',
         announce: say,
+        purpose: 'relief',
         onChange: (settings) => {
           clearTimeout(retraceTimer);
           retraceTimer = setTimeout(
