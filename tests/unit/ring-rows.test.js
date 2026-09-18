@@ -106,6 +106,40 @@ describe('a drawn compound path keeps the meaning of its rings (D-159)', () => {
     expect(analyzeSvg(drawn).recommendation).not.toBe('pass_through');
   });
 
+  it('a path with thousands of rings is read as before, every ring filled, and quickly', () => {
+    // A traced noise field: one path, two thousand small squares. Testing
+    // each ring against every other took minutes at 4x CPU on CI.
+    let d = 'M0,0 H1000 V1000 H0 Z';
+    for (let i = 0; i < 2000; i++) {
+      const x = (i % 50) * 20 + 2;
+      const y = Math.floor(i / 50) * 20 + 2;
+      d += ` M${x},${y} h10 v10 h-10 Z`;
+    }
+    const svg = wrap(`<path d="${d}" fill="black" fill-rule="evenodd"/>`);
+    const t0 = performance.now();
+    const classified = classifyElements(parseSvgElements(svg));
+    const took = performance.now() - t0;
+    expect(classified.length).toBe(2001);
+    expect(classified.every((e) => e.role === 'foreground')).toBe(true);
+    expect(took, `took ${Math.round(took)} ms`).toBeLessThan(4000);
+  });
+
+  it('a few hundred rings are still judged, and in well under a second', () => {
+    let d = 'M0,0 H1000 V1000 H0 Z';
+    for (let i = 0; i < 400; i++) {
+      const x = (i % 20) * 50 + 5;
+      const y = Math.floor(i / 20) * 50 + 5;
+      d += ` M${x},${y} h20 v20 h-20 Z`;
+    }
+    const svg = wrap(`<path d="${d}" fill="black" fill-rule="evenodd"/>`);
+    const t0 = performance.now();
+    const roles = classifyElements(parseSvgElements(svg)).map((e) => e.role);
+    const took = performance.now() - t0;
+    expect(roles[0]).toBe('foreground');
+    expect(roles.slice(1).every((r) => r === 'hole')).toBe(true);
+    expect(took, `took ${Math.round(took)} ms`).toBeLessThan(1500);
+  });
+
   it('a person can still turn a hole ring on, and analyzeSvg reports the default', () => {
     const svg = wrap(
       '<path d="M0,0 H100 V100 H0 Z M25,25 V75 H75 V25 Z" fill="black" fill-rule="evenodd"/>'

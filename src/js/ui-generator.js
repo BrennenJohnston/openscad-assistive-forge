@@ -2801,9 +2801,16 @@ function createFileControl(
   // on screen either way, because re-running after a change is the common
   // case, and the press is the person's when the picture is not quick.
   let runningStartedBy = 'self';
-  const SETTINGS_CHANGED_NOTE =
-    'Settings changed. Convert again when you are ready.';
   let settingsNoteShown = false;
+  // Whether this picture has been converted once: the waiting button and
+  // the waiting sentence say Start conversion until it has, Convert again
+  // after (a CI run pressed nothing because a change before the first run
+  // had relabeled Start as Convert again).
+  let convertedOnce = false;
+  const startLabel = () =>
+    convertedOnce ? 'Convert again' : 'Start conversion';
+  const settingsChangedNote = () =>
+    `Settings changed. Press ${startLabel()} when you are ready.`;
   // What the quick look said about the picture now in hand, kept so the
   // auto-start rule and the sentence agree with each other.
   let currentQuickLook = null;
@@ -3407,6 +3414,7 @@ function createFileControl(
       purpose: plateParams.length > 0 ? 'stencil' : 'relief',
       runsBySelf: () =>
         (conversionJob && conversionJob.isRunning()) || changeRunsBySelf(),
+      startLabel,
       onChange: (settings) => {
         clearTimeout(inkRetraceTimer);
         inkRetraceTimer = setTimeout(() => {
@@ -3419,8 +3427,8 @@ function createFileControl(
           // dialog stays.
           const running = conversionJob && conversionJob.isRunning();
           if (!running && !changeRunsBySelf()) {
-            traceProgress.offer('Convert again');
-            traceProgress.setNote(SETTINGS_CHANGED_NOTE);
+            traceProgress.offer(startLabel());
+            traceProgress.setNote(settingsChangedNote());
             settingsNoteShown = true;
             return;
           }
@@ -3648,6 +3656,7 @@ function createFileControl(
       // dialog took from it has somewhere visible to return to; then the page
       // is live again before anything is said or opened.
       clearTimeout(graceTimer);
+      convertedOnce = true;
       traceProgress.finish();
       traceProgress.offer('Convert again');
       dialog.close();
@@ -3907,6 +3916,7 @@ function createFileControl(
 
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           inkSourceImageData = await loadImageData(dataUrl);
+          convertedOnce = false;
           inkSourceDataUrl = dataUrl;
           cropUndo = null;
           lastCrop = null;

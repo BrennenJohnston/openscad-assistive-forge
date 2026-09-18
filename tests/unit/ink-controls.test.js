@@ -66,12 +66,16 @@ describe('ink controls: the words follow the purpose (D-156)', () => {
     );
   });
 
-  it('the filament hint is a stencil sentence and stays out of a charm', () => {
+  it('the filament hint names the color for both, a plate on a stencil and the piece on a charm', () => {
     const summary = {
       rejectedColor: { r: 75, g: 46, b: 131, coherence: 0.9, share: 0.5 },
     };
-    expect(filamentSentence(summary, 0.6, 0.05, 'stencil')).toMatch(/plate/);
-    expect(filamentSentence(summary, 0.6, 0.05, 'relief')).toBeNull();
+    expect(filamentSentence(summary, 0.6, 0.05, 'stencil')).toMatch(
+      /#4b2e83\. Printing this plate/
+    );
+    expect(filamentSentence(summary, 0.6, 0.05, 'relief')).toBe(
+      'The color behind the lines was about #4b2e83. Printing the piece in a filament near that color keeps the symbol recognizable.'
+    );
   });
 
   it('the Colors choice describes what a charm gets when it is announced', () => {
@@ -91,7 +95,7 @@ describe('ink controls: the words follow the purpose (D-156)', () => {
 });
 
 describe('ink controls: a change that waits for a press says so (D-157)', () => {
-  const build = (runsBySelf) => {
+  const build = (runsBySelf, startLabel) => {
     const said = [];
     const panel = createInkControls({
       idPrefix: 'wait',
@@ -99,6 +103,7 @@ describe('ink controls: a change that waits for a press says so (D-157)', () => 
       announce: (s) => said.push(s),
       purpose: 'relief',
       runsBySelf,
+      ...(startLabel ? { startLabel } : {}),
     });
     return { panel, said };
   };
@@ -109,7 +114,18 @@ describe('ink controls: a change that waits for a press says so (D-157)', () => 
     radio.checked = true;
     radio.dispatchEvent(new Event('change', { bubbles: true }));
     expect(said).toHaveLength(1);
-    expect(said[0]).toMatch(/^Colors\. .* Convert again when you are ready\.$/);
+    expect(said[0]).toMatch(/^Colors\. .* Press Convert again when you are ready\.$/);
+  });
+
+  it('before anything has run, the waiting sentence names Start conversion', () => {
+    const { panel, said } = build(
+      () => false,
+      () => 'Start conversion'
+    );
+    const radio = panel.element.querySelector('#wait-mode-colours');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(said[0]).toMatch(/ Press Start conversion when you are ready\.$/);
   });
 
   it('a slider change ends with it too, and neither does when the run starts itself', () => {
@@ -118,7 +134,7 @@ describe('ink controls: a change that waits for a press says so (D-157)', () => 
     range.value = '5';
     range.dispatchEvent(new Event('change', { bubbles: true }));
     expect(said.at(-1)).toBe(
-      'How many colors: 5. Convert again when you are ready.'
+      'How many colors: 5. Press Convert again when you are ready.'
     );
 
     const quick = build(() => true);

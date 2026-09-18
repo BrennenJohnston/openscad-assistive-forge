@@ -50,8 +50,12 @@ const PURPOSE_WORDS = {
 
 const wordsFor = (purpose) => PURPOSE_WORDS[purpose] || PURPOSE_WORDS.relief;
 
-/** What a change ends with when the run waits for a press (D-157). */
-export const WAITING_SENTENCE = 'Convert again when you are ready.';
+/**
+ * What a change ends with when the run waits for a press (D-157): the
+ * button's own name, so a person who has not converted yet hears Start and
+ * one who has hears Convert again.
+ */
+export const waitingSentence = (label) => `Press ${label} when you are ready.`;
 
 /** What each mode is called and what it does, in the order they are offered. */
 export const INK_MODE_CHOICES = [
@@ -196,9 +200,11 @@ export function warningSentences(summary) {
  * blue field averages to that blue, while a card of four different fills
  * averages to a color that is in none of them.
  *
- * A stencil's sentence: the plate is printed in the color the lines sat on.
- * A charm is one material and has no plate, so there is nothing to suggest
- * and the relief purpose gets nothing (D-156).
+ * The hint names the color the lines sat on, because for a symbol that
+ * color can carry meaning (an AAC symbol's background is part of what it
+ * says), and printing in a filament near it keeps the symbol recognizable.
+ * A stencil says "this plate"; a charm or a pendant is one piece and says
+ * so (D-156).
  *
  * @param {Object|null} summary
  * @param {number} [minCoherence]
@@ -212,14 +218,14 @@ export function filamentSentence(
   minShare = 0.05,
   purpose = 'relief'
 ) {
-  if (purpose !== 'stencil') return null;
   const color = summary?.rejectedColor;
   if (!color) return null;
   if (color.coherence < minCoherence || color.share < minShare) return null;
   const hex = `#${[color.r, color.g, color.b]
     .map((c) => c.toString(16).padStart(2, '0'))
     .join('')}`;
-  return `The color behind the lines was about ${hex}. Printing this plate in a filament near that color keeps the symbol recognizable.`;
+  const thing = purpose === 'stencil' ? 'this plate' : 'the piece';
+  return `The color behind the lines was about ${hex}. Printing ${thing} in a filament near that color keeps the symbol recognizable.`;
 }
 
 /**
@@ -233,8 +239,10 @@ export function filamentSentence(
  *   (D-156): a charm's, or the stencil tile's
  * @param {Function} [deps.runsBySelf] - Asked at every change: will the host
  *   re-run the conversion by itself? When not, the change's own sentence
- *   ends by saying that Convert again is the next press (D-157), so the
- *   change and what it waits for are ONE announcement
+ *   ends by naming the press that will (D-157), so the change and what it
+ *   waits for are ONE announcement
+ * @param {Function} [deps.startLabel] - The name of that press: Start
+ *   conversion before anything has run, Convert again after
  * @returns {{element: HTMLElement, getSettings: Function, setSummary: Function, setBusy: Function}}
  */
 export function createInkControls({
@@ -243,6 +251,7 @@ export function createInkControls({
   announce,
   purpose = 'relief',
   runsBySelf = () => true,
+  startLabel = () => 'Convert again',
 }) {
   const id = (suffix) => `${idPrefix}-${suffix}`;
   const words = wordsFor(purpose);
@@ -476,7 +485,13 @@ export function createInkControls({
     }
     if (!waits) return say(message);
     const base = /[.!?]$/.test(message) ? message : `${message}.`;
-    say(`${base} ${WAITING_SENTENCE}`);
+    let label = 'Convert again';
+    try {
+      label = startLabel() || label;
+    } catch {
+      label = 'Convert again';
+    }
+    say(`${base} ${waitingSentence(label)}`);
   };
 
   const emit = () => {

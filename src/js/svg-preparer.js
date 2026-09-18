@@ -682,6 +682,8 @@ function splitSubpaths(pathData) {
  * The rings of one compound path, measured: polygon, winding sign, a point
  * inside. Shared by the two ring rules below (D-159).
  */
+const RING_RULE_MAX_RINGS = 1500;
+
 function measureRings(subpaths) {
   return subpaths.map((sp) => {
     const { points } = polygonFromPathData(sp);
@@ -735,19 +737,40 @@ function outerRingOf(subpaths) {
  * @returns {boolean[]} One flag per ring
  */
 function ringHoleFlags(subpaths, fillRule) {
+  // A traced noise field is one path with thousands of rings, and testing
+  // every ring against every other took minutes at 4x CPU (a CI run of the
+  // big-picture test never finished). Past this many rings the path is read
+  // as it was before D-159, every ring filled; no drawing a person keeps
+  // has that many rings in one path.
+  if (subpaths.length > RING_RULE_MAX_RINGS) return subpaths.map(() => false);
   const rings = measureRings(subpaths);
+  const boxes = rings.map((r) => (r.usable ? boundsOf(r.points) : null));
   const evenOdd = String(fillRule || '').toLowerCase() === 'evenodd';
   return rings.map((ring, j) => {
     if (!ring.probe) return false;
+    const pt = ring.probe;
     let depth = 0;
     let winding = ring.sign;
-    rings.forEach((other, k) => {
-      if (k === j || !other.usable) return;
-      if (pointInPolygon(ring.probe, other.points)) {
+    for (let k = 0; k < rings.length; k++) {
+      if (k === j) continue;
+      const other = rings[k];
+      const box = boxes[k];
+      // Only a bigger ring can contain this one, and only one whose box
+      // holds the probe; the polygon test runs on those alone.
+      if (!other.usable || !box || other.area <= ring.area) continue;
+      if (
+        pt.x < box.minX ||
+        pt.x > box.maxX ||
+        pt.y < box.minY ||
+        pt.y > box.maxY
+      ) {
+        continue;
+      }
+      if (pointInPolygon(pt, other.points)) {
         depth += 1;
         winding += other.sign;
       }
-    });
+    }
     return evenOdd ? depth % 2 === 1 : winding === 0;
   });
 }
