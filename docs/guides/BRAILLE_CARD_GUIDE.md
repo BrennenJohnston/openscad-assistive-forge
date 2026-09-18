@@ -1,8 +1,8 @@
-# Braille Card Customizer Guide
+# Braille Card Designer Guide
 
 Type text, get 3D-printable braille. Translation to Unicode braille runs entirely on your device (no server involved), and every model is designed to read directly off the printer — no post-processing.
 
-The Braille Card Customizer is a family of three tools that share the same translation panel:
+The Braille Card Designer is a family of three tools that share the same translation panel:
 
 - **Braille Card** (`?example=braille-wedge-card`) — a leaning card with break-away supports; the original tool, best for business cards, labels, and multi-line text.
 - **Braille Charm** (`?example=braille-charm`) — a small pendant, keychain charm, or zipper pull carrying one or two braille cells.
@@ -20,7 +20,7 @@ Good uses:
 
 ## Opening the customizer
 
-- Welcome screen: **Braille Card Customizer** card → pick a tool from the Tool dropdown (Braille Sign is preselected; Braille Card and Braille Charm are the other options) → Open
+- Welcome screen: **Braille Card Designer** card → pick a tool from the Tool dropdown (Braille Sign is preselected; Braille Card and Braille Charm are the other options) → Open
 - Direct links: `?example=braille-wedge-card`, `?example=braille-charm`, `?example=braille-sign`
 
 ## Using the translation panel
@@ -94,7 +94,7 @@ Charm downloads get **friendly file names**: `Braille Charm B.stl` for a single 
 
 Every shape exports **already oriented for printing** — no rotating in the slicer.
 
-- **Bracelet clip (the default shape)** (`charm_shape = bracelet_clip`): a C-shaped clip for silicone bracelets, adapted from the Charm Customizer's Bracelet Clip Charm. It always prints **standing vertically** — the C profile lies on the bed (a "C" seen from above) and the braille sits on the vertical outer wall, so the dots print crisply with **no support fin at all**. Because a worn clip hangs sideways on the band, the braille is **rotated 90°** on the face (flip `clip_braille_rotation` to −90 for the opposite clip-on direction) and stays centered unless you nudge it with the left/right and up/down offsets. Channel length, clip height, profile depth, wall thickness, gap width/offset, and the full q-charm rounding set (outer/inner corners, edge radius, and a rounded top rim — the bottom rim stays flat for bed adhesion) are adjustable under the Bracelet Clip group; `print_orientation`, border, and attachment are ignored for this shape. **Large Charm** and **Small Charm** presets matching the original Bracelet Clip Charm sizes load with the example — pick them from the preset dropdown.
+- **Bracelet clip (the default shape)** (`charm_shape = bracelet_clip`): a C-shaped clip for silicone bracelets, adapted from the Charm Designer's Bracelet Clip Charm. It always prints **standing vertically** — the C profile lies on the bed (a "C" seen from above) and the braille sits on the vertical outer wall, so the dots print crisply with **no support fin at all**. Because a worn clip hangs sideways on the band, the braille is **rotated 90°** on the face (flip `clip_braille_rotation` to −90 for the opposite clip-on direction) and stays centered unless you nudge it with the left/right and up/down offsets. Channel length, clip height, profile depth, wall thickness, gap width/offset, and the full q-charm rounding set (outer/inner corners, edge radius, and a rounded top rim — the bottom rim stays flat for bed adhesion) are adjustable under the Bracelet Clip group; `print_orientation`, border, and attachment are ignored for this shape. **Large Charm** and **Small Charm** presets matching the original Bracelet Clip Charm sizes load with the example — pick them from the preset dropdown.
 - **Pendant shapes**: circle, square, rounded rectangle, hexagon, oval; adjustable width/height/thickness and corner radius plus an optional raised border.
 - **Attachment**: keychain hole (default), bail loop, or none (pendant shapes only — the bracelet clip is its own attachment).
 - **Print orientation** (pendant shapes): **Angled** (default) — the charm leans back at 75° with a central break-away support fin, snap-off bridges, and a built-in brim, for the crispest dots (same research-backed technique as the card, but slimmer). The fin uses at least 3 bridges and automatically adds about one more per 10 mm of height for taller charms. The leaning bottom edge is trimmed flat against the bed (`bed_contact_mm`, default 2 mm) so the first layer is a wide contact strip rather than a knife edge. Flat mode (dots up) is still available. A bail loop prints poorly in Angled mode; use the keychain hole.
@@ -115,7 +115,7 @@ A two-part sign following the **2010 ADA Standards (section 703)** recommendatio
 
 ### Making a sign, step by step
 
-1. Open the sign tool (welcome screen → Braille Card Customizer → Open — **Braille Sign** is the preselected tool — or `?example=braille-sign`).
+1. Open the sign tool (welcome screen → Braille Card Designer → Open — **Braille Sign** is the preselected tool — or `?example=braille-sign`).
 2. Type the sign text into **Text to translate** — one line per message line (for example `Conference Room` then `101`). Long lines wrap onto new rows by themselves.
 3. Check the **Braille preview**: each braille row shows the words it contains underneath, the row summary reports how many rows each plate uses, and any fit problems appear as errors or warnings.
 4. To correct a contraction or paste braille you already have, open the **Braille editor (Unicode)** and edit the rows directly — see "Editing braille by hand". On a sign the editor drives the braille plate only; the raised letters keep coming from your text.
@@ -162,6 +162,6 @@ Translation runs in a Web Worker on your device using liblouis compiled to WebAs
   [braille-wedge-card-openscad](https://github.com/BrennenJohnston/braille-wedge-card-openscad),
   [braille-sign-openscad](https://github.com/BrennenJohnston/braille-sign-openscad),
   [braille-charm-openscad](https://github.com/BrennenJohnston/braille-charm-openscad).
-- The **Braille Charm** (GPL-3.0-or-later) combines the charm base from Nasif's Charm Maker (concept by Nasif Zaman, CC0) with the wedge card's braille dot system; its bracelet clip shape is adapted from the Charm Customizer's Bracelet Clip Charm (CC0), whose design direction came from Duy Do's AAC bracelet charms (UW WOOF3D).
+- The **Braille Charm** (GPL-3.0-or-later) combines the charm base from Nasif's Charm Maker (concept by Nasif Zaman, CC0) with the wedge card's braille dot system; its bracelet clip shape is adapted from the Charm Designer's Bracelet Clip Charm (CC0), whose design direction came from Duy Do's AAC bracelet charms (UW WOOF3D).
 - The **Braille Sign** (GPL-3.0-or-later) uses the wedge card's braille dot system and renders raised characters with the Liberation Sans font (SIL OFL).
 - Key references: [BANA size and spacing](https://brailleauthority.org/size-and-spacing-braille-characters), the CHI 2024 study on [3D-printed braille orientation](https://doi.org/10.1145/3613904.3642719), and the [2010 ADA Standards](https://archive.ada.gov/) section 703.

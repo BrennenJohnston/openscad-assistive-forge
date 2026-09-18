@@ -164,16 +164,16 @@ Access this via the **Preview Settings & Info** drawer (Stats section).
 
 1. **Start with Examples**: Load an example model to get familiar with the interface
 2. **Use Parameter Groups**: Models with many parameters are organized into collapsible groups
-3. **Presets Are Your Friend**: Save frequently-used configurations as presets
-4. **Undo is Available**: Don't worry about experimenting. Ctrl+Z undoes parameter changes
+3. **Presets**: save configurations you use often as presets
+4. **Undo**: Ctrl+Z undoes parameter changes
 5. **Help Text**: Each parameter may have a help tooltip (? button)
 
-#### Tested Configurations
+#### Configurations
 
-- **NVDA + Firefox** (Windows): Fully supported
-- **JAWS + Chrome/Edge** (Windows): Fully supported
-- **VoiceOver + Safari** (macOS/iOS): Fully supported
-- **TalkBack + Chrome** (Android): Supported for basic workflows
+The app is built and measured against NVDA with Firefox, JAWS with Chrome or
+Edge, VoiceOver with Safari, and TalkBack with Chrome. A listening run with a
+screen reader has not been done yet, so these results are measured, not
+heard. If you use one of these and something reads wrongly, please report it.
 
 ---
 
@@ -269,7 +269,7 @@ If you're unsure what values to use:
 
 ### What If I Break Something?
 
-Don't worry! You can't break anything permanently:
+You cannot break anything permanently:
 
 - **Reset All**: Returns everything to defaults
 - **Undo**: Reverses your last change (Ctrl+Z)
@@ -478,12 +478,11 @@ For detailed information:
 - Presets: save and recall frequently-used configurations
 - Persistent values: parameters remembered between sessions
 
-### Standards Compliance
+### Standards
 
-- **WCAG 2.2 Level AA**: Meets or exceeds all applicable criteria
-- **Section 508**: Compliant with U.S. federal accessibility requirements
-- **EN 301 549**: Aligned with European accessibility standard
-- **W3C COGA**: Implements cognitive accessibility patterns
+The target is WCAG 2.2 Level AA, which also covers Section 508 and EN 301
+549. The status of each criterion is recorded in the VPAT and the conformance
+decisions under `docs/vpat/`.
 
 ### Browser Recommendations
 

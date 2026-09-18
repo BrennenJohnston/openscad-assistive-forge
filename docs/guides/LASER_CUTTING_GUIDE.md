@@ -1,6 +1,7 @@
 # Cutting a stencil on a laser
 
-PROSE: owner review pending (DP-R1 text pack).
+> Shelved. This page belongs to the stencil project, which is not part of
+> version 5. It stays here for when I pick that work up again.
 
 Forge prepares the file. Your laser's own software cuts it. This page is about
 the handover: what Forge puts in the file, what it deliberately leaves for the

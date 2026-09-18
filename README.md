@@ -37,7 +37,8 @@ The welcome screen ships with ready-to-use customizers -- no `.scad` file needed
   `docs/guides/BRAILLE_CARD_GUIDE.md`.
 - **Charm Designer** -- design wearable charms, pendants, and logo plates
   with engraved or raised icons, including C-clip charms that snap onto
-  silicone bracelets. Import your own SVG or pick from the built-in library.
+  silicone bracelets. Import your own SVG, DXF or photo, or pick from the
+  built-in library.
 
 ## Two interfaces
 
@@ -45,8 +46,9 @@ The first time you open the app it asks which interface you want, and you can
 switch at any time from the button in the top right:
 
 - **Assistive Forge** -- a guided, parameter-first interface built for screen
-  readers, keyboard use, and people new to OpenSCAD. Light, dark, and high
-  contrast themes.
+  readers, keyboard use, and people new to OpenSCAD. It has a Simplified view,
+  the default, and a Standard view with the working panels. Light, dark, and
+  high contrast themes.
 - **Classic** -- the layout of the OpenSCAD desktop application: the same menus,
   toolbar, editor, Customizer, and console. For people who already know the
   desktop program or are following a tutorial written for it. Desktop widths

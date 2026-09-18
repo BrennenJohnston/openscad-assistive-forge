@@ -15,10 +15,10 @@ The 5.0.0 milestone gathers a year's worth of shape. Since 4.5.0 the app
 grew its three interfaces - Simplified for the person who opened a link,
 Standard for working inside a project, and a Classic layout that rebuilds
 the desktop OpenSCAD experience in the browser - along with a drawing lane
-that opens, cleans and saves SVG and DXF in both directions, a Stencil
-Maker, braille editing refinements across the card, sign and charm tools,
-one-link project sharing with manifests and provenance records, and a long
-accessibility and honesty pass over the whole surface. The last work before
+that opens, cleans and saves SVG and DXF in both directions, braille
+editing refinements across the card, sign and charm tools, one-link
+project sharing with manifests and provenance records, and a long
+accessibility pass over the whole surface. The last work before
 release rebuilt the picture-to-charm editor as one product: a conversion you
 start, watch and can stop, a second tracing engine built from source, an
 editor that no longer freezes the page, and a shapes panel with one
@@ -190,7 +190,7 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
   "Shapes", "Shape 3", and the roles, then Raised / Hole / Ignore (Include / Exclude where a compound
   path has no holes to offer). Eight strings across four files were still saying the retired
   ones, four of them only to people who cannot see the control that disagreed
-- **The CI shard planner knows what CI skips** (#211) - three of six Chromium shards were each
+- **The CI shard planner accounts for what CI skips** (#211) - three of six Chromium shards were each
   given a heavy suite that skips in seconds there, so they finished in under a minute while one
   shard ran nineteen. Measured on the real runners, shard wall clock before and after:
   57 / 54 / 55 / 780 / 677 / 1,178 s became 515 / 458 / 486 / 446 / 434 / 337 s - the lane is
@@ -232,7 +232,7 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
   "ready to paint a plate for each" color and the wall as "the surface behind the stencil" on
   a charm, where no stencil is possible. The panel knows its host now: a charm and the
   standalone editor get relief words (one shape per color, the wall left out, colors in the
-  artwork), the stencil tile keeps its own, and the filament hint stays a stencil sentence.
+  artwork), and the filament hint speaks of the piece rather than a plate.
 - **A changed setting started a conversion by itself** (D-157) - the ink panel re-ran the
   conversion after every change on any picture at any speed, where choosing the same picture
   had waited for Start under the DP-Q32 rule (at most 0.5 MP and a quick look that calls it
@@ -380,10 +380,9 @@ the sharing feature, so it needs a decision before a fix.
 - **The editor's side panel is a drawer over the drawing** (DP-24) - the regions, colors,
   plates and warnings used to be a column that squeezed the drawing to less than half its space
   (and at phone width grew to four screens tall while the drawing shrank to nothing). The panel
-  lays OVER the drawing's right edge now, from a Regions toggle in the toolbar: closed by
-  default on the stencil tile, where pointing at the picture carries the task, open on the
-  drawing-cleanup door, where the shape list is the hands. The skip link still lands on the
-  regions table - it opens the drawer on its way there
+  lays OVER the drawing's right edge now, from a Regions toggle in the toolbar, open by
+  default on the drawing-cleanup door, where the shape list is the hands. The skip link
+  still lands on the regions table - it opens the drawer on its way there
 - **The editor toolbar is three named rows** (DP-24) - it used to be one long line that wrapped
   wherever it ran out, four rows deep. Now it is the actions row, the view row and the hands
   row, and none of them wraps at a desktop window. Getting the hands row to hold took a shorter
@@ -862,23 +861,6 @@ the sharing feature, so it needs a decision before a fix.
 
 ### Changed
 
-- **The Stencil Maker's designs are this project's own now** (DP-14) - the gallery used to offer
-  six icons copied out of the charm tool's library: a smiley, a heart, a star, a bolt, a crown
-  and a sun, none of which had anything to do with stencils. They are gone. In their place is the
-  Forge logo, beside the ring that was already there. Getting the logo in took some doing, and it
-  is the same thing that happens to any drawing exported from a CAD program: the logo is drawn in
-  lines with nothing filled in, and OpenSCAD fills in every shape it is given, so the file as it
-  stood came out as one solid blob. The app's own preparer turns the lines into thin filled
-  ribbons, which is what a stencil of a line drawing should be, and that is what ships. The ring
-  is still the design you start with, because the logo's ellipses and figure close into pieces
-  the default single support bar does not reach, and the ring is there to show a bar doing its
-  job. The Stencil Maker card still credits the Stencil Forge project by name, but no longer
-  links to it: that repository is private, so the link was a dead end for everybody who followed
-  it. The same credit is now in CREDITS.md, saying which parts were carried over and under what
-  license. Behind the scenes, the Bracelet Clip Charm stopped borrowing its six gallery icons
-  from a neighboring tool's folder and uses its own copies, which have been sitting there unused
-  since they were added
-
 - **A pendant can take the shape of your own drawing** (DP-11) - the Flat Pendant gains a shape
   called "design": instead of a circle or a square, the outline of your drawing becomes the
   pendant itself, and everything inside it stands up on the surface as raised detail. A traced
@@ -955,25 +937,17 @@ the sharing feature, so it needs a decision before a fix.
 
 ### Fixed
 
-- **A stencil plate no longer comes out several times the size of the plate it is cut from**
-  (DP-15) - a drawing is put on a shared canvas before the plates are cut from it, so that every
-  plate lines up with every other one, and that canvas is reached by a transform stored beside
-  the drawing. The plate builder read the canvas but not the transform, so it sized the drawing
-  as if it were already on the canvas. A drawing 119.81 units wide came out a fifth too big and
-  ran off the bottom of the plate; a drawing traced from a photograph, whose units are pixels,
-  came out five times over - a 100 mm plate with a 285 mm cat hanging off the corner of it, which
-  is exactly what one owner's export looked like. The transform is now applied, once, and a cut
-  lands inside the plate's margin on both axes. The design's own proportions did not change: the
-  cat that used to overflow a 70 mm design box now fills it exactly. The laser sheet was reading
-  the same drawing the same wrong way, and is fixed with it
+- **The Bracelet Clip Charm's gallery icons are its own** (DP-14) - the tile borrowed its six
+  icons from a neighboring tool's folder; it uses its own copies now, which had been there
+  unused since they were added
 
 - **Drawings that declare their colors in a style block are no longer read as solid black**
   (DP-3) - drawings exported from CAD and illustration programs usually set "no fill, black
   outline" once at the top of the file and refer to it by name from every shape. Forge was not
   reading that, so it assumed every shape was filled in, and a line drawing became a page of
-  solid blocks. On a stencil that meant the whole picture came out as one hole the shape of its
-  outer edge, with none of the artwork in it. Forge now reads those rules, and such a drawing
-  opens as the line art it is
+  solid blocks: one user's cat came out as one shape the size of its outer edge, with none of
+  the artwork in it. Forge now reads those rules, and such a drawing opens as the line art
+  it is
 
 - **The editor said the wrong thing about drawings it could not open** (DP-3) - a drawing with
   too many shapes was turned away with "has no shapes Forge can work with. A photo needs dark
@@ -1008,96 +982,31 @@ the sharing feature, so it needs a decision before a fix.
   and saying the same paint sentence the export writes, so you can see what plate 2 will cut
   before anything is printed. A legend under the drawing names the five looks
 
-- **You can point at a region and say brown** (DP-20) - the drawing editor on the Stencil Maker
-  gains its tools. The drawing is one canvas you work on directly: Select a region by clicking it
-  (Shift adds another), drag a Marquee around several, Paint one with the current color, Remove
-  one, or drag with the Hand to move around; the wheel zooms. Every one of those has a keyboard
-  equivalent: the regions table has a checkbox on each row, Up and Down walk the rows in the same
-  column while the drawing highlights the region you are on, Space ticks, Ctrl+A ticks them all,
-  the number keys 1 to 8 give the ticked regions the matching color and 0 the base coat, Delete
-  removes them and "Put back" restores them. Everything you do is an Undo away - Ctrl+Z, Ctrl+Y,
-  the Undo button in the toolbar or the one under the table - and every undo says what came back,
-  in words. Colors can be renamed, merged into another, or removed (their regions go back to the
-  base coat), and the paint order has "Paint earlier" and "Paint later" buttons on each plate. One
-  checkbox decides the plate rule: on, later colors also cut through each plate so nothing can
-  fall out; off, each plate cuts its own color only, the way a hand-cut set does. The plan you
-  apply is saved with the drawing and comes back when the drawing does, so a project reopened
-  cuts what it cut when it was saved. Walked through with one user's own cat: their six plates,
-  applied by hand through the interface, come out as six plates
-
 - **The drawing editor now lives where the 3D preview is** (DP-19) - it used to be a block nested
   inside the customizer's file control, a long flat list with a before-and-after pair above it.
   Now it takes the preview area, the biggest surface on the page and on a phone the whole of it:
   a toolbar across the top, the drawing in the middle, and a side panel of collapsible sections
-  beside it (Colors, Regions, Plates and paint order, Warnings), each a native disclosure that
-  opens from the keyboard. The customizer stays one Tab away, the arrow keys you use inside the
-  editor no longer turn the model behind it, and Escape gives the area back. On the Stencil
-  Maker the editor reads a drawing into REGIONS, the faces between the lines, one row each with
-  a color to choose, the plate that paints it and its share of the drawing; you can add a
-  color, give it to a region, and when you apply, that color comes out as a plate. A drawing
-  with no colors of its own, like a line drawing from a CAD program, used to be waved through
-  with "OpenSCAD merges these automatically", which is how one user's cat came out as a single
-  silhouette hole; on a stencil tile it now opens the editor by itself and says what it found:
-  "21 regions found, no colors yet: every one starts as the base coat." The editor's own door
-  on the welcome screen hosts the same surface over the whole page. The editing itself - roles,
-  layers, deleting shapes and undoing it, the render tiers - is the same tested code as before,
-  mounted inside the new surface rather than rewritten. Behind the scenes the editor is loaded
-  the first time it opens, so a project that never opens it never downloads it, and the tests
-  for the editor's own walk run on Chromium only, because the Edge and Firefox lanes were
-  within a third of a minute of their time ceiling before this release existed
+  beside it, each a native disclosure that opens from the keyboard. The customizer stays one
+  Tab away, the arrow keys you use inside the editor no longer turn the model behind it, and
+  Escape gives the area back. The editor's own door on the welcome screen hosts the same
+  surface over the whole page. The editing itself - roles, layers, deleting shapes and undoing
+  it, the render tiers - is the same tested code as before, mounted inside the new surface
+  rather than rewritten. Behind the scenes the editor is loaded the first time it opens, so a
+  project that never opens it never downloads it, and the tests for the editor's own walk run
+  on Chromium only, because the Edge and Firefox lanes were within a third of a minute of their
+  time ceiling before this release existed
 
-- **A set of real stencil plates to check Forge's own against** (DP-15) - one of this project's
-  users made a six-plate spray stencil of their cat by hand, drawing it in Illustrator, cutting
-  the plates in Fusion 360 and painting the result, and has contributed the drawing and the seven
-  printed pieces to the project as test fixtures. They live in `tests/fixtures/harley/`, with the
-  color plan measured out of the plates themselves rather than typed from a description, and a
-  new tool, `scripts/stencil-golden.mjs`, sets a plate Forge makes beside the plate the owner made
-  and reports how much of the two cuts is the same shape. That number is what the stencil work in
-  this round is judged by. The photograph the drawing was traced from is deliberately not included
-
-- **A photo or a colored drawing can become the colors of a stencil, by itself** (DP-18) - the
-  picture panel gains a fourth choice, **Colors**. Instead of deciding what counts as a line, it
-  separates the picture into flat colors, one region per color, and hands them straight to the
-  plate maker: choose a photo, choose how many colors, and a set of plates comes out with nobody
-  having to point at anything. It also names the wall, which is the color that is the surface
-  behind the stencil rather than paint on it, and gets no plate; Forge guesses by looking at the
-  edges of the picture, where a wall shows, and you can override it. The summary line names every
-  color and how much of the picture it covers, so a color you wanted and did not get is visible
-  rather than merely absent, and the answer is to ask for one more. Two things are worth knowing.
-  A color that covers about one per cent of a picture is genuinely hard to find, and the way
-  Forge finds it is by looking at a smaller copy in which each pixel is the most common color of
-  the block it came from, which removes the soft edges that would otherwise eat the search. And a
-  white that is five shades from the paper cannot be told apart from the paper by any amount of
-  cleverness, so if your picture has one, name your colors instead of asking Forge to find them.
-  A picture too big to trace is now made smaller and traced, instead of refused, and the amount it
-  was shrunk by is said out loud
-
-- **A stencil can now be a set of plates and a jig, up to eight colors** (DP-17) - the Stencil
-  Maker used to make three plates and decide what went on them by how deeply the shapes nested.
-  It now makes as many plates as the design has colors, up to eight, and it makes the thing that
-  holds them still: a printed base with four posts, and a matching hole in the corner of every
-  plate. The posts are round at one end and rectangular at the other, so a plate cannot go on
-  backwards, which is the mistake that ruins a six-colour picture on the last coat. Each plate
-  carries its own number cut through the bottom margin, so a stack of them on a bench still says
-  which is which. There is a new **Export all plates** button that renders the whole set in turn
-  and hands back one zip: a file per plate named for its color, the jig base, and a text file
-  with the order to paint in. All of it is measured against a real stencil: one user made a
-  six-plate set of their cat by hand, and five of Forge's six plates now come out at 99.7% to
-  99.9% the same shape as the ones they cut. The sixth is lower for a reason worth knowing: on
-  that plate they opened the pupil of each eye together with the black ring around it, and Forge
-  opens the pupil
-
-- **Forge now understands that a stencil layer is a paint color** (DP-16) - not a nesting depth,
-  which is what it used to work out for itself. Nothing on screen changes yet; this is the part
-  underneath. It knows what a region of a drawing is, and for a line drawing that is the areas
-  BETWEEN the lines rather than the lines themselves, which is the thing the old version had
-  backwards: given a drawing of a cat traced as outlines, it finds the twenty-one faces of the
-  line network and the whole head as a silhouette, and every one of the sixteen regions the owner
-  of that drawing painted by hand is among them. It knows a palette, an order to paint in, which
-  plate cuts what under either of the two methods, and which openings will drop a loose piece out
-  of the plate, with the three ways round that named rather than chosen for you. The shapes are
-  worked out with a different geometry library than before, which on one real drawing of 831
-  pieces takes 0.55 seconds where the old path took 2 minutes 8
+- **Colors: a photo or a colored drawing is read by its colors** (DP-18) - the picture panel's
+  fourth choice. Instead of deciding what counts as a line, Forge separates the picture into
+  flat colors, one shape per color, each with its own On, Cut out or Off switch. The color
+  that is the surface behind the artwork is the wall: Forge guesses it from the picture's
+  edges and leaves it out, and you can override the guess. The summary names every color and
+  how much of the picture it covers, so a missing color is visible and the fix is to ask for
+  one more. A color covering about one per cent of a picture is found on a smaller copy in
+  which each pixel is the most common color of its block, which removes the soft edges that
+  hide it. A white five shades from the paper cannot be told from the paper, so name your
+  colors in that case. A picture too big to trace is shrunk and traced instead of refused,
+  and the amount is said out loud
 
 - **The reference image can sit on any surface, be cropped, and be used as the design** (DP-5,
   DP-6) - three additions to the Reference Image panel. **Sits against** chooses the height by
@@ -1169,12 +1078,6 @@ the sharing feature, so it needs a decision before a fix.
   write-back has been tried on a real Chrome or Edge with the watcher running, which is a test only
   a person can do
 
-- **Stencil Maker** (`?example=stencil-maker`) - a new welcome-screen tool that turns a shape or
-  a drawing into printable stencil plates: thin bridges hold the islands so letter centers do not
-  fall out, registration marks in the corners line the plates up, and the plate, bridge and mark
-  dimensions are all parameters. This entry records the tool's arrival; the CHANGELOG missed it
-  at the time
-
 - **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
   and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
   the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the
@@ -1225,7 +1128,7 @@ the sharing feature, so it needs a decision before a fix.
   where the design came from, which preset was chosen, and the values that differed. Unzip it into
   your repository and everything is already in the right place
 
-- **The smallest character size now knows your machine** (CW-42) - the game used to open at 50%
+- **The smallest character size is measured on your machine** (CW-42) - the game used to open at 50%
   characters on every machine and let you go down to 10% everywhere, even where 10% turned walking
   into a slideshow. Now, in the first moments after you enter a city, the game quietly measures how
   fast your machine actually draws and picks the smallest size in the 10-30% range that can hold
@@ -1315,7 +1218,7 @@ the sharing feature, so it needs a decision before a fix.
 - **Fireworks when you finish a city** (CW-64) - find all twelve landmarks and the sky over the
   city lights up for about twenty seconds: bursts on a ring around you, well above the rooftops,
   drawn as characters like everything else here. Afterwards a Fireworks button appears and the Y key
-  replays it whenever you like, and the city remembers that you earned it. The overhead map shows
+  replays it whenever you like, and the unlock is saved. The overhead map shows
   the bursts where they really are, so you can watch it from up there instead. **If you use reduced
   motion you still get a celebration**: the same bursts, composed and held still for a few seconds
   in front of you, with a spoken line saying what it is and why it is not moving - because a reward
@@ -1736,7 +1639,7 @@ the sharing feature, so it needs a decision before a fix.
   screen. The roadmap is a record of intent and of the seams already in the code, not a schedule -
   and it states plainly that when tactile work does begin, every dimension a hand reads is a
   safety value that needs a signed-off number, with no exceptions
-- **The status line knows which street you are on** (CW-27) - walk down a street and the line at
+- **The status line names the street you are on** (CW-27) - walk down a street and the line at
   the top now reads "on 4th Avenue", changing as you turn onto another one. If you are not
   actually on a street it says "near" the closest one, and if there is nothing close it says
   nothing at all rather than naming a street you cannot see. Press **X**, or the new **Where am
@@ -2179,7 +2082,7 @@ the sharing feature, so it needs a decision before a fix.
   it again, and the instructions vanished again. On step 4 it was worse: the pill did nothing at all
   that you could see, because the drawer was still open and the tour minimized itself again in the
   same instant. Closing the drawer by hand did not work either, since the tour reopened it within half
-  a second. Four things change. The tour now knows the Customizer is part of the app rather than a
+  a second. Four things change. The tour now treats the Customizer as part of the app rather than a
   dialog you opened, so the instruction card stays on screen next to the open drawer instead of
   hiding - and it docks below the drawer's title so it never sits on the drawer's only Close button.
   Step 3 arrives with the drawer shut and the ring on the Params button, which is what its words tell
@@ -2334,6 +2237,16 @@ the sharing feature, so it needs a decision before a fix.
 - **Three high-severity transitive advisories patched, unblocking the CI Security Checks job.** `fast-uri` 3.1.3 → 3.1.4 ([GHSA-v2hh-gcrm-f6hx](https://github.com/advisories/GHSA-v2hh-gcrm-f6hx) — host confusion via a literal backslash authority delimiter) is the only one that ships, reaching the bundle through the `ajv` runtime dependency. The other two are build-time only: `postcss` 8.5.16 → 8.5.25 ([GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849) — path traversal in `sourceMappingURL` auto-loading) via `vite`, and `brace-expansion` 5.0.7 → 5.0.9 ([GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg) — denial of service via unbounded expansion) via `eslint` → `minimatch`. All three fixes land inside the semver ranges already declared in `package.json`, so the change is confined to `package-lock.json` and `npm audit --audit-level=high` passes again
 
 ---
+
+### Shelved
+
+- **The Stencil Maker** - during this cycle I built a welcome-screen tool that turned a shape
+  or a picture into spray-stencil plates: bridges to hold the islands, registration marks in
+  the corners, up to eight plates with a jig to hold them still, and the first tools of the
+  drawing editor, checked against a six-plate stencil one user cut by hand. The work grew
+  bigger than I expected, so I have shelved it. The Stencil Maker is not part of this release.
+  Its code stays in the repository for when I pick it up again, and the parts the charm's
+  drawing lane shares with it, the Colors reading and the editor's surface, are described above
 
 ## [4.5.0] - 2026-07-12
 

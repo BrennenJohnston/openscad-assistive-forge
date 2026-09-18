@@ -91,9 +91,9 @@ and the elements list (`NVDA+F7`) rather than Tab.
 
 ## 7. Converting a picture (new this round)
 
-Standard mode, a charm design (Q charm, the charm maker, the logo plate or
-the stencil maker). Choose a PNG or a JPG for the design file. Nothing is
-converted until you ask for it.
+Standard mode, a charm design (Q charm, the charm maker or the logo plate).
+Choose a PNG or a JPG for the design file. Nothing is converted until you
+ask for it.
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
@@ -116,8 +116,8 @@ DP-42 P0b, so do not go listening for them. What changed, in case you hear
 the old words anywhere and want to know they are wrong:
 
 - the list is named **"Shapes"** now, not "SVG objects"
-- the skip link says **"Skip to the shapes list"** on a charm, and keeps
-  "Skip to the regions table" on a stencil, where a region is the right word
+- the skip link says **"Skip to the shapes list"** now, not "Skip to the
+  regions table"
 - the tint legend under the picture says **On · Cut out · Off** (or **Layer 1 · Layer 2 · Layer 3 · Cut out · Off** where the design has layers), the same
   words as the control on the row - and on a traced picture, where the rows
   say On / Off, the legend says **On · Off** to match
