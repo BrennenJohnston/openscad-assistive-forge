@@ -858,6 +858,13 @@ const LOGO_TRACE = path.join(
   'svg-edit',
   'create-logo-colors-trace.svg'
 )
+const TWO_PAPERS = path.join(
+  process.cwd(),
+  'tests',
+  'fixtures',
+  'svg-edit',
+  'two-papers.svg'
+)
 
 async function openCharmHost(page) {
   await page.addInitScript(() => {
@@ -1297,5 +1304,43 @@ test.describe('the dot inside the figure (DP-57, D-159)', () => {
         { timeout: 60000 }
       )
       .toBe(true)
+  })
+})
+
+test.describe('the automatic preparation that keeps nothing (D-167)', () => {
+  test('★ D-167: when the automatic pass subtracts everything, the editor opens and says so', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    // Two light squares side by side with a dark bar on each: no frame, so
+    // both squares are cut-outs, and subtracting them leaves nothing. The
+    // old code applied that nothing under "Simplified 4 shapes for 3D
+    // printing" and never opened the editor.
+    await page.setInputFiles('#param-design_file', TWO_PAPERS)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    await expect(page.locator('.svg-prep-object')).toHaveCount(4, {
+      timeout: 60000,
+    })
+
+    // The card says what happened.
+    const card = page.locator('.svg-prep-status').first()
+    await expect(card).toContainText('Nothing was kept', { timeout: 10000 })
+
+    // And the design the charm holds is the drawing itself, not the empty
+    // result.
+    const design = await page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file
+      const data = v && typeof v === 'object' ? String(v.data || '') : ''
+      const comma = data.indexOf(',')
+      if (comma < 0) return data
+      const body = data.slice(comma + 1)
+      return /base64/.test(data.slice(0, comma))
+        ? atob(body)
+        : decodeURIComponent(body)
+    })
+    expect(design).not.toMatch(/<path d=""/)
+    expect(design).toContain('M4 8')
   })
 })

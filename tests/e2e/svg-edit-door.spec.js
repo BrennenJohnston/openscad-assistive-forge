@@ -1718,9 +1718,10 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
 
     // And the row's own accessible name reads the word on screen, so a
     // screen reader and an eye get the same answer to "what is this shape".
-    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Cut out/)
-    await row.getByRole('radio', { name: 'Off' }).check()
+    // The rectangle is the bird's paper, and D-167 starts it Off.
     await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Off/)
+    await row.getByRole('radio', { name: 'Cut out' }).check()
+    await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Cut out/)
   })
 
   test('★ More holds what left the line, and gives the row back', async ({

@@ -334,6 +334,21 @@ export function setDxfRenderProvider(fn) {
 }
 
 /**
+ * D-167: a prepared drawing whose paths hold no path data. `prepareSvg`
+ * writes one `<path d="...">` per pass; a pass that kept nothing writes
+ * `d=""`, and a number anywhere in a `d` is a shape. A result with no path
+ * element at all is not this case.
+ * @param {string} svgText
+ * @returns {boolean}
+ */
+function designIsEmpty(svgText) {
+  const paths = [
+    ...String(svgText || '').matchAll(/<path\b[^>]*\sd="([^"]*)"/g),
+  ];
+  return paths.length > 0 && paths.every((m) => !/\d/.test(m[1]));
+}
+
+/**
  * The extension of a file name, lowercased, without the dot.
  * @param {string} name
  * @returns {string}
@@ -3922,6 +3937,30 @@ function createFileControl(
 
       const prepWarnings = [];
       const prepared = prepareSvg(rawSvgText, { warningsOut: prepWarnings });
+
+      // D-167: the automatic pass subtracts every cut-out from everything,
+      // and a drawing whose cut-outs cover its artwork comes out EMPTY. That
+      // used to be applied as the design under "Simplified N shapes for 3D
+      // printing", and the charm rendered bare. An empty design is nothing to
+      // apply: the card says so, and the editor opens on the drawing so the
+      // person can say what to keep.
+      if (designIsEmpty(prepared)) {
+        updateStatusCard(analysis, [
+          ...prepWarnings,
+          'Choose what to keep in the drawing editor.',
+        ]);
+        const badge = statusCard.querySelector('.svg-prep-status-badge');
+        if (badge) {
+          badge.textContent = 'Nothing was kept by the automatic preparation.';
+          badge.dataset.level = 'warn';
+        }
+        requestOpen({
+          openedSentence:
+            'Drawing editor open. The automatic preparation kept nothing of this drawing, so choose what to keep here.',
+        });
+        return rawSvgText;
+      }
+
       if (prepWarnings.length > 0) {
         updateStatusCard(analysis, prepWarnings);
       }

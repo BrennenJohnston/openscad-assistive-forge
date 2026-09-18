@@ -869,6 +869,65 @@ export function parseSvgElements(svgString) {
 }
 
 /**
+ * D-167: the paper a plain drawing sits on, or null.
+ *
+ * The frame is the one root of the nesting tree, filled and light (over
+ * the luminance threshold `classifyElements` uses), with something else
+ * drawn on it. A closed shape is inside it by the tree's own containment;
+ * an open path (a stroke the classifier will convert) counts as inside when
+ * its bounds are. Two light roots side by side are two shapes, not a paper;
+ * a dark root is artwork, whatever sits inside it; a light root alone is
+ * the whole design. None of those is a frame.
+ *
+ * @param {Array} elements - Output of parseSvgElements()
+ * @param {{nodes: Array, roots: Array}} tree - Their nesting tree
+ * @param {{luminanceThreshold?: number}} [options]
+ * @returns {Element|null} The frame's DOM element
+ */
+function plainFrameOf(elements, tree, options = {}) {
+  const { luminanceThreshold = 200 } = options;
+  const roots = (tree && tree.roots) || [];
+  if (roots.length !== 1) return null;
+  const root = elements[roots[0]];
+  if (!root || root.ringHole) return null;
+  const fillLower = (root.fill || '').toLowerCase();
+  if (fillLower === 'none' || fillLower === 'transparent') return null;
+  if (root.luminance === null || !(root.luminance > luminanceThreshold)) {
+    return null;
+  }
+  const frame = root.element;
+  const nodes = (tree && tree.nodes) || [];
+  let frameBounds = null;
+  let somethingOnIt = false;
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i];
+    if (el.element === frame) continue;
+    const node = nodes[i];
+    if (node && !node.degenerate) {
+      // A closed shape: the tree already placed it inside the one root.
+      somethingOnIt = true;
+      continue;
+    }
+    const { points } = polygonFromPathData(el.pathData);
+    if (points.length === 0) continue;
+    if (!frameBounds) {
+      frameBounds = boundsOf(polygonFromPathData(root.pathData).points);
+    }
+    const b = boundsOf(points);
+    if (
+      b.minX < frameBounds.minX ||
+      b.maxX > frameBounds.maxX ||
+      b.minY < frameBounds.minY ||
+      b.maxY > frameBounds.maxY
+    ) {
+      return null;
+    }
+    somethingOnIt = true;
+  }
+  return somethingOnIt ? frame : null;
+}
+
+/**
  * ★ What the Colors mode's WALL becomes on a charm (D-137; the owner
  * signed the rule at DP-Q53, 2026-09-16: "Leave the wall out; artwork
  * Raised").
@@ -899,7 +958,7 @@ export function parseSvgElements(svgString) {
  * @returns {Object} Element index to forced role; empty when the rule does
  *   not apply, which leaves every existing drawing exactly as it was
  */
-export function wallRoleOverrides(elements, nestingTree = null) {
+export function wallRoleOverrides(elements, nestingTree = null, options = {}) {
   const out = {};
   if (!Array.isArray(elements) || elements.length === 0) return out;
   const isWall = (el) =>
@@ -913,7 +972,42 @@ export function wallRoleOverrides(elements, nestingTree = null) {
     if (isWall(el)) walls.push(i);
     else somethingElse = true;
   });
-  if (walls.length === 0 || !somethingElse) return out;
+  if (!somethingElse) return out;
+
+  if (walls.length === 0) {
+    // D-167: a drawing that never went through the separation carries no
+    // flag, but a drawing program leaves the same ground behind: one light
+    // shape under everything. Judged by luminance alone it was a Cut out,
+    // and the automatic pass, which subtracts every cut-out from everything,
+    // erased the bird fixture to an empty design (MEASURED: 210 bytes, one
+    // `<path d="">`) under "Simplified 7 shapes for 3D printing". The
+    // editor kept the bird, because its paint only cuts inside a shape that
+    // encloses the cut-out, so the two paths disagreed about one drawing.
+    //
+    // A drawing with no light filled shape has no paper to find, and skips
+    // the nesting tree it would otherwise build for nothing.
+    const { luminanceThreshold = 200 } = options;
+    const hasLightFill = elements.some((el) => {
+      const fillLower = (el.fill || '').toLowerCase();
+      return (
+        fillLower !== 'none' &&
+        fillLower !== 'transparent' &&
+        !el.ringHole &&
+        el.luminance !== null &&
+        el.luminance > luminanceThreshold
+      );
+    });
+    if (!hasLightFill) return out;
+    const tree = nestingTree || buildNestingTree(elements);
+    const frame = plainFrameOf(elements, tree, options);
+    if (frame !== null) {
+      // Every ring of the frame carries its role, for the reason below.
+      elements.forEach((el, i) => {
+        if (el.element === frame) out[i] = 'ignore';
+      });
+    }
+    return out;
+  }
 
   const tree = nestingTree || buildNestingTree(elements);
   const depth = new Map(
@@ -1462,7 +1556,7 @@ export function prepareSvg(svgString, options = {}) {
   const classified = classifyElements(elements, {
     ...options,
     roleOverrides: {
-      ...wallRoleOverrides(elements),
+      ...wallRoleOverrides(elements, null, options),
       ...(options.roleOverrides || {}),
     },
   });
