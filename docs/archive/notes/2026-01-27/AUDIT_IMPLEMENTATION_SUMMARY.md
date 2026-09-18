@@ -153,7 +153,7 @@ These items can be addressed in future work when:
 
 - `src/js/html-utils.js` - HTML utilities (escaping, validation, UI helpers)
 - `src/js/color-utils.js` - Color validation and conversion
-- `docs/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md` - This file
+- `docs/archive/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md` - This file
 
 ## 📝 Files Modified (Major Changes)
 

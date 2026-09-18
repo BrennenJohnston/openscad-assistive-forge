@@ -117,7 +117,7 @@ against either editor.
 
 **Resolution**: A 3-line guard addition converting `applyCompanionAliases()` from overwrite to create-only semantics. The parameter dropout fix in `ui-generator.js` (seeding `currentValues` from `initialValues`) was also discovered during the investigation.
 
-**Investigation history**: Five prior investigation plans incorrectly attributed the issue to the upstream Manifold WASM engine based on code-level analysis alone. The successful investigation used captured-input comparison against desktop CLI and `git bisect` to identify the true root cause. See `docs/audit/ki-012-investigation/findings-report.md` for the full write-up.
+**Investigation history**: Five prior investigation plans incorrectly attributed the issue to the upstream Manifold WASM engine based on code-level analysis alone. The successful investigation used captured-input comparison against desktop CLI and `git bisect` to identify the true root cause. See `docs/archive/audit/ki-012-investigation/findings-report.md` for the full write-up.
 
 **Developer toggles for diagnosis** (via browser console):
 - `localStorage.setItem('openscad-forge-debug-preview-parity', '1')` — bypass preview overrides for A/B parity comparison
@@ -192,7 +192,7 @@ against either editor.
 
 ### Parity Remediation (2026-03-12)
 
-All 16 desktop parity scenarios audited; 14 fully resolved, 1 partially resolved (S-013 Layer 1 pending runtime verification). See `docs/audit/parity-remediation-validation-report.md` for the full write-up.
+All 16 desktop parity scenarios audited; 14 fully resolved, 1 partially resolved (S-013 Layer 1 pending runtime verification). See `docs/archive/audit/parity-remediation-validation-report.md` for the full write-up.
 
 | Scenario | Description | Resolution |
 |----------|-------------|------------|

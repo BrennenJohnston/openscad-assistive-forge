@@ -121,9 +121,9 @@ There are no other outbound connections.
 ## Accessibility
 
 The app targets **WCAG 2.2 Level AA** and publishes its conformance
-work: [VPAT 2.5 (WCAG 2.2)](../vpat/VPAT-2.5-WCAG.md) and the
+work: [VPAT 2.5 (WCAG 2.2)](../accessibility/vpat/VPAT-2.5-WCAG.md) and the
 [Accessibility Conformance Statement](../accessibility/ACCESSIBILITY_CONFORMANCE.md),
-with per-criterion decisions and evidence under `docs/vpat/`.
+with per-criterion decisions and evidence under `docs/accessibility/vpat/`.
 
 ## Installing on managed devices (reference)
 

@@ -56,7 +56,7 @@ generate standalone shell scripts for tasks that already exist.
 
 ## 5. Accessibility requirements
 
-- Target: WCAG 2.2 Level AA (the VPAT under `docs/vpat/` is the record).
+- Target: WCAG 2.2 Level AA (the VPAT under `docs/accessibility/vpat/` is the record).
 - Touch targets: 44×44 px minimum. Never shrink an existing target.
 - Icon-only buttons require `aria-label`; decorative graphics are hidden
   from assistive tech.

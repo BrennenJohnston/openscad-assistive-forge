@@ -347,7 +347,7 @@ curl -I https://your-domain.com/wasm/openscad.wasm
 ### Section 508
 
 The application includes a VPAT documenting accessibility conformance:
-- Location: `docs/vpat/VPAT-2.5-WCAG.md`
+- Location: `docs/accessibility/vpat/VPAT-2.5-WCAG.md`
 - Covers: WCAG 2.2 Level AA criteria
 
 ### FedRAMP Considerations

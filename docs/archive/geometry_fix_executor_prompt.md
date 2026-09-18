@@ -108,7 +108,7 @@ file references, and fallback gates, lives in a single authoritative document:
   (vendored libraries in `public/libraries/`): frozen always.
 - **Prompt library:** `ai-at-playbook/prompts/` — each phase lists its
   suggested prompt from this directory.
-- **Desktop reference data:** `docs/audit/testing-round-7/reference-data/
+- **Desktop reference data:** `docs/archive/audit/testing-round-7/reference-data/
   cli-extracts/nightly/` — baseline geometry statistics for comparison.
 - **Plan file location:** `.cursor/plans/` — outside git. Update with file
   tools; do not `git add` or commit the plan file.

@@ -16,7 +16,7 @@
  * Environment variables:
  *   LWFL_PRESET — preset name filter (default: matches "LWFL" case-insensitive)
  *
- * Artifacts written to: docs/audit/lwfl-parity-reproduction/
+ * Artifacts written to: docs/archive/audit/lwfl-parity-reproduction/
  *
  * @license GPL-3.0-or-later
  */
@@ -41,7 +41,7 @@ const KEYGUARD_ZIP_PATH = path.resolve(
 const fixtureAvailable = fs.existsSync(KEYGUARD_ZIP_PATH);
 
 const OUTPUT_DIR = path.resolve(
-  __dirname, '..', '..', 'docs', 'audit', 'lwfl-parity-reproduction',
+  __dirname, '..', '..', 'docs', 'archive', 'audit', 'lwfl-parity-reproduction',
 );
 
 // UF-9 P1: the stakeholder bundle names its preset "... LAMP WFL 84"

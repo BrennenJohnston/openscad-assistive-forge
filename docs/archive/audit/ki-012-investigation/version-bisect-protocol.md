@@ -300,7 +300,7 @@ not be committed.
 ## Output Files
 
 ```
-docs/audit/ki-012-investigation/
+docs/archive/audit/ki-012-investigation/
 ├── swap-wasm-build.ps1              (automation script)
 ├── version-bisect-protocol.md       (this file)
 ├── version-bisect-results.md        (results template)

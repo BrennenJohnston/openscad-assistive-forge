@@ -491,7 +491,7 @@ correct resolution behavior from `bb1b9ef`. No WASM binary issue exists.
 ## Captured Artifacts Index
 
 ```
-docs/audit/ki-012-investigation/
+docs/archive/audit/ki-012-investigation/
 │
 ├── findings-report.md                    ← THIS FILE
 │

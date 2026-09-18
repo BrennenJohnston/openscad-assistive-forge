@@ -5,7 +5,7 @@
 **Date**: 2026-04-06  
 **Standard**: WCAG 2.2 Level AA
 
-> **Note:** For detailed, criterion-level conformance status with evidence links, see [`docs/vpat/conformance-decisions.md`](../vpat/conformance-decisions.md). This document provides a summary statement; the decisions log is the source of truth for WCAG criterion status.
+> **Note:** For detailed, criterion-level conformance status with evidence links, see [`docs/accessibility/vpat/conformance-decisions.md`](vpat/conformance-decisions.md). This document provides a summary statement; the decisions log is the source of truth for WCAG criterion status.
 
 ---
 
@@ -152,7 +152,7 @@ The following assistive technology combinations have been tested:
 | JAWS 2024 | Edge 124 | Windows 11 | Functional (textarea editor recommended) |
 | VoiceOver | Safari 17 | macOS 14 | Functional |
 
-**Notes**: JAWS users may experience improved navigation with the accessible text editor option enabled. See [`conformance-decisions.md`](../vpat/conformance-decisions.md) for criterion-level evidence.
+**Notes**: JAWS users may experience improved navigation with the accessible text editor option enabled. See [`conformance-decisions.md`](vpat/conformance-decisions.md) for criterion-level evidence.
 
 ### Test Workflow
 
@@ -173,7 +173,7 @@ The following core workflow has been verified with assistive technology:
 
 A full Voluntary Product Accessibility Template (VPAT) 2.5 based on WCAG 2.2 is available:
 
-- **Location**: [VPAT-2.5-WCAG.md](../vpat/VPAT-2.5-WCAG.md)
+- **Location**: [VPAT-2.5-WCAG.md](vpat/VPAT-2.5-WCAG.md)
 - **Format**: ITI VPAT 2.5 (Rev 508)
 - **Coverage**: 59 WCAG 2.2 criteria (38 Level A + 21 Level AA)
 

@@ -9,7 +9,7 @@
 Instead of the manual browser test described in the plan, Phase 1 was validated
 programmatically via unit tests that directly exercise `injectCsgColors()` against
 representative patterns extracted from the actual LWFL keyguard SCAD source
-(`docs/audit/ki-012-investigation/bug-a-capture/scad-source.scad`).
+(`docs/archive/audit/ki-012-investigation/bug-a-capture/scad-source.scad`).
 
 Three diagnostic tests were added to
 `tests/unit/auto-preview-controller.test.js` under the describe block

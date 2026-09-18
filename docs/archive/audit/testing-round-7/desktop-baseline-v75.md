@@ -16,7 +16,7 @@ Data was collected both manually (screenshots, console logs from the
 stakeholder's 2021.01 installation) and programmatically via
 `scripts/desktop-audit.ps1`.
 
-All data references use relative paths from `docs/audit/testing-round-7/`.
+All data references use relative paths from `docs/archive/audit/testing-round-7/`.
 
 ---
 
@@ -372,7 +372,7 @@ and Turquoise for the frame. The CGAL backend (2021.01) does not support
    (`loadOFF()`) handles this correctly: per-face color accumulation, integer
    scale detection, and `vertexColors: true` material rendering have been
    verified via unit tests and E2E pixel sampling (see
-   [COLOR_PASSTHROUGH.md](../../notes/COLOR_PASSTHROUGH.md#multi-color-coff-verification-2026-03-14)).
+   [COLOR_PASSTHROUGH.md](../../../notes/COLOR_PASSTHROUGH.md#multi-color-coff-verification-2026-03-14)).
 
 3. **2D geometry produces no color data.** The laser-cut first layer scenario
    (2D, `projection()`) cannot export to OFF/STL. Color handling for this

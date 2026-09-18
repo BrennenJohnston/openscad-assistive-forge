@@ -14,12 +14,12 @@ This file captures raw, **pre-analysis** numbers so every later phase can cite a
 
 ## 1. Repo metadata
 
-- App name / version: `openscad-assistive-forge` `4.4.0` ([package.json:2-3](../../../package.json)).
+- App name / version: `openscad-assistive-forge` `4.4.0` ([package.json:2-3](../../../../package.json)).
 - Node toolchain target: `nodejs >=20` ([pixi.toml:20](../../../pixi.toml)).
-- Build system: `vite ^7.3.1` ([package.json:82](../../../package.json)), tests `vitest ^4.0.17` + `@playwright/test ^1.57.0` ([package.json:69-83](../../../package.json)).
+- Build system: `vite ^7.3.1` ([package.json:82](../../../../package.json)), tests `vitest ^4.0.17` + `@playwright/test ^1.57.0` ([package.json:69-83](../../../../package.json)).
 - Production dependencies: 19. Dev dependencies: 19.
-  - Production deps include the libraries Phase 1 must compare custom code against: `clipper2-js`, `path-bool`, `svg-path-commander`, `imagetracerjs`, `jszip`, `three`, `@codemirror/*` ([package.json:87-107](../../../package.json)).
-  - Dev deps include `colorjs.io` (note: declared in `devDependencies`, not runtime — Phase 1 should record this), `@axe-core/playwright`, `lighthouse`, `vnu-jar`, `happy-dom`, `jsdom` ([package.json:67-86](../../../package.json)).
+  - Production deps include the libraries Phase 1 must compare custom code against: `clipper2-js`, `path-bool`, `svg-path-commander`, `imagetracerjs`, `jszip`, `three`, `@codemirror/*` ([package.json:87-107](../../../../package.json)).
+  - Dev deps include `colorjs.io` (note: declared in `devDependencies`, not runtime — Phase 1 should record this), `@axe-core/playwright`, `lighthouse`, `vnu-jar`, `happy-dom`, `jsdom` ([package.json:67-86](../../../../package.json)).
 
 ---
 
@@ -37,7 +37,7 @@ Captured with `Get-ChildItem -Recurse -File` and `Measure-Object -Property Lengt
   - `tests/visual/` — 15 files, 674,251 bytes.
 - `scripts/` — 11 files, 98,868 bytes.
 - `cli/` — 60 files, 261,168 bytes (templates that vendor copies of the worker — see §6).
-- `docs/` — 1,571 files, ≈ 1.07 GiB total. Almost all of that mass (1,459 files / ≈ 1.07 GiB) sits under `docs/audit/ki-012-investigation/` (a prior incident's WASM-backup capture). `docs/` excluding that subtree is ≈ 25 MiB.
+- `docs/` — 1,571 files, ≈ 1.07 GiB total. Almost all of that mass (1,459 files / ≈ 1.07 GiB) sits under `docs/archive/audit/ki-012-investigation/` (a prior incident's WASM-backup capture). `docs/` excluding that subtree is ≈ 25 MiB.
 - `public/` — 2,295 files, ≈ 86.5 MiB. Includes vendored WASM and the OpenSCAD libraries fetched by `setup-libraries`.
 
 Top-level configuration files of note (from `Get-ChildItem` on the project root):
@@ -145,7 +145,7 @@ This is recorded as data here; Phase 1 decides whether they are duplicates of `s
 
 ## 7. Scanner outputs (commands and counts only)
 
-All commands run via `pixi run <task>`, which is a thin wrapper around the `npm run <task>` line in [package.json](../../../package.json).
+All commands run via `pixi run <task>`, which is a thin wrapper around the `npm run <task>` line in [package.json](../../../../package.json).
 
 ### 7.1 Lint — `pixi run lint`
 
@@ -248,12 +248,12 @@ Every number above can be re-derived from the project root by running, in order:
 - `pixi run bloat-scan`
 - `pixi run import-check`
 - `pixi run css-variable-audit`
-- `pixi run check-bundle` (requires an existing `dist/`; see [scripts/check-bundle-budget.js](../../../scripts/check-bundle-budget.js))
+- `pixi run check-bundle` (requires an existing `dist/`; see [scripts/check-bundle-budget.js](../../../../scripts/check-bundle-budget.js))
 - `pixi run validate:html`
 - For directory sizes: `Get-ChildItem -Path <dir> -File -Recurse | Measure-Object -Property Length -Sum`.
 - For LOC: `Get-Content <file> | Measure-Object -Line`.
 
-If `pixi` is absent, the equivalent `npm run <task>` form is documented in [package.json](../../../package.json) §`scripts`.
+If `pixi` is absent, the equivalent `npm run <task>` form is documented in [package.json](../../../../package.json) §`scripts`.
 
 ---
 

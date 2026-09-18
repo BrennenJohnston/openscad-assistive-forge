@@ -9,7 +9,7 @@ across the source. This document is kept as the design record.
 `applyCompanionAliases()` originally replaced an existing root-level companion
 file instead of only creating a missing one, which changed what `include`
 resolved to and produced wrong geometry. See
-[`audit/ki-012-investigation/findings-report.md`](../audit/ki-012-investigation/findings-report.md).
+[`audit/ki-012-investigation/findings-report.md`](../archive/audit/ki-012-investigation/findings-report.md).
 
 ---
 

@@ -429,20 +429,20 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 | [x] | docs/research/SAVED_PROJECTS_REFERENCE.md | 19 | Clean architecture reference for IndexedDB library selection. Implementation used a custom approach rather than recommended idb-keyval -- divergence is known and fine. |
 | [E] | docs/research/TUTORIAL_DESIGN_RESEARCH.md | 19 | Fixed: replaced two broken links to phantom files (WELCOME_SCREEN_FEATURE_PATHS.md, WELCOME_FEATURE_PATHS_INVENTORY.md) with link to existing WELCOME_SCREEN.md. |
 | [x] | docs/research/WASM_THREADING_ANALYSIS.md | 19 | Clean historical analysis confirming openscad-wasm-prebuilt@1.2.0 is non-threaded (zero SharedArrayBuffer/Atomics/PTHREAD references in 11MB of compiled code). |
-| [E] | docs/vpat/VPAT-2.5-WCAG.md | 19 | Fixed: Product Version 1.0→4.1.0. |
-| [x] | docs/vpat/conformance-decisions.md | 19 | Clean. Honest -- many criteria still "Not Evaluated". Well-structured decisions log with evidence references. |
-| [x] | docs/vpat/evidence/m0/validation-summary-2026-02-02.md | 19 | Clean internal validation evidence. |
-| [x] | docs/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md | 19 | Clean AT testing template. |
-| [x] | docs/vpat/evidence/m1/validation-summary-2026-02-02.md | 19 | Clean. |
-| [x] | docs/vpat/evidence/m2/validation-summary-2026-02-02.md | 19 | Clean. |
-| [x] | docs/vpat/evidence/m3/validation-summary-2026-02-02.md | 19 | Clean. |
-| [x] | docs/vpat/evidence/m5/validation-summary-2026-02-02.md | 19 | Clean. |
+| [E] | docs/accessibility/vpat/VPAT-2.5-WCAG.md | 19 | Fixed: Product Version 1.0→4.1.0. |
+| [x] | docs/accessibility/vpat/conformance-decisions.md | 19 | Clean. Honest -- many criteria still "Not Evaluated". Well-structured decisions log with evidence references. |
+| [x] | docs/accessibility/vpat/evidence/m0/validation-summary-2026-02-02.md | 19 | Clean internal validation evidence. |
+| [x] | docs/accessibility/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md | 19 | Clean AT testing template. |
+| [x] | docs/accessibility/vpat/evidence/m1/validation-summary-2026-02-02.md | 19 | Clean. |
+| [x] | docs/accessibility/vpat/evidence/m2/validation-summary-2026-02-02.md | 19 | Clean. |
+| [x] | docs/accessibility/vpat/evidence/m3/validation-summary-2026-02-02.md | 19 | Clean. |
+| [x] | docs/accessibility/vpat/evidence/m5/validation-summary-2026-02-02.md | 19 | Clean. |
 | [x] | docs/notes/README.md | 19 | Clean. Honest description of dev notes folder purpose. |
-| [x] | docs/notes/2026-01-25/README.md | 19 | Clean. |
-| [x] | docs/notes/2026-01-25/SUMMARY.md | 19 | Clean. Summarizes Jan 25 sprint: binary STL, capability detection, WASM experimentation. |
-| [x] | docs/notes/2026-01-26/CODE_AUDIT_FINDINGS.md | 19 | Clean internal code audit notes from Jan 26 pass through src/js. |
-| [x] | docs/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md | 19 | Clean implementation summary of Jan 27 security fixes and code consolidation. |
-| [x] | docs/notes/2026-01-27/DOC_INVENTORY.md | 19 | Clean doc inventory and decision log from Jan 27 documentation style audit. |
+| [x] | docs/archive/notes/2026-01-25/README.md | 19 | Clean. |
+| [x] | docs/archive/notes/2026-01-25/SUMMARY.md | 19 | Clean. Summarizes Jan 25 sprint: binary STL, capability detection, WASM experimentation. |
+| [x] | docs/archive/notes/2026-01-26/CODE_AUDIT_FINDINGS.md | 19 | Clean internal code audit notes from Jan 26 pass through src/js. |
+| [x] | docs/archive/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md | 19 | Clean implementation summary of Jan 27 security fixes and code consolidation. |
+| [x] | docs/archive/notes/2026-01-27/DOC_INVENTORY.md | 19 | Clean doc inventory and decision log from Jan 27 documentation style audit. |
 | [x] | docs/planning/BUILD_PLAN_V2.md | 19 | Clean. Build plan for Volkswitch compatibility and Advanced/Basic UI work. |
 | [x] | docs/planning/decision-log.md | 19 | Clean. ADR-format decision log covering editor selection, storage, rendering, and manifest patterns. |
 | [x] | docs/archive/README.md | 19 | Clean. Honest note explaining archived project management docs. |
@@ -511,7 +511,7 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 | [S] | .vercel/ | Deployment config (auto-managed) |
 | [S] | .volkswitch/ | Stakeholder research files (not app code) |
 | [S] | docs/planning/parser-golden-corpus.json | Generated test corpus |
-| [S] | docs/vpat/evidence/**/.gitkeep | Empty placeholder files |
+| [S] | docs/accessibility/vpat/evidence/**/.gitkeep | Empty placeholder files |
 | [S] | tests/visual/core-ui.visual.spec.js-snapshots/ | Generated visual snapshots |
 
 ---
@@ -541,7 +541,7 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 ### Session 19 -- 2026-02-24
 
 - Files reviewed: 36
-- Files flagged [D]: 5 (docs/research/TUTORIAL_DESIGN_RESEARCH.md, docs/vpat/VPAT-2.5-WCAG.md, docs/accessibility/ACCESSIBILITY_CONFORMANCE.md, docs/accessibility/BROWSER_SUPPORT.md, docs/accessibility/KNOWN_ISSUES.md)
+- Files flagged [D]: 5 (docs/research/TUTORIAL_DESIGN_RESEARCH.md, docs/accessibility/vpat/VPAT-2.5-WCAG.md, docs/accessibility/ACCESSIBILITY_CONFORMANCE.md, docs/accessibility/BROWSER_SUPPORT.md, docs/accessibility/KNOWN_ISSUES.md)
 - Files marked [x] clean: 31
 - Files edited: 0 (READ-ONLY session)
 - Tests pass: yes (1383/1383)

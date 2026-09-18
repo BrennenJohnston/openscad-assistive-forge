@@ -114,7 +114,7 @@
 ## Evidence File Naming Convention
 
 ```
-docs/vpat/evidence/{milestone}/
+docs/accessibility/vpat/evidence/{milestone}/
   {at}-{browser}-{feature}-{date}.md
 
 Examples:

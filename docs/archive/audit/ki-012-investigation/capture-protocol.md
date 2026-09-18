@@ -219,7 +219,7 @@ After all three captures, verify the complete set:
 Save all three ZIPs to:
 
 ```
-docs/audit/ki-012-investigation/
+docs/archive/audit/ki-012-investigation/
 ├── baseline-capture.zip
 ├── bug-a-capture.zip
 ├── bug-b-capture.zip

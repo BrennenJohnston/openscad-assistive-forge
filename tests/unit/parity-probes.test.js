@@ -7,7 +7,7 @@
  * Probes 1 & 2 test the JavaScript pipeline with synthetic OFF/COFF data.
  * The actual WASM output question (does the binary emit COFF?) requires
  * runtime browser testing — manual procedure documented in
- * docs/audit/parity-probe-results.md.
+ * docs/archive/audit/parity-probe-results.md.
  *
  * Probes 3 & 4 are pure unit tests against detection regex and serialization.
  * Probe 5 is verified via existing auto-preview-controller tests + code trace.

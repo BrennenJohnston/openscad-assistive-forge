@@ -70,14 +70,14 @@ If you're setting up the project for development or thinking about forking:
 ## Accessibility and compliance
 
 - [Accessibility Conformance](./accessibility/ACCESSIBILITY_CONFORMANCE.md) -- WCAG 2.2 AA conformance statement
-- [VPAT (WCAG 2.2)](./vpat/VPAT-2.5-WCAG.md) -- Voluntary Product Accessibility Template
-- [Conformance Decisions](./vpat/conformance-decisions.md) -- per-criterion status tracking
+- [VPAT (WCAG 2.2)](./accessibility/vpat/VPAT-2.5-WCAG.md) -- Voluntary Product Accessibility Template
+- [Conformance Decisions](./accessibility/vpat/conformance-decisions.md) -- per-criterion status tracking
 - [Camera controls](./accessibility/CAMERA_CONTROLS_ACCESSIBILITY.md) -- how the 3D camera meets WCAG 2.2
 - [Browser Support](./accessibility/BROWSER_SUPPORT.md) -- what browsers we test against
 - [Mobile limitations](./accessibility/MOBILE_LIMITATIONS.md) -- what a phone can and cannot do
 - [Known Issues](./accessibility/KNOWN_ISSUES.md) -- current limitations and workarounds
 
-> **Where's the source of truth?** Use `conformance-decisions.md` + evidence files in `vpat/evidence/` for criterion-level status. `ACCESSIBILITY_CONFORMANCE.md` is the summary.
+> **Where's the source of truth?** Use `conformance-decisions.md` + evidence files in `accessibility/vpat/evidence/` for criterion-level status. `ACCESSIBILITY_CONFORMANCE.md` is the summary.
 
 ---
 
