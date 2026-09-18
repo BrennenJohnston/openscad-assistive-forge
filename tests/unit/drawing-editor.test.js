@@ -521,3 +521,23 @@ describe('the stencil purpose, on the owner drawing', () => {
     expect(editor.getPlan()).toBeNull()
   })
 })
+
+// ── DP-58, D-165: one editor per surface element ─────────────────────────────
+describe('one editor per surface element (D-165)', () => {
+  it('a second editor built into the same element replaces the first instead of standing beside it', async () => {
+    const surface = document.createElement('div')
+    surface.id = 'drawingEditorSurface-d165'
+    document.body.appendChild(surface)
+    const { createDrawingEditor } = await import('../../src/js/drawing-editor/surface.js')
+    const first = createDrawingEditor({ surfaceEl: surface, announce: () => {} })
+    const second = createDrawingEditor({ surfaceEl: surface, announce: () => {} })
+    // The owner's screenshots: three and four toolbars side by side, one per
+    // file control the customizer had rendered into the same element.
+    expect(surface.querySelectorAll(':scope > .drawing-editor')).toHaveLength(1)
+    expect(surface.querySelectorAll('.drawing-editor-toolbar')).toHaveLength(1)
+    expect(second._root.isConnected).toBe(true)
+    expect(first._root.isConnected).toBe(false)
+    second.destroy()
+    surface.remove()
+  })
+})

@@ -612,10 +612,12 @@ describe('q-charm layered design (DP-8)', () => {
     // MEASURED on the STLs, face at 8.65: raised 0.5 / 0.5 / 1.0 tops out at
     // 10.65; layer 2 at 1.0 moves it to 11.15; raised 1.0 beside engraved
     // 1.0 leaves 9.65 over 7.65, two millimeters between the surfaces.
-    expect(source).toContain('layer_top_1 = charm_top_z + layer_1_up;');
+    expect(source).toContain('layer_top_0 = charm_top_z;');
+    expect(source).toContain('layer_top_1 = layer_top_0 + layer_1_up;');
     expect(source).toContain('layer_top_2 = layer_top_1 + layer_2_up;');
     expect(source).toContain('layer_top_3 = layer_top_2 + layer_3_up;');
-    expect(source).toContain('layer_floor_1 = charm_top_z - layer_1_down;');
+    expect(source).toContain('layer_floor_0 = charm_top_z;');
+    expect(source).toContain('layer_floor_1 = layer_floor_0 - layer_1_down;');
     expect(source).toContain('layer_floor_2 = layer_floor_1 - layer_2_down;');
     expect(source).toContain('layer_floor_3 = layer_floor_2 - layer_3_down;');
     for (let n = 1; n <= 3; n++) {
@@ -626,13 +628,24 @@ describe('q-charm layered design (DP-8)', () => {
         `layer_${n}_down = (layer_${n}_on && design_layer_${n}_style != "raised") ? design_layer_${n}_depth : 0;`
       );
     }
-    // The passes apply in layer order around the base, so a raised layer 3
-    // inside an engraved layer 2 stands in the pit instead of being cut away.
+    // D-163: each layer's exact shapes (file n minus file n+1) are built once,
+    // in their own band, going their own layer's way; the raised bands are
+    // added and the engraved bands cut; nothing is drawn twice.
+    expect(source).toContain('module layer_exact_2d(n) {');
+    expect(source).toContain('module layer_band_2d(n, raised) {');
+    for (let n = 1; n <= 3; n++) {
+      expect(source).toContain(`layer_raised_band(${n});`);
+      expect(source).toContain(`layer_engraved_band(${n});`);
+    }
+    // With layer files present the stack IS the design: the single design
+    // pass is gated off, or the design printed once more at Engrave depth
+    // under the stack (D-135's mechanism, the owner's duplicate).
     expect(source).toContain(
-      'layer_pass(3) layer_pass(2) layer_pass(1) q_charm_base();'
+      'if (!layered_mode && design_style == "raised") {'
     );
-    // A raised pass is extruded from below every floor: nothing floats.
-    expect(source).toContain('layer_stack_floor - layer_eps');
+    expect(source).toContain(
+      'if (!layered_mode && design_style != "raised") {'
+    );
     expect(source).toContain(
       'echo(str("layer levels mm: top1=", layer_top_1'
     );
@@ -647,15 +660,11 @@ describe('q-charm layered design (DP-8)', () => {
 
   it('overlaps every boolean by the epsilon, never exactly touching', () => {
     expect(source).toContain('layer_eps = 0.01;');
-    // D-160: one pass module for the three layers. A raised pass reaches
-    // from below the stack's floor to its own top, an engraved one from its
-    // own floor through the stack's top; both carry the epsilon.
-    expect(source).toContain(
-      'linear_extrude(height = top - layer_stack_floor + layer_eps)'
-    );
-    expect(source).toContain(
-      'linear_extrude(height = layer_stack_top - floor + layer_eps)'
-    );
+    // D-163: a raised band is one slab, its own depth plus the epsilon so
+    // the slabs are one body; an engraved band cuts its own depth plus the
+    // epsilon through the floor above it.
+    expect(source).toContain('linear_extrude(height = up + layer_eps)');
+    expect(source).toContain('linear_extrude(height = down + layer_eps)');
   });
 
   it('names the canvas span the app writes, as a contract', () => {

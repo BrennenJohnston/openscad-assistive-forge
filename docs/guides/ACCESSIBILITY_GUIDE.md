@@ -81,6 +81,7 @@ it is the whole screen.
 | `Ctrl+A` (`Cmd+A`) | Choose every shape, with the list focused |
 | `Delete` / `Backspace` | Remove the chosen shapes |
 | `Ctrl`-click / `Cmd`-click, `Shift`-click | Add a row or a shape to the choice, or take a range |
+| `On` / `Cut out` / `Off` on a chosen row | Sets every chosen shape, and the announcement counts them ("3 shapes set to Off.") |
 | `+` / `-` | Zoom the picture in and out; **Fit**, **+** and **-** under the picture do the same |
 | `Escape` | Shut the innermost thing that is open: a row's **More** menu, then the crop view, then the editor |
 

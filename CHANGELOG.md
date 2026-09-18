@@ -202,6 +202,32 @@ below; `docs/updates/WHATS_NEW_v5.md` is the short, illustrated version.
 
 ### Fixed
 
+- **A role pressed on a chosen row is pressed for the selection** (D-161) - several shapes could
+  be chosen together and nothing reached them all. The switch on any chosen row now sets every
+  chosen shape, and the editor says how many ("3 shapes set to Off.").
+- **Three layers, always** (D-162) - the Layer column offered as many layers as the drawing
+  nested, one or two for a line drawing; the layers are height classes I assign, so a design
+  with layers offers all three whatever the drawing looks like.
+- **The layer stack duplicated the design and missed its place** (D-163) - three things at once:
+  the single design still printed at Engrave depth under the stack (D-135's mechanism, now with
+  real layers, so a design showed twice at two heights); a layer file's aspect was measured from
+  its content instead of the shared canvas the model fits, so a layer holding a few shapes came
+  out at another size in another place; and each raised layer was extruded from the floor, so a
+  layer 3 shape was drawn three times over itself. Now the stack is the design when layer files
+  are present, the aspect is the canvas's, and each layer's own shapes are built once, in their
+  own band, going their own layer's way: a layer 3 shape is three slabs stacked, the layer 2 one
+  starting where layer 1 ends, like a braille dot's dome on its trunk. Scale, position, rotation
+  and every layer depth move the whole stack together. Measured on the printed geometry: a
+  2.0 mm design asked for under a 0.5 / 0.5 / 0.5 stack no longer shows (10.15 mm, the stack's
+  own top); the mixed case still leaves 2.0 mm between a raised layer 1 and an engraved layer 2.
+- **A changed setting never starts a conversion by itself** (D-164) - the rule from the fourth
+  walk let a change run where a small quick picture would have run when chosen, and on a desktop
+  my logo is both, so Colors chosen after a render ran unasked with no dialog for its first
+  second. A change offers the press now, always; the press opens the dialog and its Cancel.
+- **Three editors side by side** (D-165) - every re-render of the customizer (a preset, undo,
+  reset, a restored project) made a new file control that built a new drawing editor into the
+  same element beside the last one. The editor bound to the element goes before another is built,
+  and the surface removes anything left in its element.
 - **The stencil's words on a charm** (D-156) - the ink panel described the Colors choice as
   "ready to paint a plate for each" color and the wall as "the surface behind the stencil" on
   a charm, where no stencil is possible. The panel knows its host now: a charm and the
