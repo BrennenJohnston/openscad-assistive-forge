@@ -142,20 +142,6 @@ const EXAMPLES = {
     description: 'Braille Sign',
     manifest: '/examples/braille-sign/manifest.json',
   },
-  'stencil-maker': {
-    path: '/examples/stencil-maker/stencil_maker.scad',
-    name: 'stencil_maker.scad',
-    description: 'Stencil Maker',
-    manifest: '/examples/stencil-maker/manifest.json',
-    additionalFiles: [
-      '/examples/stencil-maker/sample-design.svg',
-      // DP-14. The gallery is this project's own work now: the ring, which
-      // demonstrates a support bar holding an enclosed center, and the Forge
-      // logo. The six charm icons that used to sit here were copies of another
-      // tile's library and had nothing to do with stencils.
-      '/examples/stencil-maker/forge-logo.svg',
-    ],
-  },
   'q-charm': {
     path: '/examples/q-charm/q_charm.scad',
     name: 'q_charm.scad',
@@ -202,10 +188,6 @@ const PROGRAMS = {
   'braille-card-customizer': {
     label: 'Braille Card Designer',
     examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
-  },
-  'stencil-maker': {
-    label: 'Stencil Maker',
-    examples: ['stencil-maker'],
   },
 };
 

@@ -10,7 +10,8 @@
  *
  * ★ THEY ARE DEFINED HERE, ONCE. `stencil-plates.js` and `stencil-jig.js`
  * re-export them rather than declaring their own, and the .scad's defaults are
- * pinned against these in `stencil-maker-integration.test.js`. A value that
+ * pinned against these in the shelved tile's integration test, on the branch
+ * shelf/stencil-maker-2026-09-18 (DP-63). A value that
  * exists in more than one file is this project's oldest bug.
  *
  * @license GPL-3.0-or-later
