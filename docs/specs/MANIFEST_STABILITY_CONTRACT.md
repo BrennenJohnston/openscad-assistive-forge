@@ -22,6 +22,7 @@ The following URL parameters are supported and will remain stable:
 | `?project=<url>` | v1.0 | **Stable** | Load a ZIP bundle from a URL |
 | `?scad=<url>` | v1.0 | **Stable** | Alias for `?project=`. Both accept a `.scad` or a `.zip` |
 | `?uiMode=<mode>` | v1.0 | **Stable** | Open in a named interface mode, the same values `defaults.uiMode` takes |
+| `?drawing=<url>` | v5.0.0 | **Stable** | Fetch a drawing or picture (.svg, .dxf, .png, .jpg) into the first design setting of whatever the link opened, convert it, and open the drawing editor on it; alone, open the standalone editor |
 
 **"Stable" means**: These parameters will continue to work in all future versions. Their behavior will not change in backward-incompatible ways.
 

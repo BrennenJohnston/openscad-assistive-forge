@@ -44,6 +44,7 @@ Compose an ordinary link. Every parameter below is marked **Stable** in
 | `?preset=<name>` | Selects a named preset after the project loads |
 | `?uiMode=<mode>` | Opens in a named interface mode |
 | `?skipWelcome=true` | Goes straight to the project, no welcome screen |
+| `?drawing=<url>` | A drawing or picture (.svg, .dxf, .png, .jpg) for the design the link opened; the editor opens on it. See 2.5 |
 
 Percent-encode the URL you put in the query. A manifest link looks like this:
 
@@ -127,6 +128,42 @@ A manifest can declare `defaults.starterParameters`: a list of parameter names.
 Forge shows those controls first and puts everything else behind one **Show all
 parameters** button. Useful when your design has more than a screenful.
 Documented in `MANIFEST_STABILITY_CONTRACT.md`.
+
+### 2.5 Sending a drawing to the editor
+
+A tool that makes drawings for people can send one straight into the drawing
+editor, on the design the link opened:
+
+```text
+https://<forge-host>/?example=logo-plate&drawing=https%3A%2F%2Fraw.githubusercontent.com%2Fyou%2Frepo%2Fmain%2Flogo.png
+```
+
+What happens, in order: the Logo Plate loads; the drawing is fetched from the
+allowlisted host (2.1); it lands in the plate's picture setting as if the
+person had chosen it; a picture or a DXF is converted, behind the same dialog
+and Cancel a chosen file gets, without anybody pressing Start; and the drawing
+editor opens on the result. The person edits, presses Apply, sees the plate
+with their edits, and exports the STL, or saves the edited drawing as SVG or
+DXF (3.2). Nothing comes back to your tool by itself (section 5): the person
+carries the file.
+
+The same lane works with `?example=q-charm`, `?example=nasif-charm-maker`,
+and with `?manifest=` or `?project=`, on the first design setting that takes
+the file's kind. With no design in the link at all, `?drawing=<url>` opens the
+standalone editor on the drawing.
+
+Rules:
+
+- `.svg`, `.dxf`, `.png`, `.jpg`, `.jpeg`, `.bmp` and `.gif`, by the name's
+  extension. 20 MB at most. 30 seconds to arrive.
+- The host must be on the allowlist in 2.1, or the page's own origin. Any
+  other host is refused with a sentence before a request is sent.
+- An inline drawing works the way an inline manifest does (2.3): a `data:`
+  URL with the file's name after `#`, such as `data:image/svg+xml;base64,...#logo.svg`.
+  The query budget in section 4 applies, so this suits a small SVG, not a
+  photograph.
+- The `drawing` parameter is removed from the address once the drawing has
+  loaded, so a refresh does not fetch it again.
 
 ---
 

@@ -550,6 +550,15 @@ after the one you opened -- `bird-drawing.png` comes back as
 Nothing is uploaded anywhere. The tracing, the editing and the saving all happen
 in your browser, and your original file is never changed.
 
+### A drawing sent by a link
+
+A link can bring a drawing with it. Opened, it loads the design the link names,
+puts the drawing into the design's picture setting, converts a picture or a DXF
+behind the usual dialog and Cancel, and opens the editor on it. Edit, press
+Apply, and the charm or plate shows your edits; export the STL, or save the
+edited drawing. The design parameters take `.dxf` now as well as SVG, PNG and
+JPG, from a link or from the file picker.
+
 ---
 
 ## Image Measurement

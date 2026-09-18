@@ -197,6 +197,25 @@ same lanes with the sizes, the naming, the error codes, and the parts of the
 browser's security policy that will get in your way. Every Forge deployment also
 serves a short machine-readable summary at `/forge-capabilities.txt`.
 
+## Sending a drawing to the editor
+
+A link can carry a drawing with it. Add `&drawing=` and the address of an
+SVG, DXF, PNG or JPG hosted on GitHub, GitLab Pages or Cloudflare Pages:
+
+```text
+https://openscad-assistive-forge.pages.dev/?example=logo-plate&drawing=https://raw.githubusercontent.com/you/repo/main/logo.png
+```
+
+The Logo Plate opens, the drawing lands in its picture setting, a picture or
+a DXF is converted behind the usual dialog and Cancel, and the drawing editor
+opens on it. The person edits, applies, sees the plate with their edits, and
+exports the STL or saves the edited drawing. The same works with the other
+charm shapes and with a manifest or project link. With nothing else in the
+link, `?drawing=` opens the standalone editor.
+
+Percent-encode the drawing's address when you build the link by hand. A
+drawing from any other host is refused with a sentence.
+
 ## Choosing which settings people meet first
 
 Some designs have a lot of parameters. A keyguard model can have well over a
