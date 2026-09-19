@@ -1106,6 +1106,38 @@ jobs:
             'docs/specs/FORGE_HANDOFF_CONTRACT.md'
           fail: true
 
+  mermaid-check:
+    name: Mermaid Diagrams
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium for the parser
+        run: npx playwright install --with-deps chromium
+
+      # Every ```mermaid fence in the tracked Markdown, parsed by Mermaid
+      # itself, the parser GitHub renders with. A diagram it rejects shows a
+      # red "Unable to render rich display" box on GitHub in place of the
+      # picture, and nothing else in CI reads the fences: two such diagrams
+      # sat in the architecture page through every green board until a
+      # reader saw them (DP-71, 2026-09-18). NON-required by design, like the
+      # link check: the parser is loaded from a CDN, and a CDN outage must
+      # never block a merge. When it is red, it is honestly red.
+      - name: Parse every Mermaid diagram
+        run: npm run check-mermaid
+
   lint-markdown:
     name: Lint Markdown
     runs-on: ubuntu-latest
