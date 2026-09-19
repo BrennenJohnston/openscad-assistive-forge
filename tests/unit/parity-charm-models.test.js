@@ -316,3 +316,39 @@ describe('the parity contract (DP-10)', () => {
     }
   });
 });
+
+describe('D-166 - the pendant\u2019s bail loop is material, not a cut', () => {
+  // Choosing Bail loop carved a half-torus groove into the edge and added
+  // no loop: the hole, the slot and the loop lived in one attachment()
+  // module that every top-level module subtracted. The loop is added now.
+  const src = sourceOf('nasif-charm-maker');
+  const between = (from, to) => {
+    const a = src.indexOf(from);
+    expect(a, `${from} is in the model`).toBeGreaterThan(-1);
+    const b = src.indexOf(to, a);
+    return src.slice(a, b === -1 ? undefined : b);
+  };
+
+  it('the loop has a module of its own and nothing subtracts it', () => {
+    expect(src).toContain('module bail_loop()');
+    expect(src).toContain('module attachment_cutout()');
+    expect(src).not.toMatch(/\battachment\(\)/);
+  });
+
+  it('nasif_charm() adds the loop in its union and cuts the hole and slot after', () => {
+    const top = between('module nasif_charm()', '\nnasif_charm();');
+    const cut = top.indexOf('layer_engraved_band(1)');
+    expect(cut).toBeGreaterThan(-1);
+    expect(top.slice(0, cut)).toContain('bail_loop();');
+    expect(top.slice(cut)).toContain('attachment_cutout();');
+    expect(top.slice(cut)).not.toContain('bail_loop();');
+  });
+
+  it('the inner modules cut the hole and the slot only', () => {
+    for (const name of ['module engraved_charm()', 'module raised_charm()']) {
+      const body = between(name, '\n}\n');
+      expect(body).toContain('attachment_cutout();');
+      expect(body).not.toContain('bail_loop();');
+    }
+  });
+});

@@ -478,7 +478,7 @@ module text_2d_layer2() {
 
 // The hole and the slot are cut from below the pendant to above its highest
 // point, so a layer stack or raised text standing over them is cut too.
-module attachment() {
+module attachment_cutout() {
     if (attachment_type == "keychain_hole") {
         // Position hole at top of charm
         hole_y = charm_shape == "circle"
@@ -498,15 +498,23 @@ module attachment() {
                     translate([-(slot_width / 2 - r), 0]) circle(r = r);
                     translate([ (slot_width / 2 - r), 0]) circle(r = r);
                 }
-    } else if (attachment_type == "bail_loop") {
+    }
+}
+
+// The bail loop is ADDED to the pendant, never cut from it (D-166: it sat in
+// the same difference as the hole and the slot, so choosing it carved a
+// half-torus groove into the edge and added no loop). A half ring lying in
+// the pendant's own plane, standing out of the top edge with both ends
+// inside the body, so a jump ring passes through it front to back.
+module bail_loop() {
+    if (attachment_type == "bail_loop") {
         bail_y = charm_shape == "circle"
             ? effective_width / 2
             : effective_height / 2;
         translate([attachment_x, bail_y + attachment_y, charm_thickness / 2])
-            rotate([0, 90, 0])
-                rotate_extrude(angle = 180, $fn = 32)
-                    translate([bail_inner_radius, 0, 0])
-                        circle(d = bail_thickness);
+            rotate_extrude(angle = 180, $fn = 32)
+                translate([bail_inner_radius, 0, 0])
+                    circle(d = bail_thickness);
     }
 }
 
@@ -553,7 +561,7 @@ module engraved_charm() {
                     design_2d();
         }
         engraved_text();
-        attachment();
+        attachment_cutout();
     }
 }
 
@@ -578,7 +586,7 @@ module raised_charm() {
             raised_text();
         }
         engraved_text();
-        attachment();
+        attachment_cutout();
     }
 }
 
@@ -586,6 +594,7 @@ module raised_charm() {
 // the engraved bands cut, and the attachment cut again through whatever the
 // stack raised over it. The two kinds of band never share a footprint (a
 // shape is one layer, and a layer goes one way), so the order does not matter.
+// The bail loop joins the union here, once (D-166).
 module nasif_charm() {
     difference() {
         union() {
@@ -594,6 +603,7 @@ module nasif_charm() {
             } else {
                 engraved_charm();
             }
+            bail_loop();
             layer_raised_band(1);
             layer_raised_band(2);
             layer_raised_band(3);
@@ -601,7 +611,7 @@ module nasif_charm() {
         layer_engraved_band(1);
         layer_engraved_band(2);
         layer_engraved_band(3);
-        attachment();
+        attachment_cutout();
     }
 }
 
