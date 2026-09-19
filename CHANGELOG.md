@@ -7,61 +7,180 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [5.0.0] - 2026-09-19
 
-- **Braille editor (Unicode) extended to the Braille Sign** (Braille Sign 1.2.0) — the
-  card tool's hand-editing panel now appears in the sign tool too, wired to the sign's
-  `Line_1`–`Line_6` braille parameters. On a sign it drives the **braille plate only**:
-  the raised letters keep wrapping from the text box, because ADA 703 treats the two as
-  separate plates and correcting a contraction by hand should not silently rewrite the
-  printed word above it. Braille beyond the sign's six rows is reported as an error and
-  dropped rather than truncated silently, and non-braille characters still block the
-  parameter write so the sign keeps its previous valid braille. "Translate to braille"
-  fills the editor from the same wrapping pass the sign would otherwise have rendered,
-  so what you edit is exactly what you were about to get. Charm mode is deliberately
-  excluded — one cell per character leaves no rows to edit. Adds a `skipBrailleRows`
-  option to `layoutSignText()` (letter rows only, no translation) so the editor path
-  cannot raise cell-capacity warnings about braille the sign is not going to carry, and
-  factors the editor's parsing and validation into a shared `parseBrailleField()` used
-  by both modes
+Since 4.5.0 the app grew three interfaces, a drawing lane that opens, cleans
+and saves SVG and DXF, one-link sharing with provenance records, braille
+editing on every braille tool, and a long accessibility pass. The last work
+before release rebuilt the picture-to-charm editor as one product and walked
+it with my own logo until it held. `docs/updates/WHATS_NEW_v5.md` is the
+illustrated version; the git history holds the full engineering record.
 
-### Changed
+### The interfaces and the welcome screen
 
-- **Braille Card example synced to wedge-card 1.2.1** — `Line_9`–`Line_20` moved into a
-  `[More Braille Lines (Advanced)]` Customizer group, so the parameter panel opens with
-  eight text fields (the `grid_rows` default) instead of twenty, and the settings below
-  them are reachable without scrolling past twelve empty boxes. Parameter names are
-  unchanged, so saved presets and the translation panel's writes are unaffected; the
-  group renders collapsed like every other group. Also corrects the example's stale
-  `VERSION` header
+- Three interfaces: Simplified for the person who opened a link, Standard
+  for working inside a project, and Classic, a desktop layout that stays
+  off phones.
+- The first screen recommends Assistive Forge, with "Remember my choice"
+  unchecked; "Not now" returns you to the top of the Main Page; the tour
+  ends by telling you the way out; one name per thing across the tours.
+- On a phone the welcome dialog fits the screen and its Download button
+  stays on it, the toolbar earns its rows, the status line can be read, the
+  Back button asks before it closes the app, and tour cards no longer cover
+  the controls they are not talking about or cut off mid-sentence.
+- High contrast no longer pushes the toolbar off the screen, and its
+  keyboard shortcut is announced.
 
-- **Braille editor (Unicode) for the Braille Card** — a collapsible editor in the translation panel holds one line of editable Unicode braille per card row. "Translate to braille" fills it from the typed text through the normal wrap pipeline; "Translate to text" back-translates it on-device (new `backTranslate` message type in the liblouis worker + `backTranslateText()` in `braille-translator.js`) so a braille reader can verify pasted braille. Whenever the editor has content the card embosses it exactly as written — no liblouis pass — with per-line validation (braille block U+2800–U+28FF only, line capacity) and the same multi-card chunking, pager, and render-all handling as translated text. A dirty-state lock keeps hand-edited braille authoritative (editing the English text clears only pristine, translation-mirroring content), and every fill/clear is announced through a visible status live region. Ported from the braille-cylinder-stl-generator project. Includes a UEB number-sign help note (hyphens end numeric mode, so `206-543-4779` legitimately needs three number signs; the BANA form `206.543.4779` needs one) in the panel and `BRAILLE_CARD_GUIDE.md`
-- **Friendly download names for cards and signs** — card and sign exports join the charms in being named after their content: `Braille Card hello.stl`, `Braille Card 2 of 3 hello.stl` (paging), `Braille Cards hello.stl` (render-all), `Braille Sign Exit.stl`. When braille pasted into the braille editor is the only input, the first line is back-translated on-device to recover a name; the hashed default remains the fallback. The multi-card pager hint and render-all notice now show the real export name
-- **Edge detail limit** — a new select in the Preview Settings drawer caps how many segments the Show Edges overlay may draw: Low (25,000), Balanced (75,000, the default), High (250,000), or Unlimited. When a model exceeds the cap the overlay keeps the *longest* segments, so silhouettes and structural lines survive while the short tessellation facets that turn a dense keyguard into a solid dark mass are dropped. A readout under the select reports the result ("Showing 75,000 of 214,338 edges") after every rebuild, and the choice persists per app profile
-- **Per-theme edge-overlay colors** — the Show Edges overlay color now comes from a new `edges` entry in every `PREVIEW_COLORS` theme (held to ≥4.5:1 against the model color per W3C thin-stroke guidance, enforced by a new contrast unit test) instead of a hardcoded light/dark pair, and the overlay rebuilds on theme change via `refreshThemeSensitiveOverlays()`
-- **Braille Charm multi-charm mode** (Braille Charm 1.3.0) — each non-whitespace character of the typed text becomes its own charm, translated individually (a capital's indicator cell shares its charm). The new **Generate all charms** toggle (on by default) renders every charm side by side in one model, laid out along the bed and separated by the new `charm_gap_mm` parameter (default 5 mm), via `charm_layout = "All charms"` and twelve `Charm_1`–`Charm_12` slots; with the toggle off, a Previous/Next pager steps through the charms ("Charm 2 of 7 — r") and renders each one separately. The panel warns per charm when a character exceeds the 2-cell face budget, when a word needs more than the 12 in-file slots, and (in the SCAD console) when the combined layout exceeds ~250 mm of bed width. The raw `braille_chars` parameter still accepts pasted Unicode braille for a single charm
-- **Friendly braille-charm download names** — charm exports are named after their content instead of the hashed default: `Braille Charm B.stl` for a single charm (the character as typed) and `Braille Charms Brennen.stl` when generating all charms in one file; applies to the download button and all export-format menu items (new `resolveDownloadFilename` helper in `download.js`)
+### The Charm Designer and the drawing editor
 
-### Changed
+- Choosing a picture no longer takes the page away: one sentence says what
+  the picture appears to be and what converting will cost, a small picture
+  converts by itself, anything bigger waits for Start conversion, and the
+  conversion runs in a dialog with its stages named and a Cancel at every
+  one. Tracing runs on a worker thread; a second tracing engine, Potrace
+  built from source, is the default.
+- Four ways to read a picture: Line art, Solid shape, Light and dark, and
+  Colors, which separates a photo or a colored drawing into one shape per
+  color. Muted colors get their own names. A cropped reference photo can be
+  the design. A symbol keeps its picture instead of becoming a blob.
+- The drawing editor is one picture that fills its space, with the side
+  panel as a drawer and the toolbar in named rows. It lives where the 3D
+  preview is, and a Drawing / Charm switch shows the charm the drawing will
+  become. A DXF opens, edits and saves back as DXF; a plain SVG opens,
+  cleans up and saves back with no design involved. Your edits can land in
+  the folder another program is watching.
+- Every shape has one row: its name, a switch reading On, Cut out or Off,
+  and More. The panel, the row, the color key and the screen reader use the
+  same words. Hovering a shape marks its row, a press chooses it, two
+  fingers pinch and pan. Several rows can be chosen together with Ctrl,
+  Shift, Ctrl+A and the arrow keys, and a switch pressed on a chosen row
+  sets them all. Shapes can be deleted from the list, and drawings with
+  hundreds of shapes open.
+- The result combines by itself a third of a second after each change, off
+  the main thread, with one sentence saying how long it takes; a combine
+  that would take longer than the measured budget waits to be asked. The
+  combine that used to take nineteen seconds takes about one and a half.
+- Every shape starts on layer 1, and three layers are always offered, each
+  with its own height on the charm, raised or engraved. The stack is built
+  once, in bands, so nothing stands on air. All three shapes of the Charm
+  Designer build it: the Bracelet Clip Charm, the Flat Pendant and the Logo
+  Plate. The Flat Pendant can take the shape of your own drawing.
+- The wall behind a picture is left out by itself, so the charm carries the
+  drawing rather than a plate with the drawing cut out of it. A plain
+  drawing's own background starts Off, and an automatic preparation that
+  keeps nothing opens the editor instead of applying an empty design.
+- Every shape is measured against half a millimeter at the width the charm
+  really prints, the too-thin ones are marked, and one press turns them all
+  off, reversibly. The charm tells the app how wide it prints a design.
+- Crop takes an edge off a picture and traces it again; Undo crop puts it
+  back.
+- The credit line that comes with a downloaded icon is left out of the
+  charm.
+- A drawing can arrive by a link: `?drawing=<url>` on any link that opens a
+  design fetches an SVG, DXF, PNG or JPG, converts it without a press and
+  opens the drawing editor on it; the design parameters take DXF.
+- `@label(text)` beside a parameter in a `.scad` tile names its dial.
+- Fixed on the way: a role pressed on a chosen row is pressed for the
+  selection; the ring inside a drawn letter can be turned off; Close keeps
+  the applied design; the way back into the editor after Apply; a changed
+  setting never starts a conversion by itself; the drawing that came back
+  in nineteen seconds; the picture cap that did nothing for three of the
+  four modes; every plain upload turning the layered design on; three
+  editors built side by side; the bail loop cut from the Flat Pendant
+  instead of added to it; the selection you could not see; Shift-click
+  selecting text; the relief flatten that lost real drawings; a DXF's
+  curves; the traced color masks that did not touch; a file control saying
+  [object Object]; the Logo Plate example that never found its sample logo.
 
-- **Show Edges is on by default.** The outline overlay makes shape, wall thickness, and feature boundaries legible without rotating the model, which matters most for the low-vision users the Forge targets — but it was hidden behind a View menu item most people never found. It now starts on, bounded by the new edge detail limit so dense models stay responsive. A saved preference still wins: anyone who explicitly turned edges off keeps them off, with no migration
-- **Reference-image help text is now visible to sighted users.** The note explaining that an overlay image is a visual guide only — it does not modify the SCAD file — was marked `sr-only`, so only screen-reader users ever heard it and several sighted users reasonably assumed the PNG/JPEG/SVG upload was a model import. `#overlaySourceHelp` now renders as visible tertiary-colored helper text under the overlay source row (new `.overlay-source-help-text` class) while remaining the control's `aria-describedby` target, so both audiences get the same explanation
-- **Upstream attribution repointed after the braille repos were split and renamed.** The sign and charm generators moved out of `braille-wedge-card-openscad` into [braille-sign-openscad](https://github.com/BrennenJohnston/braille-sign-openscad) and [braille-charm-openscad](https://github.com/BrennenJohnston/braille-charm-openscad), and the cylinder pair was renamed to `braille-cylinder-stl-generator` / `braille-cylinder-stl-generator-openscad`. The `braille-sign` and `braille-charm` manifests' `inspired_by.reference`, all three example SCAD headers, the welcome-screen link, the braille guide's licensing section, and the liblouis worker's attribution comment now name the right upstream repo. Each example's SCAD header separates its own upstream from the wedge card it borrows the dot system from, and the integration tests assert the matching repo slug per example rather than all three asserting the wedge card
-- **Braille Card auto-sizes by default** (Braille Card 1.2.0) — `auto_size_card` now defaults On, so short labels come out as small cards that fit the text plus margin instead of a mostly empty 200 × 100 mm face; the panel's Card size select gains a matching **Auto-size to fit text** option (the new default) and syncs back to it whenever auto-sizing is on. Fixed presets (Business card, Postcard, …) still turn auto-sizing off and use the manual capacity math
-- **Thinner braille defaults** — the Braille Card's `card_thickness_mm` default drops 1.5 → 1 mm, and the Braille Sign's `plate_thickness_mm` (Braille Sign 1.1.0) drops 3 → 1 mm with the slider minimum lowered 2 → 1 mm, saving filament and print time on parts whose stiffness comes from the leaning print orientation
+### Braille
 
-### Fixed
+- A braille editor (Unicode) in the Braille Card and the Braille Sign: one
+  editable line of braille per row, filled from the typed text and checked
+  before it is written; on a sign it drives the braille plate only.
+- Multi-charm mode on the Braille Charm: each character becomes its own
+  charm, translated on its own.
+- Cards, signs and charms are named after their content when downloaded.
+- The Braille Card auto-sizes by default and its rarely used lines sit in a
+  collapsed group; card and sign plates are thinner by default; editing the
+  raw row count no longer resets silently. Upstream attribution follows the
+  split braille repositories.
 
-- **Silent grid_rows reset in the Braille Card panel** — editing the raw `grid_rows` parameter used to be overwritten without notice by the panel's next layout (which always re-wrote the clamped capacity value). `grid_rows` and "Max rows per card" are now synced two ways: a direct parameter edit updates the panel input, and when the card height cannot fit the requested rows the clamp is surfaced in the warning tier and announced to screen readers ("Rows per card limited to N by the card height") instead of happening silently. The requested value stays put (sticky intent), so it takes effect again as soon as the card grows
-- **Show Edges never refreshed after a parameter change.** The display-options controller subscribed to the preview's post-load event during app startup, but the `PreviewManager` is not constructed until the first SCAD file loads — so the subscription read a `null` manager, returned without registering anything, and was never retried. The outline stayed frozen on whatever geometry was current when the toggle was last flipped, and theme-driven edge recoloring was dead for the same reason. The one-shot private hook is replaced by a public, idempotent `connectPreviewManager()` that `file-handler.js` calls once the manager exists (alongside the existing overlay/grid call), re-targets cleanly if the manager is ever replaced, and self-heals if some other path creates one. Toggling the overlay by hand always worked, and Alt View installed its own refresh hook, which is why the bug looked intermittent
-- **Edges overlay desync** — the Show Edges overlay was added to the scene with a one-time copy of the mesh transform, so any later mesh movement (recentering, auto-bed, rotation centering) left the outline floating in the wrong place. The overlay is now parented to the mesh itself and inherits every transform, and the model materials gained `polygonOffset` so the overlay lines are not chewed up by z-fighting with the facets they trace (technique ported from the braille-cylinder-stl-generator project)
-- **Light-theme model contrast (WCAG 2.2 SC 1.4.11)** — the light theme's model colors were the desktop Cornfield pair `#f9d72c` / `#9dcb51`, which measure 1.3:1 and 1.7:1 against the `#f5f5f5` viewer background and fail the 3:1 non-text contrast requirement. They are darkened in the same hues to `#9a8200` (3.5:1) and `#5a8a22` (3.8:1); all themes' model, back-face, and edge colors are now verified computationally by `tests/unit/preview-colors-contrast.test.js`
+### Sharing and links
+
+- A link opens with your settings, and Forge gives you one back with the
+  values you changed. The Publish dialog hands over the whole project as
+  one file, with a manifest and a provenance record that is now a promise:
+  `forge-provenance.json` is countersigned. A shared link can decide which
+  settings you meet first.
+- One page a pipeline tool can build against without talking to anybody:
+  `docs/specs/FORGE_HANDOFF_CONTRACT.md`. Adding a design of your own is a
+  documented job, with a template and a guide.
+- Fixed: a link's adjusted numbers wait for you; the Publish dialog is
+  readable in the light theme and never hands you a manifest Forge would
+  refuse; the sharing guide stops recommending hosting that does not work.
+- Groundwork, off by default: opening a file straight into Forge from the
+  desktop.
+
+### The preview
+
+- Show Edges is on by default, with an edge detail limit and a color per
+  theme, and it follows the model after every move. The light theme's model
+  colors meet the contrast bar.
+- The reference image can sit on any surface, be cropped and be used as the
+  design, and its place is remembered per project.
+- The preview's heavy work after a load runs off the main thread, and it
+  speaks its completion rather than its progress. A build stamp in the
+  About dialog tells two builds of one version apart.
+
+### Accessibility
+
+- Long help texts deliver their first sentence to a screen reader, then the
+  rest on request. The drawing editor reads correctly. The contrast modes
+  get the thicker focus ring they ask for, the header toggles say the state
+  they are in, and every slider row meets the 44 px touch floor.
+- American English everywhere a person reads or hears it, with a guard that
+  reads every string.
+- `docs/notes/SCREEN_READER_LESSONS.md` writes down what a screen reader
+  actually hears.
+- Fixed: the mono theme's hovered primary buttons keep a legible label; two
+  texts on the chosen welcome card met the contrast minimum; Safari gives
+  focus back after the tour closes; the preview works on Safari in the
+  dev server.
+
+### Engineering
+
+- One toolchain, npm; the CI shard planner accounts for what CI skips;
+  twelve tests only a full local board could see are current again; three
+  red lanes on develop fixed without loosening an assertion; a
+  high-severity transitive advisory patched.
+- The root and the docs folder are sorted by purpose, every link rewritten
+  and checked; the AI-coding files are out of the public repository and
+  stay local; `docs/deploying/SITE_FACTS.md` states what the deployed site
+  is made of and what it does with your data; a quick start shows a tool
+  how to point a link at Forge; `npm run check-mermaid` parses every
+  diagram the way GitHub does.
+
+### Alt View
+
+- The alternate view's walk gained four cities built from map data, with
+  real ground, weather, people, traffic, street furniture, real landmarks
+  to find, a legend and a map to travel from, an auto-walk, day and night,
+  color as a switch of its own, and keys with buttons for everyone. Its
+  picture holds still while you move, runs at full frame rate from the
+  default size up, and speaks the street you are on.
 
 ### Security
 
-- **Three high-severity transitive advisories patched, unblocking the CI Security Checks job.** `fast-uri` 3.1.3 → 3.1.4 ([GHSA-v2hh-gcrm-f6hx](https://github.com/advisories/GHSA-v2hh-gcrm-f6hx) — host confusion via a literal backslash authority delimiter) is the only one that ships, reaching the bundle through the `ajv` runtime dependency. The other two are build-time only: `postcss` 8.5.16 → 8.5.25 ([GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849) — path traversal in `sourceMappingURL` auto-loading) via `vite`, and `brace-expansion` 5.0.7 → 5.0.9 ([GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg) — denial of service via unbounded expansion) via `eslint` → `minimatch`. All three fixes land inside the semver ranges already declared in `package.json`, so the change is confined to `package-lock.json` and `npm audit --audit-level=high` passes again
+- Three high-severity transitive advisories patched (`fast-uri`), unblocking
+  the CI security job.
 
----
+### Shelved
+
+- The Stencil Maker: a welcome-screen tool that turned a shape or a picture
+  into spray-stencil plates with bridges, registration marks and a jig. The
+  work grew bigger than I expected, so it is shelved: its card, its example
+  and its tests are out of the app, and the engine stays in the repository,
+  dormant, for when I pick it up again.
 
 ## [4.5.0] - 2026-07-12
 
@@ -398,11 +517,11 @@ Security hardening, saved projects, documentation overhaul, and accessibility im
 
 ### Documentation
 
-- **Added `docs/ARCHITECTURE.md`** - Complete system architecture with 10 Mermaid diagrams
+- **Added `docs/developing/ARCHITECTURE.md`** - Complete system architecture with 10 Mermaid diagrams
   - Module map, render pipeline, saved projects flow, validation pipeline
   - Service worker caching, tutorial sandbox, comparison mode, CLI structure
 - **Added `docs/guides/SECURITY_TESTING.md`** - Security audit procedures
-- **Added `docs/DEV_QUICK_START.md`** - Developer onboarding guide
+- **Added `docs/developing/DEV_QUICK_START.md`** - Developer onboarding guide
 - **Documentation style audit** - Rewrote docs to single-maintainer voice
   - Removed boilerplate patterns and excessive emoji
   - Consolidated docs into predictable `docs/` structure
@@ -548,7 +667,7 @@ This is the first **major stable release** for production deployment on Cloudfla
 
 - Resolved `openFeaturesGuide` scope error that caused lint failures
 - Fixed unused variable warnings (`formatPresetDescription`, `index`, `fileContent`)
-- Prevented generate actions from cancelling in-progress previews
+- Prevented generate actions from canceling in-progress previews
 - Improved internal render retry detection for numeric OpenSCAD error codes
 
 ---
@@ -557,7 +676,7 @@ This is the first **major stable release** for production deployment on Cloudfla
 
 ### Fixed
 
-- Prevented generate actions from cancelling in-progress previews, which could leave the UI stuck when generating before preview completion.
+- Prevented generate actions from canceling in-progress previews, which could leave the UI stuck when generating before preview completion.
 - Improved internal render retry detection for numeric OpenSCAD error codes to recover cleanly without user intervention.
 
 ---
@@ -1176,7 +1295,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 - **Repository**: [GitHub](https://github.com/BrennenJohnston/openscad-assistive-forge)
 - **Live Demo**: [Cloudflare Pages](https://openscad-assistive-forge.pages.dev/)
-- **Documentation**: [docs/](docs/)
+- **Documentation**: [docs/](docs)
 - **License**: GPL-3.0-or-later
 
 ---

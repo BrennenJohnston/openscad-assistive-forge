@@ -3,8 +3,6 @@
  *
  * Discovery spec: 9 viewports x 10 UI surfaces. Failures are expected and
  * will be triaged in Phase 3. WASM-dependent tests are skipped in CI.
- *
- * @see .cursor/plans/responsive_ui_bug_audit_122efc11.plan.md  Phase 1
  */
 import { test, expect } from '@playwright/test'
 import path from 'path'
@@ -48,6 +46,7 @@ const VIEWPORTS = [
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -62,7 +61,7 @@ async function loadSampleFile(page) {
 
   const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
   await page.setInputFiles('#fileInput', fixturePath)
-  await page.waitForSelector('.param-control', { timeout: 30_000 })
+  await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
 
   try {
     const notNowBtn = page.locator('#saveProjectNotNow')
@@ -186,7 +185,34 @@ for (const vp of VIEWPORTS) {
       })
       expect(isScrollable).toBe(true)
 
-      await backdrop.click()
+      // The backdrop spans the whole viewport and the open drawer covers the
+      // middle of it, so Playwright's default click - at the element's centre -
+      // lands on the drawer's own content every time. MEASURED with the drawer
+      // open: the centre hits the preset actions at 320, Reset at 375, the
+      // customizer header at 480 and the panel body at 600. A person taps the
+      // strip beside the drawer, 32 px wide at the narrowest of these; so does
+      // this.
+      const strip = await page.evaluate(() => {
+        const back = document.querySelector('#drawerBackdrop')
+        const panel = document
+          .querySelector('#paramPanel')
+          .getBoundingClientRect()
+        // Search the strip rather than assume a point in it: at 320 px it is
+        // 32 px wide and a disabled preset button overflows the panel's right
+        // edge into part of it.
+        for (let f = 0.5; f > 0.05; f -= 0.05) {
+          const y = Math.round(window.innerHeight * f)
+          for (let x = window.innerWidth - 3; x > panel.right; x -= 4) {
+            if (document.elementFromPoint(x, y) === back) return { x, y }
+          }
+        }
+        return null
+      })
+      expect(
+        strip,
+        'the open drawer leaves no strip of backdrop a finger could tap'
+      ).not.toBeNull()
+      await backdrop.click({ position: strip })
       await expect(drawer).not.toHaveClass(/drawer-open/)
 
       await checkNoHorizontalOverflow(page)
@@ -257,7 +283,7 @@ for (const vp of VIEWPORTS) {
       await safeGoto(page, '/?example=q-charm&flag_svg_preparer=true')
       await wasmReady
 
-      await page.waitForSelector('.param-control', { timeout: 30_000 })
+      await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
 
       try {
         const notNowBtn = page.locator('#saveProjectNotNow')
@@ -323,10 +349,42 @@ for (const vp of VIEWPORTS) {
       // Open the keyboard shortcuts modal (no WASM needed)
       const shortcutsBtn = page.locator('#shortcutsToggle')
       await expect(shortcutsBtn).toBeVisible()
-      await shortcutsBtn.click()
 
       const modalContent = page.locator('#shortcutsModal .modal-content')
-      await expect(modalContent).toBeVisible({ timeout: 3000 })
+
+      // #shortcutsToggle sits in the static HTML, so it is visible the instant
+      // the document loads - but initApp() is async and called at module scope,
+      // and this button's click handler is attached thousands of lines into it.
+      // So there is a window where the button is on screen and DEAD, and a
+      // click that lands in it is swallowed: waiting longer on the modal cannot
+      // recover that click, because nothing is ever coming.
+      //
+      // MEASURED (build/dp-r4 harness, clicking every 100ms from
+      // domcontentloaded and timing the first click that works): the dead
+      // window after `load` is 766ms on Firefox, 450ms on Chromium, and 1,287ms
+      // on Chromium at 6x CPU throttling - it scales with how slow the machine
+      // is. This test used to click exactly once, at `load`, then allow the
+      // modal 3s. On a contended CI box that window passes 3s and the test
+      // fails with nothing wrong with the app, which is what happened on CI
+      // Firefox: three attempts red in a row, then green on the re-run.
+      // Locally it is not flaky at all (0 failures in 6 Firefox runs, ~4.7s
+      // each), so patience alone would have proved nothing here.
+      //
+      // Clicking until the modal answers fixes the cause and leaves every
+      // assertion below untouched. _openShortcutsModal always opens (it never
+      // toggles) and wires its body once, so a repeat click is safe, and
+      // checking visibility first means the button is never clicked through the
+      // open modal's own overlay.
+      await expect
+        .poll(
+          async () => {
+            if (await modalContent.isVisible()) return true
+            await shortcutsBtn.click({ timeout: 2000 }).catch(() => {})
+            return modalContent.isVisible()
+          },
+          { timeout: 15_000, intervals: [200, 400, 800, 1600] }
+        )
+        .toBe(true)
 
       const modalBox = await modalContent.boundingBox()
       expect(modalBox.width).toBeLessThanOrEqual(vp.width)

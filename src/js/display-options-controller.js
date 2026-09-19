@@ -11,11 +11,30 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import { getAppPrefKey } from './storage-keys.js';
+import {
+  readScopedPref,
+  writeScopedPref,
+  getActiveUiNamespace,
+} from './ui-scoped-prefs.js';
+import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate } from './announcer.js';
-import { buildAxisTickOverlay } from './axis-tick-overlay.js';
+import {
+  buildAxisTickOverlay,
+  resolveAxisMarkColor,
+} from './axis-tick-overlay.js';
+import { buildAxisLinesOverlay } from './axis-lines-overlay.js';
 
 const PREF_PREFIX = 'display-';
+/**
+ * Forge defaults. Classic's differ for axes and axisMarks (the desktop's
+ * out-of-the-box look: black axes with tick marks on) — those live in
+ * ui-scoped-prefs.js NAMESPACE_DEFAULTS, which readScopedPref serves when
+ * the Classic namespace has no saved value. UF-14 replaced the old
+ * first-entry stamp (classic-view-defaults-v2) with that per-namespace
+ * fallback, so each interface keeps its own saved copy of every toggle
+ * and neither can overwrite the other's again (U-25).
+ */
 const DEFAULTS = {
   axes: false,
   edges: true,
@@ -79,7 +98,7 @@ export class DisplayOptionsController {
     /** @type {boolean} Re-entrancy guard for connectPreviewManager() */
     this._connecting = false;
     /** @type {Object|null} Three.js AxesHelper instance */
-    this._axesHelper = null;
+    this._axesOverlay = null;
     /** @type {Object|null} Three.js LineSegments for edges overlay */
     this._edgesOverlay = null;
     /** @type {Object|null} Three.js Group for crosshair lines */
@@ -92,10 +111,55 @@ export class DisplayOptionsController {
     this._loadPreferences();
     this._wireControls();
     this._syncControls();
+
+    // The live swap (UF-14 P3): entering or leaving Classic crosses a
+    // preference-namespace boundary, so the controller drops the old
+    // interface's state and picks up the target's own saved copy.
+    // Simplified<->Standard flips share the forge namespace and change
+    // nothing here.
+    this._lastNamespace = getActiveUiNamespace();
+    getUIModeController().subscribe(() => {
+      const ns = getActiveUiNamespace();
+      if (ns === this._lastNamespace) return;
+      this._lastNamespace = ns;
+      this.reloadForNamespace();
+    });
+
     // The PreviewManager does not exist until the first model loads, so this
     // is usually a no-op here; file-handler.js connects us once it is built.
     if (!this.connectPreviewManager()) {
       this._applyAll();
+    }
+  }
+
+  /**
+   * Re-read every display option from the (new) active namespace and apply
+   * only what actually changed — scene overlays, checkboxes, and one
+   * display-option-change event per changed option so the View menu, the
+   * Classic camera bar and the drawer all agree (the D-24 lesson: surfaces
+   * that only learn about their own clicks lie). Deliberately silent, like
+   * the old Classic first-entry stamp: the mode switch already announces
+   * itself, and two or three toggle announcements would talk over it.
+   */
+  reloadForNamespace() {
+    const before = { ...this.state };
+    const budgetBefore = this._edgeBudget;
+    this._loadPreferences();
+    this._syncControls();
+
+    for (const key of Object.keys(this.state)) {
+      if (this.state[key] === before[key]) continue;
+      this._apply(key);
+      if (key === 'edges') this._updateEdgeBudgetStatus();
+      document.dispatchEvent(
+        new CustomEvent('display-option-change', {
+          detail: { option: key, enabled: this.state[key] },
+        })
+      );
+    }
+    if (this._edgeBudget !== budgetBefore && this.state.edges) {
+      this._apply('edges');
+      this._updateEdgeBudgetStatus();
     }
   }
 
@@ -131,6 +195,16 @@ export class DisplayOptionsController {
         }
         pm.addThemeChangeListener(this._boundThemeRefresh);
       }
+      // The axis overlays are functions of the camera distance (UF-7:
+      // desktop's showScalemarkers rebuilds per frame; ours rebuild when
+      // the zoom actually moves). Orbit and pan keep the target distance,
+      // so this only fires real rebuilds while zooming.
+      if (pm.controls?.addEventListener) {
+        if (!this._boundZoomRefresh) {
+          this._boundZoomRefresh = () => this._queueZoomRebuild();
+        }
+        pm.controls.addEventListener('change', this._boundZoomRefresh);
+      }
 
       this._applyAll();
     } finally {
@@ -148,6 +222,71 @@ export class DisplayOptionsController {
     if (pm.removeThemeChangeListener && this._boundThemeRefresh) {
       pm.removeThemeChangeListener(this._boundThemeRefresh);
     }
+    if (pm.controls?.removeEventListener && this._boundZoomRefresh) {
+      pm.controls.removeEventListener('change', this._boundZoomRefresh);
+    }
+  }
+
+  /**
+   * Camera distance to the orbit target — desktop `Camera::zoomValue()`,
+   * the number every UF-7 overlay dimension derives from.
+   * @param {Object} pm
+   * @returns {number|null}
+   * @private
+   */
+  _cameraDistanceMm(pm) {
+    const cam = pm?.camera;
+    if (!cam?.position) return null;
+    const target = pm?.controls?.target;
+    const base =
+      target && typeof cam.position.distanceTo === 'function'
+        ? cam.position.distanceTo(target)
+        : typeof cam.position.length === 'function'
+          ? cam.position.length()
+          : null;
+    if (base == null) return null;
+    // Orthographic zoom scales the frustum, not the position — desktop's
+    // one viewer_distance drives both projections, so the effective
+    // distance here is the base divided by that zoom (zoom 2 ≙ half the
+    // visible world ≙ half the distance).
+    if (pm.getProjectionMode?.() === 'orthographic' && pm.orthoCamera) {
+      return base / (pm.orthoCamera.zoom || 1);
+    }
+    return base;
+  }
+
+  /** Coalesce controls 'change' bursts to one rebuild check per frame. @private */
+  _queueZoomRebuild() {
+    if (this._zoomRebuildQueued) return;
+    this._zoomRebuildQueued = true;
+    const raf =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 16);
+    raf(() => {
+      this._zoomRebuildQueued = false;
+      this._rebuildForZoom();
+    });
+  }
+
+  /** @private */
+  _rebuildForZoom() {
+    const pm = this.getPreviewManager();
+    if (!pm?.scene) return;
+    const distance = this._cameraDistanceMm(pm);
+    if (!distance) return;
+    // 0.5% is invisible at these sizes; anything larger re-derives the
+    // whole overlay from the new distance, exactly as the desktop would.
+    const stale = (built) =>
+      typeof built === 'number' && Math.abs(distance - built) / built >= 0.005;
+    if (this.state.axisMarks && stale(this._axisTickOverlay?.distanceMm)) {
+      this._tearDownAxisTickOverlay();
+      this._applyAxisMarks(pm);
+    }
+    if (this.state.axes && stale(this._axesOverlay?.distanceMm)) {
+      this._tearDownAxesOverlay();
+      this._applyAxes(pm);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -164,16 +303,30 @@ export class DisplayOptionsController {
    * @param {DisplayOption} option
    * @param {boolean} enabled
    */
-  set(option, enabled) {
+  set(option, enabled, { announce = true } = {}) {
     if (!(option in this.state)) return;
     this.state[option] = enabled;
     this._savePref(option, enabled);
     this._apply(option);
     this._syncCheckbox(option);
     if (option === 'edges') this._updateEdgeBudgetStatus();
+
+    // Several surfaces show the same flag — the View menu, the Classic 3D
+    // view toolbar, the camera panel. Without this they only learned about
+    // their own clicks, so toggling from the menu left the toolbar button's
+    // aria-pressed stale and a screen reader reporting the wrong state.
+    document.dispatchEvent(
+      new CustomEvent('display-option-change', {
+        detail: { option, enabled },
+      })
+    );
+
+    // Silent only for the Classic first-entry stamp: two or three of these in
+    // one go would talk over the mode change the user actually asked for. Every
+    // user-driven call still speaks.
+    if (!announce) return;
     const label =
-      HUMAN_LABELS[option] ||
-      option.charAt(0).toUpperCase() + option.slice(1);
+      HUMAN_LABELS[option] || option.charAt(0).toUpperCase() + option.slice(1);
     announceImmediate(`${label} ${enabled ? 'shown' : 'hidden'}`);
   }
 
@@ -192,6 +345,12 @@ export class DisplayOptionsController {
     if (this.connectPreviewManager()) return;
     this._apply('edges');
     this._apply('wireframe');
+    // U-3 hardening: any path that replaces or clears scene content lost
+    // axes and ticks with nothing to restore them — this list re-applied
+    // only what a mesh swap invalidates. Both are idempotent re-adds
+    // (getObjectByName guards), so the common case costs nothing.
+    this._apply('axes');
+    this._apply('axisMarks');
   }
 
   /** @returns {number} Max edge segments drawn; 0 means unlimited. */
@@ -206,7 +365,7 @@ export class DisplayOptionsController {
    */
   setEdgeBudget(value) {
     this._edgeBudget = _coerceEdgeBudget(value);
-    safeSetItem(
+    writeScopedPref(
       getAppPrefKey(PREF_PREFIX + EDGE_BUDGET_PREF),
       String(this._edgeBudget)
     );
@@ -231,6 +390,12 @@ export class DisplayOptionsController {
       this._tearDownAxisTickOverlay();
       this._apply('axisMarks');
     }
+    if (this.state.axes) {
+      // The axis lines resolve the same theme color as the ticks (Q-22),
+      // so they rebuild on the same events.
+      this._tearDownAxesOverlay();
+      this._apply('axes');
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -239,20 +404,22 @@ export class DisplayOptionsController {
 
   _loadPreferences() {
     for (const key of Object.keys(DEFAULTS)) {
-      const saved = safeGetItem(getAppPrefKey(PREF_PREFIX + key));
+      const saved = readScopedPref(getAppPrefKey(PREF_PREFIX + key));
       if (saved !== null) this.state[key] = saved === 'true';
+      else this.state[key] = DEFAULTS[key];
     }
-    const savedBudget = safeGetItem(
+    const savedBudget = readScopedPref(
       getAppPrefKey(PREF_PREFIX + EDGE_BUDGET_PREF)
     );
-    if (savedBudget !== null) {
-      this._edgeBudget = _coerceEdgeBudget(savedBudget);
-    }
+    this._edgeBudget =
+      savedBudget !== null
+        ? _coerceEdgeBudget(savedBudget)
+        : DEFAULT_EDGE_BUDGET;
   }
 
   /** @param {string} key @param {boolean} val */
   _savePref(key, val) {
-    safeSetItem(getAppPrefKey(PREF_PREFIX + key), String(val));
+    writeScopedPref(getAppPrefKey(PREF_PREFIX + key), String(val));
   }
 
   // ---------------------------------------------------------------------------
@@ -377,12 +544,31 @@ export class DisplayOptionsController {
         try {
           this._axisTickOverlay = buildAxisTickOverlay(T, {
             themeKey: pm.currentTheme,
+            distanceMm: this._cameraDistanceMm(pm) ?? undefined,
           });
         } catch (err) {
-          console.warn(
+          // Do NOT just log and return. That is what hid this for a whole
+          // release: the option read as on, the camera-bar button read as
+          // pressed, and nothing was ever drawn. If the overlay cannot be
+          // built, the control has to stop claiming otherwise.
+          console.error(
             '[DisplayOptions] Failed to build axis tick overlay:',
             err
           );
+          this.state.axisMarks = false;
+          // Deliberately NOT persisted (U-3): writing the preference off
+          // here is what poisoned profiles permanently — every pre-#59
+          // session did it, and the once-ever defaults marker meant nothing
+          // ever turned it back on. In-memory off keeps the controls honest
+          // for this session; the saved preference stays intact so the next
+          // session (or a manual re-toggle) retries the build.
+          this._syncCheckbox('axisMarks');
+          document.dispatchEvent(
+            new CustomEvent('display-option-change', {
+              detail: { option: 'axisMarks', enabled: false },
+            })
+          );
+          announceImmediate('Axis distance markings are unavailable');
           return;
         }
       }
@@ -412,16 +598,47 @@ export class DisplayOptionsController {
   _applyAxes(pm) {
     const T = this.getThree();
     if (this.state.axes) {
-      if (!this._axesHelper && T) {
-        this._axesHelper = new T.AxesHelper(50);
-        this._axesHelper.name = '__displayAxes';
+      if (!this._axesOverlay && T) {
+        // Was AxesHelper(50): positive halves only, and 50mm short of where
+        // the tick overlay puts its outermost marks, so ticks at -200..-50
+        // and +100..+200 had no line under them at all.
+        this._axesOverlay = buildAxisLinesOverlay(T, {
+          themeKey: pm.currentTheme,
+          distanceMm: this._cameraDistanceMm(pm) ?? undefined,
+        });
       }
-      if (this._axesHelper && !pm.scene.getObjectByName('__displayAxes')) {
-        pm.scene.add(this._axesHelper);
+      if (this._axesOverlay && !pm.scene.getObjectByName('__displayAxes')) {
+        pm.scene.add(this._axesOverlay.group);
       }
-    } else if (this._axesHelper) {
-      pm.scene.remove(this._axesHelper);
+    } else if (this._axesOverlay) {
+      pm.scene.remove(this._axesOverlay.group);
     }
+    this._syncAxisTriad(pm);
+  }
+
+  _tearDownAxesOverlay() {
+    if (!this._axesOverlay) return;
+    const pm = this.getPreviewManager();
+    if (pm?.scene) {
+      pm.scene.remove(this._axesOverlay.group);
+    }
+    this._axesOverlay.dispose?.();
+    this._axesOverlay = null;
+  }
+
+  /**
+   * The corner triad follows the Axes toggle exactly as the desktop's
+   * smallaxes follow Show Axes (UF-7 P3), and its letters wear the same
+   * scheme-resolved color as the axis lines and ticks.
+   * @param {Object} pm
+   * @private
+   */
+  _syncAxisTriad(pm) {
+    if (typeof pm?.setAxisTriad !== 'function') return;
+    pm.setAxisTriad({
+      visible: this.state.axes,
+      letterColorHex: resolveAxisMarkColor(pm.currentTheme).hex,
+    });
   }
 
   _applyEdges(pm) {
@@ -463,6 +680,31 @@ export class DisplayOptionsController {
    * @private
    */
   _buildEdgeGeometry(T, sourceGeometry) {
+    // D-143 (DP-52 P4): a big mesh's segments are computed in the preview's
+    // worker and arrive on `userData`; until they do, the overlay is empty
+    // rather than the page held for seconds. A small mesh takes three.js'
+    // own EdgesGeometry here, as it always did.
+    const ready = sourceGeometry?.userData?.edgeSegments;
+    if (ready) {
+      const geo = new T.BufferGeometry();
+      const total = sourceGeometry.userData.edgeTotal ?? ready.length / 6;
+      const budget = this._edgeBudget;
+      const canClip = T.Float32BufferAttribute && budget > 0;
+      let segments = ready;
+      let shown = Math.floor(ready.length / 6);
+      if (canClip && shown > budget) {
+        const clipped = this._clipSegments(ready, budget);
+        segments = clipped.segments;
+        shown = clipped.shown;
+      }
+      geo.setAttribute('position', new T.Float32BufferAttribute(segments, 3));
+      this._edgeStats = { total, shown };
+      return geo;
+    }
+    if (sourceGeometry?.userData?.extrasPending) {
+      this._edgeStats = { total: 0, shown: 0 };
+      return new T.BufferGeometry();
+    }
     const edgesGeo = new T.EdgesGeometry(sourceGeometry, 15);
 
     const position = edgesGeo.attributes?.position;
@@ -511,6 +753,39 @@ export class DisplayOptionsController {
 
     this._edgeStats = { total, shown };
     return clipped;
+  }
+
+  /**
+   * The longest `budget` segments of a set (the same rule the inline path
+   * applies to three.js' segments).
+   * @param {Float32Array} src - 6 numbers per segment
+   * @param {number} budget
+   * @returns {{segments: Float32Array, shown: number}}
+   */
+  _clipSegments(src, budget) {
+    const total = Math.floor(src.length / 6);
+    const lengthsSq = new Float32Array(total);
+    for (let i = 0; i < total; i++) {
+      const a = i * 6;
+      const dx = src[a + 3] - src[a];
+      const dy = src[a + 4] - src[a + 1];
+      const dz = src[a + 5] - src[a + 2];
+      lengthsSq[i] = dx * dx + dy * dy + dz * dz;
+    }
+    const cutoff = lengthsSq.slice().sort()[total - budget];
+    const kept = new Float32Array(budget * 6);
+    let shown = 0;
+    for (let i = 0; i < total && shown < budget; i++) {
+      if (lengthsSq[i] < cutoff) continue;
+      const a = i * 6;
+      const o = shown * 6;
+      for (let k = 0; k < 6; k++) kept[o + k] = src[a + k];
+      shown++;
+    }
+    return {
+      segments: shown === budget ? kept : kept.subarray(0, shown * 6),
+      shown,
+    };
   }
 
   /** Detach and dispose the edges overlay (parented to the mesh). */
@@ -570,15 +845,20 @@ export class DisplayOptionsController {
     this._unsubscribeFrom(this._connectedPm || pm);
     this._connectedPm = null;
     if (pm?.scene) {
-      if (this._axesHelper) pm.scene.remove(this._axesHelper);
+      if (this._axesOverlay) pm.scene.remove(this._axesOverlay.group);
       if (this._crosshairGroup) pm.scene.remove(this._crosshairGroup);
+    }
+    if (typeof pm?.setAxisTriad === 'function') {
+      pm.setAxisTriad({ visible: false });
     }
     this._removeEdgesOverlay();
     this._tearDownAxisTickOverlay();
-    this._axesHelper = null;
+    this._axesOverlay?.dispose?.();
+    this._axesOverlay = null;
     this._crosshairGroup = null;
     this._boundRefresh = null;
     this._boundThemeRefresh = null;
+    this._boundZoomRefresh = null;
   }
 }
 

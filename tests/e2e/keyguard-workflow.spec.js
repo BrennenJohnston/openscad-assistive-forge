@@ -25,6 +25,7 @@ const isCI = !!process.env.CI;
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
   });
 });
 
@@ -84,6 +85,38 @@ async function uploadFile(page, filePath) {
   } catch {
     // Modal didn't appear
   }
+}
+
+/**
+ * UF-9 P1: the app boots Simplified, which hides the project-files panel and
+ * the reference-image overlay section (ui-mode-hidden). These tests predate
+ * that mode split; take the app to Standard the way a user does.
+ */
+async function switchToStandardMode(page) {
+  const toggle = page.locator('#uiModeToggle');
+  await expect(toggle).toBeVisible({ timeout: 10000 });
+  if ((await toggle.getAttribute('aria-checked')) !== 'true') {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  }
+}
+
+/**
+ * UF-9 P1: parameter groups render as <details> collapsed by default
+ * (F5, owner decision 2026-05-15), so a .param-control is attached yet
+ * hidden. Prove the load, expand the groups, then assert visibility.
+ */
+async function expectParamsLoaded(page) {
+  await expect(page.locator('.param-control').first()).toBeAttached({
+    timeout: 10000,
+  });
+  const expandAll = page.locator('#expandAllGroupsBtn');
+  if (await expandAll.isVisible().catch(() => false)) {
+    await expandAll.click();
+  }
+  await expect(page.locator('.param-control').first()).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 test.describe('Keyguard SVG Export', () => {
@@ -158,11 +191,10 @@ test.describe('Keyguard SVG Export', () => {
     await expect(format2dGuidance).toBeHidden({ timeout: 2000 });
   });
 
-  // Re-enable attempt 2026-07-05 (review remediation): fails locally with
-  // "TimeoutError: page.waitForEvent: Timeout 60000ms exceeded while waiting
-  // for event 'download'" — the Generate click never produces a download in
-  // this flow. Needs product/test-flow investigation before re-enabling.
-  test.skip('should export valid SVG from simple 2D model', async ({ page }) => {
+  // Re-enabled 2026-08-19 (AF-7). The 2026-07-05 "no download" was the
+  // one-click premise: the primary action is Generate THEN Download since
+  // the transformer. Flow updated; passes in ~40s.
+  test('should export valid SVG from simple 2D model', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
     await page.goto('/');
@@ -175,16 +207,26 @@ test.describe('Keyguard SVG Export', () => {
     const outputFormatSelect = page.locator('#outputFormat');
     await outputFormatSelect.selectOption('svg');
     
-    // Wait for parameters to load
+    // UF-2 put parameters in drawers that ship closed; open them before
+    // asking for a control to be VISIBLE (the auto-preview spec's idiom).
+    await page.evaluate(() => {
+      for (const g of document.querySelectorAll('details.param-group')) g.open = true;
+    });
     await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find and click Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();
     await expect(generateButton).toBeVisible({ timeout: 5000 });
     
-    // Set up download promise before clicking
-    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
+    // The primary action is TWO steps now: Generate renders the SVG and the
+    // button becomes Download (measured: "SVG ready | 379 B" with the button
+    // relabelled). The one-click premise predates the transformer.
     await generateButton.click();
+    await expect(page.locator('#previewStatusText')).toContainText(/SVG ready/i, {
+      timeout: 90000,
+    });
+    const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+    await page.locator('button:has-text("Download")').first().click();
     
     const download = await downloadPromise;
     
@@ -210,12 +252,20 @@ test.describe('Keyguard SVG Export', () => {
     expect(hasGeometry).toBe(true);
   });
 
-  // Re-enable attempt 2026-07-05 (review remediation): fails locally in the
-  // upload phase — '.file-tree, .project-files' never becomes visible after
-  // the ZIP upload (same pre-existing failure as zip-workflow.spec.js on
-  // develop). Needs product/test-flow investigation before re-enabling.
-  test.skip('should export valid SVG from keyguard with Laser-Cut settings', async ({ page }) => {
+  // Re-enable attempt 2026-08-19 (AF-7): the 2026-07-05 upload-phase failure
+  // is GONE (stale selectors from before the UF-2 drawers / UF-31 tree; both
+  // repaired below, and the flow now reaches the render). What remains is a
+  // PRODUCT measurement: the real keyguard's first-layer SVG sat at
+  // "Generating SVG..." for FIVE minutes without finishing - projection() of
+  // the whole model in single-threaded WASM. Reported to the owner; the skip
+  // below carries the reason into the report instead of a comment.
+  test('should export valid SVG from keyguard with Laser-Cut settings', async ({ page }) => {
+    test.skip(
+      true,
+      'Keyguard first-layer SVG exceeds 5min in WASM (measured 2026-08-19); needs a product-level look at projection cost'
+    );
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+    test.setTimeout(420_000);
     
     await page.goto('/');
     
@@ -223,23 +273,30 @@ test.describe('Keyguard SVG Export', () => {
     const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
     
-    // Wait for project files to be recognized
-    await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
+    // "Project recognized" used to be asserted on the companion panel, but
+    // that panel is defaultHiddenInBasic - hidden by design in Simplified -
+    // and was never this test's subject. The keyguard's own parameter
+    // arriving IS the recognition signal.
+    await expect(
+      page.locator('.param-control[data-param-name="type_of_keyguard"] select')
+    ).toBeAttached({ timeout: 30000 });
     
-    // Wait for parameters to load
+    // UF-2 put parameters in drawers that ship closed; open them before
+    // asking for a control to be VISIBLE (the auto-preview spec's idiom).
+    await page.evaluate(() => {
+      for (const g of document.querySelectorAll('details.param-group')) g.open = true;
+    });
     await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
-    // Find and set type_of_keyguard to Laser-Cut
-    const keyguardTypeParam = page.locator('select[data-param="type_of_keyguard"]');
-    if (await keyguardTypeParam.isVisible()) {
-      await keyguardTypeParam.selectOption('Laser-Cut');
-    }
-    
-    // Find and set generate to "first layer for SVG/DXF file"
-    const generateParam = page.locator('select[data-param="generate"]');
-    if (await generateParam.isVisible()) {
-      await generateParam.selectOption('first layer for SVG/DXF file');
-    }
+    // These two settings ARE the test - the old if-visible guards skipped
+    // them silently against a selector that no longer existed, so the case
+    // was exporting a 3D keyguard's "SVG" whenever it last "passed".
+    await page
+      .locator('.param-control[data-param-name="type_of_keyguard"] select')
+      .selectOption('Laser-Cut');
+    await page
+      .locator('.param-control[data-param-name="generate"] select')
+      .selectOption('first layer for SVG/DXF file');
     
     // Select SVG output format
     const outputFormatSelect = page.locator('#outputFormat');
@@ -252,9 +309,14 @@ test.describe('Keyguard SVG Export', () => {
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();
     await expect(generateButton).toBeVisible({ timeout: 5000 });
     
-    // Set up download promise before clicking
-    const downloadPromise = page.waitForEvent('download', { timeout: 90000 });
+    // Two steps, same as the simple-2D case: Generate renders, then the
+    // relabelled Download button saves.
     await generateButton.click();
+    await expect(page.locator('#previewStatusText')).toContainText(/SVG ready/i, {
+      timeout: 300000,
+    });
+    const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+    await page.locator('button:has-text("Download")').first().click();
     
     const download = await downloadPromise;
     
@@ -284,15 +346,16 @@ test.describe('Companion File Handling', () => {
     // Create and upload the keyguard ZIP
     const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
-    
-    // Wait for project files to be recognized
-    await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
-    
-    // Check that both files are listed
-    const fileTree = page.locator('.file-tree, .project-files');
-    const fileNames = await fileTree.textContent();
-    
-    expect(fileNames).toContain('keyguard_minimal.scad');
+    await switchToStandardMode(page);
+
+    // UF-9 P1: the old .file-tree/.project-files markup no longer exists.
+    // Today the companion-files UI is #projectFilesControls: the badge
+    // counts EVERY project file (main + companions) and the list holds
+    // the companions only — badge '2' plus the TXT in the list is the
+    // modern proof that both ZIP files were recognized.
+    await expect(page.locator('#projectFilesControls')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#projectFilesBadge')).toHaveText('2');
+    const fileNames = await page.locator('#projectFilesList').textContent();
     expect(fileNames).toContain('openings_and_additions.txt');
   });
 
@@ -304,10 +367,11 @@ test.describe('Companion File Handling', () => {
     // Create and upload the keyguard ZIP
     const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
-    
-    // Wait for project files to be recognized
-    await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
-    
+    await switchToStandardMode(page);
+
+    // UF-9 P1: modern companion-files markup (see the test above).
+    await expect(page.locator('#projectFilesControls')).toBeVisible({ timeout: 15000 });
+
     // Wait a bit for any rendering/parsing to occur
     await page.waitForTimeout(3000);
     
@@ -334,54 +398,52 @@ test.describe('Multi-Preset JSON Import/Export', () => {
     await uploadFile(page, fixturePath);
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
+    await expectParamsLoaded(page);
     
-    // Open preset management (look for preset button or menu)
-    const presetButton = page.locator('[data-action="manage-presets"], button:has-text("Preset"), button:has-text("preset")').first();
-    
-    if (!(await presetButton.isVisible())) {
-      test.skip();
-      return;
-    }
-    
+    // UF-25: this test skipped itself with the reason "No manage-presets
+    // trigger in this build". That reason was false - #managePresetsBtn is
+    // right there. The old union locator's first() resolved to something
+    // hidden, so the guard fired and the case stopped running, and the skip
+    // message made it look deliberate. Import lives inside the Manage Presets
+    // dialog as data-action="import".
+    const presetButton = page.locator('#managePresetsBtn');
+    await expect(presetButton).toBeVisible();
     await presetButton.click();
-    
-    // Look for import option
-    const importButton = page.locator('button:has-text("Import"), [data-action="import-preset"]').first();
-    
-    if (!(await importButton.isVisible({ timeout: 3000 }))) {
-      // Preset import UI might not be implemented
-      test.skip();
-      return;
+
+    const importButton = page.locator('button[data-action="import"]');
+    await expect(importButton).toBeVisible({ timeout: 5000 });
+
+    // Import opens a file chooser rather than exposing a file input.
+    const chooserPromise = page.waitForEvent('filechooser');
+    await importButton.click();
+
+    // With no user presets saved yet there is no replace/merge question, but
+    // handle the dialog if this build asks one.
+    const modeDialog = page.locator('dialog.preset-import-mode-dialog');
+    if (await modeDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await modeDialog.locator('button[value="ok"]').click();
     }
-    
-    // Set up file input for import
-    const importInput = page.locator('input[type="file"][accept*=".json"]');
-    const multiPresetPath = path.join(process.cwd(), 'tests', 'fixtures', 'test-multipreset.json');
-    
-    await importInput.setInputFiles(multiPresetPath);
-    
+
+    const chooser = await chooserPromise;
+    await chooser.setFiles(
+      path.join(process.cwd(), 'tests', 'fixtures', 'test-multipreset.json')
+    );
+
     // Wait for import to complete
     await page.waitForTimeout(2000);
-    
+
     // Check that no error is shown
     const errorAlert = page.locator('[role="alert"]:has-text("error"), [role="alert"]:has-text("invalid")');
     const hasError = await errorAlert.isVisible({ timeout: 1000 }).catch(() => false);
-    
     expect(hasError).toBe(false);
-    
-    // Verify presets appear in list or dropdown
-    const presetList = page.locator('.preset-list, .preset-dropdown, select[data-preset]');
-    if (await presetList.isVisible()) {
-      const presetText = await presetList.textContent();
-      // Should contain at least one of the imported preset names
-      const hasImportedPreset = 
-        presetText.includes('Client A') ||
-        presetText.includes('Client B') ||
-        presetText.includes('Test Preset');
-      
-      expect(hasImportedPreset).toBe(true);
-    }
+
+    // The imported names must actually reach the preset dropdown. The old
+    // check sat inside `if (presetList.isVisible())` against selectors that
+    // match nothing, so it asserted nothing either.
+    const optionLabels = await page
+      .locator('#presetSelect')
+      .evaluate((el) => Array.from(el.options).map((o) => o.textContent.trim()));
+    expect(optionLabels.join('\n')).toContain('Client A');
   });
 });
 
@@ -397,7 +459,7 @@ test.describe('Parameter Switching Stability', () => {
     await uploadFile(page, zipPath);
 
     // Wait for parameters to be available
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 20000 });
+    await expectParamsLoaded(page);
 
     // Change a numeric parameter a few times to trigger multiple worker restarts
     const rowsParam = page.locator('input[data-param="number_of_rows"], input[name="number_of_rows"]');
@@ -427,15 +489,15 @@ test.describe('Parameter Switching Stability', () => {
     await uploadFile(page, zipPath);
 
     // Wait for parameters and initial preview to settle
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 20000 });
+    await expectParamsLoaded(page);
 
     const allPresets = await getPresetOptions(page);
     const nonEmpty = allPresets.filter(o => o.trim() !== '');
 
-    if (nonEmpty.length < 2) {
-      test.skip();
-      return;
-    }
+    // UF-27: this used to skip in silence when the fixture offered fewer than
+    // two presets. It offers them, so the guard was dead code that would have
+    // turned a broken fixture into a pass.
+    expect(nonEmpty.length).toBeGreaterThanOrEqual(2);
 
     // Switch presets at least 5 times (cycle through available presets)
     const switchCount = Math.max(5, nonEmpty.length);
@@ -452,20 +514,34 @@ test.describe('Parameter Switching Stability', () => {
     // Pixel histogram check: the preview canvas should have non-trivial content
     const canvas = page.locator('#previewContainer canvas');
     if (await canvas.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // UF-9 P1: readPixels only sees the draw buffer inside the frame
+      // (no preserveDrawingBuffer) — the bare read returned all zeros while
+      // the failure screenshot showed a healthy rendered model. Read under
+      // a nested double-rAF (the axis-depth-truth pattern) so the sample
+      // always follows a full app frame.
       const pixelStats = await canvas.evaluate((el) => {
-        const ctx = el.getContext('webgl2') || el.getContext('webgl');
-        if (!ctx) return { nonBlack: 0, total: 0 };
-        const w = el.width;
-        const h = el.height;
-        const pixels = new Uint8Array(w * h * 4);
-        ctx.readPixels(0, 0, w, h, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
-        let nonBlack = 0;
-        for (let i = 0; i < pixels.length; i += 4) {
-          if (pixels[i] > 10 || pixels[i + 1] > 10 || pixels[i + 2] > 10) {
-            nonBlack++;
-          }
-        }
-        return { nonBlack, total: w * h };
+        return new Promise((resolve) => {
+          requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const ctx = el.getContext('webgl2') || el.getContext('webgl');
+            if (!ctx) {
+              resolve({ nonBlack: 0, total: 0 });
+              return;
+            }
+            const w = el.width;
+            const h = el.height;
+            const pixels = new Uint8Array(w * h * 4);
+            ctx.readPixels(0, 0, w, h, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
+            let nonBlack = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i] > 10 || pixels[i + 1] > 10 || pixels[i + 2] > 10) {
+                nonBlack++;
+              }
+            }
+            resolve({ nonBlack, total: w * h });
+          });
+          });
+        });
       });
 
       // At least 1% of pixels should be non-black (model is visible, not degenerate)
@@ -482,11 +558,9 @@ test.describe('Parameter Switching Stability', () => {
 });
 
 test.describe('OpenSCAD Output Exposure', () => {
-  // Re-enable attempt 2026-07-05 (review remediation): fails locally at the
-  // console-panel assertion — the panel text never contains
-  // "E2E TEST MESSAGE 123" after upload + render. Needs product/test-flow
-  // investigation before re-enabling.
-  test.skip('should display echo output from OpenSCAD', async ({ page }) => {
+  // Re-enabled 2026-08-19 (AF-7): the console-panel failure it blamed was
+  // fixed by UF-19's console work - the case simply works now.
+  test('should display echo output from OpenSCAD', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
     await page.goto('/');
@@ -580,6 +654,7 @@ test.describe('Reference Image', () => {
     
     // Wait for main interface
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Look for the overlay section in preview settings
     const overlaySection = page.locator('#overlaySection, .overlay-section');
@@ -605,6 +680,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, fixturePath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Click on the overlay summary to expand
     const overlaySummary = page.locator('.overlay-summary');
@@ -632,6 +708,7 @@ test.describe('Reference Image', () => {
     
     // Wait for files to be processed
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 20000 });
+    await switchToStandardMode(page);
     await page.waitForTimeout(2000);
     
     // Expand overlay section
@@ -659,6 +736,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, zipPath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 20000 });
+    await switchToStandardMode(page);
     await page.waitForTimeout(2000);
     
     // Expand overlay section
@@ -682,6 +760,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, fixturePath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Expand overlay section
     const overlaySummary = page.locator('.overlay-summary');
@@ -709,6 +788,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, fixturePath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Expand overlay section
     const overlaySummary = page.locator('.overlay-summary');
@@ -745,7 +825,7 @@ test.describe('Progress Text Shows Correct Format', () => {
     await outputFormatSelect.selectOption('svg');
     
     // Wait for parameters
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
+    await expectParamsLoaded(page);
     
     // Find Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();

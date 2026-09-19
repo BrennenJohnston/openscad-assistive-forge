@@ -1128,6 +1128,114 @@ describe('Parameter Parser', () => {
     })
   })
 
+  describe('Display labels (@label)', () => {
+    it('should read @label from a preceding comment and drop it from the description', () => {
+      const scad = `
+        /*[Design]*/
+        // Design size as a percentage of the face @label(Scale)
+        design_scale = 60; // [10:5:110]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.design_scale.label).toBe('Scale')
+      expect(result.parameters.design_scale.description).toBe(
+        'Design size as a percentage of the face'
+      )
+    })
+
+    it('should read @label from an inline comment', () => {
+      const scad = `
+        /*[Design]*/
+        design_rotation = 0; // [-180:5:180] @label(Rotation)
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.design_rotation.label).toBe('Rotation')
+    })
+
+    it('should keep a label with spaces and punctuation', () => {
+      const scad = `
+        /*[Design]*/
+        // Left and right position @label(Left / right)
+        design_left_right = 0; // [-10:0.5:10]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.design_left_right.label).toBe('Left / right')
+      expect(result.parameters.design_left_right.description).toBe(
+        'Left and right position'
+      )
+    })
+
+    it('should leave label undefined when there is no annotation', () => {
+      const scad = `
+        /*[Design]*/
+        // Design size as a percentage of the face
+        design_scale = 60; // [10:5:110]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.design_scale.label).toBeUndefined()
+      expect(result.parameters.design_scale.description).toBe(
+        'Design size as a percentage of the face'
+      )
+    })
+
+    it('should ignore an empty @label()', () => {
+      const scad = `
+        /*[Design]*/
+        // Design size @label()
+        design_scale = 60; // [10:5:110]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.design_scale.label).toBeUndefined()
+    })
+
+    it('should read @label beside @depends in the same comment', () => {
+      const scad = `
+        /*[Features]*/
+        ventilation = "no"; // [yes, no]
+        // Hole count @label(Holes) @depends(ventilation==yes)
+        hole_count = 3; // [1:10]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.hole_count.label).toBe('Holes')
+      expect(result.parameters.hole_count.dependency).toBeDefined()
+      expect(result.parameters.hole_count.dependency.parameter).toBe(
+        'ventilation'
+      )
+      expect(result.parameters.hole_count.description).toBe(
+        'Hole count @depends(ventilation==yes)'
+      )
+    })
+
+    it('should keep the unit that the description carries', () => {
+      const scad = `
+        /*[Design]*/
+        // Depth of engraving in mm @label(Engrave depth)
+        engrave_depth = 0.8; // [0.2:0.1:3.0]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.engrave_depth.label).toBe('Engrave depth')
+      expect(result.parameters.engrave_depth.unit).toBe('mm')
+    })
+
+    it('should not let the label text invent a unit', () => {
+      const scad = `
+        /*[Design]*/
+        // How far the design sits from center @label(Inches of travel)
+        design_offset = 0; // [0:0.2:1.5]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.design_offset.label).toBe('Inches of travel')
+      expect(result.parameters.design_offset.unit).toBeNull()
+    })
+  })
+
   // =========================================================================
   // Keyguard-specific annotation pattern tests (Stakeholder Validation Plan)
   // =========================================================================

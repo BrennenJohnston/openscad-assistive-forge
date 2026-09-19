@@ -34,22 +34,8 @@ const CACHE_STRATEGIES = {
   libraries: [/\/libraries\//],
   
   // Images/icons: cache-first
-  images: [/\.png$/, /\.jpg$/, /\.svg$/, /\.ico$/],
+  images: [/\.png$/, /\.jpg$/, /\.svg$/, /\.ico$/, /\.webp$/],
 };
-
-// Trusted CDN origins whose assets we cache for offline/resilience.
-// Monaco Editor is loaded from jsdelivr CDN; caching these assets means
-// Expert Mode works even when the CDN is temporarily unreachable.
-const TRUSTED_CDN_ORIGINS = [
-  'https://cdn.jsdelivr.net',
-];
-
-/**
- * Check if a URL is from a trusted CDN that we should cache
- */
-function isTrustedCDN(url) {
-  return TRUSTED_CDN_ORIGINS.some((origin) => url.origin === origin);
-}
 
 /**
  * Install event - precache essential assets
@@ -113,14 +99,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Handle trusted CDN assets (e.g., Monaco Editor from jsdelivr)
-  // These are cached on first successful load for offline resilience.
-  if (isTrustedCDN(url)) {
-    event.respondWith(cacheFirst(request));
-    return;
-  }
-  
-  // Skip other cross-origin requests
+  // Skip cross-origin requests entirely — the app is fully self-hosted
+  // (the old Monaco-from-jsdelivr caching branch was dead code: the
+  // dependency was removed and the CSP blocks that origin anyway).
   if (url.origin !== self.location.origin) {
     return;
   }

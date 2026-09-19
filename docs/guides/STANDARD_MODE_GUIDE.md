@@ -1,6 +1,6 @@
 # Standard Mode Guide
 
-Standard Mode is the default interface. This guide covers everything you can do here: parameter types, presets, exports, image measurement, and the reference overlay.
+Standard Mode is the full view of the Assistive Forge interface; Simplified, the default, hides the working panels. This guide covers parameter types, presets, exports, image measurement, the reference overlay, and the drawing editor.
 
 ---
 
@@ -117,7 +117,8 @@ Undo history includes the last 50 changes.
 Auto-rotate slowly spins the model for presentation:
 
 1. Click the **Auto-rotate** button (circular arrow icon)
-2. Adjust speed in Preview Settings
+2. Adjust speed with the **Auto-rotate speed** slider next to it in the
+   Camera panel
 3. Click again to stop
 
 **Note:** Auto-rotate is disabled if you have "Reduce Motion" enabled in your system settings.
@@ -142,6 +143,18 @@ Preview colors can be customized:
 2. Find **Model Color** picker
 3. Choose a color
 4. Note: This is preview only; exported models use their defined colors
+
+### Your View Settings Are Per Interface
+
+The Assistive Forge and Classic interfaces each remember their own viewing
+preferences: grid on and off and its size and color, axes and tick
+markings, edges, measurements, the status bar, model color and appearance,
+auto-rotate, and Classic's color scheme. Changing one of these in Classic
+never changes it in the Forge interface, and switching interfaces brings
+back each side's own saved look. Your code, parameter values, and camera
+position stay the same across both interfaces, so you always see the same
+object in the same pose. In Classic, the grid is controlled from
+**Preferences ▸ 3D View**.
 
 ---
 
@@ -223,7 +236,7 @@ To move a project to another device, export it as a ZIP from the Saved Projects 
 |--------|-----------|----------|
 | **STL** | `.stl` | 3D printing (most common) |
 | **OBJ** | `.obj` | Software with color support |
-| **3MF** | `.3mf` | Modern 3D printers |
+| **3MF** | `.3mf` | Not available in this browser build — use STL or OBJ, which slicers accept |
 | **OFF** | `.off` | Academic/research |
 | **AMF** | `.amf` | Multi-material printing |
 | **SVG** | `.svg` | Laser cutting (2D only) |
@@ -238,7 +251,7 @@ To move a project to another device, export it as a ZIP from the Saved Projects 
 
 ### Export Quality
 
-Export always uses maximum quality regardless of preview settings. This ensures your 3D prints are accurate.
+Export quality is chosen from the **File** menu, under **Export Quality**: Model default, Low (fast), Medium (balanced), or High (smooth). It starts at Model default each session and is independent of the preview quality setting. Preview quality never affects exported files.
 
 ### 2D Export (SVG/DXF)
 
@@ -270,51 +283,281 @@ If your model uses `include` or `use` statements:
 
 ### File Size Limits
 
-- Single files: 5 MB maximum
-- ZIP archives: 20 MB maximum
-- These limits prevent browser memory issues
+| What you open | Limit |
+|---|---|
+| A single `.scad` file | 5 MB |
+| A `.zip` project | 250 MB |
+| An STL you are only viewing | 250 MB |
+| A folder | 2,000 files and 500 MB |
 
-### SVG Preparation
+Opening a folder warns you above 200 files or 150 MB. That is a warning, not a
+refusal -- large projects simply render more slowly, because every file the
+model depends on has to be handed to the OpenSCAD engine before it can start.
 
-When you upload an SVG file (or select one from the gallery), the app analyzes it to determine whether it needs preparation for OpenSCAD. OpenSCAD imports SVG as 2D geometry, so multi-element SVGs need to be combined into a single compound path using boolean operations (union for foreground shapes, difference for holes).
+### The drawing editor
 
-**What happens automatically:**
+When you give a design an SVG, the app checks whether it needs preparation.
+OpenSCAD imports an SVG as one 2D shape, so a drawing with several shapes
+needs a decision about each one. A badge next to the file input says what
+happened:
 
-1. The SVG is analyzed for complexity (number of elements, fills, strokes, transforms)
-2. A status badge appears next to the file input:
-   - **SVG Ready** (green): Single-element SVG or successfully auto-prepared
-   - **Needs review** (amber): Multiple elements detected — the editor opens for you to review
-   - **Unsupported features** (red): Gradients, clip-paths, or other features that cannot be flattened
-3. Simple SVGs are auto-prepared silently. Complex or ambiguous SVGs open the preparation editor
+- **SVG Ready** (green): one shape, or prepared without questions
+- **Needs review** (amber): several shapes, so the editor opens for you
+- **Unsupported features** (red): gradients, clip paths or other features
+  that cannot be flattened
 
-**The SVG Preparation Editor:**
+**One picture.** The editor shows what your drawing will print as, with the
+list of shapes beside it. **Compare with original** shows the before and
+after side by side.
 
-The editor shows a side-by-side view of your source SVG and the prepared result. Below the previews, an object list shows each detected shape with its assigned role:
+**Roles.** Each shape has one of three roles:
 
-- **Foreground**: Becomes solid geometry in the final shape
-- **Hole**: Subtracted from the foreground (creates cutouts)
-- **Ignore**: Dropped from the output entirely
+- **On**: the shape prints, at its layer, raised or engraved as the layer's
+  style says
+- **Cut out**: cut out of the shape it sits in, like the inside of an O
+- **Off**: left out
 
-Every role change updates the prepared result preview in real time, so you can see exactly what your changes do before applying.
+The role control shows all three words, so what you read and what a screen
+reader reads are the same. Arrow keys move between them.
+
+With layers, the picture paints every On shape in its layer's color: layer 1
+deep blue, layer 2 orange, layer 3 yellow-green, each lighter than the last
+so the order reads in grayscale too. A Cut out is paper with a dashed edge.
+A shape turned Off keeps its layer's color, muted under a diagonal hatch, so
+you can see it is still there. The legend under the picture names each.
+
+**Choosing shapes.** The list and the picture point at each other: move over
+a row and its shape lights up in the drawing; move over the drawing and its
+row is marked. Click either to choose it. Ctrl (Cmd on a Mac) adds or removes
+a shape, Shift takes a range, and Ctrl+A chooses every shape while the list
+is focused. **Delete selected** appears with the number chosen. With several
+shapes chosen, the switch on any chosen row sets all of them, and the editor
+says how many.
+
+On a touch screen, one finger scrolls the page and two fingers zoom and pan
+the picture. A tap chooses a shape. **Fit**, **+** and **−** do the same
+without pinching. Pressing inside an outline chooses whatever is under your
+finger, usually the background behind it, because an outline is the line
+itself, not the space inside it. The mark that appears as you move shows
+which shape you are about to choose.
+
+**More, on each row.** Each row has a **More** button holding the shape's
+offset, its layer where the design has layers, and **Delete**. Every shape
+starts on layer 1, and three layers are always offered, each with its own
+height on the charm. Choose a layer under More.
+
+**The result combines by itself.** Combining shapes into one outline is the
+slow step, and its cost depends on how complicated the shapes are, not on how
+many there are: two hundred rectangles take a tenth of a second, two hundred
+curves half a second. Forge combines the drawing a third of a second after
+your last change, off the page's own thread, and says so under the picture:
+"Combining 146 shapes, about 2 seconds. Apply is ready when they are
+combined." You can keep choosing while it works. Apply and Save wait for the
+result, and a change made while it combines starts it again. After the first
+combine on your machine, the estimate is based on that measurement. Above a
+thousand shapes, Forge asks you to simplify the drawing first and names both
+numbers.
+
+**Removing shapes.** Off leaves a shape in the list but out of the result. To
+take shapes out of the list:
+
+| Action | How |
+|--------|-----|
+| Remove one shape | **More** on its row, then **Delete** |
+| Remove the chosen shapes | Choose them, then **Delete selected** |
+| Remove every shape below a size | Type a size in **Smaller than … mm²** and press **Delete those** |
+| Keep only the biggest | Type a number in **Keep largest …** and press **Delete the rest** |
+| Put the last removal back | **Undo delete** (one step, this session only) |
+
+Sizes are measured at the design width in the editor's header, so they are
+the size the shape will print. Removals are saved with the project.
+
+**Shapes too thin to print.** Forge measures every shape at the width the
+charm will print the drawing: the charm's design box, which the editor's
+width box starts at. It counts the shapes under half a millimeter and says so
+above the list: "33 shapes are thinner than 0.5 mm at 12 mm wide and may not
+print." Each such row carries a **thin** mark, and a screen reader hears why:
+too thin to print, or too small to trace clearly, which means under three
+pixels in the picture. Nothing is changed for you. **Turn those off** sets
+every flagged shape to Off in one press, **Turn those back on** puts them
+back, and any single row can be turned back on by hand. The floor and the
+width are numbers you can change.
 
 **Editor controls:**
 
 | Action | How |
 |--------|-----|
-| Change a role | Click a radio button or use arrow keys in the radio group |
-| See the effect | The prepared result updates instantly |
-| Apply changes | Click "Apply prepared SVG" |
-| Keep the original | Click "Keep original" (bypasses preparation) |
-| Reset roles | Click "Reset" to return to auto-classification |
-| Expand to fullscreen | Click the fullscreen button (top-right) |
-| Exit fullscreen | Press `Escape` or click the fullscreen button again |
-| Close the editor | Press `Escape` or click the close button |
+| Change a role | Click **On**, **Cut out** or **Off**, or use arrow keys |
+| Choose a shape | Click its row or the shape itself; Ctrl or Cmd adds, Shift takes a range |
+| Choose every shape | Ctrl+A (Cmd+A on a Mac) with the list focused |
+| Remove the chosen shapes | Delete or Backspace, or **Delete selected** |
+| See the effect | The result combines on its own after each change |
+| See the charm instead of the drawing | The **Drawing / Charm** switch in the toolbar |
+| Draw the charm with the drawing as it stands | **Render preview**, in the Charm view |
+| Crop the picture | **Crop** in the toolbar, then **Save crop** |
+| Apply changes | **Apply** |
+| Save it as a file | **Save SVG** (and **Save DXF** through the standalone door) |
+| Keep the original | **Keep original** (bypasses preparation) |
+| Reset roles | **Reset** returns to the automatic first pass (this does not bring deleted shapes back) |
+| Shut what is open | `Escape` shuts the innermost thing: a row's **More** menu, the crop view, then the editor |
+| Close the editor | **Close**, or `Escape` when nothing smaller is open |
 
-**Warnings:**
+**The Drawing / Charm switch.** The switch in the editor's toolbar swaps
+between the drawing and the charm it makes. Every role, removal and layer is
+still there when you switch back. While the editor is open, previews are
+drawn at draft quality; your own quality setting returns when you close it.
+In the Charm view, **Render preview** draws the charm with the drawing as it
+stands, without applying anything. A note says it is a draft, and Close puts
+the charm back. Apply is the only thing that changes your design.
 
-The editor surfaces warnings for unsupported features. For example, stroked paths (paths with only a `stroke` and no `fill`) cannot participate in boolean operations and are flagged with a warning badge. These elements are automatically set to "Ignore."
+**The wall.** A picture with a colored background arrives with that
+background as one big shape, the wall. Its row starts as **Off**. A patch of
+wall closed in by the artwork, like the inside of an A, becomes a **Cut
+out**, and every other color is **On**, so the charm carries the drawing
+rather than a plate with the drawing cut out of it. Turn the wall on if you
+want it.
 
-Your role assignments and prepared output are saved with the project, so reopening a saved project restores exactly where you left off.
+**Crop.** **Crop** in the toolbar opens a crop view in the drawing's place:
+the kept rectangle clear, the rest shaded, and four sliders named **Top**,
+**Bottom**, **Left** and **Right**, each a share of the picture from 0 to 90
+percent, with a number box beside each. The sentence under the picture says
+what stays. **Save crop** applies it: a traced picture is cropped in its
+pixels and traced again, and an uploaded drawing is clipped shape by shape. A
+crop starts the shape list over. **Undo crop** puts the picture back, one
+step, for this session. **Cancel** or `Escape` leaves the drawing as it was.
+
+**If the result looks like a solid blob:** everything set to On is merged
+into one shape. When a drawing has an outline around its detail, merging
+fills the outline and swallows the detail. Set the interior shapes to
+**Off**, or to **Cut out** to cut them out.
+
+**Warnings.** Unsupported features are listed in the editor's warnings. A
+path with only a stroke and no fill cannot take part in the combining, and
+its row carries a warning.
+
+Your roles and the prepared drawing are saved with the project.
+
+### Opening and saving a DXF
+
+The editor takes `.dxf` as well as SVG and photos, and can save one back.
+Forge's own OpenSCAD engine does the converting, in your browser. On a 40 x
+25 mm drawing, DXF in and DXF out each took about 0.3 seconds.
+
+Open a DXF from the welcome screen's **Edit a drawing or photo** line or
+**Edit Drawing** in the Actions drawer. Forge says it is converting, then
+the editor opens with each shape listed. **Save as DXF** sits beside **Save
+edited SVG**.
+
+A drawing that has been through the editor is rebuilt from its shapes, and
+the rebuilt size can differ slightly: that 40 x 25 mm file came back 40.3 by
+25.35. The app reports the saved size. If the difference matters for a fit,
+take the SVG instead and convert it with your own tool.
+
+OpenSCAD's DXF import reads drawing entities only. Text, dimensions and other
+annotations are not read, so a file made only of those arrives empty, and
+Forge says so. Export the drawing again with its outlines as geometry, or
+send an SVG.
+
+This is separate from **Export for laser cutting** in the keyguard guide,
+which exports a model you are customizing.
+
+### Choosing what to keep from a photo
+
+A photo is traced before it becomes a shape, and tracing has to decide what
+counts as a line. **What to keep from the picture** offers four answers
+wherever a picture enters Forge:
+
+| Choice | What it keeps | Best for |
+|--------|---------------|----------|
+| **Line art** (the default) | The drawn lines. The color behind them is dropped. | Communication symbols, and any drawing on a colored background |
+| **Solid shape** | The outline of the whole picture, filled in. | Very small pieces, where detail could not be felt anyway |
+| **Light and dark** | Whatever is darker than the background. What Forge did before. | A plain pencil drawing on white paper |
+| **Colors** | The picture separated into flat colors, one shape per color, with the color behind the picture as the wall. | A colored drawing or a logo whose colors are the point |
+
+**Why Line art is the default.** Communication symbols are black line work
+over a colored fill, and the fill carries meaning. Judging by brightness
+alone puts a blue field and the black drawing on it in the same bucket, and
+they merge: a black person symbol inside a blue square came back as a plain
+blue square with the person gone. Line art asks two questions, is it dark and
+is it close to gray, so black strokes survive and colored fills do not.
+
+Two sliders, each with a number box beside it:
+
+- **How dark counts as a line**: higher keeps more of the picture, lower
+  keeps only the darkest strokes.
+- **How colorful is still a line**: lower rejects colored fills more firmly.
+  Raise it if a colored line is being dropped. Line art only.
+
+After every change Forge says what happened: how many shapes it found, how
+much of the picture became ink, and whether anything looks wrong, such as
+almost nothing kept, or so much kept that the result will print as one
+block. If the picture had a single color behind its lines, Forge names it,
+so you can pick a filament near it. It says nothing when the picture has
+several fills, because their average is a color that is in none of them.
+
+**Tracing starts and stops when you say so.** The picture is shown with a
+**Start conversion** button under it. While it works, a dialog stands in
+front of the page with the stages by name (reading the picture, tracing the
+shapes, preparing the drawing, updating the charm), a moving bar and a
+**Cancel** that stops it at any stage and gives you the picture back. A
+picture small enough to be done in a moment starts by itself when chosen,
+and shows the dialog only if it takes longer. A setting changed afterwards
+never starts a conversion by itself: it offers **Convert again**. When the
+drawing needs a look, the editor opens once the dialog has gone.
+
+Before you commit, Forge takes a **quick look** at a thumbnail and says
+roughly what it will find: how busy the drawing is and how much of it will
+become ink. It is a forecast, not a promise.
+
+**Stock icons: the caption comes off.** Icons from symbol libraries usually
+carry a line of credit along the bottom, and across nine of them the caption
+was 76 to 97 percent of the shapes in the drawing. Traced as it is, it
+becomes forty-odd tiny specks along the bottom edge of a charm. Forge finds
+that line and takes it off, says so, and offers **Undo** in case the drawing
+really did end in a row of small marks. It only fires when the marks look
+like a caption: enough of them, all small, all low down, all in one band.
+Removing the caption removes no obligation: if the icon's license asks for
+credit, you still owe it, and the panel says so.
+
+**Lines too thin to print.** Forge measures the thinnest line at the width
+the charm will print it and says so in the editor: under about half a
+millimeter a line may not print, or may be too faint to feel. On a charm
+every shape is measured too (see "Shapes too thin to print" above). It is a
+sentence, not an action.
+
+**Nothing is uploaded.** Tracing and every choice above happen in your
+browser. You are responsible for having the right to use any image you
+bring. [ARASAAC](https://arasaac.org/),
+[Mulberry Symbols](https://mulberrysymbols.org/) and
+[Blissymbolics](https://blissymbolics.org/) publish openly licensed sets;
+check each set's license before you share what you make.
+
+### Editing a drawing with no design open
+
+You do not need an OpenSCAD project to use the editor. Two doors open it on a
+file of its own:
+
+- the **Edit a drawing or photo** line inside **Explore Features &
+  Accessibility** on the welcome screen, and
+- **Edit Drawing** in the Actions drawer, once a design is open.
+
+Both accept an SVG or a photo saved as PNG or JPG. A photo is traced first, the
+same way a photo dropped into a file parameter is. The editor then opens on it
+with **Save edited SVG** as its main action, and the file you save is named
+after the one you opened -- `bird-drawing.png` comes back as
+`bird-drawing-edited.svg`.
+
+Nothing is uploaded anywhere. The tracing, the editing and the saving all happen
+in your browser, and your original file is never changed.
+
+### A drawing sent by a link
+
+A link can bring a drawing with it. Opened, it loads the design the link names,
+puts the drawing into the design's picture setting, converts a picture or a DXF
+behind the usual dialog and Cancel, and opens the editor on it. Edit, press
+Apply, and the charm or plate shows your edits; export the STL, or save the
+edited drawing. The design parameters take `.dxf` now as well as SVG, PNG and
+JPG, from a link or from the file picker.
 
 ---
 
@@ -337,7 +580,7 @@ The image dimensions show up next to the Browse button so you can verify the fil
 
 ## Reference Image
 
-Want to see how your model lines up against a reference image? The Reference Image puts any image behind the 3D model in the preview so you can compare visually.
+The Reference Image puts any image behind the 3D model in the preview so you can compare visually.
 
 ### Setting it up
 
@@ -352,6 +595,47 @@ Want to see how your model lines up against a reference image? The Reference Ima
 - **Fit to model** -- auto-sizes the image to match the model's footprint
 - **Center** -- snaps the image back to the origin
 - **Offset / Rotation** -- nudge or rotate for a better fit
+
+### Which surface it sits against
+
+**Sits against** chooses the height the image is drawn at, by naming a surface
+rather than asking for a number:
+
+| Choice | Where the image goes |
+|--------|----------------------|
+| **Under the plate** | Just below the build plate. The default, and where it has always been |
+| **Build plate** | Level with the plate itself |
+| **Top of the model** | Just above the model's highest face, which is what you want when tracing something onto the top of a charm. It follows the model, so it moves when the model changes |
+| **A height I choose** | Type the height in mm |
+
+### Cropping
+
+A photograph of a page is mostly page. **Crop** lets you keep the part you
+want by typing the edges, with the picture beside the numbers showing the same
+rectangle. If you type something that will not fit, the number is pulled back
+to what actually fits, so the boxes always say what will really happen.
+
+Cropping never changes your picture. It saves a copy named after the original
+(`bird.png` becomes `bird-crop.png`), leaves the original in the list, and
+points the overlay at the copy.
+
+### Using it as a design
+
+**Use as design** hands the image you have been tracing against to one of the
+model's design parameters. It goes in the same way a file you chose by hand
+would: a photograph is traced, the preparation editor opens if the drawing
+needs it, and the design's proportions are measured at the same moment. If the
+model has more than one design slot, you choose which one.
+
+### The position is saved with the project
+
+The image's position, rotation, size and chosen surface are saved **with the
+project**, so reopening it later puts the reference back where you left it.
+Opacity and color are settings for how you like to work, so they stay the
+same across every project rather than traveling with one.
+
+Your images never leave your device. Cropping, tracing and measuring all
+happen in your browser.
 
 ### A note on accessibility
 

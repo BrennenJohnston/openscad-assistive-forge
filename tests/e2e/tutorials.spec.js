@@ -27,6 +27,7 @@ const SPOTLIGHT_TIMEOUT_MS = 1500
 async function setBaseline(page) {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 }
 
@@ -311,6 +312,7 @@ for (const vp of VIEWPORTS) {
 test('tutorial: no infinite retry loop when target is missing', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
   await page.goto('/')
   await startTutorial(page, 'intro')
@@ -344,4 +346,279 @@ test('tutorial: no infinite retry loop when target is missing', async ({ page })
     !panelExists || recoveryVisible,
     'Tutorial should exit or show recovery dialog after max failures — not loop indefinitely'
   ).toBe(true)
+})
+
+// ── Welcome page tour (U-24, UF-17) ──────────────────────────────────────────
+
+test.describe('Welcome page tour (U-24, UF-17)', () => {
+  const REGISTRY_KEY = 'openscad-forge-tutorial-state'
+
+  const readRegistry = (page) =>
+    page.evaluate((key) => {
+      const raw = localStorage.getItem(key)
+      return raw ? JSON.parse(raw) : null
+    }, REGISTRY_KEY)
+
+  /** Click Next/Finish until the tour closes (welcome steps are all passive). */
+  async function walkToFinish(page, maxClicks = 20) {
+    for (let i = 0; i < maxClicks; i++) {
+      const overlayGone = await page
+        .locator('.tutorial-panel')
+        .isHidden()
+        .catch(() => true)
+      if (overlayGone) return
+      await page.locator('#tutorialNextBtn').click()
+      await page.waitForTimeout(300)
+    }
+  }
+
+  test('Forge: end to end from the card, recording the family and chaining to Beginners once', async ({
+    page,
+  }) => {
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Welcome to the Forge!')
+
+    // opened is written at the commitment point, before any step outcome
+    await expect
+      .poll(async () => (await readRegistry(page))?.welcome?.opened, { timeout: 10_000 })
+      .toEqual(expect.any(Number))
+
+    await walkToFinish(page)
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+
+    const registry = await readRegistry(page)
+    expect(registry.welcome.completed).toEqual(expect.any(Number))
+    // The family rule: nothing records under the variant id
+    expect(registry['welcome-classic']).toBeUndefined()
+
+    // The U-24 chain: exactly one spotlight, now on the Beginners card
+    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(1)
+    await expect(
+      page.locator('.role-path-card.welcome-spotlight .role-path-title')
+    ).toHaveText('Beginners Start Here')
+  })
+
+  test('Classic: the welcome-classic variant walks the chrome-free welcome end to end', async ({
+    page,
+  }) => {
+    await setBaseline(page)
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'classic', lastCustomMode: 'standard' })
+      )
+    })
+    await page.goto('/')
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome')
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    // The modeVariants hop: the Classic variant runs, not the Forge tour
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Welcome to Classic!')
+
+    await walkToFinish(page)
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+
+    // The family rule: the variant records as the welcome family
+    const registry = await readRegistry(page)
+    expect(registry.welcome.opened).toEqual(expect.any(Number))
+    expect(registry.welcome.completed).toEqual(expect.any(Number))
+    expect(registry['welcome-classic']).toBeUndefined()
+  })
+
+  test('chaining declines when the intro family already has a record', async ({ page }) => {
+    await setBaseline(page)
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, JSON.stringify({ intro: { opened: 1 } }))
+    }, REGISTRY_KEY)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+
+    // Precedence: the welcome card still wears the tip (its family is clear)
+    await expect(
+      page.locator('.role-path-card.welcome-spotlight .role-path-title')
+    ).toHaveText('Main Page Tour')
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await walkToFinish(page)
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+
+    // No chain: intro already has a record, so no card is decorated
+    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(0)
+    await expect(page.locator('.role-path-card.welcome-spotlight')).toHaveCount(0)
+  })
+
+  test('opening a project through the spotlight cutout closes the tour without completing it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 180_000,
+    })
+
+    // Watch the live regions: the close announcement is this case's subject
+    // now that Q-50d approved its wording.
+    await page.evaluate(() => {
+      window.__said = []
+      for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
+        const el = document.getElementById(id)
+        if (!el || el.__watched) continue
+        el.__watched = true
+        new MutationObserver(() => {
+          const text = el.textContent.trim()
+          if (text) window.__said.push(text)
+        }).observe(el, { childList: true, characterData: true, subtree: true })
+      }
+    })
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+
+    // Walk to the Open-or-start step, whose cutout exposes Start New Project.
+    // By title, not by a click count: UF-21 shortened this tour by one step
+    // (U-29) and a fixed count silently overshot.
+    for (let i = 0; i < 12; i++) {
+      const title = await page.locator('#tutorial-step-title').textContent()
+      if (title === 'Open or start a project') break
+      await page.locator('#tutorialNextBtn').click()
+      await page.waitForTimeout(300)
+    }
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Open or start a project')
+
+    await page.locator('#startNewProjectBtn').click()
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'project', {
+      timeout: 60_000,
+    })
+
+    // The user's action wins: the tour is gone, opened recorded, completed not
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    const registry = await readRegistry(page)
+    expect(registry.welcome.opened).toEqual(expect.any(Number))
+    expect(registry.welcome.completed).toBeUndefined()
+
+    // Q-50d (owner, 2026-08-14): this sentence is approved as drafted, so it
+    // is pinned rather than left as a D-35 flag in the code.
+    const announcements = await page.evaluate(() => window.__said)
+    expect(announcements.join(' | ')).toContain(
+      'Main Page Tour closed because a project opened. Progress saved.'
+    )
+  })
+
+  test('the closing step names the Main Page button as the way back (U-45)', async ({
+    page,
+  }) => {
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+
+    for (let i = 0; i < 16; i++) {
+      const title = await page.locator('#tutorial-step-title').textContent()
+      if (title === 'Your next step') break
+      await page.locator('#tutorialNextBtn').click()
+      await page.waitForTimeout(250)
+    }
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Your next step')
+    await expect(page.locator('.tutorial-body')).toContainText(
+      'The Main Page button in the top left corner brings you back here from a project.'
+    )
+  })
+
+  test('no tour can exist while the first-visit modal blocks', async ({ page }) => {
+    // Deliberately no baseline stamp: the modal must be up
+    await page.goto('/')
+    await page
+      .locator('#first-visit-modal:not(.hidden)')
+      .waitFor({ state: 'visible', timeout: 10_000 })
+
+    await expect(page.locator('#app')).toHaveAttribute('inert', '')
+    await expect(page.locator('.tutorial-overlay')).toHaveCount(0)
+  })
+})
+
+/**
+ * U-45 (UF-39): the box tour used to stop at "You're ready!" and never say how
+ * to get out of a project. The way people reached for was the browser's Back
+ * button, which closed the app. The tour now ends on the button that does the
+ * job, and pressing it there is a first-class path, not an accident.
+ */
+test.describe('U-45: the box tour ends by naming the way back', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  async function startBoxTourAtTheEnd(page) {
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    await page.locator('.btn-role-try[data-tutorial="intro"]').click()
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'project', {
+      timeout: 180_000,
+    })
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 60_000 })
+    // End clears every completion gate between here and the last step.
+    await page.keyboard.press('End')
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Back to the Main Page',
+      { timeout: 15_000 }
+    )
+  }
+
+  test('the last step spotlights the Main Page button', async ({ page }) => {
+    test.setTimeout(240_000)
+    await startBoxTourAtTheEnd(page)
+
+    await expect(page.locator('.tutorial-progress')).toContainText('Step 18 of 18')
+    await expect(page.locator('#clearFileBtn')).toHaveClass(/tutorial-target-highlight/)
+    await expect(page.locator('.tutorial-body')).toContainText(
+      "Use it instead of the browser's Back button"
+    )
+  })
+
+  test('pressing the spotlighted button ends the tour with its surface', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await startBoxTourAtTheEnd(page)
+
+    await page.evaluate(() => {
+      window.__said = []
+      for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
+        const el = document.getElementById(id)
+        if (!el || el.__watched) continue
+        el.__watched = true
+        new MutationObserver(() => {
+          const text = el.textContent.trim()
+          if (text) window.__said.push(text)
+        }).observe(el, { childList: true, characterData: true, subtree: true })
+      }
+    })
+
+    // The curiosity path: the cutout stays clickable, so press what the step
+    // points at (U-24, Q-66a). The tour stands down for the confirm dialog.
+    await page.locator('#clearFileBtn').click()
+    await expect(page.locator('.confirm-modal')).toBeVisible({ timeout: 10_000 })
+    await page.locator('.confirm-modal [data-action="confirm"]').click()
+
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome', {
+      timeout: 30_000,
+    })
+    // The tour closes with its surface, the same rule the welcome tours have
+    // obeyed since UF-17, now mirrored for the surface a box tour lives on.
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    const announcements = await page.evaluate(() => window.__said)
+    expect(announcements.join(' | ')).toContain(
+      'closed because you went back to the Main Page'
+    )
+  })
 })

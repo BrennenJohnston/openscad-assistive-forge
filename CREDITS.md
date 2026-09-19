@@ -16,6 +16,11 @@ For third-party software licenses and compliance information, see [THIRD_PARTY_N
   - https://threejs.org/
   - License: MIT
 
+- **Potrace** by Peter Selinger - the tracer behind Line art and Solid shape,
+  compiled from source to WebAssembly
+  - https://potrace.sourceforge.net/
+  - License: GPL-2.0-or-later
+
 ---
 
 ## Rendering & Visual Techniques
@@ -30,6 +35,14 @@ The shape-vector approach to character-based rendering used in this project was 
 - **Note**: Implementation is clean-room; no code was copied
 
 The article's exploration of 6-dimensional shape vectors, per-cell contrast enhancement, and treating characters as shapes rather than pixels informed the rendering approach.
+
+### ASCII City Walk (hidden game)
+
+The walkable ASCII city inside the Alt View mode draws on several inspirations. No code was taken from any of them; the game is built on this project's own ASCII pipeline, three.js, and OpenStreetMap data.
+
+- **OpenStreetMap contributors** — the map data the cities are built from (ODbL 1.0; see THIRD_PARTY_NOTICES.md)
+- **Touch Mapper** by Samuli Kärkkäinen — the idea of turning an address into a tactile-style top-down map informed the game's aerial view (https://touch-mapper.org, AGPL-3.0; concept reference only)
+- **Grow Now! Games** — "A Walkable ASCII Cyberpunk City in One HTML File" video, the street-level ASCII-city aesthetic that sparked the feature (https://www.grownowgames.com/; closed source, aesthetic inspiration only)
 
 ---
 
@@ -115,6 +128,23 @@ it, the Braille Charm's `bracelet_clip` shape).
 - **Club**: UW WOOF3D (University of Washington)
 - **URL**: https://www.thingiverse.com/thing:7153594
 - **Project**: AAC Charms With Boardmaker Symbols For Silicone Bracelets
+
+---
+
+## Stencil Maker Program
+
+### Stencil Forge
+
+The **Stencil Forge** project is where the Stencil Maker tool comes from. Its
+plate defaults (200 x 200 x 0.6 mm, a 15 mm margin, 10 mm corner crosses) are
+carried over as approved values, and two pieces of its geometry code were
+ported into this repository and adapted: the island-and-bridge geometry in
+`src/js/stencil-bridges.js` and the containment analysis in
+`src/js/svg-nesting.js`. Both source and destination are GPL-3.0-or-later, and
+each file records what changed and why at the top.
+
+Stencil Forge is a private repository, so this credit deliberately names it
+without linking to it.
 
 ---
 

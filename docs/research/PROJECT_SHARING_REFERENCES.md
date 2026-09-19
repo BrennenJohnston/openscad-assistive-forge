@@ -2,7 +2,7 @@
 
 This document is a **debugging reference** for implementing “open this preconfigured project from a link” while keeping Forge **static-hosted** and **100% client-side for rendering**.
 
-If you’re looking for hosting + COOP/COEP notes, also see `docs/research/COMPARABLE_PROJECTS.md`, `docs/DEPLOYMENT.md`, and `docs/SECURITY_ADMIN_GUIDE.md`.
+If you’re looking for hosting + COOP/COEP notes, also see `docs/research/COMPARABLE_PROJECTS.md`, `docs/deploying/DEPLOYMENT.md`, and `docs/deploying/SECURITY_ADMIN_GUIDE.md`.
 
 ## Patterns we care about
 

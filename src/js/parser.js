@@ -452,6 +452,34 @@ function parseDependency(comment) {
   return null;
 }
 
+const LABEL_ANNOTATION = /@label\(\s*([^)]*?)\s*\)/i;
+
+/**
+ * Parse a display label from a comment
+ * Supports: @label(Scale), beside @depends(...) in the same comment
+ * @param {string} comment - Comment text to parse
+ * @returns {string|null} Label text, or null if there is none
+ */
+function parseLabel(comment) {
+  if (!comment) return null;
+
+  const labelMatch = comment.match(LABEL_ANNOTATION);
+  const label = labelMatch ? labelMatch[1].trim() : '';
+
+  return label || null;
+}
+
+/**
+ * Remove an @label(...) annotation from a description
+ * @param {string} description - Description that may carry the annotation
+ * @returns {string} Description without the annotation
+ */
+function stripLabelAnnotation(description) {
+  if (!description) return description;
+
+  return description.replace(LABEL_ANNOTATION, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Extract unit from parameter description, name, or tab context.
  *
@@ -976,6 +1004,17 @@ export function extractParameters(scadContent) {
           param.uiType = 'toggle';
         }
 
+        // A tile can name a dial with @label(...) so a parameter whose name
+        // repeats its group ("design_scale") shows a short word. The label is
+        // taken off the description before the unit is read from it.
+        const fullComment =
+          `${capturedPrecedingComment} ${annotationText}`.trim();
+        const label = parseLabel(fullComment);
+        if (label) {
+          param.label = label;
+          param.description = stripLabelAnnotation(param.description);
+        }
+
         // Extract unit for numeric parameters (with tab-name fallback)
         if (param.type === 'integer' || param.type === 'number') {
           param.unit = extractUnit(
@@ -1037,8 +1076,6 @@ export function extractParameters(scadContent) {
         }
 
         // Extract dependency from comment (supports @depends(param==value))
-        const fullComment =
-          `${capturedPrecedingComment} ${annotationText}`.trim();
         const dependency = parseDependency(fullComment);
         if (dependency) {
           param.dependency = dependency;

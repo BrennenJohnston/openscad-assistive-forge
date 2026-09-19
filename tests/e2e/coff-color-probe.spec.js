@@ -7,7 +7,7 @@
  * with multi-color meshes.
  *
  * Fixture: color-debug-test.scad — red cube + green sphere (2 color() calls)
- * Companion to: docs/audit/parity-probe-results.md
+ * Companion to: docs/archive/audit/parity-probe-results.md
  *
  * @license GPL-3.0-or-later
  */
@@ -109,6 +109,7 @@ test.describe('COFF Color Probe', () => {
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
   });
 

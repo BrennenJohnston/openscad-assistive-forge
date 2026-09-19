@@ -14,6 +14,7 @@ import { test, expect } from '@playwright/test'
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     if (!localStorage.getItem('openscad-forge-theme')) {
       localStorage.setItem('openscad-forge-theme', 'light')
     }
@@ -526,5 +527,256 @@ test.describe('Alt View unlock flow (?hfm=unlock)', () => {
     expect(state.variant).toBe('mono')
     const rgb = state.bodyBg.match(/\d+/g)?.map(Number) ?? []
     expect(rgb[0] + rgb[1] + rgb[2]).toBeLessThan(200)
+  })
+})
+
+// U-4: the editor took its dark mode from the OS media query instead of the
+// app theme, so a dark-mode browser painted a dark editor island inside a
+// light app — the owner's screenshot condition. The editor must follow the
+// RESOLVED app theme, and Classic is always light (desktop parity).
+test.describe('Editor follows the app theme, not the OS (U-4)', () => {
+  test.use({ colorScheme: 'dark' })
+
+  const isCI = !!process.env.CI
+  const WASM_READY_TIMEOUT = 180_000
+
+  async function editorBrightness(page) {
+    const bg = await page
+      .locator('.cm-editor')
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundColor)
+    const rgb = bg.match(/\d+/g)?.map(Number) ?? []
+    return (rgb[0] + rgb[1] + rgb[2]) / 3
+  }
+
+  async function loadSample(page) {
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    })
+    await page.setInputFiles(
+      '#fileInput',
+      'tests/fixtures/sample.scad'
+    )
+    await expect(page.locator('#mainInterface')).toBeVisible({
+      timeout: 30_000,
+    })
+    const notNow = page.locator('#saveProjectNotNow')
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 })
+      await notNow.click()
+    } catch {
+      // No save-project modal to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle')
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click()
+    }
+  }
+
+  test('Classic stays light under a dark OS preference', async ({ page }) => {
+    test.setTimeout(240_000)
+    await loadSample(page)
+
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(page.locator('.cm-editor').first()).toBeVisible({
+      timeout: 20_000,
+    })
+
+    // The owner's exact condition: dark OS, light app, Classic. The editor
+    // painted rgb(30,30,30) before the fix.
+    expect(await editorBrightness(page)).toBeGreaterThan(200)
+  })
+
+  test('the Forge editor follows the app theme in both directions', async ({
+    page,
+  }) => {
+    test.skip(isCI, 'WASM-heavy; the Classic case above is the CI regression')
+    test.setTimeout(240_000)
+    await loadSample(page)
+
+    // Expert Mode hosts the code editor outside Classic.
+    await page.keyboard.press('Control+e')
+    await expect(page.locator('#expertModePanel .cm-editor')).toBeVisible({
+      timeout: 20_000,
+    })
+
+    // App light + OS dark: light editor.
+    expect(await editorBrightness(page)).toBeGreaterThan(200)
+
+    // App dark: dark editor — the fix must not pin the editor light.
+    await page.locator('#themeToggle').click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    expect(await editorBrightness(page)).toBeLessThan(80)
+  })
+})
+
+test.describe('The header toggles describe the state they are in (D-60)', () => {
+  // Both labels used to be written only inside their own button's click
+  // handler, so every other route left them saying the opposite of the
+  // truth - to the one group of people who cannot see the button change.
+  // The chords are Ctrl+Shift+T and Ctrl+Shift+H, not Ctrl+T / Ctrl+H:
+  // DEFAULT_SHORTCUTS shifts them "to avoid OpenSCAD conflicts", and the
+  // unshifted pair belongs to the opt-in LEGACY_FORGE_SHORTCUTS preset.
+  const themeLabel = (page) =>
+    page.locator('#themeToggle').getAttribute('aria-label')
+  const contrastLabel = (page) =>
+    page.locator('#contrastToggle').getAttribute('aria-label')
+
+  test('the keyboard shortcut flips high contrast and the label follows', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.locator('#contrastToggle').waitFor()
+    // The chord is only live once the app has finished booting: the shortcut
+    // TABLE is registered early, but the handlers that act on it are
+    // attached late, so an earlier press matches, calls preventDefault, and
+    // finds nothing to call. MEASURED: it starts working at about +1.4s, by
+    // which point this marker is set - the same gate this suite already uses.
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 60000,
+    })
+
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await contrastLabel(page)).toBe(
+      'High contrast mode: OFF. Click to enable.'
+    )
+
+    await page.keyboard.press('Control+Shift+h')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await contrastLabel(page)).toBe(
+      'High contrast mode: ON. Click to disable.'
+    )
+
+    await page.keyboard.press('Control+Shift+h')
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await contrastLabel(page)).toBe(
+      'High contrast mode: OFF. Click to enable.'
+    )
+  })
+
+  test('the keyboard shortcut cycles the theme and the label follows', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.locator('#themeToggle').waitFor()
+    // The chord is only live once the app has finished booting: the shortcut
+    // TABLE is registered early, but the handlers that act on it are
+    // attached late, so an earlier press matches, calls preventDefault, and
+    // finds nothing to call. MEASURED: it starts working at about +1.4s, by
+    // which point this marker is set - the same gate this suite already uses.
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 60000,
+    })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    expect(await themeLabel(page)).toBe(
+      'Current theme: light. Click to cycle themes.'
+    )
+
+    // The label names the RESOLVED theme, so cycle until the resolved value
+    // actually moves rather than assuming one press is enough.
+    await page.keyboard.press('Control+Shift+t')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    expect(await themeLabel(page)).toBe(
+      'Current theme: dark. Click to cycle themes.'
+    )
+  })
+
+  test('the system changing scheme under Auto relabels the button by itself', async ({
+    page,
+  }) => {
+    // The purest form of the defect: nobody touches anything at all, and the
+    // button still has to stop lying.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-theme', 'auto')
+    })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto('/')
+    await page.locator('#themeToggle').waitFor()
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    // Polled, not one-shot: the button exists with its static "Toggle
+    // theme" label before init wires the descriptive one, and a loaded
+    // shard can read that gap (measured on CI; the sibling case above is
+    // gated behind data-wasm-ready and never saw it).
+    await expect
+      .poll(() => themeLabel(page))
+      .toBe('Current theme: light. Click to cycle themes.')
+
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect
+      .poll(() => themeLabel(page))
+      .toBe('Current theme: dark. Click to cycle themes.')
+  })
+})
+
+/**
+ * CW-66: the unlock door used to eat the fragment.
+ *
+ * It strips `hfm` from the query so the link is not accidentally shared on,
+ * and it composed the replacement URL from pathname and query ALONE - so a
+ * link of the form `/?hfm=unlock#v=1&params=...` arrived, unlocked, and then
+ * destroyed the payload it was carrying. The fragment is where state.js puts a
+ * shared parameter set, so the door was breaking exactly the links most worth
+ * sending.
+ *
+ * ★★ ITS OWN DESCRIBE, WITH NO PRIOR NAVIGATION, AND THAT IS THE POINT. The
+ * unlock-flow block above opens `/?hfm=unlock` in a beforeEach, so a case
+ * nested there ARRIVES ALREADY UNLOCKED and its second navigation measures
+ * something else - which is exactly what happened, and it reported the door
+ * broken while a direct trace of `history.replaceState` showed it working.
+ * These cases are about what happens ON ARRIVAL, so they arrive.
+ *
+ * ★★ AND THE FRAGMENT UNDER TEST IS DELIBERATELY NOT `#v=1&params=`, even
+ * though that is the one that matters. state.js CONSUMES that payload and
+ * clears it - measured, it is gone before the door has even run - so a test
+ * written with it watches state.js and reports on the door. `#keep=me` is
+ * inert, which is what makes it an instrument.
+ */
+test.describe('the unlock door keeps the fragment (CW-66)', () => {
+  test('keeps the URL fragment while still stripping the unlock', async ({
+    page,
+  }) => {
+    await page.goto('/?hfm=unlock#keep=me')
+    await expect(page.locator('h1')).toBeVisible()
+    // Polled, not read once: the door runs after the first paint, so an
+    // immediate read races it and would pass before the cleanup happened.
+    await expect
+      .poll(() => page.evaluate(() => window.location.search))
+      .toBe('')
+    // ★ The `hfm` half matters too: a "fix" that kept the fragment by leaving
+    // the whole URL alone would pass a fragment-only check while quietly
+    // re-sharing the unlock. The assertion above is `toBe('')`, not merely
+    // "does not contain hfm", for that reason.
+    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me')
+  })
+
+  test('keeps the fragment when other query parameters survive too', async ({
+    page,
+  }) => {
+    // The composition has TWO branches - one for a query with something left
+    // in it and one for a query left empty - and a fix applied to only one of
+    // them would pass the case above and still break real links.
+    await page.goto('/?hfm=unlock&keepme=1#keep=me')
+    await expect(page.locator('h1')).toBeVisible()
+    await expect
+      .poll(() => page.evaluate(() => window.location.search))
+      .toBe('?keepme=1')
+    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me')
   })
 })

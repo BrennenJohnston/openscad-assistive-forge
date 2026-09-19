@@ -388,9 +388,9 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 | Status | File | Session | Notes |
 |--------|------|---------|-------|
 | [x] | docs/README.md | 17 | Clean. Well-organized docs index. All links resolve correctly. |
-| [x] | docs/DEV_QUICK_START.md | 17 | Clean. All npm commands accurate. Setup/test/lint/build steps correct. |
-| [x] | docs/DEVELOPMENT_WORKFLOW.md | 17 | Clean. Concise, accurate single-maintainer workflow. |
-| [E] | docs/TESTING.md | 17 | Fixed: stale test count 1184+→1383+. |
+| [x] | docs/developing/DEV_QUICK_START.md | 17 | Clean. All npm commands accurate. Setup/test/lint/build steps correct. |
+| [x] | docs/developing/DEVELOPMENT_WORKFLOW.md | 17 | Clean. Concise, accurate single-maintainer workflow. |
+| [E] | docs/developing/TESTING.md | 17 | Fixed: stale test count 1184+→1383+. |
 | [E] | docs/guides/ACCESSIBILITY_GUIDE.md | 17 | Fixed: removed duplicate "Click Generate STL" voice command, replaced broken `../../README.md#features` link with `./STANDARD_MODE_GUIDE.md`. |
 | [x] | docs/guides/CHOOSING_FORGE_VS_PLAYGROUND.md | 17 | Clean. Accurate decision guide. |
 | [x] | docs/guides/COLOR_SYSTEM_GUIDE.md | 17 | Clean. Accurate developer CSS token reference. |
@@ -408,16 +408,16 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 
 | Status | File | Session | Notes |
 |--------|------|---------|-------|
-| [E] | docs/ARCHITECTURE.md | 18 | Fixed: (1) theme.css→semantic-tokens.css in diagram, (2) ~5000+→~17,000 lines for main.js, (3-4) storage descriptions updated to reflect IndexedDB+localStorage dual-write pattern. |
-| [x] | docs/specs/CAMERA_CONTROLS_ACCESSIBILITY.md | 18 | Clean. Accurate WCAG 2.2 compliance spec. All SC references correct. CSS examples match actual implementation. |
+| [E] | docs/developing/ARCHITECTURE.md | 18 | Fixed: (1) theme.css→semantic-tokens.css in diagram, (2) ~5000+→~17,000 lines for main.js, (3-4) storage descriptions updated to reflect IndexedDB+localStorage dual-write pattern. |
+| [x] | docs/accessibility/CAMERA_CONTROLS_ACCESSIBILITY.md | 18 | Clean. Accurate WCAG 2.2 compliance spec. All SC references correct. CSS examples match actual implementation. |
 | [x] | docs/specs/MANIFEST_STABILITY_CONTRACT.md | 18 | Clean. Well-structured stability contract with clear breaking vs. non-breaking policy. Hosting platform list and CSP notes accurate. |
 | [x] | docs/specs/PARAMETER_SCHEMA_SPEC.md | 18 | Clean. Concrete examples throughout. x-forge-* extension naming consistent. Group ID vs label distinction well-documented. |
 | [E] | docs/specs/UI_STANDARDS.md | 18 | Fixed: (1) Added DEPRECATED notes to --radius-sm and --radius-md token entries. (2) Fixed broken ACCESSIBILITY_GUIDE.md link (added ../guides/ prefix). |
-| [E] | docs/PERFORMANCE.md | 18 | Fixed: (1) version v4.0.0→v4.1.0, (2) WASM CDN claim→vendored in public/wasm/, (3) updated bundle size figures, (4) corrected SharedArrayBuffer threading claims to match WASM_THREADING_ANALYSIS.md. |
-| [x] | docs/DEPLOYMENT.md | 18 | Clean. Accurate platform configs (Cloudflare Pages, Netlify, Vercel, nginx, Apache). CSP notes correctly document Report-Only mode. All headers accurate. |
-| [x] | docs/RELEASING.md | 18 | Clean. Short, honest, single-maintainer tone. `npm run test:run` is a valid package.json script. Hotfix and cache version notes accurate. |
-| [E] | docs/ROLLBACK_RUNBOOK.md | 18 | Fixed: (1) version 4.2.0→4.1.0, (2) removed enterprise boilerplate (CEO escalation, quarterly drill schedule with [TBD] entries, verbose post-rollback action checklist). Kept core rollback procedures intact. |
-| [E] | docs/SECURITY_ADMIN_GUIDE.md | 18 | Fixed: phantom `npm run sbom` replaced with actual CI command `npx @cyclonedx/cyclonedx-npm`. SBOM location note updated. |
+| [E] | docs/developing/PERFORMANCE.md | 18 | Fixed: (1) version v4.0.0→v4.1.0, (2) WASM CDN claim→vendored in public/wasm/, (3) updated bundle size figures, (4) corrected SharedArrayBuffer threading claims to match WASM_THREADING_ANALYSIS.md. |
+| [x] | docs/deploying/DEPLOYMENT.md | 18 | Clean. Accurate platform configs (Cloudflare Pages, Netlify, Vercel, nginx, Apache). CSP notes correctly document Report-Only mode. All headers accurate. |
+| [x] | docs/project/RELEASING.md | 18 | Clean. Short, honest, single-maintainer tone. `npm run test:run` is a valid package.json script. Hotfix and cache version notes accurate. |
+| [E] | docs/deploying/ROLLBACK_RUNBOOK.md | 18 | Fixed: (1) version 4.2.0→4.1.0, (2) removed enterprise boilerplate (CEO escalation, quarterly drill schedule with [TBD] entries, verbose post-rollback action checklist). Kept core rollback procedures intact. |
+| [E] | docs/deploying/SECURITY_ADMIN_GUIDE.md | 18 | Fixed: phantom `npm run sbom` replaced with actual CI command `npx @cyclonedx/cyclonedx-npm`. SBOM location note updated. |
 
 ### Session 19 -- Research, VPAT, Notes, and Archive
 
@@ -429,36 +429,36 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 | [x] | docs/research/SAVED_PROJECTS_REFERENCE.md | 19 | Clean architecture reference for IndexedDB library selection. Implementation used a custom approach rather than recommended idb-keyval -- divergence is known and fine. |
 | [E] | docs/research/TUTORIAL_DESIGN_RESEARCH.md | 19 | Fixed: replaced two broken links to phantom files (WELCOME_SCREEN_FEATURE_PATHS.md, WELCOME_FEATURE_PATHS_INVENTORY.md) with link to existing WELCOME_SCREEN.md. |
 | [x] | docs/research/WASM_THREADING_ANALYSIS.md | 19 | Clean historical analysis confirming openscad-wasm-prebuilt@1.2.0 is non-threaded (zero SharedArrayBuffer/Atomics/PTHREAD references in 11MB of compiled code). |
-| [E] | docs/vpat/VPAT-2.5-WCAG.md | 19 | Fixed: Product Version 1.0→4.1.0. |
-| [x] | docs/vpat/conformance-decisions.md | 19 | Clean. Honest -- many criteria still "Not Evaluated". Well-structured decisions log with evidence references. |
-| [x] | docs/vpat/evidence/m0/validation-summary-2026-02-02.md | 19 | Clean internal validation evidence. |
-| [x] | docs/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md | 19 | Clean AT testing template. |
-| [x] | docs/vpat/evidence/m1/validation-summary-2026-02-02.md | 19 | Clean. |
-| [x] | docs/vpat/evidence/m2/validation-summary-2026-02-02.md | 19 | Clean. |
-| [x] | docs/vpat/evidence/m3/validation-summary-2026-02-02.md | 19 | Clean. |
-| [x] | docs/vpat/evidence/m5/validation-summary-2026-02-02.md | 19 | Clean. |
+| [E] | docs/accessibility/vpat/VPAT-2.5-WCAG.md | 19 | Fixed: Product Version 1.0→4.1.0. |
+| [x] | docs/accessibility/vpat/conformance-decisions.md | 19 | Clean. Honest -- many criteria still "Not Evaluated". Well-structured decisions log with evidence references. |
+| [x] | docs/accessibility/vpat/evidence/m0/validation-summary-2026-02-02.md | 19 | Clean internal validation evidence. |
+| [x] | docs/accessibility/vpat/evidence/m1/nvda-firefox-core-workflow-TEMPLATE.md | 19 | Clean AT testing template. |
+| [x] | docs/accessibility/vpat/evidence/m1/validation-summary-2026-02-02.md | 19 | Clean. |
+| [x] | docs/accessibility/vpat/evidence/m2/validation-summary-2026-02-02.md | 19 | Clean. |
+| [x] | docs/accessibility/vpat/evidence/m3/validation-summary-2026-02-02.md | 19 | Clean. |
+| [x] | docs/accessibility/vpat/evidence/m5/validation-summary-2026-02-02.md | 19 | Clean. |
 | [x] | docs/notes/README.md | 19 | Clean. Honest description of dev notes folder purpose. |
-| [x] | docs/notes/2026-01-25/README.md | 19 | Clean. |
-| [x] | docs/notes/2026-01-25/SUMMARY.md | 19 | Clean. Summarizes Jan 25 sprint: binary STL, capability detection, WASM experimentation. |
-| [x] | docs/notes/2026-01-26/CODE_AUDIT_FINDINGS.md | 19 | Clean internal code audit notes from Jan 26 pass through src/js. |
-| [x] | docs/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md | 19 | Clean implementation summary of Jan 27 security fixes and code consolidation. |
-| [x] | docs/notes/2026-01-27/DOC_INVENTORY.md | 19 | Clean doc inventory and decision log from Jan 27 documentation style audit. |
+| [x] | docs/archive/notes/2026-01-25/README.md | 19 | Clean. |
+| [x] | docs/archive/notes/2026-01-25/SUMMARY.md | 19 | Clean. Summarizes Jan 25 sprint: binary STL, capability detection, WASM experimentation. |
+| [x] | docs/archive/notes/2026-01-26/CODE_AUDIT_FINDINGS.md | 19 | Clean internal code audit notes from Jan 26 pass through src/js. |
+| [x] | docs/archive/notes/2026-01-27/AUDIT_IMPLEMENTATION_SUMMARY.md | 19 | Clean implementation summary of Jan 27 security fixes and code consolidation. |
+| [x] | docs/archive/notes/2026-01-27/DOC_INVENTORY.md | 19 | Clean doc inventory and decision log from Jan 27 documentation style audit. |
 | [x] | docs/planning/BUILD_PLAN_V2.md | 19 | Clean. Build plan for Volkswitch compatibility and Advanced/Basic UI work. |
 | [x] | docs/planning/decision-log.md | 19 | Clean. ADR-format decision log covering editor selection, storage, rendering, and manifest patterns. |
 | [x] | docs/archive/README.md | 19 | Clean. Honest note explaining archived project management docs. |
-| [E] | docs/ACCESSIBILITY_CONFORMANCE.md | 19 | Fixed: version 4.2.0→4.1.0. |
-| [E] | docs/BROWSER_SUPPORT.md | 19 | Fixed: (1) version 4.2.0→4.1.0, (2) SharedArrayBuffer threading claims corrected to match WASM_THREADING_ANALYSIS.md (WASM is single-threaded, SAB is for cross-origin isolation). |
-| [E] | docs/KNOWN_ISSUES.md | 19 | Fixed: version v4.2.0→v4.1.0. |
-| [x] | docs/MOBILE_LIMITATIONS.md | 19 | Clean. Accurate description of memory, rendering, Expert Mode, and file handling limitations on mobile. |
-| [x] | docs/OPEN_SOURCE_GUIDES.md | 19 | Clean. Mirrored GitHub Open Source Guides content with correct CC-BY-4.0 attribution. |
-| [x] | docs/OPEN_SOURCE_PROJECTS.md | 19 | Clean. Accurate dependency attribution list for runtime and dev dependencies. |
-| [x] | docs/OPENSCAD_LANGUAGE_REFERENCE.md | 19 | Clean. Full OpenSCAD Wikibooks conversion (1:1 with source). Reference doc only. |
-| [x] | docs/QUICK_REFERENCE.md | 19 | Clean. Accurate 3-section dev quick reference (branch, PR checklist, commit shapes). |
-| [x] | docs/RESPONSIVE_UI.md | 19 | Clean. Accurate documentation of responsive layout architecture and breakpoints. |
-| [x] | docs/TROUBLESHOOTING.md | 19 | Clean. Developer troubleshooting for Playwright hang, WASM worker failures, test issues. Accurate. |
-| [x] | docs/design-d1-preset-companion-files.md | 19 | Clean. Design doc clearly marked "Design approved, not yet implemented." |
-| [x] | docs/source-code-foundation-assessment.md | 19 | Clean. Decision doc for WASM integration approach. |
-| [x] | docs/testing-guide-stakeholder-bugs.md | 19 | Clean. Testing guide for stakeholder bug fix verification. |
+| [E] | docs/accessibility/ACCESSIBILITY_CONFORMANCE.md | 19 | Fixed: version 4.2.0→4.1.0. |
+| [E] | docs/accessibility/BROWSER_SUPPORT.md | 19 | Fixed: (1) version 4.2.0→4.1.0, (2) SharedArrayBuffer threading claims corrected to match WASM_THREADING_ANALYSIS.md (WASM is single-threaded, SAB is for cross-origin isolation). |
+| [E] | docs/accessibility/KNOWN_ISSUES.md | 19 | Fixed: version v4.2.0→v4.1.0. |
+| [x] | docs/accessibility/MOBILE_LIMITATIONS.md | 19 | Clean. Accurate description of memory, rendering, Expert Mode, and file handling limitations on mobile. |
+| [x] | docs/reference/OPEN_SOURCE_GUIDES.md | 19 | Clean. Mirrored GitHub Open Source Guides content with correct CC-BY-4.0 attribution. |
+| [x] | docs/reference/OPEN_SOURCE_PROJECTS.md | 19 | Clean. Accurate dependency attribution list for runtime and dev dependencies. |
+| [x] | docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md | 19 | Clean. Full OpenSCAD Wikibooks conversion (1:1 with source). Reference doc only. |
+| [x] | docs/developing/QUICK_REFERENCE.md | 19 | Clean. Accurate 3-section dev quick reference (branch, PR checklist, commit shapes). |
+| [x] | docs/developing/RESPONSIVE_UI.md | 19 | Clean. Accurate documentation of responsive layout architecture and breakpoints. |
+| [x] | docs/developing/TROUBLESHOOTING.md | 19 | Clean. Developer troubleshooting for Playwright hang, WASM worker failures, test issues. Accurate. |
+| [x] | docs/developing/design-d1-preset-companion-files.md | 19 | Clean. Design doc clearly marked "Design approved, not yet implemented." |
+| [x] | docs/archive/source-code-foundation-assessment.md | 19 | Clean. Decision doc for WASM integration approach. |
+| [x] | docs/archive/testing-guide-stakeholder-bugs.md | 19 | Clean. Testing guide for stakeholder bug fix verification. |
 
 ---
 
@@ -511,7 +511,7 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 | [S] | .vercel/ | Deployment config (auto-managed) |
 | [S] | .volkswitch/ | Stakeholder research files (not app code) |
 | [S] | docs/planning/parser-golden-corpus.json | Generated test corpus |
-| [S] | docs/vpat/evidence/**/.gitkeep | Empty placeholder files |
+| [S] | docs/accessibility/vpat/evidence/**/.gitkeep | Empty placeholder files |
 | [S] | tests/visual/core-ui.visual.spec.js-snapshots/ | Generated visual snapshots |
 
 ---
@@ -532,8 +532,8 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 ### Session 18 -- 2026-02-24
 
 - Files reviewed: 10
-- Files flagged [D]: 5 (docs/ARCHITECTURE.md, docs/specs/UI_STANDARDS.md, docs/PERFORMANCE.md, docs/ROLLBACK_RUNBOOK.md, docs/SECURITY_ADMIN_GUIDE.md)
-- Files marked [x] clean: 5 (docs/specs/CAMERA_CONTROLS_ACCESSIBILITY.md, docs/specs/MANIFEST_STABILITY_CONTRACT.md, docs/specs/PARAMETER_SCHEMA_SPEC.md, docs/DEPLOYMENT.md, docs/RELEASING.md)
+- Files flagged [D]: 5 (docs/developing/ARCHITECTURE.md, docs/specs/UI_STANDARDS.md, docs/developing/PERFORMANCE.md, docs/deploying/ROLLBACK_RUNBOOK.md, docs/deploying/SECURITY_ADMIN_GUIDE.md)
+- Files marked [x] clean: 5 (docs/accessibility/CAMERA_CONTROLS_ACCESSIBILITY.md, docs/specs/MANIFEST_STABILITY_CONTRACT.md, docs/specs/PARAMETER_SCHEMA_SPEC.md, docs/deploying/DEPLOYMENT.md, docs/project/RELEASING.md)
 - Files edited: 0 (READ-ONLY session)
 - Tests pass: yes (1383/1383)
 - Summary: Technical specs and architecture docs are mostly accurate but contain several stale or inaccurate entries. Key findings: (1) ARCHITECTURE.md references src/styles/theme.css (does not exist), understates main.js size (~5K vs actual 16.9K), and shows projects stored in localStorage only (omits IndexedDB; actual storage is IndexedDB+localStorage dual-write). (2) PERFORMANCE.md version number is stale (v4.0.0 vs 4.1.0) and incorrectly says WASM is CDN-loaded (it is vendored in public/wasm/ since v4.1). (3) ROLLBACK_RUNBOOK.md and SECURITY_ADMIN_GUIDE.md contain AI-generated enterprise boilerplate (CEO escalation contact, quarterly drill schedule, npm run sbom phantom command) inconsistent with single-maintainer hobby project tone. (4) UI_STANDARDS.md has a broken relative link to ACCESSIBILITY_GUIDE.md and lists deprecated CSS aliases without noting they are deprecated. Clean highlights: MANIFEST_STABILITY_CONTRACT.md is an excellent stability guarantee document; PARAMETER_SCHEMA_SPEC.md is a well-structured reference with concrete examples; DEPLOYMENT.md accurately documents all major hosting platforms with correct header configs.
@@ -541,11 +541,11 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 ### Session 19 -- 2026-02-24
 
 - Files reviewed: 36
-- Files flagged [D]: 5 (docs/research/TUTORIAL_DESIGN_RESEARCH.md, docs/vpat/VPAT-2.5-WCAG.md, docs/ACCESSIBILITY_CONFORMANCE.md, docs/BROWSER_SUPPORT.md, docs/KNOWN_ISSUES.md)
+- Files flagged [D]: 5 (docs/research/TUTORIAL_DESIGN_RESEARCH.md, docs/accessibility/vpat/VPAT-2.5-WCAG.md, docs/accessibility/ACCESSIBILITY_CONFORMANCE.md, docs/accessibility/BROWSER_SUPPORT.md, docs/accessibility/KNOWN_ISSUES.md)
 - Files marked [x] clean: 31
 - Files edited: 0 (READ-ONLY session)
 - Tests pass: yes (1383/1383)
-- Summary: Research notes, VPAT evidence, dev notes, planning docs, and remaining docs are mostly clean. Key findings: (1) Version inconsistency pattern continues -- docs/ACCESSIBILITY_CONFORMANCE.md, docs/BROWSER_SUPPORT.md, and docs/KNOWN_ISSUES.md all say "v4.2.0" while package.json says 4.1.0 (same issue as RELEASE_NOTES, ROLLBACK_RUNBOOK, VPAT). (2) BROWSER_SUPPORT.md incorrectly describes SharedArrayBuffer as providing "WASM threading | single-threaded fallback" -- WASM_THREADING_ANALYSIS.md confirms current build is non-threaded and does not use SharedArrayBuffer. (3) TUTORIAL_DESIGN_RESEARCH.md has two broken links to phantom files (WELCOME_SCREEN_FEATURE_PATHS.md and WELCOME_FEATURE_PATHS_INVENTORY.md -- neither exists). (4) VPAT "Product Version: 1.0" is inconsistent with current version. Clean highlights: all 14 VPAT evidence and conformance files are clean; all 8 dev notes/planning docs are clean; RESPONSIVE_UI.md and TROUBLESHOOTING.md are accurate and well-maintained; OPEN_SOURCE_GUIDES.md correctly attributes the CC-BY-4.0 mirrored content; design-d1-preset-companion-files.md is clearly marked unimplemented. This completes Phase 6 Part 2 (Sessions 18-19 doc assessment). Next: PAUSE-11 human review break before Session 20 (GitHub Configuration).
+- Summary: Research notes, VPAT evidence, dev notes, planning docs, and remaining docs are mostly clean. Key findings: (1) Version inconsistency pattern continues -- docs/accessibility/ACCESSIBILITY_CONFORMANCE.md, docs/accessibility/BROWSER_SUPPORT.md, and docs/accessibility/KNOWN_ISSUES.md all say "v4.2.0" while package.json says 4.1.0 (same issue as RELEASE_NOTES, ROLLBACK_RUNBOOK, VPAT). (2) BROWSER_SUPPORT.md incorrectly describes SharedArrayBuffer as providing "WASM threading | single-threaded fallback" -- WASM_THREADING_ANALYSIS.md confirms current build is non-threaded and does not use SharedArrayBuffer. (3) TUTORIAL_DESIGN_RESEARCH.md has two broken links to phantom files (WELCOME_SCREEN_FEATURE_PATHS.md and WELCOME_FEATURE_PATHS_INVENTORY.md -- neither exists). (4) VPAT "Product Version: 1.0" is inconsistent with current version. Clean highlights: all 14 VPAT evidence and conformance files are clean; all 8 dev notes/planning docs are clean; RESPONSIVE_UI.md and TROUBLESHOOTING.md are accurate and well-maintained; OPEN_SOURCE_GUIDES.md correctly attributes the CC-BY-4.0 mirrored content; design-d1-preset-companion-files.md is clearly marked unimplemented. This completes Phase 6 Part 2 (Sessions 18-19 doc assessment). Next: PAUSE-11 human review break before Session 20 (GitHub Configuration).
 
 ### Pre-Work -- 2026-02-23
 
@@ -680,11 +680,11 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 ### Session 17 -- 2026-02-24
 
 - Files reviewed: 16
-- Files flagged [D]: 5 (docs/TESTING.md, docs/guides/ACCESSIBILITY_GUIDE.md, docs/guides/GETTING_STARTED.md, docs/guides/STANDARD_MODE_GUIDE.md, docs/guides/TROUBLESHOOTING_USER_GUIDE.md)
+- Files flagged [D]: 5 (docs/developing/TESTING.md, docs/guides/ACCESSIBILITY_GUIDE.md, docs/guides/GETTING_STARTED.md, docs/guides/STANDARD_MODE_GUIDE.md, docs/guides/TROUBLESHOOTING_USER_GUIDE.md)
 - Files marked [x] clean: 11
 - Files edited: 0 (READ-ONLY session)
 - Tests pass: yes (1383/1383)
-- Summary: Developer and user guides are generally accurate and well-written. Key findings: (1) Save Project inaccuracy -- GETTING_STARTED.md, STANDARD_MODE_GUIDE.md, and TROUBLESHOOTING_USER_GUIDE.md all describe Save Project as downloading a .json file, but the feature saves to browser IndexedDB (not a file download); loading is from the Saved Projects panel, not Open File. (2) docs/TESTING.md regression checklist has stale test count 1184+ (actual 1383). (3) ACCESSIBILITY_GUIDE.md has a duplicate voice command entry (copy-paste error) and a broken #features anchor link. (4) GETTING_STARTED.md and STANDARD_MODE_GUIDE.md both link to ../TROUBLESHOOTING.md (developer doc) where ./TROUBLESHOOTING_USER_GUIDE.md is more appropriate. Clean highlights: KEYGUARD_WORKFLOW_GUIDE.md is the best-written guide (clinician-targeted, accurate end-to-end); MANIFEST_SHARING_GUIDE.md is comprehensive with correct Git LFS quotas and CORS hosting info; WELCOME_SCREEN.md is a good developer reference.
+- Summary: Developer and user guides are generally accurate and well-written. Key findings: (1) Save Project inaccuracy -- GETTING_STARTED.md, STANDARD_MODE_GUIDE.md, and TROUBLESHOOTING_USER_GUIDE.md all describe Save Project as downloading a .json file, but the feature saves to browser IndexedDB (not a file download); loading is from the Saved Projects panel, not Open File. (2) docs/developing/TESTING.md regression checklist has stale test count 1184+ (actual 1383). (3) ACCESSIBILITY_GUIDE.md has a duplicate voice command entry (copy-paste error) and a broken #features anchor link. (4) GETTING_STARTED.md and STANDARD_MODE_GUIDE.md both link to ../TROUBLESHOOTING.md (developer doc) where ./TROUBLESHOOTING_USER_GUIDE.md is more appropriate. Clean highlights: KEYGUARD_WORKFLOW_GUIDE.md is the best-written guide (clinician-targeted, accurate end-to-end); MANIFEST_SHARING_GUIDE.md is comprehensive with correct Git LFS quotas and CORS hosting info; WELCOME_SCREEN.md is a good developer reference.
 
 ### Session 16 — 2026-02-24
 

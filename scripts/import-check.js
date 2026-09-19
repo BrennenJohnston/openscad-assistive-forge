@@ -83,7 +83,6 @@ const SKIP_DIRS = new Set([
   "dist",
   "build",
   "coverage",
-  "ai-at-playbook",
   "playwright-report",
   "test-results",
 ]);

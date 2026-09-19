@@ -4,7 +4,10 @@
 
 # All routes: cross-origin isolation + security + CSP
 # 'unsafe-eval' in script-src is required because AJV compiles JSON schemas at runtime via new Function().
-# 'unsafe-inline' is NOT needed in style-src — CodeMirror 6 uses constructable stylesheets.
+# 'unsafe-inline' is NOT needed in style-src. CodeMirror injects its CSS in a
+# <style> element, which this policy blocks; src/js/codemirror-csp-styles.js
+# re-homes those rules into a constructable stylesheet, which CSP does not
+# govern. That one blocked <style> is expected, and it is the only one.
 # connect-src includes GitHub raw/media URLs for ?manifest= and ?project= deep-links.
 /*
   Cross-Origin-Opener-Policy: same-origin

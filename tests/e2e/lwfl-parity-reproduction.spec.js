@@ -16,7 +16,7 @@
  * Environment variables:
  *   LWFL_PRESET — preset name filter (default: matches "LWFL" case-insensitive)
  *
- * Artifacts written to: docs/audit/lwfl-parity-reproduction/
+ * Artifacts written to: docs/archive/audit/lwfl-parity-reproduction/
  *
  * @license GPL-3.0-or-later
  */
@@ -41,10 +41,14 @@ const KEYGUARD_ZIP_PATH = path.resolve(
 const fixtureAvailable = fs.existsSync(KEYGUARD_ZIP_PATH);
 
 const OUTPUT_DIR = path.resolve(
-  __dirname, '..', '..', 'docs', 'audit', 'lwfl-parity-reproduction',
+  __dirname, '..', '..', 'docs', 'archive', 'audit', 'lwfl-parity-reproduction',
 );
 
-const LWFL_PRESET_FILTER = process.env.LWFL_PRESET || 'LWFL';
+// UF-9 P1: the stakeholder bundle names its preset "... LAMP WFL 84"
+// (LAMP Words For Life), not "LWFL" — the old default filter matched
+// nothing ("Total options: 6, LWFL matches: 0" was this file's whole
+// local red). 'WFL' hits the real preset; LWFL_PRESET still overrides.
+const LWFL_PRESET_FILTER = process.env.LWFL_PRESET || 'WFL';
 
 // Bug A and Bug B parameter keys from KI-012
 const BUG_A_PARAM = 'expose_home_button';
@@ -235,9 +239,10 @@ test.describe('LWFL Parity Reproduction — Phase 2', () => {
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
 
-    await page.goto('http://localhost:5173/');
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       state: 'attached',
       timeout: 120_000,

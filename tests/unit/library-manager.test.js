@@ -382,6 +382,17 @@ describe('LibraryManager', () => {
   })
 
   describe('checkAvailability', () => {
+    it('probes each library by its own manifest file, not the bare directory', async () => {
+      const manager = new LibraryManager()
+      global.fetch = vi.fn().mockResolvedValue({ ok: true })
+
+      await manager.checkAvailability()
+
+      const urls = global.fetch.mock.calls.map((c) => c[0])
+      expect(urls).toContain('/libraries/MCAD/manifest.json')
+      expect(urls.every((u) => u.endsWith('/manifest.json'))).toBe(true)
+    })
+
     it('checks availability of all libraries', async () => {
       const manager = new LibraryManager()
       global.fetch = vi.fn().mockResolvedValue({ ok: true })

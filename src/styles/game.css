@@ -1,0 +1,549 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* ASCII City Walk game layer (CW-4).
+ *
+ * The layer always runs under the mono variant (the controller forces it
+ * on for the session), but every value here is a theme token, so it renders
+ * correctly whichever phosphor (green/amber) or contrast mode is active.
+ * The welcome card, by contrast, can be visible in the standard theme too —
+ * it only adds sizing on top of the existing role-path-card styles.
+ */
+
+.city-walk-layer {
+  /* Measured by the controller whenever the toolbar's height can change, so
+   * the two floating panels below can stop above it instead of covering the
+   * buttons (found by eye at 1280x800, where the toolbar wraps to two rows). */
+  --city-walk-toolbar-height: 0px;
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-modal);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.city-walk-layer[hidden] {
+  display: none;
+}
+
+.city-walk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  flex: 0 0 auto;
+}
+
+.city-walk-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.city-walk-header-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Hit-target floor for every control in the layer (a11y hard rule). */
+.city-walk-btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* CW-14: the pressed state of the header's high-contrast toggle. The pair is
+ * the same accent/accent-text one every other toggle in the app uses, but it
+ * has to be written with weight to survive two rules that repaint a
+ * .btn-secondary's SURFACE and nothing else (D-55/D-57): components.css's
+ * .btn-secondary:hover:not(:disabled) at (0,3,0) and, because the layer forces
+ * the mono variant on, variant.css's :root[data-ui-variant='mono'] .btn:hover
+ * at (0,4,0). A rule that only set the background here would leave black
+ * accent-text sitting on the hover surface. Guarded by the e2e case that
+ * measures this button pressed, at rest and hovered, in all four in-game
+ * states - not by this selector. */
+.city-walk-layer .city-walk-btn.btn-secondary[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+.city-walk-layer
+  .city-walk-btn.btn-secondary[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-hover);
+}
+
+.city-walk-start {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  text-align: center;
+}
+
+.city-walk-start-heading {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.city-walk-start-intro {
+  margin: 0;
+  max-width: 60ch;
+}
+
+.city-walk-city-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: min(100%, 360px);
+}
+
+.city-walk-city-btn {
+  width: 100%;
+}
+
+/* CW-44: the download-progress line for the big Seattle (47 s on Slow 4G
+   measured); shown while a city loads, spoken by its role=status. */
+.city-walk-start-loading {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--color-text-secondary);
+}
+
+.city-walk-start-error {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--color-error);
+}
+
+.city-walk-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.city-walk-viewport canvas {
+  display: block;
+}
+
+/* CW-15: the mouse route to every key, between the viewport and the HUD.
+ * Nothing here is the only way to reach anything - each button drives the
+ * same action its key does - so it is free to wrap by group when the window
+ * is too narrow for one row. Only tokens: the layer runs under whichever
+ * phosphor and contrast mode the player has chosen. */
+.city-walk-toolbar {
+  display: flex;
+  /* ★★ CW-60: wrap-REVERSE, and the reason is the same promise CW-59 made.
+   *
+   * The strip is anchored to the bottom of the layer, so a second line makes
+   * it grow UPWARD and every button on the first line rises with it. With
+   * CW-60's fifth map-only button the zone no longer fits on one row between
+   * about 1280px and 1365px, and MEASURED at 1280 the nine shared buttons
+   * moved from y=820 to y=770 on a view switch - CW-59's defect exactly,
+   * arriving on the axis its guard was not watching.
+   *
+   * Reversed, the FIRST line sits at the bottom of the strip: the shared
+   * groups keep the y they had with one row and the view zone takes the new
+   * line above them. Nothing changes on a window wide enough not to wrap,
+   * which is every case that works today. */
+  flex-wrap: wrap-reverse;
+  align-items: center;
+  /* Start-aligned, not centred: see the view-zone rule below. */
+  justify-content: flex-start;
+  /* CW-81: the column gap stepped down from --space-md when Auto-walk and
+   * Mouse look joined the street zone. At --space-md the strip missed one
+   * row by 11 px in high contrast at 1600x900, wrapped, grew 52 px taller
+   * and pushed the Camera panel 31 px past its box - the exact CW-38
+   * defect. One token step buys 48 px of slack; --space-xs already keeps a
+   * 3px focus ring at 2px offset clear of a neighbour (the group rule
+   * below), so --space-sm between groups stays ring-safe. */
+  gap: var(--space-sm) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-border);
+  flex: 0 0 auto;
+}
+
+/* display:flex outranks the hidden attribute's UA display:none, exactly as
+ * it does on .city-walk-layer above. */
+.city-walk-toolbar[hidden] {
+  display: none;
+}
+
+.city-walk-toolbar-group {
+  display: flex;
+  align-items: center;
+  /* Wide enough that a 3px focus ring at a 2px offset does not sit on the
+   * neighbouring button. */
+  gap: var(--space-xs);
+}
+
+/* CW-59 (CW-Q61): the view zone, and why the whole strip is start-aligned.
+ *
+ * Every button that exists in only one view lives in this zone, at the far
+ * end. That alone is not enough while the strip centres itself: changing the
+ * zone's width re-centres everything, and measured on a 1280px window all
+ * NINE shared buttons moved, up to 186px, some left and some right. Centring
+ * is what made a width change into a POSITION change for buttons that never
+ * changed at all.
+ *
+ * Start-aligned, the shared zone is anchored to the strip's own edge and the
+ * view zone grows and shrinks to the right of it, off the end, where nothing
+ * depends on it. This also survives what comes next: CW-60 adds a button to
+ * this zone and CW-61 takes one away, and neither can move a shared control.
+ */
+.city-walk-toolbar-view-zone {
+  border-inline-start: 1px solid var(--color-border);
+  padding-inline-start: var(--space-md);
+  margin-inline-start: var(--space-xs);
+}
+
+.city-walk-toolbar-group-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Tighter than a default .btn so the whole strip fits a desktop row; the
+ * 44px floor comes from .city-walk-btn and is untouched. */
+.city-walk-toolbar-btn {
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.city-walk-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border-top: 1px solid var(--color-border);
+  flex: 0 0 auto;
+  font-size: var(--font-size-sm);
+}
+
+.city-walk-hud-status {
+  margin: 0;
+}
+
+.city-walk-attribution {
+  margin: 0;
+  font-size: var(--font-size-xs);
+}
+
+.city-walk-help {
+  position: absolute;
+  /* Above the ASCII overlay canvas (z-index 5 in _hfm-paint.js) — without
+   * this the panel renders UNDER the glyphs. */
+  z-index: var(--z-index-dropdown);
+  top: calc(var(--space-lg) + 44px + var(--space-md));
+  right: var(--space-md);
+  max-width: min(480px, calc(100vw - 2 * var(--space-md)));
+  max-height: calc(100% - 120px - var(--city-walk-toolbar-height));
+  overflow-y: auto;
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+.city-walk-help h3 {
+  margin-top: 0;
+}
+
+.city-walk-help-list {
+  margin: var(--space-sm) 0;
+  padding-left: var(--space-lg);
+}
+
+.city-walk-help-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.city-walk-help-note {
+  max-width: 48ch;
+}
+
+/* The Camera panel (CW-35).
+ *
+ * In the Forge it is a flex child of a horizontal layout - a drawer down the
+ * right-hand edge. The game layer is a COLUMN, so left as a flex child the
+ * panel became a full-width band under the city and squashed the viewport to
+ * a strip (seen, and fixed here). It floats instead, the way this layer's
+ * other two panels already do: absolute, above the ASCII overlay canvas, and
+ * stopping short of the toolbar.
+ *
+ * Right-hand edge, because that is the edge a Forge user reaches for. The
+ * help panel shares that corner, but help is a transient overlay that already
+ * covers the city while it is open.
+ */
+.city-walk-camera-panel {
+  position: absolute;
+  /* Above the ASCII overlay canvas, like .city-walk-help. */
+  z-index: var(--z-index-dropdown);
+  /* The help panel offsets itself past the header because it is a child of
+   * the layer. This one is inside the VIEWPORT, which already begins below
+   * the header and ends above the toolbar, so it needs neither allowance -
+   * and with them it clipped its own Reset button off the bottom. */
+  top: var(--space-md);
+  right: var(--space-md);
+  max-height: calc(100% - 2 * var(--space-md));
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+/* The Forge's panel stacks its header - title above the collapse control -
+ * and CENTRES the stack. The base `.panel-header` rule carries only the
+ * stacking; the centring is scoped to the Forge's own panel, so the game's
+ * copy came out ragged against a title it should sit under. Measured on
+ * both, side by side, rather than guessed: the Forge computes
+ * align-items:center here and the game computed `normal`.
+ */
+.city-walk-camera-panel .panel-header {
+  align-items: center;
+}
+
+/* Every button in the panel wears `btn-sm` so it matches the Forge panel's
+ * look, and `btn-sm` caps min-height at --size-touch-target-sm. Measured on a
+ * touch pointer that left the D-pads 44 wide and 36 TALL - eight pixels short
+ * of a square target, on the controls a finger uses most - and the Standard
+ * Views and Reset rows shorter still at 32. The token is already 36px on a
+ * mouse and 44px on touch, so asking for it here gives the right answer on
+ * both without touching the Forge panel, whose own buttons measure the same
+ * and are reported rather than changed from inside this release.
+ *
+ * Named by the panel rather than by button class: a control added to this
+ * panel later should not be able to arrive under the target size unnoticed.
+ */
+.city-walk-camera-panel .camera-panel-body button {
+  min-height: var(--size-touch-target);
+}
+
+/* CW-35, and the D-55/D-57 fault for the third time. The layer forces the
+ * mono variant on, and variant.css's :root[data-ui-variant='mono'] .btn:hover
+ * at (0,4,0) repaints a button's SURFACE and nothing else. layout.css's
+ * .btn.camera-btn:hover at (0,3,0) sets the accent PAIR but loses the
+ * background, so a hovered panel button came out black accent-text on the
+ * mono hover surface: measured at 1.12:1 by the e2e case that hovers every
+ * control in every in-game state. Written here with enough weight to carry
+ * both halves, for every button in the panel rather than just the D-pad.
+ */
+.city-walk-layer .city-walk-camera-panel .btn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-hover);
+}
+
+/* Collapsed, only the toggle shows - the Forge panel's own behaviour, but it
+ * sizes itself by flex there and has nothing to size against here. */
+.city-walk-camera-panel.collapsed {
+  width: auto;
+  min-width: 0;
+}
+
+/* CW-38 (CW-Q47): in high contrast everything grows - 44px targets, wider
+ * gaps, thicker borders - and the panel stopped fitting: MEASURED at
+ * 1600x900, the body held 754px of content in a 576px box and Reset View
+ * sat off the bottom of the screen behind a scrollbar. The buttons never
+ * shrink (a target is a target), so the room comes back from everywhere
+ * else: the header puts the title beside the toggle instead of above it,
+ * and the margins, paddings and gaps drop to the smallest spacing token.
+ * On smaller windows the body still scrolls - that is what overflow-y is
+ * for - but at the directive's 1600x900 the whole panel is on screen. */
+:root[data-high-contrast='true'] .city-walk-camera-panel {
+  top: var(--space-2xs);
+  max-height: calc(100% - 2 * var(--space-2xs));
+}
+
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-panel-header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2xs) var(--space-sm);
+}
+
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-panel-body {
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+}
+
+:root[data-high-contrast='true']
+  .city-walk-camera-panel
+  .camera-control-section,
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-control-dpad,
+:root[data-high-contrast='true']
+  .city-walk-camera-panel
+  .camera-standard-views {
+  gap: var(--space-2xs);
+}
+
+/* CW-61 (CW-Q58): THE ARMED CURSOR HAS RETIRED WITH THE MODE IT ANNOUNCED.
+ * CW-40's ring cursor said "you are in teleport mode"; there is no mode any
+ * more, because every map click asks. A cursor that meant "this click is
+ * special" would now be lying about every click on the map. */
+
+/* CW-61: the travel dialog. Centred over the map rather than tucked into a
+ * corner, because it is asking a question and has to be found - and it is
+ * the one surface in this layer that stops the game to wait for an answer.
+ * Same z-index family as the help panel: above the ASCII overlay canvas
+ * (z-index 5 in _hfm-paint.js), or the glyphs render over it. */
+.city-walk-travel {
+  position: absolute;
+  z-index: var(--z-index-dropdown);
+  /* ★ NOT CENTRED, AND THAT IS THE WHOLE POSITIONING DECISION. Centred, it
+   * sat exactly on top of the spot it was describing: J asks about the middle
+   * of the map, and the circle marking that spot was underneath the panel
+   * every time. High and centred clears the crosshair, clears the landmark
+   * legend at the left and the Camera panel at the right, and keeps one
+   * position whichever route opened it. */
+  top: calc(var(--space-lg) + 44px + var(--space-md));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(420px, calc(100vw - 2 * var(--space-md)));
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+.city-walk-travel[hidden] {
+  display: none;
+}
+
+.city-walk-travel h3 {
+  margin-top: 0;
+}
+
+.city-walk-travel-where {
+  margin: var(--space-sm) 0 var(--space-md);
+}
+
+.city-walk-travel-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* CW-65: the traveler's speech bubble. It appears in STREET view, where the
+ * legend and the travel dialog never are, so it can take the centre - and it
+ * should: a player has just walked up to somebody, and the reply belongs where
+ * they are looking rather than tucked into a corner they are not.
+ *
+ * Same z-index family as the help and travel panels: above the ASCII overlay
+ * canvas (z-index 5 in _hfm-paint.js), or the glyphs render over it. */
+.city-walk-found {
+  position: absolute;
+  z-index: var(--z-index-dropdown);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(420px, calc(100vw - 2 * var(--space-md)));
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+.city-walk-found[hidden] {
+  display: none;
+}
+
+.city-walk-found h3 {
+  margin-top: 0;
+}
+
+.city-walk-found-body {
+  margin: var(--space-sm) 0 var(--space-md);
+}
+
+/* CW-65: the traveler's badge in the map legend. A text row, never an icon -
+ * the tick has to survive a screen reader and a high-contrast theme alike,
+ * which is CW-62's reason for the visited tick and holds identically here. */
+.city-walk-legend-badge {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+/* Landmark legend (map view): real text over the map's left edge. */
+.city-walk-legend {
+  position: absolute;
+  /* Above the ASCII overlay canvas, like .city-walk-help. */
+  z-index: var(--z-index-dropdown);
+  top: calc(var(--space-lg) + 44px + var(--space-md));
+  left: var(--space-md);
+  max-width: min(340px, calc(100vw - 2 * var(--space-md)));
+  max-height: calc(100% - 160px - var(--city-walk-toolbar-height));
+  overflow-y: auto;
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.city-walk-legend-heading {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-base);
+}
+
+.city-walk-legend-list {
+  margin: 0;
+  padding-left: var(--space-lg);
+  font-size: var(--font-size-sm);
+}
+
+.city-walk-legend-list li {
+  margin-bottom: var(--space-2xs);
+}
+
+.city-walk-legend-list li.selected {
+  color: var(--color-accent);
+  font-weight: bold;
+}
+
+.city-walk-legend-hint,
+.city-walk-legend-empty {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Welcome card: attribution rides at the card's foot in a small size. */
+.city-walk-card .city-walk-attribution {
+  margin-top: var(--space-sm);
+}
+
+/* CW-11 gate: the launch button stays focusable (aria-disabled, not
+   disabled) so keyboard and screen-reader users can find it and hear why,
+   and it must read as unavailable without relying on colour alone. Same
+   treatment as the Classic header toggle's gate (layout.css).
+
+   0.7, not the header toggle's 0.5: MEASURED composited, 0.5 puts the
+   label at 2.86:1 in light and 2.81:1 under high contrast - legal for an
+   inactive control, but high contrast is the mode people choose BECAUSE
+   they need contrast. 0.7 still reads as dimmed and keeps every mode
+   above 4.5:1.
+
+   Colours are deliberately NOT pinned for the gated hover, only the
+   lift. Pinning the background to --color-accent measured 1:1 in the
+   mono variant, whose D-58 rule flips the primary label TO the accent at
+   a higher specificity: amber label on amber surface. The variant's own
+   hover pair is already complete, so the cascade is left alone. */
+.city-walk-card .btn-role-try[aria-disabled='true'] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.city-walk-card .btn-role-try[aria-disabled='true']:hover,
+.city-walk-card .btn-role-try[aria-disabled='true']:active {
+  transform: none;
+}

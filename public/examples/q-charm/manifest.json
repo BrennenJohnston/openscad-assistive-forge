@@ -15,7 +15,10 @@
     "star.svg",
     "lightning.svg",
     "crown.svg",
-    "sun.svg"
+    "sun.svg",
+    "design_layer_1.svg",
+    "design_layer_2.svg",
+    "design_layer_3.svg"
   ],
   "svgLibrary": [
     {

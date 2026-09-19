@@ -40,7 +40,111 @@ const MENU_LABELS = {
 const RADIO_GROUP_LABELS = {
   displayMode: 'Display Mode',
   projection: 'Projection',
+  interfaceMode: 'Interface Mode',
+  previewQuality: 'Preview Quality',
+  edgeDetail: 'Edge Detail Limit',
 };
+
+/**
+ * Access keys, transcribed from upstream's menu tree (Appendix U2) where `&`
+ * marks the underlined letter. Each entry is this app's own label with the
+ * ampersand placed on the letter upstream marks; labels this app adapted keep
+ * the same letter where it survives, and items upstream does not have get no
+ * access key rather than an invented one.
+ *
+ * DISPLAY ONLY — there is no Alt+letter activation (D-30). Alt+F and Alt+D
+ * open the browser's own menus, so coverage would differ per browser and a
+ * user could not rely on any of it. Arrow and first-letter navigation inside
+ * a menu are unchanged.
+ */
+const MNEMONIC_SOURCES = [
+  // File
+  '&New File',
+  '&Open File…',
+  'Recen&t Files',
+  '&Examples',
+  '&Reload',
+  '&Close Project',
+  '&Save',
+  'Save &As…',
+  'E&xport',
+  'Show &Library Folder…',
+  // Export submenu
+  'Export as &STL (ascii)…',
+  'Export as &STL (binary)…',
+  'Export as &OBJ…',
+  'Export as &OFF…',
+  'Export as &WRL…',
+  'Export as &AMF…',
+  'Export as &3MF…',
+  'Export as &DXF…',
+  'Export as S&VG…',
+  'Export as &Image…',
+  // Edit
+  '&Undo',
+  '&Redo',
+  'Cu&t',
+  '&Copy',
+  '&Paste',
+  '&Indent',
+  'U&nindent',
+  'C&omment',
+  'Unco&mment',
+  'Conv&ert Tabs to Spaces',
+  'Copy viewport ima&ge',
+  'Copy viewport transl&ation',
+  'Cop&y viewport rotation',
+  'Copy vie&wport distance',
+  'Copy vie&wport field of view',
+  '&Find…',
+  'Fin&d and Replace…',
+  'Find Ne&xt',
+  'Find Pre&vious',
+  'Use Se&lection for Find',
+  'Increase Font &Size',
+  'Decrease Font Si&ze',
+  '&Preferences (Keyboard Shortcuts)…',
+  // Design
+  '&Automatic Reload and Preview',
+  '&Reload and Preview',
+  '&Preview',
+  'R&ender',
+  '&3D Print',
+  'Measure &Distance',
+  'Measure &Angle',
+  '&Check Validity',
+  'Display A&ST…',
+  'Display CSG &Tree…',
+  'Display CSG Pr&oducts…',
+  '&Flush Caches',
+  // View
+  '&Top',
+  '&Bottom',
+  '&Left',
+  '&Right',
+  '&Front',
+  'Bac&k',
+  '&Diagonal',
+  'Ce&nter',
+  '&Perspective',
+  '&Orthogonal',
+  // Help
+  '&About',
+  '&OpenSCAD Homepage',
+  '&Documentation',
+  '&Offline Documentation',
+  '&Cheat Sheet',
+  '&Offline Cheat Sheet',
+  '&Library info',
+];
+
+/** label → index of the character to underline. */
+const MNEMONICS = new Map(
+  MNEMONIC_SOURCES.map((source) => {
+    const index = source.indexOf('&');
+    return [source.slice(0, index) + source.slice(index + 1), index];
+  })
+);
 
 export class ToolbarMenuController {
   constructor() {
@@ -70,6 +174,14 @@ export class ToolbarMenuController {
 
     /** @type {Function|null} Bound reference for document click-outside handler */
     this._onDocumentClick = null;
+
+    /**
+     * The last element focused outside the menu system. Opening a menu takes
+     * focus, which collapses the editor's selection — so Cut/Copy/Paste and
+     * the context-aware Undo need to know where the user actually was.
+     * @type {HTMLElement|null}
+     */
+    this._lastExternalFocus = null;
   }
 
   /**
@@ -119,6 +231,38 @@ export class ToolbarMenuController {
 
     // Menubar keyboard handler (arrow navigation between top-level items)
     bar.addEventListener('keydown', (e) => this._handleMenubarKeydown(e));
+
+    document.addEventListener('focusin', (e) => {
+      if (!this._isInsideMenus(e.target)) this._lastExternalFocus = e.target;
+    });
+  }
+
+  /** @private */
+  _isInsideMenus(el) {
+    if (!el || typeof el.closest !== 'function') return false;
+    if (el.closest('#toolbarMenuBar')) return true;
+    for (const modal of this._modals.values()) {
+      if (modal.contains(el)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The element that held focus before the menu bar took it. Null once that
+   * element leaves the document.
+   * @returns {HTMLElement|null}
+   */
+  getLastExternalFocus() {
+    const el = this._lastExternalFocus;
+    return el && el.isConnected ? el : null;
+  }
+
+  /**
+   * Put focus back where the user was. CodeMirror restores its own selection
+   * on focus, which is what makes Cut and Copy work from a menu at all.
+   */
+  restoreExternalFocus() {
+    this.getLastExternalFocus()?.focus?.();
   }
 
   // ============================================================================
@@ -276,8 +420,33 @@ export class ToolbarMenuController {
 
     this._openMenuId = menuId;
     btn.setAttribute('aria-expanded', 'true');
+
+    // Publish the trigger's position as custom properties so Classic can
+    // drop the panel under its own menu-bar button, the way a desktop menu
+    // behaves. These are anchor values, not layout styles — classic.css
+    // decides whether to use them and the other modes ignore them.
+    const rect = btn.getBoundingClientRect();
+    modal.style.setProperty('--menu-anchor-x', `${Math.round(rect.left)}px`);
+    modal.style.setProperty('--menu-anchor-y', `${Math.round(rect.bottom)}px`);
+
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
+
+    // Anchored panels for right-edge triggers (Help on a phone) would run
+    // off screen; desktop menus shift left to stay visible. Measure the
+    // rendered panel and re-anchor — CSS alone cannot shift by own width.
+    const content = modal.querySelector('.toolbar-menu-content');
+    if (content) {
+      const panel = content.getBoundingClientRect();
+      const margin = 8;
+      if (panel.width > 0 && panel.right > window.innerWidth - margin) {
+        const shifted = Math.max(
+          margin,
+          window.innerWidth - margin - panel.width
+        );
+        modal.style.setProperty('--menu-anchor-x', `${Math.round(shifted)}px`);
+      }
+    }
 
     // Focus the first menuitem inside the menu list
     const listEl = modal.querySelector(`#${menuId}MenuItems`);
@@ -670,20 +839,18 @@ export class ToolbarMenuController {
       btn.setAttribute('title', item.tooltip);
     }
 
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'menu-item-label';
-    labelSpan.textContent = item.label || '';
+    const labelSpan = this._buildLabelSpan(item.label);
     btn.appendChild(labelSpan);
 
     const describedByIds = [];
+    let tooltipSpan = null;
 
     if (item.tooltip) {
       const tooltipId = `menu-tip-${this._nextId()}`;
-      const tooltipSpan = document.createElement('span');
+      tooltipSpan = document.createElement('span');
       tooltipSpan.id = tooltipId;
       tooltipSpan.className = 'sr-only';
       tooltipSpan.textContent = item.tooltip;
-      btn.appendChild(tooltipSpan);
       describedByIds.push(tooltipId);
     }
 
@@ -708,12 +875,43 @@ export class ToolbarMenuController {
     if (!isDisabled && typeof item.handler === 'function') {
       btn.addEventListener('click', () => {
         this.closeAllMenus();
+        if (item.restoreFocus) this.restoreExternalFocus();
         item.handler();
       });
     }
 
     li.appendChild(btn);
+    // The reason lives OUTSIDE the button. Inside it, it joined the item's
+    // accessible NAME as well as being its description, so a screen reader
+    // read every disabled item's reason twice (D-14).
+    if (tooltipSpan) li.appendChild(tooltipSpan);
     return li;
+  }
+
+  /**
+   * A menu item's label span, with U2's access key underlined where upstream
+   * marks one. Splitting the text into child spans does not change the text
+   * content, so the accessible name is exactly the label either way.
+   * @param {string} [label]
+   * @returns {HTMLElement}
+   * @private
+   */
+  _buildLabelSpan(label) {
+    const span = document.createElement('span');
+    span.className = 'menu-item-label';
+
+    const text = label || '';
+    const index = MNEMONICS.get(text);
+    if (index === undefined || index >= text.length) {
+      span.textContent = text;
+      return span;
+    }
+
+    const key = document.createElement('span');
+    key.className = 'menu-mnemonic';
+    key.textContent = text[index];
+    span.append(text.slice(0, index), key, text.slice(index + 1));
+    return span;
   }
 
   /** @private */
@@ -768,10 +966,7 @@ export class ToolbarMenuController {
         btn.setAttribute('title', item.tooltip);
       }
 
-      const labelSpan = document.createElement('span');
-      labelSpan.className = 'menu-item-label';
-      labelSpan.textContent = item.label || '';
-      btn.appendChild(labelSpan);
+      btn.appendChild(this._buildLabelSpan(item.label));
 
       if (item.shortcutAction) {
         const shortcutDef = keyboardConfig.getShortcut(item.shortcutAction);
@@ -829,10 +1024,20 @@ export class ToolbarMenuController {
       btn.setAttribute('title', item.tooltip);
     }
 
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'menu-item-label';
-    labelSpan.textContent = item.label || '';
-    btn.appendChild(labelSpan);
+    btn.appendChild(this._buildLabelSpan(item.label));
+
+    // A submenu trigger can have a shortcut too \u2014 Window \u25B8 Jump To\u2026 is
+    // Ctrl+J \u2014 and this never showed one, so the key was undiscoverable.
+    if (item.shortcutAction) {
+      const shortcutDef = keyboardConfig.getShortcut(item.shortcutAction);
+      if (shortcutDef) {
+        const kbdSpan = document.createElement('span');
+        kbdSpan.className = 'menu-item-shortcut';
+        kbdSpan.setAttribute('aria-hidden', 'true');
+        kbdSpan.textContent = formatShortcut(shortcutDef);
+        btn.appendChild(kbdSpan);
+      }
+    }
 
     const arrow = document.createElement('span');
     arrow.className = 'menu-submenu-arrow';
@@ -852,9 +1057,34 @@ export class ToolbarMenuController {
 
       btn.setAttribute('aria-controls', submenuId);
 
+      // Radio runs collapse through _buildRadioGroup exactly as the
+      // top-level renderer does. _buildMenuItem has no radio branch: children
+      // of type 'radio' fell through to plain menuitems with no aria-checked
+      // and no click listener (radios carry onChange, not handler), so every
+      // radio submenu — Preview Quality included — rendered inert (UF-11,
+      // defect D-24).
       const childItems = Array.isArray(item.items) ? item.items : [];
-      for (const child of childItems) {
-        nestedUl.appendChild(this._buildMenuItem(child));
+      let ci = 0;
+      while (ci < childItems.length) {
+        const child = childItems[ci];
+        if (child.type === 'radio') {
+          const group = child.group;
+          const radioItems = [];
+          while (
+            ci < childItems.length &&
+            childItems[ci].type === 'radio' &&
+            childItems[ci].group === group
+          ) {
+            radioItems.push(childItems[ci]);
+            ci++;
+          }
+          this._buildRadioGroup(group, radioItems).forEach((el) =>
+            nestedUl.appendChild(el)
+          );
+        } else {
+          nestedUl.appendChild(this._buildMenuItem(child));
+          ci++;
+        }
       }
 
       // Submenu open/close via click on the trigger
@@ -1011,7 +1241,7 @@ export function resetToolbarMenuController() {
 
 /**
  * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
- * @param {'basic'|'advanced'} mode
+ * @param {'simplified'|'standard'|'classic'} mode
  */
 export function applyToolbarModeVisibility(mode) {
   const controller = getToolbarMenuController();
@@ -1028,7 +1258,7 @@ export function applyToolbarModeVisibility(mode) {
 
   showWorkflowProgress();
 
-  if (mode === 'advanced') {
+  if (mode !== 'simplified') {
     controller.show();
   } else {
     const uiMode = getUIModeController();

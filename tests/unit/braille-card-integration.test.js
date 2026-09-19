@@ -180,7 +180,7 @@ describe('braille-wedge-card registry entries', () => {
     const def = EXAMPLE_DEFINITIONS['braille-wedge-card'];
     expect(def).toBeDefined();
     expect(def.name).toBe('braille_wedge_card.scad');
-    expect(def.description).toBe('Braille Card Customizer');
+    expect(def.description).toBe('Braille Card Designer');
 
     const scad = join(PUBLIC_DIR, def.path.replace(/^\//, ''));
     expect(existsSync(scad)).toBe(true);
@@ -192,7 +192,7 @@ describe('braille-wedge-card registry entries', () => {
   it('PROGRAM_DEFINITIONS has braille-card-customizer with the example', () => {
     const program = PROGRAM_DEFINITIONS['braille-card-customizer'];
     expect(program).toBeDefined();
-    expect(program.label).toBe('Braille Card Customizer');
+    expect(program.label).toBe('Braille Card Designer');
     expect(program.examples).toContain('braille-wedge-card');
   });
 

@@ -1,0 +1,15 @@
+{
+  "name": "Template Tile (copy me)",
+  "description": "A label plate with a raised border a finger can find, an optional picture, and an optional hanging hole. This is starter material for a new tile, not a tile anyone is offered on the welcome screen. Replace every field in this file with your own.",
+  "version": "0.1.0",
+  "author": "REPLACE-ME (your name, or the name of your project)",
+  "license": "CC0-1.0",
+  "main": "template_tile.scad",
+  "files": ["template_tile.scad", "presets/starter.json"],
+  "tags": ["template", "starter", "label", "tactile"],
+  "tactile": ["ridge_height"],
+  "inspired_by": {
+    "name": "REPLACE-ME, or delete this whole block if your design is your own",
+    "reference": "https://example.org/the-design-you-started-from"
+  }
+}

@@ -11,7 +11,12 @@ import {
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 import { isDebugPrefEnabled } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
-import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
+import {
+  isNonPreviewable,
+  is2DGenerateValue,
+  strip2DGenerateForFallback,
+} from './render-intent.js';
+import { build2DPreviewStyleTag } from './state-colors.js';
 import { RENDER_QUALITY } from './render-controller.js';
 
 /**
@@ -108,6 +113,10 @@ export class AutoPreviewController {
     this.onPreviewReady = options.onPreviewReady || (() => {});
     this.onProgress = options.onProgress || (() => {});
     this.onError = options.onError || (() => {});
+    // A full render is starting. Unlike renderPreview() this path sets no
+    // preview state, so onStateChange never fires for it and anything that
+    // has to stand back — the Animate panel, F5 — has nothing else to hear.
+    this.onFullRenderStart = options.onFullRenderStart || (() => {});
   }
 
   hashParams(params) {
@@ -189,6 +198,37 @@ export class AutoPreviewController {
    */
   setEnabledLibraries(libraries) {
     this.enabledLibraries = libraries || [];
+  }
+
+  /**
+   * Called when the enabled-library set changes (a library switched on or
+   * off). Libraries are a render input just like parameters, but they are
+   * not part of the preview cache key, so every cached preview may embed
+   * the previous library set - none can be reused. Re-render the unchanged
+   * parameters through the normal debounced path so a model that needs the
+   * switched-off library says so instead of showing leftovers (D-42).
+   * @param {Object} parameters - Current parameter values
+   */
+  onLibrariesChange(parameters) {
+    if (!this.currentScadContent) return;
+
+    this.previewCache.clear();
+
+    // With auto-preview off nothing will be scheduled; the shown preview
+    // is simply stale now (mirrors onParameterChange's disabled handling).
+    if (!this.enabled && this.pauseReason !== 'complexity') {
+      if (this.previewCacheKey && this.state === PREVIEW_STATE.CURRENT) {
+        this.setState(PREVIEW_STATE.STALE);
+      }
+      this.previewCacheKey = null;
+      return;
+    }
+
+    // Nulling the stored key defeats both the already-current early return
+    // and the just-rendered dedupe: the parameters have not moved, but the
+    // world they render against has.
+    this.previewCacheKey = null;
+    this.onParameterChange(parameters);
   }
 
   /**
@@ -624,230 +664,6 @@ export class AutoPreviewController {
   }
 
   /**
-   * Count distinct face colors in OFF/COFF data without full parsing.
-   * Used to detect monochrome output (single color wrapping all geometry)
-   * which indicates the author's color() calls don't provide useful
-   * differentiation and CSG operation face colors would be more informative.
-   *
-   * Returns early once 2 distinct colors are found (avoids scanning all faces).
-   *
-   * @param {ArrayBuffer|string} offData - OFF/COFF file content
-   * @returns {number} Number of unique face colors (0 = no colors, 1 = monochrome, 2+ = multi-color)
-   */
-  static countUniqueOFFColors(offData) {
-    if (!offData) return 0;
-    const text =
-      typeof offData === 'string' ? offData : new TextDecoder().decode(offData);
-
-    const lines = text
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && !l.startsWith('#'));
-
-    if (lines.length === 0) return 0;
-
-    const firstLine = lines[0].toUpperCase();
-    if (!firstLine.startsWith('OFF') && !firstLine.startsWith('COFF')) return 0;
-
-    const headerParts = lines[0].split(/\s+/);
-    let countLineIdx;
-    if (headerParts.length >= 3 && !isNaN(Number(headerParts[1]))) {
-      countLineIdx = 0;
-    } else {
-      countLineIdx = 1;
-    }
-    const countParts =
-      countLineIdx === 0
-        ? headerParts.slice(1)
-        : lines[countLineIdx].split(/\s+/);
-    const numVerts = Number(countParts[0]);
-    const numFaces = Number(countParts[1]);
-    const dataStartLine = countLineIdx + 1;
-    const faceStart = dataStartLine + numVerts;
-
-    const uniqueColors = new Set();
-    for (let i = 0; i < numFaces && faceStart + i < lines.length; i++) {
-      const parts = lines[faceStart + i].split(/\s+/).map(Number);
-      const n = parts[0];
-      if (parts.length >= n + 4) {
-        uniqueColors.add(`${parts[n + 1]},${parts[n + 2]},${parts[n + 3]}`);
-        if (uniqueColors.size >= 2) return 2;
-      }
-    }
-
-    return uniqueColors.size;
-  }
-
-  /**
-   * Strip color() transformation calls from SCAD source, preserving child
-   * geometry. This simulates desktop F6 render behavior where color() is
-   * ignored and the engine applies CSG operation face colors instead.
-   *
-   * Handles: color("name"), color([r,g,b]), color([r,g,b,a]), color(c=..., alpha=...)
-   * Does NOT strip color() inside comments or string literals.
-   *
-   * @param {string} scadContent - OpenSCAD source code
-   * @returns {string} Source with color() calls removed
-   */
-  static stripColorCalls(scadContent) {
-    if (!scadContent || typeof scadContent !== 'string') return scadContent;
-    // Match `color` keyword boundary, optional whitespace, then balanced parens.
-    // We manually find the matching closing paren to handle nested brackets
-    // like color([1,0,0,0.5]) correctly.
-    let result = '';
-    const len = scadContent.length;
-    const colorPattern = /\bcolor\s*\(/g;
-
-    let lastIndex = 0;
-    colorPattern.lastIndex = 0;
-    let match;
-
-    while ((match = colorPattern.exec(scadContent)) !== null) {
-      const start = match.index;
-      // Find the matching close paren
-      let depth = 1;
-      let j = match.index + match[0].length;
-      while (j < len && depth > 0) {
-        if (scadContent[j] === '(') depth++;
-        else if (scadContent[j] === ')') depth--;
-        j++;
-      }
-      // Copy everything before this color() call, skip the call itself
-      result += scadContent.slice(lastIndex, start);
-      lastIndex = j;
-      colorPattern.lastIndex = j;
-    }
-    result += scadContent.slice(lastIndex);
-    return result;
-  }
-
-  /**
-   * Inject ThrownTogether-style CSG colors into SCAD source. Wraps the entire
-   * source in gold (positive body) and wraps the subtracted children (2nd+) of
-   * each difference() block in green (subtracted body). Uses balanced-brace
-   * scanning on a comment/string-stripped copy so that difference() inside
-   * comments or string literals is ignored.
-   *
-   * @param {string} scadContent - OpenSCAD source code without user color() calls
-   * @returns {string} Source with injected gold/green color() wrappers
-   */
-  static injectCsgColors(scadContent) {
-    if (!scadContent || typeof scadContent !== 'string') return scadContent;
-
-    const GOLD = '#f9d72c';
-    const GREEN = '#9dcb51';
-
-    const cleaned = AutoPreviewController.stripCommentsAndStrings(scadContent);
-    const diffPattern = /\bdifference\s*\(\s*\)/g;
-    const ops = [];
-
-    let match;
-    while ((match = diffPattern.exec(cleaned)) !== null) {
-      const afterParen = match.index + match[0].length;
-
-      let openBrace = afterParen;
-      while (openBrace < cleaned.length && /\s/.test(cleaned[openBrace])) {
-        openBrace++;
-      }
-      if (openBrace >= cleaned.length || cleaned[openBrace] !== '{') continue;
-
-      let depth = 0;
-      let closeBrace = -1;
-      let firstChildEnd = -1;
-
-      for (let i = openBrace; i < cleaned.length; i++) {
-        const ch = cleaned[i];
-        if (ch === '{') {
-          depth++;
-        } else if (ch === '}') {
-          depth--;
-          if (depth === 0) {
-            closeBrace = i;
-            break;
-          }
-          if (firstChildEnd === -1 && depth === 1) {
-            const rest = cleaned.slice(i + 1).trimStart();
-            if (!/^else\b/.test(rest)) {
-              firstChildEnd = i + 1;
-            }
-          }
-        } else if (ch === ';' && firstChildEnd === -1 && depth === 1) {
-          firstChildEnd = i + 1;
-        }
-      }
-
-      if (closeBrace === -1 || firstChildEnd === -1) continue;
-
-      const between = scadContent.slice(firstChildEnd, closeBrace).trim();
-      if (between.length === 0) continue;
-
-      const subtractors = [];
-      let stmtStart = -1;
-      let stmtDepth = 0;
-
-      for (let i = firstChildEnd; i < closeBrace; i++) {
-        const ch = cleaned[i];
-
-        if (stmtStart === -1) {
-          if (!/\s/.test(ch)) {
-            stmtStart = i;
-            stmtDepth = 0;
-          } else {
-            continue;
-          }
-        }
-
-        if (ch === '{') {
-          stmtDepth++;
-        } else if (ch === '}') {
-          stmtDepth--;
-          if (stmtDepth === 0) {
-            const rest = cleaned.slice(i + 1).trimStart();
-            if (/^else\b/.test(rest)) {
-              continue;
-            }
-            subtractors.push({ start: stmtStart, end: i + 1 });
-            stmtStart = -1;
-          }
-        } else if (ch === ';' && stmtDepth === 0) {
-          subtractors.push({ start: stmtStart, end: i + 1 });
-          stmtStart = -1;
-        }
-      }
-
-      if (subtractors.length === 0) continue;
-
-      ops.push({ pos: openBrace + 1, text: ` color("${GOLD}") {`, pri: 0 });
-      ops.push({ pos: firstChildEnd, text: ' }', pri: 1 });
-
-      for (const sub of subtractors) {
-        ops.push({ pos: sub.start, text: `color("${GREEN}") { `, pri: 0 });
-        ops.push({ pos: sub.end, text: ' }', pri: 1 });
-      }
-    }
-
-    ops.sort((a, b) => b.pos - a.pos || a.pri - b.pri);
-
-    let result = scadContent;
-    for (const op of ops) {
-      result = result.slice(0, op.pos) + op.text + result.slice(op.pos);
-    }
-
-    return result;
-  }
-
-  /**
-   * Test whether an error from the OpenSCAD WASM render is a parser/syntax
-   * error — the kind that injection can cause when it produces invalid SCAD.
-   * @param {Error|string} error
-   * @returns {boolean}
-   */
-  static isParserError(error) {
-    const msg = (error?.message || String(error)).toLowerCase();
-    return msg.includes('parser error') || msg.includes('syntax error');
-  }
-
-  /**
    * Strip comments and string literals while preserving overall structure.
    * This enables lightweight source scanning without false-positives from
    * `#` inside comments/strings.
@@ -1019,6 +835,68 @@ export class AutoPreviewController {
   }
 
   /**
+   * Render one animation frame at a given $t (F5).
+   *
+   * Deliberately NOT renderPreview(): that path is built for a user changing a
+   * parameter, so it consults the cache, drops itself as stale when the
+   * parameter hash has moved on, and schedules pending work in its finally
+   * block. An animation asks for a specific frame, now, and every frame has a
+   * different $t, so caching would never hit and the staleness checks would
+   * discard frames the panel had explicitly asked for.
+   *
+   * $t reaches OpenSCAD as a -D flag through the ordinary parameter path
+   * (scad-param-formatter.js), which is why the plan could call this feasible
+   * before any of it was written.
+   *
+   * The camera is preserved on every frame: re-fitting it between frames would
+   * make the model appear to swim, and it would fight a low-vision user who
+   * has zoomed in to watch one detail (the reasoning behind D-11).
+   *
+   * @param {number} tValue - $t for this frame, 0..1
+   * @param {Object} [parameters] - the model's current parameters
+   * @returns {Promise<boolean>} whether the frame rendered and loaded
+   */
+  async renderAnimationFrame(tValue, parameters = {}) {
+    // One frame at a time. The WASM render is blocking in the worker, so a
+    // second concurrent request would queue behind the first and arrive late,
+    // out of order, over a newer frame.
+    if (this._animationFrameInFlight) return false;
+    if (!this.renderController || !this.currentScadContent) return false;
+
+    this._animationFrameInFlight = true;
+    try {
+      const { quality } = this.resolvePreviewQualityInfo(parameters);
+      const frameParameters = { ...parameters, $t: tValue };
+
+      const result = await this.renderController.renderPreview(
+        this.currentScadContent,
+        frameParameters,
+        {
+          ...(quality ? { quality } : {}),
+          outputFormat: 'stl',
+          files: this.projectFiles,
+          mainFile: this.mainFilePath,
+          libraries: this.enabledLibraries,
+          paramTypes: this.paramTypes,
+        }
+      );
+
+      if (result?.diagnostics) {
+        console.log(
+          '[Animate Diag] Worker defineArgs:',
+          result.diagnostics.defineArgs
+        );
+      }
+      if (!result?.stl) return false;
+
+      await this.previewManager?.loadSTL(result.stl, { preserveCamera: true });
+      return true;
+    } finally {
+      this._animationFrameInFlight = false;
+    }
+  }
+
+  /**
    * Render preview with reduced quality
    * @param {Object} parameters - Parameter values
    * @param {string} paramHash - Parameter hash
@@ -1085,27 +963,21 @@ export class AutoPreviewController {
     );
 
     let previewOutputFormat;
-    let scadForPreview = this.currentScadContent;
-    let filesForPreview = this.projectFiles;
-    let csgColorsInjected = false;
+    // The render always uses the user's UNMODIFIED source. injectCsgColors()
+    // used to wrap each difference() subtractor in its own color(){} block,
+    // but each block is a new lexical scope, so variables assigned in one
+    // subtractor became undef in the next — silently wrong geometry (KI-012
+    // phase 1, the confirmed keyguard-corruption root cause). Colorless and
+    // monochrome models now get viewer-side cavity tinting in loadOFF().
+    const scadForPreview = this.currentScadContent;
+    const filesForPreview = this.projectFiles;
+    const csgColorsInjected = false;
     const noCsgColors = isDebugPrefEnabled('noCsgColors');
 
     if (noCsgColors) {
       previewOutputFormat = 'stl';
     } else if (supportsRenderColors) {
       previewOutputFormat = 'off';
-      if (!hasColorCalls || !colorPassthroughEnabled) {
-        scadForPreview = AutoPreviewController.injectCsgColors(
-          hasColorCalls
-            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
-            : this.currentScadContent
-        );
-        csgColorsInjected = true;
-        if (this.projectFiles && this.mainFilePath) {
-          filesForPreview = new Map(this.projectFiles);
-          filesForPreview.set(this.mainFilePath, scadForPreview);
-        }
-      }
     } else {
       const useColorPassthrough =
         colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
@@ -1171,32 +1043,11 @@ export class AutoPreviewController {
         );
       }
 
-      let result;
-      try {
-        result = await this.renderController.renderPreview(
-          scadForPreview,
-          previewParameters,
-          previewRenderOpts
-        );
-      } catch (renderErr) {
-        if (
-          csgColorsInjected &&
-          AutoPreviewController.isParserError(renderErr)
-        ) {
-          console.warn(
-            '[AutoPreview] CSG color injection produced invalid SCAD — ' +
-              'retrying with original source'
-          );
-          csgColorsInjected = false;
-          result = await this.renderController.renderPreview(
-            this.currentScadContent,
-            previewParameters,
-            { ...previewRenderOpts, files: this.projectFiles }
-          );
-        } else {
-          throw renderErr;
-        }
-      }
+      const result = await this.renderController.renderPreview(
+        scadForPreview,
+        previewParameters,
+        previewRenderOpts
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -1225,63 +1076,10 @@ export class AutoPreviewController {
         return;
       }
 
-      // Monochrome fallback: if the OFF output has only 1 unique face color,
-      // the author's color() calls wrap all geometry in a single hue, which
-      // isn't visually useful. Re-render with color() calls stripped so the
-      // Manifold CSG engine assigns per-operation face colors instead.
-      let activeResult = result;
-      const useAuthorColors =
-        hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
-      if (
-        (result.format || 'stl') === 'off' &&
-        useAuthorColors &&
-        !noCsgColors
-      ) {
-        const uniqueColors = AutoPreviewController.countUniqueOFFColors(
-          result.stl
-        );
-        if (uniqueColors === 1) {
-          console.log(
-            '[AutoPreview] Monochrome OFF detected (1 unique color) — ' +
-              're-rendering with stripped color() for CSG face colors'
-          );
-          const strippedSource = AutoPreviewController.injectCsgColors(
-            AutoPreviewController.stripColorCalls(this.currentScadContent)
-          );
-          let strippedFiles = this.projectFiles;
-          if (this.projectFiles && this.mainFilePath) {
-            strippedFiles = new Map(this.projectFiles);
-            strippedFiles.set(this.mainFilePath, strippedSource);
-          }
-          try {
-            const fallbackResult = await this.renderController.renderPreview(
-              strippedSource,
-              previewParameters,
-              {
-                ...(quality ? { quality } : {}),
-                outputFormat: 'off',
-                files: strippedFiles,
-                mainFile: this.mainFilePath,
-                libraries: this.enabledLibraries,
-                paramTypes: this.paramTypes,
-                onProgress: (percent, message) => {
-                  this.onProgress(percent, message, 'preview');
-                },
-              }
-            );
-            activeResult = fallbackResult;
-            console.log(
-              '[AutoPreview] Monochrome fallback render complete — ' +
-                `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
-            );
-          } catch (fallbackErr) {
-            console.warn(
-              '[AutoPreview] Monochrome fallback render failed, using original:',
-              fallbackErr.message
-            );
-          }
-        }
-      }
+      // Monochrome/colorless OFF needs no re-render: loadOFF() detects
+      // uniform inline colors, drops them, and applies viewer-side cavity
+      // tinting via _classifyInnerFaces() — zero geometry impact.
+      const activeResult = result;
 
       // Cache the result
       this.addToCache(cacheKey, activeResult, durationMs);
@@ -1366,7 +1164,8 @@ export class AutoPreviewController {
         activeResult.stats,
         false,
         durationMs,
-        timing
+        timing,
+        activeResult.consoleOutput || ''
       );
     } catch (error) {
       renderFailed = true;
@@ -1490,16 +1289,21 @@ export class AutoPreviewController {
    * @returns {Promise<Object>} Render result with STL and stats
    */
   async renderFull(parameters, options = {}) {
+    this.onFullRenderStart();
     const paramHash = this.hashParams(parameters);
     const quality = options.quality || null;
     const qualityKey = quality?.name ? `full-${quality.name}` : 'full';
     const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);
 
-    // Check if we already have full quality for these params
+    // Check if we already have full quality for these params.
+    // The format guard matters: renderFull() only ever resolves with STL
+    // for callers, but fullQualitySTL transiently holds OFF bytes between
+    // the colored render and the STL follow-up render.
     if (
       paramHash === this.fullRenderParamHash &&
       this.fullQualitySTL &&
-      this.fullQualityKey === qualityKey
+      this.fullQualityKey === qualityKey &&
+      (this.fullQualityFormat || 'stl') === 'stl'
     ) {
       return {
         stl: this.fullQualitySTL,
@@ -1523,27 +1327,17 @@ export class AutoPreviewController {
     );
 
     let fullOutputFormat;
-    let scadContentForRender = this.currentScadContent;
-    let filesForRender = this.projectFiles;
-    let csgColorsInjected = false;
+    // Always render the user's UNMODIFIED source — see the matching comment
+    // in renderPreview() for why injectCsgColors() was removed (KI-012).
+    const scadContentForRender = this.currentScadContent;
+    const filesForRender = this.projectFiles;
+    const csgColorsInjected = false;
     const noCsgColors = isDebugPrefEnabled('noCsgColors');
 
     if (noCsgColors) {
       fullOutputFormat = undefined;
     } else if (supportsRenderColors) {
       fullOutputFormat = 'off';
-      if (!hasColorCalls || !colorPassthroughEnabled) {
-        scadContentForRender = AutoPreviewController.injectCsgColors(
-          hasColorCalls
-            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
-            : this.currentScadContent
-        );
-        csgColorsInjected = true;
-        if (this.projectFiles && this.mainFilePath) {
-          filesForRender = new Map(this.projectFiles);
-          filesForRender.set(this.mainFilePath, scadContentForRender);
-        }
-      }
     } else {
       const useColorPassthrough =
         colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
@@ -1582,81 +1376,14 @@ export class AutoPreviewController {
       });
     }
 
-    let result;
-    try {
-      result = await this.renderController.renderFull(
-        scadContentForRender,
-        parameters,
-        renderOptions
-      );
-    } catch (renderErr) {
-      if (csgColorsInjected && AutoPreviewController.isParserError(renderErr)) {
-        console.warn(
-          '[AutoPreview] CSG color injection produced invalid SCAD — ' +
-            'retrying with original source'
-        );
-        csgColorsInjected = false;
-        result = await this.renderController.renderFull(
-          this.currentScadContent,
-          parameters,
-          { ...renderOptions, files: this.projectFiles }
-        );
-      } else {
-        throw renderErr;
-      }
-    }
+    const result = await this.renderController.renderFull(
+      scadContentForRender,
+      parameters,
+      renderOptions
+    );
 
     if (fullOutputFormat === 'off') {
       console.log('[AutoPreview] Full render using OFF format');
-    }
-
-    const useAuthorColors =
-      hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
-    if (
-      !noCsgColors &&
-      useAuthorColors &&
-      (result.format || 'stl') === 'off' &&
-      AutoPreviewController.countUniqueOFFColors(result.stl) === 1
-    ) {
-      console.log(
-        '[AutoPreview] Full render monochrome OFF detected — ' +
-          're-rendering with stripped color() for CSG face colors'
-      );
-      const strippedSource = AutoPreviewController.injectCsgColors(
-        AutoPreviewController.stripColorCalls(this.currentScadContent)
-      );
-      let strippedFiles = this.projectFiles;
-      if (this.projectFiles && this.mainFilePath) {
-        strippedFiles = new Map(this.projectFiles);
-        strippedFiles.set(this.mainFilePath, strippedSource);
-      }
-      try {
-        const fallbackResult = await this.renderController.renderFull(
-          strippedSource,
-          parameters,
-          {
-            files: strippedFiles,
-            mainFile: this.mainFilePath,
-            libraries: this.enabledLibraries,
-            paramTypes: this.paramTypes,
-            ...(quality ? { quality } : {}),
-            outputFormat: 'off',
-            onProgress: (percent, message) => {
-              this.onProgress(percent, message, 'full');
-            },
-          }
-        );
-        result = fallbackResult;
-        console.log(
-          '[AutoPreview] Full render monochrome fallback complete — ' +
-            `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
-        );
-      } catch (fallbackErr) {
-        console.warn(
-          '[AutoPreview] Full render monochrome fallback failed, using original:',
-          fallbackErr.message
-        );
-      }
     }
 
     // Store for reuse — when color passthrough produced OFF, the STL for
@@ -1757,10 +1484,25 @@ export class AutoPreviewController {
         this.fullQualityConsoleOutput = stlResult.consoleOutput || '';
         return stlResult;
       } catch (stlError) {
-        console.warn(
-          '[AutoPreview] STL follow-up render failed; download may use OFF data:',
-          stlError
+        // Never leave OFF bytes where the download path expects STL: clear
+        // the cached artifact entirely and fail loudly. Returning the OFF
+        // result here used to make the app silently save OFF bytes as .stl.
+        this.fullQualitySTL = null;
+        this.fullQualityFormat = null;
+        this.fullQualityStats = null;
+        this.fullQualityKey = null;
+        this.fullRenderParamHash = null;
+        this.fullQualityConsoleOutput = null;
+        const exportError = new Error(
+          `STL export render failed: ${stlError.message}`
         );
+        exportError.code = 'EXPORT_STL_FAILED';
+        exportError.cause = stlError;
+        // Carry the raw OpenSCAD output across the wrap. Without it the UI
+        // can only see this sentence, and every specific diagnosis the
+        // worker made is lost behind a generic failure (D-42).
+        exportError.details = stlError.details;
+        throw exportError;
       }
     }
 
@@ -1793,15 +1535,11 @@ export class AutoPreviewController {
             ? result.stl
             : new TextDecoder().decode(result.stl || result.data);
 
-        // Pre-inject F5-draft parity styling into SVG before show2DPreview.
-        // Desktop OpenSCAD F5 preview for 2D first-layer: #7A9F7A sage green.
-        // Ref: Testing Round 7 color-codes.json preview_colors for laser-cut-first-layer.
-        const draftStyle =
-          '<style data-forge-preview="true">' +
-          'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
-          'line{stroke:#7A9F7A;stroke-width:0.25}' +
-          '</style>';
-        svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftStyle);
+        // Pre-inject F5-draft parity styling (see state-colors.js).
+        svgText = svgText.replace(
+          /(<svg[^>]*>)/i,
+          '$1' + build2DPreviewStyleTag('draft')
+        );
 
         if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
           await this.previewManager.show2DPreviewAs3DPlane(svgText, {
@@ -1821,9 +1559,13 @@ export class AutoPreviewController {
       const msg = (svgError?.message || '').toLowerCase();
       if (svgError?.code === 'MODEL_NOT_2D' || msg.includes('not a 2d')) {
         try {
+          // Draft PREVIEW of the projected outline (on-screen only, no
+          // file leaves the app, so no consent dialog here). Strip the
+          // 2D-mode generate so the 3D pass renders the model's default
+          // geometry — render2DFallback no longer rewrites parameters.
           const fallbackResult = await this.renderController.render2DFallback(
             this.currentScadContent,
-            parameters,
+            strip2DGenerateForFallback(parameters),
             {
               outputFormat: 'svg',
               files: this.projectFiles,
@@ -1837,12 +1579,10 @@ export class AutoPreviewController {
               : new TextDecoder().decode(
                   fallbackResult.stl || fallbackResult.data
                 );
-          const draftFallbackStyle =
-            '<style data-forge-preview="true">' +
-            'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
-            'line{stroke:#7A9F7A;stroke-width:0.25}' +
-            '</style>';
-          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftFallbackStyle);
+          svgText = svgText.replace(
+            /(<svg[^>]*>)/i,
+            '$1' + build2DPreviewStyleTag('draft')
+          );
           if (
             typeof this.previewManager?.show2DPreviewAs3DPlane === 'function'
           ) {
@@ -1882,7 +1622,11 @@ export class AutoPreviewController {
    */
   getCurrentFullSTL(parameters) {
     const paramHash = this.hashParams(parameters);
-    if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
+    if (
+      paramHash === this.fullRenderParamHash &&
+      this.fullQualitySTL &&
+      (this.fullQualityFormat || 'stl') === 'stl'
+    ) {
       return {
         stl: this.fullQualitySTL,
         stats: this.fullQualityStats,

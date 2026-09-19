@@ -3,8 +3,6 @@
  * @license GPL-3.0-or-later
  */
 
-import { escapeHtml } from './html-utils.js';
-
 /**
  * Extract files from a ZIP archive
  * @param {File|Blob} zipFile - ZIP file to extract
@@ -301,50 +299,6 @@ export function countFilesRecursive(node) {
     count += countFilesRecursive(child);
   }
   return count;
-}
-
-/**
- * Create a file tree structure for display
- * @param {Map<string, string>} files - Extracted files
- * @param {string} mainFile - Main .scad file path
- * @returns {string} - HTML representation of file tree
- */
-export function createFileTree(files, mainFile) {
-  const tree = buildNestedTree(files);
-
-  function renderNode(node, depth) {
-    const indent = depth > 0 ? `style="padding-left:${depth * 16}px"` : '';
-    let html = '';
-
-    // Render subfolders first (sorted)
-    for (const [folderName, child] of [...node.folders.entries()].sort((a, b) =>
-      a[0].localeCompare(b[0])
-    )) {
-      const childCount = countFilesRecursive(child);
-      html += `<div class="file-tree-item file-tree-folder" ${indent}>📁 ${escapeHtml(folderName)} <span class="file-tree-count">(${childCount})</span></div>`;
-      html += renderNode(child, depth + 1);
-    }
-
-    // Render files (sorted)
-    for (const file of [...node.files].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    )) {
-      const isMain = file.path === mainFile;
-      const icon = file.name.endsWith('.scad') ? '📄' : '📎';
-      const badge = isMain ? ' <span class="file-tree-badge">main</span>' : '';
-      const className = isMain ? 'file-tree-item main' : 'file-tree-item';
-      html += `<div class="${className}" ${indent}>${icon} ${escapeHtml(file.name)}${badge}</div>`;
-    }
-
-    return html;
-  }
-
-  return `
-    <div class="file-tree">
-      <div class="file-tree-header">📦 ZIP Contents (${files.size} files)</div>
-      ${renderNode(tree, 0)}
-    </div>
-  `;
 }
 
 /**

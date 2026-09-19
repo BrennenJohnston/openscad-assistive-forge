@@ -523,8 +523,51 @@ describe('AutoPreviewController', () => {
 
     it('handles null libraries', () => {
       controller.setEnabledLibraries(null)
-      
+
       expect(controller.enabledLibraries).toEqual([])
+    })
+
+    // D-42: a library toggle changes what a render produces without moving
+    // any parameter, so the already-current early return and the parameter-
+    // keyed cache must both be defeated.
+    it('onLibrariesChange schedules a re-render although parameters did not move', () => {
+      const params = { size: 10 }
+      const hash = controller.hashParams(params)
+      const { qualityKey } = controller.resolvePreviewQualityInfo(params)
+      const key = controller.getPreviewCacheKey(hash, qualityKey)
+      controller.currentParamHash = hash
+      controller.currentPreviewKey = key
+      controller.previewCacheKey = key
+      controller.previewCache.set(key, { stl: new ArrayBuffer(1), stats: {} })
+      controller.state = PREVIEW_STATE.CURRENT
+
+      controller.onLibrariesChange(params)
+
+      expect(controller.previewCache.size).toBe(0)
+      expect(controller.state).toBe(PREVIEW_STATE.PENDING)
+      expect(controller.debounceTimer).not.toBeNull()
+    })
+
+    it('onLibrariesChange with auto-preview off marks the preview stale and schedules nothing', () => {
+      controller.setEnabled(false, 'user')
+      controller.previewCacheKey = 'hash|model'
+      controller.previewCache.set('hash|model', { stl: new ArrayBuffer(1), stats: {} })
+      controller.state = PREVIEW_STATE.CURRENT
+
+      controller.onLibrariesChange({ size: 10 })
+
+      expect(controller.previewCache.size).toBe(0)
+      expect(controller.state).toBe(PREVIEW_STATE.STALE)
+      expect(controller.debounceTimer).toBeNull()
+    })
+
+    it('onLibrariesChange without content is a no-op', () => {
+      const empty = new AutoPreviewController(renderController, previewManager)
+      empty.previewCache.set('k', { stl: new ArrayBuffer(1), stats: {} })
+
+      empty.onLibrariesChange({ size: 10 })
+
+      expect(empty.previewCache.size).toBe(1)
     })
   })
 
@@ -1213,229 +1256,6 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('injectCsgColors() static method', () => {
-    const GOLD = '#f9d72c';
-    const GREEN = '#9dcb51';
-
-    it('returns null unchanged', () => {
-      expect(AutoPreviewController.injectCsgColors(null)).toBeNull()
-    })
-
-    it('returns non-string input unchanged', () => {
-      expect(AutoPreviewController.injectCsgColors(undefined)).toBeUndefined()
-      expect(AutoPreviewController.injectCsgColors(42)).toBe(42)
-    })
-
-    it('returns simple SCAD without difference() unchanged', () => {
-      const result = AutoPreviewController.injectCsgColors('cube(10);')
-
-      expect(result).toBe('cube(10);')
-      expect(result).not.toContain(`color("${GOLD}")`)
-      expect(result).not.toContain(`color("${GREEN}")`)
-    })
-
-    it('wraps subtracted children in green for single difference()', () => {
-      const scad = 'difference() { cube(20); cube(10); }'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toContain(`color("${GOLD}")`)
-      expect(result).toContain(`color("${GREEN}")`)
-      expect(result).toContain('cube(20);')
-      expect(result).toContain('cube(10);')
-    })
-
-    it('wraps each subtractor individually for multi-child difference()', () => {
-      const scad = 'difference() { cube(30); cube(20); sphere(5); }'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
-      const greenCount = (result.match(greenRe) || []).length
-      expect(greenCount).toBe(2)
-
-      const greenIdx = result.indexOf(`color("${GREEN}")`);
-      expect(greenIdx).toBeGreaterThan(-1)
-      const afterGreen = result.slice(greenIdx);
-      expect(afterGreen).toContain('cube(20)')
-      expect(afterGreen).toContain('sphere(5)')
-    })
-
-    it('handles nested difference() blocks', () => {
-      const scad = [
-        'difference() {',
-        '  union() {',
-        '    cube(30);',
-        '    difference() { cube(20); cylinder(r=5, h=10); }',
-        '  }',
-        '  sphere(8);',
-        '}'
-      ].join('\n')
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      const greenCount = (result.match(new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')) || []).length
-      expect(greenCount).toBe(2)
-    })
-
-    it('does not inject colors when difference() has only one child', () => {
-      const scad = 'difference() { cube(10); }'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toBe(scad)
-      expect(result).not.toContain(`color("${GREEN}")`)
-    })
-
-    it('does not inject green when difference() has only whitespace after first child', () => {
-      const scad = 'difference() { cube(10);   }'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).not.toContain(`color("${GREEN}")`)
-    })
-
-    it('ignores difference() inside comments', () => {
-      const scad = '// difference() { cube(20); cube(10); }\ncube(5);'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toBe(scad)
-      expect(result).not.toContain(`color("${GREEN}")`)
-    })
-
-    it('ignores difference() inside block comments', () => {
-      const scad = '/* difference() { cube(20); cube(10); } */ sphere(5);'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toBe(scad)
-      expect(result).not.toContain(`color("${GREEN}")`)
-    })
-
-    it('ignores difference() inside string literals', () => {
-      const scad = 'text("difference() { cube(20); cube(10); }");'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toBe(scad)
-      expect(result).not.toContain(`color("${GREEN}")`)
-    })
-
-    it('handles difference() with block child (curly-brace terminated first child)', () => {
-      const scad = 'difference() { union() { cube(20); sphere(5); } cylinder(r=3, h=15); }'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toContain(`color("${GREEN}")`)
-      const greenIdx = result.indexOf(`color("${GREEN}")`);
-      const afterGreen = result.slice(greenIdx);
-      expect(afterGreen).toContain('cylinder')
-    })
-
-    it('preserves original source structure for non-difference SCAD', () => {
-      const scad = 'cube(10);'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toBe(scad)
-    })
-
-    it('handles if/else inside difference() without splitting the block', () => {
-      const scad = [
-        'difference() {',
-        '    if (corner_radius > 0) {',
-        '        rounded_box();',
-        '    } else {',
-        '        cube([width, depth, height]);',
-        '    }',
-        '    translate([0,0,0]) cube(5);',
-        '}'
-      ].join('\n')
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toContain(`color("${GOLD}")`)
-      expect(result).toContain(`color("${GREEN}")`)
-      expect(result).not.toContain('} color("' + GREEN + '") { else')
-      const greenIdx = result.indexOf(`color("${GREEN}")`);
-      const afterGreen = result.slice(greenIdx);
-      expect(afterGreen).toContain('translate')
-      expect(afterGreen).toContain('cube(5)')
-    })
-
-    it('handles if/else if/else inside difference() without splitting', () => {
-      const scad = [
-        'difference() {',
-        '    if (mode == 1) {',
-        '        sphere(10);',
-        '    } else if (mode == 2) {',
-        '        cylinder(r=5, h=10);',
-        '    } else {',
-        '        cube(10);',
-        '    }',
-        '    translate([5,5,5]) sphere(2);',
-        '}'
-      ].join('\n')
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      expect(result).toContain(`color("${GOLD}")`)
-      expect(result).toContain(`color("${GREEN}")`)
-      expect(result).not.toContain('} color("' + GREEN + '") { else')
-      const greenIdx = result.indexOf(`color("${GREEN}")`);
-      const afterGreen = result.slice(greenIdx);
-      expect(afterGreen).toContain('translate')
-      expect(afterGreen).toContain('sphere(2)')
-    })
-
-    it('preserves CSG tree child count with 4 children', () => {
-      const scad = 'difference() { cube(30); cube(20); sphere(5); cylinder(r=2, h=8); }'
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      const goldRe = new RegExp(`color\\("${GOLD.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
-      const goldCount = (result.match(goldRe) || []).length
-      const greenCount = (result.match(greenRe) || []).length
-      expect(goldCount).toBe(1)
-      expect(greenCount).toBe(3)
-    })
-
-    it('wraps block subtractors individually', () => {
-      const scad = [
-        'difference() {',
-        '  cube(30);',
-        '  translate([1,0,0]) { sphere(5); }',
-        '  translate([0,1,0]) { cylinder(r=3, h=10); }',
-        '}'
-      ].join('\n')
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
-      const greenCount = (result.match(greenRe) || []).length
-      expect(greenCount).toBe(2)
-    })
-
-    it('wraps if/else subtractor as a single unit', () => {
-      const scad = [
-        'difference() {',
-        '  cube(30);',
-        '  if (x) { sphere(5); } else { cylinder(r=3, h=10); }',
-        '  translate([0,0,0]) cube(2);',
-        '}'
-      ].join('\n')
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
-      const greenCount = (result.match(greenRe) || []).length
-      expect(greenCount).toBe(2)
-    })
-
-    it('wraps mixed semicolon and block subtractors individually', () => {
-      const scad = [
-        'difference() {',
-        '  cube(30);',
-        '  sphere(5);',
-        '  translate([1,0,0]) { cylinder(r=2, h=8); }',
-        '  cube(3);',
-        '}'
-      ].join('\n')
-      const result = AutoPreviewController.injectCsgColors(scad)
-
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
-      const greenCount = (result.match(greenRe) || []).length
-      expect(greenCount).toBe(3)
-    })
-  })
-
   describe('CSG Color Preprocessing — Preview Format Decision', () => {
     beforeEach(() => {
       renderController.getCapabilities = vi.fn(() => ({
@@ -1452,9 +1272,10 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('uses OFF format and injects CSG colors when no color() calls in SCAD', async () => {
+    it('uses OFF format with UNMODIFIED source when no color() calls in SCAD', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
       const params = { width: 10 }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
@@ -1464,13 +1285,15 @@ describe('AutoPreviewController', () => {
 
       const [source, , options] = renderController.renderPreview.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).toContain('color("#9dcb51")')
+      // KI-012: injection wrapped subtractor statements in color(){} scopes
+      // and corrupted geometry. The source must pass through byte-identical.
+      expect(source).toBe(scad)
     })
 
-    it('uses OFF format with strip+inject when color() present and passthrough off', async () => {
+    it('uses OFF format with UNMODIFIED source when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('color("red") difference() { cube(20); cube(10); }')
+      const scad = 'color("red") difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
       const params = { width: 10 }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
@@ -1480,8 +1303,7 @@ describe('AutoPreviewController', () => {
 
       const [source, , options] = renderController.renderPreview.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).not.toMatch(/color\s*\(\s*"red"\s*\)/)
+      expect(source).toBe(scad)
     })
 
     it('uses OFF format with original source when color() present and passthrough on', async () => {
@@ -1765,7 +1587,7 @@ describe('AutoPreviewController', () => {
       expect(controller.previewCacheKey).toBeNull()
     })
 
-    it('disabling CSG bypass returns to OFF format with CSG color injection', async () => {
+    it('disabling CSG bypass returns to OFF format with unmodified source', async () => {
       localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
       isFlagEnabled.mockReturnValue(false)
       controller.setScadContent('difference() { cube(20); cube(10); }')
@@ -1800,7 +1622,7 @@ describe('AutoPreviewController', () => {
 
       const [source2, , secondOptions] = renderController.renderPreview.mock.calls[1]
       expect(secondOptions.outputFormat).toBe('off')
-      expect(source2).toContain('color("#f9d72c")')
+      expect(source2).toBe('difference() { cube(20); cube(10); }')
     })
   })
 
@@ -1826,28 +1648,28 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('uses OFF format and injects CSG colors for full render when no color() calls', async () => {
+    it('uses OFF format with UNMODIFIED source for full render when no color() calls', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
 
       await controller.renderFull({ width: 10 })
 
       const [source, , options] = renderController.renderFull.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).toContain('color("#9dcb51")')
+      expect(source).toBe(scad)
     })
 
-    it('uses OFF format with strip+inject for full render when color() present and passthrough off', async () => {
+    it('uses OFF format with UNMODIFIED source for full render when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('color("blue") difference() { sphere(10); sphere(5); }')
+      const scad = 'color("blue") difference() { sphere(10); sphere(5); }'
+      controller.setScadContent(scad)
 
       await controller.renderFull({ width: 10 })
 
       const [source, , options] = renderController.renderFull.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).not.toMatch(/color\s*\(\s*"blue"\s*\)/)
+      expect(source).toBe(scad)
     })
 
     it('uses OFF format with original source for full render when color() present and passthrough on', async () => {
@@ -1886,7 +1708,7 @@ describe('AutoPreviewController', () => {
       expect(callOptions.outputFormat).toBeUndefined()
     })
 
-    it('updates project files map when CSG colors are injected and project files exist', async () => {
+    it('passes the ORIGINAL project files map through to the render', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       const files = new Map([['main.scad', scad]])
@@ -1896,8 +1718,8 @@ describe('AutoPreviewController', () => {
       await controller.renderFull({ width: 10 })
 
       const callOptions = renderController.renderFull.mock.calls[0][2]
-      expect(callOptions.files).toBeInstanceOf(Map)
-      expect(callOptions.files.get('main.scad')).toContain('color("#f9d72c")')
+      expect(callOptions.files).toBe(files)
+      expect(callOptions.files.get('main.scad')).toBe(scad)
     })
 
     it('skips CSG injection for full render when debug-no-csg-colors toggle is set', async () => {
@@ -1924,195 +1746,7 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('isParserError() static method', () => {
-    it('returns true for parser error messages', () => {
-      const err = new Error(
-        'Parser error: syntax error in file /tmp/input.scad, line 51'
-      )
-      expect(AutoPreviewController.isParserError(err)).toBe(true)
-    })
-
-    it('returns true for syntax error messages', () => {
-      const err = new Error('syntax error near unexpected token')
-      expect(AutoPreviewController.isParserError(err)).toBe(true)
-    })
-
-    it('returns false for non-parser errors', () => {
-      expect(
-        AutoPreviewController.isParserError(new Error('WASM out of memory'))
-      ).toBe(false)
-    })
-
-    it('handles string input', () => {
-      expect(AutoPreviewController.isParserError('Parser error')).toBe(true)
-    })
-
-    it('handles null and undefined gracefully', () => {
-      expect(AutoPreviewController.isParserError(null)).toBe(false)
-      expect(AutoPreviewController.isParserError(undefined)).toBe(false)
-    })
-  })
-
-  describe('Phase 4 Regression: CSG tree structure preservation', () => {
-    const GOLD = '#f9d72c';
-    const GREEN = '#9dcb51';
-
-    function countTopLevelChildrenOfDifference(injectedSource) {
-      const cleaned = injectedSource;
-      const diffMatch = /\bdifference\s*\(\s*\)\s*\{/.exec(cleaned);
-      if (!diffMatch) return { gold: 0, green: 0, total: 0 };
-
-      const openBrace = diffMatch.index + diffMatch[0].length - 1;
-      let depth = 0;
-      let gold = 0;
-      let green = 0;
-
-      for (let i = openBrace; i < cleaned.length; i++) {
-        if (cleaned[i] === '{') depth++;
-        else if (cleaned[i] === '}') depth--;
-        if (depth === 0) break;
-        if (depth === 1) {
-          const slice = cleaned.slice(i);
-          if (slice.startsWith(`color("${GOLD}")`)) gold++;
-          if (slice.startsWith(`color("${GREEN}")`)) green++;
-        }
-      }
-      return { gold, green, total: gold + green };
-    }
-
-    it('N+1 structural invariant: 2 children → 1 gold + 1 green (total 2)', () => {
-      const scad = 'difference() { cube(30); sphere(5); }';
-      const result = AutoPreviewController.injectCsgColors(scad);
-      const counts = countTopLevelChildrenOfDifference(result);
-      expect(counts.gold).toBe(1);
-      expect(counts.green).toBe(1);
-      expect(counts.total).toBe(2);
-    });
-
-    it('N+1 structural invariant: 5 children → 1 gold + 4 green (total 5)', () => {
-      const scad = 'difference() { cube(30); sphere(5); cylinder(r=3, h=10); cube(8); sphere(2); }';
-      const result = AutoPreviewController.injectCsgColors(scad);
-      const counts = countTopLevelChildrenOfDifference(result);
-      expect(counts.gold).toBe(1);
-      expect(counts.green).toBe(4);
-      expect(counts.total).toBe(5);
-    });
-
-    it('LWFL-like pattern: nested difference() with conditional geometry and transforms', () => {
-      const scad = [
-        'difference() {',
-        '  union() {',
-        '    if (expose_home_button == "yes") {',
-        '      translate([home_x, home_y, 0]) rounded_rect();',
-        '    } else {',
-        '      cube([width, depth, height]);',
-        '    }',
-        '    translate([0, 0, wall_height]) cube([width, depth, 2]);',
-        '  }',
-        '  translate([grid_x_1, grid_y_1, -1]) cylinder(r=hole_r, h=height+2);',
-        '  translate([grid_x_2, grid_y_2, -1]) cylinder(r=hole_r, h=height+2);',
-        '  if (expose_upper_message_bar == "yes") {',
-        '    translate([bar_x, bar_y, -1]) cube([bar_w, bar_h, height+2]);',
-        '  }',
-        '}'
-      ].join('\n');
-      const result = AutoPreviewController.injectCsgColors(scad);
-
-      expect(result).toContain(`color("${GOLD}")`);
-      expect(result).toContain(`color("${GREEN}")`);
-
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
-      const greenCount = (result.match(greenRe) || []).length;
-      expect(greenCount).toBe(3);
-    });
-
-    it('multiple difference() blocks each get independent N+1 structure', () => {
-      const scad = [
-        'difference() { cube(30); sphere(5); cylinder(r=2, h=8); }',
-        'difference() { sphere(20); cube(10); }'
-      ].join('\n');
-      const result = AutoPreviewController.injectCsgColors(scad);
-
-      const goldRe = new RegExp(`color\\("${GOLD.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
-      const goldCount = (result.match(goldRe) || []).length;
-      const greenCount = (result.match(greenRe) || []).length;
-      expect(goldCount).toBe(2);
-      expect(greenCount).toBe(3);
-    });
-
-    it('deeply nested difference() inside union() inside difference() preserves structure at each level', () => {
-      const scad = [
-        'difference() {',
-        '  union() {',
-        '    cube(30);',
-        '    difference() { cube(20); cylinder(r=5, h=10); sphere(3); }',
-        '  }',
-        '  translate([10, 0, 0]) cube(5);',
-        '  translate([0, 10, 0]) cube(5);',
-        '}'
-      ].join('\n');
-      const result = AutoPreviewController.injectCsgColors(scad);
-
-      const goldRe = new RegExp(`color\\("${GOLD.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
-      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
-      const goldCount = (result.match(goldRe) || []).length;
-      const greenCount = (result.match(greenRe) || []).length;
-
-      expect(goldCount).toBe(2);
-      expect(greenCount).toBe(4);
-    });
-
-    it('conditional (if/else) subtractor is wrapped as a single unit, preserving child count', () => {
-      const scad = [
-        'difference() {',
-        '  cube(30);',
-        '  if (mode == 1) {',
-        '    sphere(5);',
-        '  } else if (mode == 2) {',
-        '    cylinder(r=3, h=10);',
-        '  } else {',
-        '    cube(8);',
-        '  }',
-        '  translate([5, 5, 5]) sphere(2);',
-        '  cube(3);',
-        '}'
-      ].join('\n');
-      const result = AutoPreviewController.injectCsgColors(scad);
-
-      const counts = countTopLevelChildrenOfDifference(result);
-      expect(counts.gold).toBe(1);
-      expect(counts.green).toBe(3);
-      expect(counts.total).toBe(4);
-    });
-
-    it('injected source remains valid OpenSCAD (no orphaned braces)', () => {
-      const scad = [
-        'difference() {',
-        '  hull() { cube(20); translate([10,0,0]) cube(20); }',
-        '  translate([5,5,-1]) cylinder(r=3, h=25);',
-        '  translate([15,5,-1]) cylinder(r=3, h=25);',
-        '  translate([10,10,-1]) cylinder(r=3, h=25);',
-        '}'
-      ].join('\n');
-      const result = AutoPreviewController.injectCsgColors(scad);
-
-      let braceDepth = 0;
-      for (const ch of result) {
-        if (ch === '{') braceDepth++;
-        else if (ch === '}') braceDepth--;
-        expect(braceDepth).toBeGreaterThanOrEqual(0);
-      }
-      expect(braceDepth).toBe(0);
-    });
-  });
-
-  describe('CSG Color Injection — Error Recovery', () => {
-    const okResult = {
-      stl: new ArrayBuffer(8),
-      stats: { triangles: 12 },
-      format: 'off',
-    }
+  describe('Render errors — no source-mutation retries (post-KI-012)', () => {
     const parserErr = new Error(
       'Parser error: syntax error in file /tmp/input.scad, line 51'
     )
@@ -2131,7 +1765,7 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('retries renderPreview with original source when injection causes parser error', async () => {
+    it('renderPreview surfaces parser errors after a single attempt', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
@@ -2140,20 +1774,15 @@ describe('AutoPreviewController', () => {
       controller.currentParamHash = paramHash
       controller.currentPreviewKey = `${paramHash}|model`
 
-      renderController.renderPreview
-        .mockRejectedValueOnce(parserErr)
-        .mockResolvedValueOnce(okResult)
+      renderController.renderPreview.mockRejectedValueOnce(parserErr)
 
       await controller.renderPreview(params, paramHash)
 
-      expect(renderController.renderPreview).toHaveBeenCalledTimes(2)
-      const [firstSource] = renderController.renderPreview.mock.calls[0]
-      expect(firstSource).toContain('color("#f9d72c")')
-      const [secondSource] = renderController.renderPreview.mock.calls[1]
-      expect(secondSource).toBe(scad)
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
     })
 
-    it('does not retry renderPreview when a non-parser error occurs', async () => {
+    it('renderPreview surfaces non-parser errors after a single attempt', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
@@ -2172,52 +1801,17 @@ describe('AutoPreviewController', () => {
       expect(controller.state).toBe(PREVIEW_STATE.ERROR)
     })
 
-    it('does not retry renderPreview when no injection was applied', async () => {
-      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
-      controller.setScadContent('color("red") cube(10);')
-      const params = { width: 10 }
-      const paramHash = controller.hashParams(params)
-      controller.currentParamHash = paramHash
-      controller.currentPreviewKey = `${paramHash}|model`
-
-      renderController.renderPreview.mockRejectedValueOnce(parserErr)
-
-      await controller.renderPreview(params, paramHash)
-
-      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
-      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
-    })
-
-    it('retries renderFull with original source when injection causes parser error', async () => {
+    it('renderFull rejects with parser errors after a single attempt', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
 
-      const stlFollowUp = {
-        stl: new ArrayBuffer(32),
-        stats: { triangles: 42 },
-        format: 'stl',
-        consoleOutput: '',
-      }
-      renderController.renderFull = vi.fn()
-        .mockRejectedValueOnce(parserErr)
-        .mockResolvedValueOnce({
-          stl: new ArrayBuffer(32),
-          stats: { triangles: 42 },
-          format: 'off',
-          consoleOutput: '',
-        })
-        .mockResolvedValueOnce(stlFollowUp)
-      previewManager.loadOFF.mockResolvedValue({})
+      renderController.renderFull = vi.fn().mockRejectedValueOnce(parserErr)
 
-      await controller.renderFull({ width: 10 })
-
-      // 3 calls: injected (fails), retry original (off), STL follow-up for download
-      expect(renderController.renderFull).toHaveBeenCalledTimes(3)
-      const [firstSource] = renderController.renderFull.mock.calls[0]
-      expect(firstSource).toContain('color("#f9d72c")')
-      const [secondSource] = renderController.renderFull.mock.calls[1]
-      expect(secondSource).toBe(scad)
+      await expect(controller.renderFull({ width: 10 })).rejects.toThrow(
+        'Parser error'
+      )
+      expect(renderController.renderFull).toHaveBeenCalledTimes(1)
     })
 
     it('propagates non-parser errors from renderFull without retry', async () => {
@@ -2232,35 +1826,6 @@ describe('AutoPreviewController', () => {
         'WASM out of memory'
       )
       expect(renderController.renderFull).toHaveBeenCalledTimes(1)
-    })
-
-    it('uses original project files on retry, not the injection-modified map', async () => {
-      isFlagEnabled.mockReturnValue(false)
-      const scad = 'difference() { cube(20); cube(10); }'
-      const origFiles = new Map([['main.scad', scad]])
-      controller.setProjectFiles(origFiles, 'main.scad')
-      controller.setScadContent(scad)
-
-      renderController.renderFull = vi.fn()
-        .mockRejectedValueOnce(parserErr)
-        .mockResolvedValueOnce({
-          stl: new ArrayBuffer(32),
-          stats: { triangles: 42 },
-          format: 'off',
-          consoleOutput: '',
-        })
-        .mockResolvedValueOnce({
-          stl: new ArrayBuffer(32),
-          stats: { triangles: 42 },
-          format: 'stl',
-          consoleOutput: '',
-        })
-      previewManager.loadOFF.mockResolvedValue({})
-
-      await controller.renderFull({ width: 10 })
-
-      const retryOpts = renderController.renderFull.mock.calls[1][2]
-      expect(retryOpts.files).toBe(origFiles)
     })
   })
 
@@ -2379,9 +1944,10 @@ describe('AutoPreviewController', () => {
       expect(fullOpts.outputFormat).toBe('off')
     })
 
-    it('both preview and full render inject CSG colors identically when no color() calls', async () => {
+    it('both preview and full render use the identical UNMODIFIED source when no color() calls', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
 
       renderController.renderPreview.mockResolvedValue({
         stl: new ArrayBuffer(8),
@@ -2400,8 +1966,8 @@ describe('AutoPreviewController', () => {
       await controller.renderFull(params)
       const [fullSource] = renderController.renderFull.mock.calls[0]
 
-      expect(previewSource).toContain('color("#f9d72c")')
-      expect(fullSource).toContain('color("#f9d72c")')
+      expect(previewSource).toBe(scad)
+      expect(fullSource).toBe(scad)
       expect(previewSource).toBe(fullSource)
     })
 
@@ -2728,6 +2294,117 @@ describe('AutoPreviewController', () => {
       })
 
       logSpy.mockRestore()
+    })
+  })
+
+  describe('renderFull export integrity (A1: no OFF bytes as STL)', () => {
+    beforeEach(() => {
+      isFlagEnabled.mockReturnValue(false)
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+        hasManifold: true,
+      }))
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('throws EXPORT_STL_FAILED and clears the cached artifact when the STL follow-up render fails', async () => {
+      const offBytes = new TextEncoder().encode('OFF\n8 12 0\n').buffer
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: offBytes,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockRejectedValueOnce(new Error('worker crashed'))
+
+      const params = { width: 10 }
+      await expect(controller.renderFull(params)).rejects.toMatchObject({
+        code: 'EXPORT_STL_FAILED',
+      })
+
+      expect(controller.fullQualitySTL).toBeNull()
+      expect(controller.fullQualityFormat).toBeNull()
+      expect(controller.fullRenderParamHash).toBeNull()
+      expect(controller.getCurrentFullSTL(params)).toBeNull()
+      expect(controller.getCurrentFullOutput(params)).toBeNull()
+    })
+
+    it('returns the STL follow-up result when it succeeds after an OFF render', async () => {
+      const offBytes = new TextEncoder().encode('OFF\n8 12 0\n').buffer
+      const stlBytes = new ArrayBuffer(134)
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: offBytes,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: stlBytes,
+          format: 'stl',
+          stats: { triangles: 1, size: 134 },
+          consoleOutput: '',
+        })
+
+      const params = { width: 10 }
+      const result = await controller.renderFull(params)
+
+      expect(result.format).toBe('stl')
+      expect(result.stl).toBe(stlBytes)
+      expect(controller.getCurrentFullSTL(params)).toMatchObject({
+        stl: stlBytes,
+      })
+    })
+
+    it('getCurrentFullSTL returns null while the stored artifact is OFF-format', () => {
+      const params = { a: 1 }
+      controller.fullQualitySTL = new ArrayBuffer(8)
+      controller.fullQualityFormat = 'off'
+      controller.fullQualityStats = { triangles: 0, size: 8 }
+      controller.fullRenderParamHash = controller.hashParams(params)
+
+      expect(controller.getCurrentFullSTL(params)).toBeNull()
+      // The format-agnostic accessor still reports it, with its format.
+      expect(controller.getCurrentFullOutput(params)).toMatchObject({
+        format: 'off',
+      })
+    })
+
+    it('does not serve an OFF-format artifact from the renderFull cache fast-path', async () => {
+      const params = { a: 1 }
+      controller.fullQualitySTL = new ArrayBuffer(8)
+      controller.fullQualityFormat = 'off'
+      controller.fullQualityStats = { triangles: 0, size: 8 }
+      controller.fullRenderParamHash = controller.hashParams(params)
+      controller.fullQualityKey = 'full'
+
+      const stlBytes = new ArrayBuffer(134)
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: new TextEncoder().encode('OFF\n8 12 0\n').buffer,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: stlBytes,
+          format: 'stl',
+          stats: { triangles: 1, size: 134 },
+          consoleOutput: '',
+        })
+
+      const result = await controller.renderFull(params)
+
+      expect(result.cached).toBeUndefined()
+      expect(result.format).toBe('stl')
     })
   })
 })

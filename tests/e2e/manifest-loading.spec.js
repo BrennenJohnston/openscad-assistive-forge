@@ -5,6 +5,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 
 // Skip WASM-dependent tests in CI
 const isCI = !!process.env.CI
@@ -13,6 +14,7 @@ const isCI = !!process.env.CI
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -102,6 +104,30 @@ function fullManifest() {
 const MOCK_BASE = 'https://raw.githubusercontent.com/testuser/testrepo/main'
 const MANIFEST_URL = `${MOCK_BASE}/forge-manifest.json`
 
+// UF-9 P1: parameter groups render as <details> collapsed by default
+// (F5, owner decision 2026-05-15) — even a group-less SCAD lands in one
+// default group — so a .param-control is attached yet hidden. Prove the
+// load, expand the groups, then assert visibility.
+async function expectParamsLoaded(page) {
+  await expect(page.locator('.param-control').first()).toBeAttached({ timeout: 10000 })
+  // The manifest deep-link flow raises the "Shared Project" save-copy modal
+  // (Step 6 of the deep-link lifecycle, ~300ms after first-visit clears);
+  // it intercepts pointer events, so clear it before clicking Expand all.
+  const skipBtn = page.locator('#manifestSaveCopySkip')
+  try {
+    await skipBtn.waitFor({ state: 'visible', timeout: 2000 })
+    await skipBtn.click()
+    await skipBtn.waitFor({ state: 'hidden', timeout: 3000 })
+  } catch {
+    // Modal did not appear for this manifest / was already dismissed
+  }
+  const expandAll = page.locator('#expandAllGroupsBtn')
+  if (await expandAll.isVisible().catch(() => false)) {
+    await expandAll.click()
+  }
+  await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+}
+
 // ---------------------------------------------------------------------------
 // Test Suite: Valid Manifest Loading
 // ---------------------------------------------------------------------------
@@ -134,7 +160,7 @@ test.describe('Manifest Loading - Valid Manifests', () => {
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
 
     // Parameters should render
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
 
     // Status bar should show project name
     const statusText = await page.locator('#statusArea, .status-bar').textContent()
@@ -155,7 +181,7 @@ test.describe('Manifest Loading - Valid Manifests', () => {
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
 
     // Should have parameters from the SCAD file
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 
   test('loads manifest with defaults.skipWelcome=true and skips welcome screen', async ({ page }) => {
@@ -197,7 +223,7 @@ test.describe('Manifest Loading - Valid Manifests', () => {
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
 
     // Wait for parameters to load
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
 
     // With autoPreview, the render should have started or completed
     // Look for any sign of rendering activity (progress bar, canvas, status update)
@@ -414,7 +440,7 @@ test.describe('Manifest Loading - Sequential Loads', () => {
     await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
 
     // Second manifest (different project with different params)
     const MOCK_BASE_2 = 'https://raw.githubusercontent.com/testuser/secondrepo/main'
@@ -445,7 +471,7 @@ test.describe('Manifest Loading - Sequential Loads', () => {
 
     await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL_2)}`)
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 })
 
@@ -557,5 +583,257 @@ test.describe('Manifest Loading - Accessibility', () => {
     // Should still have a focused element (not lost focus)
     const stillFocused = page.locator(':focus')
     expect(await stillFocused.count()).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// IR-9 — the starter subset
+//
+// A manifest can name the handful of parameters a beginner should meet first.
+// A 174-parameter keyguard is the truthful shape of that design and an unusable
+// first screen; the dozen its workflow walks is a much better one, as long as
+// the other 162 are one honest action away.
+//
+// Progressive DISCLOSURE, never removal: the wall is display:none, which hides
+// a control from everybody equally. Nothing is hidden from a screen reader that
+// a sighted person can still see.
+// ---------------------------------------------------------------------------
+
+const STARTER_SCAD = `
+/* [Size] */
+// How wide
+width = 50; // [10:1:100]
+// How tall
+height = 30; // [10:1:100]
+
+/* [Looks] */
+// Corner rounding
+corner = 2; // [0:0.5:10]
+// Surface finish
+finish = "smooth"; // [smooth, textured]
+
+/* [Fit] */
+// Printer allowance
+tolerance = 0.2; // [0:0.05:1]
+// Wall thickness
+wall = 1.6; // [1.2:0.1:5]
+
+cube([width, height, wall]);
+`
+
+function starterManifest(starterParameters) {
+  return {
+    forgeManifest: '1.0',
+    name: 'Starter Test Project',
+    files: { main: 'test.scad' },
+    defaults: { starterParameters },
+  }
+}
+
+async function loadStarterProject(page, starterParameters) {
+  await setupMockManifestServer(page, {
+    manifest:
+      starterParameters === undefined
+        ? { forgeManifest: '1.0', name: 'No Starter', files: { main: 'test.scad' } }
+        : starterManifest(starterParameters),
+    files: { 'test.scad': STARTER_SCAD },
+  })
+  await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+  await expect(page.locator('.param-control').first()).toBeAttached({
+    timeout: 30000,
+  })
+  const skipBtn = page.locator('#manifestSaveCopySkip')
+  try {
+    await skipBtn.waitFor({ state: 'visible', timeout: 3000 })
+    await skipBtn.click()
+    await skipBtn.waitFor({ state: 'hidden', timeout: 3000 })
+  } catch {
+    // The save-copy modal did not appear for this manifest.
+  }
+}
+
+/** Controls a person can actually see right now. */
+async function visibleControlNames(page) {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('.param-control[data-param-name]'))
+      .filter((el) => el.offsetParent !== null)
+      .map((el) => el.dataset.paramName)
+  )
+}
+
+test.describe('Starter subset (IR-9)', () => {
+  test('a manifest without the field renders every parameter, as it always did', async ({
+    page,
+  }) => {
+    await loadStarterProject(page, undefined)
+    await page.locator('#expandAllGroupsBtn').click()
+
+    expect(await visibleControlNames(page)).toEqual([
+      'width',
+      'height',
+      'corner',
+      'finish',
+      'tolerance',
+      'wall',
+    ])
+    await expect(page.locator('.starter-reveal-btn')).toHaveCount(0)
+  })
+
+  test('a manifest with the field shows those parameters and nothing else', async ({
+    page,
+  }) => {
+    await loadStarterProject(page, ['width', 'tolerance'])
+
+    // The starter groups open themselves: a starter parameter inside a
+    // collapsed group is a starter parameter nobody can see.
+    expect(await visibleControlNames(page)).toEqual(['width', 'tolerance'])
+
+    const button = page.locator('.starter-reveal-btn')
+    await expect(button).toBeVisible()
+    await expect(button).toHaveText('Show all parameters')
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.locator('.starter-reveal-hint')).toHaveText(
+      'Showing the 2 settings this design starts with. 4 more are available.'
+    )
+  })
+
+  test('the reveal works from the keyboard, keeps focus, and says what it did', async ({
+    page,
+  }) => {
+    await loadStarterProject(page, ['width', 'tolerance'])
+
+    const button = page.locator('.starter-reveal-btn')
+    await button.focus()
+    await expect(button).toBeFocused()
+
+    // Record everything the live region says, rather than sampling it later.
+    // MEASURED while writing this: the preview pipeline announces
+    // "Rendering preview..." about 200 ms after the press, so a sample taken
+    // afterwards proves nothing about whether the reveal was announced at all.
+    await page.evaluate(() => {
+      window.__announced = []
+      const el = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        if (el.textContent) window.__announced.push(el.textContent)
+      }).observe(el, { childList: true, characterData: true, subtree: true })
+    })
+
+    await page.keyboard.press('Enter')
+
+    // Everything is back, in the order the design wrote it.
+    await expect
+      .poll(async () => (await visibleControlNames(page)).length)
+      .toBe(6)
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await expect(button).toHaveText('Show only the starter settings')
+
+    // A control that removes itself takes the focus with it. This one stays.
+    await expect(button).toBeFocused()
+
+    await expect
+      .poll(async () => page.evaluate(() => window.__announced), {
+        timeout: 5000,
+      })
+      .toContain('Showing all 6 settings.')
+
+    // And it goes back, which is why it is a toggle.
+    await page.keyboard.press('Enter')
+    await expect.poll(async () => (await visibleControlNames(page)).length).toBe(2)
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('a name this design does not have is reported, and the project still loads', async ({
+    page,
+  }) => {
+    await loadStarterProject(page, ['width', 'not_a_parameter'])
+
+    // Not fatal: the names that ARE real still do their job.
+    expect(await visibleControlNames(page)).toEqual(['width'])
+
+    const notice = page.locator('#parameterNotices .parameter-notice')
+    await expect(notice).toBeVisible({ timeout: 10000 })
+    await expect(notice).toContainText(
+      'One starting setting in this link is not part of this design'
+    )
+    await expect(notice).toContainText('not_a_parameter')
+  })
+
+  test('searching drops the wall, because a search that cannot find a real parameter is a lie', async ({
+    page,
+  }) => {
+    await loadStarterProject(page, ['width'])
+    expect(await visibleControlNames(page)).toEqual(['width'])
+
+    await page.locator('#paramSearchInput').fill('finish')
+
+    await expect
+      .poll(async () => visibleControlNames(page))
+      .toContain('finish')
+    await expect(page.locator('.starter-reveal-btn')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+  })
+
+  test('axe finds nothing on the starter view, or after the reveal', async ({
+    page,
+  }) => {
+    await loadStarterProject(page, ['width', 'tolerance'])
+
+    const scan = () =>
+      new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#parametersContainer')
+        .analyze()
+
+    const before = await scan()
+    expect(
+      before.violations.map((v) => `${v.id}: ${v.description}`),
+      'starter view'
+    ).toEqual([])
+
+    await page.locator('.starter-reveal-btn').click()
+    await expect(page.locator('.starter-reveal-btn')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+
+    const after = await scan()
+    expect(
+      after.violations.map((v) => `${v.id}: ${v.description}`),
+      'after the reveal'
+    ).toEqual([])
+  })
+
+  test('every hidden control is hidden from everybody, not just from the screen', async ({
+    page,
+  }) => {
+    // The rule this release is held to: no aria-only tricks. A control the
+    // wall hides must be display:none, so nothing reaches it - not a screen
+    // reader, not the Tab key, not a pointer.
+    await loadStarterProject(page, ['width'])
+
+    const reachable = await page.evaluate(() => {
+      const hidden = Array.from(
+        document.querySelectorAll('.param-control.starter-hidden')
+      )
+      return hidden.map((el) => ({
+        name: el.dataset.paramName,
+        display: getComputedStyle(el).display,
+        ariaHidden: el.getAttribute('aria-hidden'),
+        focusableInside: Array.from(
+          el.querySelectorAll('input, select, button, textarea')
+        ).filter((c) => c.offsetParent !== null).length,
+      }))
+    })
+
+    expect(reachable.length).toBeGreaterThan(0)
+    for (const control of reachable) {
+      expect(control.display, `${control.name} should be display:none`).toBe('none')
+      expect(
+        control.focusableInside,
+        `${control.name} should have nothing tabbable inside it`
+      ).toBe(0)
+    }
   })
 })

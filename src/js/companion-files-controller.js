@@ -6,6 +6,7 @@
  */
 
 import { stateManager } from './state.js';
+import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import { formatFileSize } from './download.js';
 import { openModal, closeModal } from './modal-manager.js';
@@ -247,6 +248,7 @@ export function initCompanionFilesController({
     requiredFiles = null
   ) {
     const container = document.getElementById('projectFilesList');
+    const breadcrumbHost = document.getElementById('projectFilesBreadcrumbs');
     const badge = document.getElementById('projectFilesBadge');
     const controls = document.getElementById('projectFilesControls');
     const warning = document.getElementById('projectFilesWarning');
@@ -264,6 +266,13 @@ export function initCompanionFilesController({
       return;
     }
     controls.classList.remove('hidden');
+
+    // Once per render, before the count decides anything: this used to sit
+    // inside the no-companions branch only, so Save as Project stayed hidden
+    // in exactly the case it exists for — a multi-file project not yet saved.
+    if (saveBtn) {
+      updateCompanionSaveButton();
+    }
 
     const companionFiles = projectFiles
       ? new Map(
@@ -284,9 +293,7 @@ export function initCompanionFilesController({
     if (companionCount === 0) {
       if (badge) badge.textContent = '0';
       container.innerHTML = '';
-      if (saveBtn) {
-        updateCompanionSaveButton();
-      }
+      if (breadcrumbHost) breadcrumbHost.innerHTML = '';
       if (warning && warningText) {
         const missingFiles = [];
         if (requiredFiles && requiredFiles.files) {
@@ -363,16 +370,22 @@ export function initCompanionFilesController({
     const sortedFolders = [...currentNode.folders.entries()].sort((a, b) =>
       a[0].localeCompare(b[0])
     );
+    // A folder row is a real <button> inside a listitem wrapper. It cannot be
+    // both the list's item and its own control: axe refuses role="button" as a
+    // child of role="list" (D-38), and a native button also carries Enter,
+    // Space and focusability without a tabindex/keydown pair of its own.
     const folderItems = sortedFolders.map(([folderName, childNode]) => {
       const count = countFilesRecursive(childNode);
       return `
-        <div class="project-file-item file-nav-folder-row" role="button" tabindex="0"
-             data-folder-enter="${escapeHtml(folderName)}"
-             aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
-          <span class="project-file-icon" aria-hidden="true">\u{1F4C2}</span>
-          <span class="project-file-name">${escapeHtml(folderName)}</span>
-          <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
-          <span class="file-nav-folder-chevron" aria-hidden="true">\u203A</span>
+        <div class="project-file-listitem" role="listitem">
+          <button type="button" class="project-file-item file-nav-folder-row"
+               data-folder-enter="${escapeHtml(folderName)}"
+               aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
+            <span class="project-file-icon" aria-hidden="true">\u{1F4C2}</span>
+            <span class="project-file-name">${escapeHtml(folderName)}</span>
+            <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+            <span class="file-nav-folder-chevron" aria-hidden="true">\u203A</span>
+          </button>
         </div>`;
     });
 
@@ -405,8 +418,11 @@ export function initCompanionFilesController({
         ? 'project-file-item main-file'
         : 'project-file-item';
 
+      // tabindex="-1" so a navigation can hand focus to the row itself. It
+      // stays out of the Tab order; only the buttons inside it are reachable
+      // by Tab, exactly as before.
       return `
-        <div class="${itemClass}" role="listitem">
+        <div class="${itemClass}" role="listitem" tabindex="-1">
           <span class="project-file-icon" aria-hidden="true">${icon}</span>
           <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(name)}</span>
           ${mainBadge}
@@ -418,28 +434,60 @@ export function initCompanionFilesController({
         </div>`;
     });
 
-    container.innerHTML =
-      breadcrumbHtml +
-      '<div role="list">' +
-      folderItems.join('') +
-      fileItems.join('') +
-      '</div>';
+    // The list owns listitems and nothing else. The breadcrumb bar is a <nav>
+    // and lives in its own host above the list (D-38); it also stops scrolling
+    // away with the rows now that it is outside the scroll box.
+    if (breadcrumbHost) breadcrumbHost.innerHTML = breadcrumbHtml;
+    container.innerHTML = folderItems.join('') + fileItems.join('');
+
+    const breadcrumbScope = breadcrumbHost || container;
+
+    /**
+     * Put focus somewhere sensible after the tree redraws for a navigation the
+     * user asked for (D-54).
+     *
+     * The list is rebuilt with innerHTML, so the row they just pressed is
+     * detached by the time this runs and focus has already fallen to <body> —
+     * UF-23's mechanism on the navigation path. Only the three navigation
+     * handlers call this; a background re-render must never move focus.
+     *
+     * @param {string|null} folderLeft - Folder the user stepped OUT of, whose
+     *   row is now on screen again. Null when stepping in.
+     */
+    function focusAfterTreeNavigation(folderLeft = null) {
+      // Match on dataset rather than a selector, so a folder name containing
+      // quotes cannot break the lookup (the UF-23 rule).
+      const rows = [...container.querySelectorAll('.project-file-item')];
+      const target = folderLeft
+        ? rows.find((row) => row.dataset.folderEnter === folderLeft) || rows[0]
+        : rows[0];
+      const fallback =
+        breadcrumbScope.querySelector('.file-nav-breadcrumb-home') ||
+        document.querySelector('#projectFilesControls .project-files-summary');
+      (target || fallback)?.focus();
+    }
 
     // Breadcrumb navigation
-    container.querySelectorAll('.file-nav-breadcrumb-btn').forEach((btn) => {
-      const depth = parseInt(btn.dataset.depth, 10);
-      const activate = () => {
-        companionCurrentPath = companionCurrentPath.slice(0, depth);
-        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-      };
-      btn.addEventListener('click', activate);
-      btn.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          activate();
-        }
+    breadcrumbScope
+      .querySelectorAll('.file-nav-breadcrumb-btn')
+      .forEach((btn) => {
+        const depth = parseInt(btn.dataset.depth, 10);
+        const activate = () => {
+          // The segment being dropped is the folder the user is stepping out
+          // of, and its row is on screen again once the redraw lands.
+          const folderLeft = companionCurrentPath[depth] || null;
+          companionCurrentPath = companionCurrentPath.slice(0, depth);
+          renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+          focusAfterTreeNavigation(folderLeft);
+        };
+        btn.addEventListener('click', activate);
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activate();
+          }
+        });
       });
-    });
 
     // Folder row navigation
     container.querySelectorAll('[data-folder-enter]').forEach((row) => {
@@ -447,16 +495,19 @@ export function initCompanionFilesController({
       const enter = () => {
         companionCurrentPath = [...companionCurrentPath, folderName];
         renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+        focusAfterTreeNavigation();
       };
       row.addEventListener('click', enter);
+      // Enter and Space are the button's own now. Escape still has to be
+      // bound: it is this tree's way back up one level.
       row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === 'Escape' && companionCurrentPath.length > 0) {
           e.preventDefault();
-          enter();
-        } else if (e.key === 'Escape' && companionCurrentPath.length > 0) {
-          e.preventDefault();
+          const folderLeft =
+            companionCurrentPath[companionCurrentPath.length - 1];
           companionCurrentPath = companionCurrentPath.slice(0, -1);
           renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+          focusAfterTreeNavigation(folderLeft);
         }
       });
     });
@@ -603,8 +654,11 @@ export function initCompanionFilesController({
     }
 
     try {
-      const fileName = file.name;
-      const ext = fileName.split('.').pop()?.toLowerCase();
+      // AF-4: a file lands where you are STANDING in the tree, not always at
+      // the root. companionCurrentPath is the folder the tree is showing.
+      const targetPath = [...companionCurrentPath, file.name].join('/');
+      const fileName = targetPath;
+      const ext = file.name.split('.').pop()?.toLowerCase();
       const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
 
       let content;
@@ -757,6 +811,29 @@ export function initCompanionFilesController({
   }
 
   /**
+   * Put focus back on the row of the file that was just saved.
+   *
+   * closeModal cannot do this on its own: saving rebuilds the whole list with
+   * innerHTML, so the button it captured as the opening trigger is detached by
+   * the time it tries to restore, and focus() on a detached node is a no-op
+   * that leaves focus on <body>. Re-find the equivalent button instead. Match
+   * on dataset rather than a selector so paths containing quotes cannot break
+   * the lookup.
+   *
+   * @param {string} path - Path of the file that was saved
+   */
+  function restoreFocusToFileRow(path) {
+    const container = document.getElementById('projectFilesList');
+    const editButtons = container
+      ? [...container.querySelectorAll('button[data-action="edit"]')]
+      : [];
+    const target =
+      editButtons.find((btn) => btn.dataset.path === path) ||
+      document.querySelector('#projectFilesControls .project-files-summary');
+    if (target) target.focus();
+  }
+
+  /**
    * Apply text file editor changes and trigger preview.
    */
   async function applyTextFileEditorChanges() {
@@ -787,6 +864,11 @@ export function initCompanionFilesController({
     renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
 
     closeModal(modal);
+    restoreFocusToFileRow(path);
+    // Immediate, not debounced: the preview this is about to await announces
+    // "Rendering preview..." within the debounce window and swallows it
+    // otherwise. Measured swallowed before this was changed.
+    announceImmediate(`Saved ${path}`);
 
     const autoPreviewController = getAutoPreviewController();
     if (autoPreviewController) {
@@ -796,7 +878,10 @@ export function initCompanionFilesController({
       );
     }
 
-    updateStatus(`Updated file: ${path}`, 'success');
+    // announce:false because the save was already spoken above, the moment it
+    // happened, rather than after the render this awaited. updateStatus speaks
+    // by default, and pairing the two says the same event twice.
+    updateStatus(`Updated file: ${path}`, 'success', { announce: false });
     console.log(`[ProjectFiles] Updated file: ${path}`);
 
     await autoSaveCompanionFiles();

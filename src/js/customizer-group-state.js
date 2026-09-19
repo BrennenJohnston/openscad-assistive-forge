@@ -1,7 +1,7 @@
 /**
  * Per-file Customizer group expand/collapse state (F5).
  *
- * Default behaviour for a freshly-loaded file is "all groups collapsed"
+ * Default behavior for a freshly-loaded file is "all groups collapsed"
  * — matches the OpenSCAD desktop-style collapsed Customizer the
  * stakeholder asked for in the 2026-05-15 Volkswitch feedback. After
  * the user has expanded one or more groups, the set of open group IDs
@@ -32,7 +32,7 @@ function buildKey(fileId) {
 }
 
 /**
- * Sanitise an arbitrary string into a stable key segment. Keeps storage
+ * Sanitize an arbitrary string into a stable key segment. Keeps storage
  * keys human-readable while preventing pathological characters from
  * breaking JSON round-trips on first read.
  *

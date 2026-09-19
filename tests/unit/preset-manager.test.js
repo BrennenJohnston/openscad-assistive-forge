@@ -1828,3 +1828,53 @@ describe('Preset Manager', () => {
     })
   })
 })
+
+describe('adoptLegacyModelKey (D-47)', () => {
+  let manager
+
+  beforeEach(() => {
+    localStorage.clear()
+    manager = new PresetManager()
+  })
+
+  it('moves a legacy bucket to the stable key and deletes the old one', () => {
+    manager.savePreset('archive-v1.zip', 'My Preset', { w: 1 })
+    const moved = manager.adoptLegacyModelKey('archive-v1.zip', 'model.scad')
+    expect(moved).toBe(1)
+    expect(manager.getPresetsForModel('model.scad').map((p) => p.name)).toEqual(
+      ['My Preset']
+    )
+    expect(manager.getPresetsForModel('archive-v1.zip')).toEqual([])
+  })
+
+  it('persists the move so a fresh manager sees it', () => {
+    manager.savePreset('archive-v1.zip', 'My Preset', { w: 1 })
+    manager.adoptLegacyModelKey('archive-v1.zip', 'model.scad')
+    const fresh = new PresetManager()
+    expect(fresh.getPresetsForModel('model.scad')).toHaveLength(1)
+    expect(fresh.getPresetsForModel('archive-v1.zip')).toEqual([])
+  })
+
+  it('never overwrites: a name collision stays under the legacy key', () => {
+    manager.savePreset('model.scad', 'Same Name', { w: 'stable' })
+    manager.savePreset('archive-v1.zip', 'Same Name', { w: 'legacy' })
+    manager.savePreset('archive-v1.zip', 'Other', { w: 2 })
+    const moved = manager.adoptLegacyModelKey('archive-v1.zip', 'model.scad')
+    expect(moved).toBe(1)
+    const stable = manager.getPresetsForModel('model.scad')
+    expect(stable.map((p) => p.name).sort()).toEqual(['Other', 'Same Name'])
+    expect(stable.find((p) => p.name === 'Same Name').parameters.w).toBe(
+      'stable'
+    )
+    expect(
+      manager.getPresetsForModel('archive-v1.zip').map((p) => p.name)
+    ).toEqual(['Same Name'])
+  })
+
+  it('is a no-op on same key, missing keys, or an empty legacy bucket', () => {
+    expect(manager.adoptLegacyModelKey('a.zip', 'a.zip')).toBe(0)
+    expect(manager.adoptLegacyModelKey(null, 'model.scad')).toBe(0)
+    expect(manager.adoptLegacyModelKey('absent.zip', 'model.scad')).toBe(0)
+  })
+})
+

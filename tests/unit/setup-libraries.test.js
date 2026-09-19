@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { collectScadFiles, generatePerLibraryManifest } from '../../scripts/setup-libraries.js'
+import {
+  collectScadFiles,
+  generatePerLibraryManifest,
+  manifestsEquivalent,
+} from '../../scripts/setup-libraries.js'
 
 describe('setup-libraries', () => {
   let tmpDir
@@ -65,8 +69,8 @@ describe('setup-libraries', () => {
   })
 
   describe('generatePerLibraryManifest', () => {
-    it('returns null for non-existent library directory', () => {
-      const result = generatePerLibraryManifest('NonExistent')
+    it('returns null for non-existent library directory', async () => {
+      const result = await generatePerLibraryManifest('NonExistent')
       expect(result).toBeNull()
     })
   })
@@ -85,6 +89,55 @@ describe('setup-libraries', () => {
       expect(Array.isArray(manifest.files)).toBe(true)
       expect(manifest.files).toContain('boxes.scad')
       expect(manifest.files).toContain('gears.scad')
+    })
+  })
+
+  describe('manifestsEquivalent (F-3: no tracked-file churn)', () => {
+    const base = () => ({
+      generated: '2026-08-01T00:00:00.000Z',
+      libraries: {
+        MCAD: {
+          available: true,
+          name: 'MCAD',
+          commit: 'abc123',
+          date: '2024-01-01',
+          downloaded: '2026-08-01T00:00:00.000Z',
+        },
+      },
+    })
+
+    it('treats timestamp-only differences as equivalent', () => {
+      const a = base()
+      const b = base()
+      b.generated = '2026-08-05T12:34:56.000Z'
+      b.libraries.MCAD.downloaded = '2026-08-05T12:34:56.000Z'
+      expect(manifestsEquivalent(a, b)).toBe(true)
+    })
+
+    it('differs when a pin/commit changes', () => {
+      const a = base()
+      const b = base()
+      b.libraries.MCAD.commit = 'def456'
+      expect(manifestsEquivalent(a, b)).toBe(false)
+    })
+
+    it('differs when availability changes', () => {
+      const a = base()
+      const b = base()
+      b.libraries.MCAD.available = false
+      expect(manifestsEquivalent(a, b)).toBe(false)
+    })
+
+    it('differs when a library is added or removed', () => {
+      const a = base()
+      const b = base()
+      b.libraries.BOSL2 = { available: false, name: 'BOSL2' }
+      expect(manifestsEquivalent(a, b)).toBe(false)
+    })
+
+    it('is false for missing inputs', () => {
+      expect(manifestsEquivalent(null, base())).toBe(false)
+      expect(manifestsEquivalent(base(), undefined)).toBe(false)
     })
   })
 })

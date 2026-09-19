@@ -24,6 +24,7 @@ async function dismissSaveProjectModal(page) {
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -44,7 +45,7 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'sample.scad'
     )
     await page.setInputFiles('#fileInput', fixturePath)
-    await page.waitForSelector('.param-control', { timeout: 30_000 })
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
     await dismissSaveProjectModal(page)
 
     // Step 1: Switch to Advanced mode via the UI mode toggle
@@ -74,17 +75,25 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
     await expect(expertPanel).toBeVisible({ timeout: 10_000 })
     await expect(expertPanel).toHaveClass(/active/)
 
-    // Step 4: Verify the textarea editor was created
-    const textarea = page.locator('#expert-mode-textarea')
-    await expect(textarea).toBeVisible({ timeout: 5_000 })
+    // Step 4: Verify the editor surface was created — CodeMirror's
+    // contenteditable in the normal case, the textarea only as fallback
+    const editor = page
+      .locator('#expertModePanel .cm-content, #expert-mode-textarea')
+      .first()
+    await expect(editor).toBeVisible({ timeout: 5_000 })
 
-    // Step 5: Type content and verify it appears in the textarea
+    // Step 5: Type content and verify it appears in the editor
     const testCode = 'cube([10, 20, 30]);'
-    await textarea.focus()
-    await textarea.fill(testCode)
-
-    const currentValue = await textarea.inputValue()
-    expect(currentValue).toContain(testCode)
+    const isTextarea = await editor.evaluate(
+      (el) => el.tagName === 'TEXTAREA'
+    )
+    await editor.click()
+    await editor.fill(testCode)
+    if (isTextarea) {
+      expect(await editor.inputValue()).toContain(testCode)
+    } else {
+      await expect(editor).toContainText('cube([10, 20, 30]);')
+    }
 
     console.log(
       'Expert Mode smoke test passed: editor visible, input accepted'
@@ -106,7 +115,7 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'sample.scad'
     )
     await page.setInputFiles('#fileInput', fixturePath)
-    await page.waitForSelector('.param-control', { timeout: 30_000 })
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
     await dismissSaveProjectModal(page)
 
     // Switch to Advanced → Expert Mode
@@ -163,7 +172,7 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'sample.scad'
     )
     await page.setInputFiles('#fileInput', fixturePath)
-    await page.waitForSelector('.param-control', { timeout: 30_000 })
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
     await dismissSaveProjectModal(page)
 
     // Activate Expert Mode
@@ -193,21 +202,147 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'OpenSCAD code editor'
     )
 
-    // Verify textarea accessibility
-    const textarea = page.locator('#expert-mode-textarea')
-    await expect(textarea).toHaveAttribute(
+    // Verify editor-surface accessibility (CodeMirror content in the normal
+    // case; the plain textarea only when CM failed to load)
+    const editor = page
+      .locator('#expertModePanel .cm-content, #expert-mode-textarea')
+      .first()
+    await expect(editor).toBeVisible({ timeout: 5_000 })
+    await expect(editor).toHaveAttribute(
       'aria-label',
       'OpenSCAD code editor'
     )
-    await expect(textarea).toHaveAttribute('aria-describedby')
-    await expect(textarea).toHaveAttribute('spellcheck', 'false')
-
-    // Verify the instructions element referenced by aria-describedby exists
-    const describedById = await textarea.getAttribute('aria-describedby')
-    await expect(page.locator(`#${describedById}`)).toBeAttached()
+    const isTextarea = await editor.evaluate(
+      (el) => el.tagName === 'TEXTAREA'
+    )
+    if (isTextarea) {
+      await expect(editor).toHaveAttribute('aria-describedby')
+      await expect(editor).toHaveAttribute('spellcheck', 'false')
+      const describedById = await editor.getAttribute('aria-describedby')
+      await expect(page.locator(`#${describedById}`)).toBeAttached()
+    } else {
+      // CodeMirror's editable surface is a native textbox
+      await expect(editor).toHaveAttribute('role', 'textbox')
+      await expect(editor).toHaveAttribute('contenteditable', 'true')
+    }
 
     console.log(
       'Expert Mode accessibility test passed: ARIA attributes correct'
     )
+  })
+})
+
+test.describe('D-15 — opening the editor must not steal focus from a menu', () => {
+  /**
+   * The editor is focused after a mode switch for WCAG 2.4.3, which is right
+   * on its own. The defect is that it happens a frame later, unconditionally,
+   * so a user who presses the editor toggle and then opens a menu ends up with
+   * the menu open and focus back in the editor — the APG menu contract says
+   * focus moves INTO an open menu and stays there.
+   *
+   * Both clicks fire in one task on purpose. That is what a fast keyboard or
+   * switch user produces, and it is the only timing that reproduces it: with
+   * ordinary click latency the menu wins the race anyway, which is why a test
+   * that merely clicked twice could not tell the fix from the defect.
+   */
+  test('the Edit menu keeps focus when the editor opens under it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+    await page.setInputFiles(
+      '#fileInput',
+      path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    )
+    await page.waitForSelector('.param-control', {
+      state: 'attached',
+      timeout: 30_000,
+    })
+    await dismissSaveProjectModal(page)
+
+    const uiToggle = page.locator('#uiModeToggle')
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click()
+    }
+    await expect(page.locator('#expertModeToggle')).toBeVisible({
+      timeout: 10_000,
+    })
+
+    await page.evaluate(() => {
+      document.getElementById('expertModeToggle').click()
+      document.getElementById('editMenuBtn').click()
+    })
+
+    // Long enough for both the rAF path and the 100ms timer to have run.
+    await page.waitForTimeout(600)
+
+    const state = await page.evaluate(() => {
+      const active = document.activeElement
+      return {
+        menuOpen: !!document.querySelector('#editMenuModal:not([hidden])'),
+        activeInMenu: !!active?.closest('#editMenuModal'),
+        activeIsEditor: !!active?.classList?.contains('cm-content'),
+      }
+    })
+
+    expect(state.menuOpen).toBe(true)
+    // MEASURED on the parent commit: activeIsEditor true with the menu open,
+    // from mode-manager's requestAnimationFrame focus, which had no guard.
+    expect(state.activeIsEditor).toBe(false)
+    expect(state.activeInMenu).toBe(true)
+  })
+})
+
+test.describe('Edit ▸ Font Size actually changes the font', () => {
+  /**
+   * Found while building Preferences ▸ Editor. The handler called
+   * `editor.updateOptions({ fontSize })` behind an `if (editor.updateOptions)`
+   * guard, and no editor in this codebase has ever had that method — so the
+   * control saved the number, updated its readout and announced the new size
+   * while changing nothing on screen. That is the worst shape of defect for
+   * the low-vision users the control exists for, and it is invisible to any
+   * test that only checks the announcement or the stored value.
+   */
+  test('increasing the font size grows the rendered text', async ({ page }) => {
+    test.setTimeout(240_000)
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+    await page.setInputFiles(
+      '#fileInput',
+      path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    )
+    await page.waitForSelector('.param-control', {
+      state: 'attached',
+      timeout: 30_000,
+    })
+    await dismissSaveProjectModal(page)
+
+    const uiToggle = page.locator('#uiModeToggle')
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click()
+    }
+    await page.locator('#expertModeToggle').click()
+
+    const surface = page.locator('#expertModeBody .cm-content, #expert-mode-textarea').first()
+    await expect(surface).toBeVisible({ timeout: 15_000 })
+
+    const fontSize = () =>
+      surface.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+    const before = await fontSize()
+    expect(before).toBeGreaterThan(0)
+
+    await page.locator('#editMenuBtn').click()
+    await page
+      .locator('#editMenuModal [role="menuitem"]')
+      .filter({ hasText: 'Increase Font Size' })
+      .first()
+      .click()
+
+    // MEASURED on the parent commit: unchanged, because the method called
+    // does not exist.
+    await expect.poll(fontSize, { timeout: 5_000 }).toBeGreaterThan(before)
   })
 })

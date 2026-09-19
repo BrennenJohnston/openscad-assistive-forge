@@ -1,0 +1,178 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Classic-mode icon delivery for the vendored OpenSCAD chokusen theme
+ * (public/vendor/openscad-icons/ — see its README for provenance).
+ * Buttons always carry a text label (sr-only when the icon shows), so a
+ * missing icon degrades to text.
+ *
+ * Classic renders one fixed desktop appearance (light chrome), so only the
+ * light chokusen set is referenced. The vendored chokusen-dark/ set stays in
+ * the tree unreferenced for a future dark Classic appearance; do not wire it
+ * to data-theme, which Classic deliberately ignores (see classic.css).
+ */
+
+.classic-icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  background: center / contain no-repeat;
+  flex-shrink: 0;
+}
+
+.classic-icon[data-icon='add'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-add.svg');
+}
+
+.classic-icon[data-icon='axes'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-axes.svg');
+}
+
+.classic-icon[data-icon='crosshairs'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-crosshairs.svg');
+}
+
+.classic-icon[data-icon='export-dxf'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-export-dxf.svg');
+}
+
+.classic-icon[data-icon='export-stl'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-export-stl.svg');
+}
+
+.classic-icon[data-icon='indent'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-indent.svg');
+}
+
+.classic-icon[data-icon='measure-angle'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-measure-angle.svg');
+}
+
+.classic-icon[data-icon='measure-distance'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-measure-distance.svg');
+}
+
+.classic-icon[data-icon='new'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-new.svg');
+}
+
+.classic-icon[data-icon='open'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-open.svg');
+}
+
+.classic-icon[data-icon='orthogonal'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-orthogonal.svg');
+}
+
+.classic-icon[data-icon='parameter'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-parameter.svg');
+}
+
+.classic-icon[data-icon='perspective'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-perspective.svg');
+}
+
+.classic-icon[data-icon='preview'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-preview.svg');
+}
+
+.classic-icon[data-icon='redo'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-redo.svg');
+}
+
+.classic-icon[data-icon='remove'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-remove.svg');
+}
+
+.classic-icon[data-icon='render'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-render.svg');
+}
+
+.classic-icon[data-icon='reset-view'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-reset-view.svg');
+}
+
+.classic-icon[data-icon='save'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-save.svg');
+}
+
+.classic-icon[data-icon='scalemarkers'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-scalemarkers.svg');
+}
+
+.classic-icon[data-icon='show-edges'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-show-edges.svg');
+}
+
+.classic-icon[data-icon='surface'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-surface.svg');
+}
+
+.classic-icon[data-icon='undo'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-undo.svg');
+}
+
+.classic-icon[data-icon='unindent'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-unindent.svg');
+}
+
+.classic-icon[data-icon='view-back'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-view-back.svg');
+}
+
+.classic-icon[data-icon='view-bottom'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-view-bottom.svg');
+}
+
+.classic-icon[data-icon='view-front'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-view-front.svg');
+}
+
+.classic-icon[data-icon='view-left'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-view-left.svg');
+}
+
+.classic-icon[data-icon='view-right'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-view-right.svg');
+}
+
+.classic-icon[data-icon='view-top'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-view-top.svg');
+}
+
+.classic-icon[data-icon='zoom-all'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-zoom-all.svg');
+}
+
+.classic-icon[data-icon='zoom-in'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-zoom-in.svg');
+}
+
+.classic-icon[data-icon='zoom-out'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-zoom-out.svg');
+}
+
+/* Animate panel playback buttons (F5). Vendored 2026-08-07 from the same
+   pinned commit as the rest — see the vendor README. */
+.classic-icon[data-icon='vcr-control-start'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-start.svg');
+}
+
+.classic-icon[data-icon='vcr-control-step-back'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-step-back.svg');
+}
+
+.classic-icon[data-icon='vcr-control-play'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-play.svg');
+}
+
+.classic-icon[data-icon='vcr-control-pause'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-pause.svg');
+}
+
+.classic-icon[data-icon='vcr-control-step-forward'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-step-forward.svg');
+}
+
+.classic-icon[data-icon='vcr-control-end'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-end.svg');
+}

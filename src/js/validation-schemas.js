@@ -128,13 +128,24 @@ const savedProjectSchema = {
     schemaVersion: { type: 'number', minimum: 1, maximum: 100 },
     name: { type: 'string', minLength: 1, maxLength: 255 },
     originalName: { type: 'string', minLength: 1, maxLength: 255 },
-    kind: { type: 'string', enum: ['scad', 'zip'] },
+    // 'folder-link' = pointer to a folder on disk (handle in the folder-sync
+    // DB under folderRef); the record itself stores no file contents.
+    kind: { type: 'string', enum: ['scad', 'zip', 'folder-link'] },
     mainFilePath: { type: 'string', minLength: 1, maxLength: 500 },
     content: {
       type: 'string',
       maxLength: STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE,
     },
     projectFiles: { type: ['string', 'null'], default: null },
+    folderRef: { type: ['string', 'null'], default: null },
+    fileSummary: {
+      type: ['object', 'null'],
+      default: null,
+      properties: {
+        fileCount: { type: 'number', minimum: 0 },
+        totalBytes: { type: 'number', minimum: 0 },
+      },
+    },
     // v2 fields
     folderId: { type: ['string', 'null'], default: null },
     overlayFiles: { type: 'object', default: {} },

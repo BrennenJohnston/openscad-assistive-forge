@@ -14,7 +14,7 @@ import { escapeHtml } from './html-utils.js';
  * @param {string} [title='Confirm Action'] - Dialog title
  * @param {string} [confirmLabel='Confirm'] - Label for confirm button
  * @param {string} [cancelLabel='Cancel'] - Label for cancel button
- * @returns {Promise<boolean>} True if confirmed, false if cancelled
+ * @returns {Promise<boolean>} True if confirmed, false if canceled
  */
 export function showConfirmDialog(
   message,

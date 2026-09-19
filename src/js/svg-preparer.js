@@ -23,6 +23,7 @@ import {
   splitPath,
   getPointAtLength,
   getTotalLength,
+  getPathBBox,
 } from 'svg-path-commander';
 import {
   fromTransformAttribute,
@@ -31,6 +32,14 @@ import {
   applyToPoint,
 } from 'transformation-matrix';
 import { offsetPath } from './svg-offset.js';
+import {
+  polygonFromPathData,
+  boundsOf,
+  buildNestingTree,
+  estimateRingPoints,
+  signedArea,
+  pointInPolygon,
+} from './svg-nesting.js';
 import {
   pathFromPathData,
   pathToPathData,
@@ -59,11 +68,127 @@ const NON_RENDERING_CONTAINERS = new Set([
 ]);
 
 /**
- * Maximum rendering elements before an SVG is rejected as too complex.
- * Beyond this threshold path-bool operations become prohibitively slow
- * and produce unreliable output.
+ * The prototype builds three passes, so no more than three files are ever
+ * written. The owner's number; the tiered charm model is built to it.
  */
-const MAX_ELEMENT_COUNT = 50;
+export const LAYER_EMIT_CAP = 3;
+
+/**
+ * How many shapes the editor will list at once.
+ *
+ * All that survives of DP-Q9's 50 / 200 / 1000 counts. The 1,000 is a LIST
+ * cap - a table nobody can read and a DOM nobody wants - and it was always a
+ * different question from how long the boolean takes. The other two counts
+ * were answering that second question with the wrong unit and retired at
+ * DP-Q33; FLATTEN_BUDGET_MS below answers it in milliseconds.
+ */
+export const SHAPE_LIST_CAP = 1000;
+
+/** @param {number} count @returns {boolean} */
+export function isOverListCap(count) {
+  return count > SHAPE_LIST_CAP;
+}
+
+/**
+ * How long a combine may be predicted to take before Forge stops doing it
+ * unasked. Signed by the owner at DP-Q33 (2026-09-13).
+ *
+ * DP-Q9 signed 50 / 200 as counts, against the pairwise flatten that D-120
+ * has since replaced. A count cannot carry this decision: MEASURED with the
+ * ring engine, the same 200 shapes cost 77 ms as rectangles and 593 ms as
+ * curves, and 400 curvy shapes cost 2.5 SECONDS. The cost is in ring points
+ * and in how many shapes have to be folded together, not in either alone.
+ */
+export const FLATTEN_BUDGET_MS = 300;
+
+/**
+ * Milliseconds per (shape x ring point), the shape of the cost DP-Q33 signed.
+ *
+ * MEASURED 2026-09-14 in desktop Node against the ring engine that ships,
+ * median of three, synthetic shapes of a fixed complexity so the two axes
+ * move independently:
+ *
+ *   shapes   ring points   points/shape   flatten      ms / (shapes x points)
+ *      100           400              4     23.8 ms                  5.9e-4
+ *      800         3,200              4    961.9 ms                  3.8e-4
+ *       50         3,200             64     44.9 ms                  2.8e-4
+ *      400        25,600             64  2,551.1 ms                  2.5e-4
+ *      100        19,200            192    708.9 ms                  3.7e-4
+ *      400        76,800            192 13,030.9 ms                  4.2e-4
+ *      100        64,000            640  6,960.4 ms                  1.1e-3
+ *      400       256,000            640     132 s                    1.3e-3
+ *
+ * and the owner's two Illustrator-prepped icons, read in place and never
+ * copied: activities (9 shapes, 2,800 points) 36.7 ms = 1.5e-3; Bathroom
+ * (7 shapes, 863 points) 7.4 ms = 1.2e-3.
+ *
+ * Read the last column down: WITHIN one class of drawing it moves by less
+ * than a quarter across an eight-fold change in shape count, and BETWEEN
+ * classes it spans five-fold. That is exactly why DP-Q33 signed a
+ * calibration as well as a predictor - the constant belongs to the artwork
+ * and the machine, not to the formula.
+ *
+ * The default is the HIGH end on purpose. Real artwork sits there (both
+ * icons do), and being wrong high sends a drawing to a button it did not
+ * need; being wrong low starts a combine somebody did not ask for. After
+ * the first real flatten the measured value replaces this one.
+ */
+export const FLATTEN_COST_DEFAULT = 1.5e-3;
+
+/**
+ * What a flatten of this size is expected to cost.
+ *
+ * @param {number} shapes - Shapes that will be folded together
+ * @param {number} ringPoints - Their estimated ring points in total
+ * @param {number} [costPerUnit] - The calibrated constant, if there is one
+ * @returns {number} Milliseconds
+ */
+export function predictFlattenMs(
+  shapes,
+  ringPoints,
+  costPerUnit = FLATTEN_COST_DEFAULT
+) {
+  if (!(shapes > 0) || !(ringPoints > 0)) return 0;
+  return costPerUnit * shapes * ringPoints;
+}
+
+/**
+ * The constant a real flatten just proved, for the next prediction.
+ *
+ * Returns null rather than a number when the flatten was too small to have
+ * measured anything: a 0.2 ms combine of three squares is mostly the clock,
+ * and calibrating on it would teach the app that everything is free.
+ *
+ * @param {number} shapes
+ * @param {number} ringPoints
+ * @param {number} elapsedMs
+ * @returns {number|null}
+ */
+export function flattenCostFrom(shapes, ringPoints, elapsedMs) {
+  if (!(shapes > 0) || !(ringPoints > 0)) return null;
+  if (!(elapsedMs >= FLATTEN_CALIBRATION_FLOOR_MS)) return null;
+  return elapsedMs / (shapes * ringPoints);
+}
+
+/**
+ * Below this a flatten says more about the clock than about the drawing.
+ * The smallest row in the table above is 23.8 ms; 5 ms is well under
+ * anything measured and well over timer noise.
+ */
+export const FLATTEN_CALIBRATION_FLOOR_MS = 5;
+
+/**
+ * Total ring points for a set of elements, from their path data alone.
+ *
+ * @param {Array<{pathData?: string}>} elements
+ * @returns {number}
+ */
+export function ringPointsOf(elements) {
+  if (!Array.isArray(elements)) return 0;
+  let total = 0;
+  for (const el of elements) total += estimateRingPoints(el && el.pathData);
+  return total;
+}
 
 // CSS Level 2 named colors → hex.
 // parseLuminance() (image-import.js:130) handles rgb() and #hex only;
@@ -342,6 +467,131 @@ export function bakeElementTransforms(element, pathData) {
  * @returns {string|null} Effective paint value, or null when unset anywhere
  *   (callers apply the SVG defaults: black fill, no stroke)
  */
+/**
+ * Declarations a document's <style> blocks give to each class and element
+ * name, parsed once per document and cached.
+ *
+ * D-118 (DP-0, 2026-08-28): getEffectivePaint used to read the presentation
+ * attribute, the `style` ATTRIBUTE and ancestors, and nothing else. Every CAD
+ * and Illustrator export declares paint by CLASS instead:
+ *
+ *   <defs><style>.cls-1 { fill: none; stroke: #000 }</style></defs>
+ *   <path class="cls-1" d="..."/>
+ *
+ * so `fill` resolved to null, the SVG default BLACK was assumed, and a
+ * stroke-only line drawing became a page of solid black shapes. MEASURED on
+ * the owner's own files: 70/70 and 831/831 elements classified `foreground`
+ * with ZERO stroke conversions, which is why their art came out of the
+ * stencil as one hole the shape of its outer boundary.
+ *
+ * Deliberately small: this resolves simple class, type and id selectors,
+ * which is the shape every exporter emits. Anything with a combinator, a
+ * pseudo-class or an attribute test is skipped rather than half-understood -
+ * a wrong answer here silently changes geometry.
+ */
+const STYLESHEET_CACHE = new WeakMap();
+
+/**
+ * Parse a declaration block ("fill:none;stroke:#000") into a plain object.
+ * @param {string} body
+ * @returns {Object<string, string>}
+ */
+function parseDeclarations(body) {
+  const out = {};
+  for (const part of body.split(';')) {
+    const colon = part.indexOf(':');
+    if (colon === -1) continue;
+    const name = part.slice(0, colon).trim().toLowerCase();
+    const value = part.slice(colon + 1).trim();
+    if (name && value) out[name] = value;
+  }
+  return out;
+}
+
+/**
+ * Build {classes, types, ids} declaration maps from a document's <style>
+ * blocks. Later rules win, matching CSS's own last-one-wins for equal
+ * specificity.
+ *
+ * @param {Document} doc
+ * @returns {{classes: Object, types: Object, ids: Object}}
+ */
+function buildStylesheetIndex(doc) {
+  const index = { classes: {}, types: {}, ids: {} };
+  const styles = doc.querySelectorAll ? doc.querySelectorAll('style') : [];
+  for (const styleEl of styles) {
+    // Comments first, so a commented-out rule cannot be read as live.
+    const css = (styleEl.textContent || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+    let match;
+    while ((match = ruleRe.exec(css)) !== null) {
+      const declarations = parseDeclarations(match[2]);
+      if (Object.keys(declarations).length === 0) continue;
+      for (const rawSelector of match[1].split(',')) {
+        const selector = rawSelector.trim();
+        if (!selector) continue;
+        let bucket = null;
+        let key = null;
+        if (/^\.[A-Za-z_][\w-]*$/.test(selector)) {
+          bucket = index.classes;
+          key = selector.slice(1);
+        } else if (/^#[A-Za-z_][\w-]*$/.test(selector)) {
+          bucket = index.ids;
+          key = selector.slice(1);
+        } else if (/^[A-Za-z][\w-]*$/.test(selector)) {
+          bucket = index.types;
+          key = selector.toLowerCase();
+        }
+        // Anything else (combinators, pseudo-classes, attribute tests) is
+        // left alone rather than guessed at.
+        if (!bucket) continue;
+        bucket[key] = { ...(bucket[key] || {}), ...declarations };
+      }
+    }
+  }
+  return index;
+}
+
+/**
+ * The value a document's <style> rules give this element for one property,
+ * in ascending specificity: type < class < id.
+ *
+ * @param {Element} element
+ * @param {string} prop
+ * @returns {string|null}
+ */
+function stylesheetValueFor(element, prop) {
+  const doc = element.ownerDocument;
+  if (!doc) return null;
+  let index = STYLESHEET_CACHE.get(doc);
+  if (!index) {
+    index = buildStylesheetIndex(doc);
+    STYLESHEET_CACHE.set(doc, index);
+  }
+  let value = null;
+  const type = element.tagName ? element.tagName.toLowerCase() : null;
+  if (type && index.types[type] && index.types[type][prop] !== undefined) {
+    value = index.types[type][prop];
+  }
+  const classAttr = element.getAttribute && element.getAttribute('class');
+  if (classAttr) {
+    for (const name of classAttr.split(/\s+/)) {
+      if (
+        name &&
+        index.classes[name] &&
+        index.classes[name][prop] !== undefined
+      ) {
+        value = index.classes[name][prop];
+      }
+    }
+  }
+  const id = element.getAttribute && element.getAttribute('id');
+  if (id && index.ids[id] && index.ids[id][prop] !== undefined) {
+    value = index.ids[id][prop];
+  }
+  return value;
+}
+
 export function getEffectivePaint(element, prop) {
   const styleRe = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i');
   let node = element;
@@ -352,6 +602,10 @@ export function getEffectivePaint(element, prop) {
       const m = styleAttr.match(styleRe);
       if (m) return m[1].trim();
     }
+    // D-118: a <style> rule outranks a presentation attribute, and loses to
+    // the style attribute above. Same order the browser uses.
+    const fromSheet = stylesheetValueFor(node, prop);
+    if (fromSheet !== null && fromSheet !== '') return fromSheet;
     const attr = node.getAttribute && node.getAttribute(prop);
     if (attr !== null && attr !== undefined && attr !== '') return attr;
     node = node.parentElement;
@@ -367,6 +621,45 @@ export function getEffectivePaint(element, prop) {
  * @param {string} pathData - SVG path `d` attribute value
  * @returns {string[]} Individual subpath strings (length >= 1)
  */
+/**
+ * How many closed shapes a traced drawing holds.
+ *
+ * Not the number of <path> elements: a tracer is free to put every shape in
+ * one element, and both of the ones here do it to different degrees. Potrace
+ * returns a single compound path; imagetracerjs folds each shape's holes into
+ * the shape's own element. Counting elements under-reported both - the app
+ * told a person "35 shapes" about the Bathroom icon while the editor beside it
+ * listed 52 - so this counts what the editor counts.
+ *
+ * It counts move commands inside `d` rather than parsing, because it runs on
+ * every conversion and `parseSvgElements` already does the expensive version
+ * when the editor opens. A move is the only thing `M` or `m` can be in path
+ * data, and the two agree exactly: measured on both engines' output for the
+ * bird (7 and 6), the Bathroom icon (52 and 52) and the Harley sketch (5 and
+ * 4), every count matched `analyzeSvg`.
+ *
+ * @param {string} svgString
+ * @returns {number}
+ */
+export function countTracedShapes(svgString) {
+  if (!svgString) return 0;
+  let count = 0;
+  const tags = /<path\b[^>]*>/g;
+  let match;
+  while ((match = tags.exec(svgString)) !== null) {
+    const tag = match[0];
+    // D-159: a traced region is one shape, whatever its holes.
+    if (/\sdata-colour=/.test(tag)) {
+      count += 1;
+      continue;
+    }
+    const d = /\sd\s*=\s*"([^"]*)"/.exec(tag);
+    const moves = d && d[1].match(/[Mm]/g);
+    if (moves) count += moves.length;
+  }
+  return count;
+}
+
 function splitSubpaths(pathData) {
   if (!pathData) return [];
   const trimmed = pathData.trim();
@@ -386,6 +679,103 @@ function splitSubpaths(pathData) {
 }
 
 /**
+ * The rings of one compound path, measured: polygon, winding sign, a point
+ * inside. Shared by the two ring rules below (D-159).
+ */
+const RING_RULE_MAX_RINGS = 1500;
+
+function measureRings(subpaths) {
+  return subpaths.map((sp) => {
+    const { points } = polygonFromPathData(sp);
+    const usable = points.length >= 3;
+    const area = usable ? signedArea(points) : 0;
+    // The probe for "is this ring inside that one" is the ring's own leftmost
+    // vertex, not a point of its interior: the interior of a letter O's outer
+    // ring is mostly its counter, and a probe there would put the outer ring
+    // inside its own hole. A vertex is outside every ring nested in this one
+    // and inside every ring around it, as long as rings do not touch.
+    let probe = null;
+    if (usable) {
+      probe = points[0];
+      for (const pt of points) {
+        if (pt.x < probe.x || (pt.x === probe.x && pt.y < probe.y)) probe = pt;
+      }
+    }
+    return {
+      points,
+      usable,
+      area: Math.abs(area),
+      sign: Math.sign(area),
+      probe,
+    };
+  });
+}
+
+/**
+ * The ring of a traced region that is the region: the one with the largest
+ * area. A tracer writes a region's holes as further rings of the same path;
+ * whatever sits in those holes is a region of its own, with its own path.
+ */
+function outerRingOf(subpaths) {
+  const rings = measureRings(subpaths);
+  let best = 0;
+  rings.forEach((r, i) => {
+    if (r.area > rings[best].area) best = i;
+  });
+  return subpaths[best];
+}
+
+/**
+ * Which rings of a drawn compound path are holes, under the path's own fill
+ * rule: under even-odd a ring inside an odd number of the path's other rings;
+ * under nonzero (the SVG default) a ring where the winding number, its own
+ * turn plus every ring around it, comes to zero. The drawing's meaning, kept
+ * when the rings become rows.
+ *
+ * @param {string[]} subpaths
+ * @param {string|null} fillRule - The effective fill-rule, null for nonzero
+ * @returns {boolean[]} One flag per ring
+ */
+function ringHoleFlags(subpaths, fillRule) {
+  // A traced noise field is one path with thousands of rings, and testing
+  // every ring against every other took minutes at 4x CPU (a CI run of the
+  // big-picture test never finished). Past this many rings the path is read
+  // as it was before D-159, every ring filled; no drawing a person keeps
+  // has that many rings in one path.
+  if (subpaths.length > RING_RULE_MAX_RINGS) return subpaths.map(() => false);
+  const rings = measureRings(subpaths);
+  const boxes = rings.map((r) => (r.usable ? boundsOf(r.points) : null));
+  const evenOdd = String(fillRule || '').toLowerCase() === 'evenodd';
+  return rings.map((ring, j) => {
+    if (!ring.probe) return false;
+    const pt = ring.probe;
+    let depth = 0;
+    let winding = ring.sign;
+    for (let k = 0; k < rings.length; k++) {
+      if (k === j) continue;
+      const other = rings[k];
+      const box = boxes[k];
+      // Only a bigger ring can contain this one, and only one whose box
+      // holds the probe; the polygon test runs on those alone.
+      if (!other.usable || !box || other.area <= ring.area) continue;
+      if (
+        pt.x < box.minX ||
+        pt.x > box.maxX ||
+        pt.y < box.minY ||
+        pt.y > box.maxY
+      ) {
+        continue;
+      }
+      if (pointInPolygon(pt, other.points)) {
+        depth += 1;
+        winding += other.sign;
+      }
+    }
+    return evenOdd ? depth % 2 === 1 : winding === 0;
+  });
+}
+
+/**
  * Parse an SVG string into an array of shape element descriptors.
  *
  * Each descriptor contains the DOM element, its path data string,
@@ -394,7 +784,14 @@ function splitSubpaths(pathData) {
  * Compound paths (a single `<path>` whose `d` attribute contains
  * multiple M-command subpaths) are expanded so each subpath becomes
  * its own descriptor. This lets analyzeSvg and the workspace treat
- * each visual subpath as an independent element.
+ * each visual subpath as an independent element. Two rules keep that
+ * honest (D-159): a TRACED region, a path carrying `data-colour`, is one
+ * descriptor, its outer ring, because a tracer writes the region's holes as
+ * rings of the same path and whatever sits in them is a region of its own
+ * already (the CREATE logo's figure split into a solid disc over the navy
+ * dot's own Hole, and no role on the disc could change anything); and a
+ * DRAWN compound path's rings carry `ringHole` from the path's fill rule, so
+ * a letter O's counter is a Hole and not a Raised disc that fills it.
  *
  * @param {string} svgString - Complete SVG markup
  * @returns {Array<{element: Element, pathData: string, fill: string, stroke: string, luminance: number|null, subpathIndex?: number}>}
@@ -428,7 +825,21 @@ export function parseSvgElements(svgString) {
       resolvedFill !== null ? parseLuminance(resolvedFill) : null;
 
     const subpaths = splitSubpaths(pathData);
-    if (subpaths.length > 1) {
+    if (subpaths.length > 1 && element.hasAttribute('data-colour')) {
+      result.push({
+        element,
+        pathData: outerRingOf(subpaths),
+        fill,
+        stroke,
+        luminance,
+        transformBaked: baking.baked,
+        transformBakeFailed: baking.failed,
+      });
+    } else if (subpaths.length > 1) {
+      const holes = ringHoleFlags(
+        subpaths,
+        getEffectivePaint(element, 'fill-rule')
+      );
       subpaths.forEach((sp, idx) => {
         result.push({
           element,
@@ -437,6 +848,7 @@ export function parseSvgElements(svgString) {
           stroke,
           luminance,
           subpathIndex: idx,
+          ringHole: holes[idx] === true,
           transformBaked: baking.baked,
           transformBakeFailed: baking.failed,
         });
@@ -454,6 +866,180 @@ export function parseSvgElements(svgString) {
     }
   }
   return result;
+}
+
+/**
+ * D-167: the paper a plain drawing sits on, or null.
+ *
+ * The frame is the one root of the nesting tree, filled and light (over
+ * the luminance threshold `classifyElements` uses), with something else
+ * drawn on it. A closed shape is inside it by the tree's own containment;
+ * an open path (a stroke the classifier will convert) counts as inside when
+ * its bounds are. Two light roots side by side are two shapes, not a paper;
+ * a dark root is artwork, whatever sits inside it; a light root alone is
+ * the whole design. None of those is a frame.
+ *
+ * @param {Array} elements - Output of parseSvgElements()
+ * @param {{nodes: Array, roots: Array}} tree - Their nesting tree
+ * @param {{luminanceThreshold?: number}} [options]
+ * @returns {Element|null} The frame's DOM element
+ */
+function plainFrameOf(elements, tree, options = {}) {
+  const { luminanceThreshold = 200 } = options;
+  const roots = (tree && tree.roots) || [];
+  if (roots.length !== 1) return null;
+  const root = elements[roots[0]];
+  if (!root || root.ringHole) return null;
+  const fillLower = (root.fill || '').toLowerCase();
+  if (fillLower === 'none' || fillLower === 'transparent') return null;
+  if (root.luminance === null || !(root.luminance > luminanceThreshold)) {
+    return null;
+  }
+  const frame = root.element;
+  const nodes = (tree && tree.nodes) || [];
+  let frameBounds = null;
+  let somethingOnIt = false;
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i];
+    if (el.element === frame) continue;
+    const node = nodes[i];
+    if (node && !node.degenerate) {
+      // A closed shape: the tree already placed it inside the one root.
+      somethingOnIt = true;
+      continue;
+    }
+    const { points } = polygonFromPathData(el.pathData);
+    if (points.length === 0) continue;
+    if (!frameBounds) {
+      frameBounds = boundsOf(polygonFromPathData(root.pathData).points);
+    }
+    const b = boundsOf(points);
+    if (
+      b.minX < frameBounds.minX ||
+      b.maxX > frameBounds.maxX ||
+      b.minY < frameBounds.minY ||
+      b.maxY > frameBounds.maxY
+    ) {
+      return null;
+    }
+    somethingOnIt = true;
+  }
+  return somethingOnIt ? frame : null;
+}
+
+/**
+ * ★ What the Colors mode's WALL becomes on a charm (D-137; the owner
+ * signed the rule at DP-Q53, 2026-09-16: "Leave the wall out; artwork
+ * Raised").
+ *
+ * `separateColours` marks every path of the background color
+ * `data-background="true"`. Nothing read that flag: roles were decided by
+ * luminance alone, so on the owner's CREATE logo - white artwork on a navy
+ * ground - the navy WALL (luminance under the threshold) came out Raised and
+ * the white lettering (luminance over it) came out Hole. MEASURED: the wall
+ * path is the whole 600 x 448 canvas, the editor called it "Path 1, Raised",
+ * and the charm rendered as a black plate with the logo cut out of it.
+ *
+ * The rule, by the separation's own facts rather than by luminance:
+ *   - a wall path at nesting depth 0 is the ground the picture sits on, and
+ *     a charm does not print its ground: **Ignore**;
+ *   - a wall path INSIDE a kept shape is a counter or an island - the middle
+ *     of an R, the hole in an A - and that is a **Hole**;
+ *   - every other color is the artwork: **Raised**, whatever its luminance.
+ *
+ * ★★★ IT FIRES ONLY WHEN THERE IS SOMETHING ELSE TO RAISE.
+ * DP-48 P0 measured the nine icons and found that on a one-colour drawing
+ * `pickBackground` returns index 0 regardless, so the ARTWORK carries the
+ * flag: all nine icons separate into black paths every one of which is
+ * "the wall". A rule that ignored the wall unconditionally would empty them.
+ *
+ * @param {Array} elements - Output of parseSvgElements()
+ * @param {{nodes: Array}|null} [nestingTree] - Reuse a tree already built
+ * @returns {Object} Element index to forced role; empty when the rule does
+ *   not apply, which leaves every existing drawing exactly as it was
+ */
+export function wallRoleOverrides(elements, nestingTree = null, options = {}) {
+  const out = {};
+  if (!Array.isArray(elements) || elements.length === 0) return out;
+  const isWall = (el) =>
+    el && el.element && typeof el.element.getAttribute === 'function'
+      ? el.element.getAttribute('data-background') === 'true'
+      : false;
+
+  const walls = [];
+  let somethingElse = false;
+  elements.forEach((el, i) => {
+    if (isWall(el)) walls.push(i);
+    else somethingElse = true;
+  });
+  if (!somethingElse) return out;
+
+  if (walls.length === 0) {
+    // D-167: a drawing that never went through the separation carries no
+    // flag, but a drawing program leaves the same ground behind: one light
+    // shape under everything. Judged by luminance alone it was a Cut out,
+    // and the automatic pass, which subtracts every cut-out from everything,
+    // erased the bird fixture to an empty design (MEASURED: 210 bytes, one
+    // `<path d="">`) under "Simplified 7 shapes for 3D printing". The
+    // editor kept the bird, because its paint only cuts inside a shape that
+    // encloses the cut-out, so the two paths disagreed about one drawing.
+    //
+    // A drawing with no light filled shape has no paper to find, and skips
+    // the nesting tree it would otherwise build for nothing.
+    const { luminanceThreshold = 200 } = options;
+    const hasLightFill = elements.some((el) => {
+      const fillLower = (el.fill || '').toLowerCase();
+      return (
+        fillLower !== 'none' &&
+        fillLower !== 'transparent' &&
+        !el.ringHole &&
+        el.luminance !== null &&
+        el.luminance > luminanceThreshold
+      );
+    });
+    if (!hasLightFill) return out;
+    const tree = nestingTree || buildNestingTree(elements);
+    const frame = plainFrameOf(elements, tree, options);
+    if (frame !== null) {
+      // Every ring of the frame carries its role, for the reason below.
+      elements.forEach((el, i) => {
+        if (el.element === frame) out[i] = 'ignore';
+      });
+    }
+    return out;
+  }
+
+  const tree = nestingTree || buildNestingTree(elements);
+  const depth = new Map(
+    ((tree && tree.nodes) || []).map((n) => [n.index, n.depth])
+  );
+
+  // ★ THE DECISION IS PER PATH, NEVER PER SUBPATH. `parseSvgElements` splits
+  // every `d` into its rings, and a traced region's INNER rings are its
+  // holes: the navy wall of the CREATE logo is one path whose inner rings are
+  // the letters themselves. Rolling per ring made those letter-shaped rings
+  // Holes, and the charm came out with the lettering drawn in OUTLINE (seen
+  // in `dp48p1-after-2-drawing-after-render.png` before this was fixed). A
+  // path's outermost ring says where the path sits, and every ring of it
+  // carries that one role; the even-odd fill inside the path does the rest.
+  const shallowest = new Map();
+  elements.forEach((el, i) => {
+    const node = el.element;
+    const d = depth.get(i) || 0;
+    const seen = shallowest.get(node);
+    if (seen === undefined || d < seen) shallowest.set(node, d);
+  });
+
+  for (const i of walls) {
+    const d = shallowest.get(elements[i].element) || 0;
+    // Depth 0 is the ground the picture sits on and a charm does not print
+    // it; deeper is an island of wall inside artwork - a letter's counter.
+    out[i] = d > 0 ? 'hole' : 'ignore';
+  }
+  elements.forEach((el, i) => {
+    if (out[i] === undefined) out[i] = el.ringHole ? 'hole' : 'foreground';
+  });
+  return out;
 }
 
 /**
@@ -505,6 +1091,9 @@ export function classifyElements(elements, options = {}) {
         return { ...el, pathData: expandedPath, role, strokeConverted: true };
       }
       role = strokeHandling;
+    } else if (el.ringHole) {
+      // D-159: a ring the drawing itself cuts out of its path.
+      role = 'hole';
     } else if (el.luminance !== null && el.luminance > luminanceThreshold) {
       role = 'hole';
     } else {
@@ -675,6 +1264,267 @@ export function flattenToCompoundPath(
 }
 
 /**
+ * Flatten a design into one compound-path SVG PER LAYER (DP-7).
+ *
+ * The stacked-mask law, which is the containment law seen from the printer's
+ * side: layer L carries the FULL regions of every element assigned to L AND
+ * to every layer below it. The directive says layer 2's elements "were
+ * embossed in layer 1 and layer 2", and that is exactly this - each pass
+ * lays down a smaller mask on top of the last, so nested regions accumulate
+ * height and nothing is ever left standing on air.
+ *
+ * Not rings, and not per-layer differences: full regions, stacked. The DP-0
+ * probe built a stepped pyramid this way and it came out watertight.
+ *
+ * Layer 1 therefore costs what today's single flatten costs, and each deeper
+ * layer holds strictly fewer elements than the one before it.
+ *
+ * @param {Array} classifiedElements - Output of classifyElements()
+ * @param {Array<number>} layers - Layer per element, positionally aligned
+ * @param {number} limit - How many layers to emit
+ * @param {object} [svgMeta] - viewBox/width/height for the written SVG
+ * @param {string[]} [warningsOut] - Receives flatten fallback warnings
+ * @returns {Array<string|null>} One SVG per layer; null where a layer has
+ *   nothing to build
+ */
+/**
+ * The design's OUTER SILHOUETTE: its outline with every hole filled (DP-11).
+ *
+ * A traced bird becomes a bird-shaped pendant. Two measurements shape this,
+ * and without either one the pendant comes out wrong in a way that renders
+ * perfectly and prints as rubbish.
+ *
+ * ★ IT WORKS ON THE RAW GEOMETRY, NOT THE CONVERTED GEOMETRY. The bird's own
+ * outline is a stroke - `fill="none" stroke="#1a1a1a" stroke-width="14"` -
+ * and strokeToFill turns a stroke into a thin BAND. Built from the converted
+ * paths the pendant came out as a HOLLOW RING with the eye and the feathers
+ * floating in the hole. The raw subpath, implicitly closed, is the shape the
+ * eye sees, and filling it is the whole point of a silhouette.
+ *
+ * ★ AND THE OUTERMOST SHAPE OF A TRACED PHOTOGRAPH IS ALMOST NEVER THE
+ * DRAWING. This repo's bird fixture has one root: a full-bleed
+ * `<rect fill="#efe9dc">`, the paper it was drawn on. Taking roots naively
+ * gave a 600x450 RECTANGLE, so every traced photograph would have made a
+ * rectangular pendant. A root classified as a hole is a background, and this
+ * descends past it to the shapes drawn on it.
+ *
+ * Below the top level, roles stop mattering: a hole is a hole in the RELIEF,
+ * not a hole in the pendant. Something marked "cut out" should not saw the
+ * body in half.
+ *
+ * @param {Array} rawElements - Output of parseSvgElements(), NOT classified
+ * @param {Array<string>} roles - Role per element, positionally aligned
+ * @param {object} [svgMeta] - viewBox/width/height of the source
+ * @param {string[]} [warningsOut] - Receives flatten fallback warnings
+ * @returns {string|null} One compound-path SVG, or null when there is no shape
+ */
+export function flattenSilhouette(
+  rawElements,
+  roles,
+  svgMeta = {},
+  warningsOut = null
+) {
+  if (!Array.isArray(rawElements) || rawElements.length === 0) return null;
+  const roleAt = (i) => (Array.isArray(roles) ? roles[i] : 'foreground');
+
+  // The tree is built on the RAW outlines, which is also the only tree that
+  // matches what a person sees: converting strokes first would put the bird
+  // INSIDE its own outline band rather than being it.
+  const tree = buildNestingTree(rawElements);
+
+  const outline = [];
+  const visit = (index, depth) => {
+    const el = rawElements[index];
+    const node = tree.nodes[index];
+    if (!el || !node || depth > 4) return;
+    const role = roleAt(index);
+    if (role !== 'hole' && role !== 'ignore' && el.pathData) {
+      outline.push({ ...el, role: 'foreground' });
+      return;
+    }
+    for (const child of node.children) visit(child, depth + 1);
+  };
+  for (const root of tree.roots) visit(root, 0);
+
+  if (outline.length === 0) return null;
+  const svg = flattenToCompoundPath(outline, svgMeta, warningsOut);
+  if (!svg) return null;
+  // Normalized against its own outline, so the body and the relief files land
+  // on one canvas and a model needs one scale factor for both.
+  return normalizeLayerStack([svg])[0];
+}
+
+export function flattenLayers(
+  classifiedElements,
+  layers,
+  limit,
+  svgMeta = {},
+  warningsOut = null,
+  options = {}
+) {
+  const out = [];
+  if (!Array.isArray(classifiedElements) || !Array.isArray(layers)) return out;
+  const count = Math.max(0, Math.min(limit || 0, LAYER_EMIT_CAP));
+  const raw = [];
+
+  for (let layer = 1; layer <= count; layer++) {
+    const forThisLayer = classifiedElements
+      .filter((el, i) => (layers[i] || 1) >= layer)
+      // ★ SOLID MODE, for the bridge-less stencil (DP-12). There, DEPTH alone
+      // decides and every cut must be one solid region: layer 1's cut is the
+      // letter A INCLUDING where its counter will be, because the counter is
+      // cut at layer 1 too and only becomes its own shape at layer 2. That is
+      // the whole reason the method needs no bridges - no cut is ever an
+      // annulus, so nothing is ever left connected to nothing.
+      //
+      // MEASURED without it: the letter A came out as TWO subpaths, its
+      // counter a hole, and layer 2 came out NULL, because the counter was
+      // classified 'hole' and a compound path with no foreground is nothing.
+      //
+      // The charm keeps roles on purpose - there a hole IS a hole in the
+      // relief, and the walls of a counter must not close over as the stack
+      // rises. One law, two different jobs.
+      .map((el) => (options.solid ? { ...el, role: 'foreground' } : el));
+    // D-132: `options.flattenRegion` is the ring engine's flatten, handed in by
+    // the caller. It cannot be imported here - the ring engine lives in a lazy
+    // chunk and its wrapper lives in the workspace, which imports THIS file -
+    // so the caller supplies it and this stays the dependency-free end.
+    // Without it the pairwise compound-path flatten still runs, which is what
+    // every caller did before and what the stencil's own tests exercise.
+    const flattenRegion =
+      typeof options.flattenRegion === 'function'
+        ? options.flattenRegion
+        : flattenToCompoundPath;
+    raw.push(
+      forThisLayer.length === 0
+        ? null
+        : flattenRegion(forThisLayer, svgMeta, warningsOut)
+    );
+  }
+  return normalizeLayerStack(raw);
+}
+
+/**
+ * Put every layer on one shared, normalized canvas sized from LAYER 1 (DP-7).
+ *
+ * Four things were MEASURED against OpenSCAD 2026.01.03 to arrive at this,
+ * every one of which would otherwise have shipped as geometry that looks
+ * correct from directly above:
+ *
+ *   1. resize() fits the CONTENT bounding box, not the document. Fitting each
+ *      layer to the charm face independently scaled the probe's 8 mm inner
+ *      square up to 20 mm, the same size as the 36 mm outer one. Three
+ *      identical slabs.
+ *   2. import(center = false) preserves ABSOLUTE user coordinates (the probe
+ *      came back at 2..38 and 16..24 exactly), so layers already share one
+ *      coordinate system and need ONE transform between them.
+ *   3. OpenSCAD honors a <g transform> on import: a translate+scale wrapper
+ *      moved a square from 16..24 to 12..28 as written.
+ *   4. A width with NO unit is pixels, converted at 72 dpi: a 100-wide
+ *      document came in at 35.28 mm. The unit is therefore always written.
+ *
+ * And one quirk worth naming: OpenSCAD maps the viewBox as x_out = x - minX
+ * but y_out = (height - minY) - y, so a NEGATIVE minY shifts the result by
+ * twice itself. The canvas is always written with minX and minY at zero, and
+ * then the mapping is simply a y flip inside [0,W] x [0,H] - the same flip the
+ * single-design path already lives with, so the two agree.
+ *
+ * The result: layer 1 spans the full canvas width, deeper layers sit inside it
+ * at their true relative size and position, and the model needs one scale
+ * factor plus the aspect it already carries.
+ *
+ * @param {Array<string|null>} svgs - Per-layer SVGs, layer 1 first
+ * @returns {Array<string|null>} The same list on the normalized canvas
+ */
+function normalizeLayerStack(svgs) {
+  const first = svgs.find((v) => v);
+  if (!first) return svgs;
+  const d = /\sd="([^"]*)"/.exec(first);
+  if (!d) return svgs;
+
+  const { points } = polygonFromPathData(d[1]);
+  const box = boundsOf(points);
+  if (!box) return svgs;
+  const width = box.maxX - box.minX;
+  const height = box.maxY - box.minY;
+  if (!(width > 0) || !(height > 0)) return svgs;
+
+  const scale = LAYER_CANVAS_SPAN / width;
+  const canvasH = round6(height * scale);
+  // translate(a,b) scale(s) scales first, so this lands the design's own
+  // bounding box exactly on [0, SPAN] x [0, canvasH].
+  const t =
+    `translate(${round6(-scale * box.minX)},${round6(-scale * box.minY)}) ` +
+    `scale(${round6(scale)})`;
+  const open =
+    `<svg xmlns="http://www.w3.org/2000/svg" ` +
+    `width="${LAYER_CANVAS_SPAN}mm" height="${canvasH}mm" ` +
+    `viewBox="0 0 ${LAYER_CANVAS_SPAN} ${canvasH}">` +
+    `<g transform="${t}">`;
+
+  return svgs.map((svg) =>
+    svg
+      ? svg.replace(/^<svg[^>]*>/, open).replace(/<\/svg>$/, '</g></svg>')
+      : null
+  );
+}
+
+function round6(n) {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+/**
+ * Read back a layer file written by normalizeLayerStack: the path data, the
+ * canvas it is normalized to, and the transform BETWEEN the two.
+ *
+ * ★ D-122. The path data inside a layer file is still in the design's own
+ * user units; the `<g transform>` is what puts it on the normalized canvas.
+ * A reader that takes the `d` and the viewBox and nothing else is holding two
+ * coordinate systems and has no way to know it: the plate builder did exactly
+ * that and fitted 119.81 units of cat as if they were 100. That is a 1.198x
+ * error on this SVG and 5x on a 503-pixel raster trace - the owner's 285 mm
+ * cat on a 100 mm plate. So this is the ONE reader of a layer file, it always
+ * hands back the transform beside the data, and the caller applies it exactly
+ * once.
+ *
+ * @param {string|null} layerSvg - One entry of a flattenLayers result
+ * @returns {{pathData: string, canvasSpan: number, canvasHeight: number,
+ *   transform: {scale: number, dx: number, dy: number}|null}|null}
+ */
+export function readLayerFile(layerSvg) {
+  if (!layerSvg || typeof layerSvg !== 'string') return null;
+  const pathData = / d="([^"]*)"/.exec(layerSvg)?.[1];
+  if (!pathData) return null;
+  const vb = /viewBox="0 0 ([\d.eE+-]+) ([\d.eE+-]+)"/.exec(layerSvg);
+  const t =
+    /<g transform="translate\(([^,)]+),([^)]+)\) scale\(([^)]+)\)"/.exec(
+      layerSvg
+    );
+  const num = (s) => {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  const scale = t ? num(t[3]) : null;
+  const dx = t ? num(t[1]) : null;
+  const dy = t ? num(t[2]) : null;
+  return {
+    pathData,
+    canvasSpan: vb ? (num(vb[1]) ?? LAYER_CANVAS_SPAN) : LAYER_CANVAS_SPAN,
+    canvasHeight: vb ? (num(vb[2]) ?? LAYER_CANVAS_SPAN) : LAYER_CANVAS_SPAN,
+    transform:
+      scale !== null && dx !== null && dy !== null ? { scale, dx, dy } : null,
+  };
+}
+
+/**
+ * The width every layer file is normalized to, in millimeters of SVG canvas.
+ * A CONTRACT between this emitter and any tile that reads layer files: the
+ * model multiplies by one scale factor to reach the size it wants, and may
+ * not be changed without changing them together.
+ */
+export const LAYER_CANVAS_SPAN = 100;
+
+/**
  * Full SVG preparation pipeline.
  *
  * Parses, classifies, and flattens a multi-element SVG into a single
@@ -701,7 +1551,15 @@ export function prepareSvg(svgString, options = {}) {
   };
 
   const elements = parseSvgElements(svgString);
-  const classified = classifyElements(elements, options);
+  // D-137 again, for the drawings that never open the editor: the caller's
+  // own overrides are a person's choices and still win over the rule.
+  const classified = classifyElements(elements, {
+    ...options,
+    roleOverrides: {
+      ...wallRoleOverrides(elements, null, options),
+      ...(options.roleOverrides || {}),
+    },
+  });
   const result = flattenToCompoundPath(
     classified,
     svgMeta,
@@ -726,6 +1584,55 @@ function isInsideNonRenderingScope(element) {
 }
 
 /**
+ * Measure the width-to-height ratio of an SVG's renderable geometry.
+ *
+ * OpenSCAD's resize([w, 0], auto) rescales the imported GEOMETRY bounding
+ * box, so the ratio that matters for fit is the united bbox of every shape
+ * OpenSCAD will render (it fills all shapes regardless of paint, so
+ * stroke-only elements count too), excluding non-rendering scopes (defs,
+ * clipPath, ...). Transforms are already baked by parseSvgElements.
+ *
+ * @param {string} svgString - Complete SVG markup
+ * @returns {number|null} width/height (rounded to 4 decimals), or null when
+ *   there is nothing measurable (no shapes, or degenerate zero extent)
+ */
+export function measureSvgAspect(svgString) {
+  try {
+    const elements = parseSvgElements(svgString);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const el of elements) {
+      if (isInsideNonRenderingScope(el.element)) continue;
+      if (!el.pathData) continue;
+      const box = getPathBBox(el.pathData);
+      if (
+        !box ||
+        !Number.isFinite(box.x) ||
+        !Number.isFinite(box.y) ||
+        !Number.isFinite(box.width) ||
+        !Number.isFinite(box.height)
+      ) {
+        continue;
+      }
+      minX = Math.min(minX, box.x);
+      minY = Math.min(minY, box.y);
+      maxX = Math.max(maxX, box.x + box.width);
+      maxY = Math.max(maxY, box.y + box.height);
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+    const width = maxX - minX;
+    const height = maxY - minY;
+    if (width <= 0 || height <= 0) return null;
+    return Math.round((width / height) * 10000) / 10000;
+  } catch (err) {
+    console.warn('[SVG Preparer] Aspect measurement failed:', err);
+    return null;
+  }
+}
+
+/**
  * Analyze an SVG for preparation complexity, element roles, and warnings.
  *
  * Replaces the boolean `needsPreparation()` as the primary entry point
@@ -743,6 +1650,8 @@ function isInsideNonRenderingScope(element) {
  *   recommendation: 'auto_prepare'|'open_editor'|'pass_through'|'reject',
  *   singleElement: boolean,
  *   elementCount?: number,
+ *   ringPoints?: number,
+ *   predictedFlattenMs?: number,
  * }}
  */
 export function analyzeSvg(svgString) {
@@ -774,14 +1683,14 @@ export function analyzeSvg(svgString) {
     }
   }
 
-  if (renderElements.length > MAX_ELEMENT_COUNT) {
+  if (isOverListCap(renderElements.length)) {
     return {
       status: 'too_complex',
       confidence: 0,
       elements: [],
       warnings: [
-        `This SVG has ${renderElements.length} elements — the maximum is ${MAX_ELEMENT_COUNT}. ` +
-          'Simplify the SVG in a vector editor (e.g., merge paths, remove hidden layers) before importing.',
+        `This drawing has ${renderElements.length} shapes, and Forge can work with ${SHAPE_LIST_CAP} at a time. ` +
+          'Simplify it in a vector editor (merge paths, remove hidden layers) and try again.',
       ],
       unsupportedFeatures: [],
       recommendation: 'reject',
@@ -810,7 +1719,12 @@ export function analyzeSvg(svgString) {
     renderElements.length > 1 &&
     renderElements[0].subpathIndex !== undefined;
 
-  const classified = classifyElements(renderElements);
+  // D-137: the separation's own facts decide the wall's role before
+  // luminance gets a say. An ordinary drawing carries no such facts and gets
+  // an empty override map, so nothing about it changes.
+  const classified = classifyElements(renderElements, {
+    roleOverrides: wallRoleOverrides(renderElements),
+  });
 
   const warnings = [];
   const unsupportedFeatures = [];
@@ -823,21 +1737,17 @@ export function analyzeSvg(svgString) {
     const hasStroke = el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
 
     if (el.strokeConverted) {
-      elWarnings.push('Stroked path \u2014 converted to filled outline');
+      elWarnings.push('Stroked path: converted to filled outline');
     } else if (fillLower === 'none' && hasStroke) {
-      elWarnings.push(
-        'Stroked path \u2014 not supported for boolean operations'
-      );
+      elWarnings.push('Stroked path: not supported for boolean operations');
     }
     if (fillLower.startsWith('url(')) {
-      elWarnings.push(
-        'Gradient or pattern fill \u2014 cannot classify by luminance'
-      );
+      elWarnings.push('Gradient or pattern fill: cannot classify by luminance');
     }
     // Transforms are baked into pathData during parsing; only warn when
     // baking failed and coordinates are still in local space.
     if (el.transformBakeFailed) {
-      elWarnings.push('Has transform \u2014 could not be baked');
+      elWarnings.push('Has transform: could not be baked');
     }
     if (el.element.hasAttribute('clip-path')) {
       elWarnings.push('Has clip-path reference');
@@ -852,6 +1762,7 @@ export function analyzeSvg(svgString) {
       autoRole: el.role,
       strokeConverted: el.strokeConverted || false,
       subpathIndex: el.subpathIndex,
+      ringHole: el.ringHole === true,
       warnings: elWarnings,
     };
   });
@@ -873,7 +1784,7 @@ export function analyzeSvg(svgString) {
   ).length;
   if (ignoredStrokedCount > 0) {
     warnings.push(
-      `${ignoredStrokedCount} stroked path(s) ignored \u2014 stroke-to-fill not yet supported`
+      `${ignoredStrokedCount} stroked path(s) ignored: stroke to fill is not supported yet`
     );
   }
 
@@ -891,12 +1802,17 @@ export function analyzeSvg(svgString) {
   // All-foreground SVGs need no flattening: OpenSCAD unions overlapping
   // filled shapes natively, so passing the original through is lossless.
   // Identical dark fills are unambiguous here, so no luminance penalty.
+  // D-159: a hole the drawing cuts out of its own path (a ring the path's
+  // fill rule makes a hole) needs no flattening either, because OpenSCAD
+  // honors the file's fill rule on import; only a hole drawn as a separate
+  // shape over another has to be cut by hand.
   const allForeground =
     elements.length > 0 &&
     unsupportedFeatures.length === 0 &&
     elements.every(
       (el) =>
-        el.autoRole === 'foreground' &&
+        (el.autoRole === 'foreground' ||
+          (el.autoRole === 'hole' && el.ringHole)) &&
         !el.strokeConverted &&
         !el.transformBakeFailed
     );
@@ -912,7 +1828,7 @@ export function analyzeSvg(svgString) {
       if (max - min < 50) {
         confidence -= 0.3;
         warnings.push(
-          'All elements have similar luminance \u2014 classification may be ambiguous'
+          'All elements have similar luminance, so the classification may be ambiguous'
         );
       }
     }
@@ -944,8 +1860,34 @@ export function analyzeSvg(svgString) {
     recommendation = 'open_editor';
   }
 
+  // DP-3, re-signed at DP-Q33: nothing may start a boolean flatten by itself
+  // if that flatten is predicted to outrun the budget. `auto_prepare` is the
+  // only recommendation that does, so it becomes `open_editor` and the
+  // person decides when to spend the time.
+  // `pass_through` is left alone WHATEVER the prediction, ON PURPOSE: it
+  // means the shapes need no flattening at all (OpenSCAD unions overlapping
+  // fills natively), so it costs nothing however many there are, and
+  // downgrading it would send people to the editor for a file that is
+  // already fine.
+  // The advisory copy lives in the UI, not here: this function stays an
+  // analyzer, and `warnings` keeps meaning "something about this drawing is
+  // off" for the code that already filters it.
+  const ringPoints = ringPointsOf(elements);
+  const predictedFlattenMs = predictFlattenMs(
+    renderElements.length,
+    ringPoints
+  );
+  if (
+    predictedFlattenMs > FLATTEN_BUDGET_MS &&
+    recommendation === 'auto_prepare'
+  ) {
+    recommendation = 'open_editor';
+  }
+
   return {
     status,
+    ringPoints,
+    predictedFlattenMs,
     confidence,
     elements,
     warnings,
@@ -953,6 +1895,7 @@ export function analyzeSvg(svgString) {
     recommendation,
     singleElement,
     isCompoundPathOnly,
+    elementCount: renderElements.length,
   };
 }
 

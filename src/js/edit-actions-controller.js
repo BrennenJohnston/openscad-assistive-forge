@@ -8,13 +8,20 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import {
+  STORAGE_KEY_EDITOR_FONT_SIZE,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
+import { EDITOR_PREF_SPEC } from './editor-prefs.js';
 import { announceImmediate } from './announcer.js';
 
-const FONT_SIZE_KEY = getAppPrefKey('editor-font-size');
-const DEFAULT_FONT_SIZE = 14;
-const MIN_FONT_SIZE = 8;
-const MAX_FONT_SIZE = 32;
+// Shared with Preferences ▸ Editor, which offers the same setting. Two
+// controls for one value must not carry two sets of limits.
+const FONT_SIZE_KEY = STORAGE_KEY_EDITOR_FONT_SIZE;
+const DEFAULT_FONT_SIZE = EDITOR_PREF_SPEC.fontSize.default;
+const MIN_FONT_SIZE = EDITOR_PREF_SPEC.fontSize.min;
+const MAX_FONT_SIZE = EDITOR_PREF_SPEC.fontSize.max;
 const FONT_SIZE_STEP = 2;
 
 /**

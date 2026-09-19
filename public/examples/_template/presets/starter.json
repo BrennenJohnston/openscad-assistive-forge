@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "type": "openscad-preset",
+  "modelName": "template_tile.scad",
+  "preset": {
+    "name": "Small Tag",
+    "description": "A keyring-sized version of the label, to show what a preset looks like.",
+    "parameters": {
+      "label_width": 45,
+      "label_depth": 30,
+      "plate_thickness": 2.5,
+      "corner_radius": 3,
+      "picture_file": "",
+      "picture_style": "engraved",
+      "picture_depth": 0.6,
+      "picture_width": 0,
+      "ridge_height": 0.8,
+      "ridge_width": 2,
+      "hanging_hole": "yes",
+      "hole_diameter": 4,
+      "$fn": 48
+    }
+  }
+}

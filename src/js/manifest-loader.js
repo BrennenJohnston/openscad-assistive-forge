@@ -168,6 +168,26 @@ export function validateManifest(data) {
   // -- defaults — optional object -----------------------------------------
   if (data.defaults !== undefined && typeof data.defaults !== 'object') {
     errors.push('"defaults" must be an object');
+  } else if (data.defaults && typeof data.defaults === 'object') {
+    // defaults.starterParameters — optional array of parameter names (IR-9).
+    // Additive: a manifest without it renders exactly as it did before. Names
+    // this design does not have are reported, never fatal - a manifest is
+    // somebody else's file and a stale name in it is not a reason to refuse
+    // the whole project.
+    const starter = data.defaults.starterParameters;
+    if (starter !== undefined) {
+      if (!Array.isArray(starter)) {
+        errors.push(
+          '"defaults.starterParameters" must be an array of parameter names'
+        );
+      } else if (
+        !starter.every((name) => typeof name === 'string' && name.trim() !== '')
+      ) {
+        errors.push(
+          'Each entry in "defaults.starterParameters" must be a non-empty parameter name'
+        );
+      }
+    }
   }
 
   // -- Optional metadata — type-check only --------------------------------

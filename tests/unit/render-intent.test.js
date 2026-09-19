@@ -13,10 +13,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   RENDER_STATE,
-  resolve2DExportIntent,
+  propose2DExportAdjustments,
   isNonPreviewable,
   classifyRenderState,
 } from '../../src/js/render-intent.js';
+import { getBuiltinManifest } from '../../src/js/project-manifest.js';
+
+const BUILTIN_EXPORT_2D = getBuiltinManifest().export2D;
 
 // ── Fixture schemas (mirrored from parity-harness.test.js) ──────────────────
 
@@ -90,119 +93,189 @@ describe('RENDER_STATE', () => {
   });
 });
 
-// ── resolve2DExportIntent ───────────────────────────────────────────────────
+// ── propose2DExportAdjustments ──────────────────────────────────────────────
 
-describe('resolve2DExportIntent — passthrough for non-2D formats', () => {
-  it('returns parameters unchanged for STL format', () => {
+describe('propose2DExportAdjustments — passthrough for non-2D formats', () => {
+  it('proposes nothing for STL format', () => {
     const params = { width: 10 };
-    expect(resolve2DExportIntent(params, GENERIC_2D_SCHEMA, 'stl')).toBe(params);
+    const result = propose2DExportAdjustments(params, GENERIC_2D_SCHEMA, 'stl');
+    expect(result.changes).toEqual([]);
+    expect(result.resolvedParameters).toBe(params);
   });
 
-  it('returns parameters unchanged for OBJ format', () => {
+  it('proposes nothing for OBJ format', () => {
     const params = { size: 5 };
-    expect(resolve2DExportIntent(params, UNKNOWN_PROJECT_SCHEMA, 'obj')).toBe(params);
+    const result = propose2DExportAdjustments(
+      params,
+      UNKNOWN_PROJECT_SCHEMA,
+      'obj'
+    );
+    expect(result.changes).toEqual([]);
+    expect(result.resolvedParameters).toBe(params);
   });
 });
 
-describe('resolve2DExportIntent — missing / null schema', () => {
-  it('returns parameters unchanged when schema is null', () => {
+describe('propose2DExportAdjustments — missing / null schema', () => {
+  it('proposes nothing when schema is null', () => {
     const params = { width: 10 };
-    expect(resolve2DExportIntent(params, null, 'svg')).toBe(params);
+    const result = propose2DExportAdjustments(params, null, 'svg');
+    expect(result.changes).toEqual([]);
+    expect(result.resolvedParameters).toBe(params);
   });
 
-  it('returns parameters unchanged when schema.parameters is missing', () => {
+  it('proposes nothing when schema.parameters is missing', () => {
     const params = { width: 10 };
-    expect(resolve2DExportIntent(params, {}, 'svg')).toBe(params);
+    const result = propose2DExportAdjustments(params, {}, 'svg');
+    expect(result.changes).toEqual([]);
+    expect(result.resolvedParameters).toBe(params);
   });
 });
 
-describe('resolve2DExportIntent — generic output_mode enum', () => {
-  it('selects 2d_cut for SVG format', () => {
-    const result = resolve2DExportIntent(
+describe('propose2DExportAdjustments — generic output_mode enum', () => {
+  it('proposes 2d_cut for SVG format with from/to detail', () => {
+    const result = propose2DExportAdjustments(
       { ...GENERIC_2D_PARAMS },
       GENERIC_2D_SCHEMA,
       'svg'
     );
-    expect(result.output_mode).toBe('2d_cut');
+    expect(result.resolvedParameters.output_mode).toBe('2d_cut');
+    expect(result.changes).toEqual([
+      {
+        name: 'output_mode',
+        from: '3d',
+        to: '2d_cut',
+        reason: '2D output mode for SVG',
+      },
+    ]);
   });
 
-  it('selects a 2d_ entry for DXF format', () => {
-    const result = resolve2DExportIntent(
+  it('proposes a 2d_ entry for DXF format', () => {
+    const result = propose2DExportAdjustments(
       { ...GENERIC_2D_PARAMS },
       GENERIC_2D_SCHEMA,
       'dxf'
     );
-    expect(result.output_mode).toMatch(/^2d_/);
+    expect(result.resolvedParameters.output_mode).toMatch(/^2d_/);
   });
 
   it('does not touch params without 2D enum values', () => {
-    const result = resolve2DExportIntent(
+    const result = propose2DExportAdjustments(
       { ...GENERIC_2D_PARAMS },
       GENERIC_2D_SCHEMA,
       'svg'
     );
-    expect(result.border_style).toBe('rounded');
-    expect(result.plate_width).toBe(80);
+    expect(result.resolvedParameters.border_style).toBe('rounded');
+    expect(result.resolvedParameters.plate_width).toBe(80);
+  });
+
+  it('proposes nothing when the parameter is already 2D', () => {
+    const params = { ...GENERIC_2D_PARAMS, output_mode: '2d_cut' };
+    const result = propose2DExportAdjustments(params, GENERIC_2D_SCHEMA, 'svg');
+    expect(result.changes).toEqual([]);
+    expect(result.resolvedParameters).toBe(params);
   });
 });
 
-describe('resolve2DExportIntent — keyguard-shaped parameters', () => {
-  it('selects the 2D generate entry via labeled enum', () => {
-    const params = { generate: '0', type_of_keyguard: '0', use_Laser_Cutting_best_practices: 'No' };
-    const result = resolve2DExportIntent(params, KEYGUARD_SCHEMA, 'svg');
-    expect(result.generate).toBe('1');
-  });
-
-  it('selects laser type_of_keyguard', () => {
-    const params = { generate: '0', type_of_keyguard: '0' };
-    const result = resolve2DExportIntent(params, KEYGUARD_SCHEMA, 'svg');
-    expect(result.type_of_keyguard).toBe('1');
-  });
-
-  it('selects Yes for laser-cutting best practices', () => {
-    const params = { use_Laser_Cutting_best_practices: 'No' };
-    const result = resolve2DExportIntent(
+describe('propose2DExportAdjustments — keyguard rules via builtin manifest', () => {
+  it('proposes the 2D generate entry via labeled enum (generic rule)', () => {
+    const params = {
+      generate: '0',
+      type_of_keyguard: '0',
+      use_Laser_Cutting_best_practices: 'No',
+    };
+    const result = propose2DExportAdjustments(
       params,
       KEYGUARD_SCHEMA,
-      'dxf'
+      'svg',
+      BUILTIN_EXPORT_2D
     );
-    expect(result.use_Laser_Cutting_best_practices).toBe('Yes');
+    expect(result.resolvedParameters.generate).toBe('1');
+  });
+
+  it('proposes laser type_of_keyguard (project rule)', () => {
+    const params = { generate: '0', type_of_keyguard: '0' };
+    const result = propose2DExportAdjustments(
+      params,
+      KEYGUARD_SCHEMA,
+      'svg',
+      BUILTIN_EXPORT_2D
+    );
+    expect(result.resolvedParameters.type_of_keyguard).toBe('1');
+    expect(
+      result.changes.find((c) => c.name === 'type_of_keyguard')?.reason
+    ).toBe('project 2D-export rule');
+  });
+
+  it('proposes Yes for laser-cutting best practices (project rule)', () => {
+    const params = { use_Laser_Cutting_best_practices: 'No' };
+    const result = propose2DExportAdjustments(
+      params,
+      KEYGUARD_SCHEMA,
+      'dxf',
+      BUILTIN_EXPORT_2D
+    );
+    expect(result.resolvedParameters.use_Laser_Cutting_best_practices).toBe(
+      'Yes'
+    );
+  });
+
+  it('does NOT apply keyguard rules without the manifest (no hardcoding)', () => {
+    const params = { generate: '0', type_of_keyguard: '0' };
+    const result = propose2DExportAdjustments(params, KEYGUARD_SCHEMA, 'svg');
+    // generate still flips via the generic 2D-enum rule; type_of_keyguard
+    // has no 2D keyword in its values so only the project rule targets it.
+    expect(result.resolvedParameters.type_of_keyguard).toBe('0');
   });
 
   it('handles DXF format for labeled generate enum', () => {
     const params = { generate: '0' };
-    const result = resolve2DExportIntent(params, KEYGUARD_SCHEMA, 'dxf');
-    expect(result.generate).toBe('1');
+    const result = propose2DExportAdjustments(
+      params,
+      KEYGUARD_SCHEMA,
+      'dxf',
+      BUILTIN_EXPORT_2D
+    );
+    expect(result.resolvedParameters.generate).toBe('1');
+  });
+
+  it('ignores invalid paramMatching patterns without throwing', () => {
+    const params = { use_Laser_Cutting_best_practices: 'No' };
+    const result = propose2DExportAdjustments(params, KEYGUARD_SCHEMA, 'svg', {
+      rules: [{ paramMatching: '(unclosed', toValue: 'yes' }],
+    });
+    expect(result.resolvedParameters.use_Laser_Cutting_best_practices).toBe(
+      'No'
+    );
   });
 });
 
-describe('resolve2DExportIntent — intrinsic 2D schema', () => {
-  it('passes through params unchanged (no mode-selector enum)', () => {
-    const result = resolve2DExportIntent(
+describe('propose2DExportAdjustments — intrinsic 2D schema', () => {
+  it('proposes nothing (no mode-selector enum)', () => {
+    const result = propose2DExportAdjustments(
       { ...INTRINSIC_2D_PARAMS },
       INTRINSIC_2D_SCHEMA,
       'svg'
     );
-    expect(result).toEqual(INTRINSIC_2D_PARAMS);
+    expect(result.changes).toEqual([]);
   });
 });
 
-describe('resolve2DExportIntent — unknown project (no 2D indicators)', () => {
-  it('returns params unchanged when no enum has 2D keywords', () => {
-    const result = resolve2DExportIntent(
+describe('propose2DExportAdjustments — unknown project (no 2D indicators)', () => {
+  it('proposes nothing when no enum has 2D keywords', () => {
+    const result = propose2DExportAdjustments(
       { ...UNKNOWN_PROJECT_PARAMS },
       UNKNOWN_PROJECT_SCHEMA,
       'svg'
     );
-    expect(result).toEqual(UNKNOWN_PROJECT_PARAMS);
+    expect(result.changes).toEqual([]);
   });
 });
 
-describe('resolve2DExportIntent — does not mutate input', () => {
-  it('returns a new object', () => {
+describe('propose2DExportAdjustments — does not mutate input', () => {
+  it('returns a new resolvedParameters object when changes exist', () => {
     const params = { ...GENERIC_2D_PARAMS };
-    const result = resolve2DExportIntent(params, GENERIC_2D_SCHEMA, 'svg');
-    expect(result).not.toBe(params);
+    const result = propose2DExportAdjustments(params, GENERIC_2D_SCHEMA, 'svg');
+    expect(result.resolvedParameters).not.toBe(params);
     expect(params.output_mode).toBe('3d');
   });
 });

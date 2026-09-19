@@ -60,7 +60,7 @@ is stable, in active use, and ready to welcome co-maintainers.
 ### How to Get Involved
 
 1. **Fork the repo** and pick any open issue tagged `help wanted` or `good first issue`
-2. Read [`MAINTAINERS.md`](../../MAINTAINERS.md) for commit conventions and PR expectations
+2. Read [`docs/project/MAINTAINERS.md`](../../docs/project/MAINTAINERS.md) for commit conventions and PR expectations
 3. Open a PR — even small fixes are welcome
 4. Comment here or on the issue if you'd like to pair on a task
 

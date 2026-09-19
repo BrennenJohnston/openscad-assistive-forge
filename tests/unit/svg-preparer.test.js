@@ -21,16 +21,36 @@ import {
   FillRule,
 } from 'path-bool';
 import {
+  buildNestingTree,
+  suggestLayers,
+  layerLimit,
+  polygonFromPathData,
+  boundsOf,
+  estimateRingPoints,
+} from '../../src/js/svg-nesting.js';
+import {
   parseSvgElements,
   classifyElements,
   flattenToCompoundPath,
   prepareSvg,
   needsPreparation,
   analyzeSvg,
+  countTracedShapes,
   strokeToFill,
   applyPerPathOffsets,
   getEffectivePaint,
+  measureSvgAspect,
+  FLATTEN_BUDGET_MS,
+  FLATTEN_CALIBRATION_FLOOR_MS,
+  SHAPE_LIST_CAP,
+  isOverListCap,
+  predictFlattenMs,
+  flattenCostFrom,
+  flattenLayers,
+  LAYER_EMIT_CAP,
+  wallRoleOverrides,
 } from '../../src/js/svg-preparer.js';
+import { separateColours } from '../../src/js/colour-separation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -371,7 +391,8 @@ describe('parseSvgElements', () => {
   });
 
   it('returns empty array for SVG with no shape elements', () => {
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>hello</text></svg>';
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><text>hello</text></svg>';
     expect(parseSvgElements(svg)).toEqual([]);
   });
 
@@ -1430,18 +1451,14 @@ describe('analyzeSvg', () => {
 
     it('notes the stroked smile path was converted', () => {
       const result = analyzeSvg(SMILEY_SVG);
-      const smile = result.elements.find(
-        (el) => el.strokeConverted
-      );
+      const smile = result.elements.find((el) => el.strokeConverted);
       expect(smile.warnings.length).toBeGreaterThan(0);
       expect(smile.warnings[0]).toContain('converted');
     });
 
     it('has a global info about converted stroked paths', () => {
       const result = analyzeSvg(SMILEY_SVG);
-      expect(result.warnings.some((w) => w.includes('converted'))).toBe(
-        true
-      );
+      expect(result.warnings.some((w) => w.includes('converted'))).toBe(true);
     });
 
     it('has no unsupported features', () => {
@@ -1691,9 +1708,9 @@ describe('analyzeSvg', () => {
       const result = analyzeSvg(svg);
       expect(result.confidence).toBe(1.0);
       expect(result.recommendation).toBe('pass_through');
-      expect(
-        result.warnings.some((w) => w.includes('similar luminance'))
-      ).toBe(false);
+      expect(result.warnings.some((w) => w.includes('similar luminance'))).toBe(
+        false
+      );
     });
 
     it('reduces confidence for similar luminance when roles are mixed', () => {
@@ -1705,9 +1722,9 @@ describe('analyzeSvg', () => {
         '</svg>';
       const result = analyzeSvg(svg);
       expect(result.confidence).toBeLessThan(1.0);
-      expect(
-        result.warnings.some((w) => w.includes('similar luminance'))
-      ).toBe(true);
+      expect(result.warnings.some((w) => w.includes('similar luminance'))).toBe(
+        true
+      );
     });
 
     it('does not penalize single-element SVGs for luminance', () => {
@@ -1726,9 +1743,9 @@ describe('analyzeSvg', () => {
         '<circle cx="50" cy="20" r="10" fill="white"/>' +
         '</svg>';
       const result = analyzeSvg(svg);
-      expect(
-        result.warnings.some((w) => w.includes('similar luminance'))
-      ).toBe(false);
+      expect(result.warnings.some((w) => w.includes('similar luminance'))).toBe(
+        false
+      );
     });
   });
 
@@ -2160,5 +2177,743 @@ describe('flattenToCompoundPath hardening', () => {
     const dMatch = result.match(/d="([^"]+)"/);
     const mCount = (dMatch[1].match(/M/g) || []).length;
     expect(mCount).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('measureSvgAspect', () => {
+  it('measures a single rect (width / height)', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+      '<rect x="10" y="20" width="200" height="100" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(2, 4);
+  });
+
+  it('measures a tall path as below 1', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+      '<path d="M0,0 L50,0 L50,200 L0,200 Z" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(0.25, 4);
+  });
+
+  it('unites the boxes of separate shapes', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect x="0" y="0" width="10" height="10" fill="black"/>' +
+      '<rect x="40" y="0" width="10" height="10" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(5, 4);
+  });
+
+  it('bakes transforms before measuring', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+      '<rect x="0" y="0" width="100" height="100" transform="scale(2,1)" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(2, 4);
+  });
+
+  it('ignores shapes inside defs', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<defs><rect x="0" y="0" width="100" height="1" fill="black"/></defs>' +
+      '<rect x="0" y="0" width="10" height="20" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(0.5, 4);
+  });
+
+  it('returns null when there is nothing to measure', () => {
+    expect(
+      measureSvgAspect('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    ).toBeNull();
+    expect(measureSvgAspect('not svg at all')).toBeNull();
+  });
+
+  it('measures a real library file to a finite positive ratio', () => {
+    const aspect = measureSvgAspect(HEART_SVG);
+    expect(aspect).toBeGreaterThan(0.2);
+    expect(aspect).toBeLessThan(5);
+  });
+});
+
+/**
+ * DP-37 P3: the flatten budget signed at DP-Q33 (2026-09-13), which retires
+ * DP-Q9's 50 and 200 counts and keeps its 1,000 as a LIST cap.
+ *
+ * The values are pinned as VALUES, not as "whatever the constant says",
+ * because they are an owner signature against a measured bench and drifting
+ * them silently is the whole risk. What changed is the unit: a count could
+ * not carry this decision, because MEASURED with the ring engine the same
+ * 200 shapes cost 77 ms as rectangles and 593 ms as curves.
+ */
+describe('the flatten budget (DP-Q33)', () => {
+  /** N filled rects, every 5th one a smaller white one nested in the last. */
+  const syntheticSvg = (n) => {
+    const parts = [];
+    for (let i = 0; i < n; i++) {
+      const x = (i % 20) * 24 + 2;
+      const y = Math.floor(i / 20) * 24 + 2;
+      parts.push(
+        i % 5 === 4
+          ? `<rect x="${x - 18}" y="${y + 6}" width="8" height="8" fill="#ffffff"/>`
+          : `<rect x="${x}" y="${y}" width="20" height="20" fill="#111111"/>`
+      );
+    }
+    const h = Math.ceil(n / 20) * 24 + 4;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 484 ${h}">${parts.join('')}</svg>`;
+  };
+
+  it('carries the signed values', () => {
+    expect(FLATTEN_BUDGET_MS).toBe(300);
+    expect(SHAPE_LIST_CAP).toBe(1000);
+  });
+
+  it.each([
+    [1, false],
+    [1000, false],
+    [1001, true],
+    [831, false],
+  ])('isOverListCap(%i) is %s', (count, expected) => {
+    expect(isOverListCap(count)).toBe(expected);
+  });
+
+  /**
+   * The predictor against the bench that produced it.
+   *
+   * MEASURED 2026-09-14, desktop Node, median of three, against the ring
+   * engine that ships. Each row is (shapes, ring points, real flatten), and
+   * what is checked is that the prediction lands within the spread the
+   * constant was chosen from, not that it hits a number, which it cannot:
+   * the cost per (shape x point) spans five-fold between classes of drawing,
+   * which is exactly why DP-Q33 signed a calibration as well.
+   */
+  it.each([
+    ['100 rects', 100, 400, 23.8],
+    ['800 rects', 800, 3200, 961.9],
+    ['50 curvy', 50, 3200, 44.9],
+    ['400 curvy', 400, 25600, 2551.1],
+    ['100 lobed', 100, 19200, 708.9],
+    ['400 lobed', 400, 76800, 13030.9],
+    ['100 complex', 100, 64000, 6960.4],
+  ])(
+    'predicts %s within the measured spread',
+    (_label, shapes, points, realMs) => {
+      const predicted = predictFlattenMs(shapes, points);
+      // Never UNDER: the default constant is the high end on purpose, so a
+      // drawing is never let through the gate having been called cheaper
+      // than it turns out to be.
+      expect(predicted).toBeGreaterThanOrEqual(realMs);
+      // And never wild: six and a half times is the whole spread of the bench.
+      expect(predicted).toBeLessThan(realMs * 6.5);
+    }
+  );
+
+  it('the prepped icons predict close to what they really cost', () => {
+    // Read in place from the owner's own folder when the bench ran; only the
+    // three numbers came back. activities: 9 shapes, 2,800 ring points,
+    // 36.7 ms. Bathroom: 7 shapes, 863 points, 7.4 ms. Real artwork sits at
+    // the high end of the constant, which is why the default is set there.
+    expect(predictFlattenMs(9, 2800)).toBeCloseTo(37.8, 0);
+    expect(predictFlattenMs(7, 863)).toBeCloseTo(9.1, 0);
+  });
+
+  it('a drawing with nothing in it predicts nothing, and never NaN', () => {
+    expect(predictFlattenMs(0, 0)).toBe(0);
+    expect(predictFlattenMs(10, 0)).toBe(0);
+    expect(predictFlattenMs(0, 500)).toBe(0);
+    expect(predictFlattenMs(NaN, NaN)).toBe(0);
+  });
+
+  it('calibration replaces the default with what a real flatten proved', () => {
+    // 400 curvy shapes, 25,600 points, 2,551.1 ms measured -> 2.49e-4, which
+    // is a sixth of the default. The next drawing of the same kind is then
+    // predicted on the machine it is actually running on.
+    const cost = flattenCostFrom(400, 25600, 2551.1);
+    expect(cost).toBeCloseTo(2.49e-4, 6);
+    expect(predictFlattenMs(400, 25600, cost)).toBeCloseTo(2551.1, 0);
+  });
+
+  it('refuses to calibrate on a flatten too small to have measured anything', () => {
+    // Three squares combine in a fifth of a millisecond. That number is the
+    // clock, not the drawing, and learning from it would teach the app that
+    // everything is free.
+    expect(flattenCostFrom(3, 12, 0.2)).toBeNull();
+    expect(
+      flattenCostFrom(3, 12, FLATTEN_CALIBRATION_FLOOR_MS - 0.01)
+    ).toBeNull();
+    expect(flattenCostFrom(3, 12, FLATTEN_CALIBRATION_FLOOR_MS)).not.toBeNull();
+    expect(flattenCostFrom(0, 0, 500)).toBeNull();
+  });
+
+  it('ring points are estimated from the d string, and match the real rings', () => {
+    // The cost bench's own row: 50 synthetic rects are 200 ring points, 4 each.
+    expect(estimateRingPoints('M2 2 H38 V38 H2 Z')).toBe(4);
+    // One command letter can carry many coordinate groups. Counting letters
+    // undercounted the prepped icons by 40 to 46 per cent; counting groups
+    // brought the same two to 0.1 and 0.8 per cent.
+    expect(estimateRingPoints('M0 0c1 2 3 4 5 6 7 8 9 10 11 12')).toBe(33);
+    expect(estimateRingPoints('')).toBe(0);
+    expect(estimateRingPoints(null)).toBe(0);
+  });
+
+  it('analyzeSvg reports what it will cost to combine', () => {
+    const result = analyzeSvg(syntheticSvg(100));
+    expect(result.elementCount).toBe(100);
+    expect(result.ringPoints).toBe(400);
+    expect(result.predictedFlattenMs).toBeCloseTo(
+      predictFlattenMs(100, 400),
+      6
+    );
+  });
+
+  it('RETURNS THE TABLE right up to the cap, instead of an empty refusal', () => {
+    // The old behaviour returned elements: [] for anything over 50, which is
+    // the exact inverse of being able to delete elements down to usable.
+    for (const count of [51, 200, 201, 600]) {
+      const result = analyzeSvg(syntheticSvg(count));
+      expect(result.elements.length, `${count} elements`).toBe(count);
+      expect(result.status, `${count} elements`).not.toBe('too_complex');
+    }
+  });
+
+  it('refuses above the cap, naming the real count and the cap', () => {
+    const result = analyzeSvg(syntheticSvg(1001));
+    expect(result.status).toBe('too_complex');
+    expect(result.recommendation).toBe('reject');
+    expect(result.elements).toEqual([]);
+    expect(result.elementCount).toBe(1001);
+    expect(result.warnings[0]).toContain('1001');
+    expect(result.warnings[0]).toContain('1000');
+  });
+
+  it('never auto-prepares over the budget, because that would start the boolean', () => {
+    // No drawing whose combine is predicted to outrun the budget may set it
+    // running without a deliberate act. These rects are 4 ring points each,
+    // so the prediction is 6e-3 x count squared and the budget falls between
+    // 223 and 224 of them.
+    for (const count of [400, 600]) {
+      const result = analyzeSvg(syntheticSvg(count));
+      expect(result.predictedFlattenMs, count + ' elements').toBeGreaterThan(
+        FLATTEN_BUDGET_MS
+      );
+    }
+    for (const count of [400, 600]) {
+      const result = analyzeSvg(syntheticSvg(count));
+      expect(result.recommendation, `${count} elements`).not.toBe(
+        'auto_prepare'
+      );
+    }
+  });
+
+  it('the counts DP-Q9 refused are cheap, which is why they retired', () => {
+    // 51 of these rects were refused the automatic combine for being 51. They
+    // are 204 ring points between them and the combine is predicted at under
+    // 16 ms - MEASURED, 100 rects of this kind flatten in 23.8 ms. A count
+    // was answering the question in the wrong unit, and this is the drawing
+    // that shows it.
+    const small = analyzeSvg(syntheticSvg(51));
+    expect(small.predictedFlattenMs).toBeLessThan(FLATTEN_BUDGET_MS);
+    const was200 = analyzeSvg(syntheticSvg(200));
+    expect(was200.predictedFlattenMs).toBeLessThan(FLATTEN_BUDGET_MS);
+  });
+
+  it('leaves pass_through alone whatever the prediction: it costs no boolean at all', () => {
+    // All-foreground shapes need no flattening - OpenSCAD unions them - so
+    // sending them to the editor for their size would be a made-up cost.
+    const manyDark = Array.from(
+      { length: 300 },
+      (_, i) =>
+        `<rect x="${(i % 20) * 24}" y="${Math.floor(i / 20) * 24}" width="20" height="20" fill="#111111"/>`
+    ).join('');
+    const result = analyzeSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 484 400">${manyDark}</svg>`
+    );
+    expect(result.elementCount).toBe(300);
+    expect(result.predictedFlattenMs).toBeGreaterThan(FLATTEN_BUDGET_MS);
+    expect(result.recommendation).toBe('pass_through');
+  });
+});
+
+/**
+ * D-118: paint declared in a <style> block by class.
+ *
+ * Every CAD and Illustrator export writes paint this way. Before this fix the
+ * parser saw no fill at all, assumed the SVG default black, and turned a
+ * stroke-only line drawing into a page of solid shapes - which is why the
+ * owner's own artwork came out of the stencil as one hole.
+ */
+describe('paint declared in a <style> block (D-118)', () => {
+  const strokeOnly = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs><style>
+      .cls-1, .cls-2 { fill: none; stroke: #000; stroke-width: .5px; }
+    </style></defs>
+    <circle class="cls-2" cx="50" cy="50" r="40"/>
+    <path class="cls-1" d="M10,50 L90,50"/>
+  </svg>`;
+
+  it('reads fill and stroke from a class rule', () => {
+    const els = parseSvgElements(strokeOnly);
+    expect(els.length).toBe(2);
+    for (const el of els) {
+      expect(el.fill).toBe('none');
+      expect(el.stroke).toBe('#000');
+    }
+  });
+
+  it('no longer assumes black fill for a stroke-only drawing', () => {
+    // The defect in one assertion: these used to classify as foreground with
+    // zero stroke conversions, i.e. as solid black shapes.
+    const classified = classifyElements(parseSvgElements(strokeOnly));
+    expect(classified.every((c) => c.strokeConverted)).toBe(true);
+  });
+
+  it('the style ATTRIBUTE still outranks a class rule', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      .a { fill: #ff0000 }
+    </style></defs><rect class="a" style="fill:#00ff00" width="10" height="10"/></svg>`;
+    const el = parseSvgElements(svg)[0];
+    expect(el.fill).toBe('#00ff00');
+  });
+
+  it('a class rule outranks a presentation attribute', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      .a { fill: #ff0000 }
+    </style></defs><rect class="a" fill="#00ff00" width="10" height="10"/></svg>`;
+    const el = parseSvgElements(svg)[0];
+    expect(el.fill).toBe('#ff0000');
+  });
+
+  it('an id rule outranks a class rule, and a class rule a type rule', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      rect { fill: #0000ff }
+      .a { fill: #00ff00 }
+      #mine { fill: #ff0000 }
+    </style></defs><rect id="mine" class="a" width="10" height="10"/></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#ff0000');
+  });
+
+  it('a commented-out rule is not read as live', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      /* .a { fill: none } */
+      .a { fill: #123456 }
+    </style></defs><rect class="a" width="10" height="10"/></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#123456');
+  });
+
+  it('skips selectors it does not fully understand rather than guessing', () => {
+    // A wrong answer here silently changes geometry, so a descendant
+    // combinator is left alone and the presentation attribute stands.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      g .a { fill: #ff0000 }
+    </style></defs><g><rect class="a" fill="#00ff00" width="10" height="10"/></g></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#00ff00');
+  });
+
+  it('a class rule on an ancestor group is inherited', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      .wrap { fill: #ff0000 }
+    </style></defs><g class="wrap"><rect width="10" height="10"/></g></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#ff0000');
+  });
+
+  it('leaves an SVG with no <style> block exactly as it was', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#abcdef" width="10" height="10"/></svg>';
+    expect(parseSvgElements(svg)[0].fill).toBe('#abcdef');
+  });
+});
+
+// ── DP-7 P3: per-layer emission ──────────────────────────────────────────────
+
+describe('flattenLayers - the stacked-mask law', () => {
+  /** The `d` string out of an emitted layer SVG. */
+  const dOf = (svg) => svg.match(/ d="([^"]*)"/)[1];
+
+  /** Bounds of an emitted layer, in user units. */
+  function boundsOfLayer(svg) {
+    const { points } = polygonFromPathData(dOf(svg));
+    return boundsOf(points);
+  }
+
+  /** The DP-0 probe's own three squares, as one design. */
+  const PROBE_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="40mm" ' +
+    'viewBox="0 0 40 40">' +
+    '<path d="M2 2 H38 V38 H2 Z" fill="#000"/>' +
+    '<path d="M10 10 H30 V30 H10 Z" fill="#000"/>' +
+    '<path d="M16 16 H24 V24 H16 Z" fill="#000"/></svg>';
+  const PROBE_META = { viewBox: '0 0 40 40', width: '40mm', height: '40mm' };
+
+  function emitProbe() {
+    const els = classifyElements(parseSvgElements(PROBE_SVG));
+    const tree = buildNestingTree(els);
+    return flattenLayers(
+      els,
+      suggestLayers(tree),
+      layerLimit(tree),
+      PROBE_META
+    );
+  }
+
+  it('reproduces the DP-0 probe, layer for layer', () => {
+    // The probe stack was built and manifold-checked before this code existed.
+    // Its layer files hold one square each; the stacked-mask law unions each
+    // layer with everything deeper, and because the squares are NESTED that
+    // union collapses back to the enclosing square. Same geometry, arrived at
+    // by the law rather than by hand.
+    const out = emitProbe();
+    expect(out).toHaveLength(3);
+    expect(boundsOfLayer(out[0])).toEqual({
+      minX: 2,
+      minY: 2,
+      maxX: 38,
+      maxY: 38,
+    });
+    expect(boundsOfLayer(out[1])).toEqual({
+      minX: 10,
+      minY: 10,
+      maxX: 30,
+      maxY: 30,
+    });
+    expect(boundsOfLayer(out[2])).toEqual({
+      minX: 16,
+      minY: 16,
+      maxX: 24,
+      maxY: 24,
+    });
+  });
+
+  it('puts every layer on ONE normalized canvas, sized from layer 1', () => {
+    // Three imports have to land in the same place at their true relative
+    // sizes. OpenSCAD's resize() fits the CONTENT box, so fitting each layer
+    // separately would scale the innermost square up to the outermost's size.
+    // Instead every layer carries the SAME transform, computed from layer 1.
+    const out = emitProbe();
+    const transforms = out.map((s) => /<g transform="([^"]*)"/.exec(s)[1]);
+    expect(new Set(transforms).size).toBe(1);
+
+    for (const svg of out) {
+      // The unit is written: a width with no unit is PIXELS, converted at
+      // 72 dpi, and a 100-wide document came back 35.28 mm.
+      expect(svg).toContain('width="100mm"');
+      expect(svg).toContain('viewBox="0 0 100 100"');
+      expect(svg).toContain('fill-rule="evenodd"');
+      // minY is zero on purpose: OpenSCAD maps y as (height - minY) - y, so a
+      // negative minY would shift the import by twice itself.
+      expect(svg).toMatch(/viewBox="0 0 /);
+    }
+  });
+
+  it('normalizes layer 1 to exactly the canvas span', () => {
+    const svg = emitProbe()[0];
+    const m = /translate\(([-\d.]+),([-\d.]+)\) scale\(([\d.]+)\)/.exec(svg);
+    expect(m).toBeTruthy();
+    const scale = parseFloat(m[3]);
+    // The probe's outer square is 36 units wide and the canvas is 100.
+    expect(scale).toBeCloseTo(100 / 36, 6);
+    // translate puts the design's own minimum corner on the origin.
+    expect(parseFloat(m[1])).toBeCloseTo(-scale * 2, 6);
+  });
+
+  it('a non-square design gets a canvas of its own aspect', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50">' +
+      '<path d="M0 0 H80 V20 H0 Z" fill="#000"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    const out = flattenLayers(els, [1], 1, { viewBox: '0 0 100 50' });
+    // 80 wide by 20 tall becomes 100 by 25.
+    expect(out[0]).toContain('viewBox="0 0 100 25"');
+    expect(out[0]).toContain('height="25mm"');
+  });
+
+  it('a single-shape layer passes through byte for byte', () => {
+    // Nothing to union, so nothing is rewritten - the innermost layer is the
+    // probe's own d string, character for character.
+    expect(dOf(emitProbe()[2])).toBe('M16 16 H24 V24 H16 Z');
+  });
+
+  it('STACKS: a shallower layer carries the deeper ones too', () => {
+    // The nested fixture cannot show this, because a union of nested squares
+    // collapses to the outer one either way. Two shapes side by side can:
+    // layer 1 must span BOTH, layer 2 only the second. (The assignment breaks
+    // the containment law on purpose - the emitter's job is to emit, and the
+    // law is enforced in the editor where a person can act on it.)
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20">' +
+      '<path d="M0 0 H10 V10 H0 Z" fill="#000"/>' +
+      '<path d="M50 0 H60 V10 H50 Z" fill="#000"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    const out = flattenLayers(els, [1, 2], 2, { viewBox: '0 0 100 20' });
+
+    expect(boundsOfLayer(out[0]).maxX).toBe(60);
+    expect(boundsOfLayer(out[0]).minX).toBe(0);
+    expect(boundsOfLayer(out[1]).minX).toBe(50);
+    expect(boundsOfLayer(out[1]).maxX).toBe(60);
+  });
+
+  it('emits nothing for a layer no shape reached', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">' +
+      '<path d="M0 0 H10 V10 H0 Z" fill="#000"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    const out = flattenLayers(els, [1], 3, { viewBox: '0 0 20 20' });
+    expect(out).toHaveLength(3);
+    expect(out[0]).toBeTruthy();
+    expect(out[1]).toBeNull();
+    expect(out[2]).toBeNull();
+  });
+
+  it('never writes a fourth file', () => {
+    const els = classifyElements(parseSvgElements(PROBE_SVG));
+    expect(flattenLayers(els, [1, 2, 3], 9, PROBE_META)).toHaveLength(
+      LAYER_EMIT_CAP
+    );
+    expect(LAYER_EMIT_CAP).toBe(3);
+  });
+
+  it('keeps a hole cut on every layer it appears in', () => {
+    // A counter that closed over as the stack rose would fill in the middle
+    // of a letter at the second pass.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<path d="M0 0 H40 V40 H0 Z" fill="#000"/>' +
+      '<path d="M10 10 H30 V30 H10 Z" fill="#fff"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    expect(els.map((e) => e.role)).toEqual(['foreground', 'hole']);
+    const out = flattenLayers(els, [1, 1], 2, { viewBox: '0 0 40 40' });
+    // Both subpaths survive into the layer: the outer region and its hole.
+    expect(dOf(out[0]).match(/M/gi).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('survives nonsense arguments rather than throwing at the caller', () => {
+    expect(flattenLayers(null, [1], 3)).toEqual([]);
+    expect(flattenLayers([], null, 3)).toEqual([]);
+    expect(flattenLayers([], [], 0)).toEqual([]);
+  });
+
+  it('treats a missing assignment as layer 1', () => {
+    const els = classifyElements(parseSvgElements(PROBE_SVG));
+    const out = flattenLayers(els, [], 2, PROBE_META);
+    // Everything defaulted to layer 1, so layer 2 has nothing to build.
+    expect(out[0]).toBeTruthy();
+    expect(out[1]).toBeNull();
+  });
+});
+
+describe('countTracedShapes (DP-43)', () => {
+  // ★ The number a person hears after a conversion has to be the number the
+  // editor lists beside it. Counting <path> elements did not: imagetracerjs
+  // folds a shape's holes into that shape's element, and Potrace returns the
+  // whole drawing as one. Both engines' output is checked here, against
+  // analyzeSvg - the thing the editor's own table is built from.
+  const analysed = (svg) => (analyzeSvg(svg).elements || []).length;
+
+  it('agrees with the analyser on a drawing with holes in one element', () => {
+    // imagetracerjs's shape: one element, its hole folded in as a subpath.
+    const svg =
+      '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">' +
+      '<path fill="rgb(0,0,0)" d="M0 0L8 0L8 8L0 8ZM2 2L6 2L6 6L2 6Z"/>' +
+      '</svg>';
+    expect(countTracedShapes(svg)).toBe(2);
+    expect(countTracedShapes(svg)).toBe(analysed(svg));
+  });
+
+  it('agrees on a drawing that is all one compound path', () => {
+    // Potrace's shape: every closed shape in a single element, even-odd.
+    const svg =
+      '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">' +
+      '<path fill="rgb(0,0,0)" fill-rule="evenodd" ' +
+      'd="M0 0L4 0L4 4L0 4ZM1 1L3 1L3 3L1 3ZM6 6L9 6L9 9L6 9Z"/>' +
+      '</svg>';
+    expect(countTracedShapes(svg)).toBe(3);
+    expect(countTracedShapes(svg)).toBe(analysed(svg));
+  });
+
+  it('agrees on separate elements, the way it always did', () => {
+    const svg =
+      '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">' +
+      '<path fill="rgb(0,0,0)" d="M0 0L4 0L4 4Z"/>' +
+      '<path fill="rgb(0,0,0)" d="M6 6L9 6L9 9Z"/>' +
+      '</svg>';
+    expect(countTracedShapes(svg)).toBe(2);
+    expect(countTracedShapes(svg)).toBe(analysed(svg));
+  });
+
+  it('counts relative moves too, because a tracer may write either', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<path d="M0 0L4 0Zm6 6l3 0Z"/></svg>';
+    expect(countTracedShapes(svg)).toBe(2);
+  });
+
+  it('says nothing about a picture with nothing in it', () => {
+    expect(countTracedShapes('<svg xmlns="http://www.w3.org/2000/svg"/>')).toBe(0);
+    expect(countTracedShapes('')).toBe(0);
+    expect(countTracedShapes(null)).toBe(0);
+  });
+
+  it('does not mistake an M elsewhere in the document for a shape', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<desc>Made by M. Someone</desc>' +
+      '<path id="MMM" fill="#000" d="M0 0L1 0Z"/></svg>';
+    expect(countTracedShapes(svg)).toBe(1);
+  });
+});
+
+
+// ── D-137: what the Colours mode's wall becomes on a charm (DP-48 P1) ────────
+//
+// The owner's walk: a white logo on a navy ground came back as a black plate
+// with the logo cut out of it. The separation had marked the navy
+// data-background="true" and nothing read it; luminance alone decided, so the
+// dark wall was "Raised" and the light lettering was "Hole".
+//
+// The rule is signed (DP-Q53): the wall is left out, a patch of wall enclosed
+// by artwork is a hole, and every other color is raised.
+
+/** A drawing shaped exactly as `separateColours` writes one. */
+function separationSvg({ wallColor = '#4b2e83', inkColor = '#ffffff' } = {}) {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
+    // The wall: the whole canvas, and a counter inside the ring below.
+    `<path fill="${wallColor}" fill-rule="evenodd" data-colour="${wallColor}" ` +
+    'data-colour-name="Navy blue" data-background="true" ' +
+    'd="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+    `<path fill="${wallColor}" fill-rule="evenodd" data-colour="${wallColor}" ` +
+    'data-colour-name="Navy blue" data-background="true" ' +
+    'd="M40 40 L60 40 L60 60 L40 60 Z"/>' +
+    // The artwork: a light ring around that counter.
+    `<path fill="${inkColor}" fill-rule="evenodd" data-colour="${inkColor}" ` +
+    'data-colour-name="White" d="M30 30 L70 30 L70 70 L30 70 Z"/>' +
+    '</svg>'
+  );
+}
+
+/** A drawing shaped as the nine icons separate: ONE color, and it is "the wall". */
+function oneColourSeparationSvg() {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
+    '<path fill="#000000" fill-rule="evenodd" data-colour="#000000" ' +
+    'data-colour-name="Black" data-background="true" d="M10 10 L50 10 L50 50 L10 50 Z"/>' +
+    '<path fill="#000000" fill-rule="evenodd" data-colour="#000000" ' +
+    'data-colour-name="Black" data-background="true" d="M60 60 L90 60 L90 90 L60 90 Z"/>' +
+    '</svg>'
+  );
+}
+
+describe('the wall on a charm (D-137, DP-Q53)', () => {
+  it('leaves the wall out, cuts the counter, raises the artwork', () => {
+    const analysis = analyzeSvg(separationSvg());
+    const roles = analysis.elements.map((el) => el.autoRole);
+    // The canvas-sized wall path, the wall patch inside the ring, the ring.
+    expect(roles).toEqual(['ignore', 'hole', 'foreground']);
+  });
+
+  it('raises light artwork that luminance alone would have cut', () => {
+    // The whole defect in one assertion: white on navy. Before the rule, the
+    // white ring was a hole (luminance 255) and the navy wall was raised.
+    const analysis = analyzeSvg(separationSvg());
+    const ring = analysis.elements[2];
+    expect(ring.fill.toLowerCase()).toBe('#ffffff');
+    expect(ring.autoRole).toBe('foreground');
+  });
+
+  it('★ does NOTHING when the only color IS the wall (the nine icons)', () => {
+    // DP-48 P0, measured on all nine: a one-color drawing has the ARTWORK
+    // flagged as the background, because pickBackground returns index 0 when
+    // nothing polls better. A rule that fired here would empty them.
+    const analysis = analyzeSvg(oneColourSeparationSvg());
+    expect(analysis.elements.map((el) => el.autoRole)).toEqual([
+      'foreground',
+      'foreground',
+    ]);
+    expect(wallRoleOverrides(parseSvgElements(oneColourSeparationSvg()))).toEqual(
+      {}
+    );
+  });
+
+  it('★ keeps a wall path whole: its inner rings are ITS holes, not shapes', () => {
+    // The bug this guard exists for, found by LOOKING at the render: a traced
+    // region is one path whose inner rings are its holes, and the navy wall's
+    // inner rings ARE the letters. Deciding ring by ring made those letter
+    // rings "Hole", and the lettering came out drawn in outline. A path's
+    // outermost ring says where the path sits and every ring of it follows.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
+      // One wall path: the canvas, with a letter-shaped ring cut out of it.
+      '<path fill="#4b2e83" fill-rule="evenodd" data-colour="#4b2e83" ' +
+      'data-colour-name="Navy blue" data-background="true" ' +
+      'd="M0 0 L100 0 L100 100 L0 100 Z M20 20 L80 20 L80 80 L20 80 Z"/>' +
+      // The artwork that stands in that hole.
+      '<path fill="#ffffff" fill-rule="evenodd" data-colour="#ffffff" ' +
+      'data-colour-name="White" d="M20 20 L80 20 L80 80 L20 80 Z"/>' +
+      '</svg>';
+    const analysis = analyzeSvg(svg);
+    // D-159 went one step further: a traced region is ONE row, its outer
+    // ring, so the letter-shaped hole in the wall is not a row at all. Two
+    // rows: the canvas and the letter.
+    expect(analysis.elements).toHaveLength(2);
+    const roles = analysis.elements.map((el) => el.autoRole);
+    expect(roles[0]).toBe('ignore');
+    expect(roles[1]).toBe('foreground');
+    expect(
+      (analysis.elements[0].pathData.match(/M/g) || []).length,
+      'a hole in the wall must not become a shape'
+    ).toBe(1);
+  });
+
+  it('leaves an ordinary drawing exactly as it was', () => {
+    const plain =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path fill="#000" d="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+      '<path fill="#fff" d="M40 40 L60 40 L60 60 L40 60 Z"/></svg>';
+    expect(wallRoleOverrides(parseSvgElements(plain))).toEqual({});
+    const analysis = analyzeSvg(plain);
+    // Luminance still decides: the black square is raised, the white one is
+    // a hole. No drawing without the separation's attributes changes at all.
+    expect(analysis.elements.map((el) => el.autoRole)).toEqual([
+      'foreground',
+      'hole',
+    ]);
+  });
+
+  it('★ runs on what separateColours actually writes, not on a hand-made copy', () => {
+    // The contract between the two modules, checked end to end: a light mark
+    // on a dark ground goes in as pixels and comes back as roles.
+    const w = 60;
+    const h = 60;
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const inMark = x >= 15 && x < 45 && y >= 15 && y < 45;
+        const inCounter = x >= 25 && x < 35 && y >= 25 && y < 35;
+        const light = inMark && !inCounter;
+        const o = (y * w + x) * 4;
+        data[o] = light ? 250 : 40;
+        data[o + 1] = light ? 250 : 40;
+        data[o + 2] = light ? 250 : 130;
+        data[o + 3] = 255;
+      }
+    }
+    const { svg, colours } = separateColours(
+      { data, width: w, height: h },
+      { count: 2 }
+    );
+    const wall = colours.find((c) => c.isBackground);
+    expect(wall, 'the separation marked no background').toBeTruthy();
+    const analysis = analyzeSvg(svg);
+    const roles = analysis.elements.map((el) => el.autoRole);
+    // Whatever the tracer's piece count, the dark ground is never raised and
+    // the light mark never cut.
+    expect(roles).toContain('ignore');
+    expect(roles).toContain('foreground');
+    expect(roles.filter((r) => r === 'ignore').length).toBeGreaterThan(0);
+
+    const byIndex = analysis.elements.map((el, i) => ({
+      i,
+      role: el.autoRole,
+      fill: (el.fill || '').toLowerCase(),
+    }));
+    const wallHex = wall.hex.toLowerCase();
+    const lightOnes = byIndex.filter((e) => e.fill !== wallHex);
+    expect(lightOnes.length).toBeGreaterThan(0);
+    for (const e of lightOnes) expect(e.role).toBe('foreground');
   });
 });

@@ -42,6 +42,17 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_GRID_OPACITY: 'openscad-forge-grid-opacity',
   STORAGE_KEY_AUTO_BED: 'openscad-forge-auto-bed',
   STORAGE_KEY_ZOOM_TO_CURSOR: 'openscad-forge-zoom-to-cursor',
+  STORAGE_KEY_VIEWPORT_SCHEME: 'openscad-forge-viewport-scheme',
+  STORAGE_KEY_EDITOR_FONT_SIZE: 'openscad-forge-editor-font-size',
+  STORAGE_KEY_EDITOR_INDENT_WIDTH: 'openscad-forge-editor-indent-width',
+  STORAGE_KEY_EDITOR_TAB_WIDTH: 'openscad-forge-editor-tab-width',
+  STORAGE_KEY_EDITOR_LINE_WRAP: 'openscad-forge-editor-line-wrap',
+  STORAGE_KEY_EDITOR_HIGHLIGHT_LINE: 'openscad-forge-editor-highlight-line',
+  // Two keys, not one: the desktop keeps the hanging indent and the
+  // wrap-return marker as separate settings and Q-58 chose to mirror that.
+  STORAGE_KEY_EDITOR_WRAP_INDENT: 'openscad-forge-editor-wrap-indent',
+  STORAGE_KEY_EDITOR_WRAP_ARROW: 'openscad-forge-editor-wrap-arrow',
+  STORAGE_KEY_EDITOR_BRACE_MATCHING: 'openscad-forge-editor-brace-matching',
   STORAGE_KEY_CAMERA_COLLAPSED: 'openscad-forge-camera-controls-collapsed',
   STORAGE_KEY_CAMERA_POSITION: 'openscad-forge-camera-controls-position',
   STORAGE_KEY_LOD_WARNING_DISMISSED: 'openscad-forge-lod-warning-dismissed',
@@ -51,6 +62,18 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_METRICS_LOG: 'openscad-forge-metrics-log',
   STORAGE_KEY_LAZY_UNION: 'openscad-forge-lazy-union',
   STORAGE_KEY_MANIFOLD_ENGINE: 'openscad-forge-manifold-engine',
+
+  // UI mode (ui-mode-controller.js; centralized in UF-14)
+  STORAGE_KEY_UI_MODE: 'openscad-forge-ui-mode',
+
+  // UI-scoped preference split marker (ui-scoped-prefs.js, UF-14)
+  STORAGE_KEY_SCOPED_PREFS_SEEDED: 'openscad-forge-scoped-prefs-seeded-v1',
+
+  // Persistent tutorial registry (tutorial-sandbox.js, UF-16)
+  STORAGE_KEY_TUTORIAL_STATE: 'openscad-forge-tutorial-state',
+
+  // Welcome tour nudge, permanent suppression (tour-nudge.js, UF-22)
+  STORAGE_KEY_TOUR_NUDGE_SUPPRESSED: 'openscad-forge-tour-nudge-suppressed',
 
   // Preset dropdown sort order
   PRESET_SORT_KEY: 'openscad-forge-preset-sort',
@@ -63,6 +86,29 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_HFM_CONTRAST_SCALE: 'openscad-forge-hfm-contrast-scale',
   STORAGE_KEY_HFM_FONT_SCALE: 'openscad-forge-hfm-font-scale',
   STORAGE_KEY_HFM_PERSIST_FADE: 'openscad-forge-hfm-persist-fade',
+
+  // City Walk game (CW-Q8): persistent walking-speed multiplier
+  STORAGE_KEY_CITY_WALK_SPEED: 'openscad-forge-city-walk-speed',
+
+  // City Walk game (CW-Q10): persistent ASCII character scale
+  STORAGE_KEY_CITY_WALK_FONT_SCALE: 'openscad-forge-city-walk-font-scale',
+
+  // City Walk game (CW-42, CW-Q39): the machine's LAST calibrated size floor
+  STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR:
+    'openscad-forge-city-walk-calibrated-floor',
+
+  // City Walk game (CW-Q16): colour on/off; absent means follow high contrast
+  STORAGE_KEY_CITY_WALK_COLOUR: 'openscad-forge-city-walk-colour',
+  // CW-85: Day/Night and the empty city. Both are player choices the
+  // game remembers, and both are ABSENT by default - Night and a busy
+  // city are what ships.
+  STORAGE_KEY_CITY_WALK_DAYLIGHT: 'openscad-forge-city-walk-daylight',
+  STORAGE_KEY_CITY_WALK_EMPTY_CITY: 'openscad-forge-city-walk-empty-city',
+  STORAGE_KEY_CITY_WALK_MAP_STYLE: 'openscad-forge-city-walk-map-style',
+  STORAGE_KEY_CITY_WALK_CAMERA_PANEL: 'openscad-drawer-camera-city-walk-state',
+  // CW-81: the mouse-look mode (follow | drag | off); absent means follow,
+  // or off when the machine asks for reduced motion.
+  STORAGE_KEY_CITY_WALK_LOOK: 'openscad-forge-city-walk-look',
 };
 
 describe('storage-keys exported constants', () => {
@@ -178,6 +224,22 @@ describe('safeGetItem / safeSetItem / safeRemoveItem', () => {
 describe('storage-keys helpers', () => {
   it('getAppPrefKey generates openscad-forge-* keys', () => {
     expect(storageKeys.getAppPrefKey('theme')).toBe('openscad-forge-theme');
+  });
+
+  it('getCityWalkProgressKey is one key per city, under the app prefix', () => {
+    // CW-62. A key per city, because progress is per city - and the shape is
+    // pinned here because CW-64 and CW-65 are going to EXTEND its value
+    // rather than mint sibling keys beside it.
+    expect(storageKeys.getCityWalkProgressKey('seattle')).toBe(
+      'openscad-forge-city-walk-progress-seattle'
+    );
+    expect(storageKeys.getCityWalkProgressKey('denver')).toBe(
+      'openscad-forge-city-walk-progress-denver'
+    );
+    // Two cities never share a key, which is the whole point of the shape.
+    expect(storageKeys.getCityWalkProgressKey('seattle')).not.toBe(
+      storageKeys.getCityWalkProgressKey('burnaby')
+    );
   });
 
   it('getDrawerStateKey generates openscad-drawer-*-state keys', () => {

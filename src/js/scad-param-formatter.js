@@ -100,13 +100,13 @@ export function formatScadValue(key, value, paramTypes = {}, scadContent = '') {
       return 'false';
     }
 
-    if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
-      const colorStyle =
-        paramTypes[key] === 'color'
-          ? detectColorParamLiteralStyle(scadContent, key)
-          : { style: 'unknown', hasHashPrefix: false };
+    // Hex→RGB conversion is strictly opt-in via the declared 'color' type.
+    // Without the type gate, any 6-hex-char word ("decade", "facade") was
+    // silently converted to an RGB vector, corrupting text parameters.
+    if (paramTypes[key] === 'color' && /^#?[0-9A-Fa-f]{6}$/.test(value)) {
+      const colorStyle = detectColorParamLiteralStyle(scadContent, key);
 
-      if (paramTypes[key] === 'color' && colorStyle.style === 'string') {
+      if (colorStyle.style === 'string') {
         const normalizedHex = value.replace(/^#/, '').toUpperCase();
         const literal = colorStyle.hasHashPrefix
           ? `#${normalizedHex}`

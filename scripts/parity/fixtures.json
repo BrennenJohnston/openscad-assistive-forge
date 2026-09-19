@@ -1,0 +1,63 @@
+{
+  "comment": "Fixture manifest for the desktop-parity harness. Paths are repo-relative. 'companions' are sibling files mounted next to the main SCAD for the WASM render (the desktop CLI reads them from disk in place). Params reproduce DESKTOP_REFERENCE_GEOMETRY configurations where noted.",
+  "fixtures": [
+    {
+      "id": "cube-cyl-diff",
+      "scad": "tests/fixtures/parity/cube-cyl-diff.scad",
+      "params": {},
+      "notes": "Deterministic boolean: difference of cube and $fn=64 cylinder.",
+      "ci": true
+    },
+    {
+      "id": "sphere-fn",
+      "scad": "tests/fixtures/parity/sphere-fn.scad",
+      "params": {},
+      "notes": "Tessellation determinism: sphere(r=8, $fn=96).",
+      "ci": true
+    },
+    {
+      "id": "keyguard-minimal",
+      "scad": "tests/fixtures/keyguard-minimal/keyguard_minimal.scad",
+      "companions": ["openings_and_additions.txt", "default.svg"],
+      "params": {},
+      "notes": "Minimal keyguard with include + SVG import companions.",
+      "ci": true
+    },
+    {
+      "id": "kv75-3d-printed",
+      "scad": "tests/fixtures/keyguard-v75/keyguard_v75.scad",
+      "companions": ["openings_and_additions.txt"],
+      "params": { "generate": "keyguard", "type_of_keyguard": "3D-Printed" },
+      "notes": "DESKTOP_REFERENCE_GEOMETRY '3d-printed-keyguard' configuration.",
+      "ci": false
+    },
+    {
+      "id": "kv75-laser-cut",
+      "scad": "tests/fixtures/keyguard-v75/keyguard_v75.scad",
+      "companions": ["openings_and_additions.txt"],
+      "params": { "generate": "keyguard", "type_of_keyguard": "Laser-Cut" },
+      "notes": "DESKTOP_REFERENCE_GEOMETRY 'laser-cut-keyguard' configuration.",
+      "ci": false
+    },
+    {
+      "id": "kv75-frame-multicolor",
+      "scad": "tests/fixtures/keyguard-v75/keyguard_v75.scad",
+      "companions": ["openings_and_additions.txt"],
+      "params": {
+        "type_of_keyguard": "3D-Printed",
+        "generate": "keyguard frame",
+        "show_keyguard_with_frame": "yes",
+        "have_a_keyguard_frame": "yes"
+      },
+      "notes": "DESKTOP_REFERENCE_GEOMETRY 'keyguard-frame-multicolor' configuration.",
+      "ci": false
+    },
+    {
+      "id": "braille-charm",
+      "scad": "public/examples/braille-charm/braille_charm.scad",
+      "params": {},
+      "notes": "Braille dot geometry — the stakeholder-critical tactile case. Defaults.",
+      "ci": true
+    }
+  ]
+}

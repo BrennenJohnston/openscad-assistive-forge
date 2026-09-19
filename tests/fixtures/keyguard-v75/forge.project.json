@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "previewOverrides": {
+    "auto-fast": {
+      "set": { "render_quality": "Low" },
+      "clampInt": { "cone_segments": [8, 12] }
+    }
+  },
+  "export2D": {
+    "rules": [
+      { "param": "type_of_keyguard", "toValueMatching": "laser" },
+      {
+        "paramMatching": "laser.*(cut|cutting).*(best|pract)",
+        "toValue": "yes"
+      }
+    ]
+  }
+}

@@ -330,10 +330,15 @@ export class LibraryManager {
   async checkAvailability() {
     const availability = {};
 
+    // AF-4: probe the one file a library cannot mount without - its own
+    // per-library manifest (the worker reads the same file to get the file
+    // list). A HEAD on the bare directory was server-dependent and never
+    // answered the real question.
     for (const [id, lib] of Object.entries(this.libraries)) {
       try {
-        // Try to fetch manifest or a test file
-        const response = await fetch(`${lib.path}/`, { method: 'HEAD' });
+        const response = await fetch(`${lib.path}/manifest.json`, {
+          method: 'HEAD',
+        });
         availability[id] = response.ok;
       } catch (_error) {
         availability[id] = false;

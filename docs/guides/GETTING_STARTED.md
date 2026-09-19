@@ -10,18 +10,41 @@ A few things that matter:
 
 - Works with keyboard, mouse, touch, and screen readers
 - Keeps all your data on your own computer
-- Exports STL, OBJ, 3MF, and more
+- Exports STL, OBJ, and more
+
+## The first thing you will see
+
+The very first time you open the app, before anything else, it asks you to pick
+an interface. You get a short note for first-time users and two choices:
+
+- **Assistive Forge** -- the guided one. Parameters first, built for keyboard
+  use, screen readers and high contrast. Works on phones and tablets as well as
+  desktops. Pick this one if you are new to OpenSCAD, and pick it if you are not
+  sure.
+- **Classic** -- the layout of the OpenSCAD desktop application: menus, toolbar,
+  code editor, Customizer and console. Pick this if you already know the desktop
+  program or you are following a tutorial written for it. Desktop screen widths
+  only.
+
+Neither choice is permanent. There is a button in the top right that switches
+between them at any time, and your code, parameter values and camera position
+all come with you. See the [Classic Interface Guide](./CLASSIC_UI_GUIDE.md).
+
+The app only asks once. After that it opens straight into whichever you chose.
+
+The rest of this guide describes the **Assistive Forge** interface.
 
 ## Opening Your First Design
 
-### Option 1: Load an Example
+### Option 1: Open an example
 
-1. Open the app at your hosted URL
-2. Look for the **Welcome Panel** in the center of the screen
-3. Click **"Load Example"** to see available sample models
-4. Select any example to load it
+1. Open the app
+2. Once past the interface choice, the welcome screen shows four cards
+3. Press **Beginners Start Here** to load the simple box example with a short
+   tour, or open the **Charm Designer** or the **Braille Card Designer**
 
-The example loads with default settings. You'll see a 3D preview on the right (or below on mobile).
+The example loads with default settings. The 3D preview is on the right, or
+below on a phone.
 
 ### Option 2: Upload Your Own File
 
@@ -81,7 +104,7 @@ When you're happy with your customization:
 2. Choose your format:
    - **STL**: Standard format for 3D printing
    - **OBJ**: Includes vertex colors, works with most software
-   - **3MF**: Modern format with better metadata
+   - **AMF**: XML-based, carries per-object color
 3. Click the format button to download the file
 
 The export takes a few seconds for complex models. Your browser downloads the file automatically.
@@ -136,7 +159,7 @@ The preview settings area has two tools for working with reference images:
 ## Getting Help
 
 - **Parameter help**: Click the ? button next to any parameter
-- **Error messages**: Read carefully—they explain what went wrong
+- **Error messages**: they say what went wrong
 - **GitHub Issues**: Report bugs or request features
 
 ---
