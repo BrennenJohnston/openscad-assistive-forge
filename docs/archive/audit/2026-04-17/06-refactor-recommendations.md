@@ -505,7 +505,7 @@ Wave 4 will take many months of sustained effort. The audit's recommendation is 
 
 ## 9. What this phase does **not** cover
 
-Per the audit charter ([plan §non-goals](../../../.cursor/plans/professional_code_review_plan_68eb907c.plan.md)):
+Per the audit charter (plan §non-goals (a local planning note, not in the repository)):
 
 - No source code is modified.
 - No refactor is executed (this phase only ranks).

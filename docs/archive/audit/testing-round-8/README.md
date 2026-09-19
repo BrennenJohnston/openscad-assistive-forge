@@ -14,7 +14,7 @@ set** from `keyguard_v75.json`, capturing per-preset reference data from both
 the desktop CLI and the browser app.
 
 This data enables the project-native preset parity work (Phases 3–6 of the
-[project preset parity plan](../../.cursor/plans/project_preset_parity_40db0611.plan.md))
+project preset parity plan (a local planning note, not in the repository))
 to classify every remaining mismatch with explicit evidence.
 
 ---
@@ -132,4 +132,4 @@ $env:PRESET_FILTER = "Fintie"; npx playwright test preset-audit-sweep
 |----------|-------------|
 | [Testing Round 7 README](../testing-round-7/README.md) | Prior round (3 scenarios, default parameters) |
 | [scenario-matrix.md](../scenario-matrix.md) | Full S-001 through S-016 scenario definitions |
-| [Project Preset Parity Plan](../../.cursor/plans/project_preset_parity_40db0611.plan.md) | Build plan driving this audit |
+| Project Preset Parity Plan (a local planning note, not in the repository) | Build plan driving this audit |
