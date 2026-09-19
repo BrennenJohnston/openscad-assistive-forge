@@ -1,0 +1,505 @@
+/**
+ * Feature Flag System
+ *
+ * Enables gradual rollout of new features and quick rollback if issues arise.
+ * Follows the rollout-process.md specification.
+ *
+ * @license GPL-3.0-or-later
+ */
+
+/**
+ * Deterministic hash function for user bucketing
+ * cyrb53 - fast, reasonable distribution
+ * @param {string} str - String to hash
+ * @param {number} seed - Optional seed
+ * @returns {number} Hash value
+ */
+function cyrb53(str, seed = 0) {
+  let h1 = 0xdeadbeef ^ seed;
+  let h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
+/**
+ * Feature flag definitions
+ *
+ * Each flag has:
+ * - id: Unique identifier (matches object key)
+ * - name: Human-readable name for UI
+ * - description: What the flag controls
+ * - default: Default state when not in rollout
+ * - rollout: Percentage (0-100) of users who get the feature
+ * - userConfigurable: Can users toggle this in settings?
+ * - killSwitch: If true, flag can only disable (never enable via rollout)
+ */
+export const FLAGS = {
+  expert_mode: {
+    id: 'expert_mode',
+    name: 'Code Editor',
+    description: 'Code editor with syntax highlighting for OpenSCAD',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  codemirror_editor: {
+    id: 'codemirror_editor',
+    name: 'Advanced Code Editor (CodeMirror)',
+    description:
+      'Use CodeMirror 6 editor with syntax highlighting instead of simple textarea',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['expert_mode'],
+  },
+  vector_parameters: {
+    id: 'vector_parameters',
+    name: 'Vector Parameters',
+    description: 'Support for [x, y, z] vector parameter inputs',
+    default: true,
+    rollout: 100,
+    userConfigurable: false,
+    killSwitch: false,
+  },
+  memory_monitoring: {
+    id: 'memory_monitoring',
+    name: 'Memory Monitoring',
+    description: 'Track memory usage and show warnings when high',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  csp_reporting: {
+    id: 'csp_reporting',
+    name: 'CSP Violation Reporting',
+    description: 'Log Content Security Policy violations to console',
+    default: true,
+    rollout: 100,
+    userConfigurable: false,
+    killSwitch: false,
+  },
+  manifold_engine: {
+    id: 'manifold_engine',
+    name: 'Manifold Engine (Fast)',
+    description:
+      'Use the Manifold geometry engine for 5-30x faster rendering. Disable for maximum compatibility with complex models.',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  // Phase 6 (color parity): COFF format is the preferred path for 3D preview
+  // when SCAD source contains color() calls.  Falls back to STL automatically
+  // when no color() calls are detected.  Disable via kill-switch or URL
+  // (?flag_color_passthrough=false) if COFF output causes regressions.
+  color_passthrough: {
+    id: 'color_passthrough',
+    name: 'Color Passthrough (COFF Preview)',
+    description:
+      'Render preview using COFF (Color OFF) format to display per-face colors from color() calls. ' +
+      'Falls back to STL automatically when no color() calls are detected. ' +
+      'Disable via URL (?flag_color_passthrough=false) or the settings panel if issues occur.',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  basic_advanced_mode: {
+    id: 'basic_advanced_mode',
+    name: 'Interface Mode Toggle',
+    description: 'Toggle between Simplified and Standard interface layouts',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  // C4.6: acceptance suite green (classic-mode.spec.js + console-fidelity
+  // .spec.js walk the four-pane contract), so Classic is available to all
+  // users as a View > Interface Mode option. Disable via
+  // ?flag_classic_mode=false or the settings panel.
+  classic_mode: {
+    id: 'classic_mode',
+    name: 'Classic Desktop Layout',
+    description:
+      'Enable the Classic interface mode: a desktop-OpenSCAD-style layout with display, customizer, presets, and console panes',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  searchable_combobox: {
+    id: 'searchable_combobox',
+    name: 'Searchable Preset Combobox',
+    description:
+      'Replace the preset search input and native select with a combined searchable combobox widget',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  folder_import: {
+    id: 'folder_import',
+    name: 'Import Project Folder',
+    description:
+      'Allow importing a directory of .scad files and companion resources via the file picker',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  image_import: {
+    id: 'image_import',
+    name: 'Image Import (SVG)',
+    description:
+      'Enable SVG file import for engraving and 2D geometry in parametric models via the existing file parameter pipeline',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  svg_preparer: {
+    id: 'svg_preparer',
+    name: 'SVG Preparer',
+    description:
+      'Transform multi-element SVGs into OpenSCAD-compatible compound-path SVGs using boolean operations',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  svg_path_offset: {
+    id: 'svg_path_offset',
+    name: 'SVG Path Offset',
+    description:
+      'Per-element offset controls in the SVG prep editor for adjusting path insets/outsets before boolean flatten',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['svg_preparer'],
+  },
+  // Kept dark on purpose: this working implementation is the foundation
+  // for the Classic-mode preset contract (project = .scad + sidecar
+  // presets + assets) and the local-folder preset sidecars. Now user-
+  // configurable so it is at least reachable for testing; default stays
+  // off until that work lands.
+  project_presets: {
+    id: 'project_presets',
+    name: 'Project-Native Presets',
+    description:
+      'Use the loaded SCAD project sidecar JSON as the preset source of truth ' +
+      'instead of auto-importing into localStorage. Separates project-native ' +
+      'and user-saved presets in the dropdown.',
+    default: false,
+    rollout: 0,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  // F35 Phase A — persistent two-way sync with a folder on disk via the
+  // File System Access API. Chromium-only, gated dark by default until
+  // Spike S1 has been verified on real Chrome / Edge instances. Phase B
+  // (file-change watcher / F14) and Phase C (write-back) extend this.
+  local_folder_sync: {
+    id: 'local_folder_sync',
+    name: 'Persistent Local Folder Sync (Chromium only)',
+    description:
+      'Connect the Forge to a folder on disk via the File System Access API; ' +
+      'the connection is remembered across reloads with a single one-click ' +
+      'permission re-grant per session. Hidden on browsers that do not ' +
+      'support showDirectoryPicker (Firefox / Safari today). ' +
+      'Phase A: connect / disconnect / persist. Phase B (auto-rerun on ' +
+      'external edits) and Phase C (write-back) ship behind separate flags.',
+    // C5.1: Phase A surfaced — on by default; the UI still hides itself on
+    // browsers without showDirectoryPicker.
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  // C5.2 (Phase B): watch the connected folder for external edits and
+  // re-render automatically — Ken's edit-in-desktop-editor loop.
+  folder_sync_watch: {
+    id: 'folder_sync_watch',
+    name: 'Folder Change Watcher (Chromium only)',
+    description:
+      'When connected to a local folder, poll the project files for external ' +
+      'changes (e.g. edits saved from a desktop editor) and re-render ' +
+      'automatically. Requires Persistent Local Folder Sync.',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['local_folder_sync'],
+  },
+  // C5.3 (Phase C): write back into the connected folder.
+  //
+  // Dark until tested on real Chrome/Edge with the watcher active - and that
+  // test is the OWNER's to run, because a native folder picker cannot be
+  // driven by a machine. IR-5 built the paths this describes; before it, the
+  // description promised exports that had no write path at all.
+  folder_sync_writeback: {
+    id: 'folder_sync_writeback',
+    name: 'Folder Write-Back (Chromium only)',
+    description:
+      'Let Forge save files back into the connected local folder: exports and ' +
+      'companion files when you ask for them, and preset sidecars as you save ' +
+      'presets. Requires Persistent Local Folder Sync.',
+    default: false,
+    rollout: 0,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['local_folder_sync'],
+  },
+};
+
+// Storage key for user preferences
+const STORAGE_KEY = 'openscad-forge-feature-flags';
+
+// Storage key for user ID (stable for bucketing)
+const USER_ID_KEY = 'openscad-forge-user-id';
+
+/**
+ * Get or create a stable user ID for bucketing
+ * @returns {string} User ID
+ */
+function getUserId() {
+  try {
+    let userId = localStorage.getItem(USER_ID_KEY);
+    if (!userId) {
+      // Generate a random ID
+      userId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      localStorage.setItem(USER_ID_KEY, userId);
+    }
+    return userId;
+  } catch {
+    // localStorage unavailable, use session-only ID
+    return `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  }
+}
+
+/**
+ * Get user preferences from localStorage
+ * @returns {Object} User preferences map
+ */
+function getUserPreferences() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save user preferences to localStorage
+ * @param {Object} prefs - Preferences to save
+ */
+function saveUserPreferences(prefs) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  } catch (error) {
+    console.warn('[FeatureFlags] Could not save preferences:', error);
+  }
+}
+
+/**
+ * Convert user ID + flag ID to a bucket (0-99)
+ * @param {string} userId - User identifier
+ * @param {string} flagId - Flag identifier
+ * @returns {number} Bucket 0-99
+ */
+function hashToBucket(userId, flagId) {
+  const hash = cyrb53(`${userId}-${flagId}`);
+  return hash % 100;
+}
+
+/**
+ * Check if a feature flag is enabled
+ *
+ * Resolution order:
+ * 1. Kill switch (if flag.killSwitch && user disabled, always disabled)
+ * 2. URL override (?flag_<id>=true/false)
+ * 3. User preference (if userConfigurable)
+ * 4. Rollout percentage
+ * 5. Default value
+ *
+ * @param {string} flagId - Flag identifier
+ * @returns {boolean} Whether the flag is enabled
+ */
+export function isEnabled(flagId) {
+  const flag = FLAGS[flagId];
+  if (!flag) {
+    console.warn(`[FeatureFlags] Unknown flag: ${flagId}`);
+    return false;
+  }
+
+  // Check URL override first (useful for testing)
+  const urlOverride = getUrlOverride(flagId);
+  if (urlOverride !== null) {
+    return urlOverride;
+  }
+
+  // Check user preference (if configurable)
+  if (flag.userConfigurable) {
+    const prefs = getUserPreferences();
+    const pref = prefs[flagId];
+    if (pref !== undefined) {
+      // Kill switch: if user disabled and killSwitch is true, honor it
+      if (flag.killSwitch && pref === false) {
+        return false;
+      }
+      return pref;
+    }
+  }
+
+  // Check rollout percentage
+  if (flag.rollout > 0 && flag.rollout < 100) {
+    const userId = getUserId();
+    const bucket = hashToBucket(userId, flagId);
+    return bucket < flag.rollout;
+  }
+
+  // Full rollout or default
+  if (flag.rollout >= 100) {
+    return true;
+  }
+
+  return flag.default;
+}
+
+/**
+ * Get URL override for a flag
+ * Supports ?flag_<id>=true|false|1|0
+ * @param {string} flagId - Flag identifier
+ * @returns {boolean|null} Override value or null if not set
+ */
+function getUrlOverride(flagId) {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get(`flag_${flagId}`);
+    if (value === null) return null;
+
+    const normalized = value.toLowerCase();
+    if (normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'false' || normalized === '0') return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Set user preference for a flag
+ * Only works for userConfigurable flags
+ * @param {string} flagId - Flag identifier
+ * @param {boolean} enabled - Desired state
+ * @returns {boolean} True if preference was set
+ */
+export function setUserPreference(flagId, enabled) {
+  const flag = FLAGS[flagId];
+  if (!flag) {
+    console.warn(`[FeatureFlags] Unknown flag: ${flagId}`);
+    return false;
+  }
+
+  if (!flag.userConfigurable) {
+    console.warn(`[FeatureFlags] Flag ${flagId} is not user configurable`);
+    return false;
+  }
+
+  const prefs = getUserPreferences();
+  prefs[flagId] = enabled;
+  saveUserPreferences(prefs);
+
+  console.log(`[FeatureFlags] ${flagId} set to ${enabled}`);
+  return true;
+}
+
+/**
+ * Clear user preference for a flag (revert to default/rollout)
+ * @param {string} flagId - Flag identifier
+ */
+export function clearUserPreference(flagId) {
+  const prefs = getUserPreferences();
+  delete prefs[flagId];
+  saveUserPreferences(prefs);
+  console.log(`[FeatureFlags] ${flagId} preference cleared`);
+}
+
+/**
+ * Get all flag states (for debugging/settings UI)
+ * @returns {Object} Map of flagId -> { flag, enabled, source }
+ */
+export function getAllFlagStates() {
+  const states = {};
+  const prefs = getUserPreferences();
+
+  for (const [id, flag] of Object.entries(FLAGS)) {
+    const urlOverride = getUrlOverride(id);
+    let source = 'default';
+
+    if (urlOverride !== null) {
+      source = 'url';
+    } else if (flag.userConfigurable && prefs[id] !== undefined) {
+      source = 'user';
+    } else if (flag.rollout > 0 && flag.rollout < 100) {
+      source = 'rollout';
+    } else if (flag.rollout >= 100) {
+      source = 'full_rollout';
+    }
+
+    states[id] = {
+      flag,
+      enabled: isEnabled(id),
+      source,
+      userPreference: prefs[id],
+    };
+  }
+
+  return states;
+}
+
+/**
+ * Get user-configurable flags for settings UI
+ * @returns {Array} Array of flags that users can toggle
+ */
+export function getConfigurableFlags() {
+  return Object.values(FLAGS).filter((flag) => flag.userConfigurable);
+}
+
+/**
+ * Log all flag states to console (for debugging)
+ */
+export function debugFlags() {
+  console.group('[FeatureFlags] Current States');
+  const states = getAllFlagStates();
+  for (const [id, state] of Object.entries(states)) {
+    console.log(
+      `${id}: ${state.enabled ? '✅' : '❌'} (source: ${state.source})`
+    );
+  }
+  console.groupEnd();
+}
+
+// Export for testing
+export const _internal = {
+  cyrb53,
+  getUserId,
+  getUserPreferences,
+  saveUserPreferences,
+  hashToBucket,
+  getUrlOverride,
+  STORAGE_KEY,
+  USER_ID_KEY,
+};

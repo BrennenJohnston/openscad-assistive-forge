@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/BrennenJohnston/openscad-assistive-forge/discussions
+    about: Ask questions, share ideas, and discuss with the community
+  - name: 📚 Documentation
+    url: https://github.com/BrennenJohnston/openscad-assistive-forge/tree/main/docs
+    about: Read the comprehensive documentation and guides
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/BrennenJohnston/openscad-assistive-forge/security/advisories/new
+    about: Report security vulnerabilities privately (do not create a public issue)

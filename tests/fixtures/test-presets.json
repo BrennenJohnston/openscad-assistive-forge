@@ -1,0 +1,15 @@
+{
+  "parameterSets": {
+    "Small Config": {
+      "width": "50",
+      "height": "30",
+      "enabled": "true"
+    },
+    "Large Config": {
+      "width": "200",
+      "height": "150",
+      "enabled": "false"
+    }
+  },
+  "fileFormatVersion": "1"
+}

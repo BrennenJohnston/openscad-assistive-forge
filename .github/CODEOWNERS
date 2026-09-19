@@ -1,0 +1,40 @@
+# Code Owners
+# This file defines code ownership for automatic review requests.
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @BrennenJohnston
+
+# Documentation
+*.md @BrennenJohnston
+/docs/ @BrennenJohnston
+
+# GitHub configuration
+/.github/ @BrennenJohnston
+
+# CI/CD workflows
+/.github/workflows/ @BrennenJohnston
+
+# Build and configuration
+package.json @BrennenJohnston
+vite.config.js @BrennenJohnston
+vitest.config.js @BrennenJohnston
+playwright.config.js @BrennenJohnston
+
+# Core application
+/src/ @BrennenJohnston
+
+# Tests
+/tests/ @BrennenJohnston
+
+# CLI tools
+/cli/ @BrennenJohnston
+/bin/ @BrennenJohnston
+
+# Accessibility-critical files (require extra attention)
+/src/js/modal-manager.js @BrennenJohnston
+/src/styles/ @BrennenJohnston
+lighthouse*.json @BrennenJohnston
+
+# Templates (for scaffold command)
+/cli/templates/ @BrennenJohnston

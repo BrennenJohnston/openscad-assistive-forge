@@ -1,0 +1,4703 @@
+/**
+ * SVG Preparation Workspace — Unit tests
+ *
+ * Phase 2: Tests for createSvgPrepWorkspace DOM structure, ARIA attributes,
+ * fullscreen toggle, close behavior, keyboard handling, and lifecycle.
+ *
+ * focus-trap and announcer are mocked because jsdom does not provide layout
+ * dimensions needed for focus trapping, and has no live-region DOM elements.
+ *
+ * @license GPL-3.0-or-later
+ */
+
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  vi,
+} from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// ── Mocks ────────────────────────────────────────────────────────────────────
+
+const mockTrapActivate = vi.fn();
+const mockTrapDeactivate = vi.fn();
+const mockTrapIsActive = vi.fn(() => false);
+
+vi.mock('../../src/js/focus-trap.js', () => ({
+  createDocumentFocusTrap: vi.fn(() => ({
+    activate: mockTrapActivate,
+    deactivate: mockTrapDeactivate,
+    isActive: mockTrapIsActive,
+  })),
+}));
+
+vi.mock('../../src/js/announcer.js', () => ({
+  announce: vi.fn(),
+  POLITENESS: { POLITE: 'polite', ASSERTIVE: 'assertive' },
+}));
+
+vi.mock('../../src/js/feature-flags.js', () => ({
+  isEnabled: vi.fn(() => false),
+}));
+
+import {
+  COMBINE_SETTLE_MS,
+  createSvgPrepWorkspace,
+  describeElement,
+  thinLineSentence,
+  THIN_LINE_MM,
+} from '../../src/js/svg-preparer-workspace.js';
+import { analyzeSvg } from '../../src/js/svg-preparer.js';
+import { createDocumentFocusTrap } from '../../src/js/focus-trap.js';
+import { announce } from '../../src/js/announcer.js';
+import { isEnabled } from '../../src/js/feature-flags.js';
+
+// ── Test data ────────────────────────────────────────────────────────────────
+
+function makeAnalysis(elementCount = 3, opts = {}) {
+  const parser = new DOMParser();
+  const svgParts = [];
+  for (let i = 0; i < elementCount; i++) {
+    svgParts.push(`<circle cx="${50 + i * 20}" cy="50" r="10" fill="black"/>`);
+  }
+  const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">${svgParts.join('')}</svg>`;
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  const circles = Array.from(doc.querySelectorAll('circle'));
+
+  return {
+    status: opts.status || 'needs_review',
+    confidence: opts.confidence || 0.8,
+    elements: circles.map((el, i) => ({
+      element: el,
+      pathData: `M${50 + i * 20},40 a10,10 0 1,0 0,20 a10,10 0 1,0 0,-20`,
+      fill: 'black',
+      stroke: '',
+      luminance: 0,
+      autoRole: i === 0 ? 'foreground' : 'hole',
+      warnings: opts.warnings?.[i] || [],
+    })),
+    warnings: opts.globalWarnings || [],
+    unsupportedFeatures: opts.unsupportedFeatures || [],
+    recommendation: opts.recommendation || 'open_editor',
+    singleElement: elementCount === 1,
+  };
+}
+
+const SIMPLE_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="black"/></svg>';
+
+// ── Setup / teardown ─────────────────────────────────────────────────────────
+
+let container;
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  document.body.innerHTML = '';
+  container = null;
+});
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+describe('createSvgPrepWorkspace', () => {
+  describe('DOM structure', () => {
+    it('creates the workspace root with correct ARIA attributes', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const root = ws._root;
+
+      expect(root).toBeTruthy();
+      expect(root.classList.contains('svg-prep-workspace')).toBe(true);
+      expect(root.getAttribute('role')).toBe('region');
+      expect(root.getAttribute('aria-labelledby')).toBe('svg-prep-title');
+      expect(root.hidden).toBe(true);
+
+      ws.destroy();
+    });
+
+    it('appends the workspace to the container', () => {
+      const ws = createSvgPrepWorkspace(container);
+      expect(container.querySelector('.svg-prep-workspace')).toBe(ws._root);
+      ws.destroy();
+    });
+
+    it('creates a header with title and control buttons', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const root = ws._root;
+
+      const title = root.querySelector('#svg-prep-title');
+      expect(title).toBeTruthy();
+      expect(title.tagName).toBe('H3');
+      expect(title.textContent).toBe('SVG Preparation Editor');
+
+      const fullscreenBtn = root.querySelector('.svg-prep-fullscreen-btn');
+      expect(fullscreenBtn).toBeTruthy();
+      expect(fullscreenBtn.getAttribute('aria-label')).toBe('Open fullscreen');
+
+      const closeBtn = root.querySelector('.svg-prep-close-btn');
+      expect(closeBtn).toBeTruthy();
+      expect(closeBtn.getAttribute('aria-label')).toBe('Close editor');
+
+      ws.destroy();
+    });
+
+    // D-102: these two assertions used to require role="img" on the panes, and
+    // that is what they were pinning: a pane holds three zoom buttons, and an
+    // element with role="img" may not contain focusable descendants. Measured
+    // with axe on the shipped editor: "nested-interactive", serious, on both
+    // panes. The pane is now the GROUP that holds the picture and its
+    // controls; the picture inside carries role="img".
+    it('creates dual preview panes with correct ARIA', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const root = ws._root;
+
+      const sourcePane = root.querySelector('.svg-prep-source-pane');
+      expect(sourcePane).toBeTruthy();
+      expect(sourcePane.getAttribute('role')).toBe('group');
+      expect(sourcePane.getAttribute('aria-label')).toBe('Source SVG');
+
+      const resultPane = root.querySelector('.svg-prep-result-pane');
+      expect(resultPane).toBeTruthy();
+      expect(resultPane.getAttribute('role')).toBe('group');
+      expect(resultPane.getAttribute('aria-label')).toBe('Prepared result');
+
+      ws.destroy();
+    });
+
+    it('creates zoom controls for each preview pane', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const root = ws._root;
+
+      const sourceZoom = root.querySelector(
+        '.svg-prep-source-pane .svg-prep-zoom-controls'
+      );
+      expect(sourceZoom).toBeTruthy();
+      expect(sourceZoom.querySelector('.svg-prep-zoom-fit')).toBeTruthy();
+      expect(sourceZoom.querySelector('.svg-prep-zoom-in')).toBeTruthy();
+      expect(sourceZoom.querySelector('.svg-prep-zoom-out')).toBeTruthy();
+
+      const resultZoom = root.querySelector(
+        '.svg-prep-result-pane .svg-prep-zoom-controls'
+      );
+      expect(resultZoom).toBeTruthy();
+
+      ws.destroy();
+    });
+
+    it('creates an object list container with list role', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const objects = ws._root.querySelector('.svg-prep-objects');
+
+      expect(objects).toBeTruthy();
+      expect(objects.getAttribute('role')).toBe('list');
+      expect(objects.getAttribute('aria-label')).toBe('Shapes');
+
+      ws.destroy();
+    });
+
+    it('creates a warnings region with aria-live', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const warnings = ws._root.querySelector('.svg-prep-warnings');
+
+      expect(warnings).toBeTruthy();
+      expect(warnings.getAttribute('role')).toBe('status');
+      expect(warnings.getAttribute('aria-live')).toBe('polite');
+
+      ws.destroy();
+    });
+
+    it('creates footer with Apply, Keep original, and Reset buttons', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const footer = ws._root.querySelector('.svg-prep-footer');
+
+      expect(footer).toBeTruthy();
+
+      const applyBtn = footer.querySelector('[data-action="apply"]');
+      expect(applyBtn).toBeTruthy();
+      // DP-46: one word on the button so the working row holds one line, the
+      // whole sentence in the accessible name so a person listening still
+      // learns what is applied and where it goes.
+      expect(applyBtn.textContent).toBe('Apply');
+      expect(applyBtn.getAttribute('aria-label')).toBe(
+        'Apply the prepared drawing to your design'
+      );
+      expect(applyBtn.classList.contains('btn-primary')).toBe(true);
+
+      const keepBtn = footer.querySelector('[data-action="keep"]');
+      expect(keepBtn).toBeTruthy();
+      expect(keepBtn.textContent).toBe('Keep original');
+
+      const resetBtn = footer.querySelector('[data-action="reset"]');
+      expect(resetBtn).toBeTruthy();
+      expect(resetBtn.textContent).toBe('Reset');
+
+      ws.destroy();
+    });
+
+    it('creates a fullscreen backdrop element (hidden by default)', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const backdrop = ws._refs.backdrop;
+
+      expect(backdrop).toBeTruthy();
+      expect(backdrop.classList.contains('svg-prep-fullscreen-backdrop')).toBe(
+        true
+      );
+      expect(backdrop.classList.contains('hidden')).toBe(true);
+      expect(backdrop.getAttribute('aria-hidden')).toBe('true');
+
+      ws.destroy();
+    });
+
+    it('backdrop is a sibling of root, not a child (stacking context fix)', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const backdrop = ws._refs.backdrop;
+
+      expect(ws._root.contains(backdrop)).toBe(false);
+      expect(backdrop.parentNode).toBe(container);
+      expect(ws._root.parentNode).toBe(container);
+
+      ws.destroy();
+    });
+  });
+
+  describe('open / close lifecycle', () => {
+    it('shows the workspace on open and hides on close', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const analysis = makeAnalysis(2);
+
+      expect(ws._root.hidden).toBe(true);
+
+      ws.open(SIMPLE_SVG, analysis);
+      expect(ws._root.hidden).toBe(false);
+
+      ws.close();
+      expect(ws._root.hidden).toBe(true);
+
+      ws.destroy();
+    });
+
+    it('announces open and close via the announcer', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      expect(announce).toHaveBeenCalledWith('SVG Preparation Editor opened');
+
+      ws.close();
+      expect(announce).toHaveBeenCalledWith('SVG Preparation Editor closed');
+
+      ws.destroy();
+    });
+
+    it('close is idempotent when already closed', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.close();
+      expect(announce).not.toHaveBeenCalledWith(
+        'SVG Preparation Editor closed'
+      );
+      ws.destroy();
+    });
+
+    it('re-opening after close resets the workspace', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const analysis1 = makeAnalysis(2);
+      const analysis2 = makeAnalysis(1);
+
+      ws.open(SIMPLE_SVG, analysis1);
+      const items1 = ws._root.querySelectorAll('.svg-prep-object');
+      expect(items1.length).toBe(2);
+
+      ws.close();
+      ws.open(SIMPLE_SVG, analysis2);
+      const items2 = ws._root.querySelectorAll('.svg-prep-object');
+      expect(items2.length).toBe(1);
+
+      ws.destroy();
+    });
+  });
+
+  describe('object list population', () => {
+    it('creates a list item per analysis element', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(3));
+
+      const items = ws._root.querySelectorAll('.svg-prep-object');
+      expect(items.length).toBe(3);
+
+      ws.destroy();
+    });
+
+    it('each list item has listitem role and tabindex', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+      const items = ws._root.querySelectorAll('.svg-prep-object');
+      items.forEach((item) => {
+        expect(item.getAttribute('role')).toBe('listitem');
+        expect(item.tabIndex).toBe(0);
+      });
+
+      ws.destroy();
+    });
+
+    it('each list item has a color swatch, name, and role radio group', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const item = ws._root.querySelector('.svg-prep-object');
+      expect(item.querySelector('.svg-prep-swatch')).toBeTruthy();
+      expect(item.querySelector('.svg-prep-object-name')).toBeTruthy();
+
+      const fieldset = item.querySelector('.svg-prep-role-group');
+      expect(fieldset).toBeTruthy();
+      expect(fieldset.tagName).toBe('FIELDSET');
+
+      const radios = fieldset.querySelectorAll('input[type="radio"]');
+      expect(radios.length).toBe(3);
+
+      const values = Array.from(radios).map((r) => r.value);
+      expect(values).toEqual(['foreground', 'hole', 'ignore']);
+
+      ws.destroy();
+    });
+
+    it('radio group reflects the autoRole from analysis', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const analysis = makeAnalysis(2);
+
+      ws.open(SIMPLE_SVG, analysis);
+
+      const items = ws._root.querySelectorAll('.svg-prep-object');
+      const firstRadios = items[0].querySelectorAll('input[type="radio"]');
+      const checkedFirst = Array.from(firstRadios).find((r) => r.checked);
+      expect(checkedFirst.value).toBe('foreground');
+
+      const secondRadios = items[1].querySelectorAll('input[type="radio"]');
+      const checkedSecond = Array.from(secondRadios).find((r) => r.checked);
+      expect(checkedSecond.value).toBe('hole');
+
+      ws.destroy();
+    });
+
+    it('shows warning badge on elements with warnings', () => {
+      const analysis = makeAnalysis(2, {
+        warnings: [['Stroked path — not supported'], []],
+      });
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, analysis);
+
+      const items = ws._root.querySelectorAll('.svg-prep-object');
+      const warningBadge = items[0].querySelector('.svg-prep-object-warning');
+      expect(warningBadge).toBeTruthy();
+      expect(warningBadge.getAttribute('aria-label')).toBe(
+        'Stroked path — not supported'
+      );
+
+      expect(items[1].querySelector('.svg-prep-object-warning')).toBeFalsy();
+
+      ws.destroy();
+    });
+
+    it('aria-label includes element name and role, in the words on screen', () => {
+      // RE-PINNED at DP-39 P2. It used to read the role VALUE - "role:
+      // foreground" - which was the same word a sighted person read right up
+      // until DP-Q40 made the visible word "Raised". Blind and sighted people
+      // reading the same thing is the whole point of the row this release
+      // signs, so the name reads the label.
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const item = ws._root.querySelector('.svg-prep-object');
+      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*On/);
+
+      ws.destroy();
+    });
+
+    it('the row still says the words on screen after a change and a Reset', () => {
+      // DP-41 found this with the text pack in hand. FOUR places write this
+      // label; DP-39 changed two of them and left two. Pressing Reset turned
+      // every row from "Circle 1, Raised" back into "Circle 1, role:
+      // foreground" - the word this round retired, said only to the people
+      // who cannot see the control that says otherwise. The test above pins
+      // the row as BUILT, which is one of the two paths that always worked.
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const item = ws._root.querySelector('.svg-prep-object');
+      const holeRadio = Array.from(
+        item.querySelectorAll('input[type="radio"]')
+      ).find((r) => r.value === 'hole');
+      holeRadio.checked = true;
+      holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(item.getAttribute('aria-label')).toMatch(/Circle 1.*Cut out/);
+
+      ws._root.querySelector('[data-action="reset"]').click();
+
+      const after = ws._root.querySelector('.svg-prep-object');
+      expect(after.getAttribute('aria-label')).toMatch(/Circle 1.*On/);
+      expect(after.getAttribute('aria-label')).not.toMatch(/role:/);
+
+      ws.destroy();
+    });
+  });
+
+  describe('global warnings', () => {
+    it('renders global warnings from the analysis', () => {
+      const analysis = makeAnalysis(1, {
+        globalWarnings: [
+          'Stroked path ignored',
+          'Elements inside <defs> skipped',
+        ],
+      });
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, analysis);
+
+      const warningRegion = ws._root.querySelector('.svg-prep-warnings');
+      const items = warningRegion.querySelectorAll('li');
+      expect(items.length).toBe(2);
+      expect(items[0].textContent).toBe('Stroked path ignored');
+
+      ws.destroy();
+    });
+
+    it('clears warnings when analysis has none', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1, { globalWarnings: ['test'] }));
+      ws.close();
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const warningRegion = ws._root.querySelector('.svg-prep-warnings');
+      expect(warningRegion.querySelectorAll('li').length).toBe(0);
+
+      ws.destroy();
+    });
+  });
+
+  describe('role change', () => {
+    it('updates aria-label when a role radio is changed', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const item = ws._root.querySelector('.svg-prep-object');
+      const radios = item.querySelectorAll('input[type="radio"]');
+
+      // Change from foreground to hole
+      const holeRadio = Array.from(radios).find((r) => r.value === 'hole');
+      holeRadio.checked = true;
+      holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(item.getAttribute('aria-label')).toMatch(/Cut out/);
+
+      ws.destroy();
+    });
+
+    it('updates the ARIA live region on role change with preview info', async () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      await ws.whenReady();
+
+      const radios = ws._root.querySelectorAll('input[type="radio"]');
+      const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+      ignoreRadio.checked = true;
+      ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const liveRegion = ws._root.querySelector(
+        '[aria-live="polite"][aria-atomic="true"]'
+      );
+      expect(liveRegion).toBeTruthy();
+      expect(liveRegion.textContent).toMatch(/preview/i);
+
+      ws.destroy();
+    });
+  });
+
+  describe('fullscreen', () => {
+    it('adds fullscreen class and shows backdrop on openFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(true);
+
+      const backdrop = ws._refs.backdrop;
+      expect(backdrop.classList.contains('hidden')).toBe(false);
+      expect(backdrop.getAttribute('aria-hidden')).toBe('false');
+
+      ws.destroy();
+    });
+
+    it('portals root and backdrop to document.body on openFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      expect(ws._root.parentNode).toBe(document.body);
+      expect(ws._refs.backdrop.parentNode).toBe(document.body);
+
+      ws.destroy();
+    });
+
+    it('returns root and backdrop to container on closeFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.closeFullscreen();
+
+      expect(ws._root.parentNode).toBe(container);
+      expect(ws._refs.backdrop.parentNode).toBe(container);
+
+      ws.destroy();
+    });
+
+    it('close() returns portalled elements to container', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.close();
+
+      expect(ws._root.parentNode).toBe(container);
+      expect(ws._refs.backdrop.parentNode).toBe(container);
+
+      ws.destroy();
+    });
+
+    it('creates a focus trap on openFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      expect(createDocumentFocusTrap).toHaveBeenCalledWith(
+        ws._root,
+        expect.objectContaining({ onEscape: expect.any(Function) })
+      );
+      expect(mockTrapActivate).toHaveBeenCalled();
+
+      ws.destroy();
+    });
+
+    it('announces fullscreen open', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      expect(announce).toHaveBeenCalledWith(
+        'SVG editor expanded to fullscreen'
+      );
+
+      ws.destroy();
+    });
+
+    it('updates fullscreen button label on open', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      const btn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+      expect(btn.getAttribute('aria-label')).toBe('Exit fullscreen');
+
+      ws.destroy();
+    });
+
+    it('removes fullscreen class and hides backdrop on closeFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.closeFullscreen();
+
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+
+      const backdrop = ws._refs.backdrop;
+      expect(backdrop.classList.contains('hidden')).toBe(true);
+      expect(backdrop.getAttribute('aria-hidden')).toBe('true');
+
+      ws.destroy();
+    });
+
+    it('deactivates the focus trap on closeFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.closeFullscreen();
+
+      expect(mockTrapDeactivate).toHaveBeenCalled();
+
+      ws.destroy();
+    });
+
+    it('announces fullscreen close', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.closeFullscreen();
+
+      expect(announce).toHaveBeenCalledWith('Exited fullscreen SVG editor');
+
+      ws.destroy();
+    });
+
+    it('restores fullscreen button label on close', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.closeFullscreen();
+
+      const btn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+      expect(btn.getAttribute('aria-label')).toBe('Open fullscreen');
+
+      ws.destroy();
+    });
+
+    it('openFullscreen is a no-op when workspace is closed', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.openFullscreen();
+
+      expect(createDocumentFocusTrap).not.toHaveBeenCalled();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+
+      ws.destroy();
+    });
+
+    it('openFullscreen is a no-op when already fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      vi.clearAllMocks();
+      ws.openFullscreen();
+
+      expect(createDocumentFocusTrap).not.toHaveBeenCalled();
+
+      ws.destroy();
+    });
+
+    it('close() exits fullscreen automatically', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.close();
+
+      expect(mockTrapDeactivate).toHaveBeenCalled();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+
+      ws.destroy();
+    });
+  });
+
+  describe('keyboard handling', () => {
+    it('Escape closes the editor when not fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      });
+      ws._root.dispatchEvent(event);
+
+      expect(ws._root.hidden).toBe(true);
+
+      ws.destroy();
+    });
+
+    it('Escape exits fullscreen when fullscreen is active', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      });
+      ws._root.dispatchEvent(event);
+
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+      expect(ws._root.hidden).toBe(false);
+
+      ws.destroy();
+    });
+  });
+
+  describe('close button', () => {
+    it('close button closes the editor', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const closeBtn = ws._root.querySelector('.svg-prep-close-btn');
+      closeBtn.click();
+
+      expect(ws._root.hidden).toBe(true);
+
+      ws.destroy();
+    });
+  });
+
+  describe('fullscreen button', () => {
+    it('fullscreen button opens fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const fsBtn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+      fsBtn.click();
+
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(true);
+
+      ws.destroy();
+    });
+
+    it('fullscreen button toggles: second click exits fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const fsBtn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+      fsBtn.click();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(true);
+
+      fsBtn.click();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+      expect(ws._root.hidden).toBe(false);
+
+      ws.destroy();
+    });
+
+    it('fullscreen button re-enters fullscreen after toggle cycle', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const fsBtn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+      fsBtn.click();
+      fsBtn.click();
+      fsBtn.click();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(true);
+
+      ws.destroy();
+    });
+  });
+
+  describe('backdrop click-to-close', () => {
+    it('clicking backdrop closes fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      const backdrop = ws._refs.backdrop;
+      backdrop.click();
+
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+      expect(backdrop.classList.contains('hidden')).toBe(true);
+      expect(ws._root.hidden).toBe(false);
+
+      ws.destroy();
+    });
+
+    it('clicking backdrop does nothing when not fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      ws._refs.backdrop.click();
+
+      expect(ws._root.hidden).toBe(false);
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+
+      ws.destroy();
+    });
+  });
+
+  describe('footer buttons', () => {
+    it('Apply closes the editor', async () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      await ws.whenReady();
+
+      const applyBtn = ws._root.querySelector('[data-action="apply"]');
+      applyBtn.click();
+
+      expect(ws._root.hidden).toBe(true);
+
+      ws.destroy();
+    });
+
+    it('Keep original clears result and closes', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const keepBtn = ws._root.querySelector('[data-action="keep"]');
+      keepBtn.click();
+
+      expect(ws._root.hidden).toBe(true);
+      expect(ws.getResult()).toBe(null);
+
+      ws.destroy();
+    });
+
+    it('Reset announces reset via the live region', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const resetBtn = ws._root.querySelector('[data-action="reset"]');
+      resetBtn.click();
+
+      const liveRegion = ws._root.querySelector(
+        '[aria-live="polite"][aria-atomic="true"]'
+      );
+      expect(liveRegion.textContent).toMatch(/reset/i);
+
+      ws.destroy();
+    });
+  });
+
+  describe('destroy', () => {
+    it('removes the workspace and backdrop from the DOM', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.destroy();
+
+      expect(container.querySelector('.svg-prep-workspace')).toBe(null);
+      expect(container.querySelector('.svg-prep-fullscreen-backdrop')).toBe(
+        null
+      );
+    });
+
+    it('closes the workspace before destroying', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.destroy();
+
+      expect(mockTrapDeactivate).toHaveBeenCalled();
+      expect(container.querySelector('.svg-prep-workspace')).toBe(null);
+    });
+  });
+
+  describe('getResult', () => {
+    it('returns null when no result has been set', () => {
+      const ws = createSvgPrepWorkspace(container);
+      expect(ws.getResult()).toBe(null);
+      ws.destroy();
+    });
+  });
+});
+
+describe('describeElement', () => {
+  function makeEl(tag, attrs = {}) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      el.setAttribute(k, v);
+    }
+    return el;
+  }
+
+  it('describes a circle with radius', () => {
+    expect(describeElement(makeEl('circle', { r: '20' }), 0)).toBe(
+      'Circle 1 (r=20)'
+    );
+  });
+
+  it('describes an ellipse with dimensions', () => {
+    expect(describeElement(makeEl('ellipse', { rx: '10', ry: '5' }), 1)).toBe(
+      'Ellipse 2 (10\u00D75)'
+    );
+  });
+
+  it('describes a rectangle with dimensions', () => {
+    expect(
+      describeElement(makeEl('rect', { width: '30', height: '40' }), 2)
+    ).toBe('Rectangle 3 (30\u00D740)');
+  });
+
+  it('describes a polygon', () => {
+    expect(describeElement(makeEl('polygon'), 0)).toBe('Polygon 1');
+  });
+
+  it('describes a path', () => {
+    expect(describeElement(makeEl('path'), 4)).toBe('Path 5');
+  });
+
+  it('describes unknown tags as Shape', () => {
+    expect(describeElement(makeEl('g'), 0)).toBe('Shape 1');
+  });
+});
+
+// ── Phase 3 — Live preview, zoom, highlighting ──────────────────────────────
+
+describe('Phase 3: source pane rendering', () => {
+  it('renders source SVG inline in the source pane on open', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    expect(sourceSvg).toBeTruthy();
+
+    ws.destroy();
+  });
+
+  it('appends role-layer and highlight-overlay groups to the source SVG', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    const roleLayer = sourceSvg.querySelector('g.svg-prep-role-layer');
+    const overlay = sourceSvg.querySelector('g.svg-prep-overlay');
+    expect(roleLayer).toBeTruthy();
+    expect(overlay).toBeTruthy();
+    expect(roleLayer.getAttribute('aria-hidden')).toBe('true');
+    expect(overlay.getAttribute('aria-hidden')).toBe('true');
+    // The overlay draws on top of the ARTWORK and the tints, so it comes
+    // after both. RE-PINNED at DP-40: it is no longer the last child, because
+    // the layer a pointer hits goes above everything - the highlight is a
+    // picture and the hit layer is a target, and a target under a picture is
+    // not a target.
+    const kids = [...sourceSvg.children];
+    expect(kids.indexOf(overlay)).toBeGreaterThan(kids.indexOf(roleLayer));
+    expect(sourceSvg.lastElementChild.classList.contains('svg-prep-hit-layer')).toBe(
+      true
+    );
+
+    ws.destroy();
+  });
+
+  it('removes source SVG on close', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    ws.close();
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    expect(sourceSvg).toBeFalsy();
+
+    ws.destroy();
+  });
+});
+
+// D-120: the flatten runs through the lazily loaded ring engine, so a test
+// that reads the result awaits whenReady() once after open. After that the
+// engine is in and every later re-render is synchronous.
+describe('Phase 3: result pane rendering', () => {
+  it('renders prepared result in the result pane on open', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
+
+    const resultSvg = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(resultSvg).toBeTruthy();
+
+    ws.destroy();
+  });
+
+  it('result pane contains a single <path> after preparation', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
+
+    // The RESULT is one compound path. RE-PINNED at DP-40: the picture also
+    // carries a layer of invisible shapes for a pointer to hit, one per
+    // element, and counting every path in the pane counts those too. What
+    // this test is about is the result.
+    const paths = ws._root.querySelectorAll(
+      '.svg-prep-result-pane path:not(.svg-prep-hit-path)'
+    );
+    expect(paths.length).toBe(1);
+
+    ws.destroy();
+  });
+
+  it('result path carries the ring flatten fill rule (nonzero since D-120)', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
+
+    const path = ws._root.querySelector('.svg-prep-result-pane path');
+    expect(path.getAttribute('fill-rule')).toBe('nonzero');
+
+    ws.destroy();
+  });
+
+  it('getResult returns prepared SVG string after open', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
+
+    const result = ws.getResult();
+    expect(result).not.toBeNull();
+    expect(result).toContain('<svg');
+    expect(result).toContain('<path');
+
+    ws.destroy();
+  });
+
+  it('removes result SVG on close', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    ws.close();
+
+    const resultSvg = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(resultSvg).toBeFalsy();
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 3: role change updates result preview', () => {
+  it('changing role to ignore empties the preview', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // DP-53: the pane is never empty. The stand-in stands in for the result
+    // that does not exist (DP-Q34).
+    const resultSvg = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(resultSvg.classList.contains('svg-prep-standin')).toBe(true);
+    expect(ws.getResult()).toBeNull();
+
+    ws.destroy();
+  });
+
+  it('changing role from hole to foreground updates result path data', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const analysis = makeAnalysis(2);
+    ws.open(SIMPLE_SVG, analysis);
+    await ws.whenReady();
+
+    const initialPath = ws._root.querySelector('.svg-prep-result-pane path');
+    const initialD = initialPath ? initialPath.getAttribute('d') : '';
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const secondRadios = items[1].querySelectorAll('input[type="radio"]');
+    const fgRadio = Array.from(secondRadios).find(
+      (r) => r.value === 'foreground'
+    );
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const updatedPath = ws._root.querySelector('.svg-prep-result-pane path');
+    const updatedD = updatedPath ? updatedPath.getAttribute('d') : '';
+    expect(updatedD).not.toBe(initialD);
+
+    ws.destroy();
+  });
+
+  it('announces preview state after role change', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
+
+    const secondItem = ws._root.querySelector(
+      '.svg-prep-object[data-index="1"]'
+    );
+    const radios = secondItem.querySelectorAll('input[type="radio"]');
+    const fgRadio = Array.from(radios).find((r) => r.value === 'foreground');
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const liveRegion = ws._root.querySelector(
+      '[aria-live="polite"][aria-atomic="true"]'
+    );
+    expect(liveRegion.textContent).toMatch(/preview updated/i);
+    // The word a person reads on the control, not the value underneath it.
+    expect(liveRegion.textContent).toMatch(/\bon\b/);
+    expect(liveRegion.textContent).not.toMatch(/foreground/i);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 3: object list highlighting (overlay paths)', () => {
+  function getOverlay(ws) {
+    return ws._root.querySelector('.svg-prep-source-pane .svg-prep-overlay');
+  }
+
+  it('inserts a highlight path into the overlay on object mouseover', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const analysis = makeAnalysis(1);
+    ws.open(SIMPLE_SVG, analysis);
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    const highlight = getOverlay(ws).querySelector('.svg-prep-highlight-path');
+    expect(highlight).toBeTruthy();
+    expect(highlight.getAttribute('d')).toBe(analysis.elements[0].pathData);
+
+    ws.destroy();
+  });
+
+  it('clears the overlay on object mouseout', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    item.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+
+    // DP-47: the overlay holds two groups of its own now - what a person
+    // CHOSE and where the pointer IS - so "cleared" is about the marks in it,
+    // not about the groups.
+    expect(
+      getOverlay(ws).querySelectorAll('.svg-prep-highlight-path')
+    ).toHaveLength(0);
+
+    ws.destroy();
+  });
+
+  it('inserts a highlight path on object focusin', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    item.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+
+    expect(
+      getOverlay(ws).querySelector('.svg-prep-highlight-path')
+    ).toBeTruthy();
+
+    ws.destroy();
+  });
+
+  it('clears the overlay on object focusout', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    item.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    item.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+    expect(
+      getOverlay(ws).querySelectorAll('.svg-prep-highlight-path')
+    ).toHaveLength(0);
+
+    ws.destroy();
+  });
+
+  it('highlights the exact subpath d for each row (indexes never diverge)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const analysis = makeAnalysis(3);
+    ws.open(SIMPLE_SVG, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    items[2].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    const highlight = getOverlay(ws).querySelector('.svg-prep-highlight-path');
+    expect(highlight.getAttribute('d')).toBe(analysis.elements[2].pathData);
+
+    ws.destroy();
+  });
+
+  it('compound path: row N highlights subpath N of the single DOM element', () => {
+    // Single <path> with 3 M subpaths, expanded into 3 descriptors that
+    // all reference the same DOM element.
+    const compoundSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M10,10 L20,10 L20,20 Z M40,40 L50,40 L50,50 Z M70,70 L80,70 L80,80 Z" fill="black"/>' +
+      '</svg>';
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(compoundSvg, 'image/svg+xml');
+    const pathEl = doc.querySelector('path');
+    const subpaths = [
+      'M10,10 L20,10 L20,20 Z',
+      'M40,40 L50,40 L50,50 Z',
+      'M70,70 L80,70 L80,80 Z',
+    ];
+    const analysis = {
+      status: 'ready',
+      confidence: 1,
+      elements: subpaths.map((d, i) => ({
+        element: pathEl,
+        pathData: d,
+        fill: 'black',
+        stroke: '',
+        luminance: 0,
+        autoRole: 'foreground',
+        subpathIndex: i,
+        warnings: [],
+      })),
+      warnings: [],
+      unsupportedFeatures: [],
+      recommendation: 'pass_through',
+      singleElement: false,
+      isCompoundPathOnly: true,
+    };
+
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(compoundSvg, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    expect(items.length).toBe(3);
+
+    items[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    const highlight = getOverlay(ws).querySelector('.svg-prep-highlight-path');
+    expect(highlight.getAttribute('d')).toBe(subpaths[1]);
+
+    ws.destroy();
+  });
+});
+
+describe('role color-coding layer and legend', () => {
+  const legendWords = (ws) =>
+    [...ws._root.querySelectorAll('.svg-prep-legend-item')].map((el) =>
+      el.textContent.trim()
+    );
+
+  it('the legend says what the control beside it says, in both role tables', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    expect(legendWords(ws)).toEqual(['On', 'Cut out', 'Off']);
+
+    const compoundSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M10,10 L20,10 L20,20 Z M40,40 L50,40 L50,50 Z" fill="black"/>' +
+      '</svg>';
+    const pathEl = new DOMParser()
+      .parseFromString(compoundSvg, 'image/svg+xml')
+      .querySelector('path');
+    ws.open(compoundSvg, {
+      status: 'ready',
+      confidence: 1,
+      elements: ['M10,10 L20,10 L20,20 Z', 'M40,40 L50,40 L50,50 Z'].map(
+        (d, i) => ({
+          element: pathEl,
+          pathData: d,
+          fill: 'black',
+          stroke: '',
+          luminance: 0,
+          autoRole: 'foreground',
+          subpathIndex: i,
+          warnings: [],
+        })
+      ),
+      warnings: [],
+      unsupportedFeatures: [],
+      recommendation: 'pass_through',
+      singleElement: false,
+      isCompoundPathOnly: true,
+    });
+    // A compound path is never offered Hole, so the legend must not offer it.
+    expect(legendWords(ws)).toEqual(['On', 'Off']);
+
+    ws.destroy();
+  });
+
+  it('renders one role path per descriptor with role classes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const layer = ws._root.querySelector('.svg-prep-role-layer');
+    const paths = layer.querySelectorAll('.svg-prep-role-path');
+    expect(paths.length).toBe(2);
+    expect(paths[0].classList.contains('svg-prep-role--foreground')).toBe(true);
+    expect(paths[1].classList.contains('svg-prep-role--hole')).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('updates the role layer when a role radio changes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const radios = items[1].querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const layer = ws._root.querySelector('.svg-prep-role-layer');
+    const paths = layer.querySelectorAll('.svg-prep-role-path');
+    expect(paths[1].classList.contains('svg-prep-role--ignore')).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('header toggle hides the role layer and legend', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const toggle = ws._root.querySelector('.svg-prep-roles-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+    toggle.click();
+
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    const layer = ws._root.querySelector('.svg-prep-role-layer');
+    expect(layer.children.length).toBe(0);
+    expect(ws._refs.legendRow.hidden).toBe(true);
+
+    toggle.click();
+    expect(layer.children.length).toBe(2);
+    expect(ws._refs.legendRow.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('renders a three-chip legend row', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const chips = ws._root.querySelectorAll('.svg-prep-legend-chip');
+    expect(chips.length).toBe(3);
+    ws.destroy();
+  });
+
+  it('shows visible pane captions', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const captions = ws._root.querySelectorAll('.svg-prep-pane-caption');
+    expect(captions.length).toBe(2);
+    expect(captions[0].textContent).toBe('Original');
+    expect(captions[1].textContent).toBe('Will print as');
+    ws.destroy();
+  });
+});
+
+describe('Phase 3: zoom controls', () => {
+  it('zoom in reduces the source pane viewBox', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    const initialVB = sourceSvg.getAttribute('viewBox');
+    const [, , w1] = initialVB.split(/[\s,]+/).map(Number);
+
+    const zoomInBtn = ws._root.querySelector(
+      '.svg-prep-source-pane .svg-prep-zoom-in'
+    );
+    zoomInBtn.click();
+
+    const newVB = sourceSvg.getAttribute('viewBox');
+    const [, , w2] = newVB.split(/[\s,]+/).map(Number);
+    expect(w2).toBeLessThan(w1);
+
+    ws.destroy();
+  });
+
+  it('zoom out expands the source pane viewBox', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    const initialVB = sourceSvg.getAttribute('viewBox');
+    const [, , w1] = initialVB.split(/[\s,]+/).map(Number);
+
+    const zoomOutBtn = ws._root.querySelector(
+      '.svg-prep-source-pane .svg-prep-zoom-out'
+    );
+    zoomOutBtn.click();
+
+    const newVB = sourceSvg.getAttribute('viewBox');
+    const [, , w2] = newVB.split(/[\s,]+/).map(Number);
+    expect(w2).toBeGreaterThan(w1);
+
+    ws.destroy();
+  });
+
+  it('fit restores the natural viewBox', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    const naturalVB = sourceSvg.getAttribute('viewBox');
+
+    const zoomInBtn = ws._root.querySelector(
+      '.svg-prep-source-pane .svg-prep-zoom-in'
+    );
+    zoomInBtn.click();
+    expect(sourceSvg.getAttribute('viewBox')).not.toBe(naturalVB);
+
+    const fitBtn = ws._root.querySelector(
+      '.svg-prep-source-pane .svg-prep-zoom-fit'
+    );
+    fitBtn.click();
+    expect(sourceSvg.getAttribute('viewBox')).toBe(naturalVB);
+
+    ws.destroy();
+  });
+
+  it('keyboard + zooms in on focused pane', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourcePane = ws._root.querySelector('.svg-prep-source-pane');
+    const sourceSvg = sourcePane.querySelector('svg');
+    const initialVB = sourceSvg.getAttribute('viewBox');
+    const [, , w1] = initialVB.split(/[\s,]+/).map(Number);
+
+    sourcePane.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '+', bubbles: true })
+    );
+
+    const [, , w2] = sourceSvg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
+    expect(w2).toBeLessThan(w1);
+
+    ws.destroy();
+  });
+
+  it('keyboard - zooms out on focused pane', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourcePane = ws._root.querySelector('.svg-prep-source-pane');
+    const sourceSvg = sourcePane.querySelector('svg');
+    const initialVB = sourceSvg.getAttribute('viewBox');
+    const [, , w1] = initialVB.split(/[\s,]+/).map(Number);
+
+    sourcePane.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '-', bubbles: true })
+    );
+
+    const [, , w2] = sourceSvg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
+    expect(w2).toBeGreaterThan(w1);
+
+    ws.destroy();
+  });
+
+  it('makes preview panes focusable with tabIndex', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourcePane = ws._root.querySelector('.svg-prep-source-pane');
+    expect(sourcePane.tabIndex).toBe(0);
+
+    const resultPane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(resultPane.tabIndex).toBe(0);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 3: reset behavior', () => {
+  it('Reset restores radio buttons to auto-classification', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const analysis = makeAnalysis(2);
+    ws.open(SIMPLE_SVG, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const firstRadios = items[0].querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(firstRadios).find(
+      (r) => r.value === 'ignore'
+    );
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const resetBtn = ws._root.querySelector('[data-action="reset"]');
+    resetBtn.click();
+
+    const fgRadio = Array.from(firstRadios).find(
+      (r) => r.value === 'foreground'
+    );
+    expect(fgRadio.checked).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('Reset updates the result preview', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // RE-PINNED at DP-37: this used to assert the pane held NO svg at all.
+    // The pane is never empty now (P1) - with every shape ignored there is no
+    // combined result, and what stands in its place is the drawing itself,
+    // marked as not yet combined. Emptiness was the evidence, not the point.
+    expect(
+      ws._root.querySelector('.svg-prep-result-pane svg.svg-prep-standin')
+    ).toBeTruthy();
+    expect(ws._refs.applyBtn.disabled).toBe(true);
+
+    const resetBtn = ws._root.querySelector('[data-action="reset"]');
+    resetBtn.click();
+
+    expect(ws._root.querySelector('.svg-prep-result-pane svg')).toBeTruthy();
+
+    ws.destroy();
+  });
+});
+
+// ── Phase 4a — Callback integration ─────────────────────────────────────
+
+describe('Phase 4a: open() callbacks parameter', () => {
+  it('open() accepts an optional callbacks parameter', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const onApply = vi.fn();
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    expect(ws._root.hidden).toBe(false);
+    ws.destroy();
+  });
+
+  it('open() works without callbacks (backward compat)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    expect(ws._root.hidden).toBe(false);
+    ws.destroy();
+  });
+});
+
+describe('Phase 4a: Apply button fires onApply callback', () => {
+  it('calls onApply with the prepared result on Apply', async () => {
+    const onApply = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    await ws.whenReady();
+
+    const applyBtn = ws._root.querySelector('[data-action="apply"]');
+    applyBtn.click();
+
+    expect(onApply).toHaveBeenCalledTimes(1);
+    const result = onApply.mock.calls[0][0];
+    expect(result).toContain('<svg');
+    expect(result).toContain('<path');
+  });
+
+  it('closes the editor after calling onApply', async () => {
+    const onApply = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    await ws.whenReady();
+
+    ws._root.querySelector('[data-action="apply"]').click();
+    expect(ws._root.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 4a: Keep original fires onKeepOriginal callback', () => {
+  it('calls onKeepOriginal on Keep original', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws._root.querySelector('[data-action="keep"]').click();
+
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the result before calling onKeepOriginal', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws._root.querySelector('[data-action="keep"]').click();
+    expect(ws.getResult()).toBeNull();
+
+    ws.destroy();
+  });
+
+  it('closes the editor after calling onKeepOriginal', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws._root.querySelector('[data-action="keep"]').click();
+    expect(ws._root.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 4a: Escape / close button keep the original', () => {
+  it('Escape fires onKeepOriginal (close without Apply = keep original)', () => {
+    const onApply = vi.fn();
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply, onKeepOriginal });
+
+    ws._root.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1);
+    expect(ws.getResult()).toBeNull();
+
+    ws.destroy();
+  });
+
+  it('close button fires onKeepOriginal but never onApply', () => {
+    const onApply = vi.fn();
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply, onKeepOriginal });
+
+    ws._root.querySelector('.svg-prep-close-btn').click();
+
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1);
+
+    ws.destroy();
+  });
+
+  it('close after Apply does not fire onKeepOriginal', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws._root.querySelector('[data-action="apply"]').click();
+
+    expect(onKeepOriginal).not.toHaveBeenCalled();
+
+    ws.destroy();
+  });
+
+  it('Keep original fires onKeepOriginal exactly once (not again on close)', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws._root.querySelector('[data-action="keep"]').click();
+
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1);
+
+    ws.destroy();
+  });
+
+  it('dismiss() closes without firing onKeepOriginal', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws.dismiss();
+
+    expect(onKeepOriginal).not.toHaveBeenCalled();
+    expect(ws._root.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('Apply button disabled state', () => {
+  it('disables Apply and shows the hint when nothing is included', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
+
+    const applyBtn = ws._root.querySelector('[data-action="apply"]');
+    expect(applyBtn.disabled).toBe(false);
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(applyBtn.disabled).toBe(true);
+    expect(applyBtn.getAttribute('aria-disabled')).toBe('true');
+    expect(ws._refs.applyHint.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('re-enables Apply when the preview becomes non-empty again', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    const fgRadio = Array.from(radios).find((r) => r.value === 'foreground');
+
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    // DP-53: the combine follows the settle.
+    await ws.whenCombined();
+
+    const applyBtn = ws._root.querySelector('[data-action="apply"]');
+    expect(applyBtn.disabled).toBe(false);
+    expect(ws._refs.applyHint.hidden).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('clicking a disabled-state Apply does not fire onApply', () => {
+    const onApply = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    ws._root.querySelector('[data-action="apply"]').click();
+    expect(onApply).not.toHaveBeenCalled();
+    expect(ws._root.hidden).toBe(false);
+
+    ws.destroy();
+  });
+});
+
+describe('compound-path mode (Include/Exclude)', () => {
+  function makeCompoundAnalysis() {
+    const compoundSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M10,10 L20,10 L20,20 Z M40,40 L50,40 L50,50 Z" fill="black"/>' +
+      '</svg>';
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(compoundSvg, 'image/svg+xml');
+    const pathEl = doc.querySelector('path');
+    return {
+      svg: compoundSvg,
+      analysis: {
+        status: 'ready',
+        confidence: 1,
+        elements: ['M10,10 L20,10 L20,20 Z', 'M40,40 L50,40 L50,50 Z'].map(
+          (d, i) => ({
+            element: pathEl,
+            pathData: d,
+            fill: 'black',
+            stroke: '',
+            luminance: 0,
+            autoRole: 'foreground',
+            subpathIndex: i,
+            warnings: [],
+          })
+        ),
+        warnings: [],
+        unsupportedFeatures: [],
+        recommendation: 'pass_through',
+        singleElement: false,
+        isCompoundPathOnly: true,
+      },
+    };
+  }
+
+  it('renders only Include/Exclude radios for compound paths', () => {
+    const { svg, analysis } = makeCompoundAnalysis();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analysis);
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const radios = item.querySelectorAll('input[type="radio"]');
+    expect(radios.length).toBe(2);
+    const values = Array.from(radios).map((r) => r.value);
+    expect(values).toEqual(['foreground', 'ignore']);
+
+    const labels = Array.from(item.querySelectorAll('fieldset label')).map(
+      (l) => l.textContent
+    );
+    expect(labels).toEqual(['On', 'Off']);
+
+    ws.destroy();
+  });
+
+  it('labels rows "Shape N" in compound mode (DP-Q45)', () => {
+    // Signed wording: a person is choosing whether a shape is in the drawing,
+    // not about a `d` attribute. It matters more since DP-Q43 made Potrace the
+    // default - Potrace returns one compound path, so this is what a screen
+    // reader says about every traced picture now, not the occasional one.
+    const { svg, analysis } = makeCompoundAnalysis();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analysis);
+
+    const names = Array.from(
+      ws._root.querySelectorAll('.svg-prep-object-name')
+    ).map((n) => n.textContent);
+    expect(names).toEqual(['Shape 1', 'Shape 2']);
+
+    const labels = Array.from(
+      ws._root.querySelectorAll('.svg-prep-object')
+    ).map((el) => el.getAttribute('aria-label'));
+    // Compound mode has its own two words: a subpath is included or excluded,
+    // and "Hole" would be a lie because subpaths are concatenated, not
+    // subtracted. The name reads whichever table is in force.
+    expect(labels[0]).toBe('Shape 1, On');
+
+    ws.destroy();
+  });
+
+  it('excluding a subpath removes it from the result', async () => {
+    const { svg, analysis } = makeCompoundAnalysis();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const excludeRadio = Array.from(
+      items[1].querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    excludeRadio.checked = true;
+    excludeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await ws.whenCombined();
+
+    const result = ws.getResult();
+    expect(result).toContain('M10,10');
+    expect(result).not.toContain('M40,40');
+
+    ws.destroy();
+  });
+});
+
+describe('viewBox fallback and zoom preservation', () => {
+  it('derives a viewBox from width/height when absent', () => {
+    const noVbSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm">' +
+      '<circle cx="50" cy="50" r="40" fill="black"/></svg>';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(noVbSvg, makeAnalysis(1));
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    expect(sourceSvg.getAttribute('viewBox')).toBe('0 0 200 100');
+
+    // Zoom controls work because the derived viewBox exists
+    const zoomInBtn = ws._root.querySelector(
+      '.svg-prep-source-pane .svg-prep-zoom-in'
+    );
+    zoomInBtn.click();
+    const [, , w] = sourceSvg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
+    expect(w).toBeLessThan(200);
+
+    ws.destroy();
+  });
+
+  it('preserves result pane zoom across preview re-renders', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
+
+    const zoomInBtn = ws._root.querySelector(
+      '.svg-prep-result-pane .svg-prep-zoom-in'
+    );
+    zoomInBtn.click();
+
+    const zoomedVB = ws._root
+      .querySelector('.svg-prep-result-pane svg')
+      .getAttribute('viewBox');
+
+    // Trigger a preview re-render via a role change
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const fgRadio = Array.from(
+      items[1].querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'foreground');
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await ws.whenCombined();
+
+    const newSvg = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(newSvg.getAttribute('viewBox')).toBe(zoomedVB);
+
+    ws.destroy();
+  });
+});
+
+describe('preview error handling', () => {
+  it('shows an inline error instead of dying when preview generation throws', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
+
+    // Force the next preview render to explode mid-pipeline
+    const RealDOMParser = globalThis.DOMParser;
+    globalThis.DOMParser = class {
+      parseFromString() {
+        throw new Error('boom');
+      }
+    };
+
+    try {
+      const items = ws._root.querySelectorAll('.svg-prep-object');
+      const fgRadio = Array.from(
+        items[1].querySelectorAll('input[type="radio"]')
+      ).find((r) => r.value === 'foreground');
+      fgRadio.checked = true;
+      expect(() =>
+        fgRadio.dispatchEvent(new Event('change', { bubbles: true }))
+      ).not.toThrow();
+      // DP-53: the combine, and so the throw, comes after the settle.
+      await ws.whenCombined();
+    } finally {
+      globalThis.DOMParser = RealDOMParser;
+    }
+
+    const errorMsg = ws._root.querySelector('.svg-prep-result-error');
+    expect(errorMsg).toBeTruthy();
+    expect(errorMsg.textContent).toMatch(/original will be kept/i);
+
+    const applyBtn = ws._root.querySelector('[data-action="apply"]');
+    expect(applyBtn.disabled).toBe(true);
+
+    // Recovering: a valid change re-renders and clears the error
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const holeRadio = Array.from(
+      items[1].querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'hole');
+    holeRadio.checked = true;
+    holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await ws.whenCombined();
+
+    expect(ws._root.querySelector('.svg-prep-result-error')).toBeFalsy();
+    expect(applyBtn.disabled).toBe(false);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 4a: callbacks are cleared on close', () => {
+  it('does not fire stale callbacks on re-open without callbacks', () => {
+    const onApply = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    ws.close();
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    ws._root.querySelector('[data-action="apply"]').click();
+    expect(onApply).not.toHaveBeenCalled();
+
+    ws.destroy();
+  });
+});
+
+// ── Phase 5 — Persistence support ───────────────────────────────────────
+
+describe('Phase 5: getRoleOverrides()', () => {
+  it('returns current roles as an array copy', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+
+    const overrides = ws.getRoleOverrides();
+    expect(Array.isArray(overrides)).toBe(true);
+    expect(overrides).toHaveLength(3);
+    expect(overrides[0]).toBe('foreground');
+    expect(overrides[1]).toBe('hole');
+    expect(overrides[2]).toBe('hole');
+
+    ws.destroy();
+  });
+
+  it('returns a copy that does not mutate internal state', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const overrides = ws.getRoleOverrides();
+    overrides[0] = 'ignore';
+
+    const fresh = ws.getRoleOverrides();
+    expect(fresh[0]).toBe('foreground');
+
+    ws.destroy();
+  });
+
+  it('reflects role changes made via radio buttons', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find(
+      (r) => r.name === 'svg-prep-role-0' && r.value === 'ignore'
+    );
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const overrides = ws.getRoleOverrides();
+    expect(overrides[0]).toBe('ignore');
+
+    ws.destroy();
+  });
+
+  it('is callable from the onApply callback before close()', async () => {
+    let capturedOverrides = null;
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      onApply: () => {
+        capturedOverrides = ws.getRoleOverrides();
+      },
+    });
+    await ws.whenReady();
+
+    ws._root.querySelector('[data-action="apply"]').click();
+    expect(capturedOverrides).toBeTruthy();
+    expect(capturedOverrides[0]).toBe('foreground');
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 5: open() with initialOverrides', () => {
+  it('applies initial overrides to radio buttons', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOverrides: ['ignore', 'foreground', 'hole'],
+    });
+
+    const overrides = ws.getRoleOverrides();
+    expect(overrides).toEqual(['ignore', 'foreground', 'hole']);
+
+    const radios0 = ws._root.querySelectorAll('input[name="svg-prep-role-0"]');
+    const checked0 = Array.from(radios0).find((r) => r.checked);
+    expect(checked0.value).toBe('ignore');
+
+    const radios1 = ws._root.querySelectorAll('input[name="svg-prep-role-1"]');
+    const checked1 = Array.from(radios1).find((r) => r.checked);
+    expect(checked1.value).toBe('foreground');
+
+    ws.destroy();
+  });
+
+  it('updates aria-labels when applying initial overrides', () => {
+    // RE-PINNED at DP-41. This test was holding the retired words in place:
+    // it asserted "role: ignore" and "role: foreground", which is what this
+    // path still wrote after DP-39 gave the control the words Raised, Hole
+    // and Ignore. The assertion was green because the code and the test
+    // agreed with each other and with nothing a person reads.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      initialOverrides: ['ignore', 'foreground'],
+    });
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    expect(items[0].getAttribute('aria-label')).toContain('Off');
+    expect(items[1].getAttribute('aria-label')).toContain('On');
+    expect(items[0].getAttribute('aria-label')).not.toContain('role:');
+    expect(items[1].getAttribute('aria-label')).not.toContain('role:');
+
+    ws.destroy();
+  });
+
+  it('ignores overrides beyond the element count', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      initialOverrides: ['ignore', 'foreground', 'hole', 'foreground'],
+    });
+
+    const overrides = ws.getRoleOverrides();
+    expect(overrides).toHaveLength(2);
+    expect(overrides).toEqual(['ignore', 'foreground']);
+
+    ws.destroy();
+  });
+
+  it('skips null entries in initialOverrides', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOverrides: [null, 'foreground', null],
+    });
+
+    const overrides = ws.getRoleOverrides();
+    expect(overrides[0]).toBe('foreground');
+    expect(overrides[1]).toBe('foreground');
+    expect(overrides[2]).toBe('hole');
+
+    ws.destroy();
+  });
+
+  it('works without initialOverrides (backward compat)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const overrides = ws.getRoleOverrides();
+    expect(overrides[0]).toBe('foreground');
+    expect(overrides[1]).toBe('hole');
+
+    ws.destroy();
+  });
+
+  it('result preview reflects initial overrides', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      initialOverrides: ['ignore', 'ignore'],
+    });
+
+    // DP-53: the pane is never empty; with every shape ignored the stand-in
+    // stands in and there is no result.
+    const picture = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(picture.classList.contains('svg-prep-standin')).toBe(true);
+    expect(ws.getResult()).toBeNull();
+
+    ws.destroy();
+  });
+});
+
+// ── Phase 6b — Accessibility validation ──────────────────────────────────
+
+describe('Phase 6b: accessibility — screen reader landmarks', () => {
+  it('workspace root is a labelled region', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    expect(ws._root.getAttribute('role')).toBe('region');
+    expect(ws._root.getAttribute('aria-labelledby')).toBe('svg-prep-title');
+    const title = ws._root.querySelector('#svg-prep-title');
+    expect(title).toBeTruthy();
+    expect(title.textContent).not.toBe('');
+
+    ws.destroy();
+  });
+
+  it('object list is a labelled list landmark', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const list = ws._root.querySelector('.svg-prep-objects');
+    expect(list.getAttribute('role')).toBe('list');
+    expect(list.getAttribute('aria-label')).toBe('Shapes');
+
+    const items = list.querySelectorAll('[role="listitem"]');
+    expect(items.length).toBe(2);
+
+    ws.destroy();
+  });
+
+  it('preview panes are named groups, and the picture inside is the image', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const src = ws._root.querySelector('.svg-prep-source-pane');
+    expect(src.getAttribute('role')).toBe('group');
+    expect(src.getAttribute('aria-label')).toBe('Source SVG');
+
+    const res = ws._root.querySelector('.svg-prep-result-pane');
+    expect(res.getAttribute('role')).toBe('group');
+    expect(res.getAttribute('aria-label')).toBe('Prepared result');
+
+    // The zoom buttons are why: role="img" cannot hold focusable children
+    // (D-102).
+    expect(src.querySelectorAll('button').length).toBeGreaterThan(0);
+    expect(res.querySelectorAll('button').length).toBeGreaterThan(0);
+
+    ws.destroy();
+  });
+
+  it('the live region is not a child of the object list (D-101)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const list = ws._root.querySelector('.svg-prep-objects');
+    // role="list" accepts listitem children and nothing else. A live region
+    // parked among them made the whole list invalid to assistive technology.
+    const strays = [...list.children].filter(
+      (child) => child.getAttribute('role') !== 'listitem'
+    );
+    expect(strays.map((el) => el.className)).toEqual([]);
+    expect(ws._root.querySelector('[aria-live="polite"]')).toBeTruthy();
+
+    ws.destroy();
+  });
+
+  it('warning region is a live status landmark', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const w = ws._root.querySelector('.svg-prep-warnings');
+    expect(w.getAttribute('role')).toBe('status');
+    expect(w.getAttribute('aria-live')).toBe('polite');
+
+    ws.destroy();
+  });
+
+  it('inline live region is polite and atomic', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const lr = ws._root.querySelector(
+      '[aria-live="polite"][aria-atomic="true"]'
+    );
+    expect(lr).toBeTruthy();
+    expect(lr.classList.contains('sr-only')).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 6b: accessibility — all interactive elements have names', () => {
+  it('fullscreen button has an accessible name', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const btn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+    expect(btn.getAttribute('aria-label')).toBeTruthy();
+    ws.destroy();
+  });
+
+  it('close button has an accessible name', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const btn = ws._root.querySelector('.svg-prep-close-btn');
+    expect(btn.getAttribute('aria-label')).toBeTruthy();
+    ws.destroy();
+  });
+
+  it('all zoom buttons have accessible names', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const zoomBtns = ws._root.querySelectorAll(
+      '.svg-prep-zoom-controls button'
+    );
+    expect(zoomBtns.length).toBeGreaterThanOrEqual(6);
+
+    zoomBtns.forEach((btn) => {
+      expect(btn.getAttribute('aria-label')).toBeTruthy();
+    });
+
+    ws.destroy();
+  });
+
+  it('footer action buttons have visible text labels', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const footer = ws._root.querySelector('.svg-prep-footer');
+    const btns = footer.querySelectorAll('button');
+
+    btns.forEach((btn) => {
+      expect(btn.textContent.trim()).not.toBe('');
+    });
+
+    ws.destroy();
+  });
+
+  it('each radio group has a legend for screen readers', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const fieldsets = ws._root.querySelectorAll('.svg-prep-role-group');
+    fieldsets.forEach((fs) => {
+      const legend = fs.querySelector('legend');
+      expect(legend).toBeTruthy();
+      expect(legend.textContent).toMatch(/Role for/);
+      expect(legend.classList.contains('sr-only')).toBe(true);
+    });
+
+    ws.destroy();
+  });
+
+  it('color swatches are hidden from screen readers', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const swatches = ws._root.querySelectorAll('.svg-prep-swatch');
+    swatches.forEach((s) => {
+      expect(s.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    ws.destroy();
+  });
+
+  it('color swatches are non-interactive decorative elements, not checkboxes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const swatches = ws._root.querySelectorAll('.svg-prep-swatch');
+    expect(swatches.length).toBe(2);
+    swatches.forEach((s) => {
+      expect(s.tagName).toBe('SPAN');
+      expect(s.querySelector('input')).toBeNull();
+      expect(s.getAttribute('role')).toBeNull();
+    });
+
+    ws.destroy();
+  });
+
+  it('backdrop is marked aria-hidden when shown and hidden', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const backdrop = ws._refs.backdrop;
+    expect(backdrop.getAttribute('aria-hidden')).toBe('true');
+
+    ws.openFullscreen();
+    expect(backdrop.getAttribute('aria-hidden')).toBe('false');
+
+    ws.closeFullscreen();
+    expect(backdrop.getAttribute('aria-hidden')).toBe('true');
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 6b: accessibility — keyboard walkthrough', () => {
+  it('all object list items are keyboard-focusable', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    items.forEach((item) => {
+      expect(item.tabIndex).toBe(0);
+    });
+
+    ws.destroy();
+  });
+
+  it('preview panes are keyboard-focusable for zoom shortcuts', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const srcPane = ws._root.querySelector('.svg-prep-source-pane');
+    const resPane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(srcPane.tabIndex).toBe(0);
+    expect(resPane.tabIndex).toBe(0);
+
+    ws.destroy();
+  });
+
+  it('Escape in fullscreen exits fullscreen without closing editor', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    ws.openFullscreen();
+
+    ws._root.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+
+    expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+    expect(ws._root.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('Escape when not fullscreen closes the editor', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    ws._root.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+
+    expect(ws._root.hidden).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('radio inputs use shared name per element for arrow-key navigation', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const group0 = ws._root.querySelectorAll('input[name="svg-prep-role-0"]');
+    expect(group0.length).toBe(3);
+
+    const group1 = ws._root.querySelectorAll('input[name="svg-prep-role-1"]');
+    expect(group1.length).toBe(3);
+
+    expect(group0[0].name).not.toBe(group1[0].name);
+
+    ws.destroy();
+  });
+
+  it('keyboard = key zooms in on focused source pane', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const sourcePane = ws._root.querySelector('.svg-prep-source-pane');
+    const svg = sourcePane.querySelector('svg');
+    const [, , w1] = svg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
+
+    sourcePane.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '=', bubbles: true })
+    );
+
+    const [, , w2] = svg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
+    expect(w2).toBeLessThan(w1);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 6b: accessibility — focus management', () => {
+  it('openFullscreen creates a focus trap', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    ws.openFullscreen();
+
+    expect(createDocumentFocusTrap).toHaveBeenCalledWith(
+      ws._root,
+      expect.objectContaining({ onEscape: expect.any(Function) })
+    );
+    expect(mockTrapActivate).toHaveBeenCalledWith(
+      expect.objectContaining({ initialFocus: expect.any(HTMLElement) })
+    );
+
+    ws.destroy();
+  });
+
+  it('closeFullscreen deactivates the focus trap', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    ws.openFullscreen();
+    ws.closeFullscreen();
+
+    expect(mockTrapDeactivate).toHaveBeenCalled();
+
+    ws.destroy();
+  });
+
+  it('close() deactivates fullscreen trap if active', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    ws.openFullscreen();
+
+    vi.clearAllMocks();
+    ws.close();
+
+    expect(mockTrapDeactivate).toHaveBeenCalled();
+
+    ws.destroy();
+  });
+
+  it('announces lifecycle events for screen readers', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    expect(announce).toHaveBeenCalledWith('SVG Preparation Editor opened');
+
+    ws.openFullscreen();
+    expect(announce).toHaveBeenCalledWith('SVG editor expanded to fullscreen');
+
+    ws.closeFullscreen();
+    expect(announce).toHaveBeenCalledWith('Exited fullscreen SVG editor');
+
+    ws.close();
+    expect(announce).toHaveBeenCalledWith('SVG Preparation Editor closed');
+
+    ws.destroy();
+  });
+});
+
+// ── Fullscreen sticky layout CSS contract ────────────────────────────────
+//
+// jsdom does not compute styles from external CSS. These tests read the
+// stylesheet source to verify the layout contract for fullscreen mode.
+// They are intentionally red until Phase 2 adds the required CSS rules.
+
+describe('Fullscreen sticky layout CSS contract', () => {
+  let css;
+
+  beforeAll(() => {
+    css = readFileSync(resolve('src/styles/components.css'), 'utf-8');
+  });
+
+  it('fullscreen root sets overflow: hidden so only objects list scrolls', () => {
+    const match = css.match(
+      /\.svg-prep-workspace\.svg-prep-fullscreen\s*\{([^}]*)\}/
+    );
+    expect(match).not.toBeNull();
+    expect(match[1]).toMatch(/overflow\s*:\s*hidden/);
+  });
+
+  it('fullscreen objects list has overflow-y: auto', () => {
+    expect(css).toMatch(
+      /\.svg-prep-fullscreen\s+\.svg-prep-objects\s*\{[^}]*overflow-y\s*:\s*auto/
+    );
+  });
+
+  it('540px stacking media query is scoped to non-fullscreen only', () => {
+    const mediaBlocks = [
+      ...css.matchAll(
+        /@media\s*\(\s*max-width\s*:\s*540px\s*\)\s*\{([\s\S]*?\n\})/g
+      ),
+    ];
+    const nonFullscreenBlock = mediaBlocks.find((m) =>
+      /:not\(\.svg-prep-fullscreen\)/.test(m[1])
+    );
+    expect(nonFullscreenBlock).toBeDefined();
+  });
+
+  it('540px fullscreen block uses compact padding with safe-area-insets', () => {
+    const mediaBlocks = [
+      ...css.matchAll(
+        /@media\s*\(\s*max-width\s*:\s*540px\s*\)\s*\{([\s\S]*?\n\})/g
+      ),
+    ];
+    const fullscreenBlock = mediaBlocks.find(
+      (m) =>
+        /\.svg-prep-fullscreen/.test(m[1]) &&
+        !/\:not\(/.test(m[1].split('.svg-prep-fullscreen')[0].split('\n').pop())
+    );
+    expect(fullscreenBlock).toBeDefined();
+    expect(fullscreenBlock[1]).toMatch(/env\(safe-area-inset-top/);
+    expect(fullscreenBlock[1]).toMatch(/env\(safe-area-inset-bottom/);
+  });
+
+  it('non-fullscreen workspace preserves default overflow', () => {
+    const baseMatch = css.match(/\.svg-prep-workspace\s*\{([^}]*)\}/);
+    expect(baseMatch).not.toBeNull();
+    expect(baseMatch[1]).not.toMatch(/overflow\s*:\s*hidden/);
+  });
+});
+
+// ── Phase 9 — Offset input unit tests ────────────────────────────────────
+
+describe('Phase 9: offset inputs (flag disabled)', () => {
+  it('does not render offset inputs when flag is disabled', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    expect(inputs.length).toBe(0);
+
+    ws.destroy();
+  });
+
+  it('design-width group is hidden when flag is disabled', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const group = ws._root.querySelector('.svg-prep-design-width');
+    expect(group.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: offset inputs (flag enabled)', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('renders an offset input per element', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    expect(inputs.length).toBe(3);
+
+    ws.destroy();
+  });
+
+  it('offset input has correct type, range, and step', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const input = ws._root.querySelector('.svg-prep-offset-input');
+    expect(input.type).toBe('number');
+    expect(input.min).toBe('-2');
+    expect(input.max).toBe('2');
+    expect(input.step).toBe('0.1');
+    expect(input.value).toBe('0');
+
+    ws.destroy();
+  });
+
+  it('offset input has aria-label including element name and units', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const input = ws._root.querySelector('.svg-prep-offset-input');
+    expect(input.getAttribute('aria-label')).toMatch(/Offset for .+ \(mm\)/);
+
+    ws.destroy();
+  });
+
+  it('offset input starts disabled when autoRole is "ignore"', () => {
+    const analysis = makeAnalysis(2);
+    analysis.elements[1].autoRole = 'ignore';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const secondInput = items[1].querySelector('.svg-prep-offset-input');
+    expect(secondInput.disabled).toBe(true);
+
+    const firstInput = items[0].querySelector('.svg-prep-offset-input');
+    expect(firstInput.disabled).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('disables offset input when role changes to "ignore"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const ignoreRadio = Array.from(
+      item.querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const offsetInput = item.querySelector('.svg-prep-offset-input');
+    expect(offsetInput.disabled).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('re-enables offset input when role changes back from "ignore"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const radios = item.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    const fgRadio = Array.from(radios).find((r) => r.value === 'foreground');
+
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(item.querySelector('.svg-prep-offset-input').disabled).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('resets offset value to 0 when role changes to "ignore"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const offsetInput = item.querySelector('.svg-prep-offset-input');
+    offsetInput.value = '0.5';
+    offsetInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const ignoreRadio = Array.from(
+      item.querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(offsetInput.value).toBe('0');
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: getOffsetOverrides()', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('returns initial zeros for all elements', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+
+    expect(ws.getOffsetOverrides()).toEqual([0, 0, 0]);
+
+    ws.destroy();
+  });
+
+  it('reflects offset changes from input events', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    inputs[0].value = '0.5';
+    inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(ws.getOffsetOverrides()[0]).toBe(0.5);
+    expect(ws.getOffsetOverrides()[1]).toBe(0);
+
+    ws.destroy();
+  });
+
+  it('returns a copy that does not mutate internal state', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const overrides = ws.getOffsetOverrides();
+    overrides[0] = 99;
+
+    expect(ws.getOffsetOverrides()[0]).toBe(0);
+
+    ws.destroy();
+  });
+
+  it('is callable from the onApply callback before close', async () => {
+    let capturedOffsets = null;
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      onApply: () => {
+        capturedOffsets = ws.getOffsetOverrides();
+      },
+    });
+    await ws.whenReady();
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    inputs[0].value = '1.0';
+    inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+
+    ws._root.querySelector('[data-action="apply"]').click();
+    expect(capturedOffsets).toEqual([1.0, 0]);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: open() with initialOffsets', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('applies initial offsets to input values', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOffsets: [0.5, -0.3, 0],
+    });
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    expect(inputs[0].value).toBe('0.5');
+    expect(inputs[1].value).toBe('-0.3');
+    expect(inputs[2].value).toBe('0');
+
+    ws.destroy();
+  });
+
+  it('getOffsetOverrides reflects initial offsets', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      initialOffsets: [1.0, -0.5],
+    });
+
+    expect(ws.getOffsetOverrides()).toEqual([1.0, -0.5]);
+
+    ws.destroy();
+  });
+
+  it('ignores non-finite values in initialOffsets', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOffsets: [NaN, null, undefined],
+    });
+
+    expect(ws.getOffsetOverrides()).toEqual([0, 0, 0]);
+
+    ws.destroy();
+  });
+
+  it('works without initialOffsets (backward compat)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    expect(ws.getOffsetOverrides()).toEqual([0, 0]);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: design-width input', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('renders with default value of 14', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const input = ws._root.querySelector('.svg-prep-design-width-input');
+    expect(input).toBeTruthy();
+    expect(input.value).toBe('14');
+
+    ws.destroy();
+  });
+
+  it('has correct type and constraints', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const input = ws._root.querySelector('.svg-prep-design-width-input');
+    expect(input.type).toBe('number');
+    expect(input.min).toBe('1');
+    expect(input.max).toBe('200');
+    expect(input.step).toBe('1');
+
+    ws.destroy();
+  });
+
+  it('design-width group is visible when flag is enabled', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const group = ws._root.querySelector('.svg-prep-design-width');
+    expect(group.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('has a label with "mm" unit suffix', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const unit = ws._root.querySelector('.svg-prep-design-width-unit');
+    expect(unit).toBeTruthy();
+    expect(unit.textContent).toBe('mm');
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: Reset restores offsets', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('Reset clears offset values to zero', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    inputs[0].value = '1.5';
+    inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+
+    ws._root.querySelector('[data-action="reset"]').click();
+
+    expect(inputs[0].value).toBe('0');
+    expect(ws.getOffsetOverrides()).toEqual([0, 0]);
+
+    ws.destroy();
+  });
+
+  it('Reset re-enables offset inputs disabled by ignore role', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const ignoreRadio = Array.from(
+      item.querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(item.querySelector('.svg-prep-offset-input').disabled).toBe(true);
+
+    ws._root.querySelector('[data-action="reset"]').click();
+
+    expect(item.querySelector('.svg-prep-offset-input').disabled).toBe(false);
+
+    ws.destroy();
+  });
+});
+
+/**
+ * DP-4: removing shapes from the LIST, not just from the output.
+ *
+ * The sharp edge here is not the deleting, it is what deleting does to
+ * everything that is keyed by position: the rows' data-index, the radio group
+ * names, the roles and offsets arrays, and above all the SAVED
+ * prepOverrides / prepOffsets. The editor reopens on the raw SVG and
+ * re-analyses it, so a saved role array that is positional against the
+ * post-delete list would be applied to the wrong shapes on the next visit.
+ */
+describe('deleting shapes from the list (DP-4)', () => {
+  const openWith = (ws, count, callbacks = {}) => {
+    const analysis = makeAnalysis(count);
+    ws.open(SIMPLE_SVG, analysis, callbacks);
+    return analysis;
+  };
+  const rows = (ws) => ws._root.querySelectorAll('.svg-prep-object');
+  const deleteRow = (ws, i) =>
+    ws._root
+      .querySelector(`.svg-prep-object-delete[data-delete-index="${i}"]`)
+      .click();
+
+  it('a row delete removes exactly that row and renumbers the rest', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 5);
+    expect(rows(ws).length).toBe(5);
+
+    deleteRow(ws, 1);
+
+    const after = rows(ws);
+    expect(after.length).toBe(4);
+    // Renumbered with no gaps: a stale data-index is how a radio in one row
+    // ends up driving another.
+    expect(Array.from(after).map((r) => r.dataset.index)).toEqual([
+      '0',
+      '1',
+      '2',
+      '3',
+    ]);
+    ws.destroy();
+  });
+
+  it('keeps the surviving roles with their own shapes, not their old slots', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+
+    deleteRow(ws, 1); // the 'hole' at index 1 goes
+
+    const checked = Array.from(rows(ws)).map(
+      (r) => r.querySelector('input[type="radio"]:checked').value
+    );
+    expect(checked).toEqual(['foreground', 'ignore', 'hole']);
+    ws.destroy();
+  });
+
+  it('saves roles against the ORIGINAL indices, so a reopen lands them right', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+
+    deleteRow(ws, 1);
+
+    // Position 1 in the saved array is still the shape that WAS at position 1,
+    // and it is absent because it was deleted.
+    const saved = ws.getRoleOverrides();
+    expect(saved[0]).toBe('foreground');
+    expect(saved[1]).toBeUndefined();
+    expect(saved[2]).toBe('ignore');
+    expect(saved[3]).toBe('hole');
+    expect(ws.getDeletedIndices()).toEqual([1]);
+    ws.destroy();
+  });
+
+  it('round-trips a delete through save and reopen', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+    deleteRow(ws, 1);
+    const savedRoles = ws.getRoleOverrides();
+    const savedDeleted = ws.getDeletedIndices();
+
+    // Reopen on a FRESH analysis of the untouched source, the way the Edit
+    // button does - four elements again, with the saved arrays applied.
+    ws.open(SIMPLE_SVG, makeAnalysis(4), {
+      initialOverrides: savedRoles,
+      initialDeleted: savedDeleted,
+    });
+
+    expect(rows(ws).length).toBe(3);
+    const checked = Array.from(rows(ws)).map(
+      (r) => r.querySelector('input[type="radio"]:checked').value
+    );
+    expect(checked).toEqual(['foreground', 'ignore', 'hole']);
+    ws.destroy();
+  });
+
+  it('reads a saved project from before deletions existed unchanged', () => {
+    // prepDeleted is absent in older saves, which is exactly right: nothing
+    // was deleted then, and the dense positional array still means what it did.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOverrides: ['hole', 'foreground', 'ignore'],
+    });
+    expect(rows(ws).length).toBe(3);
+    expect(
+      Array.from(rows(ws)).map(
+        (r) => r.querySelector('input[type="radio"]:checked').value
+      )
+    ).toEqual(['hole', 'foreground', 'ignore']);
+    ws.destroy();
+  });
+
+  it('undo is one level and puts the shape back where it was', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+
+    const undoBtn = ws._root.querySelector('[data-action="undo-delete"]');
+    expect(undoBtn.disabled).toBe(true);
+
+    deleteRow(ws, 1);
+    expect(rows(ws).length).toBe(3);
+    expect(undoBtn.disabled).toBe(false);
+
+    undoBtn.click();
+    expect(rows(ws).length).toBe(4);
+    expect(
+      Array.from(rows(ws)).map(
+        (r) => r.querySelector('input[type="radio"]:checked').value
+      )
+    ).toEqual(['foreground', 'hole', 'ignore', 'hole']);
+    expect(ws.getDeletedIndices()).toEqual([]);
+    // One level only: a second undo has nothing to do.
+    expect(undoBtn.disabled).toBe(true);
+    ws.destroy();
+  });
+
+  it('the bulk bar lives outside the list, which takes listitems only', () => {
+    // D-101: a toolbar inside role="list" is dropped from the accessibility
+    // tree, so this is a placement the markup has to keep.
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 3);
+    const list = ws._root.querySelector('.svg-prep-objects');
+    const bar = ws._root.querySelector('.svg-prep-bulk-bar');
+    expect(bar).not.toBeNull();
+    expect(list.contains(bar)).toBe(false);
+    expect(bar.getAttribute('role')).toBe('group');
+    ws.destroy();
+  });
+
+  it('says how many shapes are left, and updates as they go', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 5);
+    const count = ws._root.querySelector('.svg-prep-bulk-count');
+    expect(count.textContent).toBe('5 shapes');
+    deleteRow(ws, 0);
+    expect(count.textContent).toBe('4 shapes');
+    ws.destroy();
+  });
+
+  it('announces the delete and the undo, with the count left', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 3);
+    deleteRow(ws, 0);
+    const said = announce.mock.calls.map((c) => c[0]).join(' | ');
+    expect(said).toMatch(/Deleted/);
+    expect(said).toMatch(/2 shapes left/);
+    expect(said).toMatch(/Undo available/);
+    ws._root.querySelector('[data-action="undo-delete"]').click();
+    expect(announce.mock.calls.map((c) => c[0]).join(' | ')).toMatch(
+      /Undone\. 3 shapes\./
+    );
+    ws.destroy();
+  });
+
+  it('every delete control clears the 44 px target floor in its own styles', () => {
+    // jsdom has no layout, so the rule is asserted where it is WRITTEN rather
+    // than measured - the e2e walk measures it for real. The block is cut at
+    // its own closing brace: reading a fixed number of characters would let a
+    // neighbouring rule's min-height satisfy this, which is a guard that
+    // cannot fail.
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/styles/components.css'),
+      'utf8'
+    );
+    const ruleBlock = (selector) => {
+      const at = css.indexOf(`${selector} {`);
+      if (at === -1) return null;
+      const open = css.indexOf('{', at);
+      const close = css.indexOf('}', open);
+      return css.slice(open, close);
+    };
+    for (const sel of [
+      '.svg-prep-object-delete',
+      '.svg-prep-bulk-btn',
+      '.svg-prep-bulk-input',
+    ]) {
+      const block = ruleBlock(sel);
+      expect(block, `${sel} must have a rule of its own`).not.toBeNull();
+      expect(block, sel).toMatch(/min-height:\s*44px/);
+    }
+  });
+});
+
+// ── DP-7: the Layer column ───────────────────────────────────────────────────
+
+/** Nested squares as an analysis, outermost first. */
+function makeNestedAnalysis(count = 3, outer = 100) {
+  const parser = new DOMParser();
+  const parts = [];
+  const paths = [];
+  for (let i = 0; i < count; i++) {
+    const size = outer - i * (outer / (count + 1));
+    const at = (outer - size) / 2;
+    paths.push(
+      `M ${at} ${at} L ${at + size} ${at} L ${at + size} ${at + size} ` +
+        `L ${at} ${at + size} Z`
+    );
+    parts.push(`<path d="${paths[i]}" fill="black"/>`);
+  }
+  const svgString =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outer} ${outer}">` +
+    `${parts.join('')}</svg>`;
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  const els = Array.from(doc.querySelectorAll('path'));
+  return {
+    svgString,
+    analysis: {
+      status: 'needs_review',
+      confidence: 0.8,
+      elements: els.map((el, i) => ({
+        element: el,
+        pathData: paths[i],
+        fill: 'black',
+        stroke: '',
+        luminance: 0,
+        autoRole: 'foreground',
+        warnings: [],
+      })),
+      warnings: [],
+      unsupportedFeatures: [],
+      recommendation: 'open_editor',
+      singleElement: false,
+    },
+  };
+}
+
+const layerSelects = (ws) =>
+  Array.from(ws._refs.objects.querySelectorAll('.svg-prep-layer-select'));
+
+function setLayer(ws, i, value) {
+  const s = layerSelects(ws)[i];
+  s.value = String(value);
+  s.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+describe('the Layer column (DP-7)', () => {
+  describe('opt-in', () => {
+    it('is ABSENT for a tile that did not ask for it', () => {
+      // The control case: a non-layered editor must be exactly what it was.
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis);
+      expect(layerSelects(ws)).toHaveLength(0);
+      expect(ws._refs.layerSummary.hidden).toBe(true);
+      expect(ws.getLayerAssignments()).toEqual({
+        layers: [],
+        limit: 0,
+        problems: [],
+      });
+    });
+
+    it('appears when the tile opts in', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(layerSelects(ws)).toHaveLength(3);
+      expect(ws._refs.layerSummary.hidden).toBe(false);
+    });
+
+    it('offers three layers when nothing encloses anything (D-162)', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const parser = new DOMParser();
+      const a = 'M 0 0 L 10 0 L 10 10 L 0 10 Z';
+      const b = 'M 50 0 L 60 0 L 60 10 L 50 10 Z';
+      const svgString =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+        `<path d="${a}"/><path d="${b}"/></svg>`;
+      const doc = parser.parseFromString(svgString, 'image/svg+xml');
+      const els = Array.from(doc.querySelectorAll('path'));
+      const analysis = {
+        status: 'needs_review',
+        elements: els.map((el, i) => ({
+          element: el,
+          pathData: i === 0 ? a : b,
+          fill: 'black',
+          stroke: '',
+          luminance: 0,
+          autoRole: 'foreground',
+          warnings: [],
+        })),
+        warnings: [],
+        unsupportedFeatures: [],
+        recommendation: 'open_editor',
+      };
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(ws.getLayerAssignments().limit).toBe(3);
+      expect(ws._refs.layerSummary.textContent).toContain('3 layers');
+    });
+  });
+
+  // D-142 (DP-51, the owner's second walk, 2026-09-16): nesting depth decides
+  // how many layers a drawing OFFERS and never what a shape sits on. MEASURED
+  // on the owner's CREATE logo before the fix: 394 of 553 rows opened on layer
+  // 2 and 158 on layer 3, and Apply emitted a three-layer stack nobody built.
+  describe('the starting column', () => {
+    it('starts every shape on layer 1, however deep the artwork nests', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
+    });
+
+    it('offers three layers whatever the artwork nests to (D-162)', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(2);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      for (const s of layerSelects(ws)) {
+        expect(Array.from(s.options).map((o) => o.value)).toEqual([
+          '1',
+          '2',
+          '3',
+        ]);
+      }
+      expect(ws._refs.layerSummary.textContent).toContain(
+        '3 layers, each with its own height on the charm.'
+      );
+    });
+
+    it('says the default in the summary, and how to build a stack', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      const said = ws._refs.layerSummary.textContent;
+      expect(said).toContain('Every shape starts on layer 1.');
+      expect(said).toContain('Choose a layer under More to build a stack.');
+      expect(said).not.toContain('—');
+    });
+
+    it('drops the starting sentence once a stack is built, and says when it shows', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      setLayer(ws, 1, 2);
+      const said = ws._refs.layerSummary.textContent;
+      expect(said).not.toContain('Every shape starts on layer 1');
+      expect(said).toContain('3 layers, each with its own height on the charm.');
+      // DP-47: the charm behind the editor is the last APPLIED design, so a
+      // stack that has not been applied is not on it yet.
+      expect(said).toContain('Layers show on the charm after you press Apply.');
+    });
+
+    it('reports NO STACK until somebody builds one', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      // What Apply reads: null means "leave every layer file empty", which is
+      // the ordinary design with its holes cut.
+      const untouched = ws.getLayerAssignments();
+      expect(untouched.layers).toBeNull();
+      expect(untouched.limit).toBe(3);
+      expect(untouched.problems).toEqual([]);
+
+      setLayer(ws, 1, 2);
+      expect(ws.getLayerAssignments().layers).toEqual([1, 2, 1]);
+    });
+
+    it('counts a saved column above layer 1 as a stack somebody built', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 2, 3],
+      });
+      expect(ws.getLayerAssignments().layers).toEqual([1, 2, 3]);
+    });
+
+    it('a saved column of ones is still no stack', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 1, 1],
+      });
+      expect(ws.getLayerAssignments().layers).toBeNull();
+    });
+
+    it('forgets the stack when the editor opens on another drawing', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const first = makeNestedAnalysis(3);
+      ws.open(first.svgString, first.analysis, { layersEnabled: true });
+      setLayer(ws, 1, 2);
+      expect(ws.getLayerAssignments().layers).not.toBeNull();
+
+      const second = makeNestedAnalysis(3);
+      ws.open(second.svgString, second.analysis, { layersEnabled: true });
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
+      expect(ws.getLayerAssignments().layers).toBeNull();
+    });
+
+    it('never offers a fourth layer, whatever the artwork nests to', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(5);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(ws.getLayerAssignments().limit).toBe(3);
+      for (const s of layerSelects(ws)) expect(s.options).toHaveLength(3);
+    });
+
+    it('every select carries an accessible name', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      for (const s of layerSelects(ws)) {
+        expect(s.getAttribute('aria-label')).toMatch(/^Layer for .+/);
+      }
+    });
+  });
+
+  describe('layers are height classes, and no row is ever marked (D-160)', () => {
+    /**
+     * Open the nested squares and BUILD the stack, the way a person does
+     * since D-142: the column starts at all ones, so the middle square is
+     * put on layer 2 and the inner one on layer 3 by hand. The containment
+     * law that used to mark a stranded row is gone: the emission writes a
+     * layer 3 shape into every layer's file and the model extrudes each
+     * raised pass from below every floor, so nothing floats.
+     */
+    function openNested(count = 3) {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(count);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      for (let i = 1; i < count && i < 3; i++) setLayer(ws, i, i + 1);
+      return ws;
+    }
+
+    it('accepts a stack that stands on itself', () => {
+      const ws = openNested();
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '2', '3']);
+      expect(ws.getLayerAssignments().problems).toEqual([]);
+    });
+
+    it('a layer 3 shape with nothing on layer 2 around it is not a problem: nothing floats', () => {
+      const ws = openNested();
+      // The middle square back on layer 1: the inner one is on layer 3 with
+      // no layer 2 around it. It carries its own column from the face now.
+      announce.mockClear();
+      setLayer(ws, 1, 1);
+      expect(ws.getLayerAssignments().problems).toEqual([]);
+      expect(ws._refs.objects.querySelectorAll('[aria-invalid]')).toHaveLength(
+        0
+      );
+      expect(ws._refs.objects.querySelectorAll('.svg-prep-layer-note')).toHaveLength(
+        0
+      );
+      expect(ws._refs.layerSummary.textContent).not.toMatch(/different layer/);
+      expect(ws._refs.layerSummary.textContent).not.toMatch(/nothing under/);
+      const said = announce.mock.calls.map((c) => c[0]);
+      expect(said).toContain('Layer 1 set.');
+      expect(said.join(' ')).not.toMatch(/under it|different layer/);
+    });
+
+    it('NEVER reassigns the layer the person chose', () => {
+      const ws = openNested();
+      setLayer(ws, 1, 1);
+      expect(layerSelects(ws)[2].value).toBe('3');
+      expect(ws.getLayerAssignments().layers[2]).toBe(3);
+    });
+
+    it('no row wears the retired warning text', () => {
+      const ws = openNested();
+      setLayer(ws, 1, 1);
+      expect(ws._refs.objects.textContent).not.toMatch(
+        /nothing under it|cut away before layer/
+      );
+    });
+  });
+
+  describe('working with the rest of the editor', () => {
+    it('an ignored shape cannot carry a layer', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      const row = ws._refs.objects.querySelector(
+        '.svg-prep-object[data-index="2"]'
+      );
+      const ignore = row.querySelector('input[value="ignore"]');
+      ignore.checked = true;
+      ignore.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(row.querySelector('.svg-prep-layer-select').disabled).toBe(true);
+    });
+
+    it('restores layers saved from a previous visit', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 1, 2],
+      });
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '2']);
+      expect(ws.getLayerAssignments().problems).toEqual([]);
+    });
+
+    it('never restores a layer past the limit', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(2);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 5],
+      });
+      expect(layerSelects(ws)[1].value).toBe('3');
+    });
+
+    it('keys assignments by ORIGINAL index, so a delete cannot shift them', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      setLayer(ws, 1, 2);
+      setLayer(ws, 2, 3);
+      expect(ws.getLayerAssignments().layers).toEqual([1, 2, 3]);
+    });
+  });
+});
+
+// G0 2026-09-01 (DP-24): the owner's words - "It should be one picture svg
+// that you are seeing the elements turning on or off. A side by side of
+// original to edited is offed in a button toggle if the user wishes but is
+// not default." The edited drawing IS the editor; the original arrives
+// beside it only when Compare is pressed.
+describe('one picture by default (DP-24)', () => {
+  it('opens with the original pane hidden and the edited drawing alone', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const previews = ws._root.querySelector('.svg-prep-previews');
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(true);
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    expect(sourceWrap).toBeTruthy();
+    expect(sourceWrap.hidden).toBe(true);
+    const resultWrap = ws._root.querySelector('.svg-prep-pane-wrap--result');
+    expect(resultWrap).toBeTruthy();
+    expect(resultWrap.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('offers Compare as an unpressed toggle in the header', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    expect(compareBtn).toBeTruthy();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+
+    ws.destroy();
+  });
+
+  it('Compare shows the pair, says so, and un-pressing hides it again', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    const previews = ws._root.querySelector('.svg-prep-previews');
+
+    compareBtn.click();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(sourceWrap.hidden).toBe(false);
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(
+      false
+    );
+    expect(announce).toHaveBeenCalledWith(
+      'Comparing with the original drawing.'
+    );
+
+    compareBtn.click();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(sourceWrap.hidden).toBe(true);
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(true);
+    expect(announce).toHaveBeenCalledWith('Showing your edited drawing.');
+
+    ws.destroy();
+  });
+
+  it('a fresh open returns to the one-picture default', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    ws._root.querySelector('.svg-prep-compare-btn').click();
+    ws.close();
+
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(sourceWrap.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('the thin-line advisory (DP-36 P3)', () => {
+  // MEASURED on nine stock icons at charm size: their outlines land between
+  // 0.31 and 0.65 mm. Some print and some do not, and nothing said which.
+  const px = (p10) => ({ p10, p50: p10 * 2, ridgePx: 100 });
+
+  it('★ turns pixels into the millimetres this will actually print at', () => {
+    // Three pixels on a 700-pixel icon is 0.06 mm on a 14 mm charm. The same
+    // three pixels on a 60 mm coaster is 0.26 mm. The pixel count alone is not
+    // a fact anybody can act on.
+    expect(thinLineSentence(px(3), 700, 14)).toContain('about 0.06 mm');
+    expect(thinLineSentence(px(3), 700, 60)).toContain('about 0.26 mm');
+  });
+
+  it('names the width it measured at, and the lever', () => {
+    const said = thinLineSentence(px(10), 700, 14);
+    expect(said).toBe(
+      'Thin lines: about 0.20 mm at 14 mm wide. Lines under 0.5 mm may not ' +
+        'print. Raise Design offset (0.6 suits a 0.4 mm nozzle) or make the ' +
+        'design bigger.'
+    );
+  });
+
+  it('★ says when the width is the editor’s own default, not the model’s', () => {
+    // A number the person did not choose, presented as if they had, is the
+    // kind of thing that sends someone hunting for where they set it.
+    expect(thinLineSentence(px(10), 700, 14, false)).toContain(
+      "14 mm wide, the editor's default width"
+    );
+    expect(thinLineSentence(px(10), 700, 14, true)).not.toContain('default');
+  });
+
+  it('says so when there is nothing to worry about', () => {
+    // 30 px on a 700 px icon at 14 mm is 0.6 mm, over the line.
+    expect(thinLineSentence(px(30), 700, 14)).toBe(
+      'Lines look thick enough to print.'
+    );
+  });
+
+  it('the line is half a millimetre, which is what a 0.4 mm nozzle can do', () => {
+    expect(THIN_LINE_MM).toBe(0.5);
+    // Exactly on the line counts as thick enough: 25 px of 700 at 14 mm is
+    // 0.5 mm exactly.
+    expect(thinLineSentence(px(25), 700, 14)).toBe(
+      'Lines look thick enough to print.'
+    );
+  });
+
+  it('says nothing at all when there is no measurement', () => {
+    expect(thinLineSentence(null, 700, 14)).toBe('');
+    expect(thinLineSentence(px(0), 700, 14)).toBe('');
+    expect(thinLineSentence(px(3), 0, 14)).toBe('');
+    expect(thinLineSentence(px(3), 700, 0)).toBe('');
+  });
+
+  it('★ proposes and never acts: no default is changed by it', () => {
+    // The plan is explicit that this is a proposal. Nine icons at 0.31 to
+    // 0.65 mm means a blanket offset would fatten the ones already fine.
+    const said = thinLineSentence(px(3), 700, 14);
+    expect(said).toContain('Raise Design offset');
+    expect(said).toContain('or make the design bigger');
+  });
+});
+
+describe('the result pane is never empty (DP-37 P1)', () => {
+  // ★ "One picture" was built by HIDING rather than by showing. Above the auto
+  // budget markPreviewStale removed the drawing from the result pane, and
+  // DP-24 had already put the source pane behind Compare, so somebody who
+  // opened a 210-shape drawing was shown "Will print as", an empty rectangle,
+  // two zoom buttons floating in it, and a sentence telling them to press a
+  // button. MEASURED in the browser at 1268 x 160 with no svg in it at all.
+  //
+  // It was walked on the bird - tier A, the one class of drawing that could
+  // not show it.
+
+  // Above FLATTEN_BUDGET_MS, which is the band the blank lived in. Below it
+  // the editor combines on its own and the pane holds a real result.
+  //
+  // Each of these elements is an M and two arcs, which the estimator prices at
+  // 33 ring points, so the prediction is 1.5e-3 x n x 33n and the 300 ms
+  // budget falls between 77 and 78 of them. 100 is over it with room. It used
+  // to be 60, which was over DP-Q9's retired count of 50 and is under the
+  // budget that replaced it (178 ms) - the re-sign at DP-Q33 moved this line
+  // and the drawing that sits on it had to move too.
+  const ABOVE_BUDGET = 100;
+
+  it('★ shows the drawing where the combined result will go', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const picture = pane.querySelector('svg');
+    expect(picture).not.toBeNull();
+    expect(picture.classList.contains('svg-prep-standin')).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('★ says what it is, so nobody mistakes it for the result', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    const picture = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(picture.getAttribute('role')).toBe('img');
+    // DP-47 P4: the name counts what is in the picture, because the picture
+    // is painted from the roles now and changes when they do. It still says
+    // plainly that this is not the combined result.
+    expect(picture.getAttribute('aria-label')).toMatch(
+      /^The drawing as it is now: \d+ raised, \d+ holes?, \d+ left out, not yet combined$/
+    );
+
+    ws.destroy();
+  });
+
+  it('★ a picture in the pane is still not a result: Apply stays refused', () => {
+    // The pane having something in it must not be mistaken for having a
+    // result. currentResult === null IS the staleness flag, and Apply and Save
+    // read it, not the pane.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    expect(ws._root.querySelector('.svg-prep-result-pane svg')).not.toBeNull();
+    expect(ws._refs.applyBtn.disabled).toBe(true);
+    expect(ws._refs.saveBtn.disabled).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('carries the role tints, so the two panes agree about every shape', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+
+    const layers = ws._root.querySelectorAll('.svg-prep-role-layer');
+    expect(layers.length).toBeGreaterThanOrEqual(2);
+    for (const layer of layers) {
+      expect(layer.querySelectorAll('.svg-prep-role-path').length).toBe(
+        ABOVE_BUDGET
+      );
+    }
+
+    ws.destroy();
+  });
+
+  it('the stand-in is redrawn when a change makes the result stale again', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
+    const first = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(first).not.toBeNull();
+
+    // Re-opening is what a re-trace does.
+    ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET + 1));
+    const second = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(second).not.toBeNull();
+    expect(second.classList.contains('svg-prep-standin')).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('the drawer breakpoint lives in two files (DP-Q46a)', () => {
+  it('★ the number in surface.js and the number in the stylesheet are the same', async () => {
+    // surface.js has to choose the drawer's starting state before anything is
+    // laid out, so it cannot ask the stylesheet - it repeats the number. Two
+    // copies of a number drift; this is what stops them.
+    const { PANEL_DRAWER_MAX_WIDTH } = await import(
+      '../../src/js/drawing-editor/surface.js'
+    );
+    const css = readFileSync(resolve('src/styles/components.css'), 'utf-8');
+    expect(css).toContain(`@container (max-width: ${PANEL_DRAWER_MAX_WIDTH}px)`);
+  });
+});
+
+// ── DP-47 / D-141: choosing shapes, and changing them together ──────────────
+//
+// The owner's words, on their own logo: "I tried to select and change the
+// letters at the bottom and could not ignore any path, even when I pressed
+// ignore or layer. This defeats the entire purpose of the drawing editor."
+// MEASURED before this release: Delete did nothing at all, Ctrl+A selected
+// 35,759 characters of PAGE text, and the picture never marked the selection -
+// the only thing it ever drew was the hover mark of one shape.
+
+describe('choosing shapes and changing them together (DP-47, D-141)', () => {
+  const rows = (ws) => [
+    ...ws._refs.objects.querySelectorAll('.svg-prep-object'),
+  ];
+  const roleOf = (ws, i) =>
+    rows(ws)[i].querySelector('input[type="radio"]:checked')?.value;
+  const selectedRows = (ws) =>
+    ws._refs.objects.querySelectorAll('.svg-prep-object--selected');
+  const selectionPaths = (ws) =>
+    ws._root.querySelectorAll('.svg-prep-selected-path');
+  const clickRow = (ws, i, opts = {}) =>
+    rows(ws)[i]
+      .querySelector('.svg-prep-object-name')
+      .dispatchEvent(new MouseEvent('click', { bubbles: true, ...opts }));
+  /** A press, as the browser delivers it: from a target, bubbling. */
+  const press = (target, key, opts = {}) => {
+    const e = new KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...opts,
+    });
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  function openThree() {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    return ws;
+  }
+
+  it('★ paints every selected shape on the picture, not just the rows', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    clickRow(ws, 2, { ctrlKey: true });
+
+    expect(selectedRows(ws)).toHaveLength(2);
+    // One outline per selected shape, in the picture.
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(2);
+    ws.destroy();
+  });
+
+  it('★ the hover mark and the selection do not wipe each other', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(1);
+
+    // Moving the pointer over another row draws the hover mark...
+    rows(ws)[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    expect(
+      ws._root.querySelectorAll('.svg-prep-highlight-path').length
+    ).toBeGreaterThanOrEqual(1);
+    // ...and the selection is still there.
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(1);
+
+    // And moving off clears the hover mark alone.
+    rows(ws)[1].dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    expect(ws._root.querySelectorAll('.svg-prep-highlight-path')).toHaveLength(
+      0
+    );
+    expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(1);
+    ws.destroy();
+  });
+
+  it('★ Delete sets the whole selection to Ignore, and says so once', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    clickRow(ws, 1, { ctrlKey: true });
+    announce.mockClear();
+
+    const e = press(rows(ws)[1], 'Delete');
+
+    expect(roleOf(ws, 0)).toBe('ignore');
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(roleOf(ws, 2)).not.toBe('ignore');
+    // One sentence for the whole action, not one per shape.
+    const said = announce.mock.calls.map((c) => c[0]);
+    expect(said).toEqual(['2 shapes set to Off.']);
+    // And the press is spent here: the app never sees it.
+    expect(e.defaultPrevented).toBe(true);
+    ws.destroy();
+  });
+
+  it('Backspace does the same thing as Delete', () => {
+    const ws = openThree();
+    clickRow(ws, 2);
+    press(rows(ws)[2], 'Backspace');
+    expect(roleOf(ws, 2)).toBe('ignore');
+    ws.destroy();
+  });
+
+  it('with nothing selected, Delete acts on the row a person is standing on', () => {
+    const ws = openThree();
+    announce.mockClear();
+    press(rows(ws)[1], 'Delete');
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(roleOf(ws, 0)).not.toBe('ignore');
+    expect(announce.mock.calls.map((c) => c[0])[0]).toMatch(/set to Off\.$/);
+    ws.destroy();
+  });
+
+  it('with nothing selected and nowhere to act, it asks rather than guessing', () => {
+    const ws = openThree();
+    announce.mockClear();
+    press(ws._refs.objects, 'Delete');
+    expect(rows(ws).some((_, i) => roleOf(ws, i) === 'ignore')).toBe(false);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      'Choose a shape first.',
+    ]);
+    ws.destroy();
+  });
+
+  it('★ Ctrl+A selects every row, and the press never reaches the page', () => {
+    const ws = openThree();
+    announce.mockClear();
+    // What the app would hear, if the editor let the press through: the real
+    // defect was 35,759 characters of page text going blue.
+    const heardOutside = vi.fn();
+    document.addEventListener('keydown', heardOutside);
+
+    const e = press(rows(ws)[0], 'a', { ctrlKey: true });
+
+    expect(selectedRows(ws)).toHaveLength(3);
+    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+      'All 3 shapes selected.',
+    ]);
+    // preventDefault is what stops the browser selecting the whole page...
+    expect(e.defaultPrevented).toBe(true);
+    // ...and stopPropagation is what keeps it out of the app's own shortcuts.
+    expect(heardOutside).not.toHaveBeenCalled();
+
+    document.removeEventListener('keydown', heardOutside);
+    ws.destroy();
+  });
+
+  it('leaves typing alone: Delete in a number box is Delete in a number box', () => {
+    const ws = openThree();
+    const e = press(ws._refs.designWidthInput, 'Delete');
+    expect(e.defaultPrevented).toBe(false);
+    expect(rows(ws).some((_, i) => roleOf(ws, i) === 'ignore')).toBe(false);
+    ws.destroy();
+  });
+
+  it('a press on the empty picture clears the selection', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    expect(selectedRows(ws)).toHaveLength(1);
+
+    ws._refs.sourcePane.dispatchEvent(
+      new MouseEvent('click', { bubbles: true })
+    );
+    expect(selectedRows(ws)).toHaveLength(0);
+    expect(selectionPaths(ws)).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('★ the bulk button says Remove from list, because Delete means Ignore now', () => {
+    const ws = openThree();
+    clickRow(ws, 0);
+    expect(ws._refs.deleteSelectedBtn.textContent).toBe('Remove from list (1)');
+    // And the row menu agrees with it.
+    const rowBtn = rows(ws)[0].querySelector('.svg-prep-object-delete');
+    expect(rowBtn.textContent).toBe('Remove from list');
+    expect(rowBtn.getAttribute('aria-label')).toMatch(
+      /^Remove .+ from the list$/
+    );
+    ws.destroy();
+  });
+
+  it('the selection mark is its own style, and survives a forced-colors theme', () => {
+    // jsdom has no layout and no forced-colors mode, so the rule is asserted
+    // where it is WRITTEN. What matters is that the mark is an OUTLINE (a fill
+    // would argue with the role tint under it) and that a theme which throws
+    // the app's colors away leaves something behind.
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/styles/components.css'),
+      'utf8'
+    );
+    const block = (selector) => {
+      const at = css.indexOf(`${selector} {`);
+      if (at === -1) return null;
+      const open = css.indexOf('{', at);
+      return css.slice(open, css.indexOf('}', open));
+    };
+    const mark = block('.svg-prep-selected-path');
+    expect(mark, '.svg-prep-selected-path must have a rule of its own').not.toBeNull();
+    expect(mark).toMatch(/fill:\s*none/);
+    expect(mark).toMatch(/stroke:/);
+    expect(mark).toMatch(/vector-effect:\s*non-scaling-stroke/);
+    // And the forced-colors block names it.
+    const forced = css.indexOf('@media (forced-colors: active)');
+    expect(
+      css.slice(forced, forced + 600),
+      'a forced-colors theme must still mark the selection'
+    ).toBeTruthy();
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)[\s\S]{0,400}\.svg-prep-selected-path/
+    );
+  });
+
+  it('★ Ignore takes the shape out of the picture at once (P4)', () => {
+    // The owner's complaint, in one assertion. Above the combine budget the
+    // "Will print as" pane is a STAND-IN, and it used to be the original file
+    // with a 12 %-opacity tint over it: pressing Ignore changed a radio and
+    // nothing a person could see. The stand-in is painted from the roles now.
+    // Above the combine budget, which is the band the stand-in lives in - and
+    // where every drawing of the owner's kind lives. 100 elements, the same
+    // count the DP-37 P1 suite uses for the same reason.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(100));
+
+    const painted = () =>
+      ws._refs.resultPane.querySelectorAll(
+        '.svg-prep-standin-path--raised, .svg-prep-standin-path--hole'
+      ).length;
+    const before = painted();
+    expect(before).toBeGreaterThan(0);
+
+    clickRow(ws, 0);
+    press(rows(ws)[0], 'Delete');
+
+    expect(painted()).toBe(before - 1);
+    // And the shape is still choosable: its row is there and so is its hit
+    // target, because an invisible shape somebody has to turn back on is
+    // worse than no shape at all.
+    expect(rows(ws)).toHaveLength(100);
+    expect(
+      ws._refs.resultPane.querySelectorAll('.svg-prep-hit-path')
+    ).toHaveLength(100);
+    ws.destroy();
+  });
+
+  it('one radio still changes one shape, and stays quiet about it', () => {
+    // The control announces itself; a second sentence would be the editor
+    // talking over the screen reader.
+    const ws = openThree();
+    announce.mockClear();
+    const radio = rows(ws)[1].querySelector('input[value="ignore"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(announce).not.toHaveBeenCalled();
+    ws.destroy();
+  });
+
+  // ── Session 4 of DP-R5: what the owner's walk of the merged code found ─────
+
+  it('★ the selection mark is drawn so it shows on a dark shape: a light halo under the outline', () => {
+    // LOOKED AT on the owner's logo after DP-47: the outline was drawn in the
+    // ink color over shapes painted in the ink color, and three chosen letters
+    // showed no mark a person could see. The DOM count said 6; the eyes said 0.
+    const ws = openThree();
+    clickRow(ws, 0);
+    clickRow(ws, 2, { ctrlKey: true });
+    const halos = ws._root.querySelectorAll('.svg-prep-selected-halo');
+    expect(halos.length, 'one halo per selected shape, per picture').toBe(
+      selectionPaths(ws).length
+    );
+    expect(halos.length).toBeGreaterThanOrEqual(2);
+    // The halo sits UNDER its outline in the same layer.
+    const layer = ws._root.querySelector('.svg-prep-overlay-selection');
+    expect(layer.firstElementChild.classList.contains('svg-prep-selected-halo')).toBe(true);
+    ws.destroy();
+  });
+
+  it('the halo and the outline have rules of their own, in colors that are not the ink', () => {
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/styles/components.css'),
+      'utf8'
+    );
+    const block = (selector) => {
+      const at = css.indexOf(`${selector} {`);
+      if (at === -1) return null;
+      const open = css.indexOf('{', at);
+      return css.slice(open, css.indexOf('}', open));
+    };
+    const halo = block('.svg-prep-selected-halo');
+    expect(halo, '.svg-prep-selected-halo must have a rule of its own').not.toBeNull();
+    expect(halo).toMatch(/fill:\s*none/);
+    expect(halo).toMatch(/stroke:\s*var\(--color-bg-primary\)/);
+    expect(halo).toMatch(/vector-effect:\s*non-scaling-stroke/);
+    const mark = block('.svg-prep-selected-path');
+    // The outline must not be the ink color, or it vanishes on a raised shape.
+    expect(mark).not.toMatch(/stroke:\s*var\(--color-text-primary\)/);
+    expect(mark).toMatch(/stroke:\s*var\(--color-focus\)/);
+    // And a forced-colors theme keeps both.
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)[\s\S]{0,600}\.svg-prep-selected-halo/
+    );
+  });
+
+  it('★ a Shift-click extends the choice, not the page\'s text selection', () => {
+    // MEASURED on the built app: a Shift-click on a row left 49 characters of
+    // the rows' own text selected and painted blue across two rows, because
+    // the browser extends its text selection on Shift before the click lands.
+    const ws = openThree();
+    clickRow(ws, 0);
+    const name = rows(ws)[2].querySelector('.svg-prep-object-name');
+    const down = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      shiftKey: true,
+    });
+    name.dispatchEvent(down);
+    expect(down.defaultPrevented, 'the text selection must not start').toBe(true);
+    clickRow(ws, 2, { shiftKey: true });
+    expect(selectedRows(ws)).toHaveLength(3);
+    // A plain press is left alone: the row takes focus the ordinary way.
+    const plain = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    name.dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+    ws.destroy();
+  });
+
+  it('★ the wall behind a Colors drawing is not a pointer target while it is ignored', () => {
+    // MEASURED on the owner's logo: the navy wall is one element the size of
+    // the whole canvas, set to Ignore by the wall rule (D-137). Its hit path
+    // sat under every point of the picture, so pointing at the background
+    // washed the whole drawing in the hover color and a click on empty space
+    // chose "Path 1, Ignore" instead of clearing the choice.
+    const analysis = makeAnalysis(100);
+    analysis.elements[0].element.setAttribute('data-background', 'true');
+    analysis.elements[0].autoRole = 'ignore';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, analysis);
+    const hits = () =>
+      ws._refs.resultPane.querySelectorAll('.svg-prep-hit-path').length;
+    expect(roleOf(ws, 0)).toBe('ignore');
+    expect(hits(), 'the ignored wall has no hit path').toBe(99);
+    // Every other ignored shape keeps its target (DP-47 P4's rule).
+    clickRow(ws, 5);
+    press(rows(ws)[5], 'Delete');
+    expect(roleOf(ws, 5)).toBe('ignore');
+    expect(hits()).toBe(99);
+    // And a wall somebody RAISES is a shape again, and can be pointed at.
+    const radio = rows(ws)[0].querySelector('input[value="foreground"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(hits()).toBe(100);
+    ws.destroy();
+  });
+});
+
+describe('DP-53 P1: the drawing view combines by itself', () => {
+  // The band the button lived in: over DP-Q33's 300 ms budget (see the
+  // arithmetic on ABOVE_BUDGET in the describe above this one).
+  const OVER = 100;
+  const settle = () =>
+    new Promise((resolve) => setTimeout(resolve, COMBINE_SETTLE_MS + 30));
+
+  it('★ a drawing over the old budget combines on open, with no button to press', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(OVER));
+    await ws.whenReady();
+    await ws.whenCombined();
+
+    expect(ws.getResult()).toBeTruthy();
+    const picture = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(picture.classList.contains('svg-prep-standin')).toBe(false);
+    expect(ws._refs.applyBtn.disabled).toBe(false);
+    expect(ws._refs.renderBtn.hidden).toBe(true);
+    expect(ws._refs.renderRow.hidden).toBe(true);
+    ws.destroy();
+  });
+
+  it('★ a change goes stale at once, says the combine is coming, and combines once the changes settle', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    await ws.whenReady();
+    await ws.whenCombined();
+    expect(ws.isCombining()).toBe(false);
+
+    const radio = ws._root.querySelector('.svg-prep-object input[type=radio][value="foreground"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(ws.isCombining()).toBe(true);
+    expect(ws.getResult()).toBeNull();
+    expect(ws._refs.applyBtn.disabled).toBe(true);
+    expect(ws._refs.applyHint.textContent).toMatch(
+      /^Combining 3 shapes, about a second\. Apply is ready when they are combined\.$/
+    );
+    expect(ws._root.querySelector('.svg-prep-result-pane svg').classList.contains('svg-prep-standin')).toBe(true);
+
+    await ws.whenCombined();
+    await ws.whenCombined();
+    expect(ws.isCombining()).toBe(false);
+    expect(ws.getResult()).toBeTruthy();
+    expect(ws._refs.applyBtn.disabled).toBe(false);
+    ws.destroy();
+  });
+
+  it('three quick changes make one combine, after the last of them settles', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(3));
+      await ws.whenReady();
+      const radios = ws._root.querySelectorAll('.svg-prep-object input[type=radio][value="foreground"]');
+      for (let i = 0; i < 3; i++) {
+        radios[i].checked = true;
+        radios[i].dispatchEvent(new Event('change', { bubbles: true }));
+        vi.advanceTimersByTime(100);
+      }
+      // 200 ms after the last change: still settling.
+      vi.advanceTimersByTime(200);
+      expect(ws.isCombining()).toBe(true);
+      expect(ws.getResult()).toBeNull();
+      // 350 ms after it: combined, once.
+      vi.advanceTimersByTime(COMBINE_SETTLE_MS - 200 + 5);
+      expect(ws.isCombining()).toBe(false);
+      expect(ws.getResult()).toBeTruthy();
+      ws.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('whenCombined resolves at once when nothing is combining', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    await ws.whenReady();
+    await ws.whenCombined();
+    let resolved = false;
+    await ws.whenCombined().then(() => {
+      resolved = true;
+    });
+    expect(resolved).toBe(true);
+    ws.destroy();
+  });
+
+  it('closing with a combine pending leaves nothing waiting', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+    await ws.whenReady();
+    await ws.whenCombined();
+    const radio = ws._root.querySelector('.svg-prep-object input[type=radio][value="foreground"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    const waited = ws.whenCombined();
+    ws.close();
+    await waited;
+    expect(ws.isCombining()).toBe(false);
+    await settle();
+    ws.destroy();
+  });
+});
+
+describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () => {
+  // A 200-unit picture at the editor's default 14 mm: 0.07 mm per unit. A bar
+  // 2 units tall is 0.14 mm and 2 px: too thin to print, too small to trace.
+  // A 40-unit square is 2.8 mm and 40 px: fine both ways.
+  const BAR = 'M10,10h100v2h-100z';
+  const BAR2 = 'M10,30h100v2h-100z';
+  const SQUARE = 'M120,20h40v40h-40z';
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"></svg>';
+  function analysisOf(paths) {
+    const doc = new DOMParser().parseFromString(SVG, 'image/svg+xml');
+    return {
+      status: 'ready',
+      confidence: 1,
+      isCompoundPathOnly: false,
+      elements: paths.map((d, i) => {
+        const el = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        el.setAttribute('d', d);
+        return { element: el, index: i, type: 'path', pathData: d, fill: '#000000', autoRole: 'foreground', warnings: [] };
+      }),
+      warnings: [],
+      unsupportedFeatures: [],
+    };
+  }
+  const roleOf = (ws, i) => ws._root.querySelector(`.svg-prep-object[data-index="${i}"] input[type=radio]:checked`)?.value;
+  const markOf = (ws, i) => {
+    const row = ws._root.querySelector(`.svg-prep-object[data-index="${i}"]`);
+    const id = row?.getAttribute('aria-describedby');
+    if (!id) return null;
+    const mark = document.getElementById(id);
+    // The badge says "thin" to the eye; the description is the words.
+    expect(mark.querySelector('.svg-prep-thin-mark-badge').textContent).toBe('thin');
+    return mark.querySelector('.svg-prep-thin-mark-words')?.textContent ?? null;
+  };
+
+  it('★ the notice counts the shapes under the print floor at the design width, in a sentence', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const notice = ws._root.querySelector('.svg-prep-thin-notice');
+    expect(notice).not.toBeNull();
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.hidden).toBe(false);
+    expect(notice.textContent).toBe('1 shape is thinner than 0.5 mm at 14 mm wide and may not print.');
+    ws.close();
+    ws.open(SVG, analysisOf([BAR, BAR2, SQUARE]));
+    await ws.whenReady();
+    expect(notice.textContent).toBe('2 shapes are thinner than 0.5 mm at 14 mm wide and may not print.');
+    ws.destroy();
+  });
+
+  it('★ each too-thin row carries its mark, read with the name; a sound row carries none', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    expect(markOf(ws, 0)).toBe('too thin to print, too small to trace clearly');
+    expect(markOf(ws, 1)).toBeNull();
+    ws.destroy();
+  });
+
+  it('★ Ignore those sets the flagged rows to Ignore in one press and says so; Undo ignore puts them back', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, BAR2, SQUARE]));
+    await ws.whenReady();
+    await ws.whenCombined();
+    const btn = ws._root.querySelector('[data-action="ignore-thin"]');
+    expect(btn.textContent).toBe('Turn those off');
+    expect(btn.getAttribute('aria-label')).toBe('Ignore the shapes thinner than this');
+    const undo = ws._root.querySelector('[data-action="undo-ignore"]');
+    expect(undo.disabled).toBe(true);
+    btn.click();
+    expect(roleOf(ws, 0)).toBe('ignore');
+    expect(roleOf(ws, 1)).toBe('ignore');
+    expect(roleOf(ws, 2)).toBe('foreground');
+    expect(ws._root.querySelector('.svg-prep-live, [aria-live="polite"].sr-only')?.textContent).toBe(
+      '2 thin shapes turned off. Each can be turned back on in the list.'
+    );
+    expect(undo.disabled).toBe(false);
+    undo.click();
+    expect(roleOf(ws, 0)).toBe('foreground');
+    expect(roleOf(ws, 1)).toBe('foreground');
+    expect(undo.disabled).toBe(true);
+    expect(ws._root.querySelector('.svg-prep-live, [aria-live="polite"].sr-only')?.textContent).toBe(
+      'Undone. 2 shapes are back to how they were.'
+    );
+    ws.destroy();
+  });
+
+  it('with nothing under the floor the press says so and changes nothing', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([SQUARE]));
+    await ws.whenReady();
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+    ws._root.querySelector('[data-action="ignore-thin"]').click();
+    expect(roleOf(ws, 0)).toBe('foreground');
+    expect(ws._root.querySelector('.svg-prep-live, [aria-live="polite"].sr-only')?.textContent).toBe(
+      'Nothing is thinner than 0.5 mm.'
+    );
+    ws.destroy();
+  });
+
+  it('the floor field moves the floor, and the notice follows it', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const field = ws._root.querySelector('.svg-prep-thin-input');
+    expect(field.value).toBe('0.5');
+    field.value = '3';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ws._root.querySelector('.svg-prep-thin-notice').textContent).toBe(
+      '2 shapes are thinner than 3 mm at 14 mm wide and may not print.'
+    );
+    expect(markOf(ws, 1)).toBe('too thin to print');
+    ws.destroy();
+  });
+
+  it('the design width moves the print floor but not the picture floor', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const width = ws._refs.designWidthInput;
+    width.value = '200';
+    width.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+    expect(markOf(ws, 0)).toBe('too small to trace clearly');
+    ws.destroy();
+  });
+
+  it('the notice and the marks follow a deletion', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    ws._root.querySelector('.svg-prep-object[data-index="0"] [data-delete-index="0"]')?.click();
+    if (ws._root.querySelectorAll('.svg-prep-object').length === 1) {
+      expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+      expect(markOf(ws, 0)).toBeNull();
+    }
+    ws.destroy();
+  });
+});
+
+describe('DP-54 P3: the width the host knows (D-144)', () => {
+  const BAR = 'M10,10h100v2h-100z';
+  const SQUARE = 'M120,20h40v40h-40z';
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"></svg>';
+  function analysisOf(paths) {
+    const doc = new DOMParser().parseFromString(SVG, 'image/svg+xml');
+    return {
+      status: 'ready',
+      confidence: 1,
+      isCompoundPathOnly: false,
+      elements: paths.map((d, i) => {
+        const el = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        el.setAttribute('d', d);
+        return { element: el, index: i, type: 'path', pathData: d, fill: '#000000', autoRole: 'foreground', warnings: [] };
+      }),
+      warnings: [],
+      unsupportedFeatures: [],
+    };
+  }
+
+  it('★ a host that knows the width opens the editor at it, and the sentences say so', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]), {
+      designWidthMm: 11.97,
+      designWidthKnown: true,
+      lineWidthPx: { p10: 2 },
+    });
+    await ws.whenReady();
+    expect(ws._refs.designWidthInput.value).toBe('11.97');
+    expect(ws._root.querySelector('.svg-prep-thin-notice').textContent).toBe(
+      '1 shape is thinner than 0.5 mm at 12 mm wide and may not print.'
+    );
+    const advisory = ws._root.querySelector('.svg-prep-thin-lines');
+    expect(advisory.hidden).toBe(false);
+    expect(advisory.textContent).toContain('at 12 mm wide.');
+    expect(advisory.textContent).not.toContain("the editor's default width");
+    ws.destroy();
+  });
+
+  it('★ a width that arrives while the editor is open moves the box, the notice and the advisory', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]), { lineWidthPx: { p10: 2 } });
+    await ws.whenReady();
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(false);
+    ws.setDesignWidthMm(200);
+    expect(ws._refs.designWidthInput.value).toBe('200');
+    expect(ws._root.querySelector('.svg-prep-thin-notice').hidden).toBe(true);
+    expect(ws._root.querySelector('.svg-prep-thin-lines').textContent).toBe(
+      'Lines look thick enough to print.'
+    );
+    ws.destroy();
+  });
+
+  it('typing a width moves the advisory too', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]), { lineWidthPx: { p10: 2 } });
+    await ws.whenReady();
+    const width = ws._refs.designWidthInput;
+    width.value = '200';
+    width.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ws._root.querySelector('.svg-prep-thin-lines').textContent).toBe(
+      'Lines look thick enough to print.'
+    );
+    ws.destroy();
+  });
+});
+
+describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154)', () => {
+  const BAR = 'M10,10h100v20h-100z';
+  const SQUARE = 'M120,20h40v40h-40z';
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"></svg>';
+  function analysisOf(paths) {
+    const doc = new DOMParser().parseFromString(SVG, 'image/svg+xml');
+    return {
+      status: 'ready',
+      confidence: 1,
+      isCompoundPathOnly: false,
+      elements: paths.map((d, i) => {
+        const el = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        el.setAttribute('d', d);
+        return { element: el, index: i, type: 'path', pathData: d, fill: '#000000', autoRole: 'foreground', warnings: [] };
+      }),
+      warnings: [],
+      unsupportedFeatures: [],
+    };
+  }
+  const setRole = (ws, i, role) => {
+    const radio = ws._root.querySelector(`.svg-prep-object[data-index="${i}"] input[type=radio][value="${role}"]`);
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const vbOf = (svg) => svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
+
+  it('★ D-154: a shape set to Ignore stays in the picture, in the left-out style, and keeps its hit path', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    setRole(ws, 0, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const leftOut = pane.querySelectorAll('.svg-prep-standin-path--ignore');
+    expect(leftOut).toHaveLength(1);
+    expect(leftOut[0].getAttribute('d')).toBe(BAR);
+    // Not painted as raised any more.
+    const raised = Array.from(pane.querySelectorAll('.svg-prep-standin-path--raised')).map((p) => p.getAttribute('d'));
+    expect(raised).toEqual([SQUARE]);
+    // And still a shape a pointer can choose.
+    expect(pane.querySelector('.svg-prep-hit-path[data-index="0"]')).not.toBeNull();
+    // Turned back on, it is ink again.
+    setRole(ws, 0, 'foreground');
+    expect(pane.querySelectorAll('.svg-prep-standin-path--ignore')).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('★ D-154: the combined result keeps the left-out shapes in view', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    setRole(ws, 1, 'ignore');
+    await ws.whenCombined();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(pane.querySelector('svg.svg-prep-standin')).toBeNull();
+    const leftOut = pane.querySelectorAll('.svg-prep-standin-path--ignore');
+    expect(leftOut).toHaveLength(1);
+    expect(leftOut[0].getAttribute('d')).toBe(SQUARE);
+    ws.destroy();
+  });
+
+  it('the ignored wall of a Colors drawing is not painted as left out', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const analysis = analysisOf([BAR, SQUARE]);
+    analysis.elements[0].element.setAttribute('data-background', 'true');
+    ws.open(SVG, analysis);
+    await ws.whenReady();
+    setRole(ws, 0, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(pane.querySelectorAll('.svg-prep-standin-path--ignore')).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('★ D-153: four buttons move the view by a quarter of it, and the arrow keys do the same', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const zoom = pane.querySelector('.svg-prep-zoom-controls');
+    const svg = () => pane.querySelector('svg');
+    zoom.querySelector('.svg-prep-zoom-in').click();
+    const [x0, y0, w, h] = vbOf(svg());
+    zoom.querySelector('.svg-prep-pan-right').click();
+    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 4, 5);
+    zoom.querySelector('.svg-prep-pan-down').click();
+    expect(vbOf(svg())[1]).toBeCloseTo(y0 + h / 4, 5);
+    zoom.querySelector('.svg-prep-pan-left').click();
+    zoom.querySelector('.svg-prep-pan-up').click();
+    expect(vbOf(svg())[0]).toBeCloseTo(x0, 5);
+    expect(vbOf(svg())[1]).toBeCloseTo(y0, 5);
+    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    expect(vbOf(svg())[0]).toBeCloseTo(x0 + w / 4, 5);
+    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    expect(vbOf(svg())[1]).toBeCloseTo(y0 - h / 4, 5);
+    ws.destroy();
+  });
+
+  it('D-153: the view cannot be steered off the drawing', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, SQUARE]));
+    await ws.whenReady();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const zoom = pane.querySelector('.svg-prep-zoom-controls');
+    const svg = () => pane.querySelector('svg');
+    zoom.querySelector('.svg-prep-zoom-in').click();
+    for (let i = 0; i < 40; i++) zoom.querySelector('.svg-prep-pan-right').click();
+    const [x, , w] = vbOf(svg());
+    // The view's middle never leaves the drawing's box (0..200 wide).
+    expect(x + w / 2).toBeLessThanOrEqual(200 + 1e-6);
+    for (let i = 0; i < 40; i++) zoom.querySelector('.svg-prep-pan-left').click();
+    const [x2, , w2] = vbOf(svg());
+    expect(x2 + w2 / 2).toBeGreaterThanOrEqual(0 - 1e-6);
+    ws.destroy();
+  });
+
+  it('D-153: the four buttons carry their names, in both panes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR]));
+    for (const pane of ['source', 'result']) {
+      const zoom = ws._root.querySelector(`.svg-prep-${pane}-pane .svg-prep-zoom-controls`);
+      expect(zoom.querySelector('.svg-prep-pan-left').getAttribute('aria-label')).toBe(`Move the ${pane} view left`);
+      expect(zoom.querySelector('.svg-prep-pan-right').getAttribute('aria-label')).toBe(`Move the ${pane} view right`);
+      expect(zoom.querySelector('.svg-prep-pan-up').getAttribute('aria-label')).toBe(`Move the ${pane} view up`);
+      expect(zoom.querySelector('.svg-prep-pan-down').getAttribute('aria-label')).toBe(`Move the ${pane} view down`);
+    }
+    ws.destroy();
+  });
+});
+
+// ── DP-57 P5: the words On / Cut out / Off, and the layer colors (DP-Q59,
+// DP-Q60, signed 2026-09-17) ─────────────────────────────────────────────────
+describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => {
+  const legendWords = (ws) =>
+    [...ws._root.querySelectorAll('.svg-prep-legend-item')].map((el) =>
+      el.textContent.trim()
+    );
+  const openLayered = (count = 3) => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(count);
+    ws.open(svgString, analysis, { layersEnabled: true });
+    return ws;
+  };
+  const setRole = (ws, i, role) => {
+    const radio = ws._refs.objects.querySelector(
+      `input[name="svg-prep-role-${i}"][value="${role}"]`
+    );
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  it('the legend and the rows say On, Cut out and Off', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(2);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    expect(legendWords(ws)).toEqual(['On', 'Cut out', 'Off']);
+    const labels = [...ws._refs.objects.querySelectorAll('.svg-prep-object[data-index="0"] label')]
+      .map((l) => l.textContent.trim())
+      .filter((t) => ['On', 'Cut out', 'Off', 'Raised', 'Hole', 'Ignore'].includes(t));
+    expect(labels).toEqual(['On', 'Cut out', 'Off']);
+    expect(
+      ws._refs.objects.querySelector('.svg-prep-object[data-index="0"]').getAttribute('aria-label')
+    ).toMatch(/, On$/);
+    setRole(ws, 0, 'ignore');
+    expect(
+      ws._refs.objects.querySelector('.svg-prep-object[data-index="0"]').getAttribute('aria-label')
+    ).toMatch(/, Off$/);
+    ws.destroy();
+  });
+
+  it('with layers, the legend names the layers and every shape is painted in its layer', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    setLayer(ws, 1, 2);
+    setLayer(ws, 2, 3);
+    expect(legendWords(ws)).toEqual(['Layer 1', 'Layer 2', 'Layer 3', 'Cut out', 'Off']);
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const raised = (i) =>
+      pane.querySelector(`.svg-prep-standin-path--raised[data-index="${i}"]`);
+    // Layer 1 is the ink itself (the stand-in's path, or the combined union).
+    expect(pane.querySelector('.svg-prep-standin-layer-1')).not.toBeNull();
+    expect(raised(1).classList.contains('svg-prep-standin-layer-2')).toBe(true);
+    expect(raised(2).classList.contains('svg-prep-standin-layer-3')).toBe(true);
+    // A layer change repaints at once, without a recombine.
+    setLayer(ws, 2, 2);
+    expect(raised(2).classList.contains('svg-prep-standin-layer-2')).toBe(true);
+    ws.destroy();
+  });
+
+  it('a shape turned off is hatched in its layer color: a pattern in the picture, a fill that points at it', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    setLayer(ws, 2, 3);
+    setRole(ws, 2, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const off = pane.querySelector('.svg-prep-standin-path--ignore[data-index="2"]');
+    expect(off).not.toBeNull();
+    const fill = off.getAttribute('fill');
+    const id = /^url\(#(.+)\)$/.exec(fill || '')?.[1];
+    expect(id, `fill was ${fill}`).toBeTruthy();
+    const pattern = pane.querySelector(`pattern[id="${id}"]`);
+    expect(pattern).not.toBeNull();
+    expect(pattern.querySelector('.svg-prep-hatch-3')).not.toBeNull();
+    expect(off.classList.contains('svg-prep-standin-layer-3')).toBe(true);
+    ws.destroy();
+  });
+
+  it('without layers the hatch is neutral and the legend says On', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(2);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    setRole(ws, 1, 'ignore');
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const off = pane.querySelector('.svg-prep-standin-path--ignore[data-index="1"]');
+    const id = /^url\(#(.+)\)$/.exec(off.getAttribute('fill') || '')?.[1];
+    expect(pane.querySelector(`pattern[id="${id}"] .svg-prep-hatch-0`)).not.toBeNull();
+    expect(legendWords(ws)).toEqual(['On', 'Cut out', 'Off']);
+    ws.destroy();
+  });
+
+  it('the combined result carries the layer paint: the union in layer 1, deeper layers over it', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    // A role press asks for the combine; the layer is set once it has landed
+    // and repaints the result by itself.
+    setRole(ws, 0, 'foreground');
+    await ws.whenCombined();
+    setLayer(ws, 2, 3);
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    expect(pane.querySelector('svg.svg-prep-standin')).toBeNull();
+    const union = pane.querySelector('.svg-prep-result-ink');
+    expect(union).not.toBeNull();
+    expect(union.classList.contains('svg-prep-standin-layer-1')).toBe(true);
+    const over = pane.querySelector('.svg-prep-standin-path--raised.svg-prep-standin-layer-3[data-index="2"]');
+    expect(over).not.toBeNull();
+    // A layer 1 shape is the union itself, not a second coat.
+    expect(pane.querySelector('.svg-prep-standin-path--raised.svg-prep-standin-layer-1')).toBeNull();
+    ws.destroy();
+  });
+
+  it("a cut-out that encloses the drawing goes under the ink, not over it (the bird's paper)", async () => {
+    // A paper rectangle around a black bar: the paper is a Cut out by its
+    // luminance and by far the biggest shape. Painted as a second pass over
+    // the ink, it hid the bar (and, in the journal picture, the whole bird).
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect width="100" height="100" fill="#efe9dc"/>' +
+      '<path d="M20 40 H80 V60 H20 Z" fill="black"/></svg>';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analyzeSvg(svg), { layersEnabled: true });
+    await ws.whenReady();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    // D-167 starts the paper Off; a person can still call it a Cut out, and
+    // this is what that press paints.
+    setRole(ws, 0, 'hole');
+    // A role press puts the stand-in up while the combine runs; read it
+    // before anything is awaited.
+    setRole(ws, 1, 'foreground');
+    const art = pane.querySelector('.svg-prep-standin-art');
+    expect(art).not.toBeNull();
+    const painted = [...art.querySelectorAll('path')].map((p) => p.dataset.index);
+    expect(painted).toEqual(['0', '1']);
+    expect(art.querySelector('path[data-index="0"]').classList.contains('svg-prep-standin-path--hole')).toBe(true);
+    expect(art.querySelector('path[data-index="1"]').classList.contains('svg-prep-standin-path--raised')).toBe(true);
+    // Over the combined result, the paper is never painted again.
+    await ws.whenCombined();
+    expect(pane.querySelector('svg.svg-prep-standin')).toBeNull();
+    expect(pane.querySelectorAll('.svg-prep-result-layers path')).toHaveLength(0);
+    ws.destroy();
+  });
+
+  it('over the result, a cut-out inside a layer 2 shape is painted again as paper; the paper around everything is not', async () => {
+    const ws = openLayered(3);
+    await ws.whenReady();
+    // Nested squares: the outer a Cut out around everything (a paper), the
+    // middle on layer 2, the inner a Cut out inside the middle.
+    setLayer(ws, 1, 2);
+    setRole(ws, 0, 'hole');
+    setRole(ws, 2, 'hole');
+    await ws.whenCombined();
+    const pane = ws._root.querySelector('.svg-prep-result-pane');
+    const over = [...pane.querySelectorAll('.svg-prep-result-layers path')].map((p) => [p.dataset.index, p.getAttribute('class')]);
+    expect(over).toEqual([
+      ['1', 'svg-prep-standin-path--raised svg-prep-standin-layer-2'],
+      ['2', 'svg-prep-standin-path--hole'],
+    ]);
+    ws.destroy();
+  });
+
+  it('a compound path says On and Off', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M0 0 H40 V40 H0 Z M60 60 H100 V100 H60 Z" fill="black"/></svg>';
+    const analysis = analyzeSvg(svg);
+    ws.open(svg, analysis);
+    await ws.whenReady();
+    expect(legendWords(ws)).toEqual(['On', 'Off']);
+    ws.destroy();
+  });
+});
+
+// ── DP-58: the owner's fifth walk (D-161, D-162) ─────────────────────────────
+describe('a role pressed on a chosen row is pressed for the selection (D-161)', () => {
+  const clickRow = (ws, i, opts = {}) =>
+    ws._refs.objects
+      .querySelectorAll('.svg-prep-object')[i]
+      .querySelector('.svg-prep-object-name')
+      .dispatchEvent(new MouseEvent('click', { bubbles: true, ...opts }));
+
+  it('two chosen rows both turn Off from one row\u2019s switch, and the announcement counts them', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(3);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    clickRow(ws, 0);
+    clickRow(ws, 2, { ctrlKey: true });
+    announce.mockClear();
+    const radio = ws._refs.objects.querySelector(
+      'input[name="svg-prep-role-2"][value="ignore"]'
+    );
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    const checked = (i) =>
+      ws._refs.objects.querySelector(`input[name="svg-prep-role-${i}"]:checked`)
+        .value;
+    expect(checked(0)).toBe('ignore');
+    expect(checked(2)).toBe('ignore');
+    expect(checked(1)).toBe('foreground');
+    expect(announce.mock.calls.map((c) => c[0])).toContain('2 shapes set to Off.');
+    ws.destroy();
+  });
+
+  it('a row outside the selection is only itself', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(3);
+    ws.open(svgString, analysis);
+    await ws.whenReady();
+    clickRow(ws, 0);
+    clickRow(ws, 1, { ctrlKey: true });
+    const radio = ws._refs.objects.querySelector(
+      'input[name="svg-prep-role-2"][value="hole"]'
+    );
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    const checked = (i) =>
+      ws._refs.objects.querySelector(`input[name="svg-prep-role-${i}"]:checked`)
+        .value;
+    expect(checked(2)).toBe('hole');
+    expect(checked(0)).toBe('foreground');
+    expect(checked(1)).toBe('foreground');
+    ws.destroy();
+  });
+});
+
+describe('three layers, whatever the drawing nests to (D-162)', () => {
+  it('two shapes side by side still offer layers 1, 2 and 3, and the summary says so', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect x="0" y="0" width="40" height="40" fill="black"/>' +
+      '<rect x="60" y="60" width="40" height="40" fill="black"/></svg>';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analyzeSvg(svg), { layersEnabled: true });
+    await ws.whenReady();
+    const options = [...ws._refs.objects.querySelectorAll('.svg-prep-object[data-index="0"] .svg-prep-layer-select option')]
+      .map((o) => o.value);
+    expect(options).toEqual(['1', '2', '3']);
+    expect(ws._refs.layerSummary.textContent).toMatch(/^3 layers/);
+    expect(ws._refs.layerSummary.textContent).not.toMatch(/supports/);
+    ws.destroy();
+  });
+});

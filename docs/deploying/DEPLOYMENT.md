@@ -1,0 +1,475 @@
+# Deployment Guide
+
+This guide covers deploying OpenSCAD Assistive Forge to various hosting platforms and setting up operational monitoring.
+
+## Overview
+
+OpenSCAD Assistive Forge is a static Vite site with special requirements:
+
+- **Cross-Origin Isolation**: recommended, not required -- see below
+- **Security Headers**: CSP, HSTS, and other protective headers
+- **Large Assets**: the OpenSCAD WASM binary is about 10 MB and needs proper caching
+
+---
+
+## Quick Start (Cloudflare Pages)
+
+### 1. Build
+
+```bash
+npm install
+npm run build
+```
+
+Output is in `dist/`.
+
+### 2. Configure Cloudflare Pages
+
+| Setting | Value |
+|---------|-------|
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Node version | 18 or 20 |
+
+### Fonts for `text()` Support
+
+The OpenSCAD `text()` function requires Liberation Sans/Mono TTF fonts at
+runtime. These fonts are **gitignored** (`public/fonts/*.ttf`) and must be
+downloaded before each build.
+
+A `prebuild` npm lifecycle hook runs automatically before every `npm run build`:
+
+```json
+"prebuild": "node scripts/download-wasm.js --strict && node scripts/setup-libraries.js && node scripts/setup-liblouis.js"
+```
+
+The first script downloads the 4 required Liberation font files from GitHub
+releases into `public/fonts/`, which Vite then copies to `dist/fonts/`. It
+short-circuits if fonts are already present (fast file-existence check). The
+other two stage OpenSCAD libraries into `public/libraries/` and liblouis
+braille-translation assets into `public/liblouis/` (see `scripts/README.md`).
+
+**Requirements:**
+- The build environment must have outbound HTTPS access to `github.com`
+- In `--strict` mode, the build **fails** if any font is missing (preventing
+  silent deployment of a broken `text()` function)
+- For local development, `npm run setup-wasm` downloads fonts without
+  `--strict` (lenient — proceeds even if fonts fail to download)
+
+### 3. Deploy (Cloudflare Git Integration)
+
+This repo uses Cloudflare's built-in GitHub integration. Pushes to `main`
+trigger a production deployment automatically; pull requests get preview
+deployments. No API tokens or GitHub secrets are required.
+
+Verify settings at Cloudflare Dashboard → Pages → openscad-assistive-forge
+→ Settings → Builds & deployments:
+
+| Setting | Value |
+|---------|-------|
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Node.js version | 20 |
+
+Mismatched settings here will cause the site to serve raw source files
+instead of the built application.
+
+---
+
+## Required Headers
+
+These headers are configured in `public/_headers` and copied to `dist/` during build.
+
+### Cross-Origin Isolation (Required)
+
+```
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: cross-origin
+```
+
+**Why we send them:** they enable `SharedArrayBuffer`, which a future threaded
+OpenSCAD build could use. They cost nothing to send and keep that door open.
+
+**They are not required.** MEASURED on 2026-08-04 against a static server
+sending no COOP or COEP headers at all: `crossOriginIsolated` was `false` and
+`SharedArrayBuffer` was unavailable, and the WASM engine still initialized, the
+preview still rendered real geometry, and there were no console errors -- both
+on a cold visit and on an offline reload afterwards. The full record is in
+[`audit/offline-pwa-spike-results.md`](../archive/audit/offline-pwa-spike-results.md).
+
+This matters for anyone hosting on an intranet share or a locked-down file
+server that cannot set headers: **that works.** Serve the contents of `dist/`
+over plain HTTP with correct MIME types, have the user open it once while
+connected, and the service worker takes care of the rest.
+
+(`file://` is a different matter and is out of scope -- browsers refuse ES
+modules from it.)
+
+### Security Headers (Recommended)
+
+The CSP is in **enforcing mode**. See `public/_headers` for the full policy. Key directives:
+
+```
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+```
+
+`X-Frame-Options: SAMEORIGIN` allows same-origin iframe embedding (vs `DENY` which blocks all). `style-src` does not need `'unsafe-inline'`: CodeMirror injects its CSS in a `<style>` element that this policy blocks, and the app re-homes those rules into a constructable stylesheet, which CSP does not govern. Expect exactly one `style-src-elem` console violation, from that blocked element.
+
+### SPA Routing
+
+`public/_redirects`:
+
+```
+/*    /index.html   200
+```
+
+Ensures client-side routing works on page refresh.
+
+---
+
+## Alternative Hosting Platforms
+
+### Netlify
+
+Create `netlify.toml`:
+
+```toml
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+    Cross-Origin-Resource-Policy = "cross-origin"
+```
+
+### Vercel
+
+Create `vercel.json`:
+
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/((?!assets).*)", "destination": "/index.html" }
+  ]
+}
+```
+
+### nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    root /var/www/openscad-forge/dist;
+    index index.html;
+
+    # Cross-Origin Isolation
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Embedder-Policy "require-corp" always;
+    add_header Cross-Origin-Resource-Policy "cross-origin" always;
+
+    # Security Headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+
+    # SPA routing
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache WASM files
+    location ~* \.wasm$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+### Apache
+
+`.htaccess`:
+
+```apache
+<IfModule mod_headers.c>
+    Header set Cross-Origin-Opener-Policy "same-origin"
+    Header set Cross-Origin-Embedder-Policy "require-corp"
+    Header set Cross-Origin-Resource-Policy "cross-origin"
+    Header set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    RewriteRule ^index\.html$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /index.html [L]
+</IfModule>
+```
+
+---
+
+## Deployment Verification
+
+### Essential Checks
+
+After deploying, verify:
+
+1. **Cross-Origin Isolation**
+   ```javascript
+   // In browser console
+   window.crossOriginIsolated // should be true
+   ```
+
+2. **WASM Loading**
+   - Load an example model
+   - Adjust a parameter
+   - Verify preview updates
+
+3. **Export Functionality**
+   - Generate STL
+   - Download completes successfully
+
+4. **Security Headers**
+   - Visit [securityheaders.com](https://securityheaders.com)
+   - Enter your URL
+   - Target: Grade A or better
+
+### Automated Health Check
+
+```bash
+# Check cross-origin headers
+curl -I https://your-domain.com/ | grep -i "cross-origin"
+
+# Check WASM is accessible
+curl -I https://your-domain.com/wasm/openscad-official/openscad.wasm
+
+# Check redirect works
+curl -I https://your-domain.com/some-path
+```
+
+---
+
+## Caching Strategy
+
+### Recommended Cache Headers
+
+| Asset Type | Cache Duration | Notes |
+|------------|----------------|-------|
+| HTML | no-cache | Always fetch fresh |
+| JS/CSS (hashed) | 1 year | Immutable with hash |
+| WASM | 1 year | Large, rarely changes |
+| Fonts | 1 year | Immutable |
+| Images | 1 week | May update |
+
+Cloudflare Pages handles this automatically. For other platforms, configure explicitly.
+
+---
+
+## Environment Configuration
+
+### Environment Variables
+
+None required. The application is entirely client-side.
+
+### Feature Flags
+
+Control features via URL parameters in development:
+
+```
+https://your-domain.com/?flag_expert_mode=true
+https://your-domain.com/?flag_monaco_editor=false
+```
+
+For production rollouts, use the feature flag system's percentage-based rollout.
+
+---
+
+## Monitoring and Operations
+
+### Health Monitoring
+
+Set up monitoring for:
+
+| Check | Frequency | Alert Threshold |
+|-------|-----------|-----------------|
+| Site availability | 1 minute | 2 consecutive failures |
+| Response time | 5 minutes | P95 > 3 seconds |
+| SSL certificate | Daily | < 14 days to expiry |
+
+### Error Monitoring
+
+Browser errors can be monitored via:
+
+1. **Cloudflare Analytics**: Automatic for Pages deployments
+2. **Custom error handler**: Implement in application if needed
+3. **CSP reports**: Configure report-uri directive
+
+### Performance Monitoring
+
+Key metrics to track:
+
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| Time to Interactive | < 3s | Lighthouse CI |
+| First Contentful Paint | < 1.5s | Lighthouse CI |
+| Largest Contentful Paint | < 2.5s | Lighthouse CI |
+| Core Web Vitals | Pass | Google Search Console |
+
+### Operational Runbooks
+
+For incident response procedures, see:
+- `docs/deploying/ROLLBACK_RUNBOOK.md` -- rollback and recovery procedures
+- `docs/deploying/SECURITY_ADMIN_GUIDE.md` -- security configuration and incident handling
+
+---
+
+## Rollback Procedures
+
+### Cloudflare Pages
+
+1. Go to Cloudflare Dashboard → Pages → Your Project
+2. Click "Deployments"
+3. Find the last known-good deployment
+4. Click "..." → "Rollback to this deployment"
+
+### Git-based Rollback
+
+```bash
+# Find the last good commit
+git log --oneline
+
+# Revert to it
+git revert HEAD~n..HEAD  # or specific commits
+git push origin main
+
+# Or force rollback (destructive)
+git reset --hard <good-commit>
+git push --force origin main
+```
+
+### Emergency: Static File Rollback
+
+Keep a ZIP of the last known-good `dist/` folder. In emergency:
+
+1. Extract the backup
+2. Upload directly to CDN or hosting
+3. Bypass CI/CD if needed
+
+---
+
+## Troubleshooting Deployment
+
+### `window.crossOriginIsolated === false`
+
+**Cause:** Headers not being applied.
+
+**Fix:**
+1. Check `_headers` file exists in `dist/`
+2. Verify hosting platform is processing headers file
+3. Check for conflicting headers in CDN/proxy
+
+### 404 on Page Refresh
+
+**Cause:** SPA routing not configured.
+
+**Fix:**
+1. Check `_redirects` file exists in `dist/`
+2. Verify rewrite rules are working
+3. Test: `curl -I https://your-domain.com/some-path` should return 200
+
+### WASM Fails to Load
+
+**Cause:** Missing files or CORS issues.
+
+**Fix:**
+1. Verify WASM files exist: `ls dist/wasm/openscad-official/`
+2. Check CORS headers on WASM response
+3. Check console for specific error message
+
+### `text()` Function Not Working
+
+**Cause:** Liberation font TTF files are missing from `dist/fonts/`.
+
+**Diagnosis:**
+1. Open DevTools Network tab, filter by `.ttf`
+2. Check if font requests return `Content-Type: font/ttf` (not `text/html`)
+3. If fonts return HTML content, the SPA `_redirects` rule is masking a 404
+
+**Fix:**
+1. Ensure the `prebuild` hook is present in `package.json`
+2. Verify the build environment has outbound HTTPS to `github.com`
+3. Rebuild: `npm run build` (the `prebuild` hook downloads fonts automatically)
+4. Check `dist/fonts/` contains the 4 TTF files:
+   - `LiberationSans-Regular.ttf`
+   - `LiberationSans-Bold.ttf`
+   - `LiberationSans-Italic.ttf`
+   - `LiberationMono-Regular.ttf`
+
+### Cloudflare Web Analytics beacon blocked (expected)
+
+The deployed console may show a CSP violation for
+`https://static.cloudflareinsights.com/beacon.min.js`. Cloudflare Pages
+auto-injects its Web Analytics beacon into served pages; our CSP
+(`public/_headers`) blocks third-party scripts **by design** and must not be
+loosened for it (project security rule).
+
+**Owner decision (2026-08-05): Web Analytics stays DISABLED for now.**
+To turn off the injection (dashboard, not repo — no rebuild needed):
+either *Workers & Pages → this project → Metrics tab → Web Analytics →
+Disable*, or *account sidebar → Analytics & Logs → Web Analytics →
+Manage site (openscad-assistive-forge.pages.dev) → Remove site / turn off
+Automatic setup*. Verify with a hard refresh: the beacon CSP violation
+disappears. `wrangler.toml` carries no analytics config.
+
+**Future work — privacy-first usage telemetry (planned, not started):**
+a FIRST-PARTY anonymous ping instead of any third-party script: a
+same-origin Pages Function feeding Workers Analytics Engine with a small
+owner-approved event set (`app_loaded`, `wasm_ready`, `wasm_failed`,
+`render_ok`, `render_failed` + coarse browser family / error category).
+No cookies, no identifiers, no IPs stored, no CSP change (same-origin
+`connect-src 'self'` already covers it). Counts app loads and
+success/failure rates — not distinct individuals (deduplicating people
+would require an identifier, which we deliberately do not use). Ship
+with a one-line transparency note in the use statement, text
+owner-approved before release.
+
+### CSP Violations
+
+**Cause:** Security policy blocking resources.
+
+**Fix:**
+1. Check browser console for CSP errors
+2. Review `Content-Security-Policy` header
+3. Add necessary directives for blocked resources
+4. Test with `Content-Security-Policy-Report-Only` first if unsure, then switch to enforcing
+
+---
+
+## Related Documentation- [Security Admin Guide](./SECURITY_ADMIN_GUIDE.md) - Security configuration details
+- [Testing](../developing/TESTING.md) - Pre-deployment testing
+- [Troubleshooting](../developing/TROUBLESHOOTING.md) - Developer troubleshooting

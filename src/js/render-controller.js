@@ -1,0 +1,1358 @@
+/**
+ * Render Controller - Orchestrates OpenSCAD WASM rendering
+ * @license GPL-3.0-or-later
+ */
+
+import {
+  STORAGE_KEY_LAZY_UNION,
+  STORAGE_KEY_MANIFOLD_ENGINE as STORAGE_KEY_MANIFOLD,
+  isDebugPrefEnabled,
+} from './storage-keys.js';
+import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
+
+// Re-export quality tier system for convenience.
+// RENDER_QUALITY now lives in quality-tiers.js (single source of truth for
+// tessellation defaults); existing `import { RENDER_QUALITY } from
+// './render-controller.js'` sites keep working through this re-export.
+export {
+  COMPLEXITY_TIER,
+  QUALITY_TIERS,
+  RENDER_QUALITY,
+  PREVIEW_QUALITY_DEFAULT,
+  HARDWARE_LEVEL,
+  detectHardware,
+  analyzeComplexity,
+  getQualityPreset,
+  getAdaptiveQualityConfig,
+  getTierPresets,
+  formatPresetDescription,
+} from './quality-tiers.js';
+
+import { RENDER_QUALITY } from './quality-tiers.js';
+import { filterFilesForMount } from './mount-filter.js';
+
+/**
+ * Estimate render time based on SCAD content complexity
+ * @param {string} scadContent - OpenSCAD source code
+ * @param {Object} parameters - Current parameter values
+ * @returns {Object} Estimated render info { seconds, complexity, confidence, warning }
+ */
+export function estimateRenderTime(scadContent, parameters = {}) {
+  if (!scadContent) {
+    return { seconds: 0, complexity: 0, confidence: 'unknown', warning: null };
+  }
+
+  let complexityScore = 0;
+  const warnings = [];
+
+  // Count expensive operations
+  const forLoops = (scadContent.match(/for\s*\(/g) || []).length;
+  const intersections = (scadContent.match(/intersection\s*\(/g) || []).length;
+  const differences = (scadContent.match(/difference\s*\(/g) || []).length;
+  const hulls = (scadContent.match(/hull\s*\(/g) || []).length;
+  const minkowskis = (scadContent.match(/minkowski\s*\(/g) || []).length;
+  const linearExtrudes = (scadContent.match(/linear_extrude\s*\(/g) || [])
+    .length;
+  const rotateExtrudes = (scadContent.match(/rotate_extrude\s*\(/g) || [])
+    .length;
+  const spheres = (scadContent.match(/sphere\s*\(/g) || []).length;
+  const cylinders = (scadContent.match(/cylinder\s*\(/g) || []).length;
+
+  // Additional expensive operations (common in keyguards and complex models)
+  const offsets = (scadContent.match(/offset\s*\(/g) || []).length;
+  const surfaces = (scadContent.match(/surface\s*\(/g) || []).length;
+  const polyhedrons = (scadContent.match(/polyhedron\s*\(/g) || []).length;
+  const imports = (scadContent.match(/import\s*\(/g) || []).length;
+  const projections = (scadContent.match(/projection\s*\(/g) || []).length;
+
+  // File size signal
+  const fileSize = scadContent.length;
+
+  // Weighted complexity scoring
+  complexityScore += forLoops * 10;
+  // Multiple intersections/differences are exponentially expensive
+  complexityScore +=
+    intersections > 5 ? intersections * 30 : intersections * 20;
+  complexityScore += differences > 10 ? differences * 20 : differences * 15;
+  complexityScore += hulls * 30;
+  complexityScore += minkowskis * 50; // Minkowski is very expensive
+  complexityScore += linearExtrudes * 8;
+  complexityScore += rotateExtrudes * 12;
+  complexityScore += spheres * 5;
+  complexityScore += cylinders * 3;
+
+  // Additional expensive operations
+  complexityScore += offsets * 25; // offset() is computationally expensive
+  complexityScore += surfaces * 40; // surface() imports heightmaps
+  complexityScore += polyhedrons * 15; // polyhedron() can be complex
+  complexityScore += imports * 20; // import() external geometry
+  complexityScore += projections * 35; // projection() is expensive
+
+  // File size penalty (large SCAD files often correlate with complexity)
+  if (fileSize > 10000) {
+    const extraKB = Math.floor((fileSize - 10000) / 5000);
+    complexityScore += extraKB * 8;
+  }
+
+  // Check $fn value (affects tessellation complexity)
+  const fn = parameters.$fn || parameters.fn;
+  if (fn !== undefined) {
+    if (fn > 100) {
+      complexityScore += fn * 0.8;
+      warnings.push(
+        `High $fn value (${fn}) may significantly increase render time`
+      );
+    } else if (fn > 50) {
+      complexityScore += fn * 0.4;
+    } else {
+      complexityScore += fn * 0.2;
+    }
+  }
+
+  // Warn about known expensive operations
+  if (minkowskis > 0) {
+    warnings.push(
+      `${minkowskis} minkowski() operation(s) detected - these are very expensive`
+    );
+  }
+  if (hulls > 2) {
+    warnings.push(`Multiple hull() operations (${hulls}) may slow rendering`);
+  }
+  if (forLoops > 5) {
+    warnings.push(`Many for loops (${forLoops}) detected`);
+  }
+  if (differences > 15) {
+    warnings.push(
+      `Many difference() operations (${differences}) - heavy boolean workload`
+    );
+  }
+  if (offsets > 3) {
+    warnings.push(
+      `Multiple offset() operations (${offsets}) - computationally expensive`
+    );
+  }
+  if (fileSize > 25000) {
+    warnings.push(
+      `Large file (${Math.round(fileSize / 1024)}KB) may indicate complex model`
+    );
+  }
+
+  // Estimate time (in seconds)
+  // MANIFOLD OPTIMIZED: Reduced base time and multiplier since Manifold
+  // renders 10-100x faster than CGAL for boolean operations.
+  // A complex keyguard that takes ~10s with CGAL takes ~0.2s with Manifold
+  const baseTime = 0.5;
+  const estimatedSeconds = Math.max(
+    1,
+    Math.round(baseTime + complexityScore * 0.03) // Much lower multiplier for Manifold
+  );
+
+  // Determine confidence level
+  let confidence;
+  if (complexityScore < 20) {
+    confidence = 'high';
+  } else if (complexityScore < 80) {
+    confidence = 'medium';
+  } else {
+    confidence = 'low'; // Complex models are harder to predict
+  }
+
+  return {
+    seconds: estimatedSeconds,
+    complexity: complexityScore,
+    confidence,
+    warning: warnings.length > 0 ? warnings.join('. ') : null,
+    details: {
+      forLoops,
+      intersections,
+      differences,
+      hulls,
+      minkowskis,
+      linearExtrudes,
+      rotateExtrudes,
+      spheres,
+      cylinders,
+      offsets,
+      surfaces,
+      polyhedrons,
+      imports,
+      projections,
+      fileSize,
+    },
+  };
+}
+
+/**
+ * Memory warning threshold in MB.
+ * Since we can only measure the allocated heap-buffer size (not actual
+ * usage), this is an absolute-MB threshold rather than a percent. ~819 MB
+ * matches the previous "80% of 1 GB" heuristic.
+ */
+const MEMORY_WARNING_THRESHOLD_MB = 819;
+
+export class RenderController {
+  /**
+   * Create a new RenderController
+   * @param {Object} options - Configuration options
+   * @param {number} options.defaultTimeoutMs - Default render timeout in milliseconds (default: 30000)
+   * @param {number} options.previewTimeoutMs - Preview render timeout in milliseconds (default: 15000)
+   * @param {number} options.initTimeoutMs - WASM initialization timeout in milliseconds (default: 120000)
+   */
+  constructor(options = {}) {
+    this.worker = null;
+    this.requestId = 0;
+    this.currentRequest = null;
+    this.ready = false;
+    this.initPromise = null;
+    this.initTimeoutHandle = null;
+    this.readyResolve = null;
+    this.readyReject = null;
+    this.renderQueue = Promise.resolve();
+    this.memoryUsage = null;
+    this.onMemoryWarning = null;
+    this._moduleUsed = false;
+    this._restartInProgress = null;
+
+    /**
+     * Names this render must NOT pass as `-D` (UF-18, Q-45a). Supplied by the
+     * app, which is the only layer that knows which parameters a person
+     * actually changed. Everything withheld here falls through to the value
+     * the SCAD source declares, which is the point: a `-D` for every
+     * parameter is what made an edited default invisible (U-30).
+     * @type {(() => Set<string>)|null}
+     */
+    this._getWithheldDefineKeys = null;
+
+    // Worker health monitoring
+    this._heartbeatId = 0;
+    this._lastPongTimestamp = 0;
+    this._heartbeatInterval = null;
+    this._workerCrashCount = 0;
+    this.onWorkerHealthChange = null;
+
+    // MANIFOLD OPTIMIZED: Reduced default timeouts since Manifold renders much faster
+    // Configurable timeout settings
+    this.timeoutConfig = {
+      defaultTimeoutMs: options.defaultTimeoutMs || 30000, // Was 60000
+      previewTimeoutMs: options.previewTimeoutMs || 15000, // Was 30000
+      initTimeoutMs: options.initTimeoutMs || 120000, // Keep init timeout (WASM loading)
+    };
+  }
+
+  /**
+   * Update timeout configuration
+   * @param {Object} config - Timeout configuration
+   * @param {number} config.defaultTimeoutMs - Default render timeout in milliseconds
+   * @param {number} config.previewTimeoutMs - Preview render timeout in milliseconds
+   * @param {number} config.initTimeoutMs - WASM initialization timeout in milliseconds
+   */
+  setTimeoutConfig(config) {
+    if (config.defaultTimeoutMs)
+      this.timeoutConfig.defaultTimeoutMs = config.defaultTimeoutMs;
+    if (config.previewTimeoutMs)
+      this.timeoutConfig.previewTimeoutMs = config.previewTimeoutMs;
+    if (config.initTimeoutMs)
+      this.timeoutConfig.initTimeoutMs = config.initTimeoutMs;
+  }
+
+  /**
+   * Get current timeout configuration
+   * @returns {Object} Current timeout settings
+   */
+  getTimeoutConfig() {
+    return { ...this.timeoutConfig };
+  }
+
+  /**
+   * Whether a render is currently in progress.
+   * (Note: OpenSCAD WASM renderToStl blocks inside the worker, so we cannot interrupt it mid-render.)
+   * @returns {boolean}
+   */
+  isBusy() {
+    return !!this.currentRequest;
+  }
+
+  /**
+   * Set callback for WASM initialization progress
+   * @param {Function} callback - Called with progress updates during init
+   */
+  setInitProgressCallback(callback) {
+    this.onInitProgress = callback;
+  }
+
+  /**
+   * Initialize the Web Worker
+   * @param {Object} options - Initialization options
+   * @param {Function} options.onProgress - Progress callback
+   * @returns {Promise<void>}
+   */
+  async init(options = {}) {
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    const onProgress = options.onProgress || this.onInitProgress;
+
+    const initPromise = new Promise((resolve, reject) => {
+      let initSettled = false;
+      const clearInitTimeout = () => {
+        if (this.initTimeoutHandle) {
+          clearTimeout(this.initTimeoutHandle);
+          this.initTimeoutHandle = null;
+        }
+      };
+
+      const settleInit = (settler, value) => {
+        if (initSettled) {
+          return;
+        }
+        initSettled = true;
+        clearInitTimeout();
+        this.readyResolve = null;
+        this.readyReject = null;
+        settler(value);
+      };
+
+      const failInit = (error) => {
+        console.error('[RenderController] Init failed:', error);
+        this.terminate();
+        settleInit(reject, error);
+      };
+
+      const resolveInit = () => {
+        settleInit(resolve);
+      };
+
+      try {
+        // Report start of initialization (indeterminate — no real measurement)
+        if (onProgress) {
+          onProgress(-1, 'Starting OpenSCAD engine...');
+        }
+
+        // Create worker (inline URL keeps Vite worker bundling intact).
+        this.worker = new Worker(
+          new URL('../worker/openscad-worker.js', import.meta.url),
+          { type: 'module' }
+        );
+
+        // Set up message handler
+        this.worker.onmessage = (e) => {
+          this.handleMessage(e.data, onProgress);
+        };
+
+        this.worker.onerror = (error) => {
+          const message = error?.message || 'Worker error';
+          console.error('[RenderController] Worker error:', error);
+
+          // If a render is in progress, reject it immediately so the UI
+          // doesn't hang waiting for a watchdog timeout.
+          if (this.currentRequest) {
+            const renderError = new Error(
+              'The rendering engine crashed unexpectedly. ' +
+                'This may be caused by projection() or roof() in your model. ' +
+                'The engine will restart automatically for the next render.'
+            );
+            renderError.code = 'WASM_ABORT';
+            renderError.needsRestart = true;
+            this._moduleUsed = true;
+            this.currentRequest.reject(renderError);
+            this.currentRequest = null;
+          }
+
+          if (onProgress) {
+            onProgress(-1, 'Failed to initialize: ' + message);
+          }
+          const initError = new Error(message);
+          initError.event = error;
+          failInit(initError);
+        };
+
+        // Report WASM download starting (indeterminate)
+        if (onProgress) {
+          onProgress(-1, 'Loading WASM module (~15-30MB)...');
+        }
+
+        // Send init message
+        // Asset base URL is optional - worker will derive from self.location if not provided
+        // cachedCapabilities bypasses callMain(['--help']) in restarted workers,
+        // avoiding a second callMain() invocation before the actual render.
+        const assetBaseUrl = options.assetBaseUrl;
+        const cachedCapabilities = options.cachedCapabilities;
+        this._initUsedCachedCapabilities = !!cachedCapabilities;
+        this.worker.postMessage({
+          type: 'INIT',
+          payload: {
+            ...(assetBaseUrl ? { assetBaseUrl } : {}),
+            ...(cachedCapabilities ? { cachedCapabilities } : {}),
+          },
+        });
+
+        // Set up ready handler
+        this.readyResolve = resolveInit;
+        this.readyReject = failInit;
+
+        // Timeout for initialization (configurable)
+        this.initTimeoutHandle = setTimeout(() => {
+          if (!this.ready) {
+            if (onProgress) {
+              onProgress(
+                -1,
+                'Initialization timeout - please refresh and try again'
+              );
+            }
+            failInit(new Error('Worker initialization timeout'));
+          }
+        }, this.timeoutConfig.initTimeoutMs);
+      } catch (error) {
+        console.error('[RenderController] Failed to create worker:', error);
+        if (onProgress) {
+          onProgress(-1, 'Failed to create worker: ' + error.message);
+        }
+        failInit(error);
+      }
+    });
+
+    this.initPromise = initPromise;
+    return initPromise.catch((error) => {
+      if (this.initPromise === initPromise) {
+        this.initPromise = null;
+      }
+      throw error;
+    });
+  }
+
+  /**
+   * Restart the worker (workaround for OpenSCAD WASM state corruption between renders)
+   * Passes cached capabilities so the new worker skips callMain(['--help']),
+   * preventing a second callMain() invocation before the actual render.
+   * @returns {Promise<void>}
+   */
+  async restart() {
+    if (this._restartInProgress) {
+      return this._restartInProgress;
+    }
+
+    const doRestart = async () => {
+      this._workerCrashCount++;
+      console.warn(
+        `[RenderController] Worker restart #${this._workerCrashCount}`
+      );
+      this.terminate(); // also stops health monitoring
+      this.initPromise = null;
+      this.ready = false;
+      await this.init({ cachedCapabilities: this.capabilities || null });
+      // Resume health monitoring after reinit
+      this.startHealthMonitoring();
+    };
+
+    this._restartInProgress = doRestart().finally(() => {
+      this._restartInProgress = null;
+    });
+    return this._restartInProgress;
+  }
+
+  /**
+   * Handle messages from worker
+   * @param {Object} message - Message from worker
+   * @param {Function} onInitProgress - Optional init progress callback
+   */
+  handleMessage(message, onInitProgress) {
+    const { type, payload } = message;
+
+    switch (type) {
+      case 'READY':
+        this.ready = true;
+        // Store WASM init timing if provided
+        this.wasmInitDurationMs = payload?.wasmInitDurationMs || 0;
+
+        // Store detected capabilities
+        this.capabilities = payload?.capabilities || {
+          hasManifold: false,
+          hasFastCSG: false,
+          hasLazyUnion: false,
+          hasRenderColorsFlag: false,
+          hasBinarySTL: false,
+          version: 'unknown',
+        };
+
+        console.log(
+          `[RenderController] Worker ready (WASM init: ${this.wasmInitDurationMs}ms, ` +
+            `Manifold: ${this.capabilities.hasManifold}, ` +
+            `fast-csg: ${this.capabilities.hasFastCSG})`
+        );
+
+        // When the worker ran checkCapabilities() (no cachedCapabilities),
+        // callMain(['--help']) has already been invoked on this module instance.
+        // Mark the module as used so renderOnce() triggers a proactive restart
+        // before the first render, giving it a clean WASM module.
+        if (!this._initUsedCachedCapabilities) {
+          this._moduleUsed = true;
+        }
+
+        // Emit capability event for UI to handle
+        if (this.onCapabilitiesDetected) {
+          this.onCapabilitiesDetected(this.capabilities);
+        }
+
+        if (onInitProgress) {
+          onInitProgress(100, 'OpenSCAD engine ready');
+        }
+        if (this.readyResolve) {
+          this.readyResolve();
+        }
+        break;
+
+      case 'PROGRESS':
+        // Handle init progress (requestId === 'init')
+        if (payload.requestId === 'init' && onInitProgress) {
+          // Init progress is indeterminate (percent: -1) — pass through
+          // untouched so the UI shows stage messages without fake numbers.
+          onInitProgress(payload.percent, payload.message);
+        } else if (this.currentRequest && this.currentRequest.onProgress) {
+          this.currentRequest.onProgress(payload.percent, payload.message);
+        }
+        break;
+
+      case 'COMPLETE':
+        if (
+          this.currentRequest &&
+          payload.requestId === this.currentRequest.id
+        ) {
+          // Normalize payload: add 'stl' alias for backwards compatibility with consumers
+          const result = {
+            ...payload,
+            stl: payload.data, // Alias data as stl for backwards compatibility
+            // Include timing info from worker
+            timing: payload.timing || {},
+          };
+          this.currentRequest.resolve(result);
+          this.currentRequest = null;
+
+          // Collect performance metrics if enabled
+          if (isPerfMetricsEnabled() && payload.timing) {
+            const ok = appendPerfMetric({
+              timestamp: Date.now(),
+              renderMs: payload.timing.renderMs || 0,
+              wasmInitMs: payload.timing.wasmInitMs || 0,
+              cached: false,
+            });
+            if (ok) {
+              console.log('[Perf] Render timing:', payload.timing);
+            }
+          }
+
+          // Check memory after render completes
+          this.checkMemoryUsage();
+        }
+        break;
+
+      case 'ERROR':
+        // Surface any console output captured before the error (warnings, echos)
+        if (
+          payload.consoleOutput &&
+          typeof window.updateConsoleOutput === 'function'
+        ) {
+          window.updateConsoleOutput(payload.consoleOutput);
+        }
+        if (
+          this.currentRequest &&
+          payload.requestId === this.currentRequest.id
+        ) {
+          // If the worker signals that the WASM module is corrupted after this
+          // error (non-zero exit code, numeric abort, etc.), mark the module as
+          // used so the proactive restart fires before the next render attempt.
+          if (payload.needsRestart) {
+            this._moduleUsed = true;
+          }
+
+          const error = new Error(payload.message);
+          error.code = payload.code;
+          error.details = payload.details;
+          this.currentRequest.reject(error);
+          this.currentRequest = null;
+        } else if (payload.requestId === 'init' && this.readyReject) {
+          const error = new Error(
+            payload.message || 'Failed to initialize OpenSCAD engine'
+          );
+          if (payload.code) {
+            error.code = payload.code;
+          }
+          if (payload.details) {
+            error.details = payload.details;
+          }
+          this.readyReject(error);
+        }
+        break;
+
+      case 'MEMORY_USAGE':
+        this.memoryUsage = payload;
+        console.log(`[RenderController] Memory: ${payload.usedMB} MB`);
+
+        // Trigger warning callback if above absolute-MB threshold
+        if (
+          (payload.usedMB || 0) >= MEMORY_WARNING_THRESHOLD_MB &&
+          this.onMemoryWarning
+        ) {
+          this.onMemoryWarning(payload);
+        }
+
+        // Resolve pending memory request if any
+        if (this.memoryResolve) {
+          this.memoryResolve(payload);
+          this.memoryResolve = null;
+        }
+        break;
+
+      case 'WARNING':
+        // Handle proactive warnings from worker (e.g., high memory before render)
+        console.warn(`[RenderController] Warning: ${payload.message}`);
+
+        // Trigger memory warning callback if this is a memory warning
+        if (payload.code === 'HIGH_MEMORY' && this.onMemoryWarning) {
+          this.onMemoryWarning(payload.memoryUsage || payload);
+        }
+
+        // Forward warning to current request's progress callback
+        if (this.currentRequest && this.currentRequest.onProgress) {
+          // Use negative percent to indicate warning state
+          this.currentRequest.onProgress(-2, payload.message);
+        }
+        break;
+
+      case 'PONG':
+        // Worker heartbeat response — update health tracking
+        this._lastPongTimestamp = Date.now();
+        break;
+
+      case 'CONSOLE':
+        // Runtime console output from the WASM engine (e.g. echo/warning during render)
+        if (typeof window.updateConsoleOutput === 'function') {
+          const text = payload?.output || payload?.message;
+          if (text) window.updateConsoleOutput(text);
+        }
+        break;
+
+      case 'DEBUG_LOG':
+        break;
+
+      default:
+        console.warn('[RenderController] Unknown message type:', type);
+    }
+  }
+
+  /**
+   * Start worker health monitoring via heartbeat.
+   * Sends periodic PING messages; if the worker is responsive, it replies PONG.
+   * During a blocking WASM render the worker won't respond — that's expected.
+   * The health callback fires only when the worker appears unresponsive
+   * *outside* of a known render.
+   * @param {number} intervalMs - Heartbeat interval (default 10000ms)
+   */
+  startHealthMonitoring(intervalMs = 10000) {
+    this.stopHealthMonitoring();
+    this._lastPongTimestamp = Date.now();
+    this._heartbeatInterval = setInterval(() => {
+      if (!this.worker || !this.ready) return;
+
+      this.worker.postMessage({
+        type: 'PING',
+        payload: { id: ++this._heartbeatId },
+      });
+
+      // Check if last pong was too long ago AND we're not in a render
+      const silenceMs = Date.now() - this._lastPongTimestamp;
+      const isRendering = !!this.currentRequest;
+      if (!isRendering && silenceMs > intervalMs * 3) {
+        console.warn(
+          `[RenderController] Worker unresponsive for ${Math.round(silenceMs / 1000)}s outside render`
+        );
+        if (this.onWorkerHealthChange) {
+          this.onWorkerHealthChange({
+            healthy: false,
+            silenceMs,
+            crashCount: this._workerCrashCount,
+          });
+        }
+      }
+    }, intervalMs);
+  }
+
+  /**
+   * Stop worker health monitoring
+   */
+  stopHealthMonitoring() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+      this._heartbeatInterval = null;
+    }
+  }
+
+  /**
+   * Get worker crash count since last init
+   * @returns {number}
+   */
+  getWorkerCrashCount() {
+    return this._workerCrashCount;
+  }
+
+  /**
+   * Set callback for memory warnings
+   * @param {Function} callback - Called when memory usage exceeds threshold
+   */
+  setMemoryWarningCallback(callback) {
+    this.onMemoryWarning = callback;
+  }
+
+  /**
+   * Supply the names this controller must withhold from `-D` (UF-18, Q-45a).
+   * @param {(() => Set<string>)|null} resolver
+   */
+  setWithheldDefineKeyResolver(resolver) {
+    this._getWithheldDefineKeys = resolver;
+  }
+
+  /**
+   * Drop the parameters the app says the user never touched, so the SCAD
+   * source's own declarations decide their values.
+   *
+   * Applied AFTER the quality preset, never before: `applyQualitySettings`
+   * reads `$fn` to decide whether to cap it, and a preset that forces `$fn`
+   * writes a value that has to survive to the command line.
+   *
+   * @param {Object} parameters
+   * @returns {Object}
+   */
+  _withholdUntouchedParameters(parameters) {
+    if (!this._getWithheldDefineKeys) return parameters;
+    let withheld;
+    try {
+      withheld = this._getWithheldDefineKeys();
+    } catch (error) {
+      console.warn('[Render] Could not resolve withheld -D keys:', error);
+      return parameters;
+    }
+    if (!withheld || withheld.size === 0) return parameters;
+
+    const kept = {};
+    for (const [key, value] of Object.entries(parameters || {})) {
+      if (!withheld.has(key)) kept[key] = value;
+    }
+    return kept;
+  }
+
+  /**
+   * Set callback for when OpenSCAD capabilities are detected
+   * @param {Function} callback - Called with capability info after init
+   */
+  setCapabilitiesCallback(callback) {
+    this.onCapabilitiesDetected = callback;
+  }
+
+  /**
+   * Get detected capabilities
+   * @returns {Object} Capability flags
+   */
+  getCapabilities() {
+    return (
+      this.capabilities || {
+        hasManifold: false,
+        hasFastCSG: false,
+        hasLazyUnion: false,
+        hasRenderColorsFlag: false,
+        hasBinarySTL: false,
+        version: 'unknown',
+      }
+    );
+  }
+
+  /**
+   * Request memory usage from worker
+   * @returns {Promise<Object>} Memory usage info
+   */
+  async getMemoryUsage() {
+    if (!this.worker || !this.ready) {
+      return {
+        used: 0,
+        limit: 512 * 1024 * 1024,
+        percent: 0,
+        available: false,
+      };
+    }
+
+    return new Promise((resolve) => {
+      this.memoryResolve = resolve;
+      this.worker.postMessage({ type: 'GET_MEMORY_USAGE' });
+
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        if (this.memoryResolve) {
+          this.memoryResolve({
+            used: 0,
+            limit: 512 * 1024 * 1024,
+            percent: 0,
+            available: false,
+          });
+          this.memoryResolve = null;
+        }
+      }, 5000);
+    });
+  }
+
+  /**
+   * Check memory usage and trigger warning if needed
+   */
+  async checkMemoryUsage() {
+    if (!this.worker || !this.ready) return;
+    this.worker.postMessage({ type: 'GET_MEMORY_USAGE' });
+  }
+
+  /**
+   * Apply quality settings to parameters
+   *
+   * Quality presets control tessellation through $fn, $fa, and $fs:
+   * - $fn: Number of segments for full circles (0 = use $fa/$fs instead)
+   * - $fa: Minimum angle (degrees) per segment (default 12°)
+   * - $fs: Minimum size (mm) per segment (default 2mm)
+   *
+   * For FULL/DESKTOP_DEFAULT quality, we only SET defaults if the model
+   * doesn't define them. For PREVIEW/DRAFT, we enforce constraints.
+   *
+   * @param {Object} parameters - Original parameters
+   * @param {Object} quality - Quality preset (RENDER_QUALITY.PREVIEW or RENDER_QUALITY.FULL)
+   * @returns {Object} Parameters with quality adjustments
+   */
+  applyQualitySettings(parameters, quality) {
+    const adjusted = { ...parameters };
+    const isFullQuality = quality.name === 'full' || quality.name === 'desktop';
+
+    // Cap $fn if quality has a maxFn limit
+    if (quality.maxFn !== null && adjusted.$fn !== undefined) {
+      adjusted.$fn = Math.min(adjusted.$fn, quality.maxFn);
+    }
+
+    // Optionally force $fn even if the model didn't set it (useful for draft/fast previews)
+    if (
+      quality.maxFn !== null &&
+      adjusted.$fn === undefined &&
+      quality.forceFn
+    ) {
+      adjusted.$fn = quality.maxFn;
+    }
+
+    // Handle $fa (minimum angle)
+    // For full quality: Only set if model doesn't define it (respect model's choices)
+    // For preview/draft: Enforce minimum for performance
+    if (quality.minFa !== null && quality.minFa !== undefined) {
+      if (adjusted.$fa === undefined) {
+        // Model doesn't define $fa - use our default
+        adjusted.$fa = quality.minFa;
+      } else if (!isFullQuality) {
+        // For preview modes, enforce minimum $fa for performance
+        adjusted.$fa = Math.max(adjusted.$fa, quality.minFa);
+      }
+      // For full quality, respect the model's $fa setting
+    }
+
+    // Handle $fs (minimum size)
+    // Same logic as $fa
+    if (quality.minFs !== null && quality.minFs !== undefined) {
+      if (adjusted.$fs === undefined) {
+        // Model doesn't define $fs - use our default
+        adjusted.$fs = quality.minFs;
+      } else if (!isFullQuality) {
+        // For preview modes, enforce minimum $fs for performance
+        adjusted.$fs = Math.max(adjusted.$fs, quality.minFs);
+      }
+      // For full quality, respect the model's $fs setting
+    }
+
+    return adjusted;
+  }
+
+  /**
+   * Render OpenSCAD to specified format
+   * @param {string} scadContent - OpenSCAD source code
+   * @param {Object} parameters - Parameter overrides
+   * @param {Object} options - Render options
+   * @param {number} options.timeoutMs - Timeout in milliseconds
+   * @param {Function} options.onProgress - Progress callback
+   * @param {Object} options.quality - Quality preset (optional, defaults to FULL)
+   * @param {string} options.outputFormat - Output format (stl, obj, off, amf, 3mf)
+   * @param {Map<string, string>} options.files - Additional files for multi-file projects
+   * @param {string} options.mainFile - Main file path (for multi-file projects)
+   * @param {Array<{id: string, path: string}>} options.libraries - Library bundles to mount
+   * @param {Object} options.paramTypes - Map of parameter names to schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
+   * @returns {Promise<Object>} Render result with data and stats
+   */
+  async render(scadContent, parameters = {}, options = {}) {
+    const run = async () => {
+      const quality = options.quality || RENDER_QUALITY.FULL;
+      const adjustedParams = this._withholdUntouchedParameters(
+        this.applyQualitySettings(parameters, quality)
+      );
+      // Use explicit timeout if provided, then quality preset, then controller default
+      let timeoutMs =
+        options.timeoutMs ||
+        quality.timeoutMs ||
+        this.timeoutConfig.defaultTimeoutMs;
+
+      // Minkowski operations can trigger CGAL Nef fallback which is orders of
+      // magnitude slower than the Manifold fast-path.  Double the timeout so
+      // the watchdog doesn't kill a legitimate (but slow) render.
+      if (scadContent && /\bminkowski\s*\(/m.test(scadContent)) {
+        timeoutMs = Math.max(timeoutMs, 60000);
+      }
+
+      const shouldRetryOnce = (err) => {
+        const msg = err?.message || String(err);
+        const code = err?.code;
+        const details = err?.details;
+
+        // MODEL_NOT_2D is handled by the caller via a two-pass fallback;
+        // normal retry would just hit the same error.
+        if (code === 'MODEL_NOT_2D') return false;
+
+        // Don't retry CGAL geometry errors - these are real compilation failures
+        if (msg.includes('CGAL error') || msg.includes('assertion violation')) {
+          return false;
+        }
+
+        // Don't retry compilation failures with useful error messages
+        if (
+          msg.includes('OpenSCAD compilation failed') &&
+          msg.includes('Output:')
+        ) {
+          return false;
+        }
+
+        // Pattern we see in logs: "Failed to render model: 1101176" (numeric code, no stack)
+        if (/^Failed to render model:\s*\d+/.test(msg)) return true;
+        // Worker translates numeric callMain errors to INTERNAL_ERROR with raw numeric details.
+        if (code === 'INTERNAL_ERROR') return true;
+        if (typeof details === 'string' && /\b\d{6,}\b/.test(details))
+          return true;
+        // BUG-A fix: double-invoke guard detected stale worker — retry after restart.
+        if (code === 'WASM_DOUBLE_INVOKE') return true;
+        return false;
+      };
+
+      const renderOnce = async () => {
+        if (this._moduleUsed) {
+          console.log(
+            '[RenderController] Proactive restart: WASM module was used by previous render'
+          );
+          try {
+            await this.restart();
+          } catch (restartErr) {
+            console.error(
+              '[RenderController] Worker restart failed (first attempt) — retrying once:',
+              restartErr
+            );
+            try {
+              await this.restart();
+              console.log(
+                '[RenderController] Worker restart succeeded on retry'
+              );
+            } catch (retryErr) {
+              console.error(
+                '[RenderController] Worker restart failed after retry — attempting render with existing worker:',
+                retryErr
+              );
+            }
+          }
+          this._moduleUsed = false;
+        }
+
+        if (!this.ready) {
+          throw new Error('Worker not ready. Call init() first.');
+        }
+
+        const requestId = `render-${++this.requestId}`;
+        const renderStartTime = performance.now();
+
+        return new Promise((resolve, reject) => {
+          this.currentRequest = {
+            id: requestId,
+            resolve: (result) => {
+              const renderDurationMs = Math.round(
+                performance.now() - renderStartTime
+              );
+              this._moduleUsed = true;
+              console.debug('[Render] Compilation complete:', {
+                requestId,
+                durationMs: renderDurationMs,
+                outputFormat: options.outputFormat || 'stl',
+                triangles: result?.stats?.triangles,
+                dataSize: result?.data?.length || result?.stl?.length || 0,
+                quality: quality?.name || 'unknown',
+              });
+              resolve(result);
+            },
+            reject: (error) => {
+              const renderDurationMs = Math.round(
+                performance.now() - renderStartTime
+              );
+              console.debug('[Render] Compilation failed:', {
+                requestId,
+                durationMs: renderDurationMs,
+                error: error?.message,
+                code: error?.code,
+              });
+              reject(error);
+            },
+            onProgress: options.onProgress,
+          };
+
+          // Mount only what the render needs (text always; large binary
+          // sets reduced to dependency-referenced files), then convert
+          // the Map to a plain object for the worker.
+          let filesObject;
+          if (options.files) {
+            const mountSelection = filterFilesForMount(
+              options.files,
+              options.mainFile
+            );
+            if (mountSelection.dropped.length > 0) {
+              console.log(
+                `[RenderController] Not mounting ${mountSelection.dropped.length} ` +
+                  `unreferenced binary companion(s): ${mountSelection.dropped.join(', ')}`
+              );
+            }
+            filesObject = Object.fromEntries(mountSelection.files);
+          }
+
+          // Determine output format (default to stl)
+          const outputFormat = options.outputFormat || 'stl';
+
+          // Read performance options from localStorage (worker can't access localStorage)
+          // Engine selection: manifold_engine feature flag controls Manifold vs CGAL backend
+          // Default to true (Manifold) for performance, user can disable for compatibility
+          const manifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD);
+          const useManifold =
+            manifoldPref === null ? true : manifoldPref !== 'false';
+
+          // CAUTION: lazy-union may produce incorrect geometry in WASM
+          // (OpenSCAD #350, #4169, #6060, Playground #115).
+          // Default is OFF. Only enable if user explicitly opts in via settings.
+          // If exposing a UI toggle, add warning: "Lazy union may produce incorrect
+          // geometry (wrong difference/union results). Use for preview speed only."
+          const useSourceOverrides = isDebugPrefEnabled('sourceOverrides');
+          const renderOptions = {
+            enableLazyUnion:
+              localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
+            useManifold,
+            useSourceOverrides,
+            // File > Export > STL (ascii) is the only caller that asks for
+            // anything but binary; everything else keeps the fast default.
+            ...(options.stlBinary === false ? { stlBinary: false } : {}),
+          };
+
+          // Clear any stale cancel watchdog before posting the new render.
+          // A previous cancel() may have left a pending watchdog that would
+          // otherwise terminate this freshly-started worker after 200 ms.
+          if (this._cancelWatchdogHandle) {
+            clearTimeout(this._cancelWatchdogHandle);
+            this._cancelWatchdogHandle = null;
+          }
+
+          this.worker.postMessage({
+            type: 'RENDER',
+            payload: {
+              requestId,
+              scadContent,
+              parameters: adjustedParams,
+              paramTypes: options.paramTypes || {},
+              timeoutMs,
+              outputFormat,
+              files: filesObject,
+              mainFile: options.mainFile,
+              libraries: options.libraries,
+              renderOptions,
+            },
+          });
+
+          // Render-level watchdog: if the render exceeds timeout + 30s grace,
+          // the worker is hung on a blocking callMain(). Hard-cancel it.
+          // This is the last line of defense against unrecoverable WASM hangs.
+          const WATCHDOG_GRACE_MS = 30000;
+          const watchdogMs = timeoutMs + WATCHDOG_GRACE_MS;
+          this._renderWatchdogHandle = setTimeout(() => {
+            if (this.currentRequest?.id === requestId) {
+              console.error(
+                `[RenderController] Render watchdog fired after ${watchdogMs}ms — ` +
+                  `worker is hung. Hard canceling.`
+              );
+              this.cancel({ hard: true });
+            }
+          }, watchdogMs);
+
+          // Clean up watchdog when render completes (wrap resolve/reject)
+          const origResolve = this.currentRequest.resolve;
+          const origReject = this.currentRequest.reject;
+          this.currentRequest.resolve = (result) => {
+            clearTimeout(this._renderWatchdogHandle);
+            origResolve(result);
+          };
+          this.currentRequest.reject = (error) => {
+            clearTimeout(this._renderWatchdogHandle);
+            origReject(error);
+          };
+        });
+      };
+
+      try {
+        return await renderOnce();
+      } catch (err) {
+        const shouldRetry = shouldRetryOnce(err);
+        if (!shouldRetry) {
+          throw err;
+        }
+        await this.restart();
+        // Reset _moduleUsed after explicit restart to prevent proactive restart
+        // from firing again inside renderOnce() (would cause a double restart).
+        this._moduleUsed = false;
+        return await renderOnce();
+      }
+    };
+
+    const queued = this.renderQueue.then(run, run);
+    this.renderQueue = queued.catch(() => {});
+    return queued;
+  }
+
+  /**
+   * Render preview with reduced quality for faster feedback
+   * @param {string} scadContent - OpenSCAD source code
+   * @param {Object} parameters - Parameter overrides
+   * @param {Object} options - Render options
+   * @returns {Promise<Object>} Render result with STL data and stats
+   */
+  async renderPreview(scadContent, parameters = {}, options = {}) {
+    const previewQuality = options.quality || RENDER_QUALITY.PREVIEW;
+    return this.render(scadContent, parameters, {
+      ...options,
+      quality: previewQuality,
+    });
+  }
+
+  /**
+   * Render full quality for final export
+   * @param {string} scadContent - OpenSCAD source code
+   * @param {Object} parameters - Parameter overrides
+   * @param {Object} options - Render options
+   * @returns {Promise<Object>} Render result with STL data and stats
+   */
+  async renderFull(scadContent, parameters = {}, options = {}) {
+    return this.render(scadContent, parameters, {
+      ...options,
+      quality: options.quality || RENDER_QUALITY.FULL,
+    });
+  }
+
+  /**
+   * Two-pass 2D fallback for MODEL_NOT_2D errors.
+   *
+   * The model's "first layer" mode produces a thin 3D slice (by design —
+   * desktop OpenSCAD applies projection() internally during export).
+   * When certain preset parameter combinations cause this internal
+   * projection to fail in WASM, the direct SVG/DXF render returns
+   * MODEL_NOT_2D.
+   *
+   * Fallback strategy:
+   *   Pass 1 — Render the model to STL with the parameters EXACTLY as
+   *            given (the caller decides which 3D-producing parameters to
+   *            use — this method never rewrites them; the historical
+   *            silent `generate`-stripping moved to the consent flow in
+   *            main.js).
+   *   Pass 2 — Compile `projection(cut=true) { import("mesh.stl"); }`
+   *            to the target 2D format on another fresh worker.
+   *
+   * The output is an APPROXIMATION: a polyline projection of a
+   * tessellated mesh, not OpenSCAD's exact 2D geometry. Results are
+   * tagged `approximation: 'stl-projection'` and SVG output carries an
+   * explanatory comment. EXPORT callers must obtain user consent before
+   * invoking this (see the MODEL_NOT_2D handlers in main.js); the draft
+   * 2D preview may use it without a dialog since nothing leaves the app.
+   *
+   * Each pass uses a fresh WASM module (proactive restart in renderOnce)
+   * to avoid the callMain-reuse corruption bug.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @param {Object} parameters - Parameter overrides (used verbatim)
+   * @param {Object} options - Original render options (outputFormat must be svg/dxf)
+   * @returns {Promise<Object>} Render result with 2D data
+   */
+  async render2DFallback(scadContent, parameters = {}, options = {}) {
+    const targetFormat = options.outputFormat || 'svg';
+
+    console.log(
+      `[RenderController] 2D fallback: STL → projection → ${targetFormat}`
+    );
+
+    if (options.onProgress) {
+      options.onProgress(
+        -1,
+        'Rendering 3D mesh then projecting to an approximate 2D profile...'
+      );
+    }
+
+    // Pass 1: render the 3D model to STL with the caller's parameters.
+    const stlResult = await this.renderFull(scadContent, parameters, {
+      ...options,
+      outputFormat: 'stl',
+    });
+
+    // Pass 2: project the 3D mesh to the target 2D format.
+    // mountFiles() only places files under /work/ when files.size > 1.
+    // Include the wrapper SCAD alongside the STL so both land in /work/,
+    // then use mainFile so the worker picks the mounted wrapper directly.
+    const wrapperName = '_projection_wrapper.scad';
+    const wrapperScad =
+      'projection(cut=true) {\n  import("_fallback_mesh.stl");\n}\n';
+    const rawStl = stlResult.data || stlResult.stl;
+    const stlData =
+      rawStl instanceof Uint8Array
+        ? rawStl
+        : rawStl instanceof ArrayBuffer
+          ? new Uint8Array(rawStl)
+          : rawStl;
+    const projFiles = new Map([
+      ['_fallback_mesh.stl', stlData],
+      [wrapperName, new TextEncoder().encode(wrapperScad)],
+    ]);
+
+    const result = await this.renderFull(
+      wrapperScad,
+      {},
+      {
+        outputFormat: targetFormat,
+        files: projFiles,
+        mainFile: wrapperName,
+        onProgress: options.onProgress,
+        timeoutMs: options.timeoutMs || 60000,
+      }
+    );
+
+    result.approximation = 'stl-projection';
+
+    if (targetFormat === 'svg') {
+      const raw = result.data || result.stl;
+      if (raw != null) {
+        const text =
+          typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
+        const svgIdx = text.indexOf('<svg');
+        if (svgIdx !== -1) {
+          const annotated =
+            text.slice(0, svgIdx) +
+            '<!-- Approximate outline: projection(cut=true) of a tessellated 3D mesh.\n' +
+            '     Curves are polyline segments - verify dimensions before cutting.\n' +
+            '     Generated by the openscad-assistive-forge 2D fallback. -->\n' +
+            text.slice(svgIdx);
+          const encoded = new TextEncoder().encode(annotated);
+          if (result.data != null) result.data = encoded;
+          if (result.stl != null) result.stl = encoded;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Cancel current render.
+   *
+   * Strategy: First, attempt a soft cancel via postMessage. If the worker
+   * doesn't respond within the grace period, perform a hard cancel by
+   * terminating the worker and reinitializing it. This is the only reliable
+   * cancellation contract because callMain() is a synchronous blocking call
+   * inside the WASM worker — the message loop cannot process CANCEL while
+   * WASM is executing.
+   *
+   * @param {Object} [options] - Cancel options
+   * @param {number} [options.gracePeriodMs=200] - Time to wait before hard cancel.
+   *   Kept short because callMain() blocks the worker event loop — the CANCEL message
+   *   cannot be processed during an active blocking render.
+   * @param {boolean} [options.hard=false] - Force immediate hard cancel (skip soft attempt)
+   */
+  cancel(options = {}) {
+    const { gracePeriodMs = 200, hard = false } = options;
+
+    if (!this.currentRequest) return;
+
+    const { id, reject } = this.currentRequest;
+
+    if (hard) {
+      // Immediate hard cancel — terminate and reinit
+      console.warn('[RenderController] Hard cancel: terminating worker');
+      reject(new Error('Render canceled (hard cancel)'));
+      this.currentRequest = null;
+      this._hardCancelAndReinit();
+      return;
+    }
+
+    // Soft cancel attempt — worker may or may not process this
+    if (this.worker) {
+      this.worker.postMessage({
+        type: 'CANCEL',
+        payload: { requestId: id },
+      });
+    }
+    reject(new Error('Render canceled'));
+    this.currentRequest = null;
+
+    // Watchdog: if the worker is still blocking after the grace period,
+    // hard-cancel it. We detect this by checking if a new render has started
+    // (meaning the worker responded) vs. still being stuck.
+    this._cancelWatchdogHandle = setTimeout(() => {
+      // If no new request has been submitted and the worker is still alive,
+      // the worker is likely hung on a blocking callMain(). Terminate it.
+      if (!this.currentRequest && this.worker) {
+        console.warn(
+          '[RenderController] Watchdog: worker may be hung after cancel; terminating'
+        );
+        this._hardCancelAndReinit();
+      }
+    }, gracePeriodMs);
+  }
+
+  /**
+   * Hard cancel: terminate the worker and reinitialize it.
+   * This is the nuclear option — the only way to stop a blocking callMain().
+   * @private
+   */
+  async _hardCancelAndReinit() {
+    this.terminate();
+    this.initPromise = null;
+    this.ready = false;
+    try {
+      await this.init({ cachedCapabilities: this.capabilities || null });
+      this._moduleUsed = true;
+    } catch (err) {
+      console.error(
+        '[RenderController] Failed to reinitialize worker after hard cancel:',
+        err
+      );
+    }
+  }
+
+  /**
+   * Terminate the worker
+   */
+  terminate() {
+    this.stopHealthMonitoring();
+    if (this._cancelWatchdogHandle) {
+      clearTimeout(this._cancelWatchdogHandle);
+      this._cancelWatchdogHandle = null;
+    }
+    if (this.initTimeoutHandle) {
+      clearTimeout(this.initTimeoutHandle);
+      this.initTimeoutHandle = null;
+    }
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+      this.ready = false;
+      this.currentRequest = null;
+    }
+  }
+}

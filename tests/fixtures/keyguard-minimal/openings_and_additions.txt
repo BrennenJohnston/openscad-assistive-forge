@@ -1,0 +1,20 @@
+// Companion file for keyguard openings
+// This file must be included by the main SCAD file
+
+screen_openings=[
+//  ID,    x,     y, width, height, shape, top slope, bottom slope, left slope, right slope, corner radius, other
+[    1,   10,    10,    30,     40,   "r",        90,           90,         90,          90,             3,      ],
+[    2,   50,    10,    30,     40,   "r",        90,           90,         90,          90,             3,      ],
+];
+
+case_openings=[
+[    1,    0,     0,     0,      0,   "r",        90,           90,         90,          90,             0,      ],
+];
+
+case_additions=[
+[    1,    0,     0,     0,      0,   "r",         0,       -999,        -999,         -999,        -999,       0],
+];
+
+tablet_openings=[
+[    1,    0,     0,     0,      0,   "r",        90,           90,         90,          90,             0,      ],
+];

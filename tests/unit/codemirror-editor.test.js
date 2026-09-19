@@ -1,0 +1,426 @@
+/**
+ * @vitest-environment jsdom
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { undo } from '@codemirror/commands';
+import {
+  CodeMirrorEditor,
+  resolveEditorDarkMode,
+} from '../../src/js/codemirror-editor.js';
+
+describe('CodeMirrorEditor', () => {
+  let container;
+  let editor;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    if (editor) {
+      editor.dispose();
+      editor = null;
+    }
+    container.remove();
+  });
+
+  function createEditor(overrides = {}) {
+    editor = new CodeMirrorEditor({
+      container,
+      onChange: vi.fn(),
+      onSave: vi.fn(),
+      onRun: vi.fn(),
+      announce: vi.fn(),
+      ...overrides,
+    });
+    return editor;
+  }
+
+  describe('constructor', () => {
+    it('should store container and callbacks', () => {
+      const onChange = vi.fn();
+      const onSave = vi.fn();
+      const ed = createEditor({ onChange, onSave });
+
+      expect(ed.container).toBe(container);
+      expect(ed.onChange).toBe(onChange);
+      expect(ed.onSave).toBe(onSave);
+    });
+
+    it('should default callbacks to no-ops', () => {
+      editor = new CodeMirrorEditor({ container });
+      expect(typeof editor.onChange).toBe('function');
+      expect(typeof editor.onSave).toBe('function');
+      expect(typeof editor.onRun).toBe('function');
+      expect(typeof editor.announce).toBe('function');
+    });
+  });
+
+  describe('initialize()', () => {
+    it('should create the CM6 editor inside the container', () => {
+      createEditor();
+      editor.initialize();
+
+      const cmEditor = container.querySelector('.cm-editor');
+      expect(cmEditor).not.toBeNull();
+    });
+
+    it('should set aria-label on the content element', () => {
+      createEditor();
+      editor.initialize();
+
+      const cmContent = container.querySelector('.cm-content');
+      expect(cmContent).not.toBeNull();
+      expect(cmContent.getAttribute('aria-label')).toBe('OpenSCAD code editor');
+    });
+
+    it('should be idempotent (calling twice does not duplicate)', () => {
+      createEditor();
+      editor.initialize();
+      editor.initialize();
+
+      const editors = container.querySelectorAll('.cm-editor');
+      expect(editors.length).toBe(1);
+    });
+  });
+
+  describe('getValue() / setValue()', () => {
+    it('should round-trip a value', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.setValue('cube([10, 10, 10]);');
+      expect(editor.getValue()).toBe('cube([10, 10, 10]);');
+    });
+
+    it('should return empty string before initialization', () => {
+      createEditor();
+      expect(editor.getValue()).toBe('');
+    });
+
+    it('should handle multiline content', () => {
+      createEditor();
+      editor.initialize();
+
+      const code = 'module box(size) {\n  cube(size);\n}';
+      editor.setValue(code);
+      expect(editor.getValue()).toBe(code);
+    });
+
+    it('should NOT fire onChange when setValue is called', () => {
+      const onChange = vi.fn();
+      createEditor({ onChange });
+      editor.initialize();
+
+      editor.setValue('sphere(5);');
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('should fire onChange for a user edit', () => {
+      const onChange = vi.fn();
+      createEditor({ onChange });
+      editor.initialize();
+      editor.setValue('sphere(5);');
+      onChange.mockClear();
+
+      editor._view.dispatch({ changes: { from: 0, insert: '// ' } });
+      expect(onChange).toHaveBeenCalledWith('// sphere(5);');
+    });
+
+    it('should resume firing onChange after setValue throws', () => {
+      const onChange = vi.fn();
+      createEditor({ onChange });
+      editor.initialize();
+
+      const realDispatch = editor._view.dispatch.bind(editor._view);
+      editor._view.dispatch = () => {
+        throw new Error('boom');
+      };
+      expect(() => editor.setValue('sphere(5);')).toThrow('boom');
+      editor._view.dispatch = realDispatch;
+
+      editor._view.dispatch({ changes: { from: 0, insert: 'cube();' } });
+      expect(onChange).toHaveBeenCalledWith('cube();');
+    });
+
+    it('should discard undo history so Undo cannot restore the old document', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.setValue('project A');
+      editor._view.dispatch({ changes: { from: 0, insert: 'edited ' } });
+      expect(editor.getValue()).toBe('edited project A');
+
+      editor.setValue('project B');
+      undo(editor._view);
+      expect(editor.getValue()).toBe('project B');
+    });
+
+    it('should still undo user edits made after a setValue', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.setValue('project B');
+      editor._view.dispatch({ changes: { from: 0, insert: 'typed ' } });
+      expect(editor.getValue()).toBe('typed project B');
+
+      undo(editor._view);
+      expect(editor.getValue()).toBe('project B');
+    });
+  });
+
+  describe('getSelection() / setSelection()', () => {
+    it('should return default selection before init', () => {
+      createEditor();
+      expect(editor.getSelection()).toEqual({ start: 0, end: 0 });
+    });
+
+    it('should set and get a selection range', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube([10, 10, 10]);');
+
+      editor.setSelection(5, 17);
+      const sel = editor.getSelection();
+      expect(sel.start).toBe(5);
+      expect(sel.end).toBe(17);
+    });
+  });
+
+  describe('setCursorPosition()', () => {
+    it('should position cursor at given line and column', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('line1\nline2\nline3');
+
+      editor.setCursorPosition(2, 3);
+      const sel = editor.getSelection();
+      // Line 2 starts at offset 6 ('line1\n'), col 3 → offset 8
+      expect(sel.start).toBe(8);
+      expect(sel.end).toBe(8);
+    });
+
+    it('should clamp to valid range', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('ab');
+
+      editor.setCursorPosition(999, 999);
+      const sel = editor.getSelection();
+      expect(sel.start).toBe(2);
+    });
+  });
+
+  describe('setErrorLines() / clearErrors()', () => {
+    it('should accept error lines without throwing', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('line1\nline2\nline3');
+
+      expect(() => editor.setErrorLines([2, 3])).not.toThrow();
+    });
+
+    it('should clear errors without throwing', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('line1\nline2');
+
+      editor.setErrorLines([1]);
+      expect(() => editor.clearErrors()).not.toThrow();
+    });
+
+    it('should ignore out-of-range line numbers', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('one line');
+
+      expect(() => editor.setErrorLines([0, 5, 100])).not.toThrow();
+    });
+  });
+
+  describe('canUndo() / canRedo() / text undo (D3)', () => {
+    it('reports nothing to undo or redo before initialization', () => {
+      createEditor();
+      expect(editor.canUndo()).toBe(false);
+      expect(editor.canRedo()).toBe(false);
+    });
+
+    it('a loaded document alone is not undoable', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+
+      // setValue resets history (A1), so the editor toolbar must not offer
+      // an Undo that would wipe the project the user just opened
+      expect(editor.canUndo()).toBe(false);
+      expect(editor.canRedo()).toBe(false);
+    });
+
+    it('a typed edit becomes undoable, and undoing makes it redoable', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+
+      editor._view.dispatch({ changes: { from: 0, insert: '// ' } });
+      expect(editor.getValue()).toBe('// cube(10);');
+      expect(editor.canUndo()).toBe(true);
+      expect(editor.canRedo()).toBe(false);
+
+      expect(editor.performAction('undo')).toBe(true);
+      expect(editor.getValue()).toBe('cube(10);');
+      expect(editor.canRedo()).toBe(true);
+
+      expect(editor.performAction('redo')).toBe(true);
+      expect(editor.getValue()).toBe('// cube(10);');
+    });
+  });
+
+  describe('supportsAction() / performAction()', () => {
+    it('reports no support before initialization', () => {
+      createEditor();
+      expect(editor.supportsAction('indent')).toBe(false);
+      expect(editor.performAction('indent')).toBe(false);
+    });
+
+    it('supports the named Edit-menu commands after initialization', () => {
+      createEditor();
+      editor.initialize();
+      for (const id of [
+        'undo',
+        'redo',
+        'indent',
+        'unindent',
+        'comment',
+        'uncomment',
+        'find',
+        'findReplace',
+        'findNext',
+        'findPrevious',
+      ]) {
+        expect(editor.supportsAction(id), id).toBe(true);
+      }
+      expect(editor.supportsAction('nonsense')).toBe(false);
+      expect(editor.performAction('nonsense')).toBe(false);
+    });
+
+    it('performs line commenting on the current line', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+      editor.setSelection(0, 0);
+      expect(editor.performAction('comment')).toBe(true);
+      expect(editor.getValue()).toBe('// cube(10);');
+      expect(editor.performAction('uncomment')).toBe(true);
+      expect(editor.getValue()).toBe('cube(10);');
+    });
+
+    it('replaceSelection inserts at the cursor', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube();');
+      editor.setSelection(5, 5);
+      editor.replaceSelection('10');
+      expect(editor.getValue()).toBe('cube(10);');
+    });
+  });
+
+  describe('focus()', () => {
+    it('should not throw before initialization', () => {
+      createEditor();
+      expect(() => editor.focus()).not.toThrow();
+    });
+
+    it('should not throw after initialization', () => {
+      createEditor();
+      editor.initialize();
+      expect(() => editor.focus()).not.toThrow();
+    });
+  });
+
+  describe('scrollToLine()', () => {
+    it('should not throw on valid line', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('a\nb\nc\nd\ne');
+
+      expect(() => editor.scrollToLine(3)).not.toThrow();
+    });
+
+    it('should clamp out-of-range lines', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('a\nb');
+
+      expect(() => editor.scrollToLine(999)).not.toThrow();
+    });
+  });
+
+  describe('dispose()', () => {
+    it('should remove the editor from DOM', () => {
+      createEditor();
+      editor.initialize();
+      expect(container.querySelector('.cm-editor')).not.toBeNull();
+
+      editor.dispose();
+      expect(container.querySelector('.cm-editor')).toBeNull();
+    });
+
+    it('should be safe to call twice', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.dispose();
+      expect(() => editor.dispose()).not.toThrow();
+    });
+
+    it('should return empty string from getValue after dispose', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('hello');
+      editor.dispose();
+
+      expect(editor.getValue()).toBe('');
+    });
+  });
+
+  describe('resolveEditorDarkMode (U-4)', () => {
+    it('follows the resolved app theme, not the OS: dark app is dark', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'standard', resolvedTheme: 'dark' })
+      ).toBe(true);
+    });
+
+    it('light app stays light — the OS preference is not even an input', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'standard', resolvedTheme: 'light' })
+      ).toBe(false);
+      expect(
+        resolveEditorDarkMode({ uiMode: 'simplified', resolvedTheme: 'light' })
+      ).toBe(false);
+    });
+
+    it('Classic is always light, even when the app theme is dark', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'classic', resolvedTheme: 'dark' })
+      ).toBe(false);
+    });
+
+    it('initialize() wires ui-mode-changed to a theme re-resolve, dispose() unwires it', () => {
+      createEditor();
+      editor.initialize();
+      const spy = vi.spyOn(editor, '_switchTheme');
+
+      document.body.dataset.uiMode = 'classic';
+      document.dispatchEvent(new CustomEvent('ui-mode-changed'));
+      expect(spy).toHaveBeenCalledWith(false);
+
+      spy.mockClear();
+      editor.dispose();
+      document.dispatchEvent(new CustomEvent('ui-mode-changed'));
+      expect(spy).not.toHaveBeenCalled();
+      delete document.body.dataset.uiMode;
+    });
+  });
+});

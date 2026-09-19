@@ -1,0 +1,62 @@
+import { defineConfig } from 'vitest/config'
+import { readFileSync } from 'fs'
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
+
+export default defineConfig({
+  define: {
+    // Mirror vite.config.js build-time constants for the test environment
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './tests/setup.js',
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/e2e/**',  // Playwright E2E tests
+      '**/e2e-prod/**',  // Playwright production-parity tests
+      '**/visual/**',  // Playwright visual regression tests
+      '**/.{idea,git,cache,output,temp}/**'
+    ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      include: ['src/js/**/*.js'],
+      exclude: [
+        'src/worker/**',
+        'src/main.js',
+        'src/js/**/*.test.js',
+        'src/js/**/*.spec.js',
+        // UI controller files - primarily tested via E2E tests
+        'src/js/drawer-controller.js',
+        'src/js/tutorial-sandbox.js',
+        'src/js/preview-settings-drawer.js',
+        // Utility modules tested indirectly through integration
+        'src/js/color-utils.js',
+        'src/js/html-utils.js',
+        'src/js/keyboard-config.js',
+        'src/js/gamepad-controller.js',
+        // UI controller modules - primarily tested via E2E / manual interaction
+        'src/js/image-measurement.js',
+        // Alt-view canvas rendering internals — require real browser/canvas; tested via E2E
+        'src/js/_hfm.js',
+        // Input sequence detector (easter egg) — event-driven, tested via E2E
+        'src/js/_seq.js'
+      ],
+      thresholds: {
+        lines: 42,
+        functions: 44,
+        branches: 40,
+        statements: 42,
+        // Note: Thresholds adjusted after adding searchable-combobox.js,
+        // saved-projects-manager.js, modal-manager.js, error-log-panel.js,
+        // and other UI modules without unit tests (tested via E2E).
+        // Target: Increase as unit tests are added for new modules.
+      }
+    },
+    // Increase timeout for integration tests
+    testTimeout: 10000
+  }
+})

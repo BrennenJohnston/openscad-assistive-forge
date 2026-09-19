@@ -1,0 +1,701 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* ============================================================================
+   Design System - CSS Custom Properties
+   ============================================================================
+   Accessible color system built on Radix Colors foundation.
+   Meets WCAG 2.2 AA for normal themes, AAA for high contrast mode.
+   Supports forced-colors and prefers-contrast.
+   ============================================================================ */
+
+/* Import Radix color scales and semantic token mappings */
+@import './color-scales.css';
+@import './semantic-tokens.css';
+
+/* ============================================================================
+   Design Tokens (Non-Color)
+   ============================================================================ */
+
+:root {
+  /* Spacing */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Typography */
+  --font-family-base:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: 'Consolas', 'Monaco', monospace;
+  --font-size-2xs: 0.75rem; /* 12px */
+  --font-size-xs: 0.8125rem; /* 13px */
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-md: var(--font-size-base);
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem; /* 32px */
+  --font-size-3xl: 2.5rem; /* 40px */
+
+  /* Font Weights (design tokens for consistency) */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Opacity (design tokens for consistent disabled/muted states)
+     Note: In forced-colors mode, opacity alone may not be sufficient.
+     Use additional visual cues (borders, icons) for disabled states. */
+  --opacity-disabled: 0.5;
+  --opacity-muted: 0.6;
+  --opacity-subtle: 0.8;
+
+  /* Touch Targets & Interactive Sizing */
+  --size-touch-target: 44px;
+  --size-touch-target-sm: 36px;
+  --size-icon-sm: 16px;
+  --size-icon-md: 20px;
+  --size-icon-lg: 24px;
+  --size-icon-xl: 32px;
+
+  /* Tutorial card sizing (UF-38, D-65)
+     The card's body is a flex item with `flex: 1`, so it takes whatever the
+     header and footer leave. MEASURED at 412x810 on Firefox, the height a
+     phone actually has: the dock cap clipped 47px off the "Preview Settings
+     & Info" step with no affordance at all. The floor keeps the step title
+     (27px) and one line of body text visible whatever the arithmetic says;
+     the cue height is the fade that admits the rest is below the fold. */
+  --tutorial-body-min-height: 72px;
+
+  /* The fold cue's fade height, shared by every scroller that admits it has
+     more below: the tutorial card (UF-38) and the first-visit modal body
+     (UF-41). One value, so the two folds cannot start looking different from
+     each other. The tutorial's own name is kept as an alias — it is spelled
+     that way at six call sites and renaming them is not this release's job. */
+  --scroll-cue-height: 32px;
+  --tutorial-scroll-cue-height: var(--scroll-cue-height);
+
+  /* Border Widths */
+  --border-width-thin: 1px;
+  --border-width-base: 2px;
+  --border-width-thick: 3px;
+
+  /* Border Radius */
+  --border-radius-xs: 3px;
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-pill: 999px;
+
+  /* DEPRECATED: Use --border-radius-* tokens instead.
+     These aliases exist for backward compatibility and will be removed. */
+  --radius-sm: var(--border-radius-sm);
+  --radius-md: var(--border-radius-md);
+
+  /* Focus Ring */
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.24);
+
+  /* Motion & Transitions */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+
+  /* Z-Index Scale
+   * CAUTION: The processing overlay (.processing-overlay) uses a hardcoded
+   * z-index: 10000 in components.css, level with --z-index-app-overlay.
+   * Because modals sit at z: 1000, any overlay shown while a modal is open
+   * will cover the modal's buttons. Always gate overlay display behind
+   * waitForFirstVisitAcceptance() in JS. See the "FIRST-VISIT GATE" comment
+   * block in src/main.js. The tutorial family sits above all of this, and
+   * stands down rather than paint over a dialog - see D-67 below. */
+  --z-index-base: 1;
+  --z-index-sticky: 10;
+  --z-index-dropdown: 100;
+  --z-index-drawer: 900;
+  --z-index-modal-backdrop: 950;
+  /* UF-22: the tutorial menu stays lit while the nudge dims the rest of the
+     page, so it sits between that backdrop and the dialog itself. */
+  --z-index-nudge-spotlight: 960;
+  --z-index-modal: 1000;
+  --z-index-skip-link: 9999;
+  /* Full-screen app states that are not the tutorial but used to borrow its
+     panel token: the memory banner and the WASM loading overlay. The same
+     value they have always had; they simply stopped riding a name that is
+     about to mean something else. */
+  --z-index-app-overlay: 10000;
+  /* D-67 (UF-36). The tutorial family, in the order it paints.
+   *
+   * The elevations from --z-index-tutorial-highlight down were bare numbers in
+   * components.css and in tutorial-sandbox.js, against the house
+   * no-hardcoded-z-index rule.
+   *
+   * The overlay's own backdrop token moved from 9998 to 10005, and that is the
+   * substance of D-67 rather than a renumbering. `.tutorial-overlay` is a
+   * stacking context, so the value on IT - not the panel's inner z - is what
+   * decides whether the tour card can be reached over a highlighted target
+   * sitting at 10001 in the root context. At 9998 it could not, and the engine
+   * papered over that at runtime: adjustTutorialZIndex read the highlight z
+   * back off its own target and re-raised the whole overlay above it on EVERY
+   * step. That is how the veil arrived at 10003, painting over dialogs at
+   * --z-index-modal. Stating the floor here means the escalation is left to do
+   * only its real job - genuinely high-z ancestors in the page - and the
+   * painted order is unchanged.
+   *
+   * MEASURED before and after on the welcome tour: veil above the ring, card
+   * above both, the tour's own dialogs above the card, the Features Guide step
+   * identical. */
+  --z-index-tutorial-highlight: 10001;
+  --z-index-tutorial-highlight-modal: 10002;
+  --z-index-tutorial-guide-modal: 10003;
+  --z-index-tutorial-guide-content: 10004;
+  --z-index-tutorial-backdrop: 10005;
+  --z-index-tutorial-spotlight: 10006;
+  --z-index-tutorial-panel: 10007;
+  --z-index-tutorial-minimized: 10007;
+  --z-index-tutorial-dialog: 10008;
+  --z-index-tutorial-panel-over-modal: 10009;
+
+  /* Drawer Dimensions */
+  --drawer-collapsed-width: 48px;
+  --drawer-header-height: 44px;
+  --drawer-padding: var(--space-sm);
+  --drawer-handle-size: 24px;
+  --drawer-max-height: 75vh;
+  /* Bottom actions bar (collapsed/docked) */
+  --actions-bar-height: 52px;
+  --actions-bar-collapsed-offset: calc(
+    var(--actions-bar-height) + var(--space-xs)
+  );
+  --actions-bar-expanded-offset: 220px;
+
+  /* Camera focus mode (mobile portrait) - calculated dynamically by JS */
+  /* Default approximates: drawer body (~45vh max) + toggle row (44px) + primary row (52px) */
+  --camera-focus-bottom-offset: 45vh;
+  --actions-bar-expanded-padding: 130px;
+
+  /* Breakpoints (Note: CSS variables cannot be used in media queries) */
+  --breakpoint-mobile: 480px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+  --breakpoint-wide: 1440px;
+}
+
+/* ============================================================================
+   Desktop Density Mode - Compact sizing for precise pointer devices
+   ============================================================================
+   Applies to devices with mouse/trackpad (pointer: fine) on larger screens.
+   Touch devices and mobile retain full 44px touch targets for accessibility.
+   This still exceeds WCAG 2.2 SC 2.5.8 minimum of 24×24px.
+   ============================================================================ */
+
+@media (pointer: fine) and (min-width: 768px) {
+  :root:not([data-high-contrast='true']) {
+    /* Reduced spacing for desktop density */
+    --space-sm: 6px;
+    --space-md: 12px;
+    --space-lg: 20px;
+    --space-xl: 28px;
+
+    /* Compact touch targets for desktop (still accessible at 36px) */
+    --size-touch-target: 36px;
+    --size-touch-target-sm: 32px;
+
+    /* Slightly smaller icons on desktop */
+    --size-icon-md: 18px;
+    --size-icon-lg: 22px;
+
+    /* Compact drawer dimensions */
+    --drawer-collapsed-width: 40px;
+    --drawer-header-height: 36px;
+    --drawer-padding: var(--space-xs);
+
+    /* Compact actions bar */
+    --actions-bar-height: 44px;
+    --actions-bar-collapsed-offset: calc(
+      var(--actions-bar-height) + var(--space-xs)
+    );
+    --actions-bar-expanded-offset: 180px;
+    --actions-bar-expanded-padding: 100px;
+  }
+}
+
+/* Large desktop screens get even more compact layout */
+@media (pointer: fine) and (min-width: 1200px) {
+  :root:not([data-high-contrast='true']) {
+    /* Further reduced spacing on large screens */
+    --space-md: 10px;
+    --space-lg: 16px;
+
+    /* Drawer can be narrower */
+    --drawer-collapsed-width: 36px;
+  }
+}
+
+/* ============================================================================
+   High Contrast Mode - Works with any theme (Light/Dark/Auto)
+   ============================================================================
+   Activated via data-high-contrast="true" on :root
+   Meets WCAG AAA (7:1 contrast ratio) requirements
+   ============================================================================ */
+
+:root[data-high-contrast='true'] {
+  /* Enhanced Typography */
+  --font-size-sm: 1rem; /* +14% from 0.875rem */
+  --font-size-base: 1.125rem; /* +12.5% from 1rem */
+  --font-size-lg: 1.25rem; /* +11% from 1.125rem */
+  --font-size-xl: 1.75rem; /* +17% from 1.5rem */
+
+  /* Stronger Borders */
+  --border-width: 2px; /* Standard border width */
+  --border-width-thick: 3px; /* Thick borders for emphasis */
+
+  /* Enhanced Focus */
+  --focus-ring-width: 4px; /* Thicker focus ring (was 3px) */
+
+  /* Stronger Shadows (more pronounced depth) */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* High Contrast Light Mode
+   Uses darker colors for 7:1 contrast on white backgrounds */
+:root[data-high-contrast='true'][data-theme='light'],
+:root[data-high-contrast='true']:not([data-theme='dark']):not(
+    [data-theme='light']
+  ) {
+  /* WCAG AAA (7:1) colors for light backgrounds */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f0f0f0;
+  --color-bg-tertiary: #e0e0e0;
+  --color-bg-elevated: #ffffff;
+
+  --color-text-primary: #000000; /* Pure black for maximum contrast */
+  --color-text-secondary: #1a1a1a; /* Near-black */
+  --color-text-tertiary: #333333; /* Dark gray */
+  --color-text-muted: #333333;
+
+  /* Accent - Brand-neutral blue for HC mode */
+  /* Ensure WCAG AAA (7:1) on white */
+  --color-accent: #003d99;
+  --color-accent-hover: #002b80;
+  --color-accent-text: #ffffff;
+  --color-accent-subtle: #e6f0ff;
+  --color-accent-fg: #003d99; /* Same as accent: solid dark blue already passes AAA */
+  --color-on-accent-subtle: var(--color-accent-fg); /* 8.59:1 on #e6f0ff */
+
+  /* Text on Solid Semantic Surfaces */
+  --color-on-accent: #ffffff;
+  --color-on-success: #ffffff;
+  --color-on-info: #ffffff;
+  --color-on-warning: #ffffff;
+  --color-on-error: #ffffff;
+
+  /* Success - Darker green for 7:1 */
+  --color-success: #08651a;
+  /* D-46 (UF-25): every block that overrides --color-success must also
+     override the solid-fill pair, or a component reading it falls back to
+     the default theme's green and high contrast is quietly lost. */
+  --color-success-solid: #08651a;
+  --color-success-hover: #054d14;
+  --color-success-text: #08651a;
+  --color-success-bg: #c8e6c9;
+
+  /* Info - Darker teal for 7:1 */
+  --color-info: #005b61;
+  --color-info-hover: #004c52;
+  --color-info-text: #005b61;
+  --color-info-bg: #c7f0f3;
+
+  /* Error - Darker red for 7:1 */
+  --color-error: #b30000;
+  --color-error-hover: #990000;
+  --color-error-text: #b30000;
+  --color-error-bg: #ffcccc;
+
+  /* Warning - Darker amber for 7:1 */
+  --color-warning: #664700;
+  --color-warning-hover: #4d3300;
+  --color-warning-text: #664700;
+  --color-warning-bg: #fff4cc;
+
+  /* Borders */
+  --color-border: #000000; /* Black borders */
+  --color-border-light: #666666; /* Dark gray borders */
+  --color-border-hover: var(--color-accent);
+
+  /* Inputs */
+  --color-input-bg: #ffffff;
+  --color-input-border: #000000;
+  --color-input-border-focus: #0052cc;
+
+  /* Interactive States */
+  --color-hover-bg: #e8e8e8;
+  --color-hover-bg-strong: var(--color-hover-bg);
+
+  /* Focus - Brand-neutral blue with 3:1 contrast */
+  --color-focus: var(--color-accent);
+  --focus-ring: 0 0 0 4px var(--color-accent); /* Solid focus, 4px thick */
+}
+
+/* High Contrast Dark Mode
+   Uses lighter colors for 7:1 contrast on black backgrounds */
+:root[data-high-contrast='true'][data-theme='dark'],
+:root[data-high-contrast='true']:not([data-theme='light']):not(
+    [data-theme='dark']
+  ) {
+  /* WCAG AAA (7:1) colors for dark backgrounds */
+  --color-bg-primary: #000000; /* Pure black */
+  --color-bg-secondary: #1a1a1a;
+  --color-bg-tertiary: #2d2d2d;
+  --color-bg-elevated: #000000;
+
+  --color-text-primary: #ffffff; /* Pure white for maximum contrast */
+  --color-text-secondary: #f0f0f0; /* Near-white */
+  --color-text-tertiary: #cccccc; /* Light gray */
+  --color-text-muted: #cccccc;
+
+  /* Accent - Brand-neutral light blue for HC dark mode */
+  --color-accent: #66b3ff; /* 7:1 on black */
+  --color-accent-hover: #99ccff; /* Even lighter on hover */
+  --color-accent-text: #000000;
+  --color-accent-subtle: #003d66;
+  --color-accent-fg: #66b3ff; /* Same as accent: light blue already passes on black */
+  --color-on-accent-subtle: var(--color-accent-fg); /* 5.09:1 on #003d66 */
+
+  /* Text on Solid Semantic Surfaces */
+  --color-on-accent: #000000;
+  --color-on-success: #000000;
+  --color-on-info: #000000;
+  --color-on-warning: #000000;
+  --color-on-error: #000000;
+
+  /* Success - Bright green for 7:1 */
+  --color-success: #66ff66;
+  /* D-46: keep the high-contrast green for solid fills too. */
+  --color-success-solid: #66ff66;
+  --color-success-hover: #7fff7f;
+  --color-success-text: #66ff66;
+  --color-success-bg: #0d3d0d;
+
+  /* Info - Bright teal for 7:1 */
+  --color-info: #44d9e6;
+  --color-info-hover: #5fe0eb;
+  --color-info-text: #44d9e6;
+  --color-info-bg: #0d3d3d;
+
+  /* Error - Bright red for 7:1 */
+  --color-error: #ff6666;
+  --color-error-hover: #ff8080;
+  --color-error-text: #ff6666;
+  --color-error-bg: #4d0000;
+
+  /* Warning - Bright yellow for 7:1 */
+  --color-warning: #ffcc00;
+  --color-warning-hover: #ffd633;
+  --color-warning-text: #ffcc00;
+  --color-warning-bg: #4d3d00;
+
+  /* Borders */
+  --color-border: #ffffff; /* White borders */
+  --color-border-light: #999999; /* Light gray borders */
+  --color-border-hover: #66b3ff;
+
+  /* Inputs */
+  --color-input-bg: #1a1a1a;
+  --color-input-border: #ffffff;
+  --color-input-border-focus: #66b3ff;
+
+  /* Interactive States */
+  --color-hover-bg: #333333;
+  --color-hover-bg-strong: var(--color-hover-bg);
+
+  /* Focus - Brand-neutral light blue with 3:1 contrast */
+  --color-focus: #66b3ff;
+  --focus-ring: 0 0 0 4px #66b3ff; /* Solid focus, 4px thick */
+}
+
+/* High Contrast - System Dark Preference */
+@media (prefers-color-scheme: dark) {
+  :root[data-high-contrast='true']:not([data-theme='light']):not(
+      [data-theme='dark']
+    ) {
+    /* Apply dark HC colors when system preference is dark and no manual theme set */
+    --color-bg-primary: #000000;
+    --color-bg-secondary: #1a1a1a;
+    --color-bg-tertiary: #2d2d2d;
+    --color-bg-elevated: #000000;
+
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #f0f0f0;
+    --color-text-tertiary: #cccccc;
+    --color-text-muted: #cccccc;
+
+    --color-accent: #66b3ff;
+    --color-accent-hover: #99ccff;
+    --color-accent-text: #000000;
+    --color-accent-subtle: #003d66;
+
+    --color-success: #66ff66;
+    /* D-46: keep the high-contrast green for solid fills too. */
+    --color-success-solid: #66ff66;
+    --color-success-hover: #7fff7f;
+    --color-success-text: #66ff66;
+    --color-success-bg: #0d3d0d;
+
+    --color-info: #44d9e6;
+    --color-info-hover: #5fe0eb;
+    --color-info-text: #44d9e6;
+    --color-info-bg: #0d3d3d;
+
+    --color-error: #ff6666;
+    --color-error-hover: #ff8080;
+    --color-error-text: #ff6666;
+    --color-error-bg: #4d0000;
+
+    --color-warning: #ffcc00;
+    --color-warning-hover: #ffd633;
+    --color-warning-text: #ffcc00;
+    --color-warning-bg: #4d3d00;
+
+    --color-border: #ffffff;
+    --color-border-light: #999999;
+    --color-border-hover: #66b3ff;
+
+    --color-input-bg: #1a1a1a;
+    --color-input-border: #ffffff;
+    --color-input-border-focus: #66b3ff;
+
+    --color-hover-bg: #333333;
+    --color-hover-bg-strong: var(--color-hover-bg);
+
+    --color-focus: #66b3ff;
+    --focus-ring: 0 0 0 4px #66b3ff;
+  }
+}
+
+/* Apply border width variables globally in high contrast */
+:root[data-high-contrast='true'] * {
+  border-width: var(--border-width, 2px);
+}
+
+:root[data-high-contrast='true'] .btn,
+:root[data-high-contrast='true'] input,
+:root[data-high-contrast='true'] select,
+:root[data-high-contrast='true'] textarea {
+  border-width: var(--border-width-thick, 3px);
+}
+
+/* ============================================================================
+   Reduced Motion
+   ============================================================================
+   Respects user preference for reduced motion
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================================
+   Forced Colors Mode (Windows High Contrast, etc.)
+   ============================================================================
+   When users enable OS-level forced color schemes (Windows High Contrast),
+   we use system color keywords to ensure legibility.
+   Reference: https://developer.mozilla.org/en-US/docs/Web/CSS/@media/forced-colors
+   ============================================================================ */
+
+@media (forced-colors: active) {
+  :root {
+    /* Map all color tokens to system colors */
+    --color-bg-primary: Canvas;
+    --color-bg-secondary: Canvas;
+    --color-bg-tertiary: Canvas;
+    --color-bg-elevated: Canvas;
+
+    --color-text-primary: CanvasText;
+    --color-text-secondary: CanvasText;
+    --color-text-tertiary: CanvasText;
+    --color-text-muted: CanvasText;
+
+    --color-accent: LinkText;
+    --color-accent-hover: LinkText;
+    --color-accent-text: Canvas;
+    --color-accent-subtle: Canvas;
+    --color-on-accent-subtle: CanvasText;
+
+    /* Text on Solid Semantic Surfaces */
+    --color-on-accent: Canvas;
+    --color-on-success: Canvas;
+    --color-on-info: Canvas;
+    --color-on-warning: Canvas;
+    --color-on-error: Canvas;
+
+    --color-success: LinkText;
+    /* D-46: forced colours keep the system colour for solid fills. */
+    --color-success-solid: LinkText;
+    --color-success-hover: LinkText;
+    --color-success-text: CanvasText;
+    --color-success-bg: Canvas;
+
+    --color-info: LinkText;
+    --color-info-hover: LinkText;
+    --color-info-text: CanvasText;
+    --color-info-bg: Canvas;
+
+    --color-error: LinkText;
+    --color-error-hover: LinkText;
+    --color-error-text: CanvasText;
+    --color-error-bg: Canvas;
+
+    --color-warning: LinkText;
+    --color-warning-hover: LinkText;
+    --color-warning-text: CanvasText;
+    --color-warning-bg: Canvas;
+
+    --color-border: CanvasText;
+    --color-border-light: CanvasText;
+    --color-border-hover: CanvasText;
+
+    --color-input-bg: Field;
+    --color-input-border: CanvasText;
+    --color-input-border-focus: Highlight;
+
+    --color-hover-bg: Canvas;
+    --color-hover-bg-strong: var(--color-hover-bg);
+
+    --color-focus: Highlight;
+
+    /* Use solid outlines instead of box-shadow for focus (box-shadow suppressed in forced-colors) */
+    --focus-ring: none;
+  }
+
+  /* Ensure all interactive elements have visible borders */
+  button,
+  input,
+  select,
+  textarea,
+  .btn {
+    border: 2px solid ButtonText !important;
+  }
+
+  input[type='number'] {
+    -webkit-text-fill-color: FieldText;
+  }
+
+  /* Focus indicators must use outline or border, not box-shadow */
+  *:focus,
+  *:focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Ensure links are distinguishable */
+  a {
+    color: LinkText;
+    text-decoration: underline;
+  }
+
+  a:visited {
+    color: VisitedText;
+  }
+
+  /* Ensure SVG icons remain visible */
+  svg {
+    fill: currentColor;
+    stroke: currentColor;
+  }
+
+  /* Remove background images that may disappear in forced-colors */
+  * {
+    background-image: none !important;
+  }
+
+  /* Ensure borders are visible for containers */
+  .param-panel,
+  .preview-panel,
+  .panel-header,
+  .modal,
+  .preset-modal-content,
+  .param-group,
+  .preset-controls {
+    border: 2px solid CanvasText !important;
+  }
+}
+
+/* ============================================================================
+   Enhanced Contrast Preference (prefers-contrast: more)
+   ============================================================================
+   For users who want enhanced contrast without forced color palettes.
+   Works on macOS, iOS, and modern browsers.
+   Reference: https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-contrast
+   ============================================================================ */
+
+@media (prefers-contrast: more) {
+  :root {
+    /* Increase contrast ratios while preserving color identity */
+    --color-text-primary: #000000;
+    --color-text-secondary: #1a1a1a;
+    --color-border: #000000;
+    --color-hover-bg-strong: var(--color-hover-bg);
+    --color-border-light: #333333;
+
+    /* Stronger focus indicators. The width token is what the global focus
+       rule reads; `--focus-ring` is the box-shadow form used elsewhere.
+       Both are needed - a mode that asks for more contrast and then draws
+       the same ring as everyone else has answered nobody. */
+    --focus-ring-width: 4px;
+    --focus-ring: 0 0 0 4px rgba(0, 82, 204, 0.5);
+  }
+
+  /* Dark mode enhanced contrast */
+  :root[data-theme='dark'] {
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #f0f0f0;
+    --color-border: #ffffff;
+    --color-hover-bg-strong: var(--color-hover-bg);
+    --color-border-light: #cccccc;
+    --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
+  }
+
+  /* System preference for dark mode */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --color-text-primary: #ffffff;
+      --color-text-secondary: #f0f0f0;
+      --color-border: #ffffff;
+      --color-hover-bg-strong: var(--color-hover-bg);
+      --color-border-light: #cccccc;
+      --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
+    }
+  }
+
+  /* Thicker borders for all components */
+  button,
+  input,
+  select,
+  textarea,
+  .btn,
+  .param-panel,
+  .preview-panel,
+  .modal {
+    border-width: 2px !important;
+  }
+
+  /* Stronger focus outlines */
+  *:focus-visible {
+    outline-width: 4px !important;
+  }
+}

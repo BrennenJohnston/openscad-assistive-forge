@@ -1,0 +1,43 @@
+{
+  "openscad_version": "2021.01",
+  "backend": "CGAL",
+  "test_date": "2026-03-12",
+  "source_project": "ready_to_print_designs/keyguard_v75.scad",
+  "variants": [
+    {
+      "id": "3d-printed-keyguard",
+      "parameters": {
+        "type_of_keyguard": "3D-Printed",
+        "generate": "keyguard"
+      },
+      "scad_color_call": "color(\"Turquoise\")",
+      "scad_color_css_hex": "#40E0D0",
+      "scad_color_css_rgb": [64, 224, 208],
+      "preview_colors": ["#39bdb0"],
+      "rendered_colors": ["#D3B627", "#85AC46"],
+      "notes": "Preview shows user color(); Render shows CGAL engine colors (yellow=positive, green=subtracted). Preview hex #39bdb0 differs from exact CSS Turquoise #40E0D0 due to OpenSCAD 2021.01 lighting/shading applied to the user-assigned color."
+    },
+    {
+      "id": "laser-cut-keyguard",
+      "parameters": {
+        "type_of_keyguard": "Laser-Cut",
+        "generate": "keyguard"
+      },
+      "scad_color_call": "unknown — requires SCAD source analysis",
+      "preview_colors": ["#CBC377"],
+      "rendered_colors": ["#D3B627", "#85AC46"],
+      "notes": "Preview shows user color(); Render shows CGAL engine colors (yellow=positive, green=subtracted). SCAD color() call for this variant not yet confirmed from source."
+    },
+    {
+      "id": "laser-cut-first-layer",
+      "parameters": {
+        "type_of_keyguard": "Laser-Cut",
+        "generate": "first layer for SVG/DXF file"
+      },
+      "scad_color_call": "unknown — requires SCAD source analysis",
+      "preview_colors": ["#7A9F7A"],
+      "rendered_colors": ["#07D0A7", "#FF0603"],
+      "notes": "Preview shows user color(); Render shows CGAL engine colors. This scenario produces 2D geometry (projection) for SVG/DXF export. SCAD color() call for this variant not yet confirmed from source."
+    }
+  ]
+}

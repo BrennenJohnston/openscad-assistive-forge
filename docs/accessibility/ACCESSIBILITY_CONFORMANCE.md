@@ -1,0 +1,252 @@
+# Accessibility Conformance Statement
+
+**Product**: OpenSCAD Assistive Forge  
+**Version**: 5.0.0  
+**Date**: 2026-09-19  
+**Standard**: WCAG 2.2 Level AA
+
+> **Note:** For detailed, criterion-level conformance status with evidence links, see [`docs/accessibility/vpat/conformance-decisions.md`](vpat/conformance-decisions.md). This document provides a summary statement; the decisions log is the source of truth for WCAG criterion status.
+
+---
+
+## Conformance Statement
+
+OpenSCAD Assistive Forge strives to conform to the Web Content Accessibility Guidelines (WCAG) 2.2 at Level AA. This conformance statement describes our accessibility commitment and current status.
+
+### Conformance Level
+
+**Target**: WCAG 2.2 Level AA  
+**Current Status**: Partially Conformant
+
+"Partially Conformant" means that some portions of the content do not fully conform to the accessibility standard. See the detailed assessment below.
+
+---
+
+## Accessibility Features
+
+### Navigation and Operation
+
+- **Full keyboard support**: All features accessible without a mouse
+- **Skip links**: Jump directly to main content
+- **Focus indicators**: Visible focus outlines on all interactive elements
+- **Logical tab order**: Navigation follows visual layout
+- **Keyboard shortcuts**: Common actions have keyboard equivalents
+
+### Screen Reader Support
+
+- **ARIA landmarks**: Page regions properly identified
+- **Live regions**: Status updates announced automatically
+- **Descriptive labels**: All controls have accessible names
+- **Error announcements**: Form validation errors announced
+- **State changes**: Mode switches and actions announced
+
+### Visual Design
+
+- **Color contrast**: All text meets 4.5:1 minimum ratio
+- **Text resizing**: Content readable at 200% zoom
+- **No color-only information**: Color is not the only indicator
+- **Focus visible**: Clear focus indicators on all elements
+- **High contrast support**: Works with system high contrast modes
+
+### Alternative Content
+
+- **Text alternatives**: Icons have text equivalents
+- **Error messages**: Clear, specific error descriptions
+- **Help text**: Instructions for complex controls
+- **Status messages**: Programmatically determinable
+
+---
+
+## Known Limitations
+
+### 3D Preview
+
+The 3D preview canvas presents inherent accessibility challenges:
+
+- **Non-text content**: 3D models cannot be fully described in text
+- **Mitigation**: Textual feedback for model statistics (triangles, dimensions)
+- **Mitigation**: Export to STL for tactile printing
+
+### Code Editor
+
+The CodeMirror 6 code editor has some assistive technology limitations:
+
+- **Mitigation**: Accessible textarea fallback available
+- **Mitigation**: User can select preferred editor in Settings
+- **Status**: Textarea provides full feature parity for core operations
+
+### Complex Parameter Values
+
+Some OpenSCAD parameters contain expressions that cannot be parsed:
+
+- **Mitigation**: Falls back to text input (raw mode)
+- **Status**: Preserves original value exactly
+
+### Console output is offered to a screen reader more than once
+
+When the OpenSCAD engine produces a message, the same text is currently
+offered by more than one route, and the behavior is identical in both
+interfaces (measured 2026-08-14, Assistive Forge and Classic):
+
+- The console message list is itself a live region
+  (`role="log"`, `aria-live="polite"`, `aria-relevant="additions"`).
+- The app also announces the message through its status announcer, as
+  "Message: <the text>", rate limited to one announcement per half second.
+
+There is a second effect in the same place. The list is rebuilt from scratch
+whenever a message arrives, so every message already in it is removed and
+added back: one new line replaced 31 nodes and added 35. Because the region
+announces additions, a screen reader may treat the whole log as new.
+
+- **Status**: Recorded, not yet changed. Which route should speak, and
+  whether the list should update in place instead of being rebuilt, is a
+  decision for the project owner, and it needs a listening test with a real
+  screen reader rather than an automated check. Both are on the pending
+  review list.
+- **Not affected**: the region is genuinely reachable by assistive
+  technology in both interfaces. No ancestor hides it, and the list can be
+  focused and scrolled from the keyboard, which matters in Classic where the
+  pane is short.
+
+### Classic mode has one fixed appearance
+
+Classic mode reproduces the desktop OpenSCAD window, which means a single
+light desktop appearance. Dark theme and high contrast do **not** apply
+there, and their buttons are not shown in Classic.
+
+- **Decision**: Owner, 2026-08-05, for visual fidelity with the desktop
+  application. Recorded here because it withholds an accessibility feature
+  in one mode.
+- **Mitigation**: Dark theme and high contrast remain fully available in
+  Simplified and Standard modes, one click from the Classic toggle.
+- **Mitigation**: The Classic palette itself is high contrast — body text
+  measures 17.4:1 on pane surfaces and 15.3:1 on window chrome, and every
+  control border clears the 3:1 non-text threshold (SC 1.4.11).
+- **Mitigation**: Entering Classic with dark or high contrast active
+  announces that the setting is paused until you leave Classic. The
+  keyboard shortcuts say the same thing rather than silently doing nothing.
+- **Not affected**: Operating-system high contrast (`forced-colors`) still
+  applies in Classic — the app never overrides it.
+- **Status**: Under review. A desktop-flavoured dark and high-contrast
+  Classic appearance remains the preferred long-term answer.
+
+---
+
+## Testing Methodology
+
+### Automated Testing
+
+- **Lighthouse**: Accessibility audits on every build (current score: 96%)
+- **axe-core**: WCAG violation scanning
+- **HTML validation**: Semantic markup verification
+
+### Manual Testing
+
+The following assistive technology combinations have been tested:
+
+| Screen Reader | Browser | Platform | Result |
+|---------------|---------|----------|--------|
+| NVDA 2024.4 | Chrome 124 | Windows 11 | Functional |
+| NVDA 2024.4 | Firefox 125 | Windows 11 | Functional |
+| JAWS 2024 | Chrome 124 | Windows 11 | Functional (textarea editor recommended) |
+| JAWS 2024 | Edge 124 | Windows 11 | Functional (textarea editor recommended) |
+| VoiceOver | Safari 17 | macOS 14 | Functional |
+
+**Notes**: JAWS users may experience improved navigation with the accessible text editor option enabled. See [`conformance-decisions.md`](vpat/conformance-decisions.md) for criterion-level evidence.
+
+### Test Workflow
+
+The following core workflow has been verified with assistive technology:
+
+1. Navigate to application
+2. Load an OpenSCAD file
+3. Modify parameter values
+4. Preview the changes
+5. Switch to Expert Mode
+6. Edit code
+7. Return to Standard Mode
+8. Export STL file
+
+---
+
+## VPAT Availability
+
+A full Voluntary Product Accessibility Template (VPAT) 2.5 based on WCAG 2.2 is available:
+
+- **Location**: [VPAT-2.5-WCAG.md](vpat/VPAT-2.5-WCAG.md)
+- **Format**: ITI VPAT 2.5 (Rev 508)
+- **Coverage**: 59 WCAG 2.2 criteria (38 Level A + 21 Level AA)
+
+---
+
+## Feedback and Support
+
+### Reporting Accessibility Issues
+
+We welcome feedback on accessibility. To report an issue:
+
+1. **GitHub Issues**: Create an issue with the "accessibility" label
+2. **Email**: Contact information in SECURITY.md for sensitive reports
+
+When reporting, please include:
+- Assistive technology used (name, version)
+- Browser and operating system
+- Steps to reproduce the issue
+- Expected vs. actual behavior
+
+### Response Commitment
+
+Accessibility issues are treated with high priority:
+
+| Severity | Response Target |
+|----------|-----------------|
+| Blocker (cannot complete core workflow) | 24 hours |
+| Major (feature inaccessible) | 72 hours |
+| Minor (inconvenient but workable) | 2 weeks |
+
+---
+
+## Continuous Improvement
+
+We are committed to improving accessibility over time:
+
+### Current Priorities
+
+1. Expand screen reader testing coverage
+2. Improve 3D preview accessibility
+3. Enhance mobile accessibility
+4. Add accessibility preference persistence
+
+### Monitoring
+
+- Lighthouse accessibility scores tracked in CI
+- Accessibility regression tests in E2E suite
+- Regular manual testing with assistive technology
+
+---
+
+## Legal Information
+
+### Section 508
+
+This product supports Section 508 of the Rehabilitation Act for users who require assistive technology.
+
+### WCAG 2.2
+
+This product targets conformance with WCAG 2.2 Level AA, the current W3C accessibility guideline.
+
+### Disclaimer
+
+This conformance statement represents our current understanding and testing results. Accessibility is an ongoing effort, and we continuously work to improve the experience for all users.
+
+---
+
+## Document History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0 | 2026-02-02 | Initial conformance statement |
+| 2.0 | 2026-03-16 | Updated for v4.2.0: version references, Expert Mode, vector parameters, memory monitoring |
+| 3.0 | 2026-03-20 | Updated for v4.3.0: CSP enforcement, accessible error dialogs, WAI-ARIA menubar, role-path cards |
+| 4.0 | 2026-04-06 | Updated for v4.4.0: SVG offset workspace a11y audit, innerHTML XSS hardening, confirm() replaced with accessible dialog, AT testing matrix resolved |
+| 5.0 | 2026-09-19 | Updated for v5.0.0: three switchable interfaces; the drawing editor reads correctly to a screen reader and uses one vocabulary in its panel, its rows, its color key and its announcements; long help texts deliver their first sentence and the rest on request; the automatic preview announces its completion, not its progress; every slider row meets the 44 px touch floor; the contrast modes draw the thicker focus ring; the header toggles announce the state they are in; American English in every string a person reads or hears. Checked by the axe scans in every browser suite and by the listening sessions in `docs/notes/SCREEN_READER_LESSONS.md`; the criterion-level VPAT evidence still dates from v4.4.0 |

@@ -1,0 +1,43 @@
+﻿{
+    "openscad_version":  "2026.01.03",
+    "backend":  "Manifold",
+    "scenario_id":  "3d-printed-keyguard",
+    "parameters":  {
+                       "generate":  "keyguard",
+                       "type_of_keyguard":  "3D-Printed"
+                   },
+    "console":  {
+                    "echo_lines":  [
+
+                                   ],
+                    "warnings":  [
+                                     "WARNING: Viewall and autocenter disabled in favor of $vp*"
+                                 ],
+                    "errors":  [
+
+                               ]
+                },
+    "geometry":  {
+                     "type":  "3D",
+                     "vertices":  5978,
+                     "facets":  12016,
+                     "render_time_s":  0.151
+                 },
+    "face_colors":  [
+                        {
+                            "rgb":  [
+                                        64,
+                                        224,
+                                        208
+                                    ],
+                            "hex":  "#40E0D0",
+                            "css_name":  "Turquoise",
+                            "face_count":  12016
+                        }
+                    ],
+    "exports":  {
+                    "off_bytes":  483226,
+                    "stl_bytes":  3394047,
+                    "png_path":  "cli-extracts/nightly/screenshots/3d-printed-keyguard.png"
+                }
+}

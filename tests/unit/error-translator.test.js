@@ -1,0 +1,481 @@
+/**
+ * Error Translator Unit Tests
+ * Tests COGA-compliant error translation functionality
+ */
+
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  translateError,
+  createFriendlyErrorDisplay,
+  showErrorModal,
+  showErrorToast,
+} from '../../src/js/error-translator.js';
+import { libraryManager } from '../../src/js/library-manager.js';
+
+describe('Error Translator', () => {
+  describe('translateError', () => {
+    test('should translate syntax errors', () => {
+      const result = translateError('syntax error at line 42');
+      
+      expect(result.title).toBe('Code Problem Found');
+      expect(result.explanation).toBeTruthy();
+      expect(result.suggestion).toBeTruthy();
+      expect(result.technical).toBe('syntax error at line 42');
+    });
+
+    test('should translate undefined variable errors', () => {
+      const result = translateError('undefined variable: my_variable');
+      
+      expect(result.title).toBe('Missing Variable');
+      expect(result.explanation).toContain('my_variable');
+      expect(result.suggestion).toBeTruthy();
+    });
+
+    test('should translate unknown function errors', () => {
+      const result = translateError('unknown function: custom_func');
+      
+      expect(result.title).toBe('Unknown Function');
+      expect(result.explanation).toContain('custom_func');
+      expect(result.suggestion).toContain('library');
+    });
+
+    test('should translate memory errors', () => {
+      const result = translateError('out of memory during render');
+      
+      expect(result.title).toBe('Model Too Complex');
+      expect(result.suggestion).toContain('complexity');
+    });
+
+    test('should translate timeout errors', () => {
+      const result = translateError('render timed out after 60 seconds');
+      
+      expect(result.title).toBe('Taking Too Long');
+      expect(result.suggestion).toBeTruthy();
+    });
+
+    test('should translate file not found errors', () => {
+      const result = translateError('file not found: missing_file.scad');
+      
+      expect(result.title).toBe('Missing File');
+      expect(result.explanation).toContain('missing_file.scad');
+    });
+
+    test('should translate CGAL errors', () => {
+      const result = translateError('CGAL error: invalid geometry');
+      
+      expect(result.title).toBe('Complex Geometry Issue');
+      expect(result.suggestion).toBeTruthy();
+    });
+
+    test('should translate degenerate geometry errors', () => {
+      const result = translateError('degenerate polygon detected');
+      
+      expect(result.title).toBe('Invalid Shape');
+      expect(result.suggestion).toContain('dimension');
+    });
+
+    test('should provide default translation for unknown errors', () => {
+      const result = translateError('some unknown error message xyz123');
+      
+      expect(result.title).toBe('Something Went Wrong');
+      expect(result.explanation).toBeTruthy();
+      expect(result.suggestion).toBeTruthy();
+      expect(result.technical).toBe('some unknown error message xyz123');
+    });
+
+    test('should handle null/undefined input', () => {
+      const resultNull = translateError(null);
+      const resultUndefined = translateError(undefined);
+      const resultEmpty = translateError('');
+      
+      expect(resultNull.title).toBe('Something Went Wrong');
+      expect(resultUndefined.title).toBe('Something Went Wrong');
+      expect(resultEmpty.title).toBe('Something Went Wrong');
+    });
+
+    test('should handle non-string input', () => {
+      const result = translateError(12345);
+      
+      expect(result.title).toBe('Something Went Wrong');
+    });
+  });
+
+  describe('createFriendlyErrorDisplay', () => {
+    test('should create accessible error element', () => {
+      const element = createFriendlyErrorDisplay('syntax error');
+      
+      expect(element).toBeInstanceOf(HTMLElement);
+      expect(element.className).toBe('error-message-friendly');
+      expect(element.getAttribute('role')).toBe('alert');
+      expect(element.getAttribute('aria-live')).toBe('assertive');
+    });
+
+    test('should include title, explanation, and suggestion', () => {
+      const element = createFriendlyErrorDisplay('undefined variable: test');
+      
+      const title = element.querySelector('.error-title');
+      const explanation = element.querySelector('.error-explanation');
+      const suggestion = element.querySelector('.error-suggestion');
+      
+      expect(title).toBeTruthy();
+      expect(explanation).toBeTruthy();
+      expect(suggestion).toBeTruthy();
+    });
+
+    test('should include collapsible technical details', () => {
+      const element = createFriendlyErrorDisplay('technical error message');
+      
+      const details = element.querySelector('.error-details-toggle');
+      expect(details).toBeTruthy();
+      
+      const summary = details.querySelector('summary');
+      expect(summary.textContent).toContain('technical');
+      
+      const technical = details.querySelector('.error-technical');
+      expect(technical.textContent).toBe('technical error message');
+    });
+  });
+
+  describe('showErrorModal', () => {
+    beforeEach(() => {
+      document.body.innerHTML = '';
+      const assertiveRegion = document.createElement('div');
+      assertiveRegion.id = 'srAnnouncerAssertive';
+      assertiveRegion.setAttribute('aria-live', 'assertive');
+      document.body.appendChild(assertiveRegion);
+    });
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    test('should create a modal with role="alertdialog"', () => {
+      showErrorModal({
+        title: 'Test Error',
+        message: 'Something went wrong',
+      });
+
+      const modal = document.querySelector('[data-testid="friendly-error-modal"]');
+      expect(modal).toBeTruthy();
+      expect(modal.getAttribute('role')).toBe('alertdialog');
+      expect(modal.getAttribute('aria-modal')).toBe('true');
+    });
+
+    test('should set aria-labelledby and aria-describedby', () => {
+      showErrorModal({
+        title: 'Test Error',
+        message: 'Description text',
+      });
+
+      const modal = document.querySelector('[data-testid="friendly-error-modal"]');
+      const labelId = modal.getAttribute('aria-labelledby');
+      const descId = modal.getAttribute('aria-describedby');
+
+      expect(document.getElementById(labelId)).toBeTruthy();
+      expect(document.getElementById(descId)).toBeTruthy();
+      expect(document.getElementById(labelId).textContent).toContain('Test Error');
+      expect(document.getElementById(descId).textContent).toContain('Description text');
+    });
+
+    test('should include suggestion when provided', () => {
+      showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+        suggestion: 'Try this fix',
+      });
+
+      const suggestion = document.querySelector('.error-suggestion');
+      expect(suggestion).toBeTruthy();
+      expect(suggestion.textContent).toContain('Try this fix');
+    });
+
+    test('should include collapsible technical details when provided', () => {
+      showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+        technical: 'stack trace here',
+      });
+
+      const details = document.querySelector('.error-details-toggle');
+      expect(details).toBeTruthy();
+      const pre = details.querySelector('.error-technical');
+      expect(pre.textContent).toBe('stack trace here');
+    });
+
+    test('should resolve when OK button is clicked', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      const okBtn = document.querySelector('.friendly-error-modal-footer .btn-primary');
+      expect(okBtn).toBeTruthy();
+      okBtn.click();
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+
+    test('should resolve when close button is clicked', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      const closeBtn = document.querySelector('.friendly-error-modal-close');
+      closeBtn.click();
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+
+    test('should resolve on Escape key', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      // Real keydowns target the focused element inside the modal and bubble
+      // up to the overlay, where the shared focus trap handles them.
+      const okBtn = document.querySelector(
+        '.friendly-error-modal-footer .btn-primary'
+      );
+      okBtn.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+      );
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+
+    test('Tab cycles focus within the error modal', async () => {
+      // jsdom has no layout, so give elements a nonzero size for the
+      // focus trap's visibility filtering.
+      const originalOffsetWidth = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        'offsetWidth'
+      );
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+        configurable: true,
+        get() {
+          return 100;
+        },
+      });
+
+      try {
+        const promise = showErrorModal({
+          title: 'Error',
+          message: 'Problem',
+          technical: 'stack trace here',
+        });
+
+        const closeBtn = document.querySelector('.friendly-error-modal-close');
+        const okBtn = document.querySelector(
+          '.friendly-error-modal-footer .btn-primary'
+        );
+
+        // Tab from the last focusable (OK) wraps to the first (close button)
+        okBtn.focus();
+        okBtn.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })
+        );
+        expect(document.activeElement).toBe(closeBtn);
+
+        // Shift+Tab from the first focusable wraps back to the last (OK)
+        closeBtn.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey: true,
+            bubbles: true,
+          })
+        );
+        expect(document.activeElement).toBe(okBtn);
+
+        okBtn.click();
+        await promise;
+      } finally {
+        if (originalOffsetWidth) {
+          Object.defineProperty(
+            HTMLElement.prototype,
+            'offsetWidth',
+            originalOffsetWidth
+          );
+        } else {
+          delete HTMLElement.prototype.offsetWidth;
+        }
+      }
+    });
+
+    test('should resolve when clicking the overlay backdrop', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      const overlay = document.querySelector('[data-testid="friendly-error-modal"]');
+      overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+  });
+
+  describe('showErrorToast', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      document.body.innerHTML = '';
+      const assertiveRegion = document.createElement('div');
+      assertiveRegion.id = 'srAnnouncerAssertive';
+      assertiveRegion.setAttribute('aria-live', 'assertive');
+      document.body.appendChild(assertiveRegion);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      document.body.innerHTML = '';
+    });
+
+    test('should create a toast with role="alert"', () => {
+      showErrorToast({ title: 'Info', message: 'Something happened' });
+
+      const toast = document.querySelector('.error-toast');
+      expect(toast).toBeTruthy();
+      expect(toast.getAttribute('role')).toBe('alert');
+    });
+
+    test('should create a toast container if absent', () => {
+      expect(document.getElementById('error-toast-container')).toBeNull();
+      showErrorToast({ title: 'Info', message: 'Test' });
+      expect(document.getElementById('error-toast-container')).toBeTruthy();
+    });
+
+    test('should display title and message', () => {
+      showErrorToast({ title: 'My Title', message: 'My message text' });
+
+      const titleEl = document.querySelector('.error-toast-title');
+      const msgEl = document.querySelector('.error-toast-message');
+      expect(titleEl.textContent).toBe('My Title');
+      expect(msgEl.textContent).toBe('My message text');
+    });
+
+    test('should auto-dismiss after duration', () => {
+      showErrorToast({ title: 'Info', message: 'Bye', duration: 5000 });
+
+      expect(document.querySelector('.error-toast')).toBeTruthy();
+      vi.advanceTimersByTime(5000);
+      const toast = document.querySelector('.error-toast');
+      expect(toast.classList.contains('error-toast-exit')).toBe(true);
+    });
+
+    test('should dismiss when dismiss button clicked', () => {
+      showErrorToast({ title: 'Info', message: 'Click me', duration: 0 });
+
+      const dismissBtn = document.querySelector('.error-toast-dismiss');
+      dismissBtn.click();
+
+      const toast = document.querySelector('.error-toast');
+      expect(toast.classList.contains('error-toast-exit')).toBe(true);
+    });
+
+    test('should stack multiple toasts', () => {
+      showErrorToast({ title: 'First', message: 'A' });
+      showErrorToast({ title: 'Second', message: 'B' });
+
+      const toasts = document.querySelectorAll('.error-toast');
+      expect(toasts.length).toBe(2);
+    });
+  });
+
+  /**
+   * UF-24 / D-42. A model whose library cannot be resolved used to fall all
+   * the way through to the generic "Something Went Wrong ... try resetting
+   * parameters to defaults", which points at the one thing that is not the
+   * cause. Two library patterns already existed above, but they were written
+   * against a guessed wording (`use <Lib/x.scad>`) and never match what
+   * OpenSCAD actually prints.
+   *
+   * The message below is the real one, captured live by unticking MCAD on the
+   * bundled library-test example.
+   */
+  describe('missing library (D-42)', () => {
+    const REAL_MESSAGE = [
+      'OpenSCAD compilation failed with exit code 1. Output:',
+      "WARNING: Can't open include file 'MCAD/boxes.scad', import file 'MCAD/boxes.scad'.",
+      "WARNING: Can't open library 'MCAD/boxes.scad'. in file /tmp/input.scad, line 8",
+      "WARNING: Ignoring unknown module 'roundedBox' in file /tmp/input.scad, line 43",
+      'Current top level object is empty.',
+    ].join('\n');
+
+    beforeEach(() => {
+      libraryManager.disable('MCAD');
+    });
+
+    afterEach(() => {
+      libraryManager.disable('MCAD');
+    });
+
+    test('names the library instead of blaming the parameters', () => {
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.title).not.toBe('Something Went Wrong');
+      expect(result.explanation).toContain('MCAD');
+      expect(result.explanation).not.toContain('unexpected error');
+    });
+
+    test('says the library is switched off, and where to switch it on', () => {
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.explanation).toContain('switched off');
+      expect(result.suggestion).toContain('Libraries panel');
+      expect(result.suggestion).not.toContain('resetting parameters');
+    });
+
+    test('keeps the raw output for the technical details section', () => {
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.technical).toBe(REAL_MESSAGE);
+    });
+
+    test('does not claim a switched-ON library is switched off', () => {
+      libraryManager.enable('MCAD');
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.explanation).toContain('MCAD');
+      expect(result.explanation).not.toContain('switched off');
+    });
+
+    test('does not claim an unknown library is switched off', () => {
+      const result = translateError(
+        "WARNING: Can't open include file 'SomeOtherLib/thing.scad', import file 'SomeOtherLib/thing.scad'."
+      );
+
+      expect(result.explanation).toContain('SomeOtherLib');
+      expect(result.explanation).not.toContain('switched off');
+    });
+
+    test('finds the cause in details when the worker has classified it away', () => {
+      // The real shape on the main thread: the worker matched "Ignoring
+      // unknown module" first, so error.message is prose that no longer
+      // contains the failing path, and error.code is UNKNOWN_MODULE. Only
+      // error.details still carries the OpenSCAD output.
+      const result = translateError(
+        'Your model uses a module that could not be found. Check include/use statements and ensure library files are loaded.',
+        { code: 'UNKNOWN_MODULE', details: REAL_MESSAGE }
+      );
+
+      expect(result.title).toBe('Missing Library');
+      expect(result.explanation).toContain('MCAD');
+      expect(result.suggestion).toContain('Libraries panel');
+    });
+
+    test('leaves a plain missing companion file alone', () => {
+      // No folder in the path, so this is a companion file, not a library —
+      // telling the user to look in the Libraries panel would be wrong.
+      const result = translateError(
+        "WARNING: Can't open include file 'helpers.scad', import file 'helpers.scad'."
+      );
+
+      expect(result.suggestion || '').not.toContain('Libraries panel');
+    });
+  });
+});

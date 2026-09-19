@@ -1,0 +1,35 @@
+{
+  "name": "Performance Benchmarks",
+  "description": "Models for measuring rendering performance",
+  "version": "1.0.0",
+  "benchmarks": [
+    {
+      "id": "simple",
+      "name": "Simple Primitives",
+      "file": "benchmark_simple.scad",
+      "expectedComplexity": "low",
+      "notes": "Baseline test - should be fast on any backend"
+    },
+    {
+      "id": "booleans",
+      "name": "Heavy Booleans",
+      "file": "benchmark_booleans.scad",
+      "expectedComplexity": "medium-high",
+      "notes": "Many difference operations - Manifold excels here"
+    },
+    {
+      "id": "minkowski",
+      "name": "Minkowski Operation",
+      "file": "benchmark_minkowski.scad",
+      "expectedComplexity": "very-high",
+      "notes": "Minkowski is expensive - biggest Manifold wins"
+    },
+    {
+      "id": "hull",
+      "name": "Hull Operations",
+      "file": "benchmark_hull.scad",
+      "expectedComplexity": "medium",
+      "notes": "Tests convex hull computation"
+    }
+  ]
+}

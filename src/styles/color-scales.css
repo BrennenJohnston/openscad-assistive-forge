@@ -1,0 +1,19 @@
+/* ============================================================================
+   Radix Colors - Light Mode Scales
+   ============================================================================
+   Importing Radix UI color scales for accessible color foundation.
+   License: MIT
+   Documentation: https://www.radix-ui.com/colors
+   ============================================================================ */
+
+/* Light Mode Base Scales */
+@import '@radix-ui/colors/yellow.css';
+@import '@radix-ui/colors/green.css';
+@import '@radix-ui/colors/teal.css';
+@import '@radix-ui/colors/slate.css';
+@import '@radix-ui/colors/slate-alpha.css';
+@import '@radix-ui/colors/red.css';
+@import '@radix-ui/colors/amber.css';
+
+/* Dark Mode scales are applied at runtime in theme-manager.js
+   so they follow data-theme and prefers-color-scheme correctly. */

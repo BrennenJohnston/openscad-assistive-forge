@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "generated": "2026-04-03T00:00:00Z",
+  "build": "OpenSCAD-2026.04.03",
+  "source": "https://files.openscad.org/snapshots/",
+  "archive": "OpenSCAD-2026.04.03-WebAssembly-web.zip",
+  "files": {
+    "openscad.js": {
+      "sha256": "266d025d4ee056356bc4f152c6e3f72fefc40fc6355a828ab0be6af31b8859a4",
+      "size": 100183
+    },
+    "openscad.wasm": {
+      "sha256": "96ed844bb397f91b3c139aced445fa0558881595bff46e965177c4e37b01e59d",
+      "size": 10712276
+    }
+  },
+  "engines": {
+    "manifold": true,
+    "cgal": true,
+    "fastCsg": true
+  },
+  "previousBuild": {
+    "build": "OpenSCAD-2025.03.25.wasm24456",
+    "reason": "Geometry discrepancy: browser produced 10,348 triangles vs desktop Nightly 12,016 (-13.9%). Updated to incorporate 12+ months of upstream Manifold/CGAL fixes."
+  },
+  "knownIssues": [
+    "projection() triggers CGAL assertion failure (openscad-wasm#6, CGAL#7560)",
+    "roof() triggers CGAL FPU error (openscad-wasm#5, openscad#5220)",
+    "Performance 6x slower than native CLI (openscad-wasm#19)",
+    "lazy-union may produce incorrect geometry (disabled by default)"
+  ],
+  "nextUpdate": "Re-evaluate geometry parity after Phase 5 regression tests"
+}

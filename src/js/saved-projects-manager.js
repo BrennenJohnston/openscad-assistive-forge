@@ -1,0 +1,2445 @@
+/**
+ * Saved Projects Manager
+ * Manages persistent saved projects with IndexedDB (preferred) and localStorage fallback
+ * Supports hierarchical folder organization and project file management
+ * @license GPL-3.0-or-later
+ */
+
+import {
+  validateSavedProject,
+  getValidationErrorMessage,
+} from './validation-schemas.js';
+import { STORAGE_LIMITS } from './validation-constants.js';
+import { clearFolderHandle } from './folder-handle-store.js';
+
+const DB_NAME = 'openscad-forge-saved-projects';
+const DB_VERSION = 2; // Bumped for v2 schema with folders, project files, assets
+const STORE_NAME = 'projects';
+const FOLDERS_STORE = 'folders';
+const PROJECT_FILES_STORE = 'projectFiles';
+const ASSETS_STORE = 'assets';
+const LS_KEY = 'openscad-saved-projects';
+const LS_FOLDERS_KEY = 'openscad-saved-folders';
+const SCHEMA_VERSION = 2; // Project schema version
+const LS_MAX_PROJECT_FILES_BYTES = 2 * 1024 * 1024; // 2 MB -- beyond this, LS stringify OOMs the tab
+const MAX_IDB_RETRY = 2; // Maximum retries when an InvalidStateError indicates a stale connection
+const LARGE_FILES_BATCH_SIZE = 50; // File count threshold above which projectFiles are written to PROJECT_FILES_STORE in batches
+const INLINE_PROJECT_FILES_MAX_BYTES = 8 * 1024 * 1024; // Serialized maps beyond this are batched regardless of file count
+const IDB_MAX_RECORD_BYTES = 100 * 1024 * 1024; // Conservative floor under Chromium's ~127MB per-value IndexedDB cap
+
+let db = null;
+let storageType = null; // 'indexeddb' or 'localstorage'
+let initPromise = null; // Track initialization promise to avoid race conditions
+
+/**
+ * Generate a simple UUID-like ID with optional prefix
+ * @param {string} prefix - Optional prefix (e.g., 'folder', 'file', 'asset')
+ * @returns {string}
+ */
+function generateId(prefix = '') {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substr(2, 9);
+  return prefix ? `${prefix}-${timestamp}-${random}` : `${timestamp}-${random}`;
+}
+
+/**
+ * Generate a unique project name by appending a number suffix if needed
+ * @param {string} baseName - The desired name
+ * @param {Array} existingProjects - Array of existing projects
+ * @returns {string} - Unique name (e.g., "example.scad", "example.scad (2)", "example.scad (3)")
+ */
+function generateUniqueName(baseName, existingProjects) {
+  const existingNames = new Set(existingProjects.map((p) => p.name));
+
+  // If the base name doesn't exist, use it as-is
+  if (!existingNames.has(baseName)) {
+    return baseName;
+  }
+
+  // Find the highest existing suffix number for this base name
+  // Match pattern: "baseName" or "baseName (N)" where N is a number
+  const suffixPattern = new RegExp(
+    `^${escapeRegExp(baseName)}(?: \\((\\d+)\\))?$`
+  );
+  let maxSuffix = 1; // Start at 1 because the original has no suffix
+
+  for (const name of existingNames) {
+    const match = name.match(suffixPattern);
+    if (match) {
+      const suffix = match[1] ? parseInt(match[1], 10) : 1;
+      maxSuffix = Math.max(maxSuffix, suffix);
+    }
+  }
+
+  return `${baseName} (${maxSuffix + 1})`;
+}
+
+/**
+ * Escape special regex characters in a string
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Ensure the database is initialized before any operation
+ * @returns {Promise<void>}
+ */
+async function ensureInitialized() {
+  if (storageType !== null && (storageType === 'localstorage' || db !== null)) {
+    return; // Already initialized
+  }
+
+  if (initPromise) {
+    await initPromise;
+    return;
+  }
+
+  console.warn('[Saved Projects] Re-initializing database connection');
+  await initSavedProjectsDB();
+}
+
+/**
+ * Reset a stale IndexedDB connection and re-initialize.
+ * Called when `db.transaction()` throws `InvalidStateError` (the connection is
+ * closing or was closed while `db` was still non-null).
+ * @returns {Promise<void>}
+ */
+async function reconnectDB() {
+  db = null;
+  initPromise = null;
+  await initSavedProjectsDB();
+}
+
+/**
+ * Initialize IndexedDB database
+ * @returns {Promise<{available: boolean, type: string}>}
+ */
+export async function initSavedProjectsDB() {
+  // If already initialized with a valid connection, return early
+  if (storageType === 'indexeddb' && db !== null) {
+    return { available: true, type: 'indexeddb' };
+  }
+  if (storageType === 'localstorage') {
+    return { available: true, type: 'localstorage' };
+  }
+
+  if (!window.indexedDB) {
+    console.warn(
+      '[Saved Projects] IndexedDB not available, falling back to localStorage'
+    );
+    storageType = 'localstorage';
+    return { available: true, type: 'localstorage' };
+  }
+
+  // Create and track the initialization promise
+  initPromise = (async () => {
+    try {
+      return await new Promise((resolve, _reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onerror = () => {
+          console.warn(
+            '[Saved Projects] IndexedDB open failed, falling back to localStorage:',
+            request.error
+          );
+          db = null;
+          storageType = 'localstorage';
+          resolve({ available: true, type: 'localstorage' });
+        };
+
+        request.onsuccess = () => {
+          db = request.result;
+          storageType = 'indexeddb';
+          console.log('[Saved Projects] IndexedDB initialized successfully');
+
+          // Handle connection errors (e.g., database deleted while in use)
+          db.onerror = (event) => {
+            console.error(
+              '[Saved Projects] IndexedDB error:',
+              event.target.error
+            );
+          };
+
+          // Handle version change (another tab upgraded the database)
+          db.onversionchange = () => {
+            console.warn(
+              '[Saved Projects] Database version changed, closing connection'
+            );
+            db.close();
+            db = null;
+          };
+
+          resolve({ available: true, type: 'indexeddb' });
+        };
+
+        request.onupgradeneeded = (event) => {
+          console.log(
+            '[Saved Projects] Upgrading database schema from version',
+            event.oldVersion,
+            'to',
+            event.newVersion
+          );
+          const database = event.target.result;
+          const transaction = event.target.transaction;
+
+          // Create projects store if it doesn't exist (v1)
+          if (!database.objectStoreNames.contains(STORE_NAME)) {
+            const projectsStore = database.createObjectStore(STORE_NAME, {
+              keyPath: 'id',
+            });
+            projectsStore.createIndex('savedAt', 'savedAt', { unique: false });
+            projectsStore.createIndex('lastLoadedAt', 'lastLoadedAt', {
+              unique: false,
+            });
+            projectsStore.createIndex('folderId', 'folderId', {
+              unique: false,
+            });
+          } else if (event.oldVersion < 2) {
+            // Upgrade existing projects store to v2 - add folderId index
+            const projectsStore = transaction.objectStore(STORE_NAME);
+            if (!projectsStore.indexNames.contains('folderId')) {
+              projectsStore.createIndex('folderId', 'folderId', {
+                unique: false,
+              });
+            }
+          }
+
+          // v2: Create folders store
+          if (!database.objectStoreNames.contains(FOLDERS_STORE)) {
+            const foldersStore = database.createObjectStore(FOLDERS_STORE, {
+              keyPath: 'id',
+            });
+            foldersStore.createIndex('parentId', 'parentId', { unique: false });
+            foldersStore.createIndex('name', 'name', { unique: false });
+            foldersStore.createIndex('createdAt', 'createdAt', {
+              unique: false,
+            });
+          }
+
+          // v2: Create project files store (metadata for files within projects)
+          if (!database.objectStoreNames.contains(PROJECT_FILES_STORE)) {
+            const filesStore = database.createObjectStore(PROJECT_FILES_STORE, {
+              keyPath: 'id',
+            });
+            filesStore.createIndex('projectId', 'projectId', { unique: false });
+            filesStore.createIndex('path', 'path', { unique: false });
+            filesStore.createIndex('kind', 'kind', { unique: false });
+          }
+
+          // v2: Create assets store (binary blobs like overlays)
+          if (!database.objectStoreNames.contains(ASSETS_STORE)) {
+            const assetsStore = database.createObjectStore(ASSETS_STORE, {
+              keyPath: 'id',
+            });
+            assetsStore.createIndex('mimeType', 'mimeType', { unique: false });
+            assetsStore.createIndex('createdAt', 'createdAt', {
+              unique: false,
+            });
+          }
+
+          // Migrate existing v1 projects to v2 schema
+          if (event.oldVersion < 2 && event.oldVersion > 0) {
+            console.log(
+              '[Saved Projects] Migrating v1 projects to v2 schema...'
+            );
+            const projectsStore = transaction.objectStore(STORE_NAME);
+            const cursorRequest = projectsStore.openCursor();
+
+            cursorRequest.onsuccess = (e) => {
+              const cursor = e.target.result;
+              if (cursor) {
+                const project = cursor.value;
+                // Add v2 fields if missing
+                if (project.schemaVersion === 1 || !project.schemaVersion) {
+                  project.schemaVersion = 2;
+                  project.folderId = project.folderId ?? null;
+                  project.overlayFiles = project.overlayFiles ?? {};
+                  project.presets = project.presets ?? [];
+                  cursor.update(project);
+                  if (import.meta.env.DEV) {
+                    console.log(
+                      `[Saved Projects] Migrated project: ${project.name}`
+                    );
+                  }
+                }
+                cursor.continue();
+              } else {
+                console.log('[Saved Projects] Migration complete');
+              }
+            };
+          }
+        };
+
+        request.onblocked = () => {
+          console.warn(
+            '[Saved Projects] IndexedDB blocked - close other tabs and try again'
+          );
+        };
+      });
+    } catch (error) {
+      console.warn(
+        '[Saved Projects] IndexedDB initialization error, falling back to localStorage:',
+        error
+      );
+      db = null;
+      storageType = 'localstorage';
+      return { available: true, type: 'localstorage' };
+    } finally {
+      initPromise = null;
+    }
+  })();
+
+  return initPromise;
+}
+
+/**
+ * Get all saved projects from IndexedDB
+ * @returns {Promise<Array>}
+ */
+async function getFromIndexedDB() {
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    // If db connection is lost, try to reconnect
+    if (!db) {
+      console.warn(
+        '[Saved Projects] IndexedDB connection lost, attempting reconnect'
+      );
+      await initSavedProjectsDB();
+
+      if (!db) {
+        console.warn('[Saved Projects] Could not reconnect to IndexedDB');
+        return [];
+      }
+    }
+
+    try {
+      return await new Promise((resolve, reject) => {
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readonly');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.getAll();
+
+          request.onsuccess = () => resolve(request.result || []);
+          request.onerror = () => {
+            console.error(
+              '[Saved Projects] Error reading from IndexedDB:',
+              request.error
+            );
+            reject(request.error);
+          };
+
+          transaction.onerror = () => {
+            console.error(
+              '[Saved Projects] Transaction error:',
+              transaction.error
+            );
+            reject(transaction.error);
+          };
+        } catch (error) {
+          console.error(
+            '[Saved Projects] Exception reading from IndexedDB:',
+            error
+          );
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on read attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
+    }
+  }
+  return [];
+}
+
+/**
+ * Thrown when a single project record would exceed the browser's per-value
+ * IndexedDB limit — Chromium rejects values past ~127MB with an opaque
+ * UnknownError, so we fail earlier with something actionable.
+ */
+export class StorageRecordTooLargeError extends Error {
+  constructor(estimatedBytes) {
+    const mb = Math.round(estimatedBytes / (1024 * 1024));
+    super(`Project record is too large for browser storage (~${mb} MB)`);
+    this.name = 'StorageRecordTooLargeError';
+    this.estimatedBytes = estimatedBytes;
+  }
+}
+
+function estimateRecordBytes(project) {
+  const len = (v) => (typeof v === 'string' ? v.length : 0);
+  return (
+    len(project.content) + len(project.projectFiles) + len(project.notes) + 4096
+  );
+}
+
+/**
+ * Surface a persistence failure to the UI layer. The listener in main.js
+ * turns this into a toast + status message + screen-reader announcement.
+ */
+function reportPersistenceFailure({ op, projectName, error }) {
+  console.error(`[Saved Projects] ${op} failed to persist:`, error);
+  try {
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.dispatchEvent === 'function'
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('storage-quota-exceeded', {
+          detail: {
+            source: 'saved-projects',
+            op,
+            projectName: projectName || null,
+            message:
+              error instanceof StorageRecordTooLargeError
+                ? `${error.message}. Use Connect Folder to work from your disk instead.`
+                : `Could not update the saved copy of "${projectName || 'this project'}". Your open design is unaffected. Free up space or re-save the project.`,
+          },
+        })
+      );
+    }
+  } catch (dispatchError) {
+    console.warn(
+      '[Saved Projects] Failed to dispatch storage event:',
+      dispatchError
+    );
+  }
+}
+
+/**
+ * Save project to IndexedDB
+ * @param {Object} project
+ * @returns {Promise<void>}
+ * @throws {StorageRecordTooLargeError} when the record would exceed the
+ *   per-value cap — callers must not retry with the same payload
+ */
+async function saveToIndexedDB(project) {
+  const estimatedBytes = estimateRecordBytes(project);
+  if (estimatedBytes > IDB_MAX_RECORD_BYTES) {
+    throw new StorageRecordTooLargeError(estimatedBytes);
+  }
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    if (!db) throw new Error('IndexedDB not initialized');
+
+    try {
+      return await new Promise((resolve, reject) => {
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.put(project);
+
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        } catch (error) {
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on save attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+/**
+ * Delete project from IndexedDB
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+async function deleteFromIndexedDB(id) {
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    if (!db) throw new Error('IndexedDB not initialized');
+
+    try {
+      return await new Promise((resolve, reject) => {
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.delete(id);
+
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        } catch (error) {
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on delete attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+/**
+ * Clear all projects from IndexedDB
+ * Includes timeout protection to prevent freezes during bulk operations
+ * @returns {Promise<void>}
+ */
+async function clearIndexedDB() {
+  if (!db) return;
+
+  const IDB_TIMEOUT = 5000; // 5 second timeout for IndexedDB operations
+
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    if (!db) return;
+
+    try {
+      return await new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          console.warn('[Saved Projects] IndexedDB clear timed out');
+          reject(new Error('IndexedDB clear timeout'));
+        }, IDB_TIMEOUT);
+
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.clear();
+
+          request.onsuccess = () => {
+            clearTimeout(timeoutId);
+            resolve();
+          };
+          request.onerror = () => {
+            clearTimeout(timeoutId);
+            reject(request.error);
+          };
+
+          transaction.onerror = () => {
+            clearTimeout(timeoutId);
+            reject(transaction.error);
+          };
+        } catch (error) {
+          clearTimeout(timeoutId);
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on clear attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+/**
+ * Infer the IndexedDB file kind from the file path extension.
+ * @param {string} path
+ * @returns {string}
+ */
+function inferFileKind(path) {
+  const lower = path.toLowerCase();
+  if (lower.endsWith('.scad')) return 'scad';
+  if (lower.endsWith('.json')) return 'json';
+  if (
+    lower.endsWith('.png') ||
+    lower.endsWith('.jpg') ||
+    lower.endsWith('.jpeg') ||
+    lower.endsWith('.gif') ||
+    lower.endsWith('.webp') ||
+    lower.endsWith('.svg')
+  )
+    return 'image';
+  return 'binary';
+}
+
+/**
+ * Write a large projectFiles map to PROJECT_FILES_STORE in small batches.
+ *
+ * Each batch opens its own IndexedDB transaction so that a 200+ file import
+ * never holds one oversized transaction that risks a timeout or quota abort.
+ *
+ * @param {string} projectId
+ * @param {Object} filesObj - Plain object mapping `path → textContent`
+ * @returns {Promise<void>}
+ */
+async function saveProjectFilesInBatches(projectId, filesObj) {
+  const entries = Object.entries(filesObj);
+  for (let i = 0; i < entries.length; i += LARGE_FILES_BATCH_SIZE) {
+    const batch = entries.slice(i, i + LARGE_FILES_BATCH_SIZE);
+    await new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction([PROJECT_FILES_STORE], 'readwrite');
+        const store = transaction.objectStore(PROJECT_FILES_STORE);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () =>
+          reject(transaction.error || new Error('Batch transaction aborted'));
+        for (const [path, content] of batch) {
+          store.put({
+            id: generateId('file'),
+            projectId,
+            path,
+            kind: inferFileKind(path),
+            textContent: typeof content === 'string' ? content : null,
+            assetId: null,
+            mimeType: null,
+            updatedAt: Date.now(),
+          });
+        }
+      } catch (error) {
+        db = null;
+        reject(error);
+      }
+    });
+  }
+}
+
+/**
+ * Reassemble the projectFiles map from PROJECT_FILES_STORE for a project that
+ * was saved with `largeFilesInStore: true`.
+ *
+ * @param {string} projectId
+ * @returns {Promise<Object>} path → textContent map
+ */
+async function loadProjectFilesFromStore(projectId) {
+  const files = await getProjectFiles(projectId);
+  const result = {};
+  for (const f of files) {
+    if (f.textContent !== null) {
+      result[f.path] = f.textContent;
+    }
+  }
+  return result;
+}
+
+/**
+ * Get all saved projects from localStorage
+ * @returns {Array}
+ */
+function getFromLocalStorage() {
+  try {
+    const data = localStorage.getItem(LS_KEY);
+    if (!data) return [];
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading saved projects from localStorage:', error);
+    return [];
+  }
+}
+
+/**
+ * Save all projects to localStorage
+ * @param {Array} projects
+ */
+function saveToLocalStorage(projects) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(projects));
+  } catch (error) {
+    console.error('Error saving projects to localStorage:', error);
+    throw new Error('Failed to save to localStorage. Storage may be full.');
+  }
+}
+
+/**
+ * localStorage has a ~5-10MB quota and JSON.stringify on huge projectFiles
+ * strings OOMs the tab. Return a metadata-only copy when the serialized map
+ * exceeds the LS budget; the full data lives in IndexedDB.
+ */
+function stripLargeProjectFilesForLS(project) {
+  const pfLen =
+    typeof project.projectFiles === 'string' ? project.projectFiles.length : 0;
+  if (pfLen <= LS_MAX_PROJECT_FILES_BYTES) return project;
+  console.warn(
+    `[Saved Projects] Project files too large for localStorage (${(pfLen / 1024 / 1024).toFixed(1)}MB); keeping a metadata-only copy there`
+  );
+  return { ...project, projectFiles: null };
+}
+
+/**
+ * Fetch a project record exactly as stored — batched projects keep
+ * projectFiles: null and inline projects keep their JSON string. Metadata
+ * writes (touch/update) MUST use this instead of getProject(): re-inlining a
+ * hydrated 200-file map once produced a single 218MB put() that Chromium
+ * rejected, killing folder-project loads.
+ */
+async function getRawProjectRecord(id) {
+  if (storageType === 'indexeddb' && db) {
+    try {
+      const projects = await getFromIndexedDB();
+      const record = projects.find((p) => p.id === id);
+      if (record) return record;
+    } catch (error) {
+      console.error('[Saved Projects] Raw record read failed:', error);
+    }
+  }
+  return getFromLocalStorage().find((p) => p.id === id) || null;
+}
+
+/**
+ * List all saved projects (metadata)
+ * @returns {Promise<Array>} Array of project metadata sorted by lastLoadedAt desc
+ */
+export async function listSavedProjects() {
+  try {
+    await ensureInitialized();
+
+    let projects = [];
+
+    if (storageType === 'indexeddb') {
+      try {
+        projects = await getFromIndexedDB();
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Saved Projects] Retrieved ${projects.length} project(s) from IndexedDB`
+          );
+        }
+      } catch (indexedDbError) {
+        console.error(
+          '[Saved Projects] IndexedDB read failed, trying localStorage:',
+          indexedDbError
+        );
+        // Fall back to localStorage if IndexedDB fails
+        projects = getFromLocalStorage();
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Saved Projects] Fallback: Retrieved ${projects.length} project(s) from localStorage`
+          );
+        }
+      }
+    } else {
+      projects = getFromLocalStorage();
+      if (import.meta.env.DEV) {
+        console.log(
+          `[Saved Projects] Retrieved ${projects.length} project(s) from localStorage`
+        );
+      }
+    }
+
+    // Sort by lastLoadedAt (most recent first), then savedAt
+    projects.sort((a, b) => {
+      if (b.lastLoadedAt !== a.lastLoadedAt) {
+        return b.lastLoadedAt - a.lastLoadedAt;
+      }
+      return b.savedAt - a.savedAt;
+    });
+
+    return projects;
+  } catch (error) {
+    console.error('[Saved Projects] Error listing saved projects:', error);
+    return [];
+  }
+}
+
+/**
+ * Save a new project
+ * @param {Object} options - Project details
+ * @param {string} options.name - Display name
+ * @param {string} options.originalName - Original file name
+ * @param {string} options.kind - 'scad' or 'zip'
+ * @param {string} options.mainFilePath - Main file path (for zip)
+ * @param {string} options.content - Main file content
+ * @param {Object} [options.projectFiles] - Optional: zip files map
+ * @param {string} [options.notes] - Optional: user notes
+ * @param {string} [options.folderId] - Optional: parent folder ID (null = root)
+ * @returns {Promise<{success: boolean, id?: string, error?: string}>}
+ */
+export async function saveProject({
+  name,
+  originalName,
+  kind,
+  mainFilePath,
+  content,
+  projectFiles = null,
+  notes = '',
+  folderId = null,
+  forkedFrom = null,
+  uiPreferences = null,
+  sourceExampleKey = null,
+  folderRef = null,
+  fileSummary = null,
+}) {
+  try {
+    await ensureInitialized();
+
+    const existingProjects = await listSavedProjects();
+    if (existingProjects.length >= STORAGE_LIMITS.MAX_SAVED_PROJECTS_COUNT) {
+      return {
+        success: false,
+        error: `Maximum saved projects limit reached (${STORAGE_LIMITS.MAX_SAVED_PROJECTS_COUNT}). Please delete some projects first.`,
+      };
+    }
+
+    const contentSize = new Blob([content]).size;
+    if (contentSize > STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE) {
+      return {
+        success: false,
+        error: `Project content exceeds maximum size of ${STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE / (1024 * 1024)}MB`,
+      };
+    }
+
+    const baseName = name || originalName;
+    const uniqueName = generateUniqueName(baseName, existingProjects);
+
+    const now = Date.now();
+
+    // Folder-link projects are pointers: their contents live on disk behind
+    // the handle named by folderRef, never in this record.
+    const isFolderLink = kind === 'folder-link';
+
+    // Normalize projectFiles to a plain object once so both the inline path
+    // and the batched path share the same representation.
+    const filesObj =
+      projectFiles && !isFolderLink
+        ? projectFiles instanceof Map
+          ? Object.fromEntries(projectFiles)
+          : projectFiles
+        : null;
+    const fileCount = filesObj ? Object.keys(filesObj).length : 0;
+    const filesJson = filesObj ? JSON.stringify(filesObj) : null;
+
+    // Use batched PROJECT_FILES_STORE writes for large imports (IndexedDB only).
+    // Storing hundreds of file contents as one serialized JSON string in a single
+    // transaction risks a browser transaction-timeout or quota abort — and a few
+    // big files can hit the per-value cap without ever crossing the file-count
+    // threshold, so byte size triggers batching too.
+    const useBatchedStorage =
+      storageType === 'indexeddb' &&
+      db !== null &&
+      db.objectStoreNames &&
+      db.objectStoreNames.contains(PROJECT_FILES_STORE) &&
+      (fileCount > LARGE_FILES_BATCH_SIZE ||
+        (filesJson !== null &&
+          filesJson.length > INLINE_PROJECT_FILES_MAX_BYTES));
+
+    const project = {
+      id: generateId('project'),
+      schemaVersion: SCHEMA_VERSION,
+      name: uniqueName,
+      originalName,
+      kind,
+      mainFilePath,
+      content,
+      projectFiles: useBatchedStorage ? null : filesJson,
+      ...(useBatchedStorage ? { largeFilesInStore: true } : {}),
+      folderRef: folderRef || null,
+      fileSummary: fileSummary || null,
+      folderId: folderId, // v2: parent folder (null = root)
+      overlayFiles: {}, // v2: overlay metadata
+      presets: [], // v2: project-scoped presets metadata
+      notes: notes || '',
+      forkedFrom: forkedFrom || null,
+      uiPreferences: uiPreferences || null, // v2: per-project UI preferences sidecar
+      sourceExampleKey: sourceExampleKey || null,
+      savedAt: now,
+      lastLoadedAt: now,
+    };
+
+    const valid = validateSavedProject(project);
+    if (!valid) {
+      const errorMsg = getValidationErrorMessage(validateSavedProject.errors);
+      return {
+        success: false,
+        error: `Validation failed: ${errorMsg}`,
+      };
+    }
+
+    // Save to storage with dual-write for redundancy
+    if (storageType === 'indexeddb') {
+      try {
+        await saveToIndexedDB(project);
+        if (useBatchedStorage) {
+          await saveProjectFilesInBatches(project.id, filesObj);
+          if (import.meta.env.DEV) {
+            console.log(
+              `[Saved Projects] Project files saved in ${Math.ceil(fileCount / LARGE_FILES_BATCH_SIZE)} batch(es) to PROJECT_FILES_STORE: ${project.name}`
+            );
+          }
+        }
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Saved Projects] Project saved to IndexedDB: ${project.name}`
+          );
+        }
+      } catch (indexedDbError) {
+        if (indexedDbError instanceof StorageRecordTooLargeError) {
+          reportPersistenceFailure({
+            op: 'saveProject',
+            projectName: project.name,
+            error: indexedDbError,
+          });
+          return { success: false, error: indexedDbError.message };
+        }
+        console.error(
+          '[Saved Projects] IndexedDB save failed:',
+          indexedDbError
+        );
+        // Fall back to localStorage — strip projectFiles if too large to avoid OOM crash
+        const projectForLS = stripLargeProjectFilesForLS(project);
+        const contentLost =
+          useBatchedStorage ||
+          projectForLS.projectFiles !== project.projectFiles;
+        if (contentLost) {
+          // The LS copy is metadata-only (batched or stripped contents never
+          // reach LS) — the user must know their files were not saved.
+          reportPersistenceFailure({
+            op: 'saveProject',
+            projectName: project.name,
+            error: indexedDbError,
+          });
+        }
+        const projects = getFromLocalStorage();
+        projects.push(projectForLS);
+        saveToLocalStorage(projects);
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Saved Projects] Fallback: Project saved to localStorage: ${project.name}`
+          );
+        }
+      }
+
+      // Also save to localStorage as backup (best-effort, ignore errors)
+      try {
+        const lsProjects = getFromLocalStorage();
+        // Don't add duplicates
+        if (!lsProjects.find((p) => p.id === project.id)) {
+          lsProjects.push(stripLargeProjectFilesForLS(project));
+          saveToLocalStorage(lsProjects);
+          if (import.meta.env.DEV)
+            console.log('[Saved Projects] Backup copy saved to localStorage');
+        }
+      } catch (lsError) {
+        // localStorage backup failed - not critical
+        console.warn(
+          '[Saved Projects] localStorage backup failed:',
+          lsError.message
+        );
+      }
+    } else {
+      const projects = getFromLocalStorage();
+      projects.push(project);
+      saveToLocalStorage(projects);
+      if (import.meta.env.DEV) {
+        console.log(
+          `[Saved Projects] Project saved to localStorage: ${project.name}`
+        );
+      }
+    }
+
+    return { success: true, id: project.id };
+  } catch (error) {
+    console.error('[Saved Projects] Error saving project:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to save project',
+    };
+  }
+}
+
+/**
+ * Get a saved project by ID
+ * @param {string} id
+ * @returns {Promise<Object|null>}
+ */
+export async function getProject(id) {
+  try {
+    await ensureInitialized();
+
+    let project = null;
+
+    if (storageType === 'indexeddb') {
+      try {
+        const projects = await getFromIndexedDB();
+        project = projects.find((p) => p.id === id);
+      } catch (indexedDbError) {
+        console.error(
+          '[Saved Projects] IndexedDB read failed:',
+          indexedDbError
+        );
+      }
+    }
+
+    // Fall back to localStorage if not found in IndexedDB
+    if (!project) {
+      const lsProjects = getFromLocalStorage();
+      project = lsProjects.find((p) => p.id === id);
+      if (project && storageType === 'indexeddb') {
+        if (import.meta.env.DEV)
+          console.log(
+            '[Saved Projects] Project found in localStorage fallback'
+          );
+      }
+    }
+
+    if (
+      project &&
+      project.largeFilesInStore &&
+      storageType === 'indexeddb' &&
+      db
+    ) {
+      project.projectFiles = await loadProjectFilesFromStore(project.id);
+    } else if (
+      project &&
+      project.projectFiles &&
+      typeof project.projectFiles === 'string'
+    ) {
+      try {
+        project.projectFiles = JSON.parse(project.projectFiles);
+      } catch (e) {
+        console.error('[Saved Projects] Error parsing projectFiles:', e);
+        project.projectFiles = null;
+      }
+    }
+
+    return project || null;
+  } catch (error) {
+    console.error('[Saved Projects] Error getting project:', error);
+    return null;
+  }
+}
+
+/**
+ * Update lastLoadedAt timestamp for a project
+ * @param {string} id
+ * @returns {Promise<boolean>}
+ */
+export async function touchProject(id) {
+  try {
+    await ensureInitialized();
+
+    // Raw record only: getProject() would hydrate batched projectFiles into an
+    // object, and re-inlining that map here is what once pushed a 211-file
+    // folder project past Chromium's per-value cap. The stored shape (null for
+    // batched, JSON string for inline) is written back untouched.
+    const record = await getRawProjectRecord(id);
+    if (!record) return false;
+
+    record.lastLoadedAt = Date.now();
+
+    let persisted = true;
+    if (storageType === 'indexeddb' && db) {
+      try {
+        await saveToIndexedDB(record);
+      } catch (indexedDbError) {
+        reportPersistenceFailure({
+          op: 'touchProject',
+          projectName: record.name,
+          error: indexedDbError,
+        });
+        persisted = false;
+      }
+    }
+
+    // Also update localStorage (dual-write)
+    const lsProjects = getFromLocalStorage();
+    const index = lsProjects.findIndex((p) => p.id === id);
+    if (index >= 0) {
+      lsProjects[index].lastLoadedAt = record.lastLoadedAt;
+      try {
+        saveToLocalStorage(lsProjects);
+      } catch (lsError) {
+        console.warn(
+          '[Saved Projects] localStorage touch failed:',
+          lsError.message
+        );
+      }
+    }
+
+    return persisted;
+  } catch (error) {
+    console.error('[Saved Projects] Error touching project:', error);
+    return false;
+  }
+}
+
+/**
+ * Update project metadata (name, notes, projectFiles, content, uiPreferences,
+ * mainFilePath, and/or kind)
+ * @param {Object} options
+ * @param {string} options.id - Project ID
+ * @param {string} [options.name] - New name
+ * @param {string} [options.notes] - New notes
+ * @param {Object|Map|string|null} [options.projectFiles] - New project files
+ *   map (object/Map) or pre-serialized JSON string; null clears
+ * @param {string} [options.content] - New main file content
+ * @param {Object|null} [options.uiPreferences] - Per-project UI preferences sidecar
+ * @param {string} [options.mainFilePath] - New main file path
+ * @param {string} [options.kind] - New project kind
+ * @param {string|null} [options.folderRef] - Handle-store key for folder-link projects
+ * @param {Object|null} [options.fileSummary] - {fileCount, totalBytes} snapshot
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function updateProject({
+  id,
+  name,
+  notes,
+  projectFiles,
+  content,
+  uiPreferences,
+  mainFilePath,
+  kind,
+  folderRef,
+  fileSummary,
+}) {
+  try {
+    await ensureInitialized();
+
+    const record = await getRawProjectRecord(id);
+    if (!record) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const isFolderLink = record.kind === 'folder-link';
+
+    if (name !== undefined) {
+      record.name = name;
+    }
+    if (notes !== undefined) {
+      if (notes.length > STORAGE_LIMITS.MAX_NOTES_LENGTH) {
+        return {
+          success: false,
+          error: `Notes exceed maximum length of ${STORAGE_LIMITS.MAX_NOTES_LENGTH} characters`,
+        };
+      }
+      record.notes = notes;
+    }
+    if (content !== undefined) {
+      if (isFolderLink) {
+        // By design: folder-link contents live on disk; the flag-gated
+        // write-back path is the only writer.
+        if (import.meta.env.DEV) {
+          console.log(
+            '[Saved Projects] Ignoring content update for folder-link project'
+          );
+        }
+      } else {
+        record.content = content;
+        record.savedAt = Date.now();
+      }
+    }
+    if (uiPreferences !== undefined) {
+      record.uiPreferences = uiPreferences || null;
+    }
+    if (mainFilePath !== undefined) {
+      record.mainFilePath = mainFilePath;
+    }
+    if (kind !== undefined) {
+      record.kind = kind;
+    }
+    if (folderRef !== undefined) {
+      record.folderRef = folderRef || null;
+    }
+    if (fileSummary !== undefined) {
+      record.fileSummary = fileSummary || null;
+    }
+
+    // Once a project is batched it stays batched — re-inlining a hydrated map
+    // as one record is what once exceeded Chromium's per-value cap.
+    let filesForBatchedStore = null;
+    if (projectFiles !== undefined && isFolderLink) {
+      if (import.meta.env.DEV) {
+        console.log(
+          '[Saved Projects] Ignoring projectFiles update for folder-link project'
+        );
+      }
+    } else if (projectFiles !== undefined) {
+      let filesObj =
+        projectFiles && typeof projectFiles === 'object'
+          ? projectFiles instanceof Map
+            ? Object.fromEntries(projectFiles)
+            : projectFiles
+          : null;
+      const filesJson =
+        typeof projectFiles === 'string'
+          ? projectFiles
+          : filesObj
+            ? JSON.stringify(filesObj)
+            : null;
+
+      const batchingAvailable =
+        storageType === 'indexeddb' &&
+        db !== null &&
+        db.objectStoreNames &&
+        db.objectStoreNames.contains(PROJECT_FILES_STORE);
+      const needsBatch =
+        record.largeFilesInStore === true ||
+        (filesObj !== null &&
+          Object.keys(filesObj).length > LARGE_FILES_BATCH_SIZE) ||
+        (filesJson !== null &&
+          filesJson.length > INLINE_PROJECT_FILES_MAX_BYTES);
+
+      if (filesJson !== null && batchingAvailable && needsBatch) {
+        if (!filesObj) {
+          try {
+            filesObj = JSON.parse(filesJson);
+          } catch {
+            return { success: false, error: 'projectFiles is not valid JSON' };
+          }
+        }
+        filesForBatchedStore = filesObj;
+        record.projectFiles = null;
+        record.largeFilesInStore = true;
+      } else {
+        record.projectFiles = filesJson;
+        if (filesJson === null && record.largeFilesInStore) {
+          // Explicit clear of a batched project's files.
+          filesForBatchedStore = {};
+          delete record.largeFilesInStore;
+        }
+      }
+    } else if (
+      record.largeFilesInStore &&
+      typeof record.projectFiles === 'string'
+    ) {
+      // Repair hybrid records produced by the old touch/update re-inline bug.
+      record.projectFiles = null;
+    }
+
+    const valid = validateSavedProject(record);
+    if (!valid) {
+      const errorMsg = getValidationErrorMessage(validateSavedProject.errors);
+      return {
+        success: false,
+        error: `Validation failed: ${errorMsg}`,
+      };
+    }
+
+    // Save updated project with dual-write
+    if (storageType === 'indexeddb' && db) {
+      try {
+        if (filesForBatchedStore !== null) {
+          await deleteAllProjectFiles(id);
+          if (Object.keys(filesForBatchedStore).length > 0) {
+            await saveProjectFilesInBatches(id, filesForBatchedStore);
+          }
+        }
+        await saveToIndexedDB(record);
+      } catch (indexedDbError) {
+        reportPersistenceFailure({
+          op: 'updateProject',
+          projectName: record.name,
+          error: indexedDbError,
+        });
+        return {
+          success: false,
+          error: indexedDbError.message || 'Failed to persist project update',
+        };
+      }
+    }
+
+    // Also update localStorage (dual-write)
+    const lsProjects = getFromLocalStorage();
+    const lsRecord = stripLargeProjectFilesForLS(record);
+    const index = lsProjects.findIndex((p) => p.id === id);
+    if (index >= 0) {
+      lsProjects[index] = lsRecord;
+    } else {
+      lsProjects.push(lsRecord);
+    }
+    try {
+      saveToLocalStorage(lsProjects);
+    } catch (lsError) {
+      console.warn(
+        '[Saved Projects] localStorage update failed:',
+        lsError.message
+      );
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error updating project:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to update project',
+    };
+  }
+}
+
+/**
+ * Delete a saved project
+ * @param {string} id
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteProject(id) {
+  try {
+    await ensureInitialized();
+
+    // Read the record BEFORE deleting so a folder-link's handle key can be
+    // cleaned up afterwards.
+    const record = await getRawProjectRecord(id);
+
+    // v2: Delete all project files and assets first
+    try {
+      await deleteAllProjectFiles(id);
+    } catch (filesError) {
+      console.warn(
+        '[Saved Projects] Error deleting project files:',
+        filesError
+      );
+    }
+
+    // Delete from both storage locations (dual-delete)
+    if (storageType === 'indexeddb') {
+      try {
+        await deleteFromIndexedDB(id);
+        if (import.meta.env.DEV)
+          console.log(`[Saved Projects] Deleted from IndexedDB: ${id}`);
+      } catch (indexedDbError) {
+        console.error(
+          '[Saved Projects] IndexedDB delete failed:',
+          indexedDbError
+        );
+      }
+    }
+
+    // Also delete from localStorage
+    const projects = getFromLocalStorage();
+    const filtered = projects.filter((p) => p.id !== id);
+    try {
+      saveToLocalStorage(filtered);
+      if (import.meta.env.DEV)
+        console.log(`[Saved Projects] Deleted from localStorage: ${id}`);
+    } catch (lsError) {
+      console.warn(
+        '[Saved Projects] localStorage delete failed:',
+        lsError.message
+      );
+    }
+
+    // Drop the folder-link's persisted directory handle so the folder-sync
+    // DB does not accumulate orphaned handles.
+    if (record && record.kind === 'folder-link' && record.folderRef) {
+      await clearFolderHandle({ key: record.folderRef });
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error deleting project:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to delete project',
+    };
+  }
+}
+
+/**
+ * Get summary of saved projects (for clear cache warning)
+ * @returns {Promise<{count: number, totalApproxBytes: number}>}
+ */
+export async function getSavedProjectsSummary() {
+  try {
+    const projects = await listSavedProjects();
+    const count = projects.length;
+
+    let totalApproxBytes = 0;
+    for (const project of projects) {
+      totalApproxBytes += new Blob([project.content]).size;
+      if (project.notes) {
+        totalApproxBytes += new Blob([project.notes]).size;
+      }
+    }
+
+    return { count, totalApproxBytes };
+  } catch (error) {
+    console.error(
+      '[Saved Projects] Error getting saved projects summary:',
+      error
+    );
+    return { count: 0, totalApproxBytes: 0 };
+  }
+}
+
+/**
+ * Clear all saved projects
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function clearAllSavedProjects() {
+  try {
+    // Clear both storage locations
+    if (storageType === 'indexeddb') {
+      try {
+        await clearIndexedDB();
+        if (import.meta.env.DEV)
+          console.log('[Saved Projects] Cleared IndexedDB');
+      } catch (indexedDbError) {
+        console.error(
+          '[Saved Projects] IndexedDB clear failed:',
+          indexedDbError
+        );
+      }
+    }
+
+    // Also clear localStorage
+    try {
+      localStorage.removeItem(LS_KEY);
+      if (import.meta.env.DEV)
+        console.log('[Saved Projects] Cleared localStorage');
+    } catch (lsError) {
+      console.warn(
+        '[Saved Projects] localStorage clear failed:',
+        lsError.message
+      );
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error clearing saved projects:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to clear saved projects',
+    };
+  }
+}
+
+/**
+ * Get storage diagnostic information (for debugging)
+ * @returns {Promise<Object>}
+ */
+export async function getStorageDiagnostics() {
+  const diagnostics = {
+    storageType,
+    indexedDbAvailable: !!window.indexedDB,
+    indexedDbConnected: db !== null,
+    localStorageAvailable: false,
+    indexedDbProjectCount: 0,
+    localStorageProjectCount: 0,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Check localStorage availability
+  try {
+    const testKey = '__storage_test__';
+    localStorage.setItem(testKey, testKey);
+    localStorage.removeItem(testKey);
+    diagnostics.localStorageAvailable = true;
+  } catch (e) {
+    diagnostics.localStorageAvailable = false;
+    diagnostics.localStorageError = e.message;
+  }
+
+  // Count IndexedDB projects
+  if (db) {
+    try {
+      const projects = await getFromIndexedDB();
+      diagnostics.indexedDbProjectCount = projects.length;
+    } catch (e) {
+      diagnostics.indexedDbError = e.message;
+    }
+  }
+
+  // Count localStorage projects
+  try {
+    const projects = getFromLocalStorage();
+    diagnostics.localStorageProjectCount = projects.length;
+  } catch (e) {
+    diagnostics.localStorageReadError = e.message;
+  }
+
+  if (import.meta.env.DEV)
+    console.log('[Saved Projects] Storage diagnostics:', diagnostics);
+  return diagnostics;
+}
+
+// ============================================================================
+// Folder Operations (v2)
+// ============================================================================
+
+/**
+ * Create a new folder
+ * @param {Object} options - Folder details
+ * @param {string} options.name - Folder name
+ * @param {string|null} [options.parentId] - Parent folder ID (null = root)
+ * @param {string|null} [options.color] - Optional folder color
+ * @returns {Promise<{success: boolean, id?: string, error?: string}>}
+ */
+export async function createFolder({ name, parentId = null, color = null }) {
+  try {
+    await ensureInitialized();
+
+    if (!name || !name.trim()) {
+      return { success: false, error: 'Folder name is required' };
+    }
+
+    if (parentId) {
+      const parentFolder = await getFolder(parentId);
+      if (!parentFolder) {
+        return { success: false, error: 'Parent folder not found' };
+      }
+    }
+
+    const folder = {
+      id: generateId('folder'),
+      name: name.trim(),
+      parentId,
+      color,
+      createdAt: Date.now(),
+    };
+
+    if (
+      storageType === 'indexeddb' &&
+      db &&
+      db.objectStoreNames.contains(FOLDERS_STORE)
+    ) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([FOLDERS_STORE], 'readwrite');
+        const store = transaction.objectStore(FOLDERS_STORE);
+        const request = store.put(folder);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+      if (import.meta.env.DEV)
+        console.log(`[Saved Projects] Folder created: ${folder.name}`);
+    } else {
+      // localStorage fallback - store folders in a separate key (also used when v2 stores don't exist)
+      const folders = getFoldersFromLocalStorage();
+      folders.push(folder);
+      saveFoldersToLocalStorage(folders);
+    }
+
+    return { success: true, id: folder.id };
+  } catch (error) {
+    console.error('[Saved Projects] Error creating folder:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to create folder',
+    };
+  }
+}
+
+/**
+ * Get a folder by ID
+ * @param {string} id - Folder ID
+ * @returns {Promise<Object|null>}
+ */
+export async function getFolder(id) {
+  try {
+    await ensureInitialized();
+
+    if (storageType === 'indexeddb' && db) {
+      // Check if folders store exists (v2 schema)
+      if (!db.objectStoreNames.contains(FOLDERS_STORE)) {
+        const folders = getFoldersFromLocalStorage();
+        return folders.find((f) => f.id === id) || null;
+      }
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([FOLDERS_STORE], 'readonly');
+        const store = transaction.objectStore(FOLDERS_STORE);
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      });
+    } else {
+      const folders = getFoldersFromLocalStorage();
+      return folders.find((f) => f.id === id) || null;
+    }
+  } catch (error) {
+    console.error('[Saved Projects] Error getting folder:', error);
+    return null;
+  }
+}
+
+/**
+ * List all folders
+ * @returns {Promise<Array>}
+ */
+export async function listFolders() {
+  try {
+    await ensureInitialized();
+
+    if (storageType === 'indexeddb' && db) {
+      // Check if folders store exists (v2 schema) - gracefully handle v1 databases
+      if (!db.objectStoreNames.contains(FOLDERS_STORE)) {
+        if (import.meta.env.DEV) {
+          console.log(
+            '[Saved Projects] Folders store not found (v1 database), returning empty array'
+          );
+        }
+        return getFoldersFromLocalStorage();
+      }
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([FOLDERS_STORE], 'readonly');
+        const store = transaction.objectStore(FOLDERS_STORE);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    } else {
+      return getFoldersFromLocalStorage();
+    }
+  } catch (error) {
+    console.error('[Saved Projects] Error listing folders:', error);
+    return [];
+  }
+}
+
+/**
+ * Rename a folder
+ * @param {string} id - Folder ID
+ * @param {string} newName - New name
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function renameFolder(id, newName) {
+  try {
+    await ensureInitialized();
+
+    if (!newName || !newName.trim()) {
+      return { success: false, error: 'Folder name is required' };
+    }
+
+    const folder = await getFolder(id);
+    if (!folder) {
+      return { success: false, error: 'Folder not found' };
+    }
+
+    folder.name = newName.trim();
+
+    if (
+      storageType === 'indexeddb' &&
+      db &&
+      db.objectStoreNames.contains(FOLDERS_STORE)
+    ) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([FOLDERS_STORE], 'readwrite');
+        const store = transaction.objectStore(FOLDERS_STORE);
+        const request = store.put(folder);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    } else {
+      const folders = getFoldersFromLocalStorage();
+      const index = folders.findIndex((f) => f.id === id);
+      if (index >= 0) {
+        folders[index] = folder;
+        saveFoldersToLocalStorage(folders);
+      }
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] Folder renamed to: ${folder.name}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error renaming folder:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to rename folder',
+    };
+  }
+}
+
+/**
+ * Delete a folder and optionally its contents
+ * @param {string} id - Folder ID
+ * @param {boolean} [deleteContents=false] - If true, delete projects inside; if false, move them to root
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteFolder(id, deleteContents = false) {
+  try {
+    await ensureInitialized();
+
+    const folder = await getFolder(id);
+    if (!folder) {
+      return { success: false, error: 'Folder not found' };
+    }
+
+    const projectsInFolder = await getProjectsInFolder(id);
+
+    const allFolders = await listFolders();
+    const childFolders = allFolders.filter((f) => f.parentId === id);
+
+    if (deleteContents) {
+      for (const project of projectsInFolder) {
+        await deleteProject(project.id);
+      }
+      for (const childFolder of childFolders) {
+        await deleteFolder(childFolder.id, true);
+      }
+    } else {
+      for (const project of projectsInFolder) {
+        await moveProject(project.id, null); // move to root
+      }
+      for (const childFolder of childFolders) {
+        await moveFolder(childFolder.id, folder.parentId);
+      }
+    }
+
+    if (
+      storageType === 'indexeddb' &&
+      db &&
+      db.objectStoreNames.contains(FOLDERS_STORE)
+    ) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([FOLDERS_STORE], 'readwrite');
+        const store = transaction.objectStore(FOLDERS_STORE);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    } else {
+      const folders = getFoldersFromLocalStorage();
+      const filtered = folders.filter((f) => f.id !== id);
+      saveFoldersToLocalStorage(filtered);
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] Folder deleted: ${folder.name}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error deleting folder:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to delete folder',
+    };
+  }
+}
+
+/**
+ * Move a folder to a new parent
+ * @param {string} id - Folder ID
+ * @param {string|null} newParentId - New parent folder ID (null = root)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function moveFolder(id, newParentId) {
+  try {
+    await ensureInitialized();
+
+    const folder = await getFolder(id);
+    if (!folder) {
+      return { success: false, error: 'Folder not found' };
+    }
+
+    // Prevent moving folder into itself or its descendants
+    if (newParentId) {
+      let currentParent = await getFolder(newParentId);
+      while (currentParent) {
+        if (currentParent.id === id) {
+          return {
+            success: false,
+            error: 'Cannot move folder into itself or its descendants',
+          };
+        }
+        currentParent = currentParent.parentId
+          ? await getFolder(currentParent.parentId)
+          : null;
+      }
+    }
+
+    folder.parentId = newParentId;
+
+    if (
+      storageType === 'indexeddb' &&
+      db &&
+      db.objectStoreNames.contains(FOLDERS_STORE)
+    ) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([FOLDERS_STORE], 'readwrite');
+        const store = transaction.objectStore(FOLDERS_STORE);
+        const request = store.put(folder);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    } else {
+      const folders = getFoldersFromLocalStorage();
+      const index = folders.findIndex((f) => f.id === id);
+      if (index >= 0) {
+        folders[index] = folder;
+        saveFoldersToLocalStorage(folders);
+      }
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] Folder moved: ${folder.name}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error moving folder:', error);
+    return { success: false, error: error.message || 'Failed to move folder' };
+  }
+}
+
+/**
+ * Get folder tree structure with nested children
+ * @returns {Promise<Array>} Tree of folders with children property
+ */
+export async function getFolderTree() {
+  try {
+    const folders = await listFolders();
+    const projects = await listSavedProjects();
+
+    const folderMap = new Map();
+    folders.forEach((f) => {
+      folderMap.set(f.id, { ...f, children: [], projects: [] });
+    });
+
+    projects.forEach((p) => {
+      if (p.folderId && folderMap.has(p.folderId)) {
+        folderMap.get(p.folderId).projects.push(p);
+      }
+    });
+
+    const roots = [];
+    const rootProjects = projects.filter((p) => !p.folderId);
+
+    folderMap.forEach((folder) => {
+      if (folder.parentId && folderMap.has(folder.parentId)) {
+        folderMap.get(folder.parentId).children.push(folder);
+      } else if (!folder.parentId) {
+        roots.push(folder);
+      }
+    });
+
+    const sortByName = (a, b) => a.name.localeCompare(b.name);
+    roots.sort(sortByName);
+    folderMap.forEach((f) => {
+      f.children.sort(sortByName);
+      f.projects.sort(sortByName);
+    });
+    rootProjects.sort(sortByName);
+
+    return { folders: roots, rootProjects };
+  } catch (error) {
+    console.error('[Saved Projects] Error getting folder tree:', error);
+    return { folders: [], rootProjects: [] };
+  }
+}
+
+/**
+ * Get folder breadcrumb path
+ * @param {string} folderId - Folder ID
+ * @returns {Promise<Array>} Array of folders from root to current
+ */
+export async function getFolderBreadcrumbs(folderId) {
+  try {
+    const breadcrumbs = [];
+    let currentId = folderId;
+
+    while (currentId) {
+      const folder = await getFolder(currentId);
+      if (folder) {
+        breadcrumbs.unshift(folder);
+        currentId = folder.parentId;
+      } else {
+        break;
+      }
+    }
+
+    return breadcrumbs;
+  } catch (error) {
+    console.error('[Saved Projects] Error getting breadcrumbs:', error);
+    return [];
+  }
+}
+
+// localStorage helpers for folders
+function getFoldersFromLocalStorage() {
+  try {
+    const data = localStorage.getItem(LS_FOLDERS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error(
+      '[Saved Projects] Error reading folders from localStorage:',
+      error
+    );
+    return [];
+  }
+}
+
+function saveFoldersToLocalStorage(folders) {
+  try {
+    localStorage.setItem(LS_FOLDERS_KEY, JSON.stringify(folders));
+  } catch (error) {
+    console.error(
+      '[Saved Projects] Error saving folders to localStorage:',
+      error
+    );
+  }
+}
+
+// ============================================================================
+// Project-Folder Operations (v2)
+// ============================================================================
+
+/**
+ * Move a project to a folder
+ * @param {string} projectId - Project ID
+ * @param {string|null} folderId - Target folder ID (null = root)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function moveProject(projectId, folderId) {
+  try {
+    await ensureInitialized();
+
+    const project = await getProject(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    // Verify target folder exists if specified
+    if (folderId) {
+      const folder = await getFolder(folderId);
+      if (!folder) {
+        return { success: false, error: 'Target folder not found' };
+      }
+    }
+
+    project.folderId = folderId;
+
+    const projectToSave = { ...project };
+    if (
+      projectToSave.projectFiles &&
+      typeof projectToSave.projectFiles === 'object'
+    ) {
+      projectToSave.projectFiles = JSON.stringify(projectToSave.projectFiles);
+    }
+
+    if (storageType === 'indexeddb' && db) {
+      await saveToIndexedDB(projectToSave);
+    }
+
+    // Also update localStorage (dual-write)
+    const lsProjects = getFromLocalStorage();
+    const index = lsProjects.findIndex((p) => p.id === projectId);
+    if (index >= 0) {
+      lsProjects[index].folderId = folderId;
+      saveToLocalStorage(lsProjects);
+    }
+
+    if (import.meta.env.DEV) {
+      console.log(
+        `[Saved Projects] Project moved: ${project.name} to folder ${folderId || 'root'}`
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error moving project:', error);
+    return { success: false, error: error.message || 'Failed to move project' };
+  }
+}
+
+/**
+ * Get all projects in a specific folder
+ * @param {string|null} folderId - Folder ID (null = root level projects)
+ * @returns {Promise<Array>}
+ */
+export async function getProjectsInFolder(folderId = null) {
+  try {
+    const projects = await listSavedProjects();
+    return projects.filter((p) => (p.folderId || null) === folderId);
+  } catch (error) {
+    console.error('[Saved Projects] Error getting projects in folder:', error);
+    return [];
+  }
+}
+
+// ============================================================================
+// Project Files Operations (v2) - Files within projects
+// ============================================================================
+
+/**
+ * Add a file to a project
+ * @param {Object} options - File details
+ * @param {string} options.projectId - Parent project ID
+ * @param {string} options.path - File path within project (e.g., 'presets/foo.json', 'overlays/ref.png')
+ * @param {string} options.kind - File type: 'scad', 'json', 'image', 'binary'
+ * @param {string|null} [options.textContent] - Text content (for scad/json)
+ * @param {string|null} [options.assetId] - Asset ID (for binaries stored in Assets store)
+ * @param {string|null} [options.mimeType] - MIME type
+ * @returns {Promise<{success: boolean, id?: string, error?: string}>}
+ */
+export async function addProjectFile({
+  projectId,
+  path,
+  kind,
+  textContent = null,
+  assetId = null,
+  mimeType = null,
+}) {
+  try {
+    await ensureInitialized();
+
+    const project = await getProject(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const fileRecord = {
+      id: generateId('file'),
+      projectId,
+      path,
+      kind,
+      textContent,
+      assetId,
+      mimeType,
+      updatedAt: Date.now(),
+    };
+
+    if (storageType === 'indexeddb' && db) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([PROJECT_FILES_STORE], 'readwrite');
+        const store = transaction.objectStore(PROJECT_FILES_STORE);
+        const request = store.put(fileRecord);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] File added to project: ${path}`);
+    return { success: true, id: fileRecord.id };
+  } catch (error) {
+    console.error('[Saved Projects] Error adding project file:', error);
+    return { success: false, error: error.message || 'Failed to add file' };
+  }
+}
+
+/**
+ * Get all files in a project
+ * @param {string} projectId - Project ID
+ * @returns {Promise<Array>}
+ */
+export async function getProjectFiles(projectId) {
+  try {
+    await ensureInitialized();
+
+    if (storageType === 'indexeddb' && db) {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([PROJECT_FILES_STORE], 'readonly');
+        const store = transaction.objectStore(PROJECT_FILES_STORE);
+        const index = store.index('projectId');
+        const request = index.getAll(projectId);
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    return [];
+  } catch (error) {
+    console.error('[Saved Projects] Error getting project files:', error);
+    return [];
+  }
+}
+
+/**
+ * Get a specific file from a project by path
+ * @param {string} projectId - Project ID
+ * @param {string} path - File path
+ * @returns {Promise<Object|null>}
+ */
+export async function getProjectFileByPath(projectId, path) {
+  try {
+    const files = await getProjectFiles(projectId);
+    return files.find((f) => f.path === path) || null;
+  } catch (error) {
+    console.error('[Saved Projects] Error getting project file:', error);
+    return null;
+  }
+}
+
+/**
+ * Delete a file from a project
+ * @param {string} fileId - File ID
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteProjectFile(fileId) {
+  try {
+    await ensureInitialized();
+
+    if (storageType === 'indexeddb' && db) {
+      const file = await new Promise((resolve, reject) => {
+        const transaction = db.transaction([PROJECT_FILES_STORE], 'readonly');
+        const store = transaction.objectStore(PROJECT_FILES_STORE);
+        const request = store.get(fileId);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+
+      if (file && file.assetId) {
+        await deleteAsset(file.assetId);
+      }
+
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([PROJECT_FILES_STORE], 'readwrite');
+        const store = transaction.objectStore(PROJECT_FILES_STORE);
+        const request = store.delete(fileId);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] File deleted: ${fileId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error deleting project file:', error);
+    return { success: false, error: error.message || 'Failed to delete file' };
+  }
+}
+
+/**
+ * Delete all files for a project
+ * @param {string} projectId - Project ID
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteAllProjectFiles(projectId) {
+  try {
+    const files = await getProjectFiles(projectId);
+    for (const file of files) {
+      await deleteProjectFile(file.id);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error deleting all project files:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================================
+// Asset Operations (v2) - Binary storage for overlays and large files
+// ============================================================================
+
+/**
+ * Store a binary asset
+ * @param {Object} options - Asset details
+ * @param {Blob|ArrayBuffer} options.data - Binary data
+ * @param {string} options.mimeType - MIME type
+ * @param {string} [options.fileName] - Original file name
+ * @returns {Promise<{success: boolean, id?: string, error?: string}>}
+ */
+export async function storeAsset({ data, mimeType, fileName = null }) {
+  try {
+    await ensureInitialized();
+
+    const asset = {
+      id: generateId('asset'),
+      data: data instanceof Blob ? data : new Blob([data], { type: mimeType }),
+      mimeType,
+      fileName,
+      size: data instanceof Blob ? data.size : data.byteLength,
+      createdAt: Date.now(),
+    };
+
+    if (storageType === 'indexeddb' && db) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([ASSETS_STORE], 'readwrite');
+        const store = transaction.objectStore(ASSETS_STORE);
+        const request = store.put(asset);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    if (import.meta.env.DEV) {
+      console.log(
+        `[Saved Projects] Asset stored: ${asset.id} (${asset.size} bytes)`
+      );
+    }
+    return { success: true, id: asset.id };
+  } catch (error) {
+    console.error('[Saved Projects] Error storing asset:', error);
+    return { success: false, error: error.message || 'Failed to store asset' };
+  }
+}
+
+/**
+ * Get an asset by ID
+ * @param {string} id - Asset ID
+ * @returns {Promise<Object|null>}
+ */
+export async function getAsset(id) {
+  try {
+    await ensureInitialized();
+
+    if (storageType === 'indexeddb' && db) {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([ASSETS_STORE], 'readonly');
+        const store = transaction.objectStore(ASSETS_STORE);
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[Saved Projects] Error getting asset:', error);
+    return null;
+  }
+}
+
+/**
+ * Delete an asset by ID
+ * @param {string} id - Asset ID
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteAsset(id) {
+  try {
+    await ensureInitialized();
+
+    if (storageType === 'indexeddb' && db) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction([ASSETS_STORE], 'readwrite');
+        const store = transaction.objectStore(ASSETS_STORE);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] Asset deleted: ${id}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error deleting asset:', error);
+    return { success: false, error: error.message || 'Failed to delete asset' };
+  }
+}
+
+// ============================================================================
+// Overlay Storage (v2) - Store overlay images as project assets
+// ============================================================================
+
+/**
+ * Save an overlay to a project
+ * @param {string} projectId - Project ID
+ * @param {Object} options - Overlay details
+ * @param {string} options.fileName - File name
+ * @param {Blob|ArrayBuffer} options.data - Image data
+ * @param {string} options.mimeType - MIME type
+ * @param {number} [options.aspectRatio] - Aspect ratio
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function saveOverlayToProject(
+  projectId,
+  { fileName, data, mimeType, aspectRatio = null }
+) {
+  try {
+    await ensureInitialized();
+
+    const project = await getProject(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const assetResult = await storeAsset({ data, mimeType, fileName });
+    if (!assetResult.success) {
+      return assetResult;
+    }
+
+    const fileResult = await addProjectFile({
+      projectId,
+      path: `overlays/${fileName}`,
+      kind: 'image',
+      assetId: assetResult.id,
+      mimeType,
+    });
+    if (!fileResult.success) {
+      return fileResult;
+    }
+
+    project.overlayFiles = project.overlayFiles || {};
+    project.overlayFiles[fileName] = {
+      assetId: assetResult.id,
+      fileId: fileResult.id,
+      mimeType,
+      aspectRatio,
+      addedAt: Date.now(),
+    };
+
+    const projectToSave = { ...project };
+    if (
+      projectToSave.projectFiles &&
+      typeof projectToSave.projectFiles === 'object'
+    ) {
+      projectToSave.projectFiles = JSON.stringify(projectToSave.projectFiles);
+    }
+
+    if (storageType === 'indexeddb' && db) {
+      await saveToIndexedDB(projectToSave);
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] Overlay saved to project: ${fileName}`);
+    return { success: true, assetId: assetResult.id };
+  } catch (error) {
+    console.error('[Saved Projects] Error saving overlay to project:', error);
+    return { success: false, error: error.message || 'Failed to save overlay' };
+  }
+}
+
+/**
+ * Get overlays from a project
+ * @param {string} projectId - Project ID
+ * @returns {Promise<Array>} Array of overlay metadata with asset data
+ */
+export async function getProjectOverlays(projectId) {
+  try {
+    const project = await getProject(projectId);
+    if (!project || !project.overlayFiles) {
+      return [];
+    }
+
+    const overlays = [];
+    for (const [fileName, metadata] of Object.entries(project.overlayFiles)) {
+      const asset = await getAsset(metadata.assetId);
+      overlays.push({
+        fileName,
+        ...metadata,
+        data: asset?.data || null,
+      });
+    }
+
+    return overlays;
+  } catch (error) {
+    console.error('[Saved Projects] Error getting project overlays:', error);
+    return [];
+  }
+}
+
+// ============================================================================
+// Preset Storage (v2) - Store presets as project files
+// ============================================================================
+
+/**
+ * Save a preset to a project
+ * @param {string} projectId - Project ID
+ * @param {Object} preset - Preset data
+ * @param {string} preset.name - Preset name
+ * @param {Object} preset.parameters - Parameter values
+ * @param {string} [preset.description] - Optional description
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function savePresetToProject(
+  projectId,
+  { name, parameters, description = '' }
+) {
+  try {
+    await ensureInitialized();
+
+    const project = await getProject(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const presetContent = JSON.stringify(
+      {
+        name,
+        parameters,
+        description,
+        created: Date.now(),
+      },
+      null,
+      2
+    );
+
+    const safeFileName = name.replace(/[^a-zA-Z0-9_-]/g, '_') + '.json';
+    const path = `presets/${safeFileName}`;
+
+    const existingFile = await getProjectFileByPath(projectId, path);
+    if (existingFile) {
+      existingFile.textContent = presetContent;
+      existingFile.updatedAt = Date.now();
+
+      if (storageType === 'indexeddb' && db) {
+        await new Promise((resolve, reject) => {
+          const transaction = db.transaction(
+            [PROJECT_FILES_STORE],
+            'readwrite'
+          );
+          const store = transaction.objectStore(PROJECT_FILES_STORE);
+          const request = store.put(existingFile);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      }
+    } else {
+      await addProjectFile({
+        projectId,
+        path,
+        kind: 'json',
+        textContent: presetContent,
+        mimeType: 'application/json',
+      });
+    }
+
+    project.presets = project.presets || [];
+    const existingIndex = project.presets.findIndex((p) => p.name === name);
+    const presetMeta = { name, path, addedAt: Date.now() };
+
+    if (existingIndex >= 0) {
+      project.presets[existingIndex] = presetMeta;
+    } else {
+      project.presets.push(presetMeta);
+    }
+
+    const projectToSave = { ...project };
+    if (
+      projectToSave.projectFiles &&
+      typeof projectToSave.projectFiles === 'object'
+    ) {
+      projectToSave.projectFiles = JSON.stringify(projectToSave.projectFiles);
+    }
+
+    if (storageType === 'indexeddb' && db) {
+      await saveToIndexedDB(projectToSave);
+    }
+
+    if (import.meta.env.DEV)
+      console.log(`[Saved Projects] Preset saved to project: ${name}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[Saved Projects] Error saving preset to project:', error);
+    return { success: false, error: error.message || 'Failed to save preset' };
+  }
+}
+
+/**
+ * Get presets from a project
+ * @param {string} projectId - Project ID
+ * @returns {Promise<Array>} Array of preset objects
+ */
+export async function getPresetsFromProject(projectId) {
+  try {
+    const project = await getProject(projectId);
+    if (!project || !project.presets) {
+      return [];
+    }
+
+    const presets = [];
+    for (const presetMeta of project.presets) {
+      const file = await getProjectFileByPath(projectId, presetMeta.path);
+      if (file && file.textContent) {
+        try {
+          const presetData = JSON.parse(file.textContent);
+          presets.push({
+            ...presetData,
+            path: presetMeta.path,
+          });
+        } catch (_e) {
+          console.warn(
+            `[Saved Projects] Failed to parse preset: ${presetMeta.path}`
+          );
+        }
+      }
+    }
+
+    return presets;
+  } catch (error) {
+    console.error('[Saved Projects] Error getting project presets:', error);
+    return [];
+  }
+}

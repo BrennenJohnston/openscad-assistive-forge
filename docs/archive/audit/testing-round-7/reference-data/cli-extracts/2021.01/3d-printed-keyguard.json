@@ -1,0 +1,31 @@
+﻿{
+    "openscad_version":  "2021.01",
+    "backend":  "CGAL",
+    "scenario_id":  "3d-printed-keyguard",
+    "parameters":  {
+                       "generate":  "keyguard",
+                       "type_of_keyguard":  "3D-Printed"
+                   },
+    "console":  {
+                    "echo_lines":  [
+
+                                   ],
+                    "warnings":  [
+                                     "WARNING: Viewall and autocenter disabled in favor of $vp*"
+                                 ],
+                    "errors":  [
+
+                               ]
+                },
+    "geometry":  {
+                     "type":  "3D",
+                     "vertices":  5658,
+                     "facets":  3247,
+                     "render_time_s":  39.141
+                 },
+    "face_colors":  "not_available_cgal_backend",
+    "exports":  {
+                    "off_bytes":  328303,
+                    "stl_bytes":  1795256
+                }
+}

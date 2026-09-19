@@ -1,0 +1,2172 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* ============================================================================
+   Classic Mode — desktop-OpenSCAD appearance and layout
+
+   Three layers, in order:
+
+     1. APPEARANCE  Classic re-points the app's own design tokens at a
+        desktop-OpenSCAD palette (neutral Windows grays, blue selection,
+        square corners, flat surfaces). Because every component already
+        paints from those tokens, the whole shell changes look without
+        touching components.css. Classic is deliberately ONE appearance:
+        the light/dark/high-contrast toggles are hidden here and the
+        tokens are literals, so a dark or high-contrast preference left
+        over from the custom modes cannot leak in. Owner decision,
+        2026-08-05 — dark and high contrast stay available outside
+        Classic, and entering Classic announces that.
+
+     2. LAYOUT      The desktop dock grid: editor | display | customizer
+        over a console row, driven by data-attributes on <body> so hidden
+        panes give their tracks back.
+
+     3. DENSITY     body[data-classic-density] mirrors the Simplified /
+        Standard choice inside Classic. Simplified drops the code-facing
+        panes and the programmer buttons; Standard is the full shell.
+
+   Every rule is keyed off body[data-ui-mode='classic'] so the other modes
+   are pixel-identical with this file loaded.
+   ============================================================================ */
+
+/* ============================================================================
+   LAYER 1 — Desktop appearance
+   ============================================================================
+   Contrast (verified, WCAG 2.2):
+     #1a1a1a on #ffffff  16.1:1   text            AAA
+     #1a1a1a on #f0f0f0  14.0:1   chrome text     AAA
+     #5a5a5a on #ffffff   7.0:1   muted text      AAA
+     #ffffff on #0067c0   5.7:1   text on accent  AA
+     #0a55a8 on #ffffff   7.3:1   accent text     AAA
+     #858585 on #ffffff   3.7:1   control borders  SC 1.4.11
+     #858585 on #f0f0f0   3.2:1   control borders  SC 1.4.11
+   ============================================================================ */
+
+body[data-ui-mode='classic'] {
+  /* Surfaces: Qt window gray for chrome, white for dock bodies */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f0f0f0;
+  --color-bg-tertiary: #e4e4e4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-primary-rgb: 255, 255, 255;
+
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #303030;
+  --color-text-tertiary: #5a5a5a;
+  --color-text-muted: #5a5a5a;
+
+  /* Selection blue replaces the Forge brand yellow everywhere in Classic */
+  --color-accent: #0067c0;
+  --color-accent-hover: #005494;
+  --color-accent-text: #ffffff;
+  --color-accent-subtle: #cfe4f7;
+  --color-accent-fg: #0a55a8;
+  --color-on-accent-subtle: var(--color-accent-fg); /* 5.59:1 on #cfe4f7 */
+  --color-on-accent: #ffffff;
+  --color-brand-yellow: #0067c0;
+
+  --color-border: #858585;
+  --color-border-light: #c4c4c4;
+  --color-border-hover: #0067c0;
+
+  --color-input-bg: #ffffff;
+  --color-input-border: #858585;
+  --color-input-border-focus: #0067c0;
+  --color-hover-bg: #dceaf7;
+  --color-hover-bg-strong: var(--color-border);
+  --color-focus: #0052cc;
+
+  /* Status colors pinned to their light values so a leftover dark or
+     high-contrast preference cannot repaint console output */
+  --color-success: #1a7f37;
+  /* D-46 (UF-25): Classic's own green already measures 5.08:1 against white,
+     so the solid-fill pair keeps it rather than inheriting Forge's. */
+  --color-success-solid: #1a7f37;
+  --color-success-hover: #14682c;
+  --color-success-text: #1a7f37;
+  --color-success-bg: #dff2e1;
+  --color-info: #0a55a8;
+  --color-info-hover: #08447f;
+  --color-info-text: #0a55a8;
+  --color-info-bg: #dceaf7;
+  --color-error: #cc0000;
+  --color-error-hover: #a30000;
+  --color-error-text: #cc0000;
+  --color-error-bg: #fde2e1;
+  --color-warning: #8a6100;
+  --color-warning-hover: #6b4b00;
+  --color-warning-text: #8a6100;
+  --color-warning-bg: #fdf1cd;
+  --color-on-success: #ffffff;
+  --color-on-info: #ffffff;
+  --color-on-error: #ffffff;
+  --color-on-warning: #ffffff;
+
+  /* Qt widgets are square and flat */
+  --border-radius-xs: 2px;
+  --border-radius-sm: 2px;
+  --border-radius-md: 3px;
+  --border-radius-lg: 3px;
+  --shadow-sm: none;
+
+  /* Only :root[data-high-contrast] defines --border-width; pinning it here
+     keeps a leftover high-contrast preference from thickening every border */
+  --border-width: 1px;
+
+  /* Dock grid geometry. Every template variant below reads these, and the
+     resizers write --classic-col-* / --classic-row-bottom back through CSSOM
+     while reading the -min bounds via getComputedStyle — so the widths and
+     their limits exist in exactly one place. */
+  --classic-col-editor: 26%;
+  --classic-col-customizer: 28%;
+  --classic-col-editor-min: 280px;
+  --classic-col-customizer-min: 300px;
+  --classic-col-middle-min: 320px;
+  --classic-row-bottom-min: 120px;
+  /* The narrowest a bottom-strip pane may be squeezed before the strip
+     scrolls instead (F7). Sized to fit the new panels' label column plus a
+     usable control beside it, and kept as low as that allows so the strip
+     scrolls as rarely as possible. Below this the panels' controls become
+     unusable rather than merely cramped.
+
+     The ladder this produces on a 1280px window: the default two panes fit
+     with room to spare, three fit exactly, and only a fourth makes the strip
+     scroll — at which point _revealPane scrolls the newly shown one into
+     view so the menu item never looks like it did nothing. */
+  --classic-strip-pane-min: 190px;
+  /* The default lives in its own token so the stow rules below can restore
+     it after the empty-bottom rule zeroes --classic-row-bottom (UF-2b).
+     0.65fr, up from 0.45fr, is Q-20e: the owner chose a taller default strip
+     (~60px more log at a 900px window) over compressing the Console's filter
+     chrome. A user-dragged height still wins — the resizer writes
+     --classic-row-bottom directly and parks it across a stow (D-8). */
+  --classic-row-bottom-default: minmax(var(--classic-row-bottom-min), 0.65fr);
+  --classic-row-bottom: var(--classic-row-bottom-default);
+  /* Floor for the 3D view, so dragging the strip up cannot reduce the
+     viewport to a sliver. Owner-approved 2026-08-06. */
+  --classic-row-display-min: 240px;
+  /* The 3D view toolbar is a thin strip; its height follows the touch-target
+     token plus its padding, so it stays one row on every pointer type. */
+  --classic-camera-bar-h: calc(var(--size-touch-target) + var(--space-xs));
+  --classic-resizer-track: 6px;
+  /* The horizontal separator carries its own thickness: see its rule below —
+     both its neighbours are interactive, so the track IS the pointer target
+     rather than a thin handle inside a larger invisible zone. */
+  --classic-resizer-track-h: 12px;
+  --classic-resizer-hit: var(--size-touch-target);
+  /* How far a resizer's hit zone may reach toward an INTERACTIVE neighbour:
+     the CodeMirror scroller, the Customizer's controls, the strip's pane
+     titlebars. The zone keeps its full size by expanding further on the
+     other side, which is always the canvas — orbit stays available across
+     the rest of the viewport, so that overhang is the accepted deviation. */
+  --classic-resizer-hit-clip: 4px;
+  --classic-resizer-hit-free: calc(
+    var(--classic-resizer-hit) - var(--classic-resizer-track) -
+      var(--classic-resizer-hit-clip)
+  );
+}
+
+/* The high-contrast control rule outranks a body-scoped one, so it is
+   named explicitly rather than fought with specificity hacks. */
+:root[data-high-contrast='true']
+  body[data-ui-mode='classic']
+  :is(.btn, input, select, textarea) {
+  border-width: var(--border-width-thin);
+}
+
+/* Flat docks: the desktop draws 1px frames, never drop shadows */
+body[data-ui-mode='classic'] .param-panel,
+body[data-ui-mode='classic'] .preview-panel,
+body[data-ui-mode='classic'] .classic-slot,
+body[data-ui-mode='classic'] .app-header {
+  box-shadow: none;
+}
+
+/* ============================================================================
+   LAYER 2a — Window chrome: title bar, menu bar, toolbar
+   ============================================================================ */
+
+/* Title bar: the hero header slims to a desktop caption strip */
+body[data-ui-mode='classic'] .app-header {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2xs) var(--space-sm);
+  padding-left: calc(var(--space-sm) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-sm) + env(safe-area-inset-right, 0px));
+}
+
+body[data-ui-mode='classic'] .app-tagline {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .header-logo {
+  width: 20px;
+  height: 20px;
+}
+
+body[data-ui-mode='classic'] .app-header h1 {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-primary);
+}
+
+/* "<file>.scad — OpenSCAD Assistive Forge", the desktop caption format */
+.classic-window-title {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-window-title {
+  display: inline;
+}
+
+body[data-ui-mode='classic'] .header-controls .btn {
+  min-height: var(--size-touch-target);
+}
+
+/* Menu bar: flat text items, no boxes, hover highlight only */
+body[data-ui-mode='classic'] #workflowProgress {
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--space-2xs);
+}
+
+body[data-ui-mode='classic'] .toolbar-menu-bar {
+  gap: 0;
+}
+
+body[data-ui-mode='classic'] .toolbar-menu-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  font-weight: var(--font-weight-normal);
+  min-height: 26px;
+  padding: var(--space-2xs) var(--space-sm);
+}
+
+body[data-ui-mode='classic'] .toolbar-menu-btn:hover,
+body[data-ui-mode='classic'] .toolbar-menu-btn[aria-expanded='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-border-light);
+}
+
+/* The 26px menu bar is desktop authenticity for mouse pointers only —
+   fingers get the full touch target (a11y rule 4) */
+@media (pointer: coarse) {
+  body[data-ui-mode='classic'] .toolbar-menu-btn {
+    min-height: var(--size-touch-target);
+  }
+}
+
+/* Menus drop under their own menu-bar button, content-sized, like a desktop
+   popup. The anchor comes from toolbar-menu-controller.js; the fallbacks
+   keep the panel on screen if it ever opens without one. */
+body[data-ui-mode='classic'] .toolbar-menu-content {
+  position: absolute;
+  left: var(--menu-anchor-x, 0);
+  top: var(--menu-anchor-y, 0);
+  margin-top: 0;
+  min-width: 200px;
+  max-width: min(420px, calc(100vw - var(--menu-anchor-x, 0px) - 8px));
+  max-height: calc(100vh - var(--menu-anchor-y, 0px) - 8px);
+  overflow-y: auto;
+  border-radius: 0;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 28%);
+}
+
+/* toolbar-menu.css clears the shared .modal-overlay background but not its
+   backdrop-filter, so an open menu blurs the whole app. A desktop menu
+   leaves the window alone. */
+body[data-ui-mode='classic'] .toolbar-menu-modal .modal-overlay {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Desktop menus have no title bar. The list's own aria-label carries the
+   accessible name, and the ✕ was already tabindex="-1" — Escape and a click
+   outside still close, exactly as a native menu does. */
+body[data-ui-mode='classic'] .toolbar-menu-header {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .toolbar-menu-body {
+  padding: var(--space-2xs) 0;
+}
+
+/* Preferences anchors over the editor column like the desktop's own dialog,
+   and its backdrop goes fully clear, so the 3D view stays visible and
+   live-previews scheme changes beside the open dialog (U-15a, Q-31a).
+   Modal semantics are untouched — focus trap, Escape, click-outside —
+   only the geometry moves. Classic is gated to >=1024 desktop-shaped
+   viewports (U-10), so phone modal layouts never meet these rules. */
+body[data-ui-mode='classic'] #preferencesModal {
+  justify-content: flex-start;
+  padding-left: calc(var(--space-lg) + env(safe-area-inset-left, 0px));
+}
+
+/* Measured against the canvas: a centered dialog covers 100% of it at any
+   usable width, so only left-anchoring works. 560px beside a 1400 window
+   leaves two thirds of the canvas clear; 480px at the 1024 gate minimum
+   leaves about half. The tab row wraps at the narrow end; the APG tab
+   pattern is unaffected by wrapping. */
+body[data-ui-mode='classic']
+  #preferencesModal
+  .modal-content.preferences-modal-content {
+  width: clamp(480px, 40vw, 560px);
+  max-width: 560px;
+}
+
+body[data-ui-mode='classic'] #preferencesModal .modal-overlay {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Icon toolbar (C6) — desktop OpenSCAD's second row, docked under the menu
+   bar. Hidden outside classic and via View > Hide Toolbar. */
+.classic-toolbar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+}
+
+body[data-ui-mode='classic'][data-classic-toolbar-hidden='true']
+  .classic-toolbar {
+  display: none;
+}
+
+/* A chrome-free welcome (U-22, UF-13): on the welcome surface the icon
+   toolbar has nothing to act on, so it hides the way the menu bar already
+   does (applyToolbarModeVisibility). display:none, not visually-hidden —
+   a hidden bar must not stay Tab-reachable. The View > Hide Classic
+   Toolbar preference above is a separate condition and stays untouched. */
+body[data-ui-mode='classic'][data-app-surface='welcome'] .classic-toolbar {
+  display: none;
+}
+
+/* Editor toolbar (D1). Lives inside #expertModePanel so it travels into the
+   Classic editor slot with the panel; the Forge layouts keep their own
+   .expert-mode-header and never show this. Group hairlines come from the
+   shared .classic-tb-group rules below. */
+.classic-editor-toolbar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+/* A toolbar button with no upstream glyph shows its label as text instead */
+body[data-ui-mode='classic'] .classic-tb-btn--text {
+  width: auto;
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+/* Disabled-with-reason buttons stay focusable, so they need a resting look
+   that reads as unavailable without relying on colour alone (the icon is
+   dimmed AND the cursor changes). */
+body[data-ui-mode='classic'] .classic-tb-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+body[data-ui-mode='classic'] .classic-tb-btn[aria-disabled='true']:hover {
+  background: transparent;
+}
+
+body[data-ui-mode='classic'] .classic-tb-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+}
+
+/* Desktop toolbars separate groups with a hairline, not whitespace */
+body[data-ui-mode='classic'] .classic-tb-group + .classic-tb-group {
+  margin-left: var(--space-xs);
+  padding-left: var(--space-xs);
+  border-left: 1px solid var(--color-border-light);
+}
+
+body[data-ui-mode='classic'] .classic-tb-btn {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xs);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-xs);
+}
+
+body[data-ui-mode='classic'] .classic-tb-btn:hover:not(:disabled) {
+  background: var(--color-hover-bg);
+  border-color: var(--color-border-light);
+}
+
+body[data-ui-mode='classic'] .classic-tb-text-btn,
+body[data-ui-mode='classic'] .classic-grid-select {
+  min-height: var(--size-touch-target);
+}
+
+/* The bed-size select is the only wide control on the row; capping it keeps
+   the later toolbar groups from wrapping onto a second line */
+body[data-ui-mode='classic'] .classic-grid-select {
+  max-width: 230px;
+}
+
+body[data-ui-mode='classic'] .classic-toolbar [aria-pressed='true'] {
+  background-color: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+}
+
+/* ============================================================================
+   LAYER 2b — Dock grid
+   ============================================================================ */
+
+.classic-slot {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-slot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+}
+
+/* Desktop shell grid, matching the owner's desktop screenshots: the editor
+   runs full height down the left, the 3D view sits centre with the camera bar
+   along its bottom edge, the Console/Error-Log strip spans between the editor
+   and the right column, and the Customizer owns the right column with
+   Viewport-Control beneath it.
+
+   The areas string is written ONCE and never overridden. Every arrangement is
+   expressed by changing track SIZES only, driven by the
+   data-classic-field-<name> occupancy attributes the layout controller stamps:
+   an empty field collapses its track to zero and its slot is display:none, so
+   no combination of hidden panes can leave a stray auto-placed cell. That is
+   what keeps this from needing one hand-written template per combination. */
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] .main-interface {
+    display: grid;
+    grid-template-columns:
+      minmax(var(--classic-col-editor-min), var(--classic-col-editor))
+      var(--classic-resizer-track)
+      minmax(var(--classic-col-middle-min), 1fr)
+      var(--classic-resizer-track)
+      minmax(var(--classic-col-customizer-min), var(--classic-col-customizer));
+    /* The camera-bar row is min-content: zero until sub-plan E fills it. */
+    grid-template-rows: minmax(0, 1fr) min-content var(--classic-row-bottom);
+    grid-template-areas:
+      'editor sep1 display sep2 customizer'
+      'editor sep1 camerabar sep2 customizer'
+      'editor sep1 bottom sep2 customizer';
+    gap: 1px;
+  }
+
+  /* Empty left field: the editor track and its resizer collapse. */
+  body[data-ui-mode='classic'][data-classic-field-left='empty']
+    .main-interface {
+    grid-template-columns:
+      0
+      0
+      minmax(var(--classic-col-middle-min), 1fr)
+      var(--classic-resizer-track)
+      minmax(var(--classic-col-customizer-min), var(--classic-col-customizer));
+  }
+
+  /* Empty right column: both its fields are empty, so the customizer track
+     and its resizer collapse. */
+  body[data-ui-mode='classic'][data-classic-field-right-top='empty'][data-classic-field-right-bottom='empty']
+    .main-interface {
+    grid-template-columns:
+      minmax(var(--classic-col-editor-min), var(--classic-col-editor))
+      var(--classic-resizer-track)
+      minmax(var(--classic-col-middle-min), 1fr)
+      0
+      0;
+  }
+
+  body[data-ui-mode='classic'][data-classic-field-left='empty'][data-classic-field-right-top='empty'][data-classic-field-right-bottom='empty']
+    .main-interface {
+    grid-template-columns: 0 0 minmax(var(--classic-col-middle-min), 1fr) 0 0;
+  }
+
+  /* Empty bottom field: the strip row collapses. */
+  body[data-ui-mode='classic'][data-classic-field-bottom='empty']
+    .main-interface {
+    --classic-row-bottom: 0;
+  }
+
+  /* A stowed strip reports its field 'empty', so the empty-bottom rule below
+     zeroes the row (UF-2b — the fold's keep-the-titlebars look is superseded
+     by Q-20c's stow-to-edge-tab). One case must claw the height back: the
+     lower-right field shares row 3, so while IT is occupied the row keeps
+     its default size and the freed strip cell hosts the bottom un-stow tab. */
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true'][data-classic-field-right-bottom='occupied']
+    .main-interface {
+    --classic-row-bottom: var(--classic-row-bottom-default);
+  }
+
+  body[data-ui-mode='classic'] .preview-panel {
+    grid-area: display;
+  }
+
+  body[data-ui-mode='classic'] .classic-dock-field--left {
+    grid-area: editor;
+  }
+
+  body[data-ui-mode='classic'] .classic-camera-bar {
+    grid-area: camerabar;
+  }
+
+  body[data-ui-mode='classic'] .classic-bottom-strip {
+    grid-area: bottom;
+    /* The strip separator shares this grid area and rides its top edge, so
+       the panes start below the track instead of under it — otherwise it
+       clips their titlebar text. */
+    padding-top: var(--classic-resizer-track-h);
+  }
+
+  body[data-ui-mode='classic'] .param-panel {
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  body[data-ui-mode='classic'] .classic-dock-field--right-top {
+    grid-area: customizer;
+  }
+
+  /* Viewport-Control shares the right column, taking the bottom row only
+     while it is occupied; until then the Customizer keeps the whole column
+     exactly as it does today. */
+  body[data-ui-mode='classic'] .classic-dock-field--right-bottom {
+    grid-column: customizer-start / customizer-end;
+    grid-row: 3;
+  }
+
+  /* The second selector (UF-2a): a STOWED lower-right field keeps the
+     Customizer pinned to rows 1-2 as well, so the freed row 3 stays clear for
+     the un-stow tab — expanding into it would put the tab on top of live
+     Customizer controls. */
+  body[data-ui-mode='classic'][data-classic-field-right-bottom='occupied']
+    .classic-dock-field--right-top,
+  body[data-ui-mode='classic'][data-classic-stow-right-bottom='true']
+    .classic-dock-field--right-top {
+    grid-row: 1 / 3;
+  }
+
+  /* Split.js is destroyed on entering Classic; hide any leftover gutter so
+     the grid never places it as a stray cell */
+  body[data-ui-mode='classic'] .main-interface > .gutter {
+    display: none;
+  }
+}
+
+/* A dock field holds whichever panels the model has placed there (B6). Two
+   panels in one field stack down the cell; the bottom strip overrides the
+   direction to a row below, which is what keeps its panes side by side. */
+body[data-ui-mode='classic'] .classic-dock-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  gap: 1px;
+}
+
+body[data-ui-mode='classic'] .classic-dock-field > * {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ── Merged fields: dock tab groups (B7) ─────────────────────────────────────
+   Two panels sharing one cell become a real tab group with ONE shared bar:
+   the tablist, then the active panel's own titlebar so its fold/close buttons
+   stay live. The tab already carries the name, so the title text inside the
+   bar is hidden rather than read out twice.
+
+   Classic-owned: nothing here touches .console-view-tabs, the Forge console's
+   own tablist, which Classic hides (D-9). */
+body[data-ui-mode='classic'] .classic-dock-tabgroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-primary);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tabgroup > .classic-slot,
+body[data-ui-mode='classic'] .classic-dock-tabgroup > .param-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+}
+
+/* An unselected tabpanel gives up its space. .classic-slot's display:flex
+   would otherwise beat the [hidden] default. */
+body[data-ui-mode='classic'] .classic-dock-tabgroup > [hidden] {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tabbar {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-xs);
+  min-width: 0;
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tablist {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* The shared bar's titlebar is the active panel's own, moved here. It keeps
+   its buttons and gives up its name to the selected tab. */
+body[data-ui-mode='classic'] .classic-dock-tabbar > .classic-pane-titlebar {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+
+body[data-ui-mode='classic']
+  .classic-dock-tabbar
+  > .classic-pane-titlebar
+  > .classic-pane-title {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab {
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab[aria-selected='true'] {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  /* Selection is carried by more than colour: the selected tab is the one
+     joined to the panel below it. */
+  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+  font-weight: var(--font-weight-medium);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab:hover {
+  background-color: var(--color-hover-bg);
+}
+
+/* Whether the dock is at desktop width, as a value JS can read (B9). The
+   breakpoint keeps ONE definition — here, in the media query below — rather
+   than a second copy in a matchMedia string that could drift from it. */
+body[data-ui-mode='classic'] {
+  --classic-dock-desktop: 0;
+}
+
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] {
+    --classic-dock-desktop: 1;
+  }
+}
+
+/* ── "Move panel" title-bar menus (B8) ───────────────────────────────────────
+   The popup is a child of <body> with position: fixed, because every dock
+   title bar sits inside a slot with overflow-y: auto — an absolutely
+   positioned menu would be clipped by its own pane. It closes on scroll and
+   resize rather than chasing the button around. */
+.classic-panel-menu {
+  position: fixed;
+  z-index: var(--z-index-dropdown);
+  min-width: 12rem;
+  margin: 0;
+  padding: var(--space-2xs) 0;
+  list-style: none;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  /* max-height is set when the menu opens, from the room it actually has */
+  overflow-y: auto;
+}
+
+.classic-panel-menu .classic-panel-menu-sep {
+  border-top: 1px solid var(--color-border-light);
+  margin-top: var(--space-2xs);
+  padding-top: var(--space-2xs);
+}
+
+.classic-panel-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.classic-panel-menu-item:hover {
+  background-color: var(--color-hover-bg);
+}
+
+/* Empty fields hide their container at every breakpoint, so a collapsed track
+   never has a zero-width element painting inside it. */
+body[data-ui-mode='classic'][data-classic-field-left='empty']
+  .classic-dock-field--left,
+body[data-ui-mode='classic'][data-classic-field-right-top='empty']
+  .classic-dock-field--right-top,
+body[data-ui-mode='classic'][data-classic-field-right-bottom='empty']
+  .classic-dock-field--right-bottom,
+body[data-ui-mode='classic'][data-classic-field-bottom='empty']
+  .classic-bottom-strip {
+  display: none;
+}
+
+/* ── Dock splitters (B4) ────────────────────────────────────────────────────
+   A 6px visible track with a larger invisible hit zone via ::before. The zone
+   sits BELOW its interactive neighbours in z-index and never handles wheel
+   events, so scrolling the editor or orbiting the canvas still works where
+   the zones overlap. The editor-side expansion is clipped short of the
+   CodeMirror scroller; the canvas-side overhang is accepted, since orbit
+   remains available across the rest of the viewport. */
+.classic-resizer {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] .classic-resizer {
+    display: block;
+    /* Deliberately NO z-index: a stacking context here would trap the
+       ::before hit zone above the panes it overlaps, and the zone must sit
+       BELOW every interactive neighbour so their clicks win. The 6px track
+       itself occupies its own grid track and overlaps nothing. */
+    position: relative;
+    background-color: var(--color-bg-secondary);
+    border-left: 1px solid var(--color-border-light);
+    border-right: 1px solid var(--color-border-light);
+    touch-action: none;
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer--editor {
+    grid-area: sep1;
+    cursor: col-resize;
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer--customizer {
+    grid-area: sep2;
+    cursor: col-resize;
+  }
+
+  /* The strip separator rides the top edge of the bottom field rather than
+     taking a row of its own — the grid's three rows come straight from the
+     desktop layout and adding a fourth would shift every area assignment.
+
+     It is thicker than the vertical separators on purpose. Both of ITS
+     neighbours are interactive (the 3D view toolbar above, the pane titlebars
+     below), so its hit zone cannot expand into either without stealing their
+     clicks — the track itself has to be the pointer target. */
+  body[data-ui-mode='classic'] .classic-resizer--strip {
+    grid-area: bottom;
+    align-self: start;
+    height: var(--classic-resizer-track-h);
+    width: 100%;
+    cursor: row-resize;
+    border-left: 0;
+    border-right: 0;
+    border-top: 1px solid var(--color-border-light);
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+  }
+
+  /* Each zone is clipped on the side facing an interactive neighbour and
+     expands the balance into the canvas, so it stays a full touch target
+     without ever stealing a click from the editor, the Customizer's controls
+     or the strip's fold button. */
+
+  /* Editor separator: editor to its left, canvas to its right */
+  body[data-ui-mode='classic'] .classic-resizer--editor::before {
+    top: 0;
+    bottom: 0;
+    left: calc(var(--classic-resizer-hit-clip) * -1);
+    right: calc(var(--classic-resizer-hit-free) * -1);
+  }
+
+  /* Customizer separator: canvas to its left, Customizer to its right */
+  body[data-ui-mode='classic'] .classic-resizer--customizer::before {
+    top: 0;
+    bottom: 0;
+    left: calc(var(--classic-resizer-hit-free) * -1);
+    right: calc(var(--classic-resizer-hit-clip) * -1);
+  }
+
+  /* Strip separator: canvas above it, pane titlebars below it */
+  body[data-ui-mode='classic'] .classic-resizer--strip::before {
+    left: 0;
+    right: 0;
+    top: calc(var(--classic-resizer-hit-free) * -1);
+    bottom: calc(var(--classic-resizer-hit-clip) * -1);
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer:hover,
+  body[data-ui-mode='classic'] .classic-resizer:focus-visible {
+    background-color: var(--color-accent);
+  }
+
+  /* The global [tabindex]:focus-visible ring is an outline on a 6px element,
+     which is nearly invisible — the separator gets its own offset ring. */
+  body[data-ui-mode='classic'] .classic-resizer:focus-visible {
+    outline: var(--border-width-thick, 2px) solid var(--color-focus);
+    outline-offset: 1px;
+  }
+
+  /* An empty field has no boundary to drag */
+  body[data-ui-mode='classic'][data-classic-field-left='empty']
+    .classic-resizer--editor,
+  body[data-ui-mode='classic'][data-classic-field-right-top='empty'][data-classic-field-right-bottom='empty']
+    .classic-resizer--customizer,
+  body[data-ui-mode='classic'][data-classic-field-bottom='empty']
+    .classic-resizer--strip {
+    display: none;
+  }
+}
+
+/* ── 3D view toolbar (E5) ───────────────────────────────────────────────────
+   A thin strip along the bottom edge of the 3D view, as on the desktop. Its
+   markup is static in index.html and Classic-only, so it is hidden by default
+   and shown once the layout controller has adopted it into the grid. */
+.classic-camera-bar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-camera-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: var(--classic-camera-bar-h);
+  padding: var(--space-2xs) var(--space-xs);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  /* relative, not static: the disabled-reason sr-only spans are
+     position:absolute, and against <html> they poke past the viewport and
+     hand the page a phantom scrollbar — the same trap the Customizer pane
+     already guards against below. */
+  position: relative;
+}
+
+/* Desktop OpenSCAD keeps each toolbar on ONE row and hides the overflow
+   behind a chevron. Wrapping instead cost up to three rows and ~110px of 3D
+   view at 1024px, so these scroll sideways rather than growing downward.
+   Every button stays reachable: the roving arrow keys traverse the whole
+   toolbar and the browser scrolls a focused button into view, so the keyboard
+   path never depends on the scrollbar. */
+body[data-ui-mode='classic'] .classic-toolbar,
+body[data-ui-mode='classic'] .classic-camera-bar,
+body[data-ui-mode='classic'] .classic-editor-toolbar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+body[data-ui-mode='classic'] .classic-toolbar .classic-tb-group,
+body[data-ui-mode='classic'] .classic-camera-bar .classic-tb-group,
+body[data-ui-mode='classic'] .classic-editor-toolbar .classic-tb-group {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* Same reason: the toolbars' reason spans are siblings of their buttons,
+   inside a group. */
+body[data-ui-mode='classic'] .classic-tb-group {
+  position: relative;
+}
+
+/* Hide 3D View toolbar (View menu) is per-toolbar, separate from the top
+   toolbar's own pref */
+body[data-ui-mode='classic'][data-classic-camera-bar-hidden='true']
+  .classic-camera-bar {
+  display: none;
+}
+
+/* Hide Editor toolbar (View menu), the other half of upstream's per-toolbar
+   pair. Two attributes on body outrank the single-attribute rule that shows
+   the bar, so this holds wherever that rule is restated. */
+body[data-ui-mode='classic'][data-classic-editor-toolbar-hidden='true']
+  .classic-editor-toolbar {
+  display: none;
+}
+
+/* No expanded hit zones on these buttons: they already meet the touch-target
+   token through .classic-tb-btn, and the bar is now a scroll container, which
+   would clip any overflow expansion anyway. */
+
+/* ── Bottom strip: side-by-side panes between editor and right column ────── */
+body[data-ui-mode='classic'] .classic-bottom-strip {
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  min-width: 0;
+  gap: 1px;
+  background-color: var(--color-border);
+  /* Four open panes will not fit their floors on a narrow desktop; scrolling
+     the strip keeps every pane usable instead of making all four unusable. */
+  overflow-x: auto;
+}
+
+body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot,
+body[data-ui-mode='classic'] .classic-bottom-strip > .classic-dock-tabgroup {
+  flex: 1 1 50%;
+  /* A floor, not zero (F7). With only Console and Error-Log open, min-width:0
+     was harmless. Turning on Animate and Font List puts FOUR panes in the
+     strip, and at zero they squeezed to ~150px each — the Font List's table
+     became unreachable and its filter text was clipped mid-word. Past the
+     floor the strip scrolls sideways instead, the same answer R2a gave the
+     toolbars rather than letting them wrap. */
+  min-width: var(--classic-strip-pane-min);
+  min-height: 0;
+}
+
+/* Animate and Font List are reserved fields until sub-plan F builds their
+   panels; an empty titled pane would read as a dead control. */
+body[data-ui-mode='classic'] .classic-animate-slot,
+body[data-ui-mode='classic'] .classic-font-list-slot {
+  display: none;
+}
+
+body[data-ui-mode='classic'][data-classic-animate-visible='true']
+  .classic-animate-slot,
+body[data-ui-mode='classic'][data-classic-font-list-visible='true']
+  .classic-font-list-slot {
+  display: flex;
+}
+
+body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
+  flex: 1;
+  min-height: 0;
+  /* The panel scrolls its entries region, not itself (P7b): the Show row has
+     to stay put while the table under it moves. max-height would fight the
+     slot, so it goes too. */
+  max-height: none;
+}
+
+/* The Console pane, the same answer its neighbour has had since P7b (D-27).
+   The Log view's box carried a fixed max-height that knew nothing about the
+   pane it had been docked into, so the pane handed it 146px at 1400 wide and
+   60px at 1024 and clipped the rest — with `.classic-fold-inner`'s
+   overflow:hidden above it and no scrollable ancestor anywhere, the clipped
+   part was simply unreachable, and render()'s scroll-to-newest was driving
+   every fresh message straight into it. The console read as empty.
+
+   Every link in the chain has to give up its content height for the flex to
+   reach the log. Two of them needed help. The <details> is not a direct child
+   of .classic-slot (the fold wrapper sits between), so the old
+   .classic-slot > details rule never applied to it - to anything, in fact,
+   which is why AF-8 deleted it. And a <details> does not
+   make its own content a flex item — MEASURED: with display:flex on the panel
+   and flex:1/min-height:0 on .console-content, the content still laid out at
+   its full 648px inside a 225px panel. Positioning the content against the
+   panel is what makes the panel's height reach it, and unlike
+   ::details-content it needs no pseudo-element support. The filter row keeps
+   its natural height; only the message list flexes. */
+body[data-ui-mode='classic'] .classic-console-slot #consolePanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+body[data-ui-mode='classic'] .classic-console-slot .console-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* :not([hidden]) so this never outranks .console-view-panel[hidden]'s
+   display:none — Classic forces the Log tab on entry, but a tabpanel that
+   ignores its own hidden attribute is a trap, not a shortcut. */
+body[data-ui-mode='classic']
+  .classic-console-slot
+  #console-view-log:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+body[data-ui-mode='classic'] .classic-console-slot #console-output {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+@media (max-width: 1023px) {
+  /* The stacked panes are taller than the window, so the column scrolls.
+     Without this the overflow is silently clipped. */
+  body[data-ui-mode='classic'] .main-interface {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* The Customizer joins the stack as a normal pane. Below 768px the custom
+     modes turn .param-panel into an off-canvas drawer (layout.css) whose
+     open button lives in the classic-hidden #actionsBar — without these
+     resets the Customizer is position:fixed off screen with no way to open
+     it, i.e. unreachable on phones. drawer-controller.js additionally
+     refuses to engage while Classic is active. */
+  body[data-ui-mode='classic'] .param-panel {
+    /* relative, not static: the pane's absolutely-positioned sr-only
+       labels must keep resolving against the pane — against <html> they
+       poke past the viewport and hand the page a phantom scrollbar */
+    position: relative;
+    transform: none;
+    width: auto;
+    /* flex-shrink would compress the pane to its borders inside the
+       fixed-height scrolling column — same collapse the preview panel
+       needed guarding against */
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: none;
+    z-index: auto;
+    transition: none;
+    border-right: 0;
+    box-shadow: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Bottom clearance for the custom modes' fixed actions bar — hidden in
+     Classic, so the clearance is just dead space */
+  body[data-ui-mode='classic'] .param-panel .param-panel-body {
+    padding-bottom: 0;
+  }
+
+  /* The drawer's backdrop and body scroll-lock must never engage */
+  body[data-ui-mode='classic'] #drawerBackdrop {
+    display: none !important;
+  }
+
+  body[data-ui-mode='classic'].drawer-open {
+    overflow: auto;
+    position: static;
+    top: auto;
+  }
+
+  body[data-ui-mode='classic'] .classic-slot,
+  body[data-ui-mode='classic'] .classic-dock-tabgroup {
+    flex: 0 0 auto;
+    max-height: 40vh;
+  }
+
+  /* Stack order: display first, then the camera bar it belongs to, then
+     customizer, the bottom strip, and the editor.
+     .preview-panel's flex:1 basis-0 would give the viewport whatever the
+     fixed-height panes leave over — which is nothing once they overflow,
+     collapsing it to a 2px sliver. It gets a real height instead. */
+  body[data-ui-mode='classic'] .preview-panel {
+    order: 1;
+    flex: 0 0 auto;
+    min-height: 45vh;
+  }
+  body[data-ui-mode='classic'] .classic-camera-bar {
+    order: 2;
+    flex: 0 0 auto;
+  }
+  /* The stack orders the FIELDS, not the panels inside them: a panel the user
+     has relocated travels with its field rather than jumping to a fixed place
+     in the stack. */
+  body[data-ui-mode='classic'] .classic-dock-field--right-top {
+    order: 3;
+    flex: 0 0 auto;
+  }
+  body[data-ui-mode='classic'] .classic-bottom-strip {
+    order: 4;
+    flex: 0 0 auto;
+  }
+  body[data-ui-mode='classic'] .classic-dock-field--left {
+    order: 5;
+    flex: 0 0 auto;
+  }
+
+  /* Side by side does not survive a phone width — the strip's panes join the
+     stack, each capped like every other slot (D-6). */
+  body[data-ui-mode='classic'] .classic-bottom-strip {
+    flex-direction: column;
+  }
+  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot,
+  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-dock-tabgroup {
+    flex: 0 0 auto;
+    max-height: 40vh;
+  }
+
+  /* Resizers and Viewport-Control are desktop-only (D-6, D-7); the field that
+     holds Viewport-Control goes with it, so the stack has no empty cell.
+     Relocation goes too (B9): the stack ignores the field map, so a move
+     button here would be a control that does nothing. */
+  body[data-ui-mode='classic'] .classic-resizer,
+  body[data-ui-mode='classic'] .classic-viewport-control-slot,
+  body[data-ui-mode='classic'] .classic-dock-field--right-bottom,
+  body[data-ui-mode='classic'] .classic-panel-menu-btn {
+    display: none;
+  }
+
+  /* ── Field stow in the stack (UF-2c) ──────────────────────────────────
+     There is no edge to stow toward in a scrolling column, so here the
+     rails render as full-width RESTORE BARS in their field's own stack
+     position (they are already flex items of the stacked .main-interface),
+     and a stowed section simply leaves the flow — one tap on its bar
+     brings it back. The occupancy attributes stay truthful below the
+     breakpoint (the controller's desktop gate); only the stow attributes
+     drive this presentation.
+
+     Lower-right is the exception: Viewport-Control does not exist in the
+     stack (D-7), so neither does its tab. */
+  body[data-ui-mode='classic'] .classic-stow-rail {
+    display: none;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-right-top='true']
+    .classic-stow-rail--right {
+    display: flex;
+    order: 3;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .classic-stow-rail--bottom {
+    display: flex;
+    order: 4;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-left='true']
+    .classic-stow-rail--left {
+    display: flex;
+    order: 5;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-left='true']
+    .classic-dock-field--left,
+  body[data-ui-mode='classic'][data-classic-stow-right-top='true']
+    .classic-dock-field--right-top,
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .classic-bottom-strip {
+    display: none;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-tab {
+    writing-mode: horizontal-tb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    width: 100%;
+    min-height: var(--size-touch-target);
+    padding: 0 var(--space-sm);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-tab:hover {
+    background-color: var(--color-hover-bg);
+  }
+
+  body[data-ui-mode='classic']
+    .classic-stow-tab[data-classic-stow-field='right-bottom'] {
+    display: none;
+  }
+}
+
+/* Phone-width trimming. The snap views, projection and overlay toggles are
+   one-tap conveniences duplicated verbatim in the View menu, and together
+   they wrapped the bar to roughly a third of a 375px screen. Dropped here,
+   reachable in the menu.
+
+   These now live on the 3D view toolbar, not the top toolbar — E3 moved
+   them — so the selectors are scoped to it. Preview, Render, View All and
+   the zoom pair stay: they have no one-tap equivalent. */
+@media (max-width: 767px) {
+  body[data-ui-mode='classic']
+    .classic-camera-bar
+    .classic-tb-group[aria-label='Views'],
+  body[data-ui-mode='classic']
+    .classic-camera-bar
+    .classic-tb-group[aria-label='Projection'],
+  body[data-ui-mode='classic']
+    .classic-camera-bar
+    .classic-tb-group[aria-label='Overlays'],
+  body[data-ui-mode='classic'] #classicMeasureDistBtn,
+  body[data-ui-mode='classic'] #classicMeasureAngleBtn {
+    display: none;
+  }
+}
+
+/* Hidden panes give up their space entirely (both breakpoints) */
+body[data-classic-editor-hidden='true'] .classic-editor-slot {
+  display: none !important;
+}
+
+body[data-ui-mode='classic'][data-classic-customizer-hidden='true']
+  .param-panel {
+  display: none !important;
+}
+
+/* ── Pane titlebars (desktop dock look) ─────────────────────────────────── */
+body[data-ui-mode='classic'] .classic-pane-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: 0 var(--space-xs) 0 var(--space-sm);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+body[data-ui-mode='classic'] .classic-pane-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-primary);
+  /* Takes the bar's free space so the controls group at the right edge as they
+     do on the desktop. With space-between and a bare title, two controls were
+     spread across the whole bar and the ⋮ hung in the middle of it (D2). */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body[data-ui-mode='classic'] .classic-pane-btn {
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-xs);
+}
+
+body[data-ui-mode='classic'] .classic-pane-btn:hover {
+  background: var(--color-hover-bg);
+  border-color: var(--color-border-light);
+}
+
+/* ── Fold technique (C10): grid-template-rows 0fr/1fr is animatable ─────── */
+body[data-ui-mode='classic'] .classic-fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--motion-slow) ease;
+  min-height: 0;
+  flex: 1;
+}
+
+body[data-ui-mode='classic'] .classic-fold-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The R2a–UF-1 fold rule stood here (display:none on the folded strip's
+   content — the R-III 2.4.11 fix, TWELVE ghost tab stops measured). UF-2b
+   (Q-20c) superseded the fold with the bottom field's STOW: the whole strip
+   now reports 'empty' and leaves the layout through the same empty-field
+   display:none rule every stowed field uses, which keeps that trap fix and
+   retires the fold-specific selector. */
+
+/* ── Per-panel collapse (D3, a Forge extra — the desktop has no such control) */
+
+/* display:none, not the strip fold's animated grid-template-rows: 0fr. Two
+   reasons, both measured.
+
+   Accessibility first: a 0fr row with overflow:hidden only CLIPS its content.
+   The editor, its toolbar and every button in it keep a place in the
+   accessibility tree and stay reachable by Tab, so a "collapsed" panel would
+   still swallow keystrokes — the trap a disclosure exists to close. Taking the
+   body out of the tree is what <details> does, and what this must do.
+
+   Then the flash: the collapsed pane also gives up its flex share below, so an
+   animated row grew the pane to its full content height first and shrank it
+   from there — 583px → 673px → 39px (measured). Instant collapse has no such
+   frame, and it matches the Customizer's, which cannot animate at all.
+
+   Direct child, so a collapsed panel does not fold a panel nested inside it. */
+body[data-ui-mode='classic'] [data-classic-collapsed='true'] > .classic-fold {
+  display: none;
+}
+
+/* Hiding the body is not enough on its own: a dock field's children are
+   flex: 1 1 0, so a collapsed pane kept its whole share of the column and left
+   a title bar sitting above 900px of nothing (measured). Giving the share up is
+   what lets the panes beside it grow into the space. */
+body[data-ui-mode='classic']
+  .classic-dock-field
+  > [data-classic-collapsed='true'] {
+  flex: 0 0 auto;
+}
+
+/* The strip lays its panes out side by side, so there the share to give up is
+   vertical: the default stretch would hold a collapsed pane at full strip
+   height with an empty body. */
+body[data-ui-mode='classic']
+  .classic-bottom-strip
+  > [data-classic-collapsed='true'] {
+  align-self: flex-start;
+}
+
+/* The Customizer is the Forge parameter panel itself, not a created slot, so it
+   has no .classic-fold at all — its body is several siblings of the title bar.
+   Wrapping them at runtime would mean moving the parameter groups on every
+   Classic entry, so they are hidden where they stand. The title bar itself
+   stays, which is the point of a collapse. Its own bar loses everything below
+   the title (controls, presets, Forge additions); when the Customizer is a
+   merged tab its title bar has moved into the shared bar, and then the whole of
+   #classicCustomizerBar folds away. */
+body[data-ui-mode='classic']
+  #paramPanel[data-classic-collapsed='true']
+  > *:not(#classicCustomizerBar),
+body[data-ui-mode='classic']
+  #paramPanel[data-classic-collapsed='true']
+  #classicCustomizerBar
+  > *:not(.classic-pane-titlebar) {
+  display: none;
+}
+
+/* The ▾/▸ glyph is real text set by the controller, not CSS content: a title
+   bar that has been adopted into a shared tab bar is no longer a descendant of
+   its own panel, and a stylesheet that fails to load must not leave a blank
+   button (R-I). aria-expanded carries the state for a screen reader; the glyph
+   is the same information for eyes (APG disclosure). */
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-ui-mode='classic'] .classic-fold {
+    transition: none;
+  }
+}
+
+/* ── Field stow (UF-2a, U-6/Q-20): edge rails + un-stow tabs ──────────────
+   A stowed field reports its occupancy as 'empty', so the existing empty-field
+   rules collapse its tracks and display:none its container — that is both the
+   space handover and the R-III keyboard-trap fix in one move. What is styled
+   here is only the way back: a labelled tab riding the grid's edge (the Forge
+   Camera-drawer look, Q-20b), one per stowed field. Desktop-only until UF-2c;
+   the stacked block above hides rail and buttons below 1024px. */
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] .main-interface {
+    /* Anchor for the rails. The grid itself is unaffected. */
+    position: relative;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-rail--left,
+  body[data-ui-mode='classic'] .classic-stow-rail--right {
+    position: absolute;
+    top: var(--space-sm);
+    bottom: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    /* Above the 3D view it overlays, below any dropdown or modal. The rail
+       spans the full edge so each tab can align with its field's former rows,
+       but only the TABS may take pointer events — a full-height invisible
+       strip would silently eat orbit drags at the view's edge. */
+    pointer-events: none;
+    z-index: var(--z-index-sticky);
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-rail--left {
+    left: 0;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-rail--right {
+    right: 0;
+  }
+
+  /* The bottom rail is NOT an overlay: the camera bar owns the window's
+     bottom edge, so a floating tab there would sit on live buttons. Instead
+     the rail takes the stowed strip's own grid cell as a slim min-content
+     row — the Forge Actions-drawer look. The stow-bottom row rule sits after
+     the empty-bottom rule, so at equal specificity the min-content wins
+     while the strip is stowed; the rb-occupied variant above (three
+     attributes) beats both. */
+  body[data-ui-mode='classic'] .classic-stow-rail--bottom {
+    display: none;
+    grid-area: bottom;
+    pointer-events: none;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .classic-stow-rail--bottom {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .main-interface {
+    --classic-row-bottom: min-content;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-rail--bottom .classic-stow-tab {
+    writing-mode: horizontal-tb;
+    min-height: var(--size-touch-target);
+    padding: 0 var(--space-sm);
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-tab {
+    /* Vertical text (the rotated-label edge-tab look). inline-flex in a
+       vertical writing mode flows glyph then label top-to-bottom. */
+    writing-mode: vertical-rl;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-width: var(--size-touch-target);
+    min-height: var(--size-touch-target);
+    padding: var(--space-sm) 0;
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  /* The lower-right field's tab rides the BOTTOM of the edge — its own former
+     rows — never the top, where it would sit over the Customizer. */
+  body[data-ui-mode='classic']
+    .classic-stow-tab[data-classic-stow-field='right-bottom'] {
+    margin-top: auto;
+  }
+
+  /* The rail hugs its edge; the tab's outer border would double the grid's. */
+  body[data-ui-mode='classic'] .classic-stow-rail--left .classic-stow-tab {
+    border-left: 0;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-rail--right .classic-stow-tab {
+    border-right: 0;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-tab:hover {
+    background-color: var(--color-hover-bg);
+  }
+
+  /* The arrow stays upright while the label rotates with the tab. */
+  body[data-ui-mode='classic'] .classic-stow-tab .classic-stow-glyph {
+    writing-mode: horizontal-tb;
+  }
+}
+
+/* ── Editor pane: co-exists with the customizer in classic ──────────────── */
+body[data-ui-mode='classic'] .classic-editor-slot .expert-mode-panel {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The slot titlebar already names the pane; the panel's own Forge header
+   (Preview / Exit Code Editor) duplicates the toolbar and the ✕ */
+body[data-ui-mode='classic'] .classic-editor-slot .expert-mode-header {
+  display: none;
+}
+
+/* ── Console pane: the slot titlebar replaces the disclosure summary ────── */
+body[data-ui-mode='classic'] .classic-console-slot > .classic-fold summary {
+  display: none;
+}
+
+/* Classic replaces the Log/Structured tabs with side-by-side Console and
+   Error-Log panes, so the tablist has nothing left to switch between and is
+   hidden outright — a two-tab control where both tabpanels are always shown
+   is noise for a screen-reader user. The Forge layouts keep it untouched;
+   the layout controller resets the selection to Log on entry and restores it
+   on exit (D-9). */
+body[data-ui-mode='classic'] .console-view-tabs {
+  display: none;
+}
+
+/* The Classic-only panel bodies (F3/F4/F5) are declared as static markup in
+   index.html so the dock can move them like any other pane, which means they
+   are in the document in every mode. They are Classic-only this round (D-32),
+   so they are hidden by default and shown once the dock adopts them. Full
+   styling is F7's; this pair is only what keeps a Forge user from seeing a
+   Classic panel. Same shape as .classic-customizer-bar below. */
+.classic-panel-body {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--space-xs);
+}
+
+/* ============================================================================
+   LAYER 2b2 — The three sub-plan F panels (F7)
+   Font List, Viewport-Control and Animate. Structural rules live above with
+   .classic-panel-body; this block is their appearance and their controls.
+   ============================================================================ */
+
+/* Each panel scrolls inside whatever height its dock field has, rather than
+   pushing the field taller. That is what makes the D-6 40vh cap on a stacked
+   narrow window a real cap and not a suggestion. */
+body[data-ui-mode='classic'] .classic-panel-body {
+  overflow: auto;
+  padding: var(--space-xs);
+  font-size: var(--font-size-sm);
+}
+
+/* Upstream groups its controls in titled boxes; <fieldset>/<legend> is the
+   native equivalent, so the grouping reaches assistive tech for free. */
+body[data-ui-mode='classic'] .classic-font-list-group,
+body[data-ui-mode='classic'] .classic-vp-group,
+body[data-ui-mode='classic'] .classic-animate-group {
+  /* Never shrink. The panel body is a flex column, and in a short dock pane
+     every child shrinks by default — which silently collapsed the Font List's
+     table to nothing while the fieldsets below kept their height. The groups
+     keep their natural size and the panel scrolls instead. */
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs);
+  margin: 0 0 var(--space-xs);
+  min-inline-size: 0;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-group > legend,
+body[data-ui-mode='classic'] .classic-vp-group > legend,
+body[data-ui-mode='classic'] .classic-animate-group > legend {
+  padding: 0 var(--space-2xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* One label-and-control row. The label column is fixed so the controls line
+   up down the panel and a value is easy to find by eye. */
+body[data-ui-mode='classic'] .classic-font-list-field,
+body[data-ui-mode='classic'] .classic-vp-field,
+body[data-ui-mode='classic'] .classic-animate-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-2xs);
+  /* In a pane at its narrowest the control drops below its label rather than
+     being squeezed to a few pixels. */
+  flex-wrap: wrap;
+  /* sr-only spans inside these rows are position:absolute; without a
+     positioned ancestor they resolve against <html> and push the page
+     sideways — the 31px phantom-scroll bug R2a paid for twice. */
+  position: relative;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-field > label,
+body[data-ui-mode='classic'] .classic-vp-field > label,
+body[data-ui-mode='classic'] .classic-animate-field > label {
+  flex: 0 0 auto;
+  min-width: 6.5em;
+  color: var(--color-text-secondary);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-field input[type='text'],
+body[data-ui-mode='classic'] .classic-font-list-field select,
+body[data-ui-mode='classic'] .classic-vp-field input,
+body[data-ui-mode='classic'] .classic-animate-field input[type='number'] {
+  min-height: var(--size-touch-target);
+  min-width: 0;
+  /* A small basis, not auto. A number input's intrinsic width is around 200px,
+     which added to the label column overflowed even the right column and made
+     every row wrap onto three lines. With a small basis the control fits
+     beside its label and grows into whatever space is left. */
+  flex: 1 1 6em;
+  padding: 0 var(--space-2xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+/* components.css gives a, button, summary, [role=button] and [tabindex] a
+   global focus ring, but NOT input or select — this codebase styles those per
+   component. These panels are mostly inputs and selects, so they carry their
+   own, using the same token and geometry as the global rule so the ring looks
+   identical wherever the user lands.
+   No transitions or animation are introduced anywhere in this block, so there
+   is nothing for prefers-reduced-motion to switch off. */
+body[data-ui-mode='classic'] .classic-panel-body input:focus-visible,
+body[data-ui-mode='classic'] .classic-panel-body select:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* A checkbox is not a text field and must not be stretched to one. */
+body[data-ui-mode='classic'] .classic-vp-field input[type='checkbox'],
+body[data-ui-mode='classic'] .classic-animate-field input[type='checkbox'] {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: auto;
+}
+
+body[data-ui-mode='classic'] .classic-panel-body input[readonly],
+body[data-ui-mode='classic'] .classic-panel-body input:disabled,
+body[data-ui-mode='classic'] .classic-panel-body select:disabled {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+body[data-ui-mode='classic'] .classic-vp-unit {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+/* Reasons for the controls that cannot work yet. Visible, not sr-only: a
+   disabled control the user can see needs its explanation where they are
+   looking, and a screen reader reaches it through aria-describedby either
+   way. */
+body[data-ui-mode='classic'] .classic-font-list-reason,
+body[data-ui-mode='classic'] .classic-vp-reason,
+body[data-ui-mode='classic'] .classic-animate-reason,
+body[data-ui-mode='classic'] .classic-animate-note {
+  flex: 1 1 100%;
+  margin: var(--space-2xs) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+/* Font List ---------------------------------------------------------------- */
+
+body[data-ui-mode='classic'] .classic-font-list-tablewrap {
+  /* The table is the part that takes the leftover height, with a floor so it
+     always shows something; a wide or long table scrolls inside its own box
+     so the panel never scrolls sideways as a whole. */
+  flex: 1 1 auto;
+  min-height: 6em;
+  overflow: auto;
+  margin-bottom: var(--space-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table td {
+  padding: var(--space-2xs);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+/* The whole cell is the radio's label, so the target is the row's height
+   rather than the 13px of the control itself. */
+body[data-ui-mode='classic'] .classic-font-list-table td label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table input[type='radio'] {
+  min-width: var(--size-touch-target-sm);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-font-sample {
+  /* The sample is set in the row's own font; it must not inherit the panel's
+     size or family, and a long sample must not widen the table. */
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-empty,
+body[data-ui-mode='classic'] .classic-font-list-hint {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-selection {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2xs) var(--space-xs);
+  margin: 0 0 var(--space-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-selection dt {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-selection dd {
+  margin: 0;
+  /* Font paths are long and have no spaces to break at. */
+  overflow-wrap: anywhere;
+}
+
+body[data-ui-mode='classic'] #fontListCopyBtn {
+  min-height: var(--size-touch-target);
+}
+
+/* Animate ------------------------------------------------------------------ */
+
+body[data-ui-mode='classic'] .classic-animate-playback {
+  display: flex;
+  gap: var(--space-2xs);
+  align-items: center;
+  flex-wrap: wrap;
+  /* Same sr-only trap as the field rows above. */
+  position: relative;
+}
+
+/* ============================================================================
+   LAYER 2c — Customizer dock (desktop Customizer header block)
+   ============================================================================ */
+.classic-customizer-bar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-customizer-bar {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+body[data-ui-mode='classic'] .classic-customizer-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
+}
+
+body[data-ui-mode='classic'] .classic-auto-preview-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-xs);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+/* Upstream row 1 is Automatic Preview + the detail combobox + Reset (U4,
+   OpenSCAD_1), so the combobox and the button that follows it sit at the end of
+   the line, with the checkbox alone on the left. */
+body[data-ui-mode='classic']
+  .classic-customizer-controls
+  .param-detail-level-wrap {
+  margin-left: auto;
+}
+
+/* Reset arrived here from Forge additions at 32px tall — below the token, and
+   visibly short beside the 36px select it now stands next to. The select in
+   this row already asks for the token explicitly; so does the button. */
+body[data-ui-mode='classic'] .classic-customizer-controls .btn {
+  min-height: var(--size-touch-target);
+}
+
+body[data-ui-mode='classic']
+  .classic-customizer-controls
+  .customizer-header-select {
+  flex: 0 1 auto;
+  max-width: 150px;
+  min-height: var(--size-touch-target);
+}
+
+/* The husks the moves leave behind. #customizerHeaderRow is emptied by C2,
+   and hiding #presetControls is also what drops the legacy preset search in
+   Classic (D-22) — the searchable combobox is the only preset search here.
+
+   UF-35 wrapped #presetControls in a .forge-disclosure-row so its help
+   control could leave the <summary>, which put a level between the husk and
+   .param-panel-body — matching the row is also what keeps that control from
+   surfacing in Classic, where it has never been visible. */
+body[data-ui-mode='classic'] #customizerHeaderRow,
+body[data-ui-mode='classic']
+  .param-panel-body
+  > .forge-disclosure-row:has(> #presetControls) {
+  display: none;
+}
+
+/* ── "Forge additions": everything upstream's Customizer does not have ──── */
+.classic-forge-extras {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras {
+  display: block;
+  border-top: 1px solid var(--color-border);
+  background: transparent;
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-sm);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-summary:hover {
+  background: var(--color-hover-bg);
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm) var(--space-xs);
+}
+
+/* The Expand/Collapse pair keeps its grouping inside the section */
+body[data-ui-mode='classic']
+  .classic-forge-extras-row
+  .customizer-group-toggles {
+  display: flex;
+  gap: var(--space-2xs);
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-row .preset-sort-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+/* Flat parameter rows: the desktop Customizer is a list, not stacked
+   cards. Every disclosure in the dock loses its card chrome (side borders,
+   radius, elevated background, margins) and becomes a full-width row
+   separated by hairlines. Applies to the Forge sections (Libraries,
+   Companion Files, Advanced, …) and the parameter groups alike. */
+body[data-ui-mode='classic'] .param-panel-body .forge-disclosure,
+body[data-ui-mode='classic'] #parametersContainer .param-group {
+  border: 0;
+  border-bottom: 1px solid var(--color-border-light);
+  border-radius: 0;
+  margin: 0;
+  background: var(--color-bg-primary);
+}
+
+body[data-ui-mode='classic'] .param-panel-body .forge-disclosure summary,
+body[data-ui-mode='classic'] #parametersContainer .param-group summary {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  font-weight: var(--font-weight-normal);
+}
+
+body[data-ui-mode='classic'] .param-panel-body .forge-disclosure summary:hover,
+body[data-ui-mode='classic'] #parametersContainer .param-group summary:hover {
+  background: var(--color-hover-bg);
+}
+
+/* Upstream row 2: preset combobox, then [+] and [−] (U4). The combobox takes
+   the width and the two buttons sit at the end, as on the desktop. */
+body[data-ui-mode='classic'] .classic-preset-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm) var(--space-xs);
+}
+
+body[data-ui-mode='classic'] .classic-preset-row > .preset-combobox-container,
+body[data-ui-mode='classic'] .classic-preset-row > .preset-selector {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body[data-ui-mode='classic'] .classic-preset-row > .btn {
+  flex: 0 0 auto;
+}
+
+/* ============================================================================
+   LAYER 2d — Chrome strip: Forge-specific controls Classic does not show.
+   Every hidden control's function stays reachable; the route is noted per
+   rule. Deliberately KEPT visible: #updateBanner and #memoryBanner (safety
+   and data-loss relevance outweigh visual purity — owner-flagged policy).
+   ============================================================================ */
+
+body[data-ui-mode='classic'] #uiModeToggle,
+/* Simplified/Standard lives in the Classic density switch instead; clicking
+   the custom-mode switch here would silently exit classic */
+/* Theme + high contrast: Classic is one fixed desktop appearance (owner
+   decision 2026-08-05). Both remain available in Simplified/Standard. */
+body[data-ui-mode='classic'] #themeToggle,
+body[data-ui-mode='classic'] #contrastToggle,
+/* Focus mode — not part of the desktop shell; the keyboard shortcut works */
+body[data-ui-mode='classic'] #focusModeBtn,
+/* Features guide — reachable via Help menu */
+body[data-ui-mode='classic'] #featuresGuideBtn,
+/* #clearFileBtn is NOT hidden here any more: U-2 overruled the
+   "Back-to-welcome — File > Close" adapt. The Main Page button leads the
+   header in BOTH themes now (Q-16). */
+/* Custom actions bar + drawer — toolbar Preview/Render + Design menu;
+   downloads via File > Export */
+body[data-ui-mode='classic'] #actionsBar,
+body[data-ui-mode='classic'] #actionsDrawer,
+/* Preview settings drawer — stats go to the status bar; quality and
+   friends live under View > Preview Quality */
+body[data-ui-mode='classic'] #previewInfoSection,
+body[data-ui-mode='classic'] #previewDrawerToggle,
+/* Echo drawer — ECHO lines already stream into the console dock */
+body[data-ui-mode='classic'] #echoDrawer,
+/* Param search/jump — desktop's Customizer has no search row */
+body[data-ui-mode='classic'] #paramSearchSection,
+/* Output format row — File > Export offers every format */
+body[data-ui-mode='classic'] .output-format-section,
+/* Custom param-panel header rows — Undo/Redo in Edit menu + toolbar,
+   Reset in the Customizer dock header, editor via Window > Editor */
+body[data-ui-mode='classic'] #paramPanel > .panel-header,
+/* Camera panel and the floating in-viewport overlay — drag/orbit plus the
+   View menu and toolbar snaps cover every camera action */
+body[data-ui-mode='classic'] #cameraPanel,
+/* Manifest info banner — informational only, suppressed in classic */
+body[data-ui-mode='classic'] #manifestInfoBanner {
+  display: none !important;
+}
+
+/* ── Forge extras out of the Customizer column (P6, owner Q-4) ───────────────
+
+   The desktop Customizer shows its parameter groups immediately under the
+   preset row. Ours put five Forge panels in front of them — Image Measurement,
+   Reference Image, Libraries, Companion Files, Advanced — so a blind user
+   walked five disclosures before reaching the region they visit most. Q-4:
+   Window-menu-only in Classic.
+
+   Keyed on the row's own [open], NOT on a separate visibility flag, so the
+   Window menu's tick and the CSS read one state and cannot disagree — the
+   mistake the Console tick already made once. Libraries and Companion Files
+   are wrappers around the same kind of <details>, so all five behave alike.
+
+   Consequence, deliberate: collapsing one of these by its own summary takes
+   the row away too, and Window is how it comes back. */
+body[data-ui-mode='classic'] #measureSection:not([open]),
+body[data-ui-mode='classic'] #overlaySection:not([open]),
+body[data-ui-mode='classic'] #advancedMenu:not([open]),
+body[data-ui-mode='classic'] #libraryControls > details:not([open]),
+/* UF-35 wrapped Companion Files in a .forge-disclosure-row, so the row is
+   what has to go — hiding the <details> alone would leave its help control
+   behind, which is how a button that has never appeared in Classic showed up
+   there. Libraries carries no header control and is unwrapped. */
+body[data-ui-mode='classic']
+  #projectFilesControls
+  > .forge-disclosure-row:has(> details:not([open])) {
+  display: none;
+}
+
+/* "Preview is current" needs no chrome in Classic — the status bar already
+   says so, and the desktop viewport has no state frame. The pending, stale,
+   rendering and error borders stay: those carry information the bar's text
+   alone would not make obvious. Width is kept so states never shift layout. */
+body[data-ui-mode='classic'] .preview-container.preview-current {
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+/* The custom-mode 48px collapsed strip must never appear inside the grid */
+body[data-ui-mode='classic'] .param-panel.collapsed {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: initial !important;
+}
+
+/* ── Window-bottom status bar ───────────────────────────────────────────── */
+.classic-status-bar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 28px;
+  padding: var(--space-2xs) var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+/* A chrome-free welcome (U-22, UF-13, Q-39a): the welcome screen carries its
+   own copy of the "upload a file" hint, so the status bar hides with the
+   icon toolbar until a project opens. */
+body[data-ui-mode='classic'][data-app-surface='welcome'] .classic-status-bar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-status-spacer {
+  flex: 1;
+}
+
+/* The telemetry is the longest thing in the bar and the desktop's own reading
+   is monospaced digits, which stops the line jittering sideways as the numbers
+   change under an orbit. It may shrink but never wrap the bar to two rows. */
+body[data-ui-mode='classic'] .classic-status-viewport {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The in-viewport overlay yields to the bottom bar in classic —
+   display:none also removes its aria-live region, so only the bar speaks */
+body[data-ui-mode='classic'] #previewStatusBar {
+  display: none !important;
+}
+
+/* Same rule for the floating "✓ Preview ready" pill (JS-created
+   .preview-state-indicator, aria-live): the status bar mirrors the same
+   render-state text, so in classic the pill is a duplicate live region
+   floating over the viewport. Desktop has no such overlay. */
+body[data-ui-mode='classic'] .preview-state-indicator {
+  display: none !important;
+}
+
+/* ============================================================================
+   LAYER 3 — Density: Simplified / Standard inside Classic
+   ============================================================================
+   The switch itself is Classic-only chrome. Standard shows the full desktop
+   shell; Simplified keeps the viewport and the Customizer and drops the
+   code-facing docks, the programmer toolbar buttons, and the Edit/Window
+   menus (owner decision 2026-08-05). Panel-level hiding (console, editor,
+   Libraries, Companion Files, Advanced, Image Measurement, Reference Image)
+   is shared with Simplified mode via the UI mode controller's panel
+   registry, so "Simplified" means the same thing in both layouts.
+   ============================================================================ */
+
+.classic-density-toggle {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-density-toggle {
+  display: inline-flex;
+}
+
+/* U-29 (UF-21), the Classic half of the same rule. MEASURED at the base: on
+   the welcome surface a press changes nothing on screen (172 rendered
+   elements before and after) while announcing that the editor and console
+   panes are hidden, when no pane is on screen at all. The Classic box tour
+   teaches it where it works. display:none so it is not Tab-reachable. */
+body[data-ui-mode='classic'][data-app-surface='welcome'] #classicDensityToggle {
+  display: none;
+}
+
+/* Both code-facing docks leave the shell in Simplified. The strip covers the
+   Console, Error-Log, Animate and Font List panes it contains. D-6's
+   redundant .classic-console-slot entry is gone (AF-8): the comment that
+   kept it claimed a regression test asserted on it, and no such test exists
+   - the only spec using the class targets the dock field, not this list. */
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  .classic-editor-slot,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  .classic-bottom-strip,
+/* Programmer toolbar buttons: file authoring. The parameter Undo/Redo group
+   is no longer here — U-5/Q-18 made it Simplified-ONLY instead (see the
+   .classic-simplified-only rule below): in Standard the editor toolbar shows
+   its own Undo/Redo pair, and two visibly identical pairs was the reported
+   confusion. */
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicTbNewBtn,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicTbSaveBtn,
+/* Editor-toolbar equivalents. Moot while Simplified hides the editor slot
+   outright, kept so the two hide-lists cannot drift apart if that changes. */
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicEdNewBtn,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicEdExportDxfBtn,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicEdPrintBtn,
+/* Everything the desktop Customizer does not have now lives in one section,
+   so Simplified drops it whole rather than naming its members (D-20/D-21).
+   This subsumes the previous #copyPresetNameBtn and #managePresetsBtn
+   entries; both are inside the section now. */
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicForgeExtras,
+/* On the 3D view toolbar Simplified drops ONLY the two disabled measure
+   buttons; Preview, Render and the view controls are what Simplified is for
+   (R9), so the rest of the bar stays in both densities. */
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicMeasureDistBtn,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicMeasureAngleBtn {
+  display: none !important;
+}
+
+/* Simplified-only controls (U-5/Q-18): the top toolbar's parameter
+   Undo/Redo. Standard shows the editor toolbar's own Undo/Redo, so a
+   second pair up top read as duplicated buttons — the owner's report. */
+body[data-ui-mode='classic'][data-classic-density='standard']
+  .classic-simplified-only {
+  display: none !important;
+}

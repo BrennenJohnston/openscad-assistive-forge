@@ -1,0 +1,1771 @@
+/**
+ * Unit tests for saved-projects-manager
+ * @license GPL-3.0-or-later
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  initSavedProjectsDB,
+  listSavedProjects,
+  saveProject,
+  getProject,
+  touchProject,
+  updateProject,
+  deleteProject,
+  getSavedProjectsSummary,
+  clearAllSavedProjects,
+  // v2: Folder operations
+  createFolder,
+  getFolder,
+  listFolders,
+  renameFolder,
+  deleteFolder,
+  moveFolder,
+  getFolderTree,
+  getFolderBreadcrumbs,
+  // v2: Project-folder operations
+  moveProject,
+  getProjectsInFolder,
+} from '../../src/js/saved-projects-manager.js';
+
+// ============================================================================
+// IndexedDB InvalidStateError retry regression tests
+// These tests use a fresh module instance (vi.resetModules + dynamic import)
+// so that the module-level `db` / `storageType` variables start from a clean
+// state and we can inject a fake IndexedDB that simulates a stale connection.
+// ============================================================================
+
+describe('IndexedDB InvalidStateError recovery', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it('retries getFromIndexedDB after InvalidStateError and returns data on reconnect', async () => {
+    vi.resetModules();
+
+    let openCallCount = 0;
+
+    // Stale database: transaction() throws InvalidStateError
+    const staleDb = {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const err = new DOMException(
+          'The database connection is closing.',
+          'InvalidStateError'
+        );
+        throw err;
+      },
+      close: vi.fn(),
+    };
+
+    // Working database: transaction() returns a transaction that resolves getAll()
+    const makeWorkingDb = () => ({
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const req = { result: [], onsuccess: null, onerror: null };
+        const store = {
+          getAll: () => {
+            Promise.resolve().then(() => {
+              if (req.onsuccess) req.onsuccess();
+            });
+            return req;
+          },
+        };
+        return { onerror: null, objectStore: () => store };
+      },
+      close: vi.fn(),
+    });
+
+    // indexedDB.open() — first call returns stale db, second call returns working db
+    const mockOpen = vi.fn(() => {
+      openCallCount++;
+      const dbInstance = openCallCount === 1 ? staleDb : makeWorkingDb();
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, listSavedProjects } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+
+    // First open: connects with the stale db
+    await initSavedProjectsDB();
+    expect(openCallCount).toBe(1);
+
+    // listSavedProjects → getFromIndexedDB → InvalidStateError on stale db
+    // → reconnectDB() → second open → working db → retry succeeds
+    const projects = await listSavedProjects();
+
+    expect(Array.isArray(projects)).toBe(true);
+    expect(openCallCount).toBe(2);
+  });
+
+  it('retries saveToIndexedDB after InvalidStateError and saves on reconnect', async () => {
+    vi.resetModules();
+
+    let openCallCount = 0;
+
+    const staleDb = {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const err = new DOMException(
+          'The database connection is closing.',
+          'InvalidStateError'
+        );
+        throw err;
+      },
+      close: vi.fn(),
+    };
+
+    const savedItems = [];
+    const makeWorkingDb = () => ({
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: (storeNames, mode) => {
+        const putReq = { result: undefined, onsuccess: null, onerror: null };
+        const getReq = { result: savedItems, onsuccess: null, onerror: null };
+        const store = {
+          put: (item) => {
+            savedItems.push(item);
+            Promise.resolve().then(() => {
+              if (putReq.onsuccess) putReq.onsuccess();
+            });
+            return putReq;
+          },
+          getAll: () => {
+            Promise.resolve().then(() => {
+              if (getReq.onsuccess) getReq.onsuccess();
+            });
+            return getReq;
+          },
+        };
+        return { onerror: null, objectStore: () => store };
+      },
+      close: vi.fn(),
+    });
+
+    const mockOpen = vi.fn(() => {
+      openCallCount++;
+      const dbInstance = openCallCount === 1 ? staleDb : makeWorkingDb();
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, saveProject } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+
+    await initSavedProjectsDB();
+    expect(openCallCount).toBe(1);
+
+    // saveProject → saveToIndexedDB → InvalidStateError → reconnect → retry
+    const result = await saveProject({
+      name: 'Retry Test',
+      originalName: 'retry.scad',
+      kind: 'scad',
+      mainFilePath: 'retry.scad',
+      content: '// retry test',
+      notes: '',
+    });
+
+    expect(result.success).toBe(true);
+    expect(openCallCount).toBe(2);
+  });
+});
+
+// ============================================================================
+// Large import batching regression tests
+// Verify that projects with > LARGE_FILES_BATCH_SIZE files are written to
+// PROJECT_FILES_STORE in batches and correctly reassembled by getProject().
+// ============================================================================
+
+describe('Large import batching', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  /**
+   * Build a minimal IDB mock that records writes to the named stores.
+   * `storeWrites` is mutated in-place so the caller can inspect it.
+   */
+  function makeBatchingDb(storeWrites, failFlags = {}) {
+    const storeData = {
+      projects: new Map(),
+      projectFiles: new Map(),
+    };
+
+    return {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: {
+        contains: (name) =>
+          failFlags.noProjectFilesStore && name === 'projectFiles'
+            ? false
+            : ['projects', 'folders', 'projectFiles', 'assets'].includes(name),
+      },
+      transaction: (storeNames) => {
+        const storeName = Array.isArray(storeNames) ? storeNames[0] : storeNames;
+        const putReq = { result: undefined, error: null, onsuccess: null, onerror: null };
+
+        const store = {
+          put: (item) => {
+            if (storeName === 'projects' && failFlags.projectsPut) {
+              Promise.resolve().then(() => {
+                putReq.error = new DOMException(
+                  'Simulated put failure',
+                  'UnknownError'
+                );
+                if (putReq.onerror) putReq.onerror();
+              });
+              return putReq;
+            }
+            storeData[storeName]?.set(item.id, item);
+            storeWrites[storeName] = (storeWrites[storeName] || []);
+            storeWrites[storeName].push(item);
+            Promise.resolve().then(() => {
+              if (putReq.onsuccess) putReq.onsuccess();
+            });
+            return putReq;
+          },
+          get: (id) => {
+            const getReq = {
+              result: storeData[storeName]?.get(id),
+              onsuccess: null,
+              onerror: null,
+            };
+            Promise.resolve().then(() => {
+              if (getReq.onsuccess) getReq.onsuccess();
+            });
+            return getReq;
+          },
+          delete: (id) => {
+            storeData[storeName]?.delete(id);
+            const delReq = { result: undefined, onsuccess: null, onerror: null };
+            Promise.resolve().then(() => {
+              if (delReq.onsuccess) delReq.onsuccess();
+            });
+            return delReq;
+          },
+          getAll: () => {
+            const getAllReq = {
+              result: [...(storeData[storeName]?.values() ?? [])],
+              onsuccess: null,
+              onerror: null,
+            };
+            Promise.resolve().then(() => {
+              if (getAllReq.onsuccess) getAllReq.onsuccess();
+            });
+            return getAllReq;
+          },
+          index: (_name) => ({
+            getAll: (projectId) => {
+              const filtered = [...(storeData.projectFiles?.values() ?? [])].filter(
+                (f) => f.projectId === projectId
+              );
+              const indexReq = { result: filtered, onsuccess: null, onerror: null };
+              Promise.resolve().then(() => {
+                if (indexReq.onsuccess) indexReq.onsuccess();
+              });
+              return indexReq;
+            },
+          }),
+        };
+
+        const tx = {
+          onerror: null,
+          oncomplete: null,
+          onabort: null,
+          objectStore: () => store,
+        };
+        Promise.resolve().then(() => {
+          if (tx.oncomplete) tx.oncomplete();
+        });
+        return tx;
+      },
+      close: vi.fn(),
+    };
+  }
+
+  it('routes large imports through PROJECT_FILES_STORE and reassembles on getProject', async () => {
+    vi.resetModules();
+
+    const storeWrites = {};
+    const mockOpen = vi.fn(() => {
+      const req = {
+        result: makeBatchingDb(storeWrites),
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, saveProject, getProject } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+    await initSavedProjectsDB();
+
+    // Build a file map that exceeds the batch threshold (50)
+    const largeFilesMap = {};
+    for (let i = 0; i < 75; i++) {
+      largeFilesMap[`file-${i}.scad`] = `// File ${i} content`;
+    }
+
+    const result = await saveProject({
+      name: 'Large Import',
+      originalName: 'large.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: largeFilesMap,
+      notes: '',
+    });
+
+    expect(result.success).toBe(true);
+
+    // Project record must have projectFiles = null + largeFilesInStore = true
+    const savedRecord = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    );
+    expect(savedRecord).toBeDefined();
+    expect(savedRecord.projectFiles).toBeNull();
+    expect(savedRecord.largeFilesInStore).toBe(true);
+
+    // All 75 file entries must be in PROJECT_FILES_STORE
+    const writtenFiles = (storeWrites.projectFiles || []).filter(
+      (f) => f.projectId === result.id
+    );
+    expect(writtenFiles).toHaveLength(75);
+
+    // getProject must reassemble the full map from the store
+    const project = await getProject(result.id);
+    expect(project).not.toBeNull();
+    expect(project.projectFiles).toBeDefined();
+    expect(Object.keys(project.projectFiles)).toHaveLength(75);
+    expect(project.projectFiles['file-0.scad']).toBe('// File 0 content');
+    expect(project.projectFiles['file-74.scad']).toBe('// File 74 content');
+  });
+
+  it('does NOT batch when projectFiles count is at or below threshold', async () => {
+    vi.resetModules();
+
+    const storeWrites = {};
+    const mockOpen = vi.fn(() => {
+      const req = {
+        result: makeBatchingDb(storeWrites),
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, saveProject, getProject } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+    await initSavedProjectsDB();
+
+    // Exactly 10 files — well below the 50-file threshold
+    const smallFilesMap = {};
+    for (let i = 0; i < 10; i++) {
+      smallFilesMap[`file-${i}.scad`] = `// File ${i}`;
+    }
+
+    const result = await saveProject({
+      name: 'Small Import',
+      originalName: 'small.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: smallFilesMap,
+      notes: '',
+    });
+
+    expect(result.success).toBe(true);
+
+    // Project record must use inline serialised projectFiles — no largeFilesInStore
+    const savedRecord = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    );
+    expect(savedRecord).toBeDefined();
+    expect(savedRecord.largeFilesInStore).toBeFalsy();
+    expect(typeof savedRecord.projectFiles).toBe('string');
+    expect(savedRecord.projectFiles).not.toBeNull();
+
+    // No files should be written to PROJECT_FILES_STORE
+    const writtenFiles = (storeWrites.projectFiles || []).filter(
+      (f) => f.projectId === result.id
+    );
+    expect(writtenFiles).toHaveLength(0);
+
+    // getProject still parses the inline JSON correctly
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(10);
+  });
+
+  // ==========================================================================
+  // Metadata writes must preserve batched storage (touchProject/updateProject)
+  // Regression for the 218MB single-record put that broke 211-file folder
+  // project loads: the batching done by saveProject must never be undone by
+  // later metadata writes.
+  // ==========================================================================
+
+  function setupBatchingHarness(failFlags = {}) {
+    const storeWrites = {};
+    const dbInstance = makeBatchingDb(storeWrites, failFlags);
+    const mockOpen = vi.fn(() => {
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+    return { storeWrites, dbInstance, failFlags };
+  }
+
+  function makeFilesMap(count, content = (i) => `// File ${i} content`) {
+    const files = {};
+    for (let i = 0; i < count; i++) {
+      files[`file-${i}.scad`] = content(i);
+    }
+    return files;
+  }
+
+  async function importFreshManager() {
+    return import('../../src/js/saved-projects-manager.js');
+  }
+
+  it('touchProject on a batched project keeps projectFiles null and writes no file rows', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, touchProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Batched Touch',
+      originalName: 'batched.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(75),
+    });
+    expect(result.success).toBe(true);
+    const fileRowsBefore = (storeWrites.projectFiles || []).length;
+
+    expect(await touchProject(result.id)).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.projectFiles).toBeNull();
+    expect(lastRecord.largeFilesInStore).toBe(true);
+    expect((storeWrites.projectFiles || []).length).toBe(fileRowsBefore);
+  });
+
+  it('touchProject on an inline project writes the stored JSON string back unchanged', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, touchProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Inline Touch',
+      originalName: 'inline.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(10),
+    });
+    const savedJson = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    ).projectFiles;
+    expect(typeof savedJson).toBe('string');
+
+    expect(await touchProject(result.id)).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    // Identity, not just equality: a re-serialization would produce a new string
+    expect(lastRecord.projectFiles).toBe(savedJson);
+  });
+
+  it('updateProject metadata-only on a batched project keeps projectFiles null', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject, getProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Batched Update',
+      originalName: 'batched.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(75),
+    });
+    const fileRowsBefore = (storeWrites.projectFiles || []).length;
+
+    const res = await updateProject({
+      id: result.id,
+      uiPreferences: { uiMode: 'standard' },
+      notes: 'metadata only',
+    });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.projectFiles).toBeNull();
+    expect(lastRecord.largeFilesInStore).toBe(true);
+    expect(lastRecord.uiPreferences).toEqual({ uiMode: 'standard' });
+    expect(lastRecord.notes).toBe('metadata only');
+    expect((storeWrites.projectFiles || []).length).toBe(fileRowsBefore);
+
+    // Contents still hydrate after the metadata write
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(75);
+  });
+
+  it('updateProject persists mainFilePath and kind', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Main File Move',
+      originalName: 'proj.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(3),
+    });
+
+    const res = await updateProject({
+      id: result.id,
+      mainFilePath: 'nested/other.scad',
+      kind: 'scad',
+    });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.mainFilePath).toBe('nested/other.scad');
+    expect(lastRecord.kind).toBe('scad');
+  });
+
+  it('updateProject routes a large map through PROJECT_FILES_STORE', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject, getProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Grows Later',
+      originalName: 'grow.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+    });
+
+    const res = await updateProject({
+      id: result.id,
+      projectFiles: makeFilesMap(75),
+    });
+    expect(res.success).toBe(true);
+
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(75);
+    expect(project.largeFilesInStore).toBe(true);
+  });
+
+  it('updateProject and touchProject surface put failures (success:false + window event)', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const flags = { projectsPut: false };
+    setupBatchingHarness(flags);
+    const { initSavedProjectsDB, saveProject, updateProject, touchProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Fail Later',
+      originalName: 'fail.scad',
+      kind: 'scad',
+      mainFilePath: 'fail.scad',
+      content: '// ok',
+    });
+    expect(result.success).toBe(true);
+
+    flags.projectsPut = true;
+    const events = [];
+    const onEvt = (e) => events.push(e.detail);
+    window.addEventListener('storage-quota-exceeded', onEvt);
+    try {
+      const res = await updateProject({ id: result.id, notes: 'will fail' });
+      expect(res.success).toBe(false);
+      expect(await touchProject(result.id)).toBe(false);
+    } finally {
+      window.removeEventListener('storage-quota-exceeded', onEvt);
+    }
+
+    expect(events).toHaveLength(2);
+    expect(events[0].source).toBe('saved-projects');
+    expect(events[0].op).toBe('updateProject');
+    expect(events[1].op).toBe('touchProject');
+  });
+
+  it('updateProject normalizes hybrid records left by the old re-inline bug', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites, dbInstance } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Hybrid Repair',
+      originalName: 'hybrid.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(75),
+    });
+    const batchedRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+
+    // Simulate the corruption the old bug produced: batched flag AND a stale
+    // inline copy in the same record.
+    dbInstance
+      .transaction(['projects'])
+      .objectStore()
+      .put({ ...batchedRecord, projectFiles: '{"stale":"data"}' });
+
+    const res = await updateProject({ id: result.id, notes: 'repair pass' });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.projectFiles).toBeNull();
+    expect(lastRecord.largeFilesInStore).toBe(true);
+    expect(lastRecord.notes).toBe('repair pass');
+  });
+
+  it('strips oversized projectFiles from the localStorage mirror on update', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    // ~3MB serialized: over the 2MB LS budget, under the 8MB inline cap
+    const result = await saveProject({
+      name: 'LS Strip',
+      originalName: 'big-inline.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: { 'big.dat': 'x'.repeat(3 * 1024 * 1024) },
+    });
+    expect(result.success).toBe(true);
+
+    const res = await updateProject({ id: result.id, name: 'LS Strip v2' });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(typeof lastRecord.projectFiles).toBe('string');
+
+    const lsEntry = JSON.parse(
+      localStorage.getItem('openscad-saved-projects')
+    ).find((p) => p.id === result.id);
+    expect(lsEntry.projectFiles).toBeNull();
+    expect(lsEntry.name).toBe('LS Strip v2');
+  });
+
+  it('saveProject batches by byte size even when the file count is small', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, getProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const bigFiles = {};
+    for (let i = 0; i < 5; i++) {
+      bigFiles[`chunk-${i}.dat`] = 'y'.repeat(3 * 1024 * 1024);
+    }
+    const result = await saveProject({
+      name: 'Byte Batched',
+      originalName: 'bytes.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: bigFiles,
+    });
+    expect(result.success).toBe(true);
+
+    const savedRecord = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    );
+    expect(savedRecord.projectFiles).toBeNull();
+    expect(savedRecord.largeFilesInStore).toBe(true);
+    expect(
+      (storeWrites.projectFiles || []).filter((f) => f.projectId === result.id)
+    ).toHaveLength(5);
+
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(5);
+  });
+
+  it('rejects a record past the per-value cap with a typed error instead of UnknownError', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    setupBatchingHarness({ noProjectFilesStore: true });
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Cap Guard',
+      originalName: 'cap.scad',
+      kind: 'scad',
+      mainFilePath: 'cap.scad',
+      content: '// ok',
+    });
+    expect(result.success).toBe(true);
+
+    const events = [];
+    const onEvt = (e) => events.push(e.detail);
+    window.addEventListener('storage-quota-exceeded', onEvt);
+    try {
+      // Batching is unavailable in this harness, so the giant string takes the
+      // inline path and must be stopped by the per-value guard.
+      const giant = 'x'.repeat(100 * 1024 * 1024 + 8192);
+      const res = await updateProject({ id: result.id, projectFiles: giant });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/too large/i);
+    } finally {
+      window.removeEventListener('storage-quota-exceeded', onEvt);
+    }
+
+    expect(events).toHaveLength(1);
+    expect(events[0].message).toMatch(/Connect Folder/);
+  });
+});
+
+// Mock IndexedDB
+const mockIndexedDB = {
+  databases: {},
+  open: vi.fn(),
+};
+
+describe('Saved Projects Manager', () => {
+  beforeEach(async () => {
+    // Clear localStorage
+    localStorage.clear();
+    
+    // Clear any IndexedDB mocks
+    mockIndexedDB.databases = {};
+    
+    // Initialize saved projects DB
+    await initSavedProjectsDB();
+    
+    // Clear all projects
+    await clearAllSavedProjects();
+  });
+
+  describe('initSavedProjectsDB', () => {
+    it('should initialize successfully', async () => {
+      const result = await initSavedProjectsDB();
+      expect(result).toHaveProperty('available');
+      expect(result).toHaveProperty('type');
+      expect(result.available).toBe(true);
+      expect(['indexeddb', 'localstorage']).toContain(result.type);
+    });
+  });
+
+  describe('saveProject', () => {
+    it('should save a project successfully', async () => {
+      const projectData = {
+        name: 'Test Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test SCAD content',
+        notes: 'Test notes',
+      };
+
+      const result = await saveProject(projectData);
+      
+      expect(result.success).toBe(true);
+      expect(result.id).toBeDefined();
+      expect(typeof result.id).toBe('string');
+    });
+
+    it('should validate project size limits', async () => {
+      const largeContent = 'x'.repeat(6 * 1024 * 1024); // 6MB (exceeds 5MB limit)
+      
+      const projectData = {
+        name: 'Large Project',
+        originalName: 'large.scad',
+        kind: 'scad',
+        mainFilePath: 'large.scad',
+        content: largeContent,
+        notes: '',
+      };
+
+      const result = await saveProject(projectData);
+      
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('exceeds maximum size');
+    });
+
+    it('should enforce project count limit', async () => {
+      // Save 25 projects (the limit)
+      for (let i = 0; i < 25; i++) {
+        await saveProject({
+          name: `Project ${i}`,
+          originalName: `project-${i}.scad`,
+          kind: 'scad',
+          mainFilePath: `project-${i}.scad`,
+          content: `// Project ${i}`,
+          notes: '',
+        });
+      }
+
+      // Try to save one more
+      const result = await saveProject({
+        name: 'Project 26',
+        originalName: 'project-26.scad',
+        kind: 'scad',
+        mainFilePath: 'project-26.scad',
+        content: '// Project 26',
+        notes: '',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Maximum saved projects limit reached');
+    });
+
+    it('should validate notes length', async () => {
+      const longNotes = 'x'.repeat(5001); // Exceeds 5000 char limit
+      
+      const projectData = {
+        name: 'Test Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: longNotes,
+      };
+
+      const result = await saveProject(projectData);
+      
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it('should save ZIP projects with projectFiles', async () => {
+      const projectData = {
+        name: 'Test ZIP Project',
+        originalName: 'test.zip',
+        kind: 'zip',
+        mainFilePath: 'main.scad',
+        content: '// Main file',
+        projectFiles: {
+          'main.scad': '// Main file',
+          'lib/helper.scad': '// Helper',
+        },
+        notes: 'ZIP project',
+      };
+
+      const result = await saveProject(projectData);
+      
+      expect(result.success).toBe(true);
+      expect(result.id).toBeDefined();
+    });
+
+    it('should persist sourceExampleKey through save/get round-trip', async () => {
+      const result = await saveProject({
+        name: 'Bracelet Clip Charm Project',
+        originalName: 'q-charm.scad',
+        kind: 'scad',
+        mainFilePath: 'q-charm.scad',
+        content: '// Bracelet Clip Charm',
+        notes: '',
+        sourceExampleKey: 'q-charm',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.sourceExampleKey).toBe('q-charm');
+    });
+
+    it('should default sourceExampleKey to null when not provided', async () => {
+      const result = await saveProject({
+        name: 'No Example Key',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.sourceExampleKey).toBeNull();
+    });
+  });
+
+  describe('listSavedProjects', () => {
+    it('should return empty array when no projects exist', async () => {
+      const projects = await listSavedProjects();
+      expect(projects).toEqual([]);
+    });
+
+    it('should list all saved projects', async () => {
+      // Save multiple projects
+      await saveProject({
+        name: 'Project 1',
+        originalName: 'p1.scad',
+        kind: 'scad',
+        mainFilePath: 'p1.scad',
+        content: '// P1',
+        notes: '',
+      });
+
+      await saveProject({
+        name: 'Project 2',
+        originalName: 'p2.scad',
+        kind: 'scad',
+        mainFilePath: 'p2.scad',
+        content: '// P2',
+        notes: '',
+      });
+
+      const projects = await listSavedProjects();
+      
+      expect(projects).toHaveLength(2);
+      expect(projects[0].name).toBeDefined();
+      expect(projects[0].savedAt).toBeDefined();
+    });
+
+    it('should sort projects by lastLoadedAt descending', async () => {
+      const project1 = await saveProject({
+        name: 'Project 1',
+        originalName: 'p1.scad',
+        kind: 'scad',
+        mainFilePath: 'p1.scad',
+        content: '// P1',
+        notes: '',
+      });
+
+      // Wait a bit to ensure different timestamps
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const project2 = await saveProject({
+        name: 'Project 2',
+        originalName: 'p2.scad',
+        kind: 'scad',
+        mainFilePath: 'p2.scad',
+        content: '// P2',
+        notes: '',
+      });
+
+      // Wait to ensure different timestamp
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Touch project 1 (make it more recent)
+      await touchProject(project1.id);
+
+      const projects = await listSavedProjects();
+      
+      expect(projects[0].id).toBe(project1.id);
+      expect(projects[1].id).toBe(project2.id);
+    });
+  });
+
+  describe('getProject', () => {
+    it('should retrieve a project by ID', async () => {
+      const saved = await saveProject({
+        name: 'Test Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test content',
+        notes: 'Test notes',
+      });
+
+      const project = await getProject(saved.id);
+      
+      expect(project).toBeDefined();
+      expect(project.id).toBe(saved.id);
+      expect(project.name).toBe('Test Project');
+      expect(project.content).toBe('// Test content');
+      expect(project.notes).toBe('Test notes');
+    });
+
+    it('should return null for non-existent project', async () => {
+      const project = await getProject('non-existent-id');
+      expect(project).toBeNull();
+    });
+
+    it('should parse projectFiles for ZIP projects', async () => {
+      const saved = await saveProject({
+        name: 'ZIP Project',
+        originalName: 'test.zip',
+        kind: 'zip',
+        mainFilePath: 'main.scad',
+        content: '// Main',
+        projectFiles: {
+          'main.scad': '// Main',
+          'lib.scad': '// Lib',
+        },
+        notes: '',
+      });
+
+      const project = await getProject(saved.id);
+      
+      expect(project.projectFiles).toBeDefined();
+      expect(typeof project.projectFiles).toBe('object');
+      expect(project.projectFiles['lib.scad']).toBe('// Lib');
+    });
+  });
+
+  describe('touchProject', () => {
+    it('should update lastLoadedAt timestamp', async () => {
+      const saved = await saveProject({
+        name: 'Test Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+      });
+
+      const originalProject = await getProject(saved.id);
+      const originalTimestamp = originalProject.lastLoadedAt;
+
+      // Wait a bit
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      await touchProject(saved.id);
+
+      const updatedProject = await getProject(saved.id);
+      
+      expect(updatedProject.lastLoadedAt).toBeGreaterThan(originalTimestamp);
+    });
+
+    it('should return false for non-existent project', async () => {
+      const result = await touchProject('non-existent-id');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('updateProject', () => {
+    it('should update project name', async () => {
+      const saved = await saveProject({
+        name: 'Original Name',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+      });
+
+      const result = await updateProject({
+        id: saved.id,
+        name: 'Updated Name',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(saved.id);
+      expect(project.name).toBe('Updated Name');
+    });
+
+    it('should update project notes', async () => {
+      const saved = await saveProject({
+        name: 'Test Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: 'Original notes',
+      });
+
+      const result = await updateProject({
+        id: saved.id,
+        notes: 'Updated notes with https://example.com',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(saved.id);
+      expect(project.notes).toBe('Updated notes with https://example.com');
+    });
+
+    it('should reject notes exceeding length limit', async () => {
+      const saved = await saveProject({
+        name: 'Test Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+      });
+
+      const longNotes = 'x'.repeat(5001);
+      const result = await updateProject({
+        id: saved.id,
+        notes: longNotes,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('exceed maximum length');
+    });
+
+    it('should return error for non-existent project', async () => {
+      const result = await updateProject({
+        id: 'non-existent-id',
+        name: 'New Name',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Project not found');
+    });
+  });
+
+  describe('deleteProject', () => {
+    it('should delete a project successfully', async () => {
+      const saved = await saveProject({
+        name: 'Test Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+      });
+
+      const result = await deleteProject(saved.id);
+      expect(result.success).toBe(true);
+
+      const project = await getProject(saved.id);
+      expect(project).toBeNull();
+    });
+
+    it('should handle deletion of non-existent project gracefully', async () => {
+      const result = await deleteProject('non-existent-id');
+      // Should succeed (idempotent)
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('getSavedProjectsSummary', () => {
+    it('should return zero count for no projects', async () => {
+      const summary = await getSavedProjectsSummary();
+      
+      expect(summary.count).toBe(0);
+      expect(summary.totalApproxBytes).toBe(0);
+    });
+
+    it('should return correct count and approximate size', async () => {
+      await saveProject({
+        name: 'Project 1',
+        originalName: 'p1.scad',
+        kind: 'scad',
+        mainFilePath: 'p1.scad',
+        content: '// P1',
+        notes: 'Notes 1',
+      });
+
+      await saveProject({
+        name: 'Project 2',
+        originalName: 'p2.scad',
+        kind: 'scad',
+        mainFilePath: 'p2.scad',
+        content: '// P2',
+        notes: 'Notes 2',
+      });
+
+      const summary = await getSavedProjectsSummary();
+      
+      expect(summary.count).toBe(2);
+      expect(summary.totalApproxBytes).toBeGreaterThan(0);
+    });
+  });
+
+  describe('clearAllSavedProjects', () => {
+    it('should clear all saved projects', async () => {
+      // Save multiple projects
+      await saveProject({
+        name: 'Project 1',
+        originalName: 'p1.scad',
+        kind: 'scad',
+        mainFilePath: 'p1.scad',
+        content: '// P1',
+        notes: '',
+      });
+
+      await saveProject({
+        name: 'Project 2',
+        originalName: 'p2.scad',
+        kind: 'scad',
+        mainFilePath: 'p2.scad',
+        content: '// P2',
+        notes: '',
+      });
+
+      const result = await clearAllSavedProjects();
+      expect(result.success).toBe(true);
+
+      const projects = await listSavedProjects();
+      expect(projects).toHaveLength(0);
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle empty notes', async () => {
+      const result = await saveProject({
+        name: 'Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.notes).toBe('');
+    });
+
+    it('should handle special characters in names', async () => {
+      const result = await saveProject({
+        name: 'Project with "quotes" & <tags>',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: 'Notes with special chars: @#$%',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.name).toBe('Project with "quotes" & <tags>');
+      expect(project.notes).toBe('Notes with special chars: @#$%');
+    });
+
+    it('should handle Unicode characters', async () => {
+      const result = await saveProject({
+        name: 'プロジェクト 项目 🚀',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Unicode: 你好',
+        notes: 'Notes: Привет 🎉',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.name).toBe('プロジェクト 项目 🚀');
+      expect(project.notes).toBe('Notes: Привет 🎉');
+    });
+  });
+
+  // ============================================================================
+  // Folder Operations Tests (v2)
+  // ============================================================================
+
+  describe('Folder Operations (v2)', () => {
+    describe('createFolder', () => {
+      it('should create a folder successfully', async () => {
+        const result = await createFolder({ name: 'Test Folder' });
+        
+        expect(result.success).toBe(true);
+        expect(result.id).toBeDefined();
+        expect(typeof result.id).toBe('string');
+        expect(result.id.startsWith('folder-')).toBe(true);
+      });
+
+      it('should create a nested folder', async () => {
+        const parent = await createFolder({ name: 'Parent Folder' });
+        expect(parent.success).toBe(true);
+
+        const child = await createFolder({
+          name: 'Child Folder',
+          parentId: parent.id,
+        });
+
+        expect(child.success).toBe(true);
+
+        const childFolder = await getFolder(child.id);
+        expect(childFolder.parentId).toBe(parent.id);
+      });
+
+      it('should reject empty folder name', async () => {
+        const result = await createFolder({ name: '' });
+        
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('required');
+      });
+
+      it('should reject folder with non-existent parent', async () => {
+        const result = await createFolder({
+          name: 'Orphan',
+          parentId: 'non-existent-id',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Parent folder not found');
+      });
+    });
+
+    describe('getFolder', () => {
+      it('should retrieve a folder by ID', async () => {
+        const created = await createFolder({ name: 'Test Folder', color: '#FF0000' });
+        
+        const folder = await getFolder(created.id);
+        
+        expect(folder).toBeDefined();
+        expect(folder.id).toBe(created.id);
+        expect(folder.name).toBe('Test Folder');
+        expect(folder.color).toBe('#FF0000');
+      });
+
+      it('should return null for non-existent folder', async () => {
+        const folder = await getFolder('non-existent-id');
+        expect(folder).toBeNull();
+      });
+    });
+
+    describe('listFolders', () => {
+      it('should return empty array when no folders exist', async () => {
+        const folders = await listFolders();
+        expect(folders).toEqual([]);
+      });
+
+      it('should list all folders', async () => {
+        await createFolder({ name: 'Folder 1' });
+        await createFolder({ name: 'Folder 2' });
+
+        const folders = await listFolders();
+        
+        expect(folders).toHaveLength(2);
+      });
+    });
+
+    describe('renameFolder', () => {
+      it('should rename a folder', async () => {
+        const created = await createFolder({ name: 'Original Name' });
+        
+        const result = await renameFolder(created.id, 'New Name');
+        expect(result.success).toBe(true);
+
+        const folder = await getFolder(created.id);
+        expect(folder.name).toBe('New Name');
+      });
+
+      it('should reject empty name', async () => {
+        const created = await createFolder({ name: 'Test' });
+        
+        const result = await renameFolder(created.id, '');
+        expect(result.success).toBe(false);
+      });
+    });
+
+    describe('deleteFolder', () => {
+      it('should delete an empty folder', async () => {
+        const created = await createFolder({ name: 'To Delete' });
+        
+        const result = await deleteFolder(created.id);
+        expect(result.success).toBe(true);
+
+        const folder = await getFolder(created.id);
+        expect(folder).toBeNull();
+      });
+
+      it('should move contents to root when deleting folder with projects', async () => {
+        const folder = await createFolder({ name: 'Folder' });
+        
+        const project = await saveProject({
+          name: 'Project in Folder',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        await deleteFolder(folder.id, false); // Don't delete contents
+
+        const updatedProject = await getProject(project.id);
+        expect(updatedProject.folderId).toBeNull(); // Moved to root
+      });
+    });
+
+    describe('moveFolder', () => {
+      it('should move a folder to a new parent', async () => {
+        const parent1 = await createFolder({ name: 'Parent 1' });
+        const parent2 = await createFolder({ name: 'Parent 2' });
+        const child = await createFolder({ name: 'Child', parentId: parent1.id });
+
+        const result = await moveFolder(child.id, parent2.id);
+        expect(result.success).toBe(true);
+
+        const movedFolder = await getFolder(child.id);
+        expect(movedFolder.parentId).toBe(parent2.id);
+      });
+
+      it('should prevent moving folder into itself', async () => {
+        const folder = await createFolder({ name: 'Self' });
+        
+        const result = await moveFolder(folder.id, folder.id);
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Cannot move folder into itself');
+      });
+
+      it('should prevent moving folder into its descendant', async () => {
+        const parent = await createFolder({ name: 'Parent' });
+        const child = await createFolder({ name: 'Child', parentId: parent.id });
+        
+        const result = await moveFolder(parent.id, child.id);
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Cannot move folder into itself');
+      });
+    });
+
+    describe('getFolderTree', () => {
+      it('should return hierarchical folder structure', async () => {
+        await createFolder({ name: 'Root Folder' });
+        const project = await saveProject({
+          name: 'Root Project',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+        });
+
+        const tree = await getFolderTree();
+        
+        expect(tree.folders).toHaveLength(1);
+        expect(tree.rootProjects).toBeDefined();
+      });
+    });
+
+    describe('getFolderBreadcrumbs', () => {
+      it('should return folder path from root to current', async () => {
+        const parent = await createFolder({ name: 'Parent' });
+        const child = await createFolder({ name: 'Child', parentId: parent.id });
+        const grandchild = await createFolder({ name: 'Grandchild', parentId: child.id });
+
+        const breadcrumbs = await getFolderBreadcrumbs(grandchild.id);
+        
+        expect(breadcrumbs).toHaveLength(3);
+        expect(breadcrumbs[0].name).toBe('Parent');
+        expect(breadcrumbs[1].name).toBe('Child');
+        expect(breadcrumbs[2].name).toBe('Grandchild');
+      });
+    });
+  });
+
+  describe('Project-Folder Operations (v2)', () => {
+    describe('moveProject', () => {
+      it('should move a project to a folder', async () => {
+        const folder = await createFolder({ name: 'Destination' });
+        const project = await saveProject({
+          name: 'Project',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+        });
+
+        const result = await moveProject(project.id, folder.id);
+        expect(result.success).toBe(true);
+
+        const updatedProject = await getProject(project.id);
+        expect(updatedProject.folderId).toBe(folder.id);
+      });
+
+      it('should move a project to root (null folder)', async () => {
+        const folder = await createFolder({ name: 'Source' });
+        const project = await saveProject({
+          name: 'Project',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        const result = await moveProject(project.id, null);
+        expect(result.success).toBe(true);
+
+        const updatedProject = await getProject(project.id);
+        expect(updatedProject.folderId).toBeNull();
+      });
+    });
+
+    describe('getProjectsInFolder', () => {
+      it('should return projects in a specific folder', async () => {
+        const folder = await createFolder({ name: 'Folder' });
+        
+        await saveProject({
+          name: 'Project 1',
+          originalName: 'p1.scad',
+          kind: 'scad',
+          mainFilePath: 'p1.scad',
+          content: '// P1',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        await saveProject({
+          name: 'Project 2',
+          originalName: 'p2.scad',
+          kind: 'scad',
+          mainFilePath: 'p2.scad',
+          content: '// P2',
+          notes: '',
+        }); // Root level
+
+        const projects = await getProjectsInFolder(folder.id);
+        
+        expect(projects).toHaveLength(1);
+        expect(projects[0].name).toBe('Project 1');
+      });
+
+      it('should return root projects when folderId is null', async () => {
+        await saveProject({
+          name: 'Root Project',
+          originalName: 'root.scad',
+          kind: 'scad',
+          mainFilePath: 'root.scad',
+          content: '// Root',
+          notes: '',
+        });
+
+        const folder = await createFolder({ name: 'Folder' });
+        await saveProject({
+          name: 'Folder Project',
+          originalName: 'folder.scad',
+          kind: 'scad',
+          mainFilePath: 'folder.scad',
+          content: '// Folder',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        const projects = await getProjectsInFolder(null);
+        
+        expect(projects).toHaveLength(1);
+        expect(projects[0].name).toBe('Root Project');
+      });
+    });
+
+    describe('saveProject with folderId', () => {
+    it('should save project with folder assignment', async () => {
+      const folder = await createFolder({ name: 'My Folder' });
+      
+      const result = await saveProject({
+        name: 'Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+        folderId: folder.id,
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.folderId).toBe(folder.id);
+    });
+  });
+
+  describe('Duplicate Name Handling', () => {
+    it('should auto-increment name when saving duplicate', async () => {
+      // Save first project
+      const result1 = await saveProject({
+        name: 'example.scad',
+        originalName: 'example.scad',
+        kind: 'scad',
+        mainFilePath: 'example.scad',
+        content: '// First',
+        notes: '',
+      });
+      expect(result1.success).toBe(true);
+
+      // Save second project with same name - should get (2)
+      const result2 = await saveProject({
+        name: 'example.scad',
+        originalName: 'example.scad',
+        kind: 'scad',
+        mainFilePath: 'example.scad',
+        content: '// Second',
+        notes: '',
+      });
+      expect(result2.success).toBe(true);
+
+      const project2 = await getProject(result2.id);
+      expect(project2.name).toBe('example.scad (2)');
+
+      // Save third project with same name - should get (3)
+      const result3 = await saveProject({
+        name: 'example.scad',
+        originalName: 'example.scad',
+        kind: 'scad',
+        mainFilePath: 'example.scad',
+        content: '// Third',
+        notes: '',
+      });
+      expect(result3.success).toBe(true);
+
+      const project3 = await getProject(result3.id);
+      expect(project3.name).toBe('example.scad (3)');
+    });
+
+    it('should handle unique names without modification', async () => {
+      const result = await saveProject({
+        name: 'unique-project.scad',
+        originalName: 'unique-project.scad',
+        kind: 'scad',
+        mainFilePath: 'unique-project.scad',
+        content: '// Unique',
+        notes: '',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.name).toBe('unique-project.scad');
+    });
+
+    it('should correctly find next available number', async () => {
+      // Save project 1
+      await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 1',
+        notes: '',
+      });
+
+      // Save project 2 - gets (2)
+      await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 2',
+        notes: '',
+      });
+
+      // Save project 3 - gets (3)
+      await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 3',
+        notes: '',
+      });
+
+      // Save project 4 - should get (4) not (2)
+      const result4 = await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 4',
+        notes: '',
+      });
+
+      const project4 = await getProject(result4.id);
+      expect(project4.name).toBe('test.scad (4)');
+    });
+  });
+});
+});

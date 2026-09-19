@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Main CSS - Imports all styles */
+@import './variables.css';
+@import './reset.css';
+@import './layout.css';
+@import './components.css';
+@import './variant.css';
+@import './toolbar-menu.css';
+@import './classic.css';
+@import './classic-icons.css';
+@import './game.css';

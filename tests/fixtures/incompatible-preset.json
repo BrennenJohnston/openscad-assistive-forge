@@ -1,0 +1,17 @@
+{
+  "parameterSets": {
+    "Outdated Preset": {
+      "width": "100",
+      "height": "50",
+      "old_parameter": "removed",
+      "deprecated_setting": "true",
+      "legacy_value": "42"
+    },
+    "Type Mismatch Preset": {
+      "width": "abc",
+      "height": "not_a_number",
+      "enabled": "maybe"
+    }
+  },
+  "fileFormatVersion": "1"
+}

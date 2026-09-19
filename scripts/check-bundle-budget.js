@@ -1,0 +1,331 @@
+#!/usr/bin/env node
+/**
+ * Bundle Size Budget Checker (Milestone 3: Performance & Stability)
+ *
+ * Enforces the bundle size budgets below. (They were first set in a
+ * planning doc, LAYER_2_BUILD_PLAN.md, that never shipped in this repo -
+ * the numbers here are the authority now. AF-8.)
+ *
+ * Budgets:
+ * - Core app: < 500 KB gzipped
+ * - Total (Expert Mode / CodeMirror editor): < 1.5 MB gzipped
+ *
+ * Usage:
+ *   node scripts/check-bundle-budget.js
+ *
+ * Exit codes:
+ *   0 - All budgets met
+ *   1 - Budget exceeded (blocks CI)
+ *
+ * @license GPL-3.0-or-later
+ */
+
+import { readdirSync, statSync, readFileSync } from 'fs';
+import { join, basename, extname, relative, sep } from 'path';
+import { gzipSync } from 'zlib';
+
+// Lazy-loaded static payloads fetched on demand at runtime, never part of
+// the initial page load (same rationale as the WASM binary exclusion).
+// liblouis/ holds the braille translation engine + tables loaded only by
+// the Braille Card Customizer's worker; examples/ascii-city/ holds the
+// City Walk game's map extracts, fetched only when a player picks a city.
+// Entries are dist-relative path prefixes (POSIX separators).
+const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
+
+// The OpenSCAD engine, which is 3.26 MB gzipped of vendored WebAssembly and
+// the one thing the app cannot work without. It is not code anybody here is
+// going to shrink, and weighing it would make the wasm line so loose it could
+// never catch anything. Kept out by name rather than by accident of extension.
+const WASM_EXCLUDED_DIRS = ['wasm/openscad-official'];
+
+// Budget definitions (in bytes)
+const BUDGETS = {
+  // Core app bundle - the one chunk every visitor downloads before anything
+  // works, so it is the number that decides how long a first visit takes.
+  // Vite generates hashes with alphanumeric chars and underscores.
+  //
+  // ★ RAISED FROM 500 KB TO 586 KB BY THE OWNER at gate G1 (DP-Q22,
+  // 2026-08-28), with the numbers in front of them. Wiring the stencil colour
+  // engine into the customizer put this at 516,052 B against the old 512,000;
+  // moving the whole stencil engine into a chunk that only loads when a
+  // stencil is opened brought it back to 511,760, which passed with 240 bytes
+  // to spare. The drawing editor is the biggest thing still to be written, and
+  // 240 bytes is not room to write it in. The owner's decision was to raise
+  // the number rather than spend the round shaving bytes off working code:
+  // "I would rather spend the round building the editor". The check still
+  // fails loudly if something doubles.
+  //
+  // Remember D-121 when reading any of these: this script weighs .js, .css,
+  // .html and .json only. Images, fonts, SVGs, .scad and .wasm are invisible
+  // to it, including to the "Total Assets" line below.
+  coreApp: {
+    name: 'Core App (no Monaco)',
+    budget: 600 * 1000, // 600 kB, decimal - see the note above
+    pattern: /^index-[a-zA-Z0-9_-]+\.js$/,
+    critical: true,
+  },
+  // Main CSS
+  mainCSS: {
+    name: 'Main CSS',
+    budget: 150 * 1024, // 150 KB
+    pattern: /^index-[a-zA-Z0-9_-]+\.css$/,
+    critical: false,
+  },
+  // Total assets (excluding WASM and external Monaco)
+  // ★ SIGNED BY THE OWNER at gate DP-Q43 (2026-09-14): "Weigh .wasm, with its
+  // own line." D-121 had this file class invisible since round 1 - the checker
+  // weighed .js, .css, .html and .json only - so a WebAssembly binary could
+  // double without a word. It cannot now.
+  //
+  // MEASURED when the line went in: potrace.wasm 18,357 B gzipped, the only
+  // wasm this weighs. 30,000 leaves room for a rebuild to grow a little and
+  // fails loudly if one doubles.
+  //
+  // One correction to what was in front of the owner when they signed: the
+  // gate's note said the OpenSCAD engine's wasm is downloaded rather than
+  // committed and so absent at check time. That was wrong - only
+  // public/wasm/openscad.* is gitignored; public/wasm/openscad-official/ is
+  // tracked and lands in dist at 3.26 MB gzipped. The decision is unaffected,
+  // and the engine is excluded by name above with its reason.
+  wasmAssets: {
+    name: 'WebAssembly (excluding the OpenSCAD engine)',
+    budget: 30000,
+    pattern: null,
+    pool: 'wasm',
+    critical: true,
+  },
+  totalAssets: {
+    name: 'Total Assets',
+    // 1,200,000 B, signed by the owner at the design round's close gate.
+    // MEASURED then: 1,051,173 B gzipped at 13b04ce (full npm run build) -
+    // the drawing editor's lazy chunks put the old 1 MiB line underwater,
+    // and the line is raised to the owner's number rather than trimmed
+    // quietly. D-121's lesson stands beside it: this weighs CODE the
+    // browser may fetch, not the vendored WASM engine.
+    budget: 1200000,
+    pattern: null, // Sum all
+    critical: true,
+  },
+};
+
+// Performance regression thresholds
+const REGRESSION_THRESHOLD = 0.15; // 15% increase triggers warning
+
+/**
+ * Get gzipped size of a file
+ * @param {string} filePath - Path to file
+ * @returns {number} Gzipped size in bytes
+ */
+function getGzippedSize(filePath) {
+  const content = readFileSync(filePath);
+  const gzipped = gzipSync(content, { level: 9 });
+  return gzipped.length;
+}
+
+/**
+ * Get raw size of a file
+ * @param {string} filePath - Path to file
+ * @returns {number} Size in bytes
+ */
+function getRawSize(filePath) {
+  return statSync(filePath).size;
+}
+
+/**
+ * Format bytes to human-readable string
+ * @param {number} bytes - Size in bytes
+ * @returns {string} Formatted string
+ */
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+/**
+ * Recursively get all files in directory
+ * @param {string} dir - Directory path
+ * @param {string[]} files - Accumulated files
+ * @returns {string[]} All file paths
+ */
+function getAllFiles(dir, files = []) {
+  const entries = readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      getAllFiles(fullPath, files);
+    } else {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Check bundle size budgets
+ * @param {string} distPath - Path to dist directory
+ * @returns {Object} Results with violations
+ */
+function checkBudgets(distPath) {
+  const results = {
+    passed: true,
+    criticalFailure: false,
+    checks: [],
+    summary: {},
+  };
+
+  // Get all files in dist
+  let allFiles;
+  try {
+    allFiles = getAllFiles(distPath);
+  } catch (e) {
+    console.error(`Error reading dist directory: ${e.message}`);
+    results.passed = false;
+    results.criticalFailure = true;
+    return results;
+  }
+
+  const under = (filePath, dirs) => {
+    const relPath = relative(distPath, filePath).split(sep).join('/');
+    return dirs.some(
+      (dir) => relPath === dir || relPath.startsWith(`${dir}/`)
+    );
+  };
+
+  // Filter to assets (JS, CSS, HTML), excluding lazy-loaded static dirs
+  const assetExtensions = ['.js', '.css', '.html', '.json'];
+  const assets = allFiles.filter(
+    (f) => assetExtensions.includes(extname(f)) && !under(f, EXCLUDED_DIRS)
+  );
+
+  // WebAssembly is weighed on its own line (DP-Q43), not folded into the code
+  // total: "Total Assets" has always meant code the browser parses, and the
+  // OpenSCAD engine would drown both numbers.
+  const wasmFiles = allFiles.filter(
+    (f) => extname(f) === '.wasm' && !under(f, WASM_EXCLUDED_DIRS)
+  );
+
+  const measure = (filePath) => ({
+    path: filePath,
+    name: basename(filePath),
+    raw: getRawSize(filePath),
+    gzipped: getGzippedSize(filePath),
+  });
+
+  // Calculate sizes
+  const fileSizes = assets.map(measure);
+  const pools = { code: fileSizes, wasm: wasmFiles.map(measure) };
+
+  // Check each budget
+  for (const [key, budget] of Object.entries(BUDGETS)) {
+    let matchedFiles;
+    let totalGzipped;
+
+    const pool = pools[budget.pool || 'code'];
+    if (budget.pattern) {
+      // Match specific pattern
+      matchedFiles = pool.filter((f) => budget.pattern.test(f.name));
+    } else {
+      // Sum everything in the pool
+      matchedFiles = pool;
+    }
+    totalGzipped = matchedFiles.reduce((sum, f) => sum + f.gzipped, 0);
+
+    const passed = totalGzipped <= budget.budget;
+    const percentOfBudget = ((totalGzipped / budget.budget) * 100).toFixed(1);
+
+    const check = {
+      name: budget.name,
+      budget: budget.budget,
+      budgetFormatted: formatBytes(budget.budget),
+      actual: totalGzipped,
+      actualFormatted: formatBytes(totalGzipped),
+      percentOfBudget,
+      passed,
+      critical: budget.critical,
+      files: matchedFiles.map((f) => ({
+        name: f.name,
+        gzipped: formatBytes(f.gzipped),
+        raw: formatBytes(f.raw),
+      })),
+    };
+
+    results.checks.push(check);
+
+    if (!passed) {
+      results.passed = false;
+      if (budget.critical) {
+        results.criticalFailure = true;
+      }
+    }
+
+    results.summary[key] = {
+      gzipped: totalGzipped,
+      budget: budget.budget,
+      passed,
+    };
+  }
+
+  return results;
+}
+
+/**
+ * Print results to console
+ * @param {Object} results - Budget check results
+ */
+function printResults(results) {
+  console.log('\n=== Bundle Size Budget Check ===\n');
+
+  for (const check of results.checks) {
+    const icon = check.passed ? '✅' : check.critical ? '❌' : '⚠️';
+    const status = check.passed
+      ? 'PASS'
+      : check.critical
+        ? 'FAIL (BLOCKING)'
+        : 'WARN';
+
+    console.log(`${icon} ${check.name}`);
+    console.log(`   Budget: ${check.budgetFormatted}`);
+    console.log(`   Actual: ${check.actualFormatted} (${check.percentOfBudget}% of budget)`);
+    console.log(`   Status: ${status}`);
+
+    if (check.files.length > 0 && check.files.length <= 5) {
+      console.log('   Files:');
+      for (const file of check.files) {
+        console.log(`     - ${file.name}: ${file.gzipped} gzipped (${file.raw} raw)`);
+      }
+    }
+
+    console.log('');
+  }
+
+  // Summary
+  console.log('=== Summary ===\n');
+
+  if (results.criticalFailure) {
+    console.log('❌ FAILED: Critical budget exceeded. This PR should not be merged.');
+    console.log('   Action: Investigate bundle size increase before proceeding.\n');
+  } else if (!results.passed) {
+    console.log('⚠️  WARNING: Non-critical budget exceeded.');
+    console.log('   Action: Review bundle size increase and justify in PR.\n');
+  } else {
+    console.log('✅ PASSED: All budgets met.\n');
+  }
+
+  // Output JSON for CI parsing
+  console.log('=== JSON Output ===');
+  console.log(JSON.stringify(results.summary, null, 2));
+}
+
+// Main execution
+const distPath = process.argv[2] || 'dist';
+
+console.log(`Checking bundle sizes in: ${distPath}`);
+
+const results = checkBudgets(distPath);
+printResults(results);
+
+// Exit with appropriate code
+process.exit(results.criticalFailure ? 1 : 0);

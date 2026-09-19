@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "type": "openscad-preset",
+  "modelName": "braille_charm.scad",
+  "preset": {
+    "name": "Large Charm",
+    "description": "Bracelet clip sized like the Charm Customizer's Large Charm preset",
+    "parameters": {
+      "charm_shape": "bracelet_clip",
+      "clip_height": 22,
+      "clip_profile_depth": 8.65,
+      "clip_wall_thickness": 2.25,
+      "clip_channel_length": 15,
+      "clip_gap_offset": 2,
+      "clip_gap_width": 3,
+      "clip_edge_radius": 1,
+      "clip_side_radius": 2.5,
+      "clip_corner_radius": 2,
+      "clip_inner_radius": 1,
+      "clip_braille_rotation": 90,
+      "clip_braille_left_right": 0,
+      "clip_braille_up_down": 0
+    }
+  }
+}

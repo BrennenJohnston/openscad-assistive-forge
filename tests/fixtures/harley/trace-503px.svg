@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="503" height="629" viewBox="0 0 503 629">
+  <!--
+    D-122's red proof. A drawing whose user units are PIXELS, at the size a
+    trace of sketch4.png comes out: 503 x 629. Everything else in the stencil
+    tests sits on a canvas about 100 units across, which is the size a layer
+    file is normalized to, so a plate builder that confuses the two lands its
+    cut in about the right place and no test ever notices. At this size the
+    same mistake puts the cut five times over the plate.
+
+    Synthetic, not traced: three nested shapes, which is all that is needed to
+    make three plates. The outer shape deliberately leaves a margin, so it is
+    the drawing and not the paper (stencilLayers treats a root covering 98% of
+    the canvas as background).
+  -->
+  <path fill="#000000" d="M 40 60 C 40 30 120 20 250 20 C 380 20 465 30 465 60 L 465 560 C 465 600 380 610 250 610 C 120 610 40 600 40 560 Z"/>
+  <path fill="#000000" d="M 120 150 C 120 130 180 120 250 120 C 320 120 385 130 385 150 L 385 430 C 385 450 320 460 250 460 C 180 460 120 450 120 430 Z"/>
+  <path fill="#000000" d="M 200 230 C 200 220 220 215 250 215 C 280 215 305 220 305 230 L 305 330 C 305 342 280 348 250 348 C 220 348 200 342 200 330 Z"/>
+</svg>

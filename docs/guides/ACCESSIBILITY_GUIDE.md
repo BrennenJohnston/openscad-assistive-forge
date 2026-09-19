@@ -1,0 +1,515 @@
+# Accessibility Guide
+
+**OpenSCAD Assistive Forge** works for everyone -- whether you use assistive technologies, have limited vision, or prefer keyboard-only navigation. This guide walks you through role-specific tips so you can get the most out of the customizer.
+
+## Quick Navigation
+
+- [For Blind and Low Vision Users](#for-blind-and-low-vision-users)
+- [For Clinicians and Caregivers](#for-clinicians-and-caregivers)
+- [For Novice Makers](#for-novice-makers)
+- [For Voice Input Users](#for-voice-input-users)
+- [General Accessibility Features](#general-accessibility-features)
+
+---
+
+## For Blind and Low Vision Users
+
+The OpenSCAD Assistive Forge is designed with screen reader users in mind and provides multiple ways to access 3D model customization without needing to see the visual preview.
+
+### Keyboard Navigation
+
+#### Essential Keyboard Shortcuts
+
+- **Tab** / **Shift+Tab**: Navigate between interactive elements
+- **Arrow Keys**: Rotate 3D preview (when preview has focus)
+- **Shift + Arrow Keys**: Pan 3D preview
+- **+** / **-**: Zoom in/out on 3D preview
+- **Enter/Space**: Toggle auto-rotate (when auto-rotate button has focus)
+- **Ctrl+Z**: Undo last parameter change
+- **Ctrl+Shift+Z**: Redo parameter change
+- **Escape**: Close open modals or tooltips
+
+#### Navigating the Interface
+
+1. **Skip to Content**: Press Tab immediately after page load to activate the "Skip to main content" link
+2. **Parameters Panel** (desktop left): All model parameters with their controls  
+   **Mobile**: Use the "Params" button at the top of the preview panel to open the drawer
+3. **Preview Settings & Info** (top of preview): Status, stats, and settings  
+   **Mobile**: Use the "Preview Settings & Info" toggle button
+4. **Camera Controls** (desktop right panel) or **Camera** drawer in the actions bar (mobile)
+   - **Auto-rotate toggle**: Located in the center of the rotation D-pad. Use Enter/Space to toggle.
+   - **Rotation speed**: Configurable in Preview Settings (0.5 to 10 degrees per second)
+5. **Status Updates**: Announced automatically via screen reader
+
+### Screen Reader Features
+
+#### Live Region Announcements
+
+The app provides automatic announcements for:
+
+- Parameter value changes (with debouncing to avoid spam)
+- Model render status (in progress, complete, error)
+- File upload results
+- Library loading status
+- Camera movement actions
+- Auto-rotate state changes (enabled/disabled)
+- Preset loading confirmations
+- SVG preparation editor open/close and fullscreen state changes
+- SVG preparation preview updates (foreground/hole counts after role changes)
+
+#### Helpful Landmarks
+
+- `role="region"` on major sections with labels
+- `role="status"` for render status updates
+- `role="dialog"` for modal interactions
+- `aria-live="polite"` for non-disruptive updates
+
+### The drawing editor
+
+The drawing editor is keyboard accessible and built to be listened to. When a
+drawing needs a look, the editor opens with focus on its own name, "Drawing
+editor", and says so; through the standalone door (the **Edit a drawing or
+photo** line on the welcome screen, or **Edit Drawing** in the Actions drawer)
+it is the whole screen.
+
+#### Keyboard Controls
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Move between the toolbar, the picture's controls, the rows and their buttons |
+| `Arrow keys` | Switch between On / Cut out / Off within a row's role group (On / Off where the drawing is one compound path) |
+| `Ctrl+A` (`Cmd+A`) | Choose every shape, with the list focused |
+| `Delete` / `Backspace` | Remove the chosen shapes |
+| `Ctrl`-click / `Cmd`-click, `Shift`-click | Add a row or a shape to the choice, or take a range |
+| `On` / `Cut out` / `Off` on a chosen row | Sets every chosen shape, and the announcement counts them ("3 shapes set to Off.") |
+| `+` / `-` | Zoom the picture in and out; **Fit**, **+** and **-** under the picture do the same |
+| `Escape` | Shut the innermost thing that is open: a row's **More** menu, then the crop view, then the editor |
+
+In the crop view the four rows are native sliders: arrow keys move them, and
+each has a number box beside it for an exact value. Focus lands on **Top**
+when the view opens and returns to **Crop** when it closes.
+
+#### Screen Reader Behavior
+
+- The editor is a labeled `region` landmark named "Drawing editor"; the
+  shapes panel's list is named "Shapes" and each row is named by its shape
+  and its role in the word the control uses (for example "Shape 3, On")
+- A row's **More** button says which row it belongs to, and Escape shuts the
+  menu without leaving the editor
+- Choosing rows is said as a sentence, once per change ("3 of 7 shapes
+  selected.", "All 7 shapes selected.", "Nothing selected."), and **Delete
+  selected** carries the count in its own name
+- The result combines by itself after a change; the sentence under the
+  picture says how many shapes and about how long ("Combining 146 shapes,
+  about 2 seconds. Apply is ready when they are combined."), and "Preview
+  ready." follows once
+- Shapes too thin to print are counted in a status region above the list
+  ("33 shapes are thinner than 0.5 mm at 12 mm wide and may not print."), and
+  each such row is described as "too thin to print" or "too small to trace
+  clearly" after its name; **Turn those off** and **Turn those back on** say what they
+  did
+- The crop view announces "Crop view open. Four sliders take an edge off the
+  picture." on opening, each slider is described by one help sentence and by
+  the sentence that says what stays, and Save crop, Cancel and Undo crop each
+  say what happened ("Cropped. 37 shapes.", "Crop canceled. Your drawing is
+  unchanged.", "Crop undone. 206 shapes.")
+- The Drawing / Charm switch is a radio group named "View"; switching says
+  "Showing the charm." or "Showing the drawing." once, and the note under the
+  charm view is read once and stays findable
+- Warnings appear in a `role="status"` live region, and a shape carrying a
+  warning reads it beside its name
+- Color swatches are decorative (`aria-hidden="true"`)
+
+#### The standalone door
+
+Through the standalone door there is no model behind the editor and nothing
+to Tab out to, so the editor traps focus: `Tab` and `Shift+Tab` cycle within
+it, and `Escape` is the way out once nothing smaller is open. Focus returns to
+the door that opened it.
+
+### Forced Colors Mode (Windows High Contrast)
+
+The app fully supports Windows High Contrast mode and other OS-enforced color schemes:
+
+- All UI elements remain visible with system colors
+- Focus indicators use outlines (not suppressed box-shadows)
+- Borders are explicitly defined on all interactive elements
+- No information is conveyed by color alone
+
+### Enhanced Contrast Mode
+
+Toggle High Contrast mode within the app:
+
+1. Click the "HC" button in the top-right header, or
+2. Press Tab until you reach it and press Enter
+
+Features:
+- Larger text (12-17% increase)
+- Thicker borders (2-3px)
+- Stronger focus indicators (4px)
+- WCAG AAA contrast ratios (7:1)
+
+### Non-Visual Model Information
+
+When a model is rendered, the following information is available:
+
+- **Render Status**: Success, in progress, or error state
+- **Model Dimensions**: X, Y, Z bounding box in millimeters
+- **File Size**: Output file size
+- **Vertex Count**: Geometric complexity indicator
+
+Access this via the **Preview Settings & Info** drawer (Stats section).
+
+### Tips for Screen Reader Users
+
+1. **Start with Examples**: Load an example model to get familiar with the interface
+2. **Use Parameter Groups**: Models with many parameters are organized into collapsible groups
+3. **Presets**: save configurations you use often as presets
+4. **Undo**: Ctrl+Z undoes parameter changes
+5. **Help Text**: Each parameter may have a help tooltip (? button)
+
+#### Configurations
+
+The app is built and measured against NVDA with Firefox, JAWS with Chrome or
+Edge, VoiceOver with Safari, and TalkBack with Chrome. A listening run with a
+screen reader has not been done yet, so these results are measured, not
+heard. If you use one of these and something reads wrongly, please report it.
+
+---
+
+## For Clinicians and Caregivers
+
+If you're customizing assistive devices (like AAC keyguards) for clients, this section will help you use the customizer efficiently in a clinical setting.
+
+### Keyguard Workflow
+
+See the dedicated [Keyguard Workflow Guide](./KEYGUARD_WORKFLOW_GUIDE.md) for step-by-step instructions on customizing AAC keyguards.
+
+### Preset Sharing for Collaboration
+
+#### Saving Client Configurations
+
+1. Adjust parameters for your client's needs
+2. Click "Save Preset" in the Parameters panel
+3. Name it descriptively (e.g., "Jane - Grid 4x5 - 15mm holes")
+4. Click "Save"
+
+#### Sharing Presets Between Sessions
+
+Presets are saved in your browser's local storage. To share across devices:
+
+1. Open Advanced menu → "View Params JSON"
+2. Copy the JSON to clipboard
+3. Send via email or paste into client notes
+4. On another device, paste JSON and click "Apply"
+
+### Quick Iteration for Trial Fittings
+
+1. Start with a preset closest to your client's device
+2. Adjust 1-2 key parameters (e.g., hole size, rail height)
+3. Generate and download STL
+4. 3D print test piece
+5. Note adjustments needed
+6. Reload preset and adjust
+7. Repeat until perfect fit
+
+### Color Considerations for CVI Users
+
+Some AAC keyguards are used by clients with Cortical Visual Impairment (CVI) who benefit from high-contrast colors:
+
+- Many AAC keyguard models support a `color` parameter
+- Black keyguards often provide best contrast against device screens
+- Use the "Model Color" picker in Preview Settings to test colors visually
+
+### Multi-Client Management
+
+Best practices for managing multiple client configurations:
+
+- Use clear preset names with client initials and device info
+- Document parameter values in client records
+- Keep a backup JSON export in each client's file
+- Review and update presets after each assessment
+
+---
+
+## For Novice Makers
+
+New to 3D modeling and parametric customization? This section explains the basics.
+
+### What Are Parameters?
+
+Parameters are the adjustable values that control your 3D model. Common examples:
+
+- **Size** (width, height, depth in millimeters)
+- **Thickness** (wall thickness, typically 2-5mm)
+- **Resolution** (detail level; higher = smoother curves but slower rendering)
+- **Quantities** (how many holes, slots, or features)
+
+#### Understanding Units
+
+- Most models use **millimeters (mm)**
+- 1 inch = 25.4mm
+- Your 3D printer's build volume is typically listed in mm
+
+### Safe Starting Values
+
+If you're unsure what values to use:
+
+1. **Start with defaults**: The model's author chose sensible defaults
+2. **Make small changes**: Adjust one parameter at a time
+3. **Use the Reset button**: Returns parameter to its default value
+4. **Undo if needed**: Ctrl+Z undoes your last change
+
+### Common Parameter Types
+
+- **Slider**: Drag or use arrow keys to adjust numeric values
+- **Dropdown**: Select from predefined options
+- **Checkbox**: Toggle features on/off
+- **Text**: Enter custom text or values
+
+### What If I Break Something?
+
+You cannot break anything permanently:
+
+- **Reset All**: Returns everything to defaults
+- **Undo**: Reverses your last change (Ctrl+Z)
+- **Reload Page**: Worst case, refresh your browser
+
+### Getting Help
+
+- **Parameter Help (?)**: Click the ? button next to parameters for explanations
+- **Features Guide**: Click "Help" button for tutorials
+- **Error Messages**: Read carefully. They often explain what went wrong
+- **Example Models**: Try the built-in examples to learn how parameters work
+
+---
+
+## For Voice Input Users
+
+If you use voice input software (Dragon NaturallySpeaking, Windows Voice Control, macOS Voice Control), this section ensures you can use all features.
+
+### Speakable Interface Elements
+
+All interactive elements have visible text labels or accessible names:
+
+- **Buttons**: Named clearly ("Generate STL", "Save Preset", etc.)
+- **Inputs**: Labeled with parameter names
+- **Dropdowns**: Labeled with setting names
+
+### Voice Command Tips
+
+#### Common Commands (vary by software)
+
+- "Click Generate STL" - Start rendering
+- "Click Save Preset" - Save current configuration  
+- "Click Reset" - Reset parameters to defaults
+- "Press Tab" - Navigate to next element
+- "Press Enter" - Activate focused button
+
+#### Parameter Adjustment
+
+For numeric parameters:
+
+- "Click [parameter name]" to focus
+- "Type [number]" to set value
+- "Press Enter" or "Press Tab" to apply
+
+### Known Limitations
+
+- **3D Preview Camera**: Voice commands for rotating the camera may be challenging. Use the on-screen camera control buttons instead.
+- **Slider Drag**: Use keyboard (+/- or arrow keys) instead of "drag" commands
+
+### Recommended Setup
+
+1. Ensure all buttons and inputs have keyboard focus
+2. Use voice commands to navigate via Tab
+3. Use keyboard shortcuts for frequent actions (Ctrl+Z, etc.)
+4. Enable "Show Keyboard Focus" in your OS accessibility settings
+
+---
+
+## Color System and Visual Accessibility
+
+### Accessible Color Palette
+
+The OpenSCAD Assistive Forge uses an accessible color system built on [Radix Colors](https://www.radix-ui.com/colors), designed to meet **WCAG 2.2 AA** standards for normal themes and **WCAG AAA (7:1)** standards for high contrast mode.
+
+#### Color Palette
+
+- **Yellow (Accent)**: Primary brand color for buttons, links, and highlights
+- **Green (Success)**: Successful operations and positive states
+- **Teal (Info)**: Informational messages and secondary actions
+- **Red (Error)**: Errors and destructive actions
+- **Amber (Warning)**: Warnings and caution states
+- **Neutral (Slate)**: Text, backgrounds, and borders
+
+All colors are carefully selected to:
+- Meet WCAG contrast requirements
+- Be distinguishable for color blind users
+- Work across light, dark, and high contrast themes
+- Never convey information by color alone (WCAG 1.4.1)
+
+### Theme Options
+
+#### Light Theme
+
+- Default theme with light backgrounds and dark text
+- Optimized for bright environments
+- WCAG 2.2 AA compliant (4.5:1 for text, 3:1 for UI elements)
+
+#### Dark Theme
+
+- Dark backgrounds with light text
+- Reduces eye strain in low-light conditions
+- Same contrast requirements as light theme
+- Automatically activates based on system preference (if not manually set)
+
+#### High Contrast Mode
+
+Toggle via the "HC" button in the header.
+
+Features:
+- **WCAG AAA** compliant (7:1 contrast for text)
+- Larger text sizes (12-17% increase)
+- Thicker borders (2-3px instead of 1px)
+- Stronger focus indicators (4px instead of 3px)
+- Brand-neutral colors for maximum contrast
+
+Available in both light and dark variants.
+
+#### Optional Monochrome Render Mode
+
+An optional monochrome rendering mode is available for users who prefer a
+terminal-style view or need additional visual clarity. To keep the interface
+lightweight, this mode is not part of the default settings panel.
+
+If you need this mode for accessibility, please contact the maintainers or
+open an issue and we will provide guidance.
+
+### Focus Indicators
+
+Focus indicators use **brand-neutral blue** (#0052cc in light mode, #66b3ff in dark mode) for:
+- Consistency with OS conventions
+- Clear distinction from brand yellow
+- Optimal contrast against all backgrounds
+
+All focus indicators meet **WCAG 2.4.13 Focus Appearance** requirements:
+- Minimum 3px thickness (4px in high contrast mode)
+- 3:1 contrast against adjacent colors
+- Visible outline or box-shadow
+
+### Skip Link
+
+The skip link uses **AAA-compliant** colors for high contrast mode:
+- Light mode: `#0047b3` background with white text (7:1 or better)
+- Dark mode: `#66b3ff` background with black text (7:1 or better)
+
+### Color Blindness Considerations
+
+The palette stays distinguishable across common color vision deficiencies:
+
+- **Deuteranopia/Protanopia (Red-Green)**: Yellow and green have sufficient brightness difference
+- **Tritanopia (Blue-Yellow)**: Teal provides clear distinction from yellow
+- **All Types**: Icons and text accompany all color-coded states
+
+No information is conveyed by color alone (WCAG 1.4.1). All states include icons: success has checkmarks, error has X icons, warning has warning icons, info has info icons.
+
+### Contrast Testing
+
+The color system includes automated tests:
+- WCAG 2.x contrast ratios (4.5:1 for text, 3:1 for UI)
+- WCAG AAA ratios for high contrast mode (7:1)
+- APCA (future WCAG 3.0) informational checks
+
+Tests run automatically with `npm test`.
+
+### System Preferences
+
+The app respects system-level accessibility preferences:
+
+#### prefers-color-scheme
+
+Automatically switches between light and dark themes based on your OS setting (unless manually overridden).
+
+#### prefers-contrast
+
+When "Increase Contrast" is enabled in your OS:
+- Borders become thicker
+- Focus indicators are enhanced
+- Text contrast is increased
+- Colors remain brand-appropriate
+
+#### forced-colors (Windows High Contrast)
+
+When Windows High Contrast or other OS color schemes are active:
+- All colors map to system colors (Canvas, CanvasText, LinkText, etc.)
+- Focus uses outline instead of box-shadow
+- Borders are explicitly visible on all interactive elements
+- No information is lost
+
+#### prefers-reduced-motion
+
+When "Reduce Motion" is enabled:
+- Animations are disabled or minimized
+- Transitions are instant
+- Auto-rotate feature is blocked from enabling (protects motion-sensitive users)
+- If auto-rotate is running when preference changes, it is automatically disabled
+
+### Color Resources
+
+For detailed information:
+- **System Overview**: See [Color System Guide](./COLOR_SYSTEM_GUIDE.md)
+- **Token Reference**: Check `src/styles/semantic-tokens.css`
+
+---
+
+## General Accessibility Features
+
+### Built-in features
+
+- Keyboard navigation: full functionality without a mouse
+- Screen reader support: ARIA labels and live regions on all interactive elements
+- High contrast mode: toggle via HC button (top-right)
+- Forced colors support: works with OS-enforced color schemes
+- Focus indicators: always visible on all interactive elements (WCAG 2.2)
+- Reduced motion: respects `prefers-reduced-motion` setting
+- Touch targets: all buttons meet 44x44px minimum size
+- Undo/Redo: parameter history with Ctrl+Z/Ctrl+Shift+Z
+- Presets: save and recall frequently-used configurations
+- Persistent values: parameters remembered between sessions
+
+### Standards
+
+The target is WCAG 2.2 Level AA, which also covers Section 508 and EN 301
+549. The status of each criterion is recorded in the VPAT and the conformance
+decisions under `docs/accessibility/vpat/`.
+
+### Browser Recommendations
+
+For best accessibility experience:
+
+- **Windows**: Firefox + NVDA or Chrome/Edge + JAWS
+- **macOS**: Safari + VoiceOver
+- **Linux**: Firefox + Orca
+- **Mobile**: Safari (iOS) or Chrome (Android) with built-in screen readers
+
+### Reporting Accessibility Issues
+
+If you encounter an accessibility barrier:
+
+1. Check this guide for workarounds
+2. Try an alternative browser/AT combination
+3. Report the issue on our [GitHub Issues page](https://github.com/BrennenJohnston/openscad-assistive-forge/issues)
+4. Include:
+   - Your OS and browser
+   - Assistive technology (if applicable)
+   - Steps to reproduce the issue
+
+---
+
+## Additional Resources
+
+- [Keyguard Workflow Guide](./KEYGUARD_WORKFLOW_GUIDE.md) - Detailed AAC keyguard customization
+- [Testing](../developing/TESTING.md) - How to run unit/e2e tests
+- [Standard Mode Guide](./STANDARD_MODE_GUIDE.md) - Overview of all features
+- [Deployment](../deploying/DEPLOYMENT.md) - Cloudflare Pages notes

@@ -1,0 +1,1543 @@
+/**
+ * Overlay/Grid Controller
+ * Manages grid display settings, reference overlay controls, and auto-rotate
+ * functionality. Extracted from main.js for maintainability.
+ * @license GPL-3.0-or-later
+ */
+
+import { stateManager } from './state.js';
+import { announceImmediate } from './announcer.js';
+import { escapeHtml } from './html-utils.js';
+import * as SharedImageStore from './shared-image-store.js';
+import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import { noteOverlayChanged } from './overlay-settings.js';
+import { createCropDialog } from './crop-dialog.js';
+// UF-14 (U-25): auto-rotate and its speed are PER-UI viewing preferences
+// (signed Q-40 table); the reference-overlay cluster stays app-level.
+import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
+
+const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
+const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
+const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
+const STORAGE_KEY_OVERLAY_SVG_COLOR = getAppPrefKey('overlay-svg-color');
+const STORAGE_KEY_OVERLAY_AUTO_COLOR = getAppPrefKey('overlay-auto-color');
+const STORAGE_KEY_OVERLAY_WIDTH = getAppPrefKey('overlay-width');
+const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
+const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
+const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
+
+/**
+ * Initialize the overlay/grid controller.
+ * @param {Object} deps
+ * @param {Function} deps.getPreviewManager - Returns current PreviewManager instance (may be null)
+ * @param {Function} deps.updateStatus - Status message callback (message, type)
+ * @returns {Object} Controller API
+ */
+export function initOverlayGridController({ getPreviewManager, updateStatus }) {
+  // ---- DOM element queries ----
+  const gridColorPicker = document.getElementById('gridColorPicker');
+  const resetGridColorBtn = document.getElementById('resetGridColorBtn');
+  const gridOpacityInput = document.getElementById('gridOpacityInput');
+  const gridOpacityValue = document.getElementById('gridOpacityValue');
+  const gridPresetSelect = document.getElementById('gridPresetSelect');
+  const gridWidthInput = document.getElementById('gridWidthInput');
+  const gridHeightInput = document.getElementById('gridHeightInput');
+  const gridPresetSaveRow = document.getElementById('gridPresetSaveRow');
+  const gridPresetNameInput = document.getElementById('gridPresetNameInput');
+  const saveGridPresetBtn = document.getElementById('saveGridPresetBtn');
+  const gridPresetSaveError = document.getElementById('gridPresetSaveError');
+  const gridPresetDeleteRow = document.getElementById('gridPresetDeleteRow');
+  const deleteGridPresetBtn = document.getElementById('deleteGridPresetBtn');
+  const gridSizeDims = document.getElementById('gridSizeDims');
+
+  const overlaySourceSelect = document.getElementById('overlaySourceSelect');
+  const overlayToggle = document.getElementById('overlayToggle');
+  const overlayOpacityInput = document.getElementById('overlayOpacityInput');
+  const overlayOpacityValue = document.getElementById('overlayOpacityValue');
+  const overlayColorInput = document.getElementById('overlayColorInput');
+  const overlayAutoColorToggle = document.getElementById(
+    'overlayAutoColorToggle'
+  );
+  const overlayFitModelBtn = document.getElementById('overlayFitModelBtn');
+  const overlayCenterBtn = document.getElementById('overlayCenterBtn');
+  const overlayWidthInput = document.getElementById('overlayWidthInput');
+  const overlayHeightInput = document.getElementById('overlayHeightInput');
+  const overlayAspectLockBtn = document.getElementById('overlayAspectLockBtn');
+  const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
+  const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
+  const overlayRotationInput = document.getElementById('overlayRotationInput');
+  const overlayZPresetSelect = document.getElementById('overlayZPresetSelect');
+  const overlayZCustomInput = document.getElementById('overlayZCustomInput');
+  const overlayZCustomRow = document.getElementById('overlayZCustomRow');
+  const overlayCropBtn = document.getElementById('overlayCropBtn');
+  const overlayUseRow = document.getElementById('overlayUseRow');
+  const overlayUseTargetSelect = document.getElementById(
+    'overlayUseTargetSelect'
+  );
+  const overlayUseAsDesignBtn = document.getElementById(
+    'overlayUseAsDesignBtn'
+  );
+  const overlayRotationValue = document.getElementById('overlayRotationValue');
+  const overlayStatus = document.getElementById('overlayStatus');
+  const overlayFileInput = document.getElementById('overlayFileInput');
+  const overlayManualOverrideToggle = document.getElementById(
+    'overlayManualOverrideToggle'
+  );
+  const overlayCalibrationFieldset = document.getElementById(
+    'overlayCalibrationFieldset'
+  );
+  const overlayDimensionsValue = document.getElementById(
+    'overlayDimensionsValue'
+  );
+  const overlayMeasurementsToggle = document.getElementById(
+    'overlayMeasurementsToggle'
+  );
+
+  const autoRotateToggle = document.getElementById('autoRotateToggle');
+  const mobileAutoRotateToggle = document.getElementById(
+    'mobileAutoRotateToggle'
+  );
+  const rotationSpeedInput = document.getElementById('rotationSpeedInput');
+  const rotationSpeedValue = document.getElementById('rotationSpeedValue');
+
+  // ---- Local state ----
+  const uploadedOverlayFiles = new Map();
+  const USER_GRID_PREFIX = 'user:';
+  const prefersReducedMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)'
+  );
+
+  // ============================================================================
+  // Grid Controls
+  // ============================================================================
+
+  function syncGridColorPicker() {
+    if (!gridColorPicker || !getPreviewManager()) return;
+    const previewManager = getPreviewManager();
+    const custom = previewManager.getGridColor();
+    if (custom) {
+      gridColorPicker.value = custom;
+    } else {
+      const themeKey = previewManager.currentTheme || 'light';
+      const PREVIEW_COLORS_MAP = {
+        light: '#cccccc',
+        dark: '#404040',
+        'light-hc': '#000000',
+        'dark-hc': '#ffffff',
+        mono: '#00ff00',
+        'mono-light': '#ffb000',
+      };
+      gridColorPicker.value = PREVIEW_COLORS_MAP[themeKey] || '#cccccc';
+    }
+  }
+
+  if (gridColorPicker) {
+    syncGridColorPicker();
+    gridColorPicker.addEventListener('input', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setGridColor(gridColorPicker.value);
+      }
+    });
+  }
+
+  if (resetGridColorBtn) {
+    resetGridColorBtn.addEventListener('click', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.resetGridColor();
+        syncGridColorPicker();
+        updateStatus('Grid color reset to theme default');
+      }
+    });
+  }
+
+  function syncGridOpacitySlider() {
+    if (!gridOpacityInput || !getPreviewManager()) return;
+    const val = getPreviewManager().getGridOpacity();
+    gridOpacityInput.value = String(val);
+    if (gridOpacityValue) gridOpacityValue.textContent = `${val}%`;
+  }
+
+  if (gridOpacityInput) {
+    syncGridOpacitySlider();
+    gridOpacityInput.addEventListener('input', () => {
+      const v = parseInt(gridOpacityInput.value, 10);
+      if (gridOpacityValue) gridOpacityValue.textContent = `${v}%`;
+      const previewManager = getPreviewManager();
+      if (previewManager) previewManager.setGridOpacity(v);
+    });
+  }
+
+  // ---- Grid size preset selector, custom inputs, and user-saved custom presets ----
+
+  function applyGridSize(widthMm, heightMm) {
+    const previewManager = getPreviewManager();
+    if (!previewManager) return;
+    previewManager.setGridSize(widthMm, heightMm);
+    if (gridWidthInput) gridWidthInput.value = widthMm;
+    if (gridHeightInput) gridHeightInput.value = heightMm;
+    updateStatus(`Grid size updated to ${widthMm} × ${heightMm} mm`);
+  }
+
+  function _populateCustomGridPresets() {
+    const previewManager = getPreviewManager();
+    if (!gridPresetSelect || !previewManager) return;
+
+    const existing = gridPresetSelect.querySelector(
+      'optgroup[data-user-presets]'
+    );
+    if (existing) existing.remove();
+
+    const userPresets = previewManager.loadCustomGridPresets();
+    if (userPresets.length === 0) return;
+
+    const group = document.createElement('optgroup');
+    group.label = 'My presets';
+    group.setAttribute('data-user-presets', 'true');
+
+    for (const p of userPresets) {
+      const opt = document.createElement('option');
+      opt.value = `${USER_GRID_PREFIX}${p.name}`;
+      opt.textContent = `${p.name} (${p.widthMm}×${p.heightMm} mm)`;
+      group.appendChild(opt);
+    }
+
+    const customOpt = gridPresetSelect.querySelector('option[value="custom"]');
+    if (customOpt) {
+      gridPresetSelect.insertBefore(group, customOpt);
+    } else {
+      gridPresetSelect.appendChild(group);
+    }
+  }
+
+  function _updateGridPresetActionRows() {
+    if (!gridPresetSelect) return;
+    const val = gridPresetSelect.value;
+    const isCustom = val === 'custom';
+    const isUserPreset = val.startsWith(USER_GRID_PREFIX);
+
+    if (gridSizeDims) gridSizeDims.hidden = !isCustom;
+    if (gridPresetSaveRow) gridPresetSaveRow.hidden = !isCustom;
+    if (gridPresetDeleteRow) gridPresetDeleteRow.hidden = !isUserPreset;
+    if (gridPresetSaveError) gridPresetSaveError.textContent = '';
+  }
+
+  if (gridPresetSelect) {
+    const previewManager = getPreviewManager();
+    if (previewManager) {
+      const saved = previewManager.getGridSize();
+      if (gridWidthInput) gridWidthInput.value = saved.widthMm;
+      if (gridHeightInput) gridHeightInput.value = saved.heightMm;
+    }
+
+    _populateCustomGridPresets();
+
+    gridPresetSelect.addEventListener('change', () => {
+      const val = gridPresetSelect.value;
+      if (val === 'custom') {
+        _updateGridPresetActionRows();
+        return;
+      }
+      if (val.startsWith(USER_GRID_PREFIX)) {
+        const pm = getPreviewManager();
+        if (pm) {
+          const name = val.slice(USER_GRID_PREFIX.length);
+          const presets = pm.loadCustomGridPresets();
+          const found = presets.find((p) => p.name === name);
+          if (found) applyGridSize(found.widthMm, found.heightMm);
+        }
+        _updateGridPresetActionRows();
+        return;
+      }
+      const [w, h] = val.split('x').map(Number);
+      if (w && h) applyGridSize(w, h);
+      _updateGridPresetActionRows();
+    });
+  }
+
+  if (gridWidthInput) {
+    gridWidthInput.addEventListener('change', () => {
+      const w = parseInt(gridWidthInput.value, 10);
+      const h = parseInt(gridHeightInput?.value || '220', 10);
+      if (!isNaN(w) && !isNaN(h)) {
+        if (gridPresetSelect) gridPresetSelect.value = 'custom';
+        applyGridSize(w, h);
+        _updateGridPresetActionRows();
+      }
+    });
+  }
+
+  if (gridHeightInput) {
+    gridHeightInput.addEventListener('change', () => {
+      const w = parseInt(gridWidthInput?.value || '220', 10);
+      const h = parseInt(gridHeightInput.value, 10);
+      if (!isNaN(w) && !isNaN(h)) {
+        if (gridPresetSelect) gridPresetSelect.value = 'custom';
+        applyGridSize(w, h);
+        _updateGridPresetActionRows();
+      }
+    });
+  }
+
+  if (saveGridPresetBtn) {
+    saveGridPresetBtn.addEventListener('click', () => {
+      const previewManager = getPreviewManager();
+      if (!previewManager) {
+        if (gridPresetSaveError)
+          gridPresetSaveError.textContent =
+            'Preview not ready yet. Please load a model first.';
+        return;
+      }
+      const name = gridPresetNameInput?.value || '';
+      const w = parseInt(gridWidthInput?.value || '0', 10);
+      const h = parseInt(gridHeightInput?.value || '0', 10);
+      const result = previewManager.saveCustomGridPreset(name, w, h);
+      if (!result.success) {
+        if (gridPresetSaveError) gridPresetSaveError.textContent = result.error;
+        return;
+      }
+      if (gridPresetSaveError) gridPresetSaveError.textContent = '';
+      if (gridPresetNameInput) gridPresetNameInput.value = '';
+      _populateCustomGridPresets();
+      const newValue = `${USER_GRID_PREFIX}${name.trim()}`;
+      if (gridPresetSelect) {
+        gridPresetSelect.value = newValue;
+      }
+      _updateGridPresetActionRows();
+      updateStatus(`Custom grid preset "${name.trim()}" saved`);
+    });
+  }
+
+  if (deleteGridPresetBtn) {
+    deleteGridPresetBtn.addEventListener('click', () => {
+      const previewManager = getPreviewManager();
+      if (!previewManager) return;
+      const val = gridPresetSelect?.value || '';
+      if (!val.startsWith(USER_GRID_PREFIX)) return;
+      const name = val.slice(USER_GRID_PREFIX.length);
+      if (!confirm(`Delete custom grid preset "${name}"?`)) return;
+      previewManager.deleteCustomGridPreset(name);
+      _populateCustomGridPresets();
+      if (gridPresetSelect) gridPresetSelect.value = 'custom';
+      _updateGridPresetActionRows();
+      updateStatus(`Custom grid preset "${name}" deleted`);
+    });
+  }
+
+  // ============================================================================
+  // Reference Overlay Controls
+  // ============================================================================
+
+  function updateOverlaySourceDropdown() {
+    if (!overlaySourceSelect) return;
+
+    const previousVal = overlaySourceSelect.value;
+    const state = stateManager.getState();
+    const projectFiles = state.projectFiles;
+
+    overlaySourceSelect.innerHTML =
+      '<option value="">-- Select file --</option>';
+
+    if (!projectFiles || projectFiles.size === 0) {
+      overlaySourceSelect.disabled = true;
+    } else {
+      overlaySourceSelect.disabled = false;
+
+      const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
+      const imageFiles = Array.from(projectFiles.keys())
+        .filter((path) => {
+          const ext = path.split('.').pop()?.toLowerCase();
+          return imageExtensions.includes(ext);
+        })
+        .sort();
+
+      if (imageFiles.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '-- No image files --';
+        option.disabled = true;
+        overlaySourceSelect.appendChild(option);
+      } else {
+        imageFiles.forEach((path) => {
+          const option = document.createElement('option');
+          option.value = path;
+          option.textContent = path;
+          overlaySourceSelect.appendChild(option);
+        });
+      }
+    }
+
+    const imgs = SharedImageStore.getImages();
+    for (const [, rec] of imgs) {
+      const opt = document.createElement('option');
+      opt.value = `screenshot:${rec.name}`;
+      opt.textContent = `\uD83D\uDCF7 ${rec.name}`;
+      opt.dataset.shared = '1';
+      overlaySourceSelect.appendChild(opt);
+    }
+
+    if (previousVal) {
+      overlaySourceSelect.value = previousVal;
+    }
+  }
+
+  async function loadOverlayFromProjectFile(fileName) {
+    const previewManager = getPreviewManager();
+    if (!previewManager || !fileName) {
+      if (previewManager) {
+        await previewManager.setReferenceOverlaySource({
+          kind: null,
+          name: null,
+          dataUrlOrText: null,
+        });
+      }
+      updateOverlayStatus();
+      return;
+    }
+
+    if (uploadedOverlayFiles.has(fileName)) {
+      await loadOverlayFromUploadedFile(fileName);
+      return;
+    }
+
+    const state = stateManager.getState();
+    const projectFiles = state.projectFiles;
+
+    if (!projectFiles || !projectFiles.has(fileName)) {
+      console.warn(`[App] Overlay file not found: ${fileName}`);
+      return;
+    }
+
+    const content = projectFiles.get(fileName);
+    const ext = fileName.split('.').pop()?.toLowerCase();
+
+    try {
+      if (ext === 'svg') {
+        await previewManager.setReferenceOverlaySource({
+          kind: 'svg',
+          name: fileName,
+          dataUrlOrText: content,
+        });
+      } else {
+        let dataUrl = content;
+        if (!content.startsWith('data:')) {
+          const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+          const blob = new Blob([content], { type: mimeType });
+          dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+        }
+        await previewManager.setReferenceOverlaySource({
+          kind: 'raster',
+          name: fileName,
+          dataUrlOrText: dataUrl,
+        });
+      }
+
+      updateOverlayUIFromConfig();
+      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
+      console.log(`[App] Overlay loaded: ${fileName}`);
+    } catch (error) {
+      console.error('[App] Failed to load overlay:', error);
+      updateStatus(`Failed to load overlay: ${error.message}`, 'error');
+    }
+  }
+
+  function applyHiddenGroups(container, modelName) {
+    if (!container || !modelName) return;
+
+    const HIDDEN_KEY = `openscad-forge-hidden-groups-${modelName}`;
+
+    function loadHidden() {
+      try {
+        // try/catch retained for JSON.parse of possibly-corrupt values
+        return new Set(JSON.parse(safeGetItem(HIDDEN_KEY, '[]')));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveHidden(set) {
+      safeSetItem(HIDDEN_KEY, JSON.stringify([...set]));
+    }
+
+    /**
+     * UF-35: the ✕ left the group's <summary> — a control inside the
+     * disclosure's own control is axe's nested-interactive — and now sits in
+     * the actions layer beside the <details>. It is no longer a descendant of
+     * the group, so it is reached through the row that stacks the two.
+     */
+    function hideButtonFor(groupEl) {
+      return (
+        groupEl
+          .closest('.forge-disclosure-row')
+          ?.querySelector('.param-group-hide-btn') || null
+      );
+    }
+
+    function refreshShowAll() {
+      const existingBar = container.querySelector('.param-groups-hidden-bar');
+      const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
+      const count = hiddenGroups.length;
+      if (count === 0) {
+        existingBar?.remove();
+        return;
+      }
+
+      const bar = existingBar || document.createElement('div');
+      if (!existingBar) {
+        bar.className = 'param-groups-hidden-bar';
+        container.appendChild(bar);
+      }
+      bar.textContent = '';
+
+      const showAll = document.createElement('button');
+      showAll.className = 'param-groups-show-all btn btn-sm btn-outline';
+      showAll.type = 'button';
+      showAll.textContent = `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+      showAll.addEventListener('click', () => {
+        container.querySelectorAll('.param-group[hidden]').forEach((el) => {
+          el.removeAttribute('hidden');
+          const btn = hideButtonFor(el);
+          if (btn) btn.setAttribute('aria-pressed', 'false');
+        });
+        saveHidden(new Set());
+        refreshShowAll();
+        announceImmediate('All parameter groups shown');
+      });
+      bar.appendChild(showAll);
+
+      // Per-group restore chips (C12): one click brings back just that group
+      hiddenGroups.forEach((groupEl) => {
+        const label =
+          groupEl.querySelector('summary span')?.textContent?.trim() ||
+          groupEl.dataset.groupId;
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'param-group-show-chip btn btn-sm btn-outline';
+        chip.textContent = `Show ${label}`;
+        chip.addEventListener('click', () => {
+          groupEl.removeAttribute('hidden');
+          const btn = hideButtonFor(groupEl);
+          if (btn) btn.setAttribute('aria-pressed', 'false');
+          const hiddenSet = loadHidden();
+          hiddenSet.delete(groupEl.dataset.groupId);
+          saveHidden(hiddenSet);
+          refreshShowAll();
+          announceImmediate(`${label} group shown`);
+        });
+        bar.appendChild(chip);
+      });
+    }
+
+    const hidden = loadHidden();
+    container
+      .querySelectorAll('.param-group[data-group-id]')
+      .forEach((details) => {
+        if (hidden.has(details.dataset.groupId)) {
+          details.setAttribute('hidden', '');
+          const btn = hideButtonFor(details);
+          if (btn) btn.setAttribute('aria-pressed', 'true');
+        }
+      });
+    refreshShowAll();
+
+    container.addEventListener('group-hide', (e) => {
+      const { groupId, groupLabel } = e.detail;
+      const groupEl = container.querySelector(
+        `.param-group[data-group-id="${groupId}"]`
+      );
+      if (!groupEl) return;
+      groupEl.setAttribute('hidden', '');
+      const btn = hideButtonFor(groupEl);
+      if (btn) btn.setAttribute('aria-pressed', 'true');
+      const hiddenSet = loadHidden();
+      hiddenSet.add(groupId);
+      saveHidden(hiddenSet);
+      refreshShowAll();
+      // The ✕ the user pressed just left the tree — land focus on the
+      // restore bar instead of letting it fall to <body>.
+      container
+        .querySelector('.param-groups-hidden-bar .param-groups-show-all')
+        ?.focus();
+      announceImmediate(
+        `${groupLabel} group hidden — use Show all groups to restore`
+      );
+    });
+  }
+
+  /**
+   * Auto-size the reference overlay from SCAD parameters.
+   * Priority: explicit screen_width/height_mm > keyguard case opening dims.
+   * @param {Object} paramValues - Current parameter values
+   */
+  function autoApplyScreenDimensionsFromParams(paramValues) {
+    const previewManager = getPreviewManager();
+    if (!previewManager || !paramValues) return;
+
+    const sw = parseFloat(paramValues['screen_width_mm']);
+    const sh = parseFloat(paramValues['screen_height_mm']);
+    if (!isNaN(sw) && !isNaN(sh) && sw > 0 && sh > 0) {
+      previewManager.fitOverlayToScreenDimensions(sw, sh);
+      console.log(
+        `[App] Overlay auto-sized from screen_width/height_mm: ${sw} × ${sh} mm`
+      );
+      return;
+    }
+
+    let cw = parseFloat(paramValues['width_of_opening_in_case']);
+    let ch = parseFloat(paramValues['height_of_opening_in_case']);
+    if (!isNaN(cw) && !isNaN(ch) && cw > 0 && ch > 0) {
+      const orientation = (paramValues['orientation'] || '').toLowerCase();
+      if (orientation === 'landscape' && ch > cw) {
+        [cw, ch] = [ch, cw];
+      } else if (orientation === 'portrait' && cw > ch) {
+        [cw, ch] = [ch, cw];
+      }
+      previewManager.fitOverlayToScreenDimensions(cw, ch);
+      console.log(
+        `[App] Overlay auto-sized from case opening: ${cw} × ${ch} mm (${orientation || 'default'})`
+      );
+      return;
+    }
+  }
+
+  function updateOverlayStatus() {
+    if (!overlayStatus) return;
+    const previewManager = getPreviewManager();
+    const config = previewManager?.getOverlayConfig();
+    const isEnabled = config?.enabled && config?.sourceFileName;
+    overlayStatus.textContent = isEnabled ? 'On' : 'Off';
+    overlayStatus.classList.toggle('active', isEnabled);
+  }
+
+  function updateOverlayUIFromConfig() {
+    const previewManager = getPreviewManager();
+    if (!previewManager) return;
+
+    const config = previewManager.getOverlayConfig();
+
+    if (overlayToggle) {
+      overlayToggle.checked = config.enabled;
+    }
+
+    if (overlayOpacityInput) {
+      const opacityPercent = Math.round(config.opacity * 100);
+      overlayOpacityInput.value = opacityPercent;
+      if (overlayOpacityValue) {
+        overlayOpacityValue.textContent = `${opacityPercent}%`;
+      }
+    }
+
+    if (overlayWidthInput) {
+      overlayWidthInput.value = parseFloat(config.width.toFixed(1));
+    }
+
+    if (overlayHeightInput) {
+      overlayHeightInput.value = parseFloat(config.height.toFixed(1));
+    }
+
+    if (overlayOffsetXInput) {
+      overlayOffsetXInput.value = Math.round(config.offsetX);
+    }
+
+    if (overlayOffsetYInput) {
+      overlayOffsetYInput.value = Math.round(config.offsetY);
+    }
+
+    if (overlayRotationInput) {
+      overlayRotationInput.value = Math.round(config.rotationDeg);
+      if (overlayRotationValue) {
+        overlayRotationValue.textContent = `${Math.round(config.rotationDeg)}°`;
+      }
+    }
+
+    if (overlayAspectLockBtn) {
+      overlayAspectLockBtn.setAttribute(
+        'aria-pressed',
+        config.lockAspect ? 'true' : 'false'
+      );
+    }
+
+    if (overlaySourceSelect && config.sourceFileName) {
+      overlaySourceSelect.value = config.sourceFileName;
+    }
+
+    if (overlayDimensionsValue) {
+      const w = Math.round(config.width);
+      const h = Math.round(config.height);
+      overlayDimensionsValue.textContent = `${w} × ${h} mm`;
+    }
+
+    syncOverlayZControls();
+    updateCropButton();
+    updateUseAsDesignRow();
+
+    updateOverlayStatus();
+  }
+
+  // Wire overlay source select
+  if (overlaySourceSelect) {
+    overlaySourceSelect.addEventListener('change', async () => {
+      const fileName = overlaySourceSelect.value;
+      if (fileName.startsWith('screenshot:')) {
+        const imageName = fileName.slice('screenshot:'.length);
+        const rec = SharedImageStore.getImageByName(imageName);
+        const previewManager = getPreviewManager();
+        if (rec && previewManager) {
+          try {
+            await previewManager.setReferenceOverlaySource({
+              kind: 'raster',
+              name: imageName,
+              dataUrlOrText: rec.dataUrl,
+            });
+            if (!overlayToggle?.checked) {
+              overlayToggle.checked = true;
+              previewManager.setOverlayEnabled(true);
+              noteOverlayChanged();
+            }
+            updateOverlayUIFromConfig();
+            overlaySourceSelect.value = fileName;
+            localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
+            console.log(`[App] Screenshot overlay loaded: ${imageName}`);
+          } catch (error) {
+            console.error('[App] Failed to load screenshot overlay:', error);
+          }
+        }
+        return;
+      }
+
+      await loadOverlayFromProjectFile(fileName);
+    });
+  }
+
+  // Wire overlay file upload input
+  if (overlayFileInput) {
+    overlayFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const fileName = file.name;
+      const ext = fileName.split('.').pop()?.toLowerCase();
+      const isSvg = ext === 'svg' || file.type === 'image/svg+xml';
+
+      try {
+        let content;
+        if (isSvg) {
+          content = await file.text();
+        } else {
+          content = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+          });
+        }
+
+        uploadedOverlayFiles.set(fileName, { content, isSvg });
+
+        if (overlaySourceSelect) {
+          let optionExists = false;
+          for (const opt of overlaySourceSelect.options) {
+            if (opt.value === fileName) {
+              optionExists = true;
+              break;
+            }
+          }
+          if (!optionExists) {
+            const option = document.createElement('option');
+            option.value = fileName;
+            option.textContent = `📤 ${fileName}`;
+            overlaySourceSelect.appendChild(option);
+          }
+          overlaySourceSelect.value = fileName;
+        }
+
+        await loadOverlayFromUploadedFile(fileName);
+        updateStatus(`Overlay image loaded: ${fileName}`);
+      } catch (error) {
+        console.error('[App] Failed to load overlay file:', error);
+        updateStatus(`Failed to load overlay: ${error.message}`, 'error');
+      }
+
+      overlayFileInput.value = '';
+    });
+  }
+
+  async function loadOverlayFromUploadedFile(fileName) {
+    const previewManager = getPreviewManager();
+    if (!previewManager || !fileName) return;
+
+    const uploadedFile = uploadedOverlayFiles.get(fileName);
+    if (!uploadedFile) {
+      await loadOverlayFromProjectFile(fileName);
+      return;
+    }
+
+    const { content, isSvg } = uploadedFile;
+
+    try {
+      await previewManager.setReferenceOverlaySource({
+        kind: isSvg ? 'svg' : 'raster',
+        name: fileName,
+        dataUrlOrText: content,
+      });
+
+      if (!overlayToggle?.checked) {
+        overlayToggle.checked = true;
+        previewManager.setOverlayEnabled(true);
+        noteOverlayChanged();
+      }
+
+      updateOverlayUIFromConfig();
+      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
+      console.log(`[App] Overlay loaded from upload: ${fileName}`);
+    } catch (error) {
+      console.error('[App] Failed to load overlay:', error);
+      throw error;
+    }
+  }
+
+  // Wire overlay toggle
+  if (overlayToggle) {
+    overlayToggle.addEventListener('change', () => {
+      const enabled = overlayToggle.checked;
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayEnabled(enabled);
+        noteOverlayChanged();
+        updateOverlayStatus();
+        localStorage.setItem(
+          STORAGE_KEY_OVERLAY_ENABLED,
+          enabled ? 'true' : 'false'
+        );
+      }
+      console.log(
+        `[App] Reference overlay ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
+  // Wire overlay measurements toggle
+  if (overlayMeasurementsToggle) {
+    overlayMeasurementsToggle.addEventListener('change', () => {
+      const enabled = overlayMeasurementsToggle.checked;
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.toggleOverlayMeasurements(enabled);
+      }
+      console.log(
+        `[App] Overlay measurements ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
+  // Wire overlay opacity slider
+  if (overlayOpacityInput) {
+    overlayOpacityInput.addEventListener('input', () => {
+      const opacityPercent = parseInt(overlayOpacityInput.value, 10);
+      if (overlayOpacityValue) {
+        overlayOpacityValue.textContent = `${opacityPercent}%`;
+      }
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayOpacity(opacityPercent / 100);
+        noteOverlayChanged();
+        localStorage.setItem(
+          STORAGE_KEY_OVERLAY_OPACITY,
+          opacityPercent.toString()
+        );
+      }
+    });
+  }
+
+  // SVG overlay color — auto-adapts to theme
+  function getThemeAwareSvgColor() {
+    const root = document.documentElement;
+    const explicit = root.getAttribute('data-theme');
+    const prefersDark = window.matchMedia?.(
+      '(prefers-color-scheme: dark)'
+    )?.matches;
+    const isDark = explicit === 'dark' || (!explicit && prefersDark);
+    return isDark ? '#ffffff' : '#000000';
+  }
+
+  function applyOverlaySvgColor() {
+    const autoColor = overlayAutoColorToggle?.checked ?? true;
+    const color = autoColor
+      ? getThemeAwareSvgColor()
+      : overlayColorInput?.value || '#000000';
+    if (overlayColorInput && autoColor) {
+      overlayColorInput.value = color;
+    }
+    const previewManager = getPreviewManager();
+    if (previewManager) {
+      previewManager.setOverlaySvgColor(color);
+      noteOverlayChanged();
+    }
+    localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
+    localStorage.setItem(
+      STORAGE_KEY_OVERLAY_AUTO_COLOR,
+      autoColor ? 'true' : 'false'
+    );
+  }
+
+  if (overlayColorInput) {
+    overlayColorInput.addEventListener('input', () => {
+      if (overlayAutoColorToggle) {
+        overlayAutoColorToggle.checked = false;
+        overlayColorInput.classList.remove('overlay-color-auto');
+      }
+      applyOverlaySvgColor();
+    });
+  }
+
+  if (overlayAutoColorToggle) {
+    overlayAutoColorToggle.addEventListener('change', () => {
+      if (overlayColorInput) {
+        overlayColorInput.classList.toggle(
+          'overlay-color-auto',
+          overlayAutoColorToggle.checked
+        );
+      }
+      applyOverlaySvgColor();
+    });
+  }
+
+  // Re-apply SVG color when theme changes
+  const themeObserver = new MutationObserver(() => {
+    if (overlayAutoColorToggle?.checked) {
+      applyOverlaySvgColor();
+    }
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-high-contrast'],
+  });
+
+  // Wire manual calibration override toggle
+  if (overlayManualOverrideToggle && overlayCalibrationFieldset) {
+    overlayManualOverrideToggle.addEventListener('change', () => {
+      const enabled = overlayManualOverrideToggle.checked;
+      overlayCalibrationFieldset.disabled = !enabled;
+      console.log(
+        `[App] Overlay manual calibration ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
+  // Wire fit to model button
+  if (overlayFitModelBtn) {
+    overlayFitModelBtn.addEventListener('click', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.fitOverlayToModelXY();
+        updateOverlayUIFromConfig();
+      }
+    });
+  }
+
+  // Wire tablet device selector for overlay auto-sizing
+  const overlayTabletSelect = document.getElementById('overlayTabletSelect');
+  if (overlayTabletSelect) {
+    let tabletDb = null;
+    async function loadTabletDb() {
+      if (tabletDb) return tabletDb;
+      try {
+        const resp = await fetch('/data/tablets.json');
+        const data = await resp.json();
+        tabletDb = data.tablets || [];
+        overlayTabletSelect.innerHTML = tabletDb
+          .map(
+            (t) =>
+              `<option value="${escapeHtml(String(t.id))}" data-w="${escapeHtml(String(t.screenWidthMm ?? ''))}" data-h="${escapeHtml(String(t.screenHeightMm ?? ''))}">${escapeHtml(t.label)}</option>`
+          )
+          .join('');
+      } catch (err) {
+        console.warn('[App] Could not load tablet database:', err);
+        tabletDb = [];
+      }
+      return tabletDb;
+    }
+
+    overlayTabletSelect.addEventListener('focus', () => loadTabletDb());
+    overlayTabletSelect.addEventListener('change', async () => {
+      await loadTabletDb();
+      const opt = overlayTabletSelect.selectedOptions[0];
+      if (!opt) return;
+      const w = parseFloat(opt.dataset.w);
+      const h = parseFloat(opt.dataset.h);
+      const previewManager = getPreviewManager();
+      if (!isNaN(w) && !isNaN(h) && previewManager) {
+        previewManager.fitOverlayToScreenDimensions(w, h);
+        updateOverlayUIFromConfig();
+        updateStatus(`Overlay sized to ${opt.text}: ${w} × ${h} mm`);
+      }
+    });
+  }
+
+  // Wire center button
+  if (overlayCenterBtn) {
+    overlayCenterBtn.addEventListener('click', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayTransform({ offsetX: 0, offsetY: 0 });
+        noteOverlayChanged();
+        updateOverlayUIFromConfig();
+      }
+    });
+  }
+
+  // Wire width input
+  if (overlayWidthInput) {
+    overlayWidthInput.addEventListener('change', () => {
+      const width = parseFloat(overlayWidthInput.value);
+      const previewManager = getPreviewManager();
+      if (!isNaN(width) && previewManager) {
+        previewManager.setOverlaySize({ width });
+        noteOverlayChanged();
+        updateOverlayUIFromConfig();
+        localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
+      }
+    });
+  }
+
+  // Wire height input
+  if (overlayHeightInput) {
+    overlayHeightInput.addEventListener('change', () => {
+      const height = parseFloat(overlayHeightInput.value);
+      const previewManager = getPreviewManager();
+      if (!isNaN(height) && previewManager) {
+        previewManager.setOverlaySize({ height });
+        noteOverlayChanged();
+        updateOverlayUIFromConfig();
+        localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
+      }
+    });
+  }
+
+  // Wire aspect lock button
+  if (overlayAspectLockBtn) {
+    overlayAspectLockBtn.addEventListener('click', () => {
+      const isCurrentlyLocked =
+        overlayAspectLockBtn.getAttribute('aria-pressed') === 'true';
+      const newLocked = !isCurrentlyLocked;
+      overlayAspectLockBtn.setAttribute(
+        'aria-pressed',
+        newLocked ? 'true' : 'false'
+      );
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayAspectLock(newLocked);
+      }
+    });
+  }
+
+  // Wire offset X input
+  if (overlayOffsetXInput) {
+    overlayOffsetXInput.addEventListener('change', () => {
+      const offsetX = parseFloat(overlayOffsetXInput.value);
+      const previewManager = getPreviewManager();
+      if (!isNaN(offsetX) && previewManager) {
+        previewManager.setOverlayTransform({ offsetX });
+        noteOverlayChanged();
+      }
+    });
+  }
+
+  // Wire offset Y input
+  if (overlayOffsetYInput) {
+    overlayOffsetYInput.addEventListener('change', () => {
+      const offsetY = parseFloat(overlayOffsetYInput.value);
+      const previewManager = getPreviewManager();
+      if (!isNaN(offsetY) && previewManager) {
+        previewManager.setOverlayTransform({ offsetY });
+        noteOverlayChanged();
+      }
+    });
+  }
+
+  // Wire rotation slider
+  if (overlayRotationInput) {
+    overlayRotationInput.addEventListener('input', () => {
+      const rotationDeg = parseInt(overlayRotationInput.value, 10);
+      if (overlayRotationValue) {
+        overlayRotationValue.textContent = `${rotationDeg}°`;
+      }
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayTransform({ rotationDeg });
+        noteOverlayChanged();
+      }
+    });
+  }
+
+  /**
+   * DP-6: hand the picture you have been tracing against to a design
+   * parameter.
+   *
+   * It goes in through the parameter's OWN file input, as a real File on a
+   * real change event, rather than through a second code path that writes the
+   * value directly. That is deliberate: the upload path already traces a
+   * raster, opens the preparation editor when the drawing needs it, measures
+   * and emits the aspect companion in the same state update (the D-108 law),
+   * appends the gallery entry and persists it with the project. A parallel
+   * path would have to copy all of that and then stay copied.
+   */
+  function fileParamControls() {
+    return Array.from(
+      document.querySelectorAll('.param-control--file input[type="file"]')
+    ).filter((input) => input.id.startsWith('param-'));
+  }
+
+  /** A readable name for a file parameter, taken from its own label. */
+  function fileParamLabel(input) {
+    const wrap = input.closest('.param-control');
+    const label = wrap?.querySelector('label');
+    const text = label?.textContent?.trim();
+    return text || input.id.replace(/^param-/, '').replace(/_/g, ' ');
+  }
+
+  function updateUseAsDesignRow() {
+    if (!overlayUseRow || !overlayUseTargetSelect) return;
+    const inputs = fileParamControls();
+    const rec = currentOverlayImage();
+    // Nothing to hand over, or nowhere to hand it to.
+    overlayUseRow.hidden = inputs.length === 0 || !rec;
+    if (overlayUseRow.hidden) return;
+
+    const previous = overlayUseTargetSelect.value;
+    overlayUseTargetSelect.replaceChildren();
+    for (const input of inputs) {
+      const option = document.createElement('option');
+      option.value = input.id;
+      option.textContent = fileParamLabel(input);
+      overlayUseTargetSelect.appendChild(option);
+    }
+    if (inputs.some((i) => i.id === previous)) {
+      overlayUseTargetSelect.value = previous;
+    }
+    // One choice is not a choice: the select only earns its place when there
+    // is more than one design slot to pick between.
+    overlayUseTargetSelect.hidden = inputs.length < 2;
+  }
+
+  /** The image currently behind the model, whichever lane it came from. */
+  function currentOverlayImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded) {
+      return { name: value, dataUrl: uploaded.content, isSvg: uploaded.isSvg };
+    }
+    return null;
+  }
+
+  async function useOverlayAsDesign() {
+    const rec = currentOverlayImage();
+    const targetId = overlayUseTargetSelect?.value;
+    const input = targetId ? document.getElementById(targetId) : null;
+    if (!rec || !input) return;
+
+    try {
+      const isSvg = rec.isSvg || /^\s*<svg|image\/svg/i.test(rec.dataUrl || '');
+      const blob = isSvg
+        ? new Blob([rec.dataUrl], { type: 'image/svg+xml' })
+        : await (await fetch(rec.dataUrl)).blob();
+      const file = new File([blob], rec.name, {
+        type: blob.type || 'image/png',
+      });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      // ★ A CONTRACT with createFileControl in ui-generator.js: this flag says
+      // "the person has already asked for this picture to become the design".
+      //
+      // DP-34 stopped a chosen picture converting on its own, and rightly - but
+      // "Use as design" is not choosing a file, it is asking for the thing the
+      // conversion produces. Without this the button appeared to do nothing:
+      // the design parameter stayed empty until the person found the Start
+      // button in a control they may not even have open. MEASURED on CI, where
+      // the quick look is slower to call a picture quick and the auto-start
+      // rule therefore did not fire: design_file was still "" after 120
+      // seconds. It still goes through the same bar and the same Cancel, so
+      // nothing happens invisibly.
+      input.dataset.forgeStartConversion = '1';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      announceImmediate(
+        `${rec.name} sent to ${fileParamLabel(input)}. Forge is preparing it.`
+      );
+    } catch (error) {
+      console.error('[Overlay] Could not use the image as a design:', error);
+      announceImmediate('Could not use that image as a design.');
+    }
+  }
+
+  if (overlayUseAsDesignBtn) {
+    overlayUseAsDesignBtn.addEventListener('click', () => {
+      void useOverlayAsDesign();
+    });
+  }
+
+  /**
+   * DP-5: cropping. Only a raster from the shared image store can be cropped -
+   * an SVG has no pixels to cut - so the button follows the chosen source.
+   */
+  function currentCroppableImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    // Two places a croppable picture can come from: the shared image store
+    // (the Screenshots lane, which knows its own size) and this panel's own
+    // Upload button, which holds only the data URL. An SVG is excluded from
+    // both - there are no pixels in it to cut.
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded && !uploaded.isSvg) {
+      return { name: value, dataUrl: uploaded.content };
+    }
+    return null;
+  }
+
+  function updateCropButton() {
+    if (!overlayCropBtn) return;
+    const rec = currentCroppableImage();
+    overlayCropBtn.disabled = !rec;
+    overlayCropBtn.title = rec
+      ? `Crop ${rec.name} and use the copy`
+      : 'Choose an uploaded picture to crop it';
+  }
+
+  const cropDialog = createCropDialog({
+    saveCopy: (name, dataUrl) =>
+      SharedImageStore.addImageFromDataUrl(name, dataUrl),
+    onCropped: async (record) => {
+      // The copy becomes the overlay straight away: cropping is something you
+      // do IN ORDER to trace, so making the person go and select it again
+      // would be a step with no decision in it.
+      updateOverlaySourceDropdown();
+      const previewManager = getPreviewManager();
+      if (!previewManager || !record?.dataUrl) return;
+      try {
+        await previewManager.setReferenceOverlaySource({
+          kind: 'raster',
+          name: record.name,
+          dataUrlOrText: record.dataUrl,
+        });
+        updateOverlayUIFromConfig();
+        // AFTER the config sync, not before: updateOverlayUIFromConfig writes
+        // config.sourceFileName into this select, and that name has no
+        // "screenshot:" prefix - so setting the value first left the select
+        // matching no option at all, showing blank, and disabling the Crop
+        // button that focus was about to return to.
+        if (overlaySourceSelect) {
+          overlaySourceSelect.value = `screenshot:${record.name}`;
+        }
+        updateCropButton();
+        // DP-26 P3: the Use-as-design row read the select while it was
+        // momentarily blank (the config sync above writes a name with no
+        // "screenshot:" prefix) and hid itself - so a plain upload offered
+        // the hand-over and a CROPPED copy did not, which is backwards:
+        // cropping is what you do on the way to the Colors lane.
+        updateUseAsDesignRow();
+        noteOverlayChanged();
+      } catch (error) {
+        console.error('[Overlay] Could not use the cropped copy:', error);
+      }
+    },
+  });
+
+  if (overlayCropBtn) {
+    overlayCropBtn.addEventListener('click', () => {
+      const rec = currentCroppableImage();
+      if (rec) cropDialog.open(rec, overlayCropBtn);
+    });
+  }
+
+  /**
+   * DP-5: the millimeter field belongs to the "A height I choose" preset, so
+   * it is hidden the rest of the time rather than sitting there inert with a
+   * number that the preset is about to overwrite.
+   */
+  function syncOverlayZControls() {
+    if (!overlayZPresetSelect) return;
+    const previewManager = getPreviewManager();
+    const config = previewManager?.getOverlayConfig?.();
+    const preset = config?.zPreset || 'under-plate';
+    overlayZPresetSelect.value = preset;
+    if (overlayZCustomRow) overlayZCustomRow.hidden = preset !== 'custom';
+    if (overlayZCustomInput && config) {
+      overlayZCustomInput.value = Number.isFinite(config.zCustomMm)
+        ? config.zCustomMm
+        : 0;
+    }
+  }
+
+  if (overlayZPresetSelect) {
+    overlayZPresetSelect.addEventListener('change', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: overlayZPresetSelect.value });
+        noteOverlayChanged();
+      }
+      syncOverlayZControls();
+    });
+  }
+
+  if (overlayZCustomInput) {
+    overlayZCustomInput.addEventListener('input', () => {
+      const customMm = parseFloat(overlayZCustomInput.value);
+      if (!Number.isFinite(customMm)) return;
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: 'custom', customMm });
+        noteOverlayChanged();
+      }
+    });
+  }
+
+  // ============================================================================
+  // Auto-Rotate Controls
+  // ============================================================================
+
+  function syncAutoRotateToggles(enabled) {
+    const toggles = [autoRotateToggle, mobileAutoRotateToggle];
+    toggles.forEach((toggle) => {
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        toggle.classList.toggle('active', enabled);
+      }
+    });
+  }
+
+  function setAutoRotation(enabled) {
+    if (enabled && prefersReducedMotion.matches) {
+      console.log('[App] Auto-rotate blocked: user prefers reduced motion');
+      announceImmediate(
+        'Auto-rotation is disabled because you prefer reduced motion'
+      );
+      return;
+    }
+
+    const previewManager = getPreviewManager();
+    if (previewManager) {
+      previewManager.setAutoRotate(enabled);
+    }
+    syncAutoRotateToggles(enabled);
+    writeScopedPref(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
+    announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  const savedRotateSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
+
+  function updateRotationSpeedDisplay(speed) {
+    if (rotationSpeedValue) {
+      rotationSpeedValue.textContent = `${speed.toFixed(1)}°/s`;
+    }
+    if (rotationSpeedInput) {
+      rotationSpeedInput.setAttribute('aria-valuenow', speed.toFixed(1));
+    }
+  }
+
+  if (savedRotateSpeed && rotationSpeedInput) {
+    const speed = parseFloat(savedRotateSpeed);
+    if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
+      rotationSpeedInput.value = speed;
+      updateRotationSpeedDisplay(speed);
+    } else {
+      updateRotationSpeedDisplay(0.5);
+    }
+  } else if (rotationSpeedInput) {
+    updateRotationSpeedDisplay(0.5);
+  }
+
+  // Wire desktop auto-rotate toggle
+  if (autoRotateToggle) {
+    autoRotateToggle.addEventListener('click', () => {
+      const currentState =
+        autoRotateToggle.getAttribute('aria-pressed') === 'true';
+      setAutoRotation(!currentState);
+    });
+  }
+
+  // Wire mobile auto-rotate toggle
+  if (mobileAutoRotateToggle) {
+    mobileAutoRotateToggle.addEventListener('click', () => {
+      const currentState =
+        mobileAutoRotateToggle.getAttribute('aria-pressed') === 'true';
+      setAutoRotation(!currentState);
+    });
+  }
+
+  // Wire rotation speed slider
+  if (rotationSpeedInput) {
+    rotationSpeedInput.addEventListener('input', () => {
+      let speed = parseFloat(rotationSpeedInput.value);
+      speed = Math.max(0.1, Math.min(3, speed));
+      updateRotationSpeedDisplay(speed);
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setAutoRotateSpeed(speed);
+      }
+    });
+
+    rotationSpeedInput.addEventListener('change', () => {
+      const speed = parseFloat(rotationSpeedInput.value);
+      writeScopedPref(STORAGE_KEY_ROTATE_SPEED, speed.toString());
+      console.log(`[App] Auto-rotate speed set to ${speed.toFixed(1)} deg/s`);
+    });
+  }
+
+  // Listen for prefers-reduced-motion changes
+  prefersReducedMotion.addEventListener('change', (e) => {
+    const previewManager = getPreviewManager();
+    if (e.matches && previewManager?.isAutoRotateEnabled()) {
+      setAutoRotation(false);
+      console.log(
+        '[App] Auto-rotate disabled: user now prefers reduced motion'
+      );
+    }
+  });
+
+  // ============================================================================
+  // Late initialization — called once previewManager is created
+  // ============================================================================
+
+  /**
+   * Connect to PreviewManager and restore persisted overlay/grid/rotate settings.
+   * Call this once after PreviewManager is instantiated.
+   * @param {Object} pm - The PreviewManager instance
+   */
+  function connectPreviewManager(pm) {
+    // Sync grid size inputs
+    const savedGrid = pm.getGridSize();
+    if (gridWidthInput) gridWidthInput.value = savedGrid.widthMm;
+    if (gridHeightInput) gridHeightInput.value = savedGrid.heightMm;
+
+    syncGridOpacitySlider();
+
+    // Restore overlay opacity
+    const savedOverlayOpacity = localStorage.getItem(
+      STORAGE_KEY_OVERLAY_OPACITY
+    );
+    if (savedOverlayOpacity) {
+      const opacity = parseInt(savedOverlayOpacity, 10);
+      if (!isNaN(opacity) && opacity >= 0 && opacity <= 100) {
+        pm.setOverlayOpacity(opacity / 100);
+        if (overlayOpacityInput) {
+          overlayOpacityInput.value = opacity;
+        }
+        if (overlayOpacityValue) {
+          overlayOpacityValue.textContent = `${opacity}%`;
+        }
+      }
+    }
+
+    // Restore overlay width/height
+    const savedOverlayWidth = localStorage.getItem(STORAGE_KEY_OVERLAY_WIDTH);
+    const savedOverlayHeight = localStorage.getItem(STORAGE_KEY_OVERLAY_HEIGHT);
+    if (savedOverlayWidth || savedOverlayHeight) {
+      const sizeUpdate = {};
+      if (savedOverlayWidth) {
+        const w = parseFloat(savedOverlayWidth);
+        if (!isNaN(w) && w > 0) sizeUpdate.width = w;
+      }
+      if (savedOverlayHeight) {
+        const h = parseFloat(savedOverlayHeight);
+        if (!isNaN(h) && h > 0) sizeUpdate.height = h;
+      }
+      if (Object.keys(sizeUpdate).length > 0) {
+        pm.setOverlaySize(sizeUpdate);
+        updateOverlayUIFromConfig();
+      }
+    }
+
+    // Restore overlay SVG color
+    const savedAutoColor = localStorage.getItem(STORAGE_KEY_OVERLAY_AUTO_COLOR);
+    const isAutoColor = savedAutoColor !== 'false';
+    if (overlayAutoColorToggle) {
+      overlayAutoColorToggle.checked = isAutoColor;
+    }
+    if (overlayColorInput) {
+      overlayColorInput.classList.toggle('overlay-color-auto', isAutoColor);
+    }
+    if (isAutoColor) {
+      const themeColor = getThemeAwareSvgColor();
+      if (overlayColorInput) overlayColorInput.value = themeColor;
+      pm.overlayConfig.svgColor = themeColor;
+    } else {
+      const savedColor = localStorage.getItem(STORAGE_KEY_OVERLAY_SVG_COLOR);
+      if (savedColor && overlayColorInput) {
+        overlayColorInput.value = savedColor;
+      }
+      pm.overlayConfig.svgColor = savedColor || '#000000';
+    }
+
+    // Restore auto-rotate settings
+    const savedAutoRotatePref = readScopedPref(STORAGE_KEY_AUTO_ROTATE);
+    const savedRotateSpeedPref = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
+
+    if (savedRotateSpeedPref) {
+      const speed = parseFloat(savedRotateSpeedPref);
+      if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
+        pm.setAutoRotateSpeed(speed);
+      }
+    }
+
+    if (savedAutoRotatePref === 'true' && !prefersReducedMotion.matches) {
+      pm.setAutoRotate(true);
+      syncAutoRotateToggles(true);
+    }
+  }
+
+  /**
+   * The live swap (UF-14 P3): re-read auto-rotate and its speed from the
+   * newly active namespace and re-apply them — rotation state, both
+   * toggle buttons' aria-pressed, and the speed slider readout. Reduced
+   * motion still wins over any saved "on".
+   */
+  function reapplyScopedAutoRotate() {
+    const pm = getPreviewManager();
+
+    let speed = 0.5;
+    const savedSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
+    if (savedSpeed) {
+      const parsed = parseFloat(savedSpeed);
+      if (!isNaN(parsed) && parsed >= 0.1 && parsed <= 3) speed = parsed;
+    }
+    if (rotationSpeedInput) rotationSpeedInput.value = speed;
+    updateRotationSpeedDisplay(speed);
+    if (pm) pm.setAutoRotateSpeed(speed);
+
+    const enabled =
+      readScopedPref(STORAGE_KEY_AUTO_ROTATE) === 'true' &&
+      !prefersReducedMotion.matches;
+    if (pm) pm.setAutoRotate(enabled);
+    syncAutoRotateToggles(enabled);
+  }
+
+  // ---- Public API ----
+  return {
+    syncGridColorPicker,
+    syncGridOpacitySlider,
+    updateOverlaySourceDropdown,
+    loadOverlayFromProjectFile,
+    applyHiddenGroups,
+    autoApplyScreenDimensionsFromParams,
+    updateOverlayStatus,
+    updateOverlayUIFromConfig,
+    getThemeAwareSvgColor,
+    syncAutoRotateToggles,
+    setAutoRotation,
+    reapplyScopedAutoRotate,
+    connectPreviewManager,
+  };
+}

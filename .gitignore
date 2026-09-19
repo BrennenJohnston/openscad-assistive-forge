@@ -1,0 +1,108 @@
+node_modules/
+dist/
+.vite/
+.DS_Store
+*.log
+.env
+.vscode/
+.idea/
+public/wasm/openscad.*
+public/libraries/*/
+!public/libraries/README.md
+public/fonts/*.ttf
+!public/fonts/README.md
+public/liblouis/
+
+.vercel
+.env*.local
+
+# Test artifacts
+coverage/
+test-results/
+playwright-report/
+# Written at the repo root by any CI-mode Playwright run; it is the input to
+# scripts/check-e2e-complete.mjs, never something to commit.
+playwright-results.json
+
+# Review screenshots and OpenSCAD check output (D-7, Q-39b): these travel in
+# PR descriptions now. Files committed before this rule stay tracked.
+build/
+
+# The frame-sequence instrument's own output (CW-67): filmstrips, contact
+# sheets, class maps and WebMs. Kept out for the same reason build/ is - it
+# is measurement, not source. The ones a release RECORD cites are copied into
+# the research folder's R8-filmstrips\ instead.
+seq-out/
+
+# Parity harness output (generated; goldens live in scripts/parity/golden/)
+artifacts/
+
+# Local scratch/experiment dirs and debug dumps (never commit)
+_em_temp/
+.tmp-scad-check/
+forge-cad-to-parametric/
+webkit-logs.txt
+
+# Lighthouse reports
+localhost_*.report.html
+.lighthouseci/
+lighthouse-*.json
+
+# CI generates a fresh SBOM every run and uploads it as an artifact; a
+# tracked copy goes stale by construction, so none is kept.
+sbom.json
+
+# Local debug screenshots
+screenshot-*.png
+
+# Font working directory used by scripts/download-wasm.js
+.temp-fonts/
+
+# Editor workspace files
+*.code-workspace
+
+# AI coding assistants' files are local development files, never public:
+# rules, plans and workspace state for any assistant stay on this machine.
+.cursor/
+.claude/
+.clinerules/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.cursorrules
+.windsurfrules
+.windsurf/
+.aider*
+.codex/
+.roo/
+.continue/
+.github/copilot-instructions.md
+.mcp.json
+
+# Local testing reference files
+.volkswitch/
+
+# Internal planning documents (not for public release)
+docs/planning/
+
+# Investigation capture bundles and directories (contain stakeholder SCAD source)
+docs/archive/audit/ki-012-investigation/*.zip
+docs/archive/audit/ki-012-investigation/baseline-capture/
+docs/archive/audit/ki-012-investigation/bug-a-capture/
+docs/archive/audit/ki-012-investigation/bug-b-capture/
+docs/archive/audit/ki-012-investigation/bug-b-capture-2/
+
+# WASM version bisect working directories
+docs/archive/audit/ki-012-investigation/_wasm-cache/
+docs/archive/audit/ki-012-investigation/_wasm-backup/
+
+# Developer scratch / temp files
+_em_temp/
+.tmp-scad-check/
+
+# CI runner logs downloaded for local triage (e.g. WebKit GitHub Actions logs)
+webkit-logs*.txt
+
+# CAD-to-parametric sub-project (lives on feat/cad-to-parametric only)
+forge-cad-to-parametric/
