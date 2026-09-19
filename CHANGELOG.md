@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [5.0.0] - 2026-09-17
+## [5.0.0] - 2026-09-19
 
 Since 4.5.0 the app grew three interfaces, a drawing lane that opens, cleans
 and saves SVG and DXF, one-link sharing with provenance records, braille

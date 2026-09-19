@@ -1,8 +1,8 @@
 # Accessibility Conformance Statement
 
 **Product**: OpenSCAD Assistive Forge  
-**Version**: 4.4.0  
-**Date**: 2026-04-06  
+**Version**: 5.0.0  
+**Date**: 2026-09-19  
 **Standard**: WCAG 2.2 Level AA
 
 > **Note:** For detailed, criterion-level conformance status with evidence links, see [`docs/accessibility/vpat/conformance-decisions.md`](vpat/conformance-decisions.md). This document provides a summary statement; the decisions log is the source of truth for WCAG criterion status.
@@ -249,3 +249,4 @@ This conformance statement represents our current understanding and testing resu
 | 2.0 | 2026-03-16 | Updated for v4.2.0: version references, Expert Mode, vector parameters, memory monitoring |
 | 3.0 | 2026-03-20 | Updated for v4.3.0: CSP enforcement, accessible error dialogs, WAI-ARIA menubar, role-path cards |
 | 4.0 | 2026-04-06 | Updated for v4.4.0: SVG offset workspace a11y audit, innerHTML XSS hardening, confirm() replaced with accessible dialog, AT testing matrix resolved |
+| 5.0 | 2026-09-19 | Updated for v5.0.0: three switchable interfaces; the drawing editor reads correctly to a screen reader and uses one vocabulary in its panel, its rows, its color key and its announcements; long help texts deliver their first sentence and the rest on request; the automatic preview announces its completion, not its progress; every slider row meets the 44 px touch floor; the contrast modes draw the thicker focus ring; the header toggles announce the state they are in; American English in every string a person reads or hears. Checked by the axe scans in every browser suite and by the listening sessions in `docs/notes/SCREEN_READER_LESSONS.md`; the criterion-level VPAT evidence still dates from v4.4.0 |
