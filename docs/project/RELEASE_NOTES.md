@@ -1,6 +1,6 @@
 # Release Notes
 
-## v5.0.0 (2026-09-17)
+## v5.0.0 (2026-09-19)
 
 Since 4.5.0 the app gained three switchable interfaces (Simplified, Standard,
 and a Classic layout that reproduces desktop OpenSCAD in the browser), a
@@ -22,6 +22,15 @@ version is [docs/updates/WHATS_NEW_v5.md](../updates/WHATS_NEW_v5.md).
   too-thin ones to Off; **Crop** takes an edge off a picture and traces it
   again. Every word is American English, and every slider row meets the 44 px
   touch floor.
+- **Layered designs on every charm shape**: the Bracelet Clip Charm, the
+  Flat Pendant and the Logo Plate all build a drawing as up to three
+  layers, each with its own height, raised or engraved. A plain drawing's
+  own background starts Off, and the Flat Pendant's bail loop is a loop
+  again.
+- **A drawing by link**: `?drawing=<url>` on any link that opens a design
+  fetches an SVG, DXF, PNG or JPG, converts it without a press, and opens
+  the drawing editor on it, so a tool that makes drawings can send one
+  straight to a person.
 - **Three interfaces**: **Simplified** (parameters, preview, one Generate
   button), **Standard** (adds the console, libraries, companion files,
   reference images and measurement), and **Classic** (the desktop OpenSCAD
