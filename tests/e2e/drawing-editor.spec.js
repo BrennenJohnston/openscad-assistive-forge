@@ -166,24 +166,34 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     await charm(page).click()
     await expect(canvas(page)).toBeVisible()
 
-    const boxes = await page.evaluate(() => {
-      const r = (el) => {
-        const b = el.getBoundingClientRect()
-        return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]
-      }
-      return {
-        canvas: r(document.querySelector('#previewContainer canvas')),
-        stage: r(document.querySelector('.drawing-editor-stage')),
-        container: r(document.getElementById('previewContainer')),
-      }
-    })
+    const readBoxes = () =>
+      page.evaluate(() => {
+        const r = (el) => {
+          const b = el.getBoundingClientRect()
+          return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]
+        }
+        return {
+          canvas: r(document.querySelector('#previewContainer canvas')),
+          stage: r(document.querySelector('.drawing-editor-stage')),
+          container: r(document.getElementById('previewContainer')),
+        }
+      })
     // The canvas sits on the window, not on the whole area behind the editor.
-    for (let i = 0; i < 4; i++) {
-      expect(
-        Math.abs(boxes.canvas[i] - boxes.stage[i]),
-        `canvas ${JSON.stringify(boxes.canvas)} vs stage ${JSON.stringify(boxes.stage)}`
-      ).toBeLessThanOrEqual(2)
-    }
+    // D-170: the canvas is re-framed to the stage a beat after it becomes
+    // visible, and one sample taken in that beat read the previous layout's
+    // box (CI, twice: canvas [531,334,692,330] against stage
+    // [529,311,692,351]). So this waits for the two boxes to agree instead
+    // of reading them once.
+    await expect
+      .poll(
+        async () => {
+          const b = await readBoxes()
+          return Math.max(...[0, 1, 2, 3].map((i) => Math.abs(b.canvas[i] - b.stage[i])))
+        },
+        { timeout: 15000, message: 'the canvas never settled on the stage' }
+      )
+      .toBeLessThanOrEqual(2)
+    const boxes = await readBoxes()
     // And it is really a different box from the one it would otherwise have.
     expect(boxes.stage[3]).toBeLessThan(boxes.container[3] - 50)
 
