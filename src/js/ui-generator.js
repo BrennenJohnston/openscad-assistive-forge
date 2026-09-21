@@ -2938,6 +2938,14 @@ function createFileControl(
   const traceProgress = createTraceProgress({
     onStart: () =>
       startConversion({ announceResult: true, startedBy: 'person' }),
+    // DP-80: Crop first. The crop view on the picture itself, before (or
+    // after) any conversion; what follows a Save crop is a conversion of
+    // the cropped pixels as a person's press.
+    onCrop: () => {
+      openEditorOnPicture().catch((err) => {
+        console.error('[Crop first] the editor did not open:', err);
+      });
+    },
   });
   traceProgress.hide();
   let traceRunner = null;
@@ -3460,6 +3468,93 @@ function createFileControl(
   }
 
   /**
+   * DP-80: the crop beside Start. "Crop first" before this picture has
+   * converted; "Crop" after, when it is the same crop the editor offers.
+   */
+  function offerCropButton() {
+    if (!inkSourceImageData) return;
+    if (convertedOnce) {
+      traceProgress.offerCrop(EDITOR_S.crop, EDITOR_S.cropLabel);
+    } else {
+      traceProgress.offerCrop();
+    }
+  }
+
+  /**
+   * DP-80: Crop first. The editor opens on the picture itself, straight into
+   * the crop view, with nothing converted: the person slides the four edges
+   * onto the part that matters, and Save crop converts that part as their
+   * own press. Cancel or Escape closes the editor with nothing converted and
+   * puts focus back on the button. A conversion that started by itself
+   * (DP-Q32, a small quick picture) is stopped first: the crop's own
+   * conversion is the one the person wants, and it comes after.
+   */
+  async function openEditorOnPicture() {
+    if (!inkSourceImageData || !inkSourceDataUrl) return false;
+    if (conversionJob && conversionJob.isRunning()) conversionJob.cancel();
+    const editor = await getEditor();
+    if (!editor || !inkSourceImageData) return false;
+    const { width, height } = inkSourceImageData;
+    editor.open(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"></svg>`,
+      { elements: [], warnings: [], recommendation: 'pass_through' },
+      editorOptions({
+        startInCropView: true,
+        pictureHref: inkSourceDataUrl,
+        pictureBox: { x: 0, y: 0, width, height },
+        onCrop: handlePictureCrop,
+        onClose: handleCropFirstClose,
+      })
+    );
+    return true;
+  }
+
+  /** DP-80: the picture cropped in its pixels, then converted as a press. */
+  async function handlePictureCrop(rect, insets) {
+    if (!inkSourceImageData || !inkControls) return;
+    const before = {
+      rawSvg: currentRawSvg,
+      fileName: currentFileName,
+      imageData: inkSourceImageData,
+      sourceDataUrl: inkSourceDataUrl,
+      trace: lastTrace,
+      metadata: currentFileName ? getSvgPrepMetadata(currentFileName) : null,
+    };
+    const cropped = cropImageDataRect(inkSourceImageData, rect);
+    inkSourceImageData = cropped;
+    inkSourceDataUrl = imageDataToDataUrl(cropped);
+    currentQuickLook = quickLook(cropped);
+    traceProgress.setNote(quickLookSentence(currentQuickLook));
+    // A picture that had converted keeps the editor's one-level Undo crop;
+    // one nothing had converted has no drawing to put back.
+    cropUndo = currentRawSvg ? before : null;
+    lastCrop = { rect, insets, source: 'picture' };
+    // The dialog returns focus to the button the crop began from.
+    traceProgress.cropButton.focus();
+    reopenSentence = (n) => EDITOR_S.cropped(n);
+    try {
+      await applyTracedImage(inkControls.getSettings(), {
+        announceResult: false,
+        startedBy: 'person',
+      });
+    } catch {
+      // applyTracedImage reports every failure itself and re-throws
+      // (D-119); nobody awaits a crop view's Save, so the rejection ends
+      // here rather than as an unhandled one.
+    } finally {
+      reopenSentence = null;
+    }
+  }
+
+  /** DP-80: the crop view left without a crop; the button gets focus back. */
+  function handleCropFirstClose() {
+    handleEditorClose();
+    if (traceProgress.cropButton && !traceProgress.cropButton.hidden) {
+      traceProgress.cropButton.focus();
+    }
+  }
+
+  /**
    * A drawing that replaced the current one by a crop or its undo: analyzed
    * and emitted the way a chosen file is, then the editor on it. When the
    * metadata already knows the drawing (an undo), the analysis path says
@@ -3703,7 +3798,9 @@ function createFileControl(
     const focusBefore = document.activeElement;
     if (inkControls) inkControls.setBusy(true);
     traceProgress.show();
-    traceProgress.begin();
+    // DP-80: a conversion that started by itself keeps Crop first on offer;
+    // a press on it ends this run and opens the crop (openEditorOnPicture).
+    traceProgress.begin({ keepCrop: startedBy === 'self' });
     // The change the note announced is being converted now.
     if (settingsNoteShown) {
       traceProgress.setNote('');
@@ -3874,6 +3971,7 @@ function createFileControl(
       convertedOnce = true;
       traceProgress.finish();
       traceProgress.offer('Convert again');
+      offerCropButton();
       dialog.close();
       const { pathCount, emitted } = outcome;
 
@@ -3927,6 +4025,7 @@ function createFileControl(
         convertedOnce = true;
         traceProgress.finish();
         traceProgress.offer('Convert again');
+        offerCropButton();
         dialog.close();
         showRefusalCard(tracedCount);
         if (sourceFileLabel) {
@@ -4285,6 +4384,8 @@ function createFileControl(
           clearButton.style.display = 'inline-block';
           traceProgress.show();
           traceProgress.offer('Start conversion');
+          // DP-80: and the crop, from the moment the pixels are read.
+          offerCropButton();
 
           // DP-35: one sentence about what this is and what it will cost HERE.
           // Never blocking, never a refusal. It costs a thumbnail pass and a

@@ -431,7 +431,10 @@ export function quickLookSentence(look) {
       ? 'Looks like a simple icon.'
       : look.pictureClass === 'drawing'
         ? 'Looks like a line drawing.'
-        : 'Looks like a photo. Icons and line drawings work best.';
+        : // DP-80: a photo is cropped to the part that matters before it is
+          // converted, and Crop first sits beside Start on the same control.
+          // STRINGS: owner review pending (DP-R6 text pack row 17).
+          'Looks like a photo. Crop first to the part you want.';
 
   const cost =
     look.costBand === 'quick'

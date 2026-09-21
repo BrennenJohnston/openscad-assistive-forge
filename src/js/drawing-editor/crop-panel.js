@@ -47,6 +47,10 @@ export function createCropPanel({ say, onSave, onCancel } = {}) {
   let open = false;
   let box = null;
   let returnTo = null;
+  // DP-80: the view's two sentences. The in-editor crop keeps its own; a
+  // crop opened before anything is converted (Crop first) brings sentences
+  // that say so.
+  let sentences = { opened: S.cropViewOpen, canceled: S.cropCanceled };
 
   const element = document.createElement('div');
   element.className = 'drawing-editor-crop';
@@ -207,11 +211,15 @@ export function createCropPanel({ say, onSave, onCancel } = {}) {
   }
 
   /**
-   * @param {{box: {x: number, y: number, width: number, height: number}, previewHref: string, insets?: object, returnTo?: HTMLElement}} options
+   * @param {{box: {x: number, y: number, width: number, height: number}, previewHref: string, insets?: object, returnTo?: HTMLElement, sentences?: {opened?: string, canceled?: string}}} options
    */
   function openPanel(options) {
     box = { ...options.box };
     returnTo = options.returnTo || null;
+    sentences = {
+      opened: options.sentences?.opened || S.cropViewOpen,
+      canceled: options.sentences?.canceled || S.cropCanceled,
+    };
     svg.setAttribute(
       'viewBox',
       `${fmt(box.x)} ${fmt(box.y)} ${fmt(box.width)} ${fmt(box.height)}`
@@ -224,7 +232,7 @@ export function createCropPanel({ say, onSave, onCancel } = {}) {
     setInsets(options.insets || {});
     element.hidden = false;
     open = true;
-    if (typeof say === 'function') say(S.cropViewOpen);
+    if (typeof say === 'function') say(sentences.opened);
     controls.top.range.focus();
   }
 
@@ -247,7 +255,7 @@ export function createCropPanel({ say, onSave, onCancel } = {}) {
   function cancel() {
     if (!open) return;
     closePanel();
-    if (typeof say === 'function') say(S.cropCanceled);
+    if (typeof say === 'function') say(sentences.canceled);
     if (typeof onCancel === 'function') onCancel();
   }
 

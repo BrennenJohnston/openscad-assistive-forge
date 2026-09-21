@@ -14841,6 +14841,23 @@ body.tutorial-body-locked {
   margin-top: var(--space-sm);
 }
 
+/* DP-80: Start and Crop first side by side, wrapping on a narrow column.
+   Start keeps the room; Crop first takes its own width. */
+.trace-progress-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.trace-progress-buttons .trace-progress-start {
+  flex: 1 1 12rem;
+}
+
+.trace-progress-buttons .trace-progress-crop {
+  flex: 0 1 auto;
+  min-height: var(--size-touch-target);
+}
+
 .trace-progress-bar {
   width: 100%;
   height: 10px;
@@ -17501,6 +17518,18 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor[data-view='charm'] .drawing-editor-status {
   background: var(--color-bg-primary);
   pointer-events: auto;
+}
+
+/* DP-80: Crop first. The crop view opened on a picture nothing has
+   converted yet has no drawing behind it, so the rows of drawing tools and
+   the shapes drawer stay out of the way; the header keeps the editor's name
+   and Close, and the crop view carries Save crop and Cancel. */
+.drawing-editor[data-crop-first='true'] .drawing-editor-toolbar-row--view,
+.drawing-editor[data-crop-first='true'] .drawing-editor-toolbar-row--tools,
+.drawing-editor[data-crop-first='true'] .drawing-editor-more-panel,
+.drawing-editor[data-crop-first='true'] .drawing-editor-panel-toggle,
+.drawing-editor[data-crop-first='true'] .drawing-editor-skip {
+  display: none;
 }
 
 /* The skip links are visible on focus and out of the way otherwise: a

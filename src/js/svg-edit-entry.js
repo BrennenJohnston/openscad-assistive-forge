@@ -615,6 +615,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    */
   async function openFile(file) {
     let prepared;
+    // DP-80: the pixels in hand, kept outside the try so a refused trace can
+    // still offer the crop on them.
+    let picture = null;
     try {
       if (fileExtension(file.name) === 'dxf') {
         say(`Converting ${file.name} to a drawing Forge can edit.`);
@@ -627,19 +630,14 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         currentSourceDataUrl = dataUrl;
         cropUndo = null;
         const imageData = await loadImageData(dataUrl);
+        picture = { imageData, dataUrl };
         // DP-79: the first trace already knows what the picture is. A camera
         // picture gets the photo defaults from the start; the panel built
         // below starts with the same switches on.
         currentCamera = !!quickLook(imageData).camera;
         const { svg, summary } = await runTrace(
           imageData,
-          {
-            mode: 'lineart',
-            camera: currentCamera,
-            smooth: currentCamera,
-            speckFloor: currentCamera,
-            mmPerPixel: DEFAULT_DESIGN_WIDTH_MM / imageData.width,
-          },
+          pictureSettings(imageData),
           { startedBy: 'person' }
         );
         prepared = { svg, traced: true, imageData, summary };
@@ -652,10 +650,101 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       // A refusal (DP-78, a trace over the cap) carries its sentence as its
       // message, and the toast is the door's one place to say it.
       fail(error.message);
+      // DP-80: that sentence says "a closer crop", and this door had no way
+      // to take one before the trace. The crop view opens on the picture
+      // itself; Save crop traces the part that is kept.
+      if (error instanceof TraceRefused && picture) {
+        await openCropOnPicture(picture.imageData, picture.dataUrl, file.name);
+      }
       return false;
     }
+    return presentTraced(prepared, file.name);
+  }
 
-    currentFileName = file.name;
+  /**
+   * The first trace's settings for a picture on this door: Line art, with
+   * the photo defaults by the quick look's verdict (DP-79), at the editor's
+   * default width.
+   */
+  const pictureSettings = (imageData) => ({
+    mode: 'lineart',
+    camera: currentCamera,
+    smooth: currentCamera,
+    speckFloor: currentCamera,
+    mmPerPixel: DEFAULT_DESIGN_WIDTH_MM / imageData.width,
+  });
+
+  /**
+   * DP-80: the crop view on a picture nothing has traced, on this door. The
+   * editor opens straight into it (no drawing behind it); Save crop traces
+   * the part that is kept, Cancel or Escape closes the editor with nothing
+   * traced.
+   */
+  async function openCropOnPicture(imageData, dataUrl, name) {
+    const ws = await ensureWorkspace();
+    currentFileName = name;
+    currentImageData = imageData;
+    currentSourceDataUrl = dataUrl;
+    cropUndo = null;
+    const { width, height } = imageData;
+    ws.open(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"></svg>`,
+      { elements: [], warnings: [], recommendation: 'pass_through' },
+      {
+        purpose: 'relief',
+        mode: 'file',
+        sourceName: name,
+        startInCropView: true,
+        pictureHref: dataUrl,
+        pictureBox: { x: 0, y: 0, width, height },
+        onCrop: handleCropBeforeTrace,
+        onKeepOriginal: () => {
+          open = false;
+        },
+      }
+    );
+    open = true;
+  }
+
+  /** DP-80: the picture cropped in its pixels, then traced as a press. */
+  async function handleCropBeforeTrace(rect) {
+    if (!currentImageData) return;
+    const cropped = cropImageDataRect(currentImageData, rect);
+    currentImageData = cropped;
+    currentSourceDataUrl = imageDataToDataUrl(cropped);
+    open = false;
+    let traced;
+    try {
+      traced = await runTrace(cropped, pictureSettings(cropped), {
+        startedBy: 'person',
+      });
+    } catch (error) {
+      if (error instanceof TraceCancelled) return;
+      fail(error.message);
+      // Still too many shapes: the crop view again, on what is left.
+      if (error instanceof TraceRefused) {
+        await openCropOnPicture(cropped, currentSourceDataUrl, currentFileName);
+      }
+      return;
+    }
+    await presentTraced(
+      {
+        svg: traced.svg,
+        traced: true,
+        imageData: cropped,
+        summary: traced.summary,
+      },
+      currentFileName,
+      (shapes) => EDITOR_S.cropped(shapes)
+    );
+  }
+
+  /**
+   * Show what a trace or a conversion produced: the ink panel for a
+   * photograph, then the editor on the drawing.
+   */
+  async function presentTraced(prepared, fileName, announceOpen = null) {
+    currentFileName = fileName;
     currentImageData = prepared.imageData;
     if (!prepared.imageData) currentSourceDataUrl = null;
     cropUndo = null;
@@ -691,12 +780,14 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       summary: prepared.summary,
       extraWarnings: prepared.warnings,
       removeCredit: prepared.traced,
-      announceOpen: (shapes) =>
-        prepared.traced
-          ? `${file.name} traced into ${shapes} shapes. Editor opened.`
-          : prepared.converted
-            ? `${file.name} converted in ${(prepared.ms / 1000).toFixed(1)} seconds, ${shapes} shapes. Editor opened.`
-            : `${file.name} opened for editing, ${shapes} shapes.`,
+      announceOpen:
+        announceOpen ||
+        ((shapes) =>
+          prepared.traced
+            ? `${fileName} traced into ${shapes} shapes. Editor opened.`
+            : prepared.converted
+              ? `${fileName} converted in ${(prepared.ms / 1000).toFixed(1)} seconds, ${shapes} shapes. Editor opened.`
+              : `${fileName} opened for editing, ${shapes} shapes.`),
     });
   }
 
