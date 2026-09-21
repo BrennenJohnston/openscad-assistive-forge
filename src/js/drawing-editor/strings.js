@@ -350,4 +350,12 @@ export const EDITOR_STRINGS = Object.freeze({
   cropFirstViewOpen:
     'Crop view open on your picture. Four sliders take an edge off; Save crop starts the conversion.',
   cropFirstCanceled: 'Crop canceled. Nothing was converted.',
+
+  /**
+   * DP-81 (D-175): a reopen whose stored result is trusted, so Apply is
+   * ready at once and nothing is combined again. A11Y.
+   * STRINGS: owner review pending (DP-R6 text pack rows 18 and 19).
+   */
+  openedAsLeft: (on, off) =>
+    `Drawing editor open, as you left it. ${count(on, 'shape', 'shapes')} on, ${off} off.`,
 });

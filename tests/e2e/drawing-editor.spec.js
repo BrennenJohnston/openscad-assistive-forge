@@ -1659,3 +1659,206 @@ test.describe('Crop first (DP-80)', () => {
     )
   })
 })
+
+// ── DP-81: the editor reopens where it was left (D-175) ─────────────────────
+//
+// The owner's report: after a long conversion and a simplification, testing
+// the position on the charm and reopening the editor "did not save the
+// previous process of simplifying and had to run through the simplification
+// process all over again", on every visit. Two halves, both MEASURED at
+// DP-77 P0c. (a) On the ring road every reopen combined everything again
+// and Apply waited for all of it: now a reopen whose stored result was made
+// from the choices it restores, at the width it measures, paints that result
+// and arms Apply at once. (b) A customizer re-render (a preset, an undo, a
+// reset) built a new file control that knew only its file's name, so the
+// door into the editor, Start and the ink panel were gone: now the control
+// restores its drawing, its picture and its settings from the stores. Both
+// RED on the build before this release.
+test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
+  const designName = (page) =>
+    page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file
+      return v && typeof v === 'object' ? v.name : v || null
+    })
+
+  test('★ Off, Apply, move the design, reopen: the editor opens as it was left with Apply ready at once, and no combine runs', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
+    const total = await rows.count()
+
+    // One shape Off, then Apply once the combine has landed. The counts the
+    // reopen will say are read from the rows now: the logo's wall is already
+    // Off by the wall rule, so "one off" is not the whole story.
+    const off = rows.nth(1).locator('input[type="radio"][value="ignore"]')
+    await off.check()
+    const offCount = await page
+      .locator('.svg-prep-object input[type="radio"][value="ignore"]:checked')
+      .count()
+    expect(offCount).toBeGreaterThanOrEqual(1)
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+    await apply.click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
+    const control = page.locator('.param-control--file', {
+      has: page.locator('#param-design_file'),
+    })
+    await expect(control.locator('.svg-prep-status-badge')).toHaveText(
+      'Prepared in the drawing editor.',
+      { timeout: 30000 }
+    )
+
+    // Reposition on the charm: Left / right moves the design, not its size.
+    const leftRight = page.locator('#param-design_left_right')
+    await leftRight.fill('2')
+    await leftRight.dispatchEvent('change')
+    await expect(page.locator('.preview-state-indicator')).toHaveText(
+      /Preview ready|Preview \(cached\)/,
+      { timeout: 240000 }
+    )
+
+    // Reopen. RED before this: "Drawing editor open. The model preview is
+    // behind it." and Apply disabled under "Combining N shapes, about N
+    // seconds" for the whole combine (14.7 s at 200 shapes, MEASURED).
+    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    await door.scrollIntoViewIfNeeded()
+    await door.click()
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Drawing editor open, as you left it\. \d+ shapes? on, \d+ off\.$/,
+      { timeout: 10000 }
+    )
+    await expect(apply).toBeEnabled({ timeout: 3000 })
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      new RegExp(`${total - offCount} shapes on, ${offCount} off\\.$`)
+    )
+    // The choice came back with the result.
+    await expect(
+      rows.nth(1).locator('input[type="radio"][value="ignore"]')
+    ).toBeChecked()
+    // No combine is under way: the render row stays quiet.
+    await expect(editor.locator('.svg-prep-render-progress')).toBeHidden()
+
+    // The first change combines as ever: Apply waits again.
+    await rows.nth(2).locator('input[type="radio"][value="ignore"]').check()
+    await expect(apply).toBeDisabled()
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
+  })
+
+  test('★ a preset, an undo and a slider undo leave the door in place, and Convert again still works after the rebuild', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    // A picture, so the control has pixels and settings to lose: 800 px is
+    // above the self-start line, so Start is pressed.
+    await page.evaluate(async () => {
+      const n = 800
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(n * 0.2, n * 0.2, n * 0.6, n * 0.6)
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(new File([blob], 'square.png', { type: 'image/png' }))
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const control = () =>
+      page.locator('.param-control--file', {
+        has: page.locator('#param-design_file'),
+      })
+    const start = () => control().locator('.trace-progress-start')
+    await expect(start()).toBeVisible({ timeout: 120000 })
+    await expect(start()).toHaveText('Start conversion')
+    await start().click()
+    await expect(control().locator('.file-info')).toContainText(
+      'converted from square.png',
+      { timeout: 240000 }
+    )
+    const door = () =>
+      control().getByRole('button', { name: 'Open the drawing editor' })
+    await expect(door()).toBeVisible({ timeout: 30000 })
+    await expect(page.locator('.preview-state-indicator')).toHaveText(
+      /Preview ready|Preview \(cached\)/,
+      { timeout: 240000 }
+    )
+
+    // The owner's order (DP-77 P0c): a change on the charm first, then a
+    // preset that clears the design, then Undo. Applying a preset records no
+    // undo step of its own (REPORTED at DP-81), so Undo restores the state
+    // from before the change that preceded it, which here holds the design;
+    // RED before this the control then showed its name with no card, no
+    // door, no Start and no ink panel (MEASURED twice at DP-77).
+    const scale = page.locator('#param-design_scale')
+    await scale.fill('80')
+    await scale.dispatchEvent('change')
+    await page.waitForTimeout(500)
+    const presetValue = await page.evaluate(() => {
+      const sel = document.querySelector('#presetSelect')
+      const opt = [...(sel?.options || [])].find(
+        (o) => o.value && !/custom|choose|select/i.test(o.value)
+      )
+      return opt ? opt.value : null
+    })
+    expect(presetValue, 'a preset to apply').toBeTruthy()
+    await page.evaluate((v) => {
+      const sel = document.querySelector('#presetSelect')
+      sel.value = v
+      sel.dispatchEvent(new Event('change', { bubbles: true }))
+    }, presetValue)
+    await expect.poll(() => designName(page), { timeout: 30000 }).toBeFalsy()
+    await page.locator('#undoBtn').click()
+    await expect.poll(() => designName(page), { timeout: 30000 }).toBe(
+      'square.svg'
+    )
+    await expect(door()).toBeVisible({ timeout: 30000 })
+    // One square is one shape, and the card calls that "SVG Ready".
+    await expect(control().locator('.svg-prep-status-badge')).toHaveText(
+      /shapes?|SVG Ready/
+    )
+    await expect(start()).toBeVisible()
+    await expect(start()).toHaveText('Convert again')
+    await expect(control().locator('.trace-progress-crop')).toHaveText('Crop')
+    await expect(control().locator('.ink-controls')).toBeVisible()
+
+    // A slider change and its undo: another re-render, the door stays.
+    await scale.fill('80')
+    await scale.dispatchEvent('change')
+    await page.waitForTimeout(500)
+    await page.locator('#undoBtn').click()
+    await expect.poll(() => designName(page), { timeout: 30000 }).toBe(
+      'square.svg'
+    )
+    await expect(door()).toBeVisible({ timeout: 30000 })
+
+    // And the pixels are still there: Convert again converts again.
+    await start().click()
+    await expect(control().locator('.file-info')).toContainText(
+      'converted from square.png',
+      { timeout: 240000 }
+    )
+    await expect(door()).toBeVisible({ timeout: 30000 })
+
+    // The door goes in.
+    await door().scrollIntoViewIfNeeded()
+    await door().click()
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(0)
+  })
+})

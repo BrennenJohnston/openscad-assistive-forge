@@ -579,7 +579,8 @@ export function createInkControls({
     say(`${base} ${waitingSentence(label)}`);
   };
 
-  const emit = () => {
+  /** The controls a mode uses are the ones a person can move. */
+  const syncEnabled = () => {
     // Only line art uses the colourfulness gate; leaving it live in the other
     // modes would offer a control that changes nothing.
     const isColours = settings.mode === 'colours';
@@ -597,6 +598,9 @@ export function createInkControls({
     // DP-79: Light and dark builds no ink mask, so there is nothing for the
     // speck floor to floor there; a switch that changes nothing is disabled.
     speck.input.disabled = settings.mode === 'standard';
+  };
+  const emit = () => {
+    syncEnabled();
     onChange({ ...settings });
   };
 
@@ -684,6 +688,51 @@ export function createInkControls({
       settings.speckFloor = !!camera;
       smooth.input.checked = settings.smooth;
       speck.input.checked = settings.speckFloor;
+    },
+    /**
+     * DP-81 (D-175 b): the settings a drawing was traced with, put back on a
+     * rebuilt control. Nothing is announced and nothing re-runs: the drawing
+     * on the charm IS this trace, and the panel only has to agree with it.
+     * Unknown keys and values are left alone.
+     * @param {object} next
+     */
+    setSettings(next = {}) {
+      if (
+        typeof next.mode === 'string' &&
+        choices.some((c) => c.value === next.mode)
+      ) {
+        settings.mode = next.mode;
+        const radio = fieldset.querySelector(
+          `input[type="radio"][value="${next.mode}"]`
+        );
+        if (radio) radio.checked = true;
+      }
+      const put = (key, pair) => {
+        if (!Number.isFinite(Number(next[key]))) return;
+        settings[key] = Number(next[key]);
+        pair.range.value = String(Math.round(settings[key]));
+        pair.number.value = pair.range.value;
+      };
+      put('lightnessMax', lightness);
+      put('chromaMax', chroma);
+      put('colourCount', colourCount);
+      if (typeof next.wallColour === 'string') {
+        settings.wallColour = next.wallColour;
+        wallSelect.value = [...wallSelect.options].some(
+          (o) => o.value === next.wallColour
+        )
+          ? next.wallColour
+          : 'auto';
+      }
+      if (typeof next.smooth === 'boolean') {
+        settings.smooth = next.smooth;
+        smooth.input.checked = next.smooth;
+      }
+      if (typeof next.speckFloor === 'boolean') {
+        settings.speckFloor = next.speckFloor;
+        speck.input.checked = next.speckFloor;
+      }
+      syncEnabled();
     },
     /**
      * Offer the colors a separation actually found as the wall choice, and

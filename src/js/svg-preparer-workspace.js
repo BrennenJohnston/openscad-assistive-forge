@@ -37,6 +37,7 @@ import { isEnabled } from './feature-flags.js';
 // flatten itself moved to a module a worker can load: see flatten-rings.js.
 import { flattenWithRings } from './flatten-rings.js';
 import { createFlattenRunner, FlattenCancelled } from './flatten-runner.js';
+import { choicesKeyOf } from './reopen-key.js';
 
 export { flattenWithRings };
 
@@ -1106,6 +1107,8 @@ export function createSvgPrepWorkspace(containerEl) {
   let fullscreenTrap = null;
   let previousFocusEl = null;
   let currentResult = null;
+  /** DP-81: the counts of a reopen painted from its stored result, or null. */
+  let openedAsLeft = null;
   let roles = [];
   let offsets = [];
   let currentSvgString = null;
@@ -1972,6 +1975,96 @@ export function createSvgPrepWorkspace(containerEl) {
     }
   }
 
+  /**
+   * Put a combined drawing in the result pane and arm Apply on it. ONE
+   * builder for the two ways a result arrives: the combine that just landed
+   * (DP-37 P2) and a stored result a reopen trusts (DP-81, D-175); a second
+   * copy of the painting is how the overlay's marks went missing once
+   * (DP-47).
+   *
+   * @param {string} resultSvgString
+   * @param {object} [options]
+   * @param {string|null} [options.previousViewBox] - The zoom to keep when
+   *   no picture stands in the pane
+   * @param {Array} [options.elements] - The classified elements the result
+   *   was made from, for the counts said
+   * @param {boolean} [options.isCompound]
+   * @param {boolean} [options.announce] - Say "Preview updated" in the
+   *   workspace's own live region (a reopen says its own sentence instead)
+   * @returns {boolean} Whether a drawing was painted
+   */
+  function paintCombinedResult(
+    resultSvgString,
+    {
+      previousViewBox = null,
+      elements = [],
+      isCompound = false,
+      announce: sayUpdated = false,
+    } = {}
+  ) {
+    currentResult = resultSvgString;
+    setApplyEnabled(true);
+
+    // Now, and not before: the old picture held the pane while the combine
+    // ran. And the zoom is read NOW, from that picture, not from when the
+    // combine began: DP-53 runs the combine by itself and lets a person
+    // pinch the stand-in meanwhile, and PR #240's board found the result
+    // landing with the earlier viewBox, so two fingers did nothing.
+    const stale = refs.resultPane.querySelector('svg');
+    const keptViewBox = stale
+      ? stale.getAttribute('viewBox') || previousViewBox
+      : previousViewBox;
+    if (stale) stale.remove();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
+    const svg = doc.querySelector('svg');
+    if (!svg) return false;
+
+    const imported = document.importNode(svg, true);
+    if (keptViewBox) imported.setAttribute('viewBox', keptViewBox);
+    // DP-Q60: the union is layer 1's paint; deeper layers go over it.
+    imported.insertBefore(
+      buildHatchDefs(keptViewBox || currentSvgMeta.viewBox),
+      imported.firstChild
+    );
+    imported.dataset.hatch = hatchPrefix;
+    imported.querySelectorAll('path').forEach((p) => {
+      p.setAttribute(
+        'class',
+        'svg-prep-result-ink' +
+          (paintsByLayer() ? ' svg-prep-standin-layer-1' : '')
+      );
+    });
+    // The picture a person is looking at is the one the list has to be able
+    // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
+    // the SAME builder as every other picture. This used to build a bare
+    // overlay of its own, and the two marks that live in it went missing on
+    // the combined result the moment they moved into groups - which is a
+    // third copy of the same three lines, and exactly how the first two
+    // copies drifted apart.
+    // D-154: the combined result is what will print, and the shapes left
+    // out are drawn over it in the left-out style, so they can be seen and
+    // chosen again here too.
+    imported.appendChild(buildLayerPaint());
+    imported.appendChild(buildLeftOutLayer(hatchPrefix));
+    imported.appendChild(buildOverlay());
+    imported.appendChild(buildHitLayer());
+    markAsPicture(imported, 'Prepared result');
+    refs.resultPane.insertBefore(imported, refs.resultZoom);
+
+    if (sayUpdated) {
+      const fgCount = elements.filter(
+        (el) => el.role !== 'ignore' && el.pathData
+      ).length;
+      const ignoredCount = elements.filter((el) => el.role === 'ignore').length;
+      liveRegion.textContent = isCompound
+        ? `Preview updated: ${fgCount} shapes on, ${ignoredCount} off.`
+        : `Preview updated: ${fgCount} on, ${elements.filter((el) => el.role === 'hole' && el.pathData).length} cut out.`;
+    }
+    return true;
+  }
+
   async function runResultPreview() {
     if (!currentAnalysis || !currentSvgMeta) return;
 
@@ -2107,66 +2200,12 @@ export function createSvgPrepWorkspace(containerEl) {
         return;
       }
 
-      currentResult = resultSvgString;
-      setApplyEnabled(true);
-
-      // Now, and not before: the old picture held the pane while the combine
-      // ran. And the zoom is read NOW, from that picture, not from when the
-      // combine began: DP-53 runs the combine by itself and lets a person
-      // pinch the stand-in meanwhile, and PR #240's board found the result
-      // landing with the earlier viewBox, so two fingers did nothing.
-      const stale = refs.resultPane.querySelector('svg');
-      const keptViewBox = stale
-        ? stale.getAttribute('viewBox') || previousViewBox
-        : previousViewBox;
-      if (stale) stale.remove();
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
-      const svg = doc.querySelector('svg');
-      if (!svg) return;
-
-      const imported = document.importNode(svg, true);
-      if (keptViewBox) imported.setAttribute('viewBox', keptViewBox);
-      // DP-Q60: the union is layer 1's paint; deeper layers go over it.
-      imported.insertBefore(
-        buildHatchDefs(keptViewBox || currentSvgMeta.viewBox),
-        imported.firstChild
-      );
-      imported.dataset.hatch = hatchPrefix;
-      imported.querySelectorAll('path').forEach((p) => {
-        p.setAttribute(
-          'class',
-          'svg-prep-result-ink' +
-            (paintsByLayer() ? ' svg-prep-standin-layer-1' : '')
-        );
+      paintCombinedResult(resultSvgString, {
+        previousViewBox,
+        elements: withOffsets,
+        isCompound,
+        announce: true,
       });
-      // The picture a person is looking at is the one the list has to be able
-      // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
-      // the SAME builder as every other picture. This used to build a bare
-      // overlay of its own, and the two marks that live in it went missing on
-      // the combined result the moment they moved into groups - which is a
-      // third copy of the same three lines, and exactly how the first two
-      // copies drifted apart.
-      // D-154: the combined result is what will print, and the shapes left
-      // out are drawn over it in the left-out style, so they can be seen and
-      // chosen again here too.
-      imported.appendChild(buildLayerPaint());
-      imported.appendChild(buildLeftOutLayer(hatchPrefix));
-      imported.appendChild(buildOverlay());
-      imported.appendChild(buildHitLayer());
-      markAsPicture(imported, 'Prepared result');
-      refs.resultPane.insertBefore(imported, refs.resultZoom);
-
-      const fgCount = withOffsets.filter(
-        (el) => el.role !== 'ignore' && el.pathData
-      ).length;
-      const ignoredCount = withOffsets.filter(
-        (el) => el.role === 'ignore'
-      ).length;
-      liveRegion.textContent = isCompound
-        ? `Preview updated: ${fgCount} shapes on, ${ignoredCount} off.`
-        : `Preview updated: ${fgCount} on, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} cut out.`;
     } catch (err) {
       console.error('[SVG Prep] Preview failed:', err);
       currentResult = null;
@@ -3662,6 +3701,30 @@ export function createSvgPrepWorkspace(containerEl) {
    * applied to the wrong shapes. Deleted positions are left undefined and the
    * deleted list carries them instead.
    */
+  /**
+   * DP-81 (D-175): the key a stored result is trusted by on a reopen: the
+   * choices as they stand (roles, offsets, deletions and layers by ORIGINAL
+   * index), the width the editor measures at, and the raw drawing itself.
+   * Null when nothing is open.
+   */
+  function choicesKey() {
+    if (!isOpen || !currentSvgString) return null;
+    return choicesKeyOf({
+      roles: getRoleOverrides(),
+      offsets: getOffsetOverrides(),
+      deleted: getDeletedIndices(),
+      layers: getLayerAssignments().layers,
+      designWidthMm:
+        parseFloat(refs.designWidthInput.value) || DEFAULT_DESIGN_WIDTH_MM,
+      svg: currentSvgString,
+    });
+  }
+
+  /** DP-81: the counts a trusted reopen was painted with, else null. */
+  function wasOpenedAsLeft() {
+    return openedAsLeft ? { ...openedAsLeft } : null;
+  }
+
   function getRoleOverrides() {
     const out = [];
     originalIndex.forEach((orig, i) => {
@@ -3869,8 +3932,42 @@ export function createSvgPrepWorkspace(containerEl) {
     // worker works (DP-37 P1's rule).
     setPreviewBand();
     clearSelection();
-    markPreviewStale({ keepZoom: false });
-    updateResultPreview();
+    // DP-81 (D-175): a reopen whose stored result was made from exactly
+    // these choices, at this width, on this drawing, is painted from that
+    // result and Apply is ready at once; the first change combines as
+    // ever. Anything else takes the usual road: the stand-in, the combine.
+    // MEASURED at DP-77 P0c: every reopen combined again, 14.7 s at 200
+    // shapes on the ring road, and Apply waited for all of it.
+    openedAsLeft = null;
+    if (
+      typeof callbacks.initialResult === 'string' &&
+      callbacks.initialResult &&
+      typeof callbacks.initialResultKey === 'string' &&
+      callbacks.initialResultKey === choicesKey()
+    ) {
+      const roleOverrides = {};
+      roles.forEach((role, i) => {
+        roleOverrides[i] = role;
+      });
+      const classified = classifyElements(liveElements, { roleOverrides });
+      if (
+        paintCombinedResult(callbacks.initialResult, {
+          elements: classified,
+          isCompound: Boolean(analysis.isCompoundPathOnly),
+          announce: false,
+        })
+      ) {
+        openedAsLeft = {
+          on: classified.filter((el) => el.role !== 'ignore' && el.pathData)
+            .length,
+          off: classified.filter((el) => el.role === 'ignore').length,
+        };
+      }
+    }
+    if (!openedAsLeft) {
+      markPreviewStale({ keepZoom: false });
+      updateResultPreview();
+    }
     measureThickness();
 
     sourceZoomCleanup = setupPaneZoom(
@@ -4119,6 +4216,8 @@ export function createSvgPrepWorkspace(containerEl) {
     close,
     dismiss,
     getResult,
+    choicesKey,
+    wasOpenedAsLeft,
     getRoleOverrides,
     getOffsetOverrides,
     getDeletedIndices,
