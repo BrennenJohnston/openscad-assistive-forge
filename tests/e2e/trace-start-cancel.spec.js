@@ -409,13 +409,18 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-    await choosePicture(page, 2000, 'noise');
+    // The gear grid, a FILE of 900 shapes: seconds of trace and sliced
+    // stages at 4x, which is the window a Cancel needs. This used to be the
+    // noise field, and since DP-79 noise is a photograph that is smoothed
+    // and floored to almost nothing in the worker (which the throttle does
+    // not slow): on CI the dialog closed before the click could land, twice
+    // (PR #273's first board).
+    await chooseGearGrid(page, 30, 12);
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
 
-    // Cancel is the first thing that happens after the bar appears: the whole
-    // conversion is under two seconds now, and anything else in front of the
-    // click spends that window.
+    // Cancel is the first thing that happens after the bar appears: anything
+    // else in front of the click spends the window.
     await p.start.click();
     await expect(p.cancel).toBeVisible({ timeout: 30_000 });
     await p.cancel.click({ timeout: 10_000 });
