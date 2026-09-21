@@ -357,14 +357,22 @@ export function createDrawingEditor({
   );
   undoCropBtn.hidden = true;
   let panelOpenBeforeCrop = null;
+  // DP-80: the crop view opened on a picture nothing has converted yet
+  // (Crop first). There is no drawing behind it, so Save crop hands the
+  // rectangle over and closes the editor, and Cancel closes it too.
+  let cropFirst = false;
   const cropPanel = createCropPanel({
     say: (text) => say(text),
     onSave: (rect, insets) => {
+      const onCrop = callbacks.onCrop;
       leaveCropView();
-      if (typeof callbacks.onCrop === 'function')
-        callbacks.onCrop(rect, insets);
+      if (cropFirst) dismissSurface();
+      if (typeof onCrop === 'function') onCrop(rect, insets);
     },
-    onCancel: () => leaveCropView(),
+    onCancel: () => {
+      leaveCropView();
+      if (cropFirst) leave();
+    },
   });
 
   /** Crop and Undo crop belong to the drawing view of a relief editor. */
@@ -388,20 +396,28 @@ export function createDrawingEditor({
    * (a photograph, for a traced one) is shown when it gives one, else the
    * drawing itself.
    */
-  function openCropView() {
+  function openCropView({
+    box: givenBox = null,
+    href = null,
+    sentences = null,
+    returnTo = cropBtn,
+  } = {}) {
     if (!isOpen || cropPanel.isOpen() || typeof callbacks.onCrop !== 'function')
       return;
-    const doc = new DOMParser().parseFromString(
-      currentSvg || '',
-      'image/svg+xml'
-    );
-    const svgRoot = doc.querySelector('svg');
-    const box = (svgRoot && readDrawingBox(svgRoot)) || {
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100,
-    };
+    let box = givenBox;
+    if (!box) {
+      const doc = new DOMParser().parseFromString(
+        currentSvg || '',
+        'image/svg+xml'
+      );
+      const svgRoot = doc.querySelector('svg');
+      box = (svgRoot && readDrawingBox(svgRoot)) || {
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+      };
+    }
     panelOpenBeforeCrop =
       panelToggleBtn.getAttribute('aria-expanded') === 'true';
     setPanel(false);
@@ -409,9 +425,11 @@ export function createDrawingEditor({
     root.dataset.crop = 'open';
     cropPanel.open({
       box,
-      previewHref: callbacks.cropPreviewHref || svgDataUrl(currentSvg || ''),
+      previewHref:
+        href || callbacks.cropPreviewHref || svgDataUrl(currentSvg || ''),
       insets: callbacks.cropInsets || {},
-      returnTo: cropBtn,
+      returnTo,
+      ...(sentences ? { sentences } : {}),
     });
   }
 
@@ -424,7 +442,7 @@ export function createDrawingEditor({
     }
   }
 
-  cropBtn.addEventListener('click', openCropView);
+  cropBtn.addEventListener('click', () => openCropView());
   undoCropBtn.addEventListener('click', () => {
     if (typeof callbacks.onUndoCrop === 'function') callbacks.onUndoCrop();
   });
@@ -861,6 +879,8 @@ export function createDrawingEditor({
     }
     bandObserver?.disconnect();
     hide();
+    cropFirst = false;
+    delete root.dataset.cropFirst;
     resetView();
     status.textContent = '';
     if (typeof onClose === 'function') onClose(surfaceEl);
@@ -917,6 +937,9 @@ export function createDrawingEditor({
       purpose: askedPurpose,
       openedSentence,
       initialPlan: savedPlan,
+      startInCropView = false,
+      pictureHref = null,
+      pictureBox = null,
       ...rest
     } = options;
     const reopening = isOpen;
@@ -939,33 +962,68 @@ export function createDrawingEditor({
     initialPlan = savedPlan || null;
     show();
 
-    // The workspace resolves Apply and Keep itself; the surface only has to
-    // give the area back afterwards, and it does that in `finish`.
-    workspace.open(svgString, analysis, {
-      ...rest,
-      hosted: true,
-      onApply: (...args) => finish('onApply', ...args),
-      onKeepOriginal: (...args) => finish('onKeepOriginal', ...args),
-    });
+    // DP-80: Crop first. The editor opens on a picture nothing has converted
+    // yet, straight into the crop view. There is no drawing, so the
+    // workspace is not opened and the rows of drawing tools stay out of the
+    // way (the CSS on data-crop-first); Save crop hands the rectangle to the
+    // host, whose conversion follows, and Cancel or Escape closes the editor
+    // with nothing converted. Only a host that can crop gets it.
+    cropFirst = startInCropView === true && typeof rest.onCrop === 'function';
+    if (cropFirst) root.dataset.cropFirst = 'true';
+    else delete root.dataset.cropFirst;
 
-    applyPurpose();
-    syncCrop();
-    setCount('warnings', analysis?.warnings?.length || null);
-
-    if (purpose === 'stencil') {
+    if (cropFirst) {
+      // A drawing already up (the file control's Crop pressed while the
+      // editor shows the drawing) is dropped as it is: the crop replaces it.
+      if (reopening) workspace.dismiss();
+      applyPurpose();
+      syncCrop();
+      setCount('warnings', null);
       setCount('regions', null);
-      setCount('colours', null);
-      setCount('plates', null);
-      status.textContent = S.findingRegions;
-      buildStencil(svgString, openedSentence || S.opened);
+      // The crop view says its own sentence for a picture, and `say` puts
+      // it on the status line: one action, one sentence, one region.
+      openCropView({
+        box: pictureBox,
+        href: pictureHref,
+        returnTo: null,
+        sentences: {
+          opened: S.cropFirstViewOpen,
+          canceled: S.cropFirstCanceled,
+        },
+      });
     } else {
-      setCount('regions', analysis?.elements?.length ?? null);
-      say(openedSentence || S.opened);
+      // The workspace resolves Apply and Keep itself; the surface only has
+      // to give the area back afterwards, and it does that in `finish`.
+      workspace.open(svgString, analysis, {
+        ...rest,
+        hosted: true,
+        onApply: (...args) => finish('onApply', ...args),
+        onKeepOriginal: (...args) => finish('onKeepOriginal', ...args),
+      });
+
+      applyPurpose();
+      syncCrop();
+      setCount('warnings', analysis?.warnings?.length || null);
+
+      if (purpose === 'stencil') {
+        setCount('regions', null);
+        setCount('colours', null);
+        setCount('plates', null);
+        status.textContent = S.findingRegions;
+        buildStencil(svgString, openedSentence || S.opened);
+      } else {
+        setCount('regions', analysis?.elements?.length ?? null);
+        say(openedSentence || S.opened);
+      }
     }
 
     if (reopening) return;
     if (typeof onOpen === 'function') onOpen(surfaceEl);
     previousFocus = document.activeElement;
+    // The crop view's first row is where a Crop first opening lands.
+    const cropTop = cropPanel.element.querySelector(
+      'input[type="range"][data-inset="top"]'
+    );
     if (fullscreen) {
       // The screen is the editor now, so Tab stays inside it and Escape is
       // the way out. Over the preview there is no trap: the customizer is
@@ -984,9 +1042,15 @@ export function createDrawingEditor({
           leave();
         },
       });
-      trap.activate({ initialFocus: title, initialFocusDelay: 0 });
+      trap.activate({
+        initialFocus: cropFirst && cropTop ? cropTop : title,
+        initialFocusDelay: 0,
+      });
     }
-    title.focus();
+    // After the host's own open hook: at phone width the customizer drawer
+    // stands aside for the editor (D-178) and moves focus to its toggle as
+    // it goes, so the editor's first focus is set last.
+    (cropFirst && cropTop ? cropTop : title).focus();
   }
 
   /**
@@ -2261,16 +2325,19 @@ export function createDrawingEditor({
 
   updateHistoryButtons();
 
+  /** Close without a verdict: no callback, the workspace dropped as it is. */
+  function dismissSurface() {
+    if (!isOpen) return;
+    isOpen = false;
+    callbacks = {};
+    workspace.dismiss();
+    teardown();
+  }
+
   return {
     open,
     close: () => leave(),
-    dismiss: () => {
-      if (!isOpen) return;
-      isOpen = false;
-      callbacks = {};
-      workspace.dismiss();
-      teardown();
-    },
+    dismiss: dismissSurface,
     setCount,
     say,
     /** D-120: resolves once the workspace's ring engine is in. */
@@ -2278,6 +2345,8 @@ export function createDrawingEditor({
     setDesignWidthMm: (mm) => workspace.setDesignWidthMm(mm),
     /** DP-49: whether the crop view is what is on the stage. */
     isCropOpen: () => cropPanel.isOpen(),
+    /** DP-80: whether the editor is open on a picture, before a conversion. */
+    isCropFirst: () => isOpen && cropFirst,
     getResult: () => workspace.getResult(),
     getRoleOverrides: () => workspace.getRoleOverrides(),
     getOffsetOverrides: () => workspace.getOffsetOverrides(),
@@ -2298,12 +2367,7 @@ export function createDrawingEditor({
     undo,
     redo,
     destroy: () => {
-      if (isOpen) {
-        isOpen = false;
-        callbacks = {};
-        workspace.dismiss();
-        teardown();
-      }
+      dismissSurface();
       canvas.destroy();
       workspace.destroy();
       root.remove();

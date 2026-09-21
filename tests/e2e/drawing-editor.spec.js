@@ -1354,3 +1354,308 @@ test.describe('the automatic preparation that keeps nothing (D-167)', () => {
     expect(design).toContain('M4 8')
   })
 })
+
+// ── DP-80: Crop first ────────────────────────────────────────────────────────
+//
+// The owner's report: "I wanted to crop the picture before it was processed
+// by the drawing editor, but it wouldn't let me." A photograph of a whole
+// page is mostly the page. Crop first sits beside Start from the moment the
+// pixels are read and opens the editor straight into the crop view on the
+// picture itself; Save crop converts the part that is kept, as the person's
+// press; Cancel or Escape closes the editor with nothing converted. RED on
+// the build before this release: no such button on the control.
+test.describe('Crop first (DP-80)', () => {
+  /**
+   * A sheet like the owner's: four panels of outlined shapes on a lit,
+   * grainy paper, 1400 px (over the self-start line, so it waits for a
+   * press), a camera picture by the quick look's verdict (DP-79).
+   */
+  async function chooseSheet(page) {
+    await page.evaluate(async () => {
+      const w = 1400
+      const h = 1400
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      const img = ctx.createImageData(w, h)
+      let seed = 777
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff
+          const noise = ((seed >> 16) & 31) - 15
+          const base = 236 - Math.round((30 * x) / w)
+          const i = (y * w + x) * 4
+          img.data[i] = base + noise
+          img.data[i + 1] = base + noise - 3
+          img.data[i + 2] = base + noise - 8
+          img.data[i + 3] = 255
+        }
+      }
+      ctx.putImageData(img, 0, 0)
+      const shape = (draw, fill) => {
+        ctx.lineWidth = 12
+        ctx.strokeStyle = '#141414'
+        ctx.fillStyle = fill
+        ctx.beginPath()
+        draw()
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+      }
+      const panels = [
+        [0, 0],
+        [700, 0],
+        [0, 700],
+        [700, 700],
+      ]
+      const fills = ['#c9a06a', '#6f8f5e', '#b04a3c', '#5b6b8a']
+      panels.forEach(([px, py], k) => {
+        shape(() => ctx.rect(px + 80, py + 90, 220, 260), fills[k])
+        shape(
+          () => ctx.arc(px + 500, py + 380, 130, 0, Math.PI * 2),
+          fills[(k + 1) % 4]
+        )
+      })
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'sheet.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  const designName = (page) =>
+    page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file
+      return v && typeof v === 'object' ? v.name : v || null
+    })
+
+  /** What the polite announcer said, from now on. */
+  const listen = (page) =>
+    page.evaluate(() => {
+      window.__heard = []
+      const node = document.getElementById('srAnnouncer')
+      if (!node) return
+      new MutationObserver(() => {
+        const t = node.textContent.trim()
+        if (t) window.__heard.push(t)
+      }).observe(node, { childList: true, characterData: true, subtree: true })
+    })
+
+  test('★ the sheet: Crop first opens the crop view on the photograph before anything is converted, and Save crop converts the one panel', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await chooseSheet(page)
+    const start = page.locator('.trace-progress-start').first()
+    const cropFirst = page.locator('.trace-progress-crop').first()
+    await expect(start).toBeVisible({ timeout: 120000 })
+    await expect(start).toHaveText('Start conversion')
+    // Beside Start, with the visible words in its name; nothing converted.
+    await expect(cropFirst).toBeVisible()
+    await expect(cropFirst).toHaveText('Crop first')
+    await expect(cropFirst).toHaveAttribute(
+      'aria-label',
+      'Crop first, before converting the picture'
+    )
+    expect(await designName(page)).toBeFalsy()
+
+    await cropFirst.click()
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const view = editor.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible()
+    // The photograph itself is on the crop view, and its first row has focus.
+    await expect(view.locator('image')).toHaveAttribute(
+      'href',
+      /^data:image\/png/
+    )
+    await expect(
+      view.locator('input[type="range"][data-inset="top"]')
+    ).toBeFocused()
+    // No drawing behind it: no rows, no drawing tools, and the sentence for a
+    // picture on the status line.
+    await expect(page.locator('.svg-prep-object')).toHaveCount(0)
+    await expect(editor.locator('.drawing-editor-toolbar-row--view')).toBeHidden()
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Crop view open on your picture\./
+    )
+    expect(await designName(page)).toBeFalsy()
+
+    // The top-left panel: half the width, half the height.
+    await view.locator('.slider-spinbox[data-inset="right"]').fill('50')
+    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50')
+    await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
+      'Keeping 50 % of the width and 50 % of the height.'
+    )
+    await view.locator('[data-action="save-crop"]').click()
+
+    // The conversion is the person's press: the dialog, then the editor on
+    // the result, which says it was cropped.
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. \d+ shapes?\.$/,
+      { timeout: 240000 }
+    )
+    const rows = await page.locator('.svg-prep-object').count()
+    expect(rows).toBeGreaterThanOrEqual(2)
+    expect(rows).toBeLessThan(60)
+    // The charm holds the crop's drawing, and the control says where it
+    // came from.
+    await expect.poll(() => designName(page), { timeout: 60000 }).toBe(
+      'sheet.svg'
+    )
+    await expect(page.locator('.file-info').first()).toContainText(
+      'converted from sheet.png'
+    )
+    // The button reads Crop now: the same crop, on a converted picture.
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden()
+    await expect(cropFirst).toHaveText('Crop')
+    await expect(cropFirst).toHaveAttribute('aria-label', 'Crop the picture')
+  })
+
+  test('★ Escape in the crop view closes the editor, converts nothing, says so once, and puts focus back on Crop first', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    await chooseSheet(page)
+    const cropFirst = page.locator('.trace-progress-crop').first()
+    await expect(cropFirst).toBeVisible({ timeout: 120000 })
+    // The page's own start-up announcements are over (the first preview is
+    // ready); from here the listener counts.
+    await page.waitForTimeout(2000)
+    await listen(page)
+
+    await cropFirst.click()
+    const editor = surface(page)
+    await expect(editor.locator('.drawing-editor-crop')).toBeVisible({
+      timeout: 60000,
+    })
+    await page.keyboard.press('Escape')
+    await expect(editor).toBeHidden()
+    await expect(cropFirst).toBeFocused()
+    await expect(cropFirst).toHaveText('Crop first')
+    expect(await designName(page)).toBeFalsy()
+    await expect(page.locator('.file-info').first()).toContainText(
+      'Ready to convert'
+    )
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.__heard ?? [])).filter((t) =>
+            t.startsWith('Crop canceled. Nothing was converted.')
+          ).length,
+        { timeout: 15000 }
+      )
+      .toBe(1)
+    const heard = await page.evaluate(() => window.__heard ?? [])
+    expect(
+      heard.filter((t) => t.startsWith('Converted:')),
+      `heard: ${heard.join(' | ')}`
+    ).toEqual([])
+  })
+
+  test('★ a small quick picture that started converting by itself is stopped by Crop first, and the one conversion that lands is the crop', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    await page.waitForTimeout(2000)
+    await listen(page)
+    // The press has to land WHILE the self-started run is under way, and
+    // that window is the run itself. A CPU throttle cannot widen it: the
+    // quick look measures the device, and under a throttle it calls the
+    // picture slow, so DP-Q32's rule waits for a press and nothing starts
+    // by itself (MEASURED at 6x: Start stayed on screen for 30 s). So the
+    // press comes from inside the page, the moment Start goes away with
+    // Crop first still on offer, which is the moment the run began.
+    await page.evaluate(() => {
+      window.__cropPressed = false
+      const obs = new MutationObserver(() => {
+        const crop = document.querySelector('.trace-progress-crop')
+        const start = document.querySelector('.trace-progress-start')
+        if (window.__cropPressed || !crop || crop.hidden || !start || !start.hidden)
+          return
+        window.__cropPressed = true
+        obs.disconnect()
+        crop.click()
+      })
+      obs.observe(document.body, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['hidden'],
+      })
+    })
+    // 450 px, a grid of 400 dots on white: under the self-start line and
+    // quick, so it starts converting the moment it is chosen (DP-Q32).
+    await page.evaluate(async () => {
+      const n = 450
+      const perSide = 20
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.fillStyle = '#000000'
+      const cell = n / perSide
+      for (let row = 0; row < perSide; row++) {
+        for (let col = 0; col < perSide; col++) {
+          ctx.beginPath()
+          ctx.arc((col + 0.5) * cell, (row + 0.5) * cell, 6, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'dots-quick.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    // The run began by itself and the press landed inside it.
+    await expect
+      .poll(() => page.evaluate(() => window.__cropPressed), { timeout: 120000 })
+      .toBe(true)
+    const editor = surface(page)
+    const view = editor.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible({ timeout: 60000 })
+    await expect(page.locator('.conversion-dialog:not(.hidden)')).toHaveCount(0)
+    // Keep the lower-right quarter: ten dots by ten.
+    await view.locator('.slider-spinbox[data-inset="top"]').fill('50')
+    await view.locator('.slider-spinbox[data-inset="left"]').fill('50')
+    await view.locator('[data-action="save-crop"]').click()
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. \d+ shapes\.$/,
+      { timeout: 240000 }
+    )
+    const rows = await page.locator('.svg-prep-object').count()
+    expect(rows).toBeGreaterThanOrEqual(90)
+    expect(rows).toBeLessThanOrEqual(110)
+    // One conversion landed, the crop's: the self-started one never got to
+    // say "Converted".
+    const heard = await page.evaluate(() => window.__heard ?? [])
+    expect(
+      heard.filter((t) => t.startsWith('Converted:')),
+      `heard: ${heard.join(' | ')}`
+    ).toEqual([])
+    await expect.poll(() => designName(page), { timeout: 60000 }).toBe(
+      'dots-quick.svg'
+    )
+  })
+})

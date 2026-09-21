@@ -2383,3 +2383,87 @@ test.describe('crop at the door (DP-49)', () => {
     await expect(cropBtn).toBeFocused()
   })
 })
+
+// ── DP-80: the crop view after a refused trace ──────────────────────────────
+//
+// The refusal's sentence says "a closer crop", and this door had no way to
+// take one before the trace: the toast was the end of it. Now the crop view
+// opens on the picture itself the moment a trace is refused, and Save crop
+// traces the part that is kept. RED on the build before this release: the
+// toast, and nothing after it.
+test.describe('the crop view after a refused trace (DP-80)', () => {
+  test('★ the dot grid is refused, the crop view opens on it, and a quarter of it traces into the editor', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await page.evaluate(() => {
+      document.getElementById('accessibilitySpotlights').open = true
+    })
+    await armPickerWatch(page)
+    await page.click('#editDrawingSpotlightBtn')
+    await expectPickerOpened(page)
+
+    // The same 1,156 dots the refusal guard draws: a file over the cap.
+    await page.evaluate(async () => {
+      const n = 1400
+      const perSide = 34
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.fillStyle = '#000000'
+      const cell = n / perSide
+      for (let row = 0; row < perSide; row++) {
+        for (let col = 0; col < perSide; col++) {
+          ctx.beginPath()
+          ctx.arc((col + 0.5) * cell, (row + 0.5) * cell, cell * 0.28, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'dots.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#svgEditFileInput')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const toast = page.locator('.toast, [role="alert"]', {
+      hasText: 'This picture traced into',
+    })
+    await expect(toast.first()).toBeVisible({ timeout: 240000 })
+    // Then the crop view, on the picture, with nothing traced.
+    const host = page.locator('#svgEditStandaloneHost')
+    const view = host.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible({ timeout: 60000 })
+    await expect(view.locator('image')).toHaveAttribute(
+      'href',
+      /^data:image\/png/
+    )
+    await expect(page.locator('.svg-prep-object')).toHaveCount(0)
+    await expect(host.locator('.drawing-editor-status')).toHaveText(
+      /^Crop view open on your picture\./
+    )
+
+    // A quarter of the grid: 17 by 17 dots, under the cap.
+    await view.locator('.slider-spinbox[data-inset="right"]').fill('50')
+    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50')
+    await view.locator('[data-action="save-crop"]').click()
+    await expect(host.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. \d+ shapes\.$/,
+      { timeout: 240000 }
+    )
+    const rows = await page.locator('.svg-prep-object').count()
+    expect(rows).toBeGreaterThanOrEqual(280)
+    expect(rows).toBeLessThanOrEqual(300)
+    await expect(page.locator('.conversion-dialog:not(.hidden)')).toHaveCount(0)
+  })
+})
