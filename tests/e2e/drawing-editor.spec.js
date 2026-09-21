@@ -1704,7 +1704,14 @@ test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
     expect(offCount).toBeGreaterThanOrEqual(1)
     const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
     await expect(apply).toBeEnabled({ timeout: 240000 })
-    await apply.click()
+    // The press lands at once, but what follows it (the emit: the data URL,
+    // the companions, the state, the URL hash, the storage save; D-150's
+    // family) holds the page, and on the CI runner that was 23 s on this
+    // drawing (MEASURED in PR #274's shard-6 trace: "pending" to
+    // "rendering" 23 s after the press, the card already reading
+    // "Prepared"). A press waits for its acknowledgment, so it gets the
+    // runner's time here rather than Playwright's ten seconds.
+    await apply.click({ timeout: 90000 })
     await expect(editor).toBeHidden({ timeout: 30000 })
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
