@@ -38,6 +38,13 @@
  * Potrace is asked for and cannot answer, the reply SAYS which engine ran
  * rather than quietly substituting one.
  *
+ * DP-79: a camera picture (the ink settings' `camera`, the quick look's
+ * verdict) is worked at the print's cell before anything looks for ink, and
+ * its median, speck floor and Solid-shape close ride in `ink-prepare.js`, the
+ * same functions the main-thread converter calls, so the two roads cannot
+ * drift. `mmPerPixel` arrives for the SOURCE pixels and is re-scaled here for
+ * the pixels in hand.
+ *
  * @license GPL-3.0-or-later
  */
 
@@ -49,9 +56,10 @@ import {
 } from './image-import.js';
 import {
   compositeOntoWhite,
-  extractInk,
   lineWidthPercentiles,
+  medianFilter3x3,
 } from './ink-extraction.js';
+import { workingPicture, inkStage, SPECK_FLOOR_MM2 } from './ink-prepare.js';
 import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
 /** The stages a caller can be told about, in the order they happen. */
@@ -117,12 +125,33 @@ self.onmessage = async (event) => {
       pixels = downscale.imageData;
     }
 
+    // DP-79: a camera picture is worked at the print's cell. `inkAt` carries
+    // the millimeters per pixel of the pixels now in hand; the summary says
+    // what was done in `working`. The host's `mmPerPixel` is for the SOURCE
+    // pixels, and the cap above may just have made each pixel `factor`
+    // times bigger: MEASURED on the sharpie photograph (18 MP, capped by
+    // four), the sentence read "the size a 1.9 mm design can use" for a 7.6
+    // mm print and the floor was sixteen times too strict, until the factor
+    // was carried across.
+    const capped =
+      ink && ink.mmPerPixel > 0 && downscale
+        ? { ...ink, mmPerPixel: ink.mmPerPixel * downscale.factor }
+        : ink;
+    const worked = workingPicture(pixels, capped);
+    pixels = worked.pixels;
+    const working = worked.working;
+    const inkAt = ink ? { ...ink, mmPerPixel: worked.mmPerPixel } : ink;
+    const printedWidthMm =
+      inkAt && inkAt.mmPerPixel > 0
+        ? +(inkAt.mmPerPixel * pixels.width).toFixed(2)
+        : null;
+
     // Colors is its own road: it separates the picture into flat colors and
     // returns regions with their fills, so there is no ink mask and no trace.
     // It lives here for the same reason the rest does - it is arithmetic over
     // pixels, and the stencil purpose should not be the one thing that still
     // freezes.
-    if (ink && ink.mode === 'colours') {
+    if (inkAt && inkAt.mode === 'colours') {
       post({
         id,
         type: 'stage',
@@ -134,19 +163,29 @@ self.onmessage = async (event) => {
       const { colourLabel } = await import('./stencil-colours.js');
       const hexOf = (c) =>
         `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+      // DP-79: the median before the separation, when the switch is on (a
+      // photograph's grain would otherwise be its own colors); the floor at
+      // the printed size only with its switch on, else the separation's own
+      // four pixels, as before.
+      const source = inkAt.smooth
+        ? medianFilter3x3(pixels, makeImageData)
+        : pixels;
+      const floorOn = !!inkAt.speckFloor && inkAt.mmPerPixel > 0;
       const options = {
-        count: ink.colourCount ?? 6,
-        mmPerPixel: ink.mmPerPixel ?? 0,
+        count: inkAt.colourCount ?? 6,
+        mmPerPixel: floorOn ? inkAt.mmPerPixel : 0,
         // D-138. The worker builds its own options rather than forwarding
         // ink, so a setting the host passes has to be named here too - which
         // is exactly how the share floor reached the separation in a unit
         // test and nowhere in the app for an afternoon.
-        shareFloor: ink.shareFloor ?? 0,
+        shareFloor: inkAt.shareFloor ?? 0,
         nameFor: (c) => colourLabel(hexOf(c)),
       };
-      const first = separateColours(pixels, options);
+      const first = separateColours(source, options);
       const wall =
-        ink.wallColour && ink.wallColour !== 'auto' ? ink.wallColour : null;
+        inkAt.wallColour && inkAt.wallColour !== 'auto'
+          ? inkAt.wallColour
+          : null;
       const chosen = wall
         ? first.colours.findIndex(
             (c) => c.hex.toLowerCase() === wall.toLowerCase()
@@ -154,7 +193,7 @@ self.onmessage = async (event) => {
         : -1;
       const result =
         chosen >= 0
-          ? separateColours(pixels, {
+          ? separateColours(source, {
               ...options,
               backgroundIndex: first.colours[chosen].index,
             })
@@ -170,7 +209,12 @@ self.onmessage = async (event) => {
           mode: 'colours',
           colours: result.colours,
           droppedTotal: result.droppedTotal,
+          smoothed: !!inkAt.smooth,
+          specksDropped: floorOn ? result.droppedTotal : 0,
+          speckFloorMm2: floorOn ? SPECK_FLOOR_MM2 : null,
+          ...(printedWidthMm != null ? { printedWidthMm } : {}),
           ...(downscale ? { downscale: { factor: downscale.factor } } : {}),
+          ...(working ? { working } : {}),
         },
       });
       return;
@@ -178,7 +222,8 @@ self.onmessage = async (event) => {
 
     let summary = null;
     let inkMask = null;
-    if (ink && ink.mode && ink.mode !== 'standard') {
+    let turdsize;
+    if (inkAt && inkAt.mode && inkAt.mode !== 'standard') {
       post({
         id,
         type: 'stage',
@@ -186,14 +231,17 @@ self.onmessage = async (event) => {
         index: 1,
         total: TRACE_STAGES.length,
       });
-      const extracted = extractInk(pixels, { ...ink, makeImageData });
-      pixels = extracted.imageData;
-      summary = extracted.summary;
-      inkMask = extracted.mask;
+      const stage = inkStage(pixels, inkAt, { makeImageData });
+      pixels = stage.pixels;
+      summary = stage.summary;
+      inkMask = stage.mask;
+      turdsize = stage.turdsize;
       // How thin the thinnest lines are, so the editor can say whether they
       // will print. MEASURED at 15 to 20 ms on a picture at the 2 MP cap, so
       // it rides along with the stage that already has the mask rather than
-      // costing a second pass over the picture later.
+      // costing a second pass over the picture later. Measured AFTER the
+      // speck floor (D-176): the thinnest things in a photograph's raw mask
+      // are its specks, and the advisory read 0.01 mm for a 0.28 mm line.
       if (inkMask) {
         // Two answers, because the caller does not know yet whether this
         // picture has a caption on it: that is decided on the other side,
@@ -222,12 +270,16 @@ self.onmessage = async (event) => {
       // what the person has already seen in every viewer they opened it in.
       const flat = compositeOntoWhite(pixels, makeImageData);
       pixels = flat.imageData;
-      if (flat.composited) {
+      // DP-79: the median for a camera picture, on this road too.
+      const smoothed = !!(inkAt && inkAt.smooth);
+      if (smoothed) pixels = medianFilter3x3(pixels, makeImageData);
+      if (flat.composited || smoothed) {
         summary = {
           mode: 'standard',
           applied: false,
-          composited: true,
-          warnings: ['composited-onto-white'],
+          composited: flat.composited,
+          warnings: flat.composited ? ['composited-onto-white'] : [],
+          smoothed,
         };
       }
     }
@@ -254,6 +306,9 @@ self.onmessage = async (event) => {
         await import('./potrace-trace.js');
       const pathData = await trace(inkMask, pixels.width, pixels.height, {
         ...FORGE_POTRACE_SETTINGS,
+        // DP-79: the speck floor, so Potrace drops what the mask already
+        // dropped and the two engines agree on what a speck is.
+        ...(turdsize !== undefined ? { turdsize } : {}),
         ...(potraceOverrides || {}),
       });
       svg = pathDataToSvg(pathData, pixels.width, pixels.height);
@@ -269,16 +324,33 @@ self.onmessage = async (event) => {
       filterForeground = true;
     }
 
+    // The cap's factor rides with a summary that exists; the working
+    // resolution makes one when nothing else did, because a person is told
+    // what size their picture was worked at.
+    let said = summary;
+    if (downscale && said) {
+      said = { ...said, downscale: { factor: downscale.factor } };
+    }
+    if (working) {
+      said = {
+        ...(said || {
+          mode: (inkAt && inkAt.mode) || 'standard',
+          applied: false,
+        }),
+        working,
+      };
+    }
+    if (said && printedWidthMm != null && said.printedWidthMm == null) {
+      said = { ...said, printedWidthMm };
+    }
+
     post({
       id,
       type: 'done',
       svg,
       filterForeground,
       engine: usePotrace ? 'potrace' : 'imagetracer',
-      summary:
-        downscale && summary
-          ? { ...summary, downscale: { factor: downscale.factor } }
-          : summary,
+      summary: said,
     });
   } catch (err) {
     post({

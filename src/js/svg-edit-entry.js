@@ -26,9 +26,10 @@ import { loadImageData, IMAGE_IMPORT_LIMITS } from './image-import.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createConversionJob, TraceRefused } from './conversion-job.js';
 import { createConversionDialog } from './conversion-dialog.js';
-import { COST_BANDS } from './quick-look.js';
+import { COST_BANDS, quickLook } from './quick-look.js';
 import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
 import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
+import { DEFAULT_DESIGN_WIDTH_MM } from './svg-preparer-workspace.js';
 
 // DP-34: the door's FIRST trace, the one that happens while the editor is
 // still being opened. It runs in the worker like every other trace, so a big
@@ -267,6 +268,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
   // the file, so the slider answers in about a tenth of a second.
   let currentImageData = null;
   let currentFileName = null;
+  // DP-79: the quick look's verdict on the picture in hand. A camera picture
+  // is worked at the print's cell and starts with the photo defaults on;
+  // this door has no charm to size to, so the editor's default width is the
+  // printed width it works at.
+  let currentCamera = false;
+  const withPicture = (settings) =>
+    currentImageData
+      ? {
+          ...settings,
+          camera: currentCamera,
+          mmPerPixel: DEFAULT_DESIGN_WIDTH_MM / currentImageData.width,
+        }
+      : settings;
   // DP-49: the picture the pixels came from (for the crop view), the drawing
   // as last shown (what a crop clips), and what a crop replaced (one undo).
   let currentSourceDataUrl = null;
@@ -452,9 +466,11 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         : { mode: 'lineart' };
       if (inkControls) inkControls.setBusy(true);
       try {
-        const { svg, summary } = await runTrace(currentImageData, settings, {
-          startedBy: 'person',
-        });
+        const { svg, summary } = await runTrace(
+          currentImageData,
+          withPicture(settings),
+          { startedBy: 'person' }
+        );
         cropUndo = before;
         await showSvg(svg, {
           summary,
@@ -568,9 +584,11 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     if (!currentImageData) return;
     if (inkControls) inkControls.setBusy(true);
     try {
-      const { svg, summary } = await runTrace(currentImageData, settings, {
-        startedBy: 'self',
-      });
+      const { svg, summary } = await runTrace(
+        currentImageData,
+        withPicture(settings),
+        { startedBy: 'self' }
+      );
       await showSvg(svg, { summary, removeCredit: true });
     } catch (error) {
       // A trace the person superseded by moving another slider is not a
@@ -609,9 +627,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         currentSourceDataUrl = dataUrl;
         cropUndo = null;
         const imageData = await loadImageData(dataUrl);
+        // DP-79: the first trace already knows what the picture is. A camera
+        // picture gets the photo defaults from the start; the panel built
+        // below starts with the same switches on.
+        currentCamera = !!quickLook(imageData).camera;
         const { svg, summary } = await runTrace(
           imageData,
-          { mode: 'lineart' },
+          {
+            mode: 'lineart',
+            camera: currentCamera,
+            smooth: currentCamera,
+            speckFloor: currentCamera,
+            mmPerPixel: DEFAULT_DESIGN_WIDTH_MM / imageData.width,
+          },
           { startedBy: 'person' }
         );
         prepared = { svg, traced: true, imageData, summary };
@@ -650,6 +678,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
           );
         },
       });
+      inkControls.setPictureClass({ camera: currentCamera });
     } else {
       inkControls = null;
     }

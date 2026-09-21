@@ -150,6 +150,55 @@ async function chooseGearGrid(page, perSide, teeth) {
   });
 }
 
+/**
+ * A grid of filled dots on flat white, one traced shape each: a FILE (no
+ * grain, a flat ground, so the photo defaults of DP-79 leave it alone) whose
+ * shape count a test can choose. 34 x 34 is 1,156, over the editor's cap of
+ * 1,000, whatever the tracer does with the noise field: since DP-79 a
+ * photograph is smoothed and floored before it is traced, and white noise
+ * is a photograph by every measure, so it is no longer a picture that is
+ * refused; this one is refused by construction.
+ */
+async function chooseDotGrid(page, perSide, size = 2000) {
+  await page.evaluate(
+    async ({ perSide, n }) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.fillStyle = '#000000';
+      const cell = n / perSide;
+      for (let row = 0; row < perSide; row++) {
+        for (let col = 0; col < perSide; col++) {
+          ctx.beginPath();
+          ctx.arc(
+            (col + 0.5) * cell,
+            (row + 0.5) * cell,
+            cell * 0.28,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+      }
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      window.__testPicture = new File([blob], 'dots.png', {
+        type: 'image/png',
+      });
+    },
+    { perSide, n: size }
+  );
+  await page.evaluate(() => {
+    const input = document.querySelector('#param-design_file');
+    const dt = new DataTransfer();
+    dt.items.add(window.__testPicture);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
 async function openCharm(page) {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
@@ -889,6 +938,18 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     test.slow();
     test.setTimeout(300_000);
     await openCharm(page);
+    // The page's own start-up announcements ("Preview ready", then the
+    // model's echo messages) must be over before the refusal is announced:
+    // the polite announcer replaces a sentence still inside its 350 ms
+    // debounce with the next one, and the dot grid below is refused within
+    // two seconds of Start, while the first preview can still be landing.
+    // MEASURED: run alone, the refusal was announced into that window and
+    // what was heard was "Preview ready" and the echo lines, never the
+    // sentence.
+    await expect(page.locator('#statusArea')).toContainText('Preview ready', {
+      timeout: 240_000,
+    });
+    await page.waitForTimeout(2_000);
     await page.evaluate(() => {
       window.__heard = [];
       const node = document.getElementById('srAnnouncer');
@@ -900,8 +961,10 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     });
     await watchStages(page);
 
-    // The noise field traces into thousands of shapes: over the cap.
-    await choosePicture(page, 2000, 'noise');
+    // 1,156 dots, a file over the cap. (This used to be the noise field,
+    // which traced into 11,962 shapes; since DP-79 noise is a photograph and
+    // is smoothed and floored first, so it is no longer over the cap.)
+    await chooseDotGrid(page, 34, 2000);
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
     await expect(p.start).toHaveText('Start conversion');
@@ -942,18 +1005,20 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     );
     expect(stages).not.toContain('Updating the charm');
 
-    // One announcement, the sentence itself; never "Converted".
-    await expect
-      .poll(
-        async () => {
-          const heard = await page.evaluate(() => window.__heard ?? []);
-          return heard.filter((t) => t.startsWith('This picture traced into'))
-            .length;
-        },
-        { timeout: 15_000, intervals: [200, 400, 800] }
-      )
-      .toBe(1);
-    const heard = await page.evaluate(() => window.__heard ?? []);
+    // One announcement, the sentence itself; never "Converted". Polled, then
+    // judged with everything that WAS heard in the message, so a miss says
+    // what took its place.
+    const deadline = Date.now() + 15_000;
+    let heard = [];
+    while (Date.now() < deadline) {
+      heard = await page.evaluate(() => window.__heard ?? []);
+      if (heard.some((t) => t.startsWith('This picture traced into'))) break;
+      await page.waitForTimeout(300);
+    }
+    expect(
+      heard.filter((t) => t.startsWith('This picture traced into')).length,
+      `heard: ${heard.join(' | ')}`
+    ).toBe(1);
     expect(
       heard.filter((t) => t.startsWith('Converted: ')),
       `heard: ${heard.join(' | ')}`

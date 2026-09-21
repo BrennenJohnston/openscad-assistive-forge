@@ -200,6 +200,99 @@ export function transparentShare(pixels) {
 }
 
 /**
+ * A ground whose luminance spreads this much at the thumbnail scale was lit
+ * by a lamp, not filled by a program (DP-79). MEASURED on every picture in
+ * hand (build/dp-r6/dp-79, `dp79-ground.mjs`): the four camera pictures
+ * spread 9.5 to 27.4; the nine library icons, the owner's logo and the five
+ * fixtures spread 0 to 1.9, as PNGs and re-saved as JPEGs.
+ */
+export const CAMERA_GROUND_SPREAD_MIN = 5;
+
+/**
+ * Grain: the share of neighboring pixel pairs that differ a little (1 to 24
+ * levels), the way a sensor's noise and paper's texture make every pixel
+ * differ from the next, where a program's fill makes none differ and an
+ * edge makes them differ a lot. MEASURED: the four camera pictures 0.22 to
+ * 0.76; the icons, the logo and the fixtures 0 to 0.03 as PNGs.
+ *
+ * Neither signal is enough alone, and both are asked for. The logo saved as
+ * a JPEG grains to 0.24 (the ringing around its lettering) with a flat
+ * ground of 1.9; a clean grid of gears (the Start-and-Cancel guard's own
+ * picture) has a ground that spreads 19 at the thumbnail scale, because its
+ * dots mix into every thumbnail pixel, and no grain at all. On the spread
+ * alone that grid was worked at 560 px and the floor dropped all 900 gears.
+ */
+export const CAMERA_GRAIN_MIN = 0.1;
+
+/**
+ * The grain share of a picture, from about fifty thousand sampled pairs.
+ *
+ * @param {{width: number, height: number, data: Uint8ClampedArray}} pixels
+ * @param {number} [samples]
+ * @returns {number} 0 to 1
+ */
+export function grainShare(pixels, samples = 50000) {
+  const { width, height, data } = pixels;
+  const total = width * height;
+  if (!(width > 1) || !(height > 0)) return 0;
+  const step = Math.max(1, Math.floor(total / samples)) | 1;
+  let looked = 0;
+  let grainy = 0;
+  for (let p = 0; p + 1 < total; p += step) {
+    if (p % width === width - 1) continue;
+    const o = p * 4;
+    if (data[o + 3] < 16 || data[o + 7] < 16) continue;
+    const d = Math.max(
+      Math.abs(data[o] - data[o + 4]),
+      Math.abs(data[o + 1] - data[o + 5]),
+      Math.abs(data[o + 2] - data[o + 6])
+    );
+    looked++;
+    if (d >= 1 && d <= 24) grainy++;
+  }
+  return looked ? grainy / looked : 0;
+}
+
+/**
+ * How unevenly the ground is lit: the luminance spread (the 10th to the 90th
+ * percentile) of the thumbnail pixels within a band of the most common
+ * luminance. A photograph's paper is brighter under the lamp than in the
+ * corner; a drawing program's background is one number everywhere, and JPEG
+ * ringing, which is a few pixels wide, is gone at the thumbnail's scale.
+ *
+ * @param {{width: number, height: number, data: Uint8ClampedArray}} thumb
+ * @returns {number} In luminance units, 0 for a flat ground
+ */
+export function groundSpread(thumb) {
+  const { data } = thumb;
+  const lum = [];
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 128) continue;
+    lum.push(0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]);
+  }
+  if (lum.length === 0) return 0;
+  const bins = new Map();
+  for (const l of lum) {
+    const b = Math.round(l / 8);
+    bins.set(b, (bins.get(b) || 0) + 1);
+  }
+  let mode = 0;
+  let best = -1;
+  for (const [b, n] of bins) {
+    if (n > best) {
+      best = n;
+      mode = b;
+    }
+  }
+  const center = mode * 8;
+  const ground = lum.filter((l) => Math.abs(l - center) <= 24);
+  ground.sort((a, b) => a - b);
+  const at = (p) =>
+    ground[Math.min(ground.length - 1, Math.floor(p * ground.length))];
+  return at(0.9) - at(0.1);
+}
+
+/**
  * What kind of picture this looks like.
  *
  * Three classes, because three is what the sentences need and what the evidence
@@ -286,12 +379,26 @@ export function quickLook(pixels, options = {}) {
         ? 'few'
         : 'long';
 
+  // DP-79: a camera made it when nothing is see-through and the ground is
+  // not flat. The photo defaults (the working resolution, the median, the
+  // speck floor) follow this verdict, and a file, whatever its class, never
+  // gets them.
+  const spread = groundSpread(thumb);
+  const grain = grainShare(pixels);
+  const camera =
+    clearShare < 0.05 &&
+    grain >= CAMERA_GRAIN_MIN &&
+    spread >= CAMERA_GROUND_SPREAD_MIN;
+
   return {
     pictureClass: classify({
       megapixels,
       clearShare,
       inkCoverage: ink.summary.inkCoverage,
     }),
+    camera,
+    groundSpread: +spread.toFixed(1),
+    grain: +grain.toFixed(3),
     costBand,
     seconds: Math.max(1, Math.round(predictedMs / 1000)),
     megapixels,
