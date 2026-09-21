@@ -9,7 +9,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -21,6 +21,7 @@ import {
   interiorPoint,
   selfIntersects,
   buildNestingTree,
+  buildNestingTreeAsync,
   suggestLayers,
   layerLimit,
   distanceToEdge,
@@ -277,6 +278,65 @@ describe('buildNestingTree', () => {
     // The LIMIT is the artwork's nesting depth. Pinned across the range so
     // a change to the tree cannot quietly change what the editor offers.
     expect(buildNestingTree(nestedSquares(depth)).depthLimit).toBe(depth);
+  });
+});
+
+describe('buildNestingTreeAsync: the same tree, a slice at a time (DP-78 P3)', () => {
+  /** Nested squares, two siblings, an open line and an empty path. */
+  const mixed = () => [
+    ...nestedSquares(3),
+    { pathData: square(200, 0, 10) },
+    { pathData: square(250, 0, 10) },
+    { pathData: 'M 10 10 L 90 10' },
+    { pathData: '' },
+  ];
+
+  it('★ gives exactly what the sync builder gives, and checkpoints every slice', async () => {
+    const checkpoint = vi.fn(async () => {});
+    const sync = buildNestingTree(mixed());
+    const sliced = await buildNestingTreeAsync(mixed(), {
+      checkpoint,
+      every: 2,
+    });
+    expect(sliced).toEqual(sync);
+    // Seven nodes in slices of two: a checkpoint before the third, fifth and
+    // seventh; five usable nodes in the parent search: one before the third
+    // and one before the fifth.
+    expect(checkpoint).toHaveBeenCalledTimes(5);
+  });
+
+  it('the shuffled letters case comes out the same both ways', async () => {
+    const field = square(0, 0, 200);
+    const els = [
+      { pathData: 'M 35 35 L 65 35 L 65 105 L 35 105 Z' },
+      { pathData: field },
+      { pathData: 'M 110 20 L 170 20 L 170 120 L 110 120 Z' },
+      { pathData: 'M 20 20 L 80 20 L 80 120 L 20 120 Z' },
+      { pathData: 'M 125 35 L 155 35 L 155 70 L 125 70 Z' },
+    ];
+    expect(await buildNestingTreeAsync(els, { every: 1 })).toEqual(
+      buildNestingTree(els)
+    );
+  });
+
+  it('a Cancel thrown by the checkpoint stops the build where it is', async () => {
+    let calls = 0;
+    const checkpoint = async () => {
+      calls += 1;
+      throw new Error('stopped');
+    };
+    await expect(
+      buildNestingTreeAsync(nestedSquares(5), { checkpoint, every: 2 })
+    ).rejects.toThrow('stopped');
+    expect(calls).toBe(1);
+  });
+
+  it('with no checkpoint and no slice size it is simply the tree', async () => {
+    expect(await buildNestingTreeAsync(nestedSquares(3))).toEqual(
+      buildNestingTree(nestedSquares(3))
+    );
+    expect((await buildNestingTreeAsync([])).depthLimit).toBe(0);
+    expect((await buildNestingTreeAsync(null)).depthLimit).toBe(0);
   });
 });
 

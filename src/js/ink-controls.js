@@ -628,6 +628,10 @@ export function createInkControls({
      * Report what the extraction did.
      * @param {Object|null} summary
      * @param {number} pathCount
+     * @param {{creditLine?: object|null, quiet?: boolean}} [extras] -
+     *   `quiet` writes the sentence without announcing it: a refusal (DP-78)
+     *   is one action whose one announcement the host makes, and the panel
+     *   still shows what the worker found
      */
     setSummary(summary, pathCount, extras = {}) {
       const sentence = summarySentence(summary, pathCount);
@@ -653,6 +657,7 @@ export function createInkControls({
         item.textContent = text;
         warningsEl.appendChild(item);
       }
+      if (extras.quiet) return;
       say([sentence, credit, ...warnings].filter(Boolean).join(' '));
     },
   };

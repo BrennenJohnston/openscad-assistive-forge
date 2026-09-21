@@ -15,11 +15,16 @@
  * @license GPL-3.0-or-later
  */
 
-import { analyzeSvg } from './svg-preparer.js';
+import {
+  analyzeSvg,
+  countTracedShapes,
+  isOverListCap,
+  shapeCapRefusal,
+} from './svg-preparer.js';
 import { removeCreditLine } from './credit-line.js';
 import { loadImageData, IMAGE_IMPORT_LIMITS } from './image-import.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
-import { createConversionJob } from './conversion-job.js';
+import { createConversionJob, TraceRefused } from './conversion-job.js';
 import { createConversionDialog } from './conversion-dialog.js';
 import { COST_BANDS } from './quick-look.js';
 import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
@@ -233,6 +238,16 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       return await job.run({
         imageData,
         settings: ink,
+        // DP-78 (D-172): a trace with more shapes than the editor lists is
+        // turned away here, the moment the worker is done. It used to reach
+        // showSvg, be parsed for seconds, and be refused there with a vector
+        // editor's advice for a photograph.
+        refuse: ({ svg }) => {
+          const count = countTracedShapes(svg);
+          return isOverListCap(count)
+            ? shapeCapRefusal(count, 'door').sentence
+            : null;
+        },
         prepare: (traced) => traced,
         update: (traced) => traced,
       });
@@ -452,6 +467,14 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         currentImageData = before.imageData;
         currentSourceDataUrl = before.sourceDataUrl;
         if (error instanceof TraceCancelled) return;
+        if (error instanceof TraceRefused) {
+          // DP-78: the crop traced into more than the editor lists. The
+          // sentence is the whole report; the waiting line in the panel
+          // would otherwise stand (D-119).
+          fail(error.sentence);
+          if (inkControls) inkControls.setFailed(error.sentence);
+          return;
+        }
         fail(`Forge could not re-read ${currentFileName}: ${error.message}`);
       } finally {
         if (inkControls) inkControls.setBusy(false);
@@ -553,6 +576,14 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       // A trace the person superseded by moving another slider is not a
       // failure and must not be reported as one.
       if (error instanceof TraceCancelled) return;
+      if (error instanceof TraceRefused) {
+        // DP-78: this setting traced into more than the editor lists. The
+        // drawing on show stays the one from before; the sentence says what
+        // to try, and replaces the waiting line (D-119).
+        fail(error.sentence);
+        if (inkControls) inkControls.setFailed(error.sentence);
+        return;
+      }
       fail(`Forge could not re-read ${currentFileName}: ${error.message}`);
     } finally {
       if (inkControls) inkControls.setBusy(false);
@@ -590,6 +621,8 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     } catch (error) {
       // The person stopped it; the dialog's own Cancel has already said so.
       if (error instanceof TraceCancelled) return false;
+      // A refusal (DP-78, a trace over the cap) carries its sentence as its
+      // message, and the toast is the door's one place to say it.
       fail(error.message);
       return false;
     }

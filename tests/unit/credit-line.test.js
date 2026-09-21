@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 /**
  * DP-36: finding the attribution a stock icon carries, and taking it off.
@@ -17,7 +17,9 @@ import { describe, it, expect } from 'vitest'
 
 import {
   findCreditLine,
+  findCreditLineAsync,
   removeCreditLine,
+  removeCreditLineAsync,
   CREDIT_LINE_RULE,
 } from '../../src/js/credit-line.js'
 import { creditLineSentence } from '../../src/js/ink-controls.js'
@@ -52,6 +54,53 @@ const asCompound = (pieces, size = SIZE) =>
 
 /** The icon itself: a ring, which is an outline and its counter. */
 const RING = [box(200, 120, 300, 300), box(250, 170, 200, 200)]
+
+describe('the credit line a slice at a time (DP-78 P3, D-171)', () => {
+  it('★ finds and removes exactly what the whole pass does, on both groupings', async () => {
+    const pieces = [...RING, ...caption(22, { y: 600 }), ...caption(18, { y: 630 })]
+    for (const svg of [asCompound(pieces), asElements(pieces)]) {
+      const whole = removeCreditLine(svg)
+      const sliced = await removeCreditLineAsync(svg, {}, { every: 3 })
+      expect(sliced).toEqual(whole)
+      expect(sliced.removed).toBe(40)
+      expect(await findCreditLineAsync(svg, {}, { every: 3 })).toEqual(
+        findCreditLine(svg)
+      )
+    }
+  })
+
+  it('leaves alone what the whole pass leaves alone, with the same reason', async () => {
+    const dots = [box(200, 620, 16, 16), box(300, 620, 16, 16)]
+    const svg = asCompound([...RING, ...dots])
+    expect(await findCreditLineAsync(svg)).toEqual(findCreditLine(svg))
+    expect((await removeCreditLineAsync(svg)).svg).toBe(svg)
+    expect(await findCreditLineAsync('')).toEqual(findCreditLine(''))
+    expect(await findCreditLineAsync('<html></html>')).toEqual(
+      findCreditLine('<html></html>')
+    )
+  })
+
+  it('checkpoints every slice of the look and of the removal', async () => {
+    // A ring and 20 letters: 22 pieces. In slices of 10, the look checkpoints
+    // before its second and third slice, the removal before pieces 11 and 21.
+    const svg = asCompound([...RING, ...caption(20)])
+    const checkpoint = vi.fn(async () => {})
+    await removeCreditLineAsync(svg, {}, { checkpoint, every: 10 })
+    expect(checkpoint).toHaveBeenCalledTimes(4)
+  })
+
+  it('a Cancel thrown by the checkpoint ends the pass', async () => {
+    const svg = asCompound([...RING, ...caption(20)])
+    await expect(
+      removeCreditLineAsync(svg, {}, {
+        every: 5,
+        checkpoint: async () => {
+          throw new Error('stopped')
+        },
+      })
+    ).rejects.toThrow('stopped')
+  })
+})
 
 describe('the credit line (DP-36)', () => {
   describe('what it finds', () => {
