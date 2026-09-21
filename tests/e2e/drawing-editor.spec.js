@@ -16,6 +16,21 @@ import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import path from 'node:path'
 
+// Every press in this file waits for the CI runner's page. A press lands at
+// once and then waits for the page to acknowledge it, and on the Chromium
+// shard-6 runner the page is held for tens of seconds by work a person also
+// waits for: the emit after Apply (D-150's family), and the close of the
+// editor, which marks the charm preview stale and brings its canvas back.
+// MEASURED in three traces (PRs #274 and #275, 2026-09-21): the Apply press
+// acknowledged after 23 s and 64 s; the Close press after a combine never
+// within ten seconds, the page silent for 78 s on one board and 31 s on the
+// next, the app's own memory alert on every snapshot. Locally the same
+// presses acknowledge in 10 to 80 ms, three of three with tracing. Nothing
+// in this file asserts a press's speed (the reopen's own timing assertion is
+// Apply ready within three seconds), so the presses get the runner's time
+// rather than the config's ten seconds.
+test.use({ actionTimeout: 120000 })
+
 const surface = (page) => page.locator('#drawingEditorSurface')
 const canvas = (page) => page.locator('#previewContainer canvas').first()
 
@@ -1713,21 +1728,6 @@ test.describe('Crop first (DP-80)', () => {
 // restores its drawing, its picture and its settings from the stores. Both
 // RED on the build before this release.
 test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
-  // A press lands at once and then waits for the page to acknowledge it,
-  // and on the CI runner that page is held for tens of seconds by work a
-  // person also waits for: the emit after Apply (the data URL, the
-  // companions, the state, the URL hash, the storage save; D-150's family)
-  // and the paint after a combine. MEASURED in PR #274's Chromium shard-6
-  // traces: the Apply press acknowledged after 23 s on one board and 64 s
-  // on the next; the Close press after the first change never within 10 s,
-  // the page silent for 78 s, with the app's own memory alert on every
-  // snapshot. Locally the same presses acknowledge in 10 to 80 ms, three
-  // of three. Nothing this describe asserts is about a press's speed (the
-  // reopen's own timing assertion is Apply ready within three seconds),
-  // so its presses get the runner's time rather than the config's ten
-  // seconds.
-  test.use({ actionTimeout: 120000 })
-
   const designName = (page) =>
     page.evaluate(() => {
       const v = window.stateManager?.getState()?.parameters?.design_file
