@@ -14,6 +14,7 @@ import {
   regionArea,
   centroid,
   buildRingTree,
+  nestingOf,
   simplify,
   ringsFromPathData,
   ringsToPathData,
@@ -267,5 +268,62 @@ describe('the clipper2-js trap', () => {
       'utf8'
     )
     expect(source).toMatch(/import\s*\{[^}]*pointInPolygon[^}]*\}\s*from\s*'\.\/svg-nesting\.js'/)
+  })
+})
+
+describe('nestingOf: containment on the rings as given (DP-82)', () => {
+  it('reads four nested squares as a chain, by index', () => {
+    const rings = [
+      square(0, 0, 100, 100),
+      square(10, 10, 90, 90),
+      square(30, 30, 70, 70),
+      square(40, 40, 60, 60),
+    ]
+    expect(nestingOf(rings)).toEqual([
+      { parent: -1, depth: 0 },
+      { parent: 0, depth: 1 },
+      { parent: 1, depth: 2 },
+      { parent: 2, depth: 3 },
+    ])
+  })
+
+  it('★ keeps identity: the answer at i is about the ring at i, whatever the order', () => {
+    // buildRingTree unions first and loses which input ring became which
+    // node; here the smaller ring listed first must still be the child.
+    const rings = [square(30, 30, 70, 70), square(0, 0, 100, 100)]
+    expect(nestingOf(rings)).toEqual([
+      { parent: 1, depth: 1 },
+      { parent: -1, depth: 0 },
+    ])
+  })
+
+  it('reads siblings as siblings, and a ring wound either way', () => {
+    const rings = [
+      square(0, 0, 40, 40),
+      [...square(50, 0, 90, 40)].reverse(),
+      square(10, 10, 30, 30),
+    ]
+    expect(nestingOf(rings)).toEqual([
+      { parent: -1, depth: 0 },
+      { parent: -1, depth: 0 },
+      { parent: 0, depth: 1 },
+    ])
+  })
+
+  it('the parent is the smallest ring around, not the biggest', () => {
+    const rings = [
+      square(0, 0, 100, 100),
+      square(5, 5, 95, 95),
+      square(45, 45, 55, 55),
+    ]
+    expect(nestingOf(rings)[2]).toEqual({ parent: 1, depth: 2 })
+  })
+
+  it('handles an empty list and a degenerate ring', () => {
+    expect(nestingOf([])).toEqual([])
+    expect(nestingOf([[], square(0, 0, 10, 10)])).toEqual([
+      { parent: -1, depth: 0 },
+      { parent: -1, depth: 0 },
+    ])
   })
 })

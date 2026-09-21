@@ -490,7 +490,7 @@ test.describe('how thin the lines are (DP-36 P3)', () => {
     // It names the width it used, because the person did not choose it.
     await expect(advisory).toContainText("the editor's default width");
     // And it names the lever without pulling it.
-    await expect(advisory).toContainText('Raise Design offset');
+    await expect(advisory).toContainText('Raise Offset in the Design group');
   });
 
   test('a thick-lined drawing is told it is fine', async ({ page }) => {

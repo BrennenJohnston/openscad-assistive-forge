@@ -358,6 +358,66 @@ export function buildRingTree(rings) {
 }
 
 /**
+ * Which ring sits inside which, on the rings AS GIVEN: no union first, so the
+ * answer at index i is about the ring at index i. `buildRingTree` runs the
+ * same containment over a union's output, where identity does not matter;
+ * here it does (DP-82: each ring of a drawing carries its own offset, and
+ * the parity that decides the offset's sign has to be the ring's own).
+ *
+ * The parent is the smallest larger ring that holds the ring's leftmost
+ * vertex (a vertex is outside every ring nested in this one and inside every
+ * ring around it, as long as rings do not touch); the depth counts the
+ * parents above. Rings that cross are read as siblings.
+ *
+ * @param {Array<Array<{x: number, y: number}>>} rings
+ * @returns {Array<{parent: number, depth: number}>} parent -1 at the top
+ */
+export function nestingOf(rings) {
+  const nodes = rings.map((ring, index) => {
+    let probe = ring[0] || null;
+    for (const pt of ring) {
+      if (pt.x < probe.x || (pt.x === probe.x && pt.y < probe.y)) probe = pt;
+    }
+    return {
+      index,
+      area: Math.abs(areaOf(ring)),
+      bounds: ring.length ? boundsOf(ring) : null,
+      probe,
+      parent: -1,
+      depth: 0,
+    };
+  });
+  const byAreaAsc = [...nodes].sort((a, b) => a.area - b.area);
+  for (let i = 0; i < byAreaAsc.length; i++) {
+    const node = byAreaAsc[i];
+    if (!node.probe || !node.bounds) continue;
+    const { probe } = node;
+    for (let j = i + 1; j < byAreaAsc.length; j++) {
+      const candidate = byAreaAsc[j];
+      const cb = candidate.bounds;
+      if (!cb || candidate.area <= node.area) continue;
+      if (
+        probe.x < cb.minX ||
+        probe.x > cb.maxX ||
+        probe.y < cb.minY ||
+        probe.y > cb.maxY
+      ) {
+        continue;
+      }
+      if (pointInPolygon(probe, rings[candidate.index])) {
+        node.parent = candidate.index;
+        break;
+      }
+    }
+  }
+  const depthOf = (node) => {
+    if (node.parent === -1) return 0;
+    return depthOf(nodes[node.parent]) + 1;
+  };
+  return nodes.map((node) => ({ parent: node.parent, depth: depthOf(node) }));
+}
+
+/**
  * Ramer-Douglas-Peucker, through the one clipper2 simplifier that works.
  *
  * @param {Array<Array<{x: number, y: number}>>} rings

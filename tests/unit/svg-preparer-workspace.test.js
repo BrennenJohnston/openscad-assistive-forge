@@ -2576,7 +2576,8 @@ describe('Phase 9: offset inputs (flag enabled)', () => {
     expect(input.type).toBe('number');
     expect(input.min).toBe('-2');
     expect(input.max).toBe('2');
-    expect(input.step).toBe('0.1');
+    // DP-Q74 (2026-09-20): 0.05 mm, the step the owner found useful.
+    expect(input.step).toBe('0.05');
     expect(input.value).toBe('0');
 
     ws.destroy();
@@ -3510,8 +3511,8 @@ describe('the thin-line advisory (DP-36 P3)', () => {
     const said = thinLineSentence(px(10), 700, 14);
     expect(said).toBe(
       'Thin lines: about 0.20 mm at 14 mm wide. Lines under 0.5 mm may not ' +
-        'print. Raise Design offset (0.6 suits a 0.4 mm nozzle) or make the ' +
-        'design bigger.'
+        'print. Raise Offset in the Design group (0.6 suits a 0.4 mm nozzle), ' +
+        'or make the design bigger.'
     );
   });
 
@@ -3551,7 +3552,8 @@ describe('the thin-line advisory (DP-36 P3)', () => {
     // The plan is explicit that this is a proposal. Nine icons at 0.31 to
     // 0.65 mm means a blanket offset would fatten the ones already fine.
     const said = thinLineSentence(px(3), 700, 14);
-    expect(said).toContain('Raise Design offset');
+    // DP-82: the dial has read "Offset" since DP-44; the lever names it.
+    expect(said).toContain('Raise Offset in the Design group');
     expect(said).toContain('or make the design bigger');
   });
 });
