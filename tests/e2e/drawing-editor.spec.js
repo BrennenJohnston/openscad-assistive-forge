@@ -2000,6 +2000,14 @@ test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
       has: page.locator('#param-design_file'),
     })
     const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    // A small picture starts converting by itself on a quick machine
+    // (DP-Q32); a slow one waits for the press: PR #275's CI runner called
+    // this 0.36 MP grid "a few seconds" and offered Start, so the door never
+    // came (three attempts). The trace is the same either way, so the guard
+    // presses Start when Start is what is offered.
+    const start = control.locator('.trace-progress-start')
+    await expect(door.or(start)).toBeVisible({ timeout: 120000 })
+    if (!(await door.isVisible())) await start.click()
     await expect(door).toBeVisible({ timeout: 120000 })
     await door.click()
     const editor = surface(page)
