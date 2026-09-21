@@ -1013,7 +1013,17 @@ export function createDrawingEditor({
         buildStencil(svgString, openedSentence || S.opened);
       } else {
         setCount('regions', analysis?.elements?.length ?? null);
-        say(openedSentence || S.opened);
+        // DP-81 (D-175): a reopen the workspace painted from its stored
+        // result says so, with the counts, and never "The model preview is
+        // behind it" as if the drawing were new.
+        const asLeft =
+          typeof workspace.wasOpenedAsLeft === 'function'
+            ? workspace.wasOpenedAsLeft()
+            : null;
+        say(
+          openedSentence ||
+            (asLeft ? S.openedAsLeft(asLeft.on, asLeft.off) : S.opened)
+        );
       }
     }
 
@@ -2348,6 +2358,8 @@ export function createDrawingEditor({
     /** DP-80: whether the editor is open on a picture, before a conversion. */
     isCropFirst: () => isOpen && cropFirst,
     getResult: () => workspace.getResult(),
+    /** DP-81: the key the result on screen would be trusted by on a reopen. */
+    choicesKey: () => workspace.choicesKey(),
     getRoleOverrides: () => workspace.getRoleOverrides(),
     getOffsetOverrides: () => workspace.getOffsetOverrides(),
     getDeletedIndices: () => workspace.getDeletedIndices(),

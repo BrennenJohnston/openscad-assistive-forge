@@ -247,6 +247,18 @@ const fitBoxListeners = new Set();
 // so that reopening a project restores the exact preparation state.
 let svgPrepMetadataByFile = {};
 
+// DP-81 (D-175 b): the picture a traced drawing came from, keyed by the
+// drawing's name, IN MEMORY ONLY (a photo is megabytes; it never joins the
+// metadata a project saves). A file control rebuilt with that drawing
+// (a preset, an undo, a reset, a restored project) gets its pixels and its
+// ink settings back, so Convert again and Crop work as before the rebuild.
+let pictureByFile = {};
+
+/** DP-81: what a rebuilt control needs to convert its picture again. */
+export function getStoredPicture(fileName) {
+  return pictureByFile[fileName] || null;
+}
+
 /**
  * Register bundled SVG gallery options for a file parameter.
  * Called when loading an example whose manifest declares an svgLibrary.
@@ -266,6 +278,7 @@ export function clearGalleryOptions() {
     delete galleryListboxRefs[key];
   }
   svgPrepMetadataByFile = {};
+  pictureByFile = {};
 }
 
 /**
@@ -297,6 +310,7 @@ export function setSvgPrepMetadata(fileName, metadata) {
  */
 export function clearSvgPrepMetadata() {
   svgPrepMetadataByFile = {};
+  pictureByFile = {};
 }
 
 /**
@@ -3118,6 +3132,11 @@ function createFileControl(
       // in older saves and in a drawing nobody has colored yet, which means
       // what it always did: the automatic first pass.
       initialPlan: currentPlan || storedMeta?.prepPlan || null,
+      // DP-81 (D-175): the result Apply stored and the key it is trusted by.
+      // The editor paints from it, with Apply ready at once, when the
+      // choices it restores still match; otherwise it combines as ever.
+      initialResult: storedMeta?.preparedSvg || null,
+      initialResultKey: storedMeta?.prepKey || null,
       ...extra,
     };
   }
@@ -3362,6 +3381,12 @@ function createFileControl(
         // drawing saved IS the cropped one, so nothing is re-clipped on the
         // way back in.
         prepCrop: lastCrop,
+        // DP-81 (D-175): the key the result above is trusted by on a
+        // reopen; the editor compares it with the choices it restores.
+        prepKey:
+          workspace && typeof workspace.choicesKey === 'function'
+            ? workspace.choicesKey()
+            : null,
       });
     }
     // After the metadata, so the card can see the prepared drawing.
@@ -3900,6 +3925,17 @@ function createFileControl(
             touched = true;
             const svg = credit.svg;
             currentFileName = inkSourceFileName;
+            // DP-81 (D-175 b): the picture this drawing came from, for a
+            // control rebuilt with the drawing later. In memory only.
+            pictureByFile[inkSourceFileName] = {
+              dataUrl: inkSourceDataUrl,
+              label: sourceFileLabel,
+              settings: { ...settings },
+              trace: { summary, creditRemoved: credit.removed > 0 },
+              // The traced drawing itself: a conversion nobody has applied
+              // writes no metadata, and the card needs the drawing back.
+              rawSvg: svg,
+            };
             const processedSvg = processSvgForOpenScad(svg, {
               deferOpen: true,
               trace: { summary, creditRemoved: credit.removed > 0 },
@@ -4570,6 +4606,62 @@ function createFileControl(
     container.appendChild(inkControlsContainer);
     container.appendChild(workspaceContainer);
   }
+
+  /**
+   * DP-81 (D-175 b). The customizer is rendered again on a preset, an undo,
+   * a reset and a restored project, and every render is a NEW file control
+   * that knew only its file's name: no status card, no "Open the drawing
+   * editor", no Start, no ink panel, though the design stood in the state
+   * and the metadata store survived (MEASURED at DP-77 P0c, twice: the door
+   * was lost to the re-render). What the stores know comes back: the raw
+   * drawing and its analysis (the card and the door), and for a traced
+   * picture its pixels and the settings it was traced with (Convert again
+   * and Crop). The info line is left as built, so the rebuild announces
+   * nothing of its own.
+   */
+  async function restoreFromStore(fileObj) {
+    if (!acceptsSvg || !fileObj || typeof fileObj !== 'object') return false;
+    const name = typeof fileObj.name === 'string' ? fileObj.name : null;
+    if (!name) return false;
+    const stored = getSvgPrepMetadata(name);
+    const picture = pictureByFile[name];
+    if (!stored && !picture) return false;
+    currentFileName = name;
+    if (picture && picture.dataUrl) {
+      inkSourceFileName = name;
+      sourceFileLabel = picture.label || name;
+      inkSourceDataUrl = picture.dataUrl;
+      inkSourceImageData = await loadImageData(picture.dataUrl);
+      currentQuickLook = quickLook(inkSourceImageData);
+      lastTrace = picture.trace || null;
+      convertedOnce = true;
+      preview.src = picture.dataUrl;
+      preview.style.display = 'inline-block';
+      clearButton.style.display = 'inline-block';
+      await ensureInkControls();
+      if (picture.settings) inkControls.setSettings(picture.settings);
+      traceProgress.show();
+      traceProgress.setNote(quickLookSentence(currentQuickLook));
+      traceProgress.offer('Convert again');
+      offerCropButton();
+    }
+    const rawSvg =
+      (stored && stored.rawSvg) || (picture && picture.rawSvg) || null;
+    if (rawSvg) {
+      currentRawSvg = rawSvg;
+      currentPlan = (stored && stored.prepPlan) || null;
+      currentSvgAnalysis = await analyzeSvgAsync(rawSvg);
+      updateStatusCard(currentSvgAnalysis);
+      statusCard.style.display = '';
+    }
+    return true;
+  }
+  restoreFromStore(param.default).catch((err) => {
+    console.warn(
+      '[Design file] the rebuilt control could not restore its design:',
+      err
+    );
+  });
 
   return container;
 }
