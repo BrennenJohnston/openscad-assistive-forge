@@ -1578,11 +1578,27 @@ test.describe('Crop first (DP-80)', () => {
     // by itself (MEASURED at 6x: Start stayed on screen for 30 s). So the
     // press comes from inside the page, the moment Start goes away with
     // Crop first still on offer, which is the moment the run began.
+    // The quick look's sentence is read by the same observer, because the
+    // Start panel hides it once a run begins and a run on this grid is over
+    // in under a second: read afterwards, the note is empty.
     await page.evaluate(() => {
       window.__cropPressed = false
+      window.__quickLookSaid = null
+      // q-charm has two file controls; only the design's is watched.
+      const control = document
+        .querySelector('#param-design_file')
+        .closest('.param-control--file')
       const obs = new MutationObserver(() => {
-        const crop = document.querySelector('.trace-progress-crop')
-        const start = document.querySelector('.trace-progress-start')
+        const note = control.querySelector('.trace-progress-note')
+        if (
+          note &&
+          !window.__quickLookSaid &&
+          /Converting should take/.test(note.textContent)
+        ) {
+          window.__quickLookSaid = note.textContent
+        }
+        const crop = control.querySelector('.trace-progress-crop')
+        const start = control.querySelector('.trace-progress-start')
         if (window.__cropPressed || !crop || crop.hidden || !start || !start.hidden)
           return
         window.__cropPressed = true
@@ -1592,6 +1608,7 @@ test.describe('Crop first (DP-80)', () => {
       obs.observe(document.body, {
         subtree: true,
         childList: true,
+        characterData: true,
         attributes: true,
         attributeFilter: ['hidden'],
       })
@@ -1628,6 +1645,27 @@ test.describe('Crop first (DP-80)', () => {
       input.files = dt.files
       input.dispatchEvent(new Event('change', { bubbles: true }))
     })
+    // DP-Q32's rule is measured on the device: only a picture the quick look
+    // calls quick starts by itself. On a starved CI runner the same 450 px
+    // grid can be called "a few seconds", and then nothing starts and the
+    // press this guard waits for never comes (PR #274's board: the poll
+    // timed out at 120 s and the retry passed). A machine that does not
+    // self-start cannot test what a self-start does; the guard says so
+    // instead of failing on the runner's speed.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => window.__cropPressed || window.__quickLookSaid),
+        { timeout: 120000 }
+      )
+      .toBeTruthy()
+    if (!(await page.evaluate(() => window.__cropPressed))) {
+      const said = await page.evaluate(() => window.__quickLookSaid)
+      test.skip(
+        !/under a second/.test(said || ''),
+        `this machine's quick look did not call the picture quick (${said}), so DP-Q32's rule waits for a press and nothing starts by itself`
+      )
+    }
     // The run began by itself and the press landed inside it.
     await expect
       .poll(() => page.evaluate(() => window.__cropPressed), { timeout: 120000 })
@@ -1675,6 +1713,21 @@ test.describe('Crop first (DP-80)', () => {
 // restores its drawing, its picture and its settings from the stores. Both
 // RED on the build before this release.
 test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
+  // A press lands at once and then waits for the page to acknowledge it,
+  // and on the CI runner that page is held for tens of seconds by work a
+  // person also waits for: the emit after Apply (the data URL, the
+  // companions, the state, the URL hash, the storage save; D-150's family)
+  // and the paint after a combine. MEASURED in PR #274's Chromium shard-6
+  // traces: the Apply press acknowledged after 23 s on one board and 64 s
+  // on the next; the Close press after the first change never within 10 s,
+  // the page silent for 78 s, with the app's own memory alert on every
+  // snapshot. Locally the same presses acknowledge in 10 to 80 ms, three
+  // of three. Nothing this describe asserts is about a press's speed (the
+  // reopen's own timing assertion is Apply ready within three seconds),
+  // so its presses get the runner's time rather than the config's ten
+  // seconds.
+  test.use({ actionTimeout: 120000 })
+
   const designName = (page) =>
     page.evaluate(() => {
       const v = window.stateManager?.getState()?.parameters?.design_file
@@ -1704,14 +1757,7 @@ test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
     expect(offCount).toBeGreaterThanOrEqual(1)
     const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
     await expect(apply).toBeEnabled({ timeout: 240000 })
-    // The press lands at once, but what follows it (the emit: the data URL,
-    // the companions, the state, the URL hash, the storage save; D-150's
-    // family) holds the page, and on the CI runner that was 23 s on this
-    // drawing (MEASURED in PR #274's shard-6 trace: "pending" to
-    // "rendering" 23 s after the press, the card already reading
-    // "Prepared"). A press waits for its acknowledgment, so it gets the
-    // runner's time here rather than Playwright's ten seconds.
-    await apply.click({ timeout: 90000 })
+    await apply.click()
     await expect(editor).toBeHidden({ timeout: 30000 })
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
