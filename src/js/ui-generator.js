@@ -37,6 +37,7 @@ import {
   createSvgPrepWorkspace,
   extractSvgMeta,
   flattenWithRings,
+  DEFAULT_DESIGN_WIDTH_MM,
 } from './svg-preparer-workspace.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createTraceProgress } from './trace-progress.js';
@@ -2909,6 +2910,21 @@ function createFileControl(
     return aspect >= w / h ? w : h * aspect;
   }
 
+  /**
+   * DP-79: how wide THIS picture will print, before it is traced: the same
+   * arithmetic as knownDesignWidthMm from the picture's own pixels instead
+   * of a drawing, and the editor's default width until a render has said
+   * the fit box. It is what the worker's working resolution and speck floor
+   * are scaled by.
+   * @returns {number} millimeters
+   */
+  function printedWidthForPicture() {
+    if (!inkSourceImageData || !designFitBoxMm) return DEFAULT_DESIGN_WIDTH_MM;
+    const aspect = inkSourceImageData.width / inkSourceImageData.height || 1;
+    const { w, h } = designFitBoxMm;
+    return aspect >= w / h ? w : h * aspect;
+  }
+
   fitBoxListeners.add(() => {
     const mm = knownDesignWidthMm();
     if (
@@ -3727,6 +3743,12 @@ function createFileControl(
         // green eyes at under a percent are the point of it.
         settings: {
           ...settings,
+          // DP-79: what this picture is and how wide it prints, so the
+          // worker can work a camera picture at the print's cell and floor
+          // its specks at the printed size. A file gets none of it: the
+          // quick look's verdict is the gate, and its switches start off.
+          camera: !!(currentQuickLook && currentQuickLook.camera),
+          mmPerPixel: printedWidthForPicture() / inkSourceImageData.width,
           ...(plateParams.length === 0
             ? { shareFloor: RELIEF_COLOUR_SHARE_FLOOR }
             : {}),
@@ -3796,6 +3818,9 @@ function createFileControl(
               if (summary && summary.mode === 'colours') {
                 inkControls.setColourResult(summary.colours, {
                   factor: summary.downscale ? summary.downscale.factor : null,
+                  working: summary.working || null,
+                  specks: summary.specksDropped || 0,
+                  printedWidthMm: summary.printedWidthMm,
                 });
               } else {
                 inkControls.setSummary(summary, pathCount, {
@@ -3915,6 +3940,9 @@ function createFileControl(
           if (summary && summary.mode === 'colours') {
             inkControls.setColourResult(summary.colours, {
               factor: summary.downscale ? summary.downscale.factor : null,
+              working: summary.working || null,
+              specks: summary.specksDropped || 0,
+              printedWidthMm: summary.printedWidthMm,
             });
           } else {
             inkControls.setSummary(summary, tracedCount, { quiet: true });
@@ -4263,6 +4291,9 @@ function createFileControl(
           // fixed calibration, measured in single-digit milliseconds.
           currentQuickLook = quickLook(inkSourceImageData);
           traceProgress.setNote(quickLookSentence(currentQuickLook));
+          // DP-79: a camera picture starts with the photo defaults on, a
+          // file with them off; the panel's help says which is which.
+          inkControls.setPictureClass({ camera: currentQuickLook.camera });
 
           const pixelCount =
             inkSourceImageData.width * inkSourceImageData.height;

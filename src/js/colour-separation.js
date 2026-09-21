@@ -35,7 +35,7 @@
 
 import ImageTracer from 'imagetracerjs';
 import { polygonFromPathData, signedArea } from './svg-nesting.js';
-import { medianFilter3x3 } from './ink-extraction.js';
+import { medianFilter3x3, floorPx, dropSmallPieces } from './ink-extraction.js';
 
 /** Below this alpha a pixel is not part of the picture. */
 const ALPHA_OPAQUE_MIN = 128;
@@ -84,23 +84,10 @@ export const PREFILTER_PASSES = 2;
  */
 export const CLUSTER_SAMPLE_PIXELS = 40000;
 
-/**
- * The smallest region worth keeping, in PIXELS of the traced image.
- *
- * ★ Four is the floor, and it scales with how big a pixel is in millimeters.
- * A picture traced at 0.1 mm per pixel has a 4-pixel region 0.04 mm2 across,
- * which no printer or laser can make and no eye can see; the same 4 pixels at
- * 1 mm per pixel is 4 mm2, which is a real mark. The rule is therefore "at
- * least four pixels, and at least a tenth of a square millimeter", and the
- * second half is what a caller who knows the scale gets.
- *
- * @param {number} [mmPerPixel] - Millimeters one pixel will become
- * @returns {number} Area floor in square pixels
- */
-export function floorPx(mmPerPixel = 0) {
-  if (!(mmPerPixel > 0)) return 4;
-  return Math.max(4, 0.1 / (mmPerPixel * mmPerPixel));
-}
+// The area floor and the speck drop live in ink-extraction.js since DP-79,
+// where the ink modes reach them without this module's tracer; they are
+// exported from here as well so nothing that imported them moves.
+export { floorPx, dropSmallPieces };
 
 const luminance = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
@@ -579,61 +566,6 @@ export function growMask(mask, width, height) {
     }
   }
   return grown;
-}
-
-/**
- * Remove connected pieces smaller than the floor, BEFORE the mask grows.
- *
- * ★ Growth alone resurrected what the floor exists to drop: a stray
- * anti-alias pixel grew into a five-pixel cross and sailed over the
- * four-pixel floor - MEASURED on the owner's cat, the shape count exploded
- * from under eighty to 1,853. So the too-small pieces leave the MASK first,
- * counted, and only what was already worth keeping gets to grow.
- *
- * @param {Uint8Array} mask - Cleaned in place
- * @param {number} width
- * @param {number} height
- * @param {number} floorPx
- * @returns {number} How many pieces were removed
- */
-export function dropSmallPieces(mask, width, height, floorPx) {
-  const seen = new Uint8Array(mask.length);
-  const stack = [];
-  const piece = [];
-  let dropped = 0;
-  for (let start = 0; start < mask.length; start++) {
-    if (!mask[start] || seen[start]) continue;
-    stack.length = 0;
-    piece.length = 0;
-    stack.push(start);
-    seen[start] = 1;
-    while (stack.length) {
-      const i = stack.pop();
-      piece.push(i);
-      const x = i % width;
-      if (x > 0 && mask[i - 1] && !seen[i - 1]) {
-        seen[i - 1] = 1;
-        stack.push(i - 1);
-      }
-      if (x + 1 < width && mask[i + 1] && !seen[i + 1]) {
-        seen[i + 1] = 1;
-        stack.push(i + 1);
-      }
-      if (i >= width && mask[i - width] && !seen[i - width]) {
-        seen[i - width] = 1;
-        stack.push(i - width);
-      }
-      if (i + width < mask.length && mask[i + width] && !seen[i + width]) {
-        seen[i + width] = 1;
-        stack.push(i + width);
-      }
-    }
-    if (piece.length < floorPx) {
-      for (const i of piece) mask[i] = 0;
-      dropped += 1;
-    }
-  }
-  return dropped;
 }
 
 /**

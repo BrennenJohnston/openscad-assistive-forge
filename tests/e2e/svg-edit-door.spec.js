@@ -532,28 +532,31 @@ test.describe('The drawing editor door', () => {
     await page.click('#editDrawingSpotlightBtn')
     await expectPickerOpened(page)
 
-    // A 1400 x 1400 noise field, built here and never stored: it traces into
-    // thousands of shapes, the honest worst case, and the same picture
-    // trace-start-cancel.spec.js draws for the charm host.
+    // A grid of 1,156 dots on flat white, 1400 px, built here and never
+    // stored: a FILE over the editor's cap of 1,000, the same picture
+    // trace-start-cancel.spec.js draws for the charm host. (It used to be a
+    // noise field; since DP-79 noise is a photograph and is smoothed and
+    // floored before it is traced, so it is no longer over the cap.)
     await page.evaluate(async () => {
       const n = 1400
+      const perSide = 34
       const canvas = document.createElement('canvas')
       canvas.width = n
       canvas.height = n
       const ctx = canvas.getContext('2d')
-      const img = ctx.createImageData(n, n)
-      let seed = 12345
-      for (let i = 0; i < img.data.length; i += 4) {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff
-        const v = (seed >> 16) & 0xff
-        img.data[i] = v
-        img.data[i + 1] = v
-        img.data[i + 2] = v
-        img.data[i + 3] = 255
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.fillStyle = '#000000'
+      const cell = n / perSide
+      for (let row = 0; row < perSide; row++) {
+        for (let col = 0; col < perSide; col++) {
+          ctx.beginPath()
+          ctx.arc((col + 0.5) * cell, (row + 0.5) * cell, cell * 0.28, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
-      ctx.putImageData(img, 0, 0)
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
-      window.__testPicture = new File([blob], 'noise.png', {
+      window.__testPicture = new File([blob], 'dots.png', {
         type: 'image/png',
       })
     })

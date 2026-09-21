@@ -62,14 +62,16 @@ export const INK_MODE_CHOICES = [
   {
     value: 'lineart',
     label: 'Line art',
+    // STRINGS: DP-R6 text pack row 10 (REVISED at DP-79).
     description:
-      'Keep the drawn lines, drop the color behind them. Best for symbols and drawings with colored backgrounds.',
+      'Keep the drawn lines, drop the color behind them. Best for symbols, line drawings and photos of a printed symbol.',
   },
   {
     value: 'silhouette',
     label: 'Solid shape',
+    // STRINGS: DP-R6 text pack row 11 (REVISED at DP-79).
     description:
-      'Keep the outline of the whole picture, filled in. Best for very small pieces, where detail could not be felt anyway.',
+      'Keep the outline of the whole picture, filled in. Best for small charms, and for a photo where the shapes matter more than the lines.',
   },
   {
     value: 'standard',
@@ -127,10 +129,52 @@ export function colourSentence(colours, notes = {}, purpose = 'relief') {
   );
   const painted = list.filter((c) => !c.isBackground).length;
   const head = wordsFor(purpose).colourHead(painted);
-  const downscale = notes.factor
-    ? ` The picture was ${notes.factor} times too big to trace, so it was made ${notes.factor} times smaller first.`
-    : '';
-  return `${head} ${parts.join(', ')}.${downscale}`;
+  // DP-79: a camera picture says the size it was worked at (row 9) in place
+  // of the cap's clause; a file that was only capped keeps the cap's.
+  const worked = workedSentence(notes.working);
+  const downscale =
+    !worked && notes.factor
+      ? ` The picture was ${notes.factor} times too big to trace, so it was made ${notes.factor} times smaller first.`
+      : '';
+  const specks = specksSentence({
+    specksDropped: notes.specks,
+    printedWidthMm: notes.printedWidthMm,
+  });
+  return `${head} ${parts.join(', ')}.${downscale}${worked ? ` ${worked}` : ''}${specks ? ` ${specks}` : ''}`;
+}
+
+/**
+ * The size a camera picture was worked at (DP-79; DP-R6 text pack row 9,
+ * A11Y: it rides in the summary the panel announces).
+ *
+ * @param {{width: number, printedWidthMm: number}|null|undefined} working
+ * @returns {string} Empty when the picture was left at its own pixels
+ */
+export function workedSentence(working) {
+  if (!working || !(working.width > 0) || !(working.printedWidthMm > 0)) {
+    return '';
+  }
+  const mm = Number(working.printedWidthMm.toFixed(1));
+  return `Worked at ${working.width} px wide, the size a ${mm} mm design can use.`;
+}
+
+/**
+ * How many specks the floor left out (DP-79; DP-R6 text pack rows 7 and 8,
+ * A11Y: announced with the summary).
+ *
+ * @param {{specksDropped?: number, printedWidthMm?: number}|null} summary
+ * @returns {string} Empty when nothing was left out
+ */
+export function specksSentence(summary) {
+  const n = summary && summary.specksDropped;
+  if (!(n > 0)) return '';
+  const at =
+    summary.printedWidthMm > 0
+      ? ` at ${Number(summary.printedWidthMm.toFixed(1))} mm wide`
+      : '';
+  return n === 1
+    ? `1 speck smaller than 0.1 mm²${at} was left out.`
+    : `${n} specks smaller than 0.1 mm²${at} were left out.`;
 }
 
 /**
@@ -262,6 +306,10 @@ export function createInkControls({
     chromaMax: INK_DEFAULTS.chromaMax,
     colourCount: INK_DEFAULTS.colourCount,
     wallColour: 'auto',
+    // DP-79: the photo defaults. Off until the host says the picture is a
+    // camera's (setPictureClass), then on; a person can turn either off.
+    smooth: false,
+    speckFloor: false,
   };
 
   const root = document.createElement('div');
@@ -389,6 +437,43 @@ export function createInkControls({
   wallWrap.append(wallLabel, wallSelect, wallHelp);
   sliders.appendChild(wallWrap);
 
+  // DP-79: the two photo defaults a person can turn off (or on). Switches,
+  // because each is a yes or no with a visible name, and the help sentence
+  // says which pictures start with it on. The label wraps the control and
+  // its words, so the whole line is the target.
+  // STRINGS: DP-R6 text pack rows 3 to 6 (A11Y).
+  const makeSwitch = (key, labelText, help) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ink-slider-row ink-switch-row';
+    const label = document.createElement('label');
+    label.className = 'toggle-switch ink-switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = id(key);
+    input.setAttribute('aria-describedby', id(`${key}-help`));
+    const text = document.createElement('span');
+    text.className = 'toggle-label';
+    text.textContent = labelText;
+    label.append(input, text);
+    const helpText = document.createElement('span');
+    helpText.className = 'ink-slider-help';
+    helpText.id = id(`${key}-help`);
+    helpText.textContent = help;
+    wrap.append(label, helpText);
+    return { wrap, input, labelText };
+  };
+  const smooth = makeSwitch(
+    'smooth',
+    'Smooth the picture first',
+    'A photo has grain a print cannot show. On for a picture from a camera, off for an icon file.'
+  );
+  const speck = makeSwitch(
+    'specks',
+    'Leave out specks under 0.1 mm²',
+    'Pieces smaller than a tenth of a square millimeter at the printed size cannot print. Turn this off if the small pieces are letters.'
+  );
+  sliders.append(smooth.wrap, speck.wrap);
+
   const summaryEl = document.createElement('p');
   summaryEl.className = 'ink-controls-summary';
   summaryEl.id = id('summary');
@@ -509,6 +594,9 @@ export function createInkControls({
     colourCount.range.disabled = !isColours;
     colourCount.number.disabled = !isColours;
     wallSelect.disabled = !isColours;
+    // DP-79: Light and dark builds no ink mask, so there is nothing for the
+    // speck floor to floor there; a switch that changes nothing is disabled.
+    speck.input.disabled = settings.mode === 'standard';
     onChange({ ...settings });
   };
 
@@ -568,9 +656,35 @@ export function createInkControls({
     emit();
   });
 
+  // STRINGS: DP-R6 text pack rows 27 and 28 (A11Y): the change, then the
+  // press that runs it, the way every other control on this panel says it.
+  smooth.input.addEventListener('change', () => {
+    settings.smooth = smooth.input.checked;
+    sayChange(`${smooth.labelText}: ${settings.smooth ? 'on' : 'off'}`);
+    emit();
+  });
+  speck.input.addEventListener('change', () => {
+    settings.speckFloor = speck.input.checked;
+    sayChange(`${speck.labelText}: ${settings.speckFloor ? 'on' : 'off'}`);
+    emit();
+  });
+
   return {
     element: root,
     getSettings: () => ({ ...settings }),
+    /**
+     * DP-79: what the picture is, from the host's quick look. A camera
+     * picture starts with both photo defaults on, a file with both off. Said
+     * by the help sentences rather than announced: the person has not acted
+     * yet, and nothing re-runs.
+     * @param {{camera?: boolean}} [look]
+     */
+    setPictureClass({ camera = false } = {}) {
+      settings.smooth = !!camera;
+      settings.speckFloor = !!camera;
+      smooth.input.checked = settings.smooth;
+      speck.input.checked = settings.speckFloor;
+    },
     /**
      * Offer the colors a separation actually found as the wall choice, and
      * say what came out. Called only in the Colors mode.
@@ -641,7 +755,11 @@ export function createInkControls({
       // it are one sentence - not a second announcement arriving behind the
       // first and interrupting it.
       const credit = creditLineSentence(extras.creditLine);
-      summaryEl.textContent = [sentence, filament, credit]
+      // DP-79: the size a camera picture was worked at, and the specks the
+      // floor left out, in the same sentence (rows 7 to 9).
+      const worked = workedSentence(summary && summary.working);
+      const specks = specksSentence(summary);
+      summaryEl.textContent = [sentence, filament, credit, worked, specks]
         .filter(Boolean)
         .join(' ');
 
@@ -658,7 +776,11 @@ export function createInkControls({
         warningsEl.appendChild(item);
       }
       if (extras.quiet) return;
-      say([sentence, credit, ...warnings].filter(Boolean).join(' '));
+      say(
+        [sentence, credit, worked, specks, ...warnings]
+          .filter(Boolean)
+          .join(' ')
+      );
     },
   };
 }

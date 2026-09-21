@@ -29,13 +29,14 @@
 
 import { ringsFromPathData } from './ring-geometry.js';
 import { lineWidthPercentiles } from './ink-extraction.js';
+import { PRINT_CELL_MM } from './print-cell.js';
 
 /** Under this a 0.4 mm nozzle cannot be relied on to lay a line (proposed). */
 export const THIN_PRINT_MM = 0.5;
 /** Under this in the picture the shape was never traced faithfully (proposed). */
 export const THIN_PICTURE_PX = 3;
-/** The print measure's cell, in mm. */
-export const PRINT_CELL_MM = 0.025;
+/** The print measure's cell, in mm (print-cell.js; the worker reads it too). */
+export { PRINT_CELL_MM };
 /** The most cells a mask has on its long side. */
 export const MAX_CELLS = 256;
 
