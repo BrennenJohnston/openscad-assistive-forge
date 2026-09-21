@@ -1093,6 +1093,7 @@ jobs:
             --exclude '^https://www\.bestbuy\.com'
             --exclude '^https://www\.sovol\.tech'
             --exclude '^https://operations\.osmfoundation\.org'
+            --exclude '^https://www\.ski\.org'
             --exclude-path docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md
             'README.md'
             'docs/README.md'
