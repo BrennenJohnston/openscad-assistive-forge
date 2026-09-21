@@ -312,6 +312,18 @@ function buildWorkspaceDom() {
   designWidthLabel.append(designWidthInput, ' ', designWidthUnit);
   designWidthGroup.appendChild(designWidthLabel);
 
+  // DP-83 (the review of every control): the box arrives filled by the
+  // charm's fit box (D-144) and a person who did not type it is owed the
+  // reason. One sentence, under the tools row where a sentence can wrap
+  // (the header is a row of buttons), tied to the box by aria-describedby;
+  // its words follow whether the width is the charm's or the editor's own
+  // (updateDesignWidthHelp).
+  const designWidthHelp = document.createElement('p');
+  designWidthHelp.className = 'svg-prep-design-width-help';
+  designWidthHelp.id = 'svgPrepDesignWidthHelp';
+  designWidthHelp.hidden = designWidthGroup.hidden;
+  designWidthInput.setAttribute('aria-describedby', designWidthHelp.id);
+
   header.append(
     title,
     designWidthGroup,
@@ -373,7 +385,7 @@ function buildWorkspaceDom() {
   bulkHelp.className = 'svg-prep-bulk-help';
   bulkHelp.id = 'svgPrepBulkHelp';
   bulkHelp.textContent =
-    'Sizes are measured against the design width above, so they are the size the shape will really print.';
+    "Sizes are the box around each shape at the design width, so a long thin line measures big. Thinner than measures each shape's narrowest part.";
 
   const smallLabel = document.createElement('label');
   smallLabel.className = 'svg-prep-bulk-field';
@@ -399,6 +411,7 @@ function buildWorkspaceDom() {
   const keepInput = document.createElement('input');
   keepInput.type = 'number';
   keepInput.className = 'svg-prep-bulk-input';
+  keepInput.setAttribute('aria-describedby', bulkHelp.id);
   keepInput.min = '1';
   keepInput.step = '1';
   keepInput.value = '50';
@@ -648,6 +661,7 @@ function buildWorkspaceDom() {
   // tint legend both describe what is in the frame above them.
   root.append(
     header,
+    designWidthHelp,
     previews,
     thinLines,
     legendRow,
@@ -672,6 +686,7 @@ function buildWorkspaceDom() {
       title,
       designWidthGroup,
       designWidthInput,
+      designWidthHelp,
       thinLines,
       compareBtn,
       rolesToggleBtn,
@@ -3157,6 +3172,19 @@ export function createSvgPrepWorkspace(containerEl) {
     );
     refs.thinLines.textContent = thin;
     refs.thinLines.hidden = thin === '';
+    updateDesignWidthHelp();
+  }
+
+  /**
+   * DP-83: what the Design width box holds and why. Text pack rows 22 and
+   * 30: the charm's own width on the charm host, the editor's default on a
+   * host that has no charm to measure (the door).
+   */
+  function updateDesignWidthHelp() {
+    refs.designWidthHelp.textContent =
+      currentCallbacks.designWidthKnown !== false
+        ? 'The charm sets this from its size. Type a width only to see what would change.'
+        : "The editor's default width. Type the width your design prints at.";
   }
 
   /**
@@ -3650,6 +3678,14 @@ export function createSvgPrepWorkspace(containerEl) {
             offsetInput.value = '0';
             offsetInput.disabled = role === 'ignore';
           }
+          // DP-83: the Layer column goes back to 1 with the rest. It used to
+          // stay where it was, so "Reset" left a stack standing that the
+          // sentence never mentioned.
+          const layerSelect = item.querySelector('.svg-prep-layer-select');
+          if (layerSelect) {
+            layerSelect.value = '1';
+            layerSelect.disabled = role === 'ignore';
+          }
           const nameSpan = item.querySelector('.svg-prep-object-name');
           const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
           // The word on the control, not the value behind it. FOUR places
@@ -3662,10 +3698,22 @@ export function createSvgPrepWorkspace(containerEl) {
             `${nameText}, ${roleWord(role, currentRoleOptions())}`
           );
         });
+        if (layersEnabled && layerCount > 0) {
+          layers = liveElements.map(() => 1);
+          // A column of ones is no stack (D-142): the summary says so again
+          // and Apply emits none.
+          layersTouched = false;
+          updateLayerSummary();
+          refreshLayerPaint();
+        }
         renderRoleLayer();
         requestResultPreview();
       }
-      liveRegion.textContent = 'Roles reset to auto-classification';
+      // Text pack rows 21 and 29: the sentence names what the editor has.
+      liveRegion.textContent =
+        layersEnabled && layerCount > 0
+          ? 'Roles, offsets and layers reset.'
+          : 'Roles and offsets reset.';
     }
   }
 
