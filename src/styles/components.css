@@ -15038,8 +15038,14 @@ body.tutorial-body-locked {
     'help';
 }
 
-.ink-switch {
+/* Stated here as well as on .toggle-switch: the customizer's own label rule
+   (.param-control label) outranks it and would lay the words flush against
+   the switch. */
+.ink-switch-row .ink-switch {
   grid-area: label;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   min-height: var(--size-touch-target);
   cursor: pointer;
 }
