@@ -25,9 +25,12 @@ import {
   flattenSilhouette,
   flattenToCompoundPath,
   LAYER_EMIT_CAP,
+  analyzeSvgAsync,
+  isOverListCap,
+  shapeCapRefusal,
 } from './svg-preparer.js';
 import { buildNestingTree, LAYER_CAP, boundsOf } from './svg-nesting.js';
-import { removeCreditLine } from './credit-line.js';
+import { removeCreditLineAsync } from './credit-line.js';
 import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
 import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
 import {
@@ -37,7 +40,7 @@ import {
 } from './svg-preparer-workspace.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createTraceProgress } from './trace-progress.js';
-import { createConversionJob } from './conversion-job.js';
+import { createConversionJob, TraceRefused } from './conversion-job.js';
 import { createConversionDialog } from './conversion-dialog.js';
 import { quickLook, quickLookSentence, COST_BANDS } from './quick-look.js';
 import { startsBySelf } from './conversion-start-rule.js';
@@ -3135,6 +3138,56 @@ function createFileControl(
     return editBtn;
   }
 
+  /**
+   * DP-78 (D-172): the card for a trace with more shapes than the editor
+   * lists. No editor button: there is no drawing to open. The card is a
+   * status region; the caller announces the sentence once.
+   */
+  function showRefusalCard(count) {
+    const { badge: badgeText, sentence } = shapeCapRefusal(count);
+    statusCard.innerHTML = '';
+    const badge = document.createElement('span');
+    badge.className = 'svg-prep-status-badge';
+    badge.textContent = badgeText;
+    badge.dataset.level = 'error';
+    statusCard.appendChild(badge);
+    const guidance = document.createElement('p');
+    guidance.className = 'svg-prep-status-guidance';
+    guidance.textContent = sentence;
+    statusCard.appendChild(guidance);
+    statusCard.style.display = '';
+  }
+
+  /**
+   * DP-78 (D-171): what a conversion's last prepare step writes (the card,
+   * the raw drawing, the analysis), taken before the run so a Cancel that
+   * lands after that step can put it all back: a canceled conversion
+   * changes nothing. The card's NODES are kept, not their markup, because
+   * the editor button's listener lives on the node.
+   */
+  function snapshotDesign() {
+    return {
+      rawSvg: currentRawSvg,
+      analysis: currentSvgAnalysis,
+      plan: currentPlan,
+      fileName: currentFileName,
+      trace: lastTrace,
+      cardNodes: Array.from(statusCard.childNodes),
+      cardDisplay: statusCard.style.display,
+    };
+  }
+
+  function restoreDesign(before) {
+    currentRawSvg = before.rawSvg;
+    currentSvgAnalysis = before.analysis;
+    currentPlan = before.plan;
+    currentFileName = before.fileName;
+    lastTrace = before.trace;
+    statusCard.replaceChildren(...before.cardNodes);
+    statusCard.style.display = before.cardDisplay;
+    deferredEditorOpen = null;
+  }
+
   function updateStatusCard(analysis, extraWarnings = null) {
     statusCard.innerHTML = '';
     const badge = document.createElement('span');
@@ -3658,6 +3711,12 @@ function createFileControl(
       }, COST_BANDS.quickMs);
     }
     let openEditorAfter = null;
+    // DP-78 (D-171): the first two prepare steps are pure; the third writes
+    // the card and the drawing. Kept from before the run so a Cancel that
+    // lands after the third step puts the control back exactly as it was.
+    const before = snapshotDesign();
+    let touched = false;
+    let tracedCount = 0;
     try {
       const outcome = await job.run({
         imageData: inkSourceImageData,
@@ -3672,49 +3731,89 @@ function createFileControl(
             ? { shareFloor: RELIEF_COLOUR_SHARE_FLOOR }
             : {}),
         },
-        // Preparing the drawing: the credit line and the analysis, on the
-        // main thread, under a stage of their own. The editor's opening is
-        // held back (deferOpen) until the dialog is gone.
-        prepare: ({ svg: traced, summary }) => {
-          // A stock icon arrives with its attribution printed along the
-          // bottom, and traced that is forty-odd shapes of unreadable specks
-          // rather than a caption. Taking it off is the default the owner
-          // signed (DP-Q31), and Undo below puts the whole drawing back
-          // exactly as it was traced.
-          const credit = removeCreditLine(traced);
-          const svg = credit.svg;
-          currentFileName = inkSourceFileName;
-          const processedSvg = processSvgForOpenScad(svg, {
-            deferOpen: true,
-            trace: { summary, creditRemoved: credit.removed > 0 },
-          });
-          openEditorAfter = takeDeferredEditorOpen();
-          const pathCount = countTracedShapes(svg);
-          if (inkControls) {
-            // The Colors mode has its own sentence: the ink summary is about
-            // how much of a picture counted as a line, which is not a
-            // question this mode asks. It also feeds the wall-colour list,
-            // which cannot be offered until the colors are known.
-            if (summary && summary.mode === 'colours') {
-              inkControls.setColourResult(summary.colours, {
-                factor: summary.downscale ? summary.downscale.factor : null,
-              });
-            } else {
-              inkControls.setSummary(summary, pathCount, {
-                creditLine:
-                  credit.removed > 0
-                    ? {
-                        removed: credit.removed,
-                        onUndo: () => emitTracedSvg(credit.original, summary),
-                      }
-                    : null,
+        // ★ DP-78 (D-172): a trace with more shapes than the editor lists
+        // is turned away HERE, the moment the worker is done, before the
+        // credit line or any parse. The count is a regex over the traced
+        // text, two milliseconds on a megabyte. MEASURED before this (DP-77
+        // P0a): the panel photo's Colors run, 3,939 shapes, was parsed for
+        // 5.1 s at 4x, refused by the analyzer under "Too complex", and
+        // EMITTED to the model anyway as a 1.89 MB design.
+        refuse: ({ svg: traced }) => {
+          tracedCount = countTracedShapes(traced);
+          return isOverListCap(tracedCount)
+            ? shapeCapRefusal(tracedCount).sentence
+            : null;
+        },
+        // Preparing the drawing, in three steps with a checkpoint between
+        // each, so a Cancel lands inside the stage and not after it (D-171):
+        // the credit line; the analysis, sliced inside; then the card, the
+        // count and the panel. The editor's opening is held back (deferOpen)
+        // until the dialog is gone.
+        prepare: [
+          async ({ svg: traced, summary }, { checkpoint }) => {
+            // A stock icon arrives with its attribution printed along the
+            // bottom, and traced that is forty-odd shapes of unreadable
+            // specks rather than a caption. Taking it off is the default the
+            // owner signed (DP-Q31), and Undo below puts the whole drawing
+            // back exactly as it was traced. In slices: on a traced
+            // photograph this pass is one box per ring, hundreds of them.
+            const credit = await removeCreditLineAsync(
+              traced,
+              {},
+              { checkpoint }
+            );
+            return { credit, summary };
+          },
+          async ({ credit, summary }, { checkpoint }) => {
+            const analysis = await analyzeSvgAsync(credit.svg, { checkpoint });
+            return { credit, summary, analysis };
+          },
+          ({ credit, summary, analysis }) => {
+            // The analyzer's own cap is the second line behind the gate
+            // above; a count the two disagree on ends here, never emitted.
+            if (analysis.recommendation === 'reject') {
+              tracedCount = analysis.elementCount || tracedCount;
+              throw new TraceRefused(shapeCapRefusal(tracedCount).sentence, {
+                svg: credit.original,
+                summary,
               });
             }
-          }
-          return { processedSvg, pathCount };
-        },
+            touched = true;
+            const svg = credit.svg;
+            currentFileName = inkSourceFileName;
+            const processedSvg = processSvgForOpenScad(svg, {
+              deferOpen: true,
+              trace: { summary, creditRemoved: credit.removed > 0 },
+              analysis,
+            });
+            openEditorAfter = takeDeferredEditorOpen();
+            const pathCount = countTracedShapes(svg);
+            if (inkControls) {
+              // The Colors mode has its own sentence: the ink summary is
+              // about how much of a picture counted as a line, which is not
+              // a question this mode asks. It also feeds the wall-colour
+              // list, which cannot be offered until the colors are known.
+              if (summary && summary.mode === 'colours') {
+                inkControls.setColourResult(summary.colours, {
+                  factor: summary.downscale ? summary.downscale.factor : null,
+                });
+              } else {
+                inkControls.setSummary(summary, pathCount, {
+                  creditLine:
+                    credit.removed > 0
+                      ? {
+                          removed: credit.removed,
+                          onUndo: () => emitTracedSvg(credit.original, summary),
+                        }
+                      : null,
+                });
+              }
+            }
+            return { processedSvg, pathCount };
+          },
+        ],
         // Updating the charm: the emit.
-        update: async ({ processedSvg, pathCount }) => {
+        update: async ({ processedSvg, pathCount }, { checkpoint }) => {
           // ★ D-139: A CONVERSION THAT KEPT NOTHING IS NOT A DESIGN. The file
           // value stays as it was: the picture is still there, the settings
           // are still there, and Convert again is the next thing to press.
@@ -3731,6 +3830,10 @@ function createFileControl(
           // the file was chosen), so this costs nothing on the second
           // picture and a chunk fetch on the first.
           if (layerParams.length > 0) await ensureRingEngine();
+          // DP-78: the last moment a Cancel can land. The data URL is built
+          // and nothing is written yet; after the emit there is nothing to
+          // cancel, and the model has the drawing.
+          await checkpoint();
           emitFileValue(convertedFile);
           if (fileUploadListener) {
             fileUploadListener(param.name, convertedFile);
@@ -3790,6 +3893,36 @@ function createFileControl(
       // one ran): the newer one owns the panel and the dialog from here, so
       // this one leaves without touching either, and without a word.
       if (err instanceof TraceCancelled && err.reason === 'superseded') return;
+      if (err instanceof TraceRefused) {
+        // DP-78 (D-172). Nothing was prepared and nothing was emitted: the
+        // model keeps whatever design it had, the picture and its settings
+        // stay, and Convert again is the next press. The card says what
+        // happened and what to try, once; the panel still shows what the
+        // worker found, quietly, so "fewer colors" has its list to point at.
+        convertedOnce = true;
+        traceProgress.finish();
+        traceProgress.offer('Convert again');
+        dialog.close();
+        showRefusalCard(tracedCount);
+        if (sourceFileLabel) {
+          fileInfo.textContent = `${sourceFileLabel}: too many shapes to work with.`;
+          fileInfo.title = sourceFileLabel;
+          fileInfo.className = 'file-info';
+        }
+        fileInfo.removeAttribute('aria-busy');
+        const summary = err.traced ? err.traced.summary : null;
+        if (inkControls) {
+          if (summary && summary.mode === 'colours') {
+            inkControls.setColourResult(summary.colours, {
+              factor: summary.downscale ? summary.downscale.factor : null,
+            });
+          } else {
+            inkControls.setSummary(summary, tracedCount, { quiet: true });
+          }
+        }
+        announceChange(err.sentence);
+        return;
+      }
       traceProgress.finish();
       traceProgress.offer('Start conversion');
       dialog.close();
@@ -3797,6 +3930,10 @@ function createFileControl(
       // announcement was already made by cancelConversion, which is the action
       // the person took.
       if (err instanceof TraceCancelled) {
+        // DP-78 (D-171): a Cancel that landed after the card was written
+        // (the third step, or the emit's own checkpoint) puts the control
+        // back as it was. A canceled conversion changes nothing.
+        if (touched) restoreDesign(before);
         if (err.reason === 'cancelled') return;
         throw err;
       }
@@ -3822,11 +3959,14 @@ function createFileControl(
 
   function processSvgForOpenScad(
     rawSvgText,
-    { deferOpen = false, trace = null } = {}
+    { deferOpen = false, trace = null, analysis: given = null } = {}
   ) {
     // DP-54 (D-144): the trace's line widths, when this drawing came from a
     // trace, so the editor's advisory can speak; a plain upload has none.
     lastTrace = trace;
+    // DP-78 P3: a host that has already analyzed this drawing (in slices,
+    // behind the dialog, where a Cancel can land) hands the analysis in, so
+    // the drawing is not parsed a second time here.
     // DP-52: while a conversion dialog stands in front of the page, the
     // editor's opening is handed back to the caller instead of started here,
     // so it opens once the page is live again.
@@ -3856,7 +3996,7 @@ function createFileControl(
       if (stored && stored.rawSvg === rawSvgText) {
         // Always re-analyze: persisted analyses lose their DOM references
         // through JSON serialization and crash the editor on restore.
-        currentSvgAnalysis = analyzeSvg(rawSvgText);
+        currentSvgAnalysis = given || analyzeSvg(rawSvgText);
         // DP-20. The plan the person applied comes back before the plates
         // are emitted, so a reopened project cuts what it cut when it was
         // saved and not the automatic first pass.
@@ -3866,7 +4006,7 @@ function createFileControl(
         return stored.preparedSvg || rawSvgText;
       }
 
-      const analysis = analyzeSvg(rawSvgText);
+      const analysis = given || analyzeSvg(rawSvgText);
 
       currentSvgAnalysis = analysis;
       updateStatusCard(analysis);

@@ -8,7 +8,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -49,6 +49,10 @@ import {
   flattenLayers,
   LAYER_EMIT_CAP,
   wallRoleOverrides,
+  analyzeSvgAsync,
+  parseSvgElementsAsync,
+  nestingTreeNeeded,
+  shapeCapRefusal,
 } from '../../src/js/svg-preparer.js';
 import { separateColours } from '../../src/js/colour-separation.js';
 
@@ -2872,6 +2876,176 @@ describe('the wall on a charm (D-137, DP-Q53)', () => {
       'foreground',
       'hole',
     ]);
+  });
+});
+
+describe('the shape cap refusal (DP-78, D-172)', () => {
+  it('names the count and the cap with thousands separators, and what a charm host can try', () => {
+    expect(shapeCapRefusal(3939)).toEqual({
+      badge: 'Too many shapes to work with (3,939)',
+      sentence:
+        'This picture traced into 3,939 shapes, and the editor can work with 1,000 at a time. ' +
+        'Try Solid shape, fewer colors, or a closer crop, then Convert again.',
+    });
+  });
+
+  it('the door gets the crop alone: it has no Convert again, and no mode to choose before its editor is open', () => {
+    expect(shapeCapRefusal(1270, 'door').sentence).toBe(
+      'This picture traced into 1,270 shapes, and the editor can work with 1,000 at a time. ' +
+        'Try a closer crop of the picture.'
+    );
+  });
+
+  it('the cap in the sentence is SHAPE_LIST_CAP, not a number written twice', () => {
+    expect(shapeCapRefusal(5).sentence).toContain(
+      `${SHAPE_LIST_CAP.toLocaleString('en-US')} at a time`
+    );
+  });
+});
+
+describe('parseSvgElementsAsync: the parse in slices (DP-78 P3, D-171)', () => {
+  // DOM elements from two parses are two objects; everything else must agree.
+  const comparable = (list) =>
+    list.map(({ element, ...rest }) => ({ ...rest, tag: element.tagName }));
+  // A drawn compound path: nested rings under even-odd, and a stray one.
+  const drawnRings =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#000" fill-rule="evenodd" d="M0 0 L100 0 L100 100 L0 100 Z ' +
+    'M20 20 L80 20 L80 80 L20 80 Z M40 40 L60 40 L60 60 L40 60 Z ' +
+    'M5 90 L10 90 L10 95 L5 95 Z"/></svg>';
+  // Two traced regions, one with a hole folded in (D-159).
+  const colourRegions =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#fff" data-colour="#ffffff" d="M0 0 L100 0 L100 100 L0 100 Z ' +
+    'M20 20 L80 20 L80 80 L20 80 Z"/>' +
+    '<path fill="#000" data-colour="#000000" d="M30 30 L70 30 L70 70 L30 70 Z"/>' +
+    '</svg>';
+  // Shapes under a transform, and a stroke-only one.
+  const transformed =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<g transform="translate(10 10)"><rect x="0" y="0" width="20" height="20"/>' +
+    '<circle cx="50" cy="50" r="10" fill="#fff"/>' +
+    '<path d="M0 90 L90 90" fill="none" stroke="#000"/></g></svg>';
+
+  it('★ returns what parseSvgElements returns: rings, traced regions, transforms, the smiley, the separation', async () => {
+    for (const svg of [
+      drawnRings,
+      colourRegions,
+      transformed,
+      SMILEY_SVG,
+      separationSvg(),
+    ]) {
+      const whole = parseSvgElements(svg);
+      const sliced = await parseSvgElementsAsync(svg, { every: 1 });
+      expect(comparable(sliced)).toEqual(comparable(whole));
+      expect(sliced.length).toBe(whole.length);
+    }
+  });
+
+  it('checkpoints between elements, and between the rings of one compound path', async () => {
+    // One element, four rings, slices of two: once while the rings are
+    // measured (before the third) and once while they are judged.
+    const inside = vi.fn(async () => {});
+    await parseSvgElementsAsync(drawnRings, { checkpoint: inside, every: 2 });
+    expect(inside).toHaveBeenCalledTimes(2);
+    // Three single-ring elements, slices of one: before the second and the
+    // third; no ring pass for a single ring.
+    const between = vi.fn(async () => {});
+    await parseSvgElementsAsync(transformed, { checkpoint: between, every: 1 });
+    expect(between).toHaveBeenCalledTimes(2);
+  });
+
+  it('a text that is not an SVG parses to nothing, both ways', async () => {
+    expect(await parseSvgElementsAsync('<html></html>')).toEqual([]);
+    expect(parseSvgElements('<html></html>')).toEqual([]);
+  });
+
+  it('a Cancel thrown by the checkpoint ends the parse', async () => {
+    await expect(
+      parseSvgElementsAsync(drawnRings, {
+        every: 1,
+        checkpoint: async () => {
+          throw new Error('stopped');
+        },
+      })
+    ).rejects.toThrow('stopped');
+  });
+});
+
+describe('analyzeSvgAsync: the analysis in slices (DP-78 P3, D-171)', () => {
+  // DOM elements from two parses are two objects; everything else must agree.
+  const comparable = (analysis) => ({
+    ...analysis,
+    elements: (analysis.elements || []).map(({ element, ...rest }) => ({
+      ...rest,
+      tag: element ? element.tagName : null,
+    })),
+  });
+  const dark =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#000" d="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+    '<path fill="#222" d="M40 40 L60 40 L60 60 L40 60 Z"/></svg>';
+  const plain =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#000" d="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+    '<path fill="#fff" d="M40 40 L60 40 L60 60 L40 60 Z"/></svg>';
+
+  it('★ returns what analyzeSvg returns: the smiley, the separation, a plain drawing, a dark one', async () => {
+    for (const svg of [SMILEY_SVG, separationSvg(), plain, dark]) {
+      const whole = analyzeSvg(svg);
+      const sliced = await analyzeSvgAsync(svg);
+      expect(comparable(sliced)).toEqual(comparable(whole));
+    }
+  });
+
+  it('checkpoints after the parse and after the tree, and carries the tree it built', async () => {
+    const checkpoint = vi.fn(async () => {});
+    const analysis = await analyzeSvgAsync(separationSvg(), { checkpoint });
+    // A wall and something else: the tree is built (three elements, one
+    // slice of it), and the analysis carries it for the editor's opening.
+    expect(nestingTreeNeeded(parseSvgElements(separationSvg()))).toBe(true);
+    expect(checkpoint).toHaveBeenCalledTimes(2);
+    expect(analysis.nestingTree).not.toBeNull();
+    expect(analysis.nestingTree.nodes).toHaveLength(analysis.elements.length);
+    expect(analyzeSvg(separationSvg()).nestingTree).toEqual(
+      analysis.nestingTree
+    );
+  });
+
+  it('a drawing with no wall and no light fill needs no tree, and carries none', async () => {
+    const checkpoint = vi.fn(async () => {});
+    expect(nestingTreeNeeded(parseSvgElements(dark))).toBe(false);
+    const analysis = await analyzeSvgAsync(dark, { checkpoint });
+    expect(checkpoint).toHaveBeenCalledTimes(2);
+    expect(analysis.nestingTree).toBeNull();
+  });
+
+  it('a Cancel thrown by the checkpoint ends the analysis', async () => {
+    await expect(
+      analyzeSvgAsync(SMILEY_SVG, {
+        checkpoint: async () => {
+          throw new Error('stopped');
+        },
+      })
+    ).rejects.toThrow('stopped');
+  });
+
+  it('over the cap it refuses at the parse, with only the parse\'s own slices behind it, as analyzeSvg does', async () => {
+    const rects = [];
+    for (let i = 0; i <= SHAPE_LIST_CAP; i++) {
+      rects.push(`<rect x="${(i % 50) * 2}" y="${Math.floor(i / 50) * 2}" width="1" height="1"/>`);
+    }
+    const many =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      rects.join('') +
+      '</svg>';
+    const checkpoint = vi.fn(async () => {});
+    const analysis = await analyzeSvgAsync(many, { checkpoint });
+    expect(analysis.recommendation).toBe('reject');
+    expect(analysis.elementCount).toBe(SHAPE_LIST_CAP + 1);
+    // 1,001 elements in slices of a hundred: ten checkpoints inside the
+    // parse, and none after the verdict (no tree, no classification).
+    expect(checkpoint).toHaveBeenCalledTimes(10);
   });
 
   it('★ runs on what separateColours actually writes, not on a hand-made copy', () => {

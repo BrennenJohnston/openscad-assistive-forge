@@ -3803,7 +3803,16 @@ export function createSvgPrepWorkspace(containerEl) {
     layersEnabled = callbacks.layersEnabled === true;
     layersTouched = false;
     if (layersEnabled) {
-      nestingTree = buildNestingTree(liveElements);
+      // DP-78 P3: the analysis may carry the tree it built for the wall
+      // rule, over these same elements in this same order; a reopen with
+      // deletions restored has fewer live elements and builds its own.
+      const given = analysis && analysis.nestingTree;
+      nestingTree =
+        given &&
+        Array.isArray(given.nodes) &&
+        given.nodes.length === liveElements.length
+          ? given
+          : buildNestingTree(liveElements);
       // D-162: the layers are height classes a person assigns (D-160), so a
       // host with layers offers all three whatever the drawing nests to; the
       // nesting depth used to cap them, and the owner's line drawing offered

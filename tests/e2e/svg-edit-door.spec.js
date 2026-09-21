@@ -520,6 +520,69 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('.svg-prep-object')).toHaveCount(0)
   })
 
+  test('★ a photo that traces over the cap is turned away before it is parsed, in words for a photo (DP-78, D-172)', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await page.evaluate(() => {
+      document.getElementById('accessibilitySpotlights').open = true
+    })
+    await armPickerWatch(page)
+    await page.click('#editDrawingSpotlightBtn')
+    await expectPickerOpened(page)
+
+    // A 1400 x 1400 noise field, built here and never stored: it traces into
+    // thousands of shapes, the honest worst case, and the same picture
+    // trace-start-cancel.spec.js draws for the charm host.
+    await page.evaluate(async () => {
+      const n = 1400
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      const img = ctx.createImageData(n, n)
+      let seed = 12345
+      for (let i = 0; i < img.data.length; i += 4) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff
+        const v = (seed >> 16) & 0xff
+        img.data[i] = v
+        img.data[i + 1] = v
+        img.data[i + 2] = v
+        img.data[i + 3] = 255
+      }
+      ctx.putImageData(img, 0, 0)
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'noise.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#svgEditFileInput')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    // Before this the trace reached showSvg, was parsed for seconds, and was
+    // refused with the vector file's sentence - "Simplify it in a vector
+    // editor" - for a photograph. The refusal now comes the moment the
+    // worker is done, in words for a photo.
+    const toast = page.locator('.toast, [role="alert"]', {
+      hasText: 'This picture traced into',
+    })
+    await expect(toast.first()).toBeVisible({ timeout: 240000 })
+    await expect(toast.first()).toContainText(
+      'and the editor can work with 1,000 at a time. Try a closer crop of the picture.'
+    )
+    await expect(page.locator('body')).not.toContainText(
+      'Simplify it in a vector editor'
+    )
+    await expect(page.locator('.svg-prep-object')).toHaveCount(0)
+    await expect(page.locator('.conversion-dialog:not(.hidden)')).toHaveCount(0)
+  })
+
   test('paint declared in a <style> block is read, so line art stays line art (D-118)', async ({
     page,
   }) => {
@@ -856,8 +919,15 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     await expect(page.locator('.drawing-editor-panel')).toBeHidden()
     const drawing = page.locator('.svg-prep-result-pane svg').first()
     await expect(drawing).toBeVisible()
-    const box = await drawing.boundingBox()
-    expect(box.width).toBeGreaterThan(300)
+    // The pane is repainted when the combine lands, and a box read ONCE
+    // between the visibility check and the read came back null (1 in 3 on
+    // DP-78's faster door, 0 in 3 on the build before it). Polled, the way
+    // D-170 polls the stage's boxes: the locator resolves again each time.
+    await expect
+      .poll(async () => (await drawing.boundingBox())?.width ?? 0, {
+        timeout: 15000,
+      })
+      .toBeGreaterThan(300)
   })
 })
 

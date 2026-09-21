@@ -94,6 +94,39 @@ describe('ink controls: the words follow the purpose (D-156)', () => {
   });
 });
 
+describe('ink controls: a quiet summary (DP-78)', () => {
+  it('quiet writes the sentence and announces nothing: the refusal is the one announcement', () => {
+    const said = [];
+    const panel = createInkControls({
+      idPrefix: 'quiet',
+      onChange: () => {},
+      announce: (s) => said.push(s),
+      purpose: 'relief',
+    });
+    panel.setSummary(
+      { applied: true, inkCoverage: 0.12, mode: 'lineart' },
+      1270,
+      { quiet: true }
+    );
+    expect(said).toEqual([]);
+    expect(
+      panel.element.querySelector('.ink-controls-summary').textContent
+    ).toMatch(/^1270 shapes traced, 12% of the picture is ink\./);
+  });
+
+  it('without quiet the summary is announced, as it always was', () => {
+    const said = [];
+    const panel = createInkControls({
+      idPrefix: 'loud',
+      onChange: () => {},
+      announce: (s) => said.push(s),
+      purpose: 'relief',
+    });
+    panel.setSummary({ applied: true, inkCoverage: 0.12 }, 7);
+    expect(said).toEqual(['7 shapes traced, 12% of the picture is ink.']);
+  });
+});
+
 describe('ink controls: a change that waits for a press says so (D-157)', () => {
   const build = (runsBySelf, startLabel) => {
     const said = [];
