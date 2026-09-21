@@ -2055,3 +2055,86 @@ test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
     await expect(editor).toBeHidden({ timeout: 30000 })
   })
 })
+
+// ── DP-83: the review fixes ─────────────────────────────────────────────────
+//
+// The review of every control (the plan's §1.5) found two sentences and one
+// button short of their words: Reset put roles and offsets back and left the
+// Layer column where it was, saying "Roles reset"; the Design width box
+// arrived filled by the charm with no word on where the number came from;
+// the bulk bar's help said its sizes were "the size the shape will really
+// print" when they are the box around each shape. RED on the build before
+// this release: the layer select still read 2 after Reset.
+test.describe('Reset puts the Layer column back and says so (DP-83)', () => {
+  test('★ a layer, an offset and an Off row all go back on Reset, the sentence names all three, and the width box says where its number came from', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+
+    // The width box carries the charm's fit box, and says so.
+    const help = editor.locator('.svg-prep-design-width-help')
+    await expect(help).toBeVisible()
+    await expect(help).toHaveText(
+      'The charm sets this from its size. Type a width only to see what would change.'
+    )
+    const widthInput = editor.locator('.svg-prep-design-width-input')
+    await expect(widthInput).toHaveAttribute(
+      'aria-describedby',
+      await help.getAttribute('id')
+    )
+    await expect(editor.locator('.svg-prep-bulk-help')).toHaveText(
+      'Sizes are the box around each shape at the design width, so a long thin line measures big. ' +
+        "Thinner than measures each shape's narrowest part."
+    )
+
+    // A stack, an offset and an Off, on three rows.
+    const row = rows.nth(3)
+    await row.locator('.svg-prep-more-btn').click()
+    const layer = row.locator('select[name="svg-prep-layer-3"]')
+    await layer.selectOption('2')
+    await expect(layer).toHaveValue('2')
+    await expect(editor.locator('.svg-prep-layer-summary')).toContainText(
+      'Layers show on the charm after you press Apply.'
+    )
+    const offset = row.locator('input[name="svg-prep-offset-3"]')
+    await offset.fill('0.3')
+    await offset.dispatchEvent('input')
+    await rows.nth(4).locator('input[type="radio"][value="ignore"]').check()
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+
+    // Reset. RED before this: the layer select still read 2, and the
+    // sentence was "Roles reset to auto-classification".
+    await editor.locator('.svg-prep-footer [data-action="reset"]').click()
+    await expect(layer).toHaveValue('1')
+    await expect(offset).toHaveValue('0')
+    await expect(
+      rows.nth(4).locator('input[type="radio"][value="ignore"]')
+    ).not.toBeChecked()
+    await expect(
+      editor.locator('.svg-prep-workspace [aria-live="polite"][aria-atomic="true"]')
+    ).toHaveText('Roles, offsets and layers reset.')
+    await expect(editor.locator('.svg-prep-layer-summary')).toContainText(
+      'Every shape starts on layer 1.'
+    )
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+
+    // The editor with its two new sentences still passes the scan.
+    const results = await new AxeBuilder({ page })
+      .include('#drawingEditorSurface')
+      .analyze()
+    expect(
+      results.violations,
+      JSON.stringify(results.violations, null, 2)
+    ).toEqual([])
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
+  })
+})

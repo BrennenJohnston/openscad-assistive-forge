@@ -16182,6 +16182,19 @@ body.tutorial-body-locked {
   line-height: 1.4;
 }
 
+/* DP-83: the Design width box's help, under the tools row where a sentence
+   can wrap; tied to the box by aria-describedby. */
+.svg-prep-design-width-help {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.svg-prep-design-width-help[hidden] {
+  display: none;
+}
+
 /* DP-54: the too-thin notice above the list, and a row's mark beside its name. */
 .svg-prep-thin-notice {
   margin: 0 0 var(--space-xs);
