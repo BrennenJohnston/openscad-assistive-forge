@@ -122,6 +122,52 @@ on layer 1.
 Each layer has its own height and can be raised or engraved, in the
 **Layered design** group under the design.
 
+## Version 5.1: a photo of a symbol
+
+![The Charm Designer with a photo of a marker drawing chosen: a thumbnail of a soap dispenser beside Choose File, the line "Sharpie Drawing.svg (converted from Sharpie Drawing.jpg)", the card "Using original (7 shapes)" with Open the drawing editor and Convert again under it, and the four choices under "What to keep from the picture" with Line art chosen. On the right the charm preview reads Preview ready, and the dispenser's outline stands raised on the clip's face](images/charm-sharpie-lineart.png)
+
+The first version of the picture lane was tuned on library icons and on my
+own logo. A photograph of a printed communication symbol is a third kind of
+picture: paper grain, uneven light, and far more pixels than a charm can
+print. Every mode turned it into thousands of specks, the conversion could
+not be canceled while it prepared the drawing, the editor either refused the
+result or opened on a table nobody could work in, and every reopen combined
+everything again. Version 5.1 is what came of walking that photograph and a
+marker drawing through the app until both printed.
+
+**A camera picture is worked at the size the charm can print.** When a
+picture came from a camera, Forge scales it to forty pixels per printed
+millimeter, smooths it, and leaves out specks under a tenth of a square
+millimeter, saying what it did and how many it left out. The panel of
+cleaning symbols that traced into 1,270 shapes traces into 18; the marker
+drawing into one clean outline. Two switches under the modes turn each step
+off, so a logo's small letters are never taken for grain.
+
+**Crop first.** Beside Start conversion, **Crop first** opens the crop view
+on the photograph before anything is converted; Save crop converts the part
+you kept. On a phone the parameter drawer stands aside while the editor is
+open and comes back when it closes.
+
+**Cancel lands.** A conversion is refused before anything is prepared when
+it traces into more shapes than the editor lists, and the card says what to
+try; the stages are sliced so Cancel is heard inside each one, and a
+canceled conversion changes nothing.
+
+**The editor reopens where you left it.** Apply saves the combined result
+with your choices, and a reopen with the same choices paints it at once
+with Apply ready; the door into the editor survives a preset, an undo and a
+reset.
+
+**The offset thickens a line.** Plus is more ink on every ring: a filled
+shape grows, a hole shrinks, and a drawn line grows thicker on both sides
+when both of its rows get the same plus. The step is 0.05 mm, in the editor
+and on the charm's own Offset slider.
+
+**Smaller things.** Reset puts every shape back on layer 1 and says what it
+reset; the Design width box says the charm set it; the bulk bar says its
+sizes are the box around each shape; the thin-line advisory names the dial
+it means and no longer measures the specks.
+
 ## Share it with one link
 
 ![The Publish Project dialog showing a generated manifest, numbered steps for hosting on GitHub, a Download Project ZIP button, and a Get Your Shareable Link section](images/share-link.png)
