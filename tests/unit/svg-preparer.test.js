@@ -38,6 +38,7 @@ import {
   countTracedShapes,
   strokeToFill,
   applyPerPathOffsets,
+  offsetRings,
   getEffectivePaint,
   measureSvgAspect,
   FLATTEN_BUDGET_MS,
@@ -54,6 +55,7 @@ import {
   nestingTreeNeeded,
   shapeCapRefusal,
 } from '../../src/js/svg-preparer.js';
+import * as ringEngine from '../../src/js/ring-geometry.js';
 import { separateColours } from '../../src/js/colour-separation.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1844,13 +1846,96 @@ describe('analyzeSvg', () => {
 
 describe('applyPerPathOffsets', () => {
   const SQUARE = 'M10,10 L90,10 L90,90 L10,90 Z';
+  // DP-82: the offset reads the path's rings through the engine, so the
+  // engine is an argument; a call without one is a programming error.
+  const widthsOf = (d) => {
+    const rings = ringEngine.ringsFromPathData(d);
+    return rings
+      .map((r) => {
+        const xs = r.map((p) => p.x);
+        return Math.max(...xs) - Math.min(...xs);
+      })
+      .sort((a, b) => b - a);
+  };
+
+  it('DP-82: refuses to run without the engine', () => {
+    const elements = [{ pathData: SQUARE, role: 'foreground' }];
+    expect(() => applyPerPathOffsets(elements, [5])).toThrow(/ring engine/);
+  });
+
+  it('★ D-174: a drawn line, two rings in one path, THICKENS by twice the offset', () => {
+    // The plan's guard: a 10-unit square line on a 100-unit page at 14 mm,
+    // +0.3 mm (2.143 units) comes back 14.3 units wide; -0.3 mm, 5.7. On the
+    // build before this the whole path was sampled as ONE polygon and both
+    // rings grew by 2.14: the line 10 wide still, shifted outward (MEASURED
+    // at DP-R6 planning, `measure-offset.mjs`).
+    const line = 'M0,0 L100,0 L100,100 L0,100 Z M10,10 L90,10 L90,90 L10,90 Z';
+    const u = (0.3 * 100) / 14;
+    const plus = applyPerPathOffsets(
+      [{ pathData: line, role: 'foreground' }],
+      [u],
+      ringEngine
+    );
+    const [outerPlus, innerPlus] = widthsOf(plus[0].pathData);
+    expect(Math.abs((outerPlus - innerPlus) / 2 - 14.29)).toBeLessThan(0.15);
+    expect(Math.abs(outerPlus - 104.29)).toBeLessThan(0.15);
+    const minus = applyPerPathOffsets(
+      [{ pathData: line, role: 'foreground' }],
+      [-u],
+      ringEngine
+    );
+    const [outerMinus, innerMinus] = widthsOf(minus[0].pathData);
+    expect(Math.abs((outerMinus - innerMinus) / 2 - 5.71)).toBeLessThan(0.15);
+    expect(Math.abs(innerMinus - 84.29)).toBeLessThan(0.15);
+  });
+
+  it('★ a Cut out element under "+" shrinks: more ink means a smaller cut', () => {
+    const out = applyPerPathOffsets(
+      [{ pathData: SQUARE, role: 'hole' }],
+      [5],
+      ringEngine
+    );
+    const [w] = widthsOf(out[0].pathData);
+    expect(Math.abs(w - 70)).toBeLessThan(0.15);
+  });
+
+  it('a filled shape under "+" grows on every side, as before', () => {
+    const out = applyPerPathOffsets(
+      [{ pathData: SQUARE, role: 'foreground' }],
+      [5],
+      ringEngine
+    );
+    const rings = ringEngine.ringsFromPathData(out[0].pathData);
+    expect(rings).toHaveLength(1);
+    const xs = rings[0].map((p) => p.x);
+    const ys = rings[0].map((p) => p.y);
+    expect(Math.abs(Math.min(...xs) - 5)).toBeLessThan(0.15);
+    expect(Math.abs(Math.max(...xs) - 95)).toBeLessThan(0.15);
+    expect(Math.abs(Math.min(...ys) - 5)).toBeLessThan(0.15);
+    expect(Math.abs(Math.max(...ys) - 95)).toBeLessThan(0.15);
+  });
+
+  it('a hole shrunk to nothing is closed, and a shape shrunk to nothing is gone', () => {
+    const line = 'M0,0 L100,0 L100,100 L0,100 Z M10,10 L90,10 L90,90 L10,90 Z';
+    const closed = offsetRings(line, 45, ringEngine);
+    expect(ringEngine.ringsFromPathData(closed)).toHaveLength(1);
+    expect(offsetRings('M40,40 L60,40 L60,60 L40,60 Z', -30, ringEngine)).toBe(
+      ''
+    );
+  });
+
+  it('offsetRings hands back what it cannot read, and the path untouched at 0', () => {
+    expect(offsetRings(SQUARE, 0, ringEngine)).toBe(SQUARE);
+    expect(offsetRings('', 5, ringEngine)).toBe('');
+    expect(offsetRings(null, 5, ringEngine)).toBe(null);
+  });
 
   it('applies offset to elements with non-zero values', () => {
     const elements = [
       { pathData: SQUARE, role: 'foreground' },
       { pathData: SQUARE, role: 'hole' },
     ];
-    const result = applyPerPathOffsets(elements, [5, 0]);
+    const result = applyPerPathOffsets(elements, [5, 0], ringEngine);
 
     expect(result[0].pathData).not.toBe(SQUARE);
     expect(result[0].pathData).toMatch(/^M/);
@@ -1859,7 +1944,7 @@ describe('applyPerPathOffsets', () => {
 
   it('skips elements with role "ignore" even with non-zero offset', () => {
     const elements = [{ pathData: SQUARE, role: 'ignore' }];
-    const result = applyPerPathOffsets(elements, [5]);
+    const result = applyPerPathOffsets(elements, [5], ringEngine);
 
     expect(result[0].pathData).toBe(SQUARE);
     expect(result[0].role).toBe('ignore');
@@ -1867,21 +1952,21 @@ describe('applyPerPathOffsets', () => {
 
   it('returns elements unchanged when offsets array is empty', () => {
     const elements = [{ pathData: SQUARE, role: 'foreground' }];
-    const result = applyPerPathOffsets(elements, []);
+    const result = applyPerPathOffsets(elements, [], ringEngine);
 
     expect(result).toBe(elements);
   });
 
   it('returns elements unchanged when offsets is null', () => {
     const elements = [{ pathData: SQUARE, role: 'foreground' }];
-    const result = applyPerPathOffsets(elements, null);
+    const result = applyPerPathOffsets(elements, null, ringEngine);
 
     expect(result).toBe(elements);
   });
 
   it('returns elements unchanged when offsets is undefined', () => {
     const elements = [{ pathData: SQUARE, role: 'foreground' }];
-    const result = applyPerPathOffsets(elements, undefined);
+    const result = applyPerPathOffsets(elements, undefined, ringEngine);
 
     expect(result).toBe(elements);
   });
@@ -1890,7 +1975,7 @@ describe('applyPerPathOffsets', () => {
     const elements = [
       { pathData: SQUARE, role: 'foreground', fill: 'black', luminance: 0 },
     ];
-    const result = applyPerPathOffsets(elements, [3]);
+    const result = applyPerPathOffsets(elements, [3], ringEngine);
 
     expect(result[0].role).toBe('foreground');
     expect(result[0].fill).toBe('black');
@@ -1904,7 +1989,7 @@ describe('applyPerPathOffsets', () => {
       { pathData: SQUARE, role: 'foreground' },
       { pathData: SQUARE, role: 'foreground' },
     ];
-    const result = applyPerPathOffsets(elements, [0, 5, 0]);
+    const result = applyPerPathOffsets(elements, [0, 5, 0], ringEngine);
 
     expect(result[0].pathData).toBe(SQUARE);
     expect(result[1].pathData).not.toBe(SQUARE);
@@ -1916,7 +2001,7 @@ describe('applyPerPathOffsets', () => {
       { pathData: SQUARE, role: 'foreground' },
       { pathData: SQUARE, role: 'foreground' },
     ];
-    const result = applyPerPathOffsets(elements, [5]);
+    const result = applyPerPathOffsets(elements, [5], ringEngine);
 
     expect(result[0].pathData).not.toBe(SQUARE);
     expect(result[1].pathData).toBe(SQUARE);
@@ -1931,7 +2016,7 @@ describe('applyPerPathOffsets', () => {
     const elements = parseSvgElements(svg);
     const classified = classifyElements(elements);
     const offsets = [2, 0];
-    const result = applyPerPathOffsets(classified, offsets);
+    const result = applyPerPathOffsets(classified, offsets, ringEngine);
 
     expect(result[0].pathData).not.toBe(classified[0].pathData);
     expect(result[1].pathData).toBe(classified[1].pathData);

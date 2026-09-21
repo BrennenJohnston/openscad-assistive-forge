@@ -36,7 +36,7 @@ design_scale = 70; // [10:5:110]
 design_file_aspect = 1; // [0.05:0.01:20]
 
 // Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle) @label(Offset)
-design_offset = 0; // [0:0.2:1.5]
+design_offset = 0; // [0:0.05:1.5]
 
 // Left (-) / right (+) position offset for design @label(Left / right)
 design_left_right = 0; // [-15:0.5:15]

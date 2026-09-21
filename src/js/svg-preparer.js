@@ -31,7 +31,7 @@ import {
   compose,
   applyToPoint,
 } from 'transformation-matrix';
-import { offsetPath } from './svg-offset.js';
+import { offsetDrawing } from './flatten-rings.js';
 import {
   polygonFromPathData,
   boundsOf,
@@ -1282,26 +1282,74 @@ export function classifyElements(elements, options = {}) {
 }
 
 /**
+ * Offset one element's path RING BY RING, with each ring's own sign (DP-82,
+ * D-174).
+ *
+ * "+" means more ink. An element's path is read as the drawing it is (a ring
+ * inside a ring is a hole), a solid ring grows by the offset and a hole ring
+ * shrinks by it, and the rings come back as one clean region: a letter O at
+ * +0.3 mm is a fatter O, not an O shifted outward. A Cut out element is a
+ * hole in the design, so for it every sign flips: "+" shrinks the cut and
+ * grows its islands. A hole shrunk to nothing is closed; an element shrunk
+ * to nothing is gone (an empty path).
+ *
+ * `offsetPath` sampled the whole `d` as ONE polygon: right for a single
+ * ring, and on a drawn line (two rings) it moved the line instead of
+ * thickening it, MEASURED at DP-R6 planning on a 10-unit square line: +0.3
+ * mm grew the outer ring AND the inner ring by 2.14 units, the line 10 wide
+ * still, shifted outward.
+ *
+ * @param {string} pathData
+ * @param {number} delta - In SVG units, before the sign
+ * @param {object} engine - The ring-geometry module
+ * @param {object} [options]
+ * @param {string} [options.role='foreground'] - 'hole' flips every sign
+ * @returns {string} The offset region's path data; '' when nothing is left
+ */
+export function offsetRings(
+  pathData,
+  delta,
+  engine,
+  { role = 'foreground' } = {}
+) {
+  if (!delta || !pathData || typeof pathData !== 'string') return pathData;
+  const rings = engine.ringsFromPathData(pathData);
+  if (rings.length === 0) return pathData;
+  const sign = role === 'hole' ? -1 : 1;
+  const region = offsetDrawing(engine, rings, () => delta * sign);
+  return region.length > 0 ? engine.ringsToPathData(region) : '';
+}
+
+/**
  * Apply per-element polygon offsets to classified SVG elements.
  *
  * For each element whose corresponding offset value is non-zero, the path
- * is inflated (positive) or deflated (negative) via clipper2-js. Elements
- * with role 'ignore' are never offset. The offset values are in SVG
- * coordinate units — callers convert from mm using mmToSvgUnits().
+ * is offset ring by ring through `offsetRings`. Elements with role 'ignore'
+ * are never offset. The offset values are in SVG coordinate units — callers
+ * convert from mm using mmToSvgUnits().
  *
  * @param {Array} classifiedElements - Output of classifyElements()
  * @param {number[]} offsets - Per-element offset in SVG units (parallel array)
+ * @param {object} engine - The ring-geometry module (DP-82: the offset needs
+ *   the rings, and the engine lives in the lazy chunk the caller holds)
  * @returns {Array} Elements with pathData replaced where offset was applied
  */
-export function applyPerPathOffsets(classifiedElements, offsets) {
+export function applyPerPathOffsets(classifiedElements, offsets, engine) {
   if (!offsets || offsets.length === 0) return classifiedElements;
 
   return classifiedElements.map((el, i) => {
     const offset = offsets[i];
     if (!offset || offset === 0) return el;
     if (el.role === 'ignore') return el;
+    // Asked for only when a ring is about to be offset: a column of zeros
+    // is the usual call and needs no engine.
+    if (!engine) {
+      throw new Error('applyPerPathOffsets needs the ring engine');
+    }
 
-    const newPathData = offsetPath(el.pathData, offset);
+    const newPathData = offsetRings(el.pathData, offset, engine, {
+      role: el.role,
+    });
     return { ...el, pathData: newPathData };
   });
 }

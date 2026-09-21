@@ -35,7 +35,7 @@ import { mmToSvgUnits } from './svg-offset.js';
 import { isEnabled } from './feature-flags.js';
 // Re-exported below so every caller keeps the import it already had. The
 // flatten itself moved to a module a worker can load: see flatten-rings.js.
-import { flattenWithRings } from './flatten-rings.js';
+import { flattenWithRings, flattenCompoundRings } from './flatten-rings.js';
 import { createFlattenRunner, FlattenCancelled } from './flatten-runner.js';
 import { choicesKeyOf } from './reopen-key.js';
 
@@ -892,7 +892,8 @@ function populateObjectList(
       offsetInput.name = `svg-prep-offset-${i}`;
       offsetInput.min = '-2';
       offsetInput.max = '2';
-      offsetInput.step = '0.1';
+      // DP-Q74 (2026-09-20): 0.05 mm, the step the owner found useful.
+      offsetInput.step = '0.05';
       offsetInput.value = '0';
       offsetInput.setAttribute('aria-label', `Offset for ${name} (mm)`);
       if (role === 'ignore') offsetInput.disabled = true;
@@ -1053,7 +1054,7 @@ export function thinLineSentence(
   return (
     `Thin lines: about ${mm.toFixed(2)} mm at ${at}. ` +
     `Lines under ${THIN_LINE_MM} mm may not print. ` +
-    'Raise Design offset (0.6 suits a 0.4 mm nozzle) or make the design bigger.'
+    'Raise Offset in the Design group (0.6 suits a 0.4 mm nozzle), or make the design bigger.'
   );
 }
 
@@ -2099,11 +2100,33 @@ export function createSvgPrepWorkspace(containerEl) {
       const svgOffsets = offsets.map((mm) =>
         mmToSvgUnits(mm, vbWidth, designWidthMm)
       );
-      const withOffsets = applyPerPathOffsets(classified, svgOffsets);
+      const anyOffset = svgOffsets.some(
+        (units, i) => units && roles[i] !== 'ignore'
+      );
 
       const isCompound = currentAnalysis.isCompoundPathOnly;
+      // DP-82 (D-174): an offset needs the drawing's rings, and the rings
+      // need the engine. On the ring road each element is offset here, ring
+      // by ring with its own sign, before the fold; on the compound road
+      // the rows go to the combine with their offsets, because the sign of
+      // each row is the parity of the rows kept, which only the combine
+      // reads. A compound drawing with no offset keeps its concatenation:
+      // exact, instant, and every picture it ever made.
+      if (anyOffset && !isCompound && !ringEngine) {
+        previewWaitingForEngine = true;
+        loadRingEngine().catch(() => {});
+        return;
+      }
+      const withOffsets = isCompound
+        ? classified.map((el, i) =>
+            svgOffsets[i] && el.role !== 'ignore'
+              ? { ...el, offset: svgOffsets[i] }
+              : el
+          )
+        : applyPerPathOffsets(classified, svgOffsets, ringEngine);
+
       let resultSvgString;
-      if (isCompound) {
+      if (isCompound && !anyOffset) {
         resultSvgString = concatenateSubpaths(withOffsets, currentSvgMeta);
       } else if (canUseWorker()) {
         // D-120: order-independent ring flatten; never the pairwise chain.
@@ -2122,12 +2145,17 @@ export function createSvgPrepWorkspace(containerEl) {
           const size = flattenSizeOf();
           const out = await getFlattenRunner().start(
             withOffsets,
-            currentSvgMeta
+            currentSvgMeta,
+            { compound: isCompound }
           );
           resultSvgString = out.svg;
           // DP-Q33's calibration: what this drawing really cost, on this
           // machine, replaces the default for every prediction after it.
-          const measured = flattenCostFrom(size.shapes, size.points, out.ms);
+          // The compound combine is another job with another cost and does
+          // not teach the predictor.
+          const measured = isCompound
+            ? null
+            : flattenCostFrom(size.shapes, size.points, out.ms);
           if (measured !== null) {
             flattenCost = measured;
             writeFlattenCost(measured);
@@ -2177,11 +2205,9 @@ export function createSvgPrepWorkspace(containerEl) {
       } else if (ringEngine) {
         // No Worker here, which in practice means a test environment. Running
         // it inline is the only way to run at all; see canUseWorker.
-        resultSvgString = flattenWithRings(
-          ringEngine,
-          withOffsets,
-          currentSvgMeta
-        );
+        resultSvgString = isCompound
+          ? flattenCompoundRings(ringEngine, withOffsets, currentSvgMeta)
+          : flattenWithRings(ringEngine, withOffsets, currentSvgMeta);
       } else {
         // The engine is still on its way (first open). No fallback to the
         // order-dependent path - the preview re-runs when the chunk lands.

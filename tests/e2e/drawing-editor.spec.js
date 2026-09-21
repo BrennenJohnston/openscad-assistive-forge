@@ -16,6 +16,21 @@ import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import path from 'node:path'
 
+// Every press in this file waits for the CI runner's page. A press lands at
+// once and then waits for the page to acknowledge it, and on the Chromium
+// shard-6 runner the page is held for tens of seconds by work a person also
+// waits for: the emit after Apply (D-150's family), and the close of the
+// editor, which marks the charm preview stale and brings its canvas back.
+// MEASURED in three traces (PRs #274 and #275, 2026-09-21): the Apply press
+// acknowledged after 23 s and 64 s; the Close press after a combine never
+// within ten seconds, the page silent for 78 s on one board and 31 s on the
+// next, the app's own memory alert on every snapshot. Locally the same
+// presses acknowledge in 10 to 80 ms, three of three with tracing. Nothing
+// in this file asserts a press's speed (the reopen's own timing assertion is
+// Apply ready within three seconds), so the presses get the runner's time
+// rather than the config's ten seconds.
+test.use({ actionTimeout: 120000 })
+
 const surface = (page) => page.locator('#drawingEditorSurface')
 const canvas = (page) => page.locator('#previewContainer canvas').first()
 
@@ -1713,21 +1728,6 @@ test.describe('Crop first (DP-80)', () => {
 // restores its drawing, its picture and its settings from the stores. Both
 // RED on the build before this release.
 test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
-  // A press lands at once and then waits for the page to acknowledge it,
-  // and on the CI runner that page is held for tens of seconds by work a
-  // person also waits for: the emit after Apply (the data URL, the
-  // companions, the state, the URL hash, the storage save; D-150's family)
-  // and the paint after a combine. MEASURED in PR #274's Chromium shard-6
-  // traces: the Apply press acknowledged after 23 s on one board and 64 s
-  // on the next; the Close press after the first change never within 10 s,
-  // the page silent for 78 s, with the app's own memory alert on every
-  // snapshot. Locally the same presses acknowledge in 10 to 80 ms, three
-  // of three. Nothing this describe asserts is about a press's speed (the
-  // reopen's own timing assertion is Apply ready within three seconds),
-  // so its presses get the runner's time rather than the config's ten
-  // seconds.
-  test.use({ actionTimeout: 120000 })
-
   const designName = (page) =>
     page.evaluate(() => {
       const v = window.stateManager?.getState()?.parameters?.design_file
@@ -1913,5 +1913,145 @@ test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
     await expect
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
       .toBeGreaterThan(0)
+  })
+})
+
+// ── DP-82: the offset, per ring with its own sign (D-174) ───────────────────
+//
+// The owner: stepping the offset by 0.05 mm smoothed a hand-drawn line
+// usefully, "but even a 1mm offset completely broke the process". MEASURED
+// at DP-R6 planning and again at DP-77 P0d: the per-shape Offset offset ONE
+// RING, and a drawn line is two rows, so "+" on the outline thickened it
+// outward only, "+" on the inner ring THINNED it, and "+" on both moved the
+// line; past a neighbor, the even-odd concatenation inverted the neighbor.
+// Now "+" is more ink on every ring: the outer ring grows, the hole ring
+// shrinks, and a line thickens by twice the offset; an offset drawing is
+// combined by its rings' parity, never concatenated. RED on the build
+// before this release.
+test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
+  // The rows' boxes in the combined result, largest first, in svg units,
+  // and the units one millimeter is at the width the editor measures at.
+  const measure = (page) =>
+    page.evaluate(() => {
+      const root = document.querySelector('#drawingEditorSurface')
+      const svg = root.querySelector('.svg-prep-result-pane svg')
+      const d = svg.querySelector('path.svg-prep-result-ink').getAttribute('d')
+      const probe = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      probe.setAttribute('viewBox', svg.getAttribute('viewBox'))
+      probe.style.position = 'absolute'
+      probe.style.width = '100px'
+      probe.style.height = '100px'
+      document.body.appendChild(probe)
+      const boxes = d
+        .split(/(?=[Mm])/)
+        .map((sub) => sub.trim())
+        .filter(Boolean)
+        .map((sub) => {
+          const path = document.createElementNS(
+            'http://www.w3.org/2000/svg',
+            'path'
+          )
+          path.setAttribute('d', sub)
+          probe.appendChild(path)
+          const b = path.getBBox()
+          return { x: b.x, y: b.y, w: b.width, h: b.height }
+        })
+        .sort((a, b) => b.w * b.h - a.w * a.h)
+      probe.remove()
+      const vbWidth = svg.viewBox.baseVal.width
+      const widthMm = parseFloat(
+        root.querySelector('.svg-prep-design-width-input').value
+      )
+      return { boxes, unitsPerMm: vbWidth / widthMm }
+    })
+
+  test('★ +0.3 mm on both rows of a square line: the outer ring out, the inner ring in, the line 0.6 mm wider', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    // A square line, 60 px thick, drawn in the test: one traced path of two
+    // rings, so two rows, the inner one a Cut out by the drawing's own
+    // parity.
+    await page.evaluate(async () => {
+      const n = 600
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.lineWidth = 60
+      ctx.strokeStyle = '#000000'
+      ctx.strokeRect(150, 150, 300, 300)
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'square-line.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const control = page.locator('.param-control--file', {
+      has: page.locator('#param-design_file'),
+    })
+    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    // A small picture starts converting by itself on a quick machine
+    // (DP-Q32); a slow one waits for the press: PR #275's CI runner called
+    // this 0.36 MP grid "a few seconds" and offered Start, so the door never
+    // came (three attempts). The trace is the same either way, so the guard
+    // presses Start when Start is what is offered.
+    const start = control.locator('.trace-progress-start')
+    await expect(door.or(start)).toBeVisible({ timeout: 120000 })
+    if (!(await door.isVisible())) await start.click()
+    await expect(door).toBeVisible({ timeout: 120000 })
+    await door.click()
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect(rows).toHaveCount(2, { timeout: 60000 })
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+    await expect(apply).toBeEnabled({ timeout: 120000 })
+
+    const before = await measure(page)
+    expect(before.boxes).toHaveLength(2)
+    const [outer0, inner0] = before.boxes
+    const band0 = (outer0.w - inner0.w) / 2
+    const mm = before.unitsPerMm
+    expect(band0).toBeGreaterThan(0)
+
+    // +0.3 mm on each row, through the row's More panel.
+    for (const i of [0, 1]) {
+      const row = rows.nth(i)
+      await row.locator('.svg-prep-more-btn').click()
+      const input = row.locator(`input[name="svg-prep-offset-${i}"]`)
+      await expect(input).toBeVisible()
+      await input.fill('0.3')
+      await input.dispatchEvent('input')
+      await input.dispatchEvent('change')
+      await expect(apply).toBeDisabled({ timeout: 5000 })
+      await expect(apply).toBeEnabled({ timeout: 120000 })
+    }
+
+    // RED before this: the inner ring GREW by 0.3 mm (the band 0.6 mm
+    // narrower than here, shifted outward, its width unchanged).
+    const after = await measure(page)
+    expect(after.boxes).toHaveLength(2)
+    const [outer1, inner1] = after.boxes
+    const tolerance = 0.06 * mm
+    expect(Math.abs(outer1.w - (outer0.w + 0.6 * mm))).toBeLessThan(tolerance)
+    expect(Math.abs(inner1.w - (inner0.w - 0.6 * mm))).toBeLessThan(tolerance)
+    const band1 = (outer1.w - inner1.w) / 2
+    expect(Math.abs(band1 - (band0 + 0.6 * mm))).toBeLessThan(tolerance)
+    // DP-Q74: the step the owner found useful.
+    await expect(
+      rows.nth(0).locator('input[name="svg-prep-offset-0"]')
+    ).toHaveAttribute('step', '0.05')
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
   })
 })
