@@ -35,8 +35,9 @@ import { mmToSvgUnits } from './svg-offset.js';
 import { isEnabled } from './feature-flags.js';
 // Re-exported below so every caller keeps the import it already had. The
 // flatten itself moved to a module a worker can load: see flatten-rings.js.
-import { flattenWithRings } from './flatten-rings.js';
+import { flattenWithRings, flattenCompoundRings } from './flatten-rings.js';
 import { createFlattenRunner, FlattenCancelled } from './flatten-runner.js';
+import { choicesKeyOf } from './reopen-key.js';
 
 export { flattenWithRings };
 
@@ -311,6 +312,18 @@ function buildWorkspaceDom() {
   designWidthLabel.append(designWidthInput, ' ', designWidthUnit);
   designWidthGroup.appendChild(designWidthLabel);
 
+  // DP-83 (the review of every control): the box arrives filled by the
+  // charm's fit box (D-144) and a person who did not type it is owed the
+  // reason. One sentence, under the tools row where a sentence can wrap
+  // (the header is a row of buttons), tied to the box by aria-describedby;
+  // its words follow whether the width is the charm's or the editor's own
+  // (updateDesignWidthHelp).
+  const designWidthHelp = document.createElement('p');
+  designWidthHelp.className = 'svg-prep-design-width-help';
+  designWidthHelp.id = 'svgPrepDesignWidthHelp';
+  designWidthHelp.hidden = designWidthGroup.hidden;
+  designWidthInput.setAttribute('aria-describedby', designWidthHelp.id);
+
   header.append(
     title,
     designWidthGroup,
@@ -372,7 +385,7 @@ function buildWorkspaceDom() {
   bulkHelp.className = 'svg-prep-bulk-help';
   bulkHelp.id = 'svgPrepBulkHelp';
   bulkHelp.textContent =
-    'Sizes are measured against the design width above, so they are the size the shape will really print.';
+    "Sizes are the box around each shape at the design width, so a long thin line measures big. Thinner than measures each shape's narrowest part.";
 
   const smallLabel = document.createElement('label');
   smallLabel.className = 'svg-prep-bulk-field';
@@ -398,6 +411,7 @@ function buildWorkspaceDom() {
   const keepInput = document.createElement('input');
   keepInput.type = 'number';
   keepInput.className = 'svg-prep-bulk-input';
+  keepInput.setAttribute('aria-describedby', bulkHelp.id);
   keepInput.min = '1';
   keepInput.step = '1';
   keepInput.value = '50';
@@ -647,6 +661,7 @@ function buildWorkspaceDom() {
   // tint legend both describe what is in the frame above them.
   root.append(
     header,
+    designWidthHelp,
     previews,
     thinLines,
     legendRow,
@@ -671,6 +686,7 @@ function buildWorkspaceDom() {
       title,
       designWidthGroup,
       designWidthInput,
+      designWidthHelp,
       thinLines,
       compareBtn,
       rolesToggleBtn,
@@ -891,7 +907,8 @@ function populateObjectList(
       offsetInput.name = `svg-prep-offset-${i}`;
       offsetInput.min = '-2';
       offsetInput.max = '2';
-      offsetInput.step = '0.1';
+      // DP-Q74 (2026-09-20): 0.05 mm, the step the owner found useful.
+      offsetInput.step = '0.05';
       offsetInput.value = '0';
       offsetInput.setAttribute('aria-label', `Offset for ${name} (mm)`);
       if (role === 'ignore') offsetInput.disabled = true;
@@ -1052,7 +1069,7 @@ export function thinLineSentence(
   return (
     `Thin lines: about ${mm.toFixed(2)} mm at ${at}. ` +
     `Lines under ${THIN_LINE_MM} mm may not print. ` +
-    'Raise Design offset (0.6 suits a 0.4 mm nozzle) or make the design bigger.'
+    'Raise Offset in the Design group (0.6 suits a 0.4 mm nozzle), or make the design bigger.'
   );
 }
 
@@ -1106,6 +1123,8 @@ export function createSvgPrepWorkspace(containerEl) {
   let fullscreenTrap = null;
   let previousFocusEl = null;
   let currentResult = null;
+  /** DP-81: the counts of a reopen painted from its stored result, or null. */
+  let openedAsLeft = null;
   let roles = [];
   let offsets = [];
   let currentSvgString = null;
@@ -1972,6 +1991,96 @@ export function createSvgPrepWorkspace(containerEl) {
     }
   }
 
+  /**
+   * Put a combined drawing in the result pane and arm Apply on it. ONE
+   * builder for the two ways a result arrives: the combine that just landed
+   * (DP-37 P2) and a stored result a reopen trusts (DP-81, D-175); a second
+   * copy of the painting is how the overlay's marks went missing once
+   * (DP-47).
+   *
+   * @param {string} resultSvgString
+   * @param {object} [options]
+   * @param {string|null} [options.previousViewBox] - The zoom to keep when
+   *   no picture stands in the pane
+   * @param {Array} [options.elements] - The classified elements the result
+   *   was made from, for the counts said
+   * @param {boolean} [options.isCompound]
+   * @param {boolean} [options.announce] - Say "Preview updated" in the
+   *   workspace's own live region (a reopen says its own sentence instead)
+   * @returns {boolean} Whether a drawing was painted
+   */
+  function paintCombinedResult(
+    resultSvgString,
+    {
+      previousViewBox = null,
+      elements = [],
+      isCompound = false,
+      announce: sayUpdated = false,
+    } = {}
+  ) {
+    currentResult = resultSvgString;
+    setApplyEnabled(true);
+
+    // Now, and not before: the old picture held the pane while the combine
+    // ran. And the zoom is read NOW, from that picture, not from when the
+    // combine began: DP-53 runs the combine by itself and lets a person
+    // pinch the stand-in meanwhile, and PR #240's board found the result
+    // landing with the earlier viewBox, so two fingers did nothing.
+    const stale = refs.resultPane.querySelector('svg');
+    const keptViewBox = stale
+      ? stale.getAttribute('viewBox') || previousViewBox
+      : previousViewBox;
+    if (stale) stale.remove();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
+    const svg = doc.querySelector('svg');
+    if (!svg) return false;
+
+    const imported = document.importNode(svg, true);
+    if (keptViewBox) imported.setAttribute('viewBox', keptViewBox);
+    // DP-Q60: the union is layer 1's paint; deeper layers go over it.
+    imported.insertBefore(
+      buildHatchDefs(keptViewBox || currentSvgMeta.viewBox),
+      imported.firstChild
+    );
+    imported.dataset.hatch = hatchPrefix;
+    imported.querySelectorAll('path').forEach((p) => {
+      p.setAttribute(
+        'class',
+        'svg-prep-result-ink' +
+          (paintsByLayer() ? ' svg-prep-standin-layer-1' : '')
+      );
+    });
+    // The picture a person is looking at is the one the list has to be able
+    // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
+    // the SAME builder as every other picture. This used to build a bare
+    // overlay of its own, and the two marks that live in it went missing on
+    // the combined result the moment they moved into groups - which is a
+    // third copy of the same three lines, and exactly how the first two
+    // copies drifted apart.
+    // D-154: the combined result is what will print, and the shapes left
+    // out are drawn over it in the left-out style, so they can be seen and
+    // chosen again here too.
+    imported.appendChild(buildLayerPaint());
+    imported.appendChild(buildLeftOutLayer(hatchPrefix));
+    imported.appendChild(buildOverlay());
+    imported.appendChild(buildHitLayer());
+    markAsPicture(imported, 'Prepared result');
+    refs.resultPane.insertBefore(imported, refs.resultZoom);
+
+    if (sayUpdated) {
+      const fgCount = elements.filter(
+        (el) => el.role !== 'ignore' && el.pathData
+      ).length;
+      const ignoredCount = elements.filter((el) => el.role === 'ignore').length;
+      liveRegion.textContent = isCompound
+        ? `Preview updated: ${fgCount} shapes on, ${ignoredCount} off.`
+        : `Preview updated: ${fgCount} on, ${elements.filter((el) => el.role === 'hole' && el.pathData).length} cut out.`;
+    }
+    return true;
+  }
+
   async function runResultPreview() {
     if (!currentAnalysis || !currentSvgMeta) return;
 
@@ -2006,11 +2115,33 @@ export function createSvgPrepWorkspace(containerEl) {
       const svgOffsets = offsets.map((mm) =>
         mmToSvgUnits(mm, vbWidth, designWidthMm)
       );
-      const withOffsets = applyPerPathOffsets(classified, svgOffsets);
+      const anyOffset = svgOffsets.some(
+        (units, i) => units && roles[i] !== 'ignore'
+      );
 
       const isCompound = currentAnalysis.isCompoundPathOnly;
+      // DP-82 (D-174): an offset needs the drawing's rings, and the rings
+      // need the engine. On the ring road each element is offset here, ring
+      // by ring with its own sign, before the fold; on the compound road
+      // the rows go to the combine with their offsets, because the sign of
+      // each row is the parity of the rows kept, which only the combine
+      // reads. A compound drawing with no offset keeps its concatenation:
+      // exact, instant, and every picture it ever made.
+      if (anyOffset && !isCompound && !ringEngine) {
+        previewWaitingForEngine = true;
+        loadRingEngine().catch(() => {});
+        return;
+      }
+      const withOffsets = isCompound
+        ? classified.map((el, i) =>
+            svgOffsets[i] && el.role !== 'ignore'
+              ? { ...el, offset: svgOffsets[i] }
+              : el
+          )
+        : applyPerPathOffsets(classified, svgOffsets, ringEngine);
+
       let resultSvgString;
-      if (isCompound) {
+      if (isCompound && !anyOffset) {
         resultSvgString = concatenateSubpaths(withOffsets, currentSvgMeta);
       } else if (canUseWorker()) {
         // D-120: order-independent ring flatten; never the pairwise chain.
@@ -2029,12 +2160,17 @@ export function createSvgPrepWorkspace(containerEl) {
           const size = flattenSizeOf();
           const out = await getFlattenRunner().start(
             withOffsets,
-            currentSvgMeta
+            currentSvgMeta,
+            { compound: isCompound }
           );
           resultSvgString = out.svg;
           // DP-Q33's calibration: what this drawing really cost, on this
           // machine, replaces the default for every prediction after it.
-          const measured = flattenCostFrom(size.shapes, size.points, out.ms);
+          // The compound combine is another job with another cost and does
+          // not teach the predictor.
+          const measured = isCompound
+            ? null
+            : flattenCostFrom(size.shapes, size.points, out.ms);
           if (measured !== null) {
             flattenCost = measured;
             writeFlattenCost(measured);
@@ -2084,11 +2220,9 @@ export function createSvgPrepWorkspace(containerEl) {
       } else if (ringEngine) {
         // No Worker here, which in practice means a test environment. Running
         // it inline is the only way to run at all; see canUseWorker.
-        resultSvgString = flattenWithRings(
-          ringEngine,
-          withOffsets,
-          currentSvgMeta
-        );
+        resultSvgString = isCompound
+          ? flattenCompoundRings(ringEngine, withOffsets, currentSvgMeta)
+          : flattenWithRings(ringEngine, withOffsets, currentSvgMeta);
       } else {
         // The engine is still on its way (first open). No fallback to the
         // order-dependent path - the preview re-runs when the chunk lands.
@@ -2107,66 +2241,12 @@ export function createSvgPrepWorkspace(containerEl) {
         return;
       }
 
-      currentResult = resultSvgString;
-      setApplyEnabled(true);
-
-      // Now, and not before: the old picture held the pane while the combine
-      // ran. And the zoom is read NOW, from that picture, not from when the
-      // combine began: DP-53 runs the combine by itself and lets a person
-      // pinch the stand-in meanwhile, and PR #240's board found the result
-      // landing with the earlier viewBox, so two fingers did nothing.
-      const stale = refs.resultPane.querySelector('svg');
-      const keptViewBox = stale
-        ? stale.getAttribute('viewBox') || previousViewBox
-        : previousViewBox;
-      if (stale) stale.remove();
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
-      const svg = doc.querySelector('svg');
-      if (!svg) return;
-
-      const imported = document.importNode(svg, true);
-      if (keptViewBox) imported.setAttribute('viewBox', keptViewBox);
-      // DP-Q60: the union is layer 1's paint; deeper layers go over it.
-      imported.insertBefore(
-        buildHatchDefs(keptViewBox || currentSvgMeta.viewBox),
-        imported.firstChild
-      );
-      imported.dataset.hatch = hatchPrefix;
-      imported.querySelectorAll('path').forEach((p) => {
-        p.setAttribute(
-          'class',
-          'svg-prep-result-ink' +
-            (paintsByLayer() ? ' svg-prep-standin-layer-1' : '')
-        );
+      paintCombinedResult(resultSvgString, {
+        previousViewBox,
+        elements: withOffsets,
+        isCompound,
+        announce: true,
       });
-      // The picture a person is looking at is the one the list has to be able
-      // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
-      // the SAME builder as every other picture. This used to build a bare
-      // overlay of its own, and the two marks that live in it went missing on
-      // the combined result the moment they moved into groups - which is a
-      // third copy of the same three lines, and exactly how the first two
-      // copies drifted apart.
-      // D-154: the combined result is what will print, and the shapes left
-      // out are drawn over it in the left-out style, so they can be seen and
-      // chosen again here too.
-      imported.appendChild(buildLayerPaint());
-      imported.appendChild(buildLeftOutLayer(hatchPrefix));
-      imported.appendChild(buildOverlay());
-      imported.appendChild(buildHitLayer());
-      markAsPicture(imported, 'Prepared result');
-      refs.resultPane.insertBefore(imported, refs.resultZoom);
-
-      const fgCount = withOffsets.filter(
-        (el) => el.role !== 'ignore' && el.pathData
-      ).length;
-      const ignoredCount = withOffsets.filter(
-        (el) => el.role === 'ignore'
-      ).length;
-      liveRegion.textContent = isCompound
-        ? `Preview updated: ${fgCount} shapes on, ${ignoredCount} off.`
-        : `Preview updated: ${fgCount} on, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} cut out.`;
     } catch (err) {
       console.error('[SVG Prep] Preview failed:', err);
       currentResult = null;
@@ -3092,6 +3172,19 @@ export function createSvgPrepWorkspace(containerEl) {
     );
     refs.thinLines.textContent = thin;
     refs.thinLines.hidden = thin === '';
+    updateDesignWidthHelp();
+  }
+
+  /**
+   * DP-83: what the Design width box holds and why. Text pack rows 22 and
+   * 30: the charm's own width on the charm host, the editor's default on a
+   * host that has no charm to measure (the door).
+   */
+  function updateDesignWidthHelp() {
+    refs.designWidthHelp.textContent =
+      currentCallbacks.designWidthKnown !== false
+        ? 'The charm sets this from its size. Type a width only to see what would change.'
+        : "The editor's default width. Type the width your design prints at.";
   }
 
   /**
@@ -3585,6 +3678,14 @@ export function createSvgPrepWorkspace(containerEl) {
             offsetInput.value = '0';
             offsetInput.disabled = role === 'ignore';
           }
+          // DP-83: the Layer column goes back to 1 with the rest. It used to
+          // stay where it was, so "Reset" left a stack standing that the
+          // sentence never mentioned.
+          const layerSelect = item.querySelector('.svg-prep-layer-select');
+          if (layerSelect) {
+            layerSelect.value = '1';
+            layerSelect.disabled = role === 'ignore';
+          }
           const nameSpan = item.querySelector('.svg-prep-object-name');
           const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
           // The word on the control, not the value behind it. FOUR places
@@ -3597,10 +3698,22 @@ export function createSvgPrepWorkspace(containerEl) {
             `${nameText}, ${roleWord(role, currentRoleOptions())}`
           );
         });
+        if (layersEnabled && layerCount > 0) {
+          layers = liveElements.map(() => 1);
+          // A column of ones is no stack (D-142): the summary says so again
+          // and Apply emits none.
+          layersTouched = false;
+          updateLayerSummary();
+          refreshLayerPaint();
+        }
         renderRoleLayer();
         requestResultPreview();
       }
-      liveRegion.textContent = 'Roles reset to auto-classification';
+      // Text pack rows 21 and 29: the sentence names what the editor has.
+      liveRegion.textContent =
+        layersEnabled && layerCount > 0
+          ? 'Roles, offsets and layers reset.'
+          : 'Roles and offsets reset.';
     }
   }
 
@@ -3662,6 +3775,30 @@ export function createSvgPrepWorkspace(containerEl) {
    * applied to the wrong shapes. Deleted positions are left undefined and the
    * deleted list carries them instead.
    */
+  /**
+   * DP-81 (D-175): the key a stored result is trusted by on a reopen: the
+   * choices as they stand (roles, offsets, deletions and layers by ORIGINAL
+   * index), the width the editor measures at, and the raw drawing itself.
+   * Null when nothing is open.
+   */
+  function choicesKey() {
+    if (!isOpen || !currentSvgString) return null;
+    return choicesKeyOf({
+      roles: getRoleOverrides(),
+      offsets: getOffsetOverrides(),
+      deleted: getDeletedIndices(),
+      layers: getLayerAssignments().layers,
+      designWidthMm:
+        parseFloat(refs.designWidthInput.value) || DEFAULT_DESIGN_WIDTH_MM,
+      svg: currentSvgString,
+    });
+  }
+
+  /** DP-81: the counts a trusted reopen was painted with, else null. */
+  function wasOpenedAsLeft() {
+    return openedAsLeft ? { ...openedAsLeft } : null;
+  }
+
   function getRoleOverrides() {
     const out = [];
     originalIndex.forEach((orig, i) => {
@@ -3803,7 +3940,16 @@ export function createSvgPrepWorkspace(containerEl) {
     layersEnabled = callbacks.layersEnabled === true;
     layersTouched = false;
     if (layersEnabled) {
-      nestingTree = buildNestingTree(liveElements);
+      // DP-78 P3: the analysis may carry the tree it built for the wall
+      // rule, over these same elements in this same order; a reopen with
+      // deletions restored has fewer live elements and builds its own.
+      const given = analysis && analysis.nestingTree;
+      nestingTree =
+        given &&
+        Array.isArray(given.nodes) &&
+        given.nodes.length === liveElements.length
+          ? given
+          : buildNestingTree(liveElements);
       // D-162: the layers are height classes a person assigns (D-160), so a
       // host with layers offers all three whatever the drawing nests to; the
       // nesting depth used to cap them, and the owner's line drawing offered
@@ -3860,8 +4006,42 @@ export function createSvgPrepWorkspace(containerEl) {
     // worker works (DP-37 P1's rule).
     setPreviewBand();
     clearSelection();
-    markPreviewStale({ keepZoom: false });
-    updateResultPreview();
+    // DP-81 (D-175): a reopen whose stored result was made from exactly
+    // these choices, at this width, on this drawing, is painted from that
+    // result and Apply is ready at once; the first change combines as
+    // ever. Anything else takes the usual road: the stand-in, the combine.
+    // MEASURED at DP-77 P0c: every reopen combined again, 14.7 s at 200
+    // shapes on the ring road, and Apply waited for all of it.
+    openedAsLeft = null;
+    if (
+      typeof callbacks.initialResult === 'string' &&
+      callbacks.initialResult &&
+      typeof callbacks.initialResultKey === 'string' &&
+      callbacks.initialResultKey === choicesKey()
+    ) {
+      const roleOverrides = {};
+      roles.forEach((role, i) => {
+        roleOverrides[i] = role;
+      });
+      const classified = classifyElements(liveElements, { roleOverrides });
+      if (
+        paintCombinedResult(callbacks.initialResult, {
+          elements: classified,
+          isCompound: Boolean(analysis.isCompoundPathOnly),
+          announce: false,
+        })
+      ) {
+        openedAsLeft = {
+          on: classified.filter((el) => el.role !== 'ignore' && el.pathData)
+            .length,
+          off: classified.filter((el) => el.role === 'ignore').length,
+        };
+      }
+    }
+    if (!openedAsLeft) {
+      markPreviewStale({ keepZoom: false });
+      updateResultPreview();
+    }
     measureThickness();
 
     sourceZoomCleanup = setupPaneZoom(
@@ -4110,6 +4290,8 @@ export function createSvgPrepWorkspace(containerEl) {
     close,
     dismiss,
     getResult,
+    choicesKey,
+    wasOpenedAsLeft,
     getRoleOverrides,
     getOffsetOverrides,
     getDeletedIndices,

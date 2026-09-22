@@ -89,6 +89,95 @@ function subpathsOf(pathData) {
 }
 
 /**
+ * How many pieces the sliced pass takes between two checkpoints (DP-78 P3,
+ * D-171). MEASURED in Chromium at 4x on a 900-ring traced drawing: the
+ * whole pass is 210 ms, one box per ring; a hundred rings is about 25 ms.
+ */
+const CREDIT_SLICE = 100;
+
+/** The drawing to look at, or the reason there is none. */
+function drawingOf(svgString) {
+  if (!svgString) return { reason: 'no drawing' };
+  const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+  const svg = doc.querySelector('svg');
+  if (!svg) return { reason: 'no drawing' };
+  const size = sizeOf(svg);
+  if (!size) return { reason: 'the drawing does not say how big it is' };
+  return { svg, size };
+}
+
+/** Every path's pieces in document order, each with its path's index. */
+function piecesOf(paths) {
+  const out = [];
+  paths.forEach((path, index) => {
+    for (const piece of subpathsOf(path.getAttribute('d'))) {
+      out.push({ index, piece });
+    }
+  });
+  return out;
+}
+
+/** One piece's box, or null when its path data cannot be read. */
+function boxOfPiece(piece) {
+  try {
+    return getPathBBox(piece);
+  } catch {
+    return null;
+  }
+}
+
+/** Letter-sized in both directions, and centered in the bottom band. */
+function isLetterBox(b, size, r, bandTop) {
+  return (
+    b.width <= r.maxShapeWidthShare * size.width &&
+    b.height <= r.maxShapeHeightShare * size.height &&
+    b.y + b.height / 2 >= bandTop
+  );
+}
+
+/** Count the letter-sized pieces `from` to `to` (exclusive) into the tally. */
+function tallyPieces(pieces, from, to, size, r, bandTop, tally) {
+  const end = Math.min(to, pieces.length);
+  for (let i = from; i < end; i++) {
+    const b = boxOfPiece(pieces[i].piece);
+    if (!b || !isLetterBox(b, size, r, bandTop)) continue;
+    tally.count++;
+    tally.box = tally.box
+      ? {
+          minX: Math.min(tally.box.minX, b.x),
+          minY: Math.min(tally.box.minY, b.y),
+          maxX: Math.max(tally.box.maxX, b.x + b.width),
+          maxY: Math.max(tally.box.maxY, b.y + b.height),
+        }
+      : { minX: b.x, minY: b.y, maxX: b.x + b.width, maxY: b.y + b.height };
+  }
+}
+
+/** The verdict on a tally: a line, too few, or scattered. */
+function creditVerdict(tally, size, r, none) {
+  const { count, box } = tally;
+  if (count < r.minShapes) {
+    return none(`only ${count} small shapes along the bottom edge`);
+  }
+  const clusterHeight = box.maxY - box.minY;
+  if (clusterHeight > r.maxClusterHeightShare * size.height) {
+    return none('the small shapes are scattered, not in a line');
+  }
+  return { found: true, count, box, reason: `${count} shapes in a line` };
+}
+
+/** The slicing options of the async passes, with their defaults. */
+function sliceOptions(options = {}) {
+  return {
+    checkpoint:
+      typeof options.checkpoint === 'function'
+        ? options.checkpoint
+        : async () => {},
+    every: options.every > 0 ? options.every : CREDIT_SLICE,
+  };
+}
+
+/**
  * Look for a credit line.
  *
  * @param {string} svgString a traced drawing
@@ -100,48 +189,42 @@ function subpathsOf(pathData) {
 export function findCreditLine(svgString, rule = {}) {
   const r = { ...CREDIT_LINE_RULE, ...rule };
   const none = (reason) => ({ found: false, count: 0, box: null, reason });
-  if (!svgString) return none('no drawing');
-
-  const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
-  const svg = doc.querySelector('svg');
-  if (!svg) return none('no drawing');
-  const size = sizeOf(svg);
-  if (!size) return none('the drawing does not say how big it is');
+  const drawing = drawingOf(svgString);
+  if (drawing.reason) return none(drawing.reason);
+  const { svg, size } = drawing;
 
   const bandTop = (1 - r.bandFromBottom) * size.height;
-  let count = 0;
-  let box = null;
-  for (const path of svg.querySelectorAll('path')) {
-    for (const piece of subpathsOf(path.getAttribute('d'))) {
-      let b;
-      try {
-        b = getPathBBox(piece);
-      } catch {
-        continue;
-      }
-      if (b.width > r.maxShapeWidthShare * size.width) continue;
-      if (b.height > r.maxShapeHeightShare * size.height) continue;
-      if (b.y + b.height / 2 < bandTop) continue;
-      count++;
-      box = box
-        ? {
-            minX: Math.min(box.minX, b.x),
-            minY: Math.min(box.minY, b.y),
-            maxX: Math.max(box.maxX, b.x + b.width),
-            maxY: Math.max(box.maxY, b.y + b.height),
-          }
-        : { minX: b.x, minY: b.y, maxX: b.x + b.width, maxY: b.y + b.height };
-    }
-  }
+  const pieces = piecesOf(Array.from(svg.querySelectorAll('path')));
+  const tally = { count: 0, box: null };
+  tallyPieces(pieces, 0, pieces.length, size, r, bandTop, tally);
+  return creditVerdict(tally, size, r, none);
+}
 
-  if (count < r.minShapes) {
-    return none(`only ${count} small shapes along the bottom edge`);
+/**
+ * findCreditLine a slice at a time (DP-78 P3, D-171): `checkpoint` is
+ * awaited every `every` pieces, so a Cancel pressed while a traced drawing
+ * is looked over lands within one slice. The answer is findCreditLine's.
+ *
+ * @param {string} svgString
+ * @param {object} [rule]
+ * @param {{checkpoint?: Function, every?: number}} [options]
+ */
+export async function findCreditLineAsync(svgString, rule = {}, options = {}) {
+  const { checkpoint, every } = sliceOptions(options);
+  const r = { ...CREDIT_LINE_RULE, ...rule };
+  const none = (reason) => ({ found: false, count: 0, box: null, reason });
+  const drawing = drawingOf(svgString);
+  if (drawing.reason) return none(drawing.reason);
+  const { svg, size } = drawing;
+
+  const bandTop = (1 - r.bandFromBottom) * size.height;
+  const pieces = piecesOf(Array.from(svg.querySelectorAll('path')));
+  const tally = { count: 0, box: null };
+  for (let from = 0; from < pieces.length; from += every) {
+    if (from > 0) await checkpoint();
+    tallyPieces(pieces, from, from + every, size, r, bandTop, tally);
   }
-  const clusterHeight = box.maxY - box.minY;
-  if (clusterHeight > r.maxClusterHeightShare * size.height) {
-    return none('the small shapes are scattered, not in a line');
-  }
-  return { found: true, count, box, reason: `${count} shapes in a line` };
+  return creditVerdict(tally, size, r, none);
 }
 
 /**
@@ -177,23 +260,69 @@ export function removeCreditLine(svgString, rule = {}) {
   for (const path of Array.from(svg.querySelectorAll('path'))) {
     const kept = [];
     for (const piece of subpathsOf(path.getAttribute('d'))) {
-      let b;
-      try {
-        b = getPathBBox(piece);
-      } catch {
-        kept.push(piece);
-        continue;
-      }
-      const isLetter =
-        b.width <= r.maxShapeWidthShare * size.width &&
-        b.height <= r.maxShapeHeightShare * size.height &&
-        b.y + b.height / 2 >= bandTop;
-      if (isLetter) removed++;
+      const b = boxOfPiece(piece);
+      if (b && isLetterBox(b, size, r, bandTop)) removed++;
       else kept.push(piece);
     }
     if (kept.length === 0) path.parentNode.removeChild(path);
     else path.setAttribute('d', kept.join(''));
   }
+
+  if (removed === 0) return unchanged;
+  return {
+    svg: new XMLSerializer().serializeToString(svg),
+    removed,
+    original: svgString,
+    box: look.box,
+  };
+}
+
+/**
+ * removeCreditLine a slice at a time (DP-78 P3, D-171): both passes, the
+ * look and the removal, await `checkpoint` every `every` pieces. The result
+ * is removeCreditLine's, to the byte.
+ *
+ * @param {string} svgString
+ * @param {object} [rule]
+ * @param {{checkpoint?: Function, every?: number}} [options]
+ */
+export async function removeCreditLineAsync(
+  svgString,
+  rule = {},
+  options = {}
+) {
+  const { checkpoint, every } = sliceOptions(options);
+  const r = { ...CREDIT_LINE_RULE, ...rule };
+  const unchanged = {
+    svg: svgString,
+    removed: 0,
+    original: svgString,
+    box: null,
+  };
+
+  const look = await findCreditLineAsync(svgString, r, options);
+  if (!look.found) return unchanged;
+
+  const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+  const svg = doc.querySelector('svg');
+  const size = sizeOf(svg);
+  const bandTop = (1 - r.bandFromBottom) * size.height;
+
+  const paths = Array.from(svg.querySelectorAll('path'));
+  const pieces = piecesOf(paths);
+  const kept = paths.map(() => []);
+  let removed = 0;
+  for (let i = 0; i < pieces.length; i++) {
+    if (i > 0 && i % every === 0) await checkpoint();
+    const { index, piece } = pieces[i];
+    const b = boxOfPiece(piece);
+    if (b && isLetterBox(b, size, r, bandTop)) removed++;
+    else kept[index].push(piece);
+  }
+  paths.forEach((path, index) => {
+    if (kept[index].length === 0) path.parentNode.removeChild(path);
+    else path.setAttribute('d', kept[index].join(''));
+  });
 
   if (removed === 0) return unchanged;
   return {

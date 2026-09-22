@@ -12,7 +12,7 @@ import { existsSync, createWriteStream, createReadStream } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
-import https from 'https';
+import { downloadFile } from './lib/download-file.mjs';
 import { createGunzip } from 'zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -69,49 +69,6 @@ async function verifyChecksum(filePath, expectedHash) {
   return { valid, hash };
 }
 
-/**
- * Download a file from URL to a destination
- * @param {string} url - URL to download from
- * @param {string} dest - Destination file path
- * @returns {Promise<void>}
- */
-function downloadFile(url, dest) {
-  return new Promise((resolve, reject) => {
-    const file = createWriteStream(dest);
-    
-    const request = https.get(url, (response) => {
-      // Follow redirects
-      if (response.statusCode === 302 || response.statusCode === 301) {
-        file.close();
-        unlink(dest).catch(() => {});
-        return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
-      }
-      
-      if (response.statusCode !== 200) {
-        file.close();
-        unlink(dest).catch(() => {});
-        return reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
-      }
-
-      response.pipe(file);
-
-      file.on('finish', () => {
-        file.close(resolve);
-      });
-    });
-    
-    request.on('error', (err) => {
-      unlink(dest).catch(() => {});
-      reject(err);
-    });
-
-    file.on('error', (err) => {
-      file.close();
-      unlink(dest).catch(() => {});
-      reject(err);
-    });
-  });
-}
 
 /**
  * Simple tar extraction - extracts .ttf files from a tar archive

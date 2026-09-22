@@ -14841,6 +14841,23 @@ body.tutorial-body-locked {
   margin-top: var(--space-sm);
 }
 
+/* DP-80: Start and Crop first side by side, wrapping on a narrow column.
+   Start keeps the room; Crop first takes its own width. */
+.trace-progress-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.trace-progress-buttons .trace-progress-start {
+  flex: 1 1 12rem;
+}
+
+.trace-progress-buttons .trace-progress-crop {
+  flex: 0 1 auto;
+  min-height: var(--size-touch-target);
+}
+
 .trace-progress-bar {
   width: 100%;
   height: 10px;
@@ -15027,6 +15044,31 @@ body.tutorial-body-locked {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+/* DP-79: the two photo defaults as switches. The label wraps the switch and
+   its words, so the whole line is the target; the help sits under it. */
+.ink-switch-row {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    'label'
+    'help';
+}
+
+/* Stated here as well as on .toggle-switch: the customizer's own label rule
+   (.param-control label) outranks it and would lay the words flush against
+   the switch. */
+.ink-switch-row .ink-switch {
+  grid-area: label;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+.ink-switch .toggle-label {
+  font-weight: 600;
 }
 
 .ink-slider-row {
@@ -16138,6 +16180,19 @@ body.tutorial-body-locked {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: 1.4;
+}
+
+/* DP-83: the Design width box's help, under the tools row where a sentence
+   can wrap; tied to the box by aria-describedby. */
+.svg-prep-design-width-help {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.svg-prep-design-width-help[hidden] {
+  display: none;
 }
 
 /* DP-54: the too-thin notice above the list, and a row's mark beside its name. */
@@ -17476,6 +17531,18 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor[data-view='charm'] .drawing-editor-status {
   background: var(--color-bg-primary);
   pointer-events: auto;
+}
+
+/* DP-80: Crop first. The crop view opened on a picture nothing has
+   converted yet has no drawing behind it, so the rows of drawing tools and
+   the shapes drawer stay out of the way; the header keeps the editor's name
+   and Close, and the crop view carries Save crop and Cancel. */
+.drawing-editor[data-crop-first='true'] .drawing-editor-toolbar-row--view,
+.drawing-editor[data-crop-first='true'] .drawing-editor-toolbar-row--tools,
+.drawing-editor[data-crop-first='true'] .drawing-editor-more-panel,
+.drawing-editor[data-crop-first='true'] .drawing-editor-panel-toggle,
+.drawing-editor[data-crop-first='true'] .drawing-editor-skip {
+  display: none;
 }
 
 /* The skip links are visible on focus and out of the way otherwise: a

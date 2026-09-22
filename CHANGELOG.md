@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-09-21
+
+A photograph of a printed communication symbol is a third kind of picture,
+after library icons and my own logo, and the first version of the picture
+lane had never met one. This release is what came of walking that
+photograph and a marker drawing through the app until both printed.
+
+### A photo of a symbol
+
+- A camera picture (no transparent background, grain, an unevenly lit
+  ground) is worked at forty pixels per printed millimeter, smoothed by a
+  3x3 median, and floored at a tenth of a square millimeter before it is
+  traced; the summary says the size it was worked at and how many specks
+  were left out. Two switches under the modes, "Smooth the picture first"
+  and "Leave out specks under 0.1 mm²", start on for a camera picture and
+  off for a file. The cleaning-symbols panel that traced into 1,270 shapes
+  traces into 18; the marker drawing into one outline. The thin-line
+  advisory measures the drawing after the floor, not the specks.
+- A trace with more shapes than the editor lists (a thousand) is refused
+  before anything is prepared: the card says how many and what to try,
+  nothing reaches the charm, and Convert again waits. The conversion's
+  "Preparing the drawing" stage is sliced so Cancel is heard inside it, a
+  paint precedes each stage's label, and a canceled conversion changes
+  nothing.
+- Crop first, beside Start conversion, opens the editor's crop view on the
+  photograph before anything is converted; Save crop converts the part
+  kept; Cancel or Escape closes it with nothing converted. At the drawing
+  door, a refused trace opens the crop view instead. On a phone the
+  parameter drawer stands aside while the editor is open.
+- The editor reopens where it was left: Apply stores the combined result
+  with the key of its choices, a reopen with the same choices at the same
+  width paints it with Apply ready at once, and the door into the editor,
+  Convert again and Crop survive a preset, an undo and a reset.
+- The per-shape Offset is per ring with its own sign: plus is more ink on
+  every ring, a hole shrinks, a Cut out flips, and a drawn line thickens
+  by twice the offset; a traced drawing with an offset is combined by its
+  rings' parity, never concatenated, so a ring grown into its neighbor
+  merges instead of inverting it. The step is 0.05 mm in the editor and on
+  both charm tiles' Offset slider. The offset's smoothing no longer cuts
+  the corners clipper leaves bare.
+- Reset puts every shape back on layer 1 with the roles and offsets and
+  says what it reset; the Design width box says the charm set it; the bulk
+  bar says its sizes are the box around each shape and what Thinner than
+  measures; the advisory names the Offset dial as it reads.
+
 ## [5.0.0] - 2026-09-19
 
 Since 4.5.0 the app grew three interfaces, a drawing lane that opens, cleans

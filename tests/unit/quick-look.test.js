@@ -115,10 +115,11 @@ describe('the quick look (DP-35)', () => {
       expect(look(drawingLike(600)).pictureClass).toBe('drawing')
     })
 
-    it('★ never calls a photograph a simple icon', () => {
+    it('★ never calls a photograph a simple icon, and points at Crop first', () => {
       const sentence = quickLookSentence(look(photoLike(3000, 2000)))
       expect(sentence).not.toContain('simple icon')
-      expect(sentence).toContain('Icons and line drawings work best.')
+      // DP-80: the photo sentence names the press that helps a photo most.
+      expect(sentence).toContain('Crop first to the part you want.')
     })
   })
 

@@ -346,6 +346,32 @@ offset, its layer where the design has layers, and **Delete**. Every shape
 starts on layer 1, and three layers are always offered, each with its own
 height on the charm. Choose a layer under More.
 
+**Offset, on each row.** The offset under More thickens or thins a shape by
+a distance in millimeters, in steps of 0.05 mm. Plus is always more ink: a
+filled shape grows on every side, a hole shrinks, and a drawn line, which is
+two rows in the list (its outline and the inside edge that is Cut out),
+grows thicker on both sides when both rows get the same plus. Minus is less
+ink. Small steps smooth a shaky hand-drawn line; 0.05 to 0.6 mm is the range
+that helps, and 0.6 suits a 0.4 mm nozzle. At 1 mm on a drawing a few
+millimeters wide the lines swallow the spaces between them and the drawing
+becomes one solid shape, which is the tool doing what it says. The charm's
+own **Offset** slider, in the Design group, thickens the whole design the
+same way and steps by the same 0.05 mm.
+
+**Reset** puts every row back: the roles as Forge first read them, every
+offset to 0, every shape on layer 1, and says so.
+
+**Design width.** The number in the editor's header is the width the charm
+will print the drawing at. The charm sets it from its own size, so you do
+not have to; type a width only to see what would change at another size.
+The thin-line measures and the shape sizes all use it.
+
+**Reopening.** Apply saves your choices with the design, and the editor
+opens as you left it: the same roles, offsets, layers and removals, the
+combined result already there and Apply ready at once. The first change you
+make combines again. Moving the design on the charm does not change the
+drawing; changing its scale does, because the offsets are in millimeters.
+
 **The result combines by itself.** Combining shapes into one outline is the
 slow step, and its cost depends on how complicated the shapes are, not on how
 many there are: two hundred rectangles take a tenth of a second, two hundred
@@ -369,8 +395,8 @@ take shapes out of the list:
 | Keep only the biggest | Type a number in **Keep largest …** and press **Delete the rest** |
 | Put the last removal back | **Undo delete** (one step, this session only) |
 
-Sizes are measured at the design width in the editor's header, so they are
-the size the shape will print. Removals are saved with the project.
+Sizes are the box around each shape at the design width, so a long thin
+line measures big. Removals are saved with the project.
 
 **Shapes too thin to print.** Forge measures every shape at the width the
 charm will print the drawing: the charm's design box, which the editor's
@@ -469,8 +495,8 @@ wherever a picture enters Forge:
 
 | Choice | What it keeps | Best for |
 |--------|---------------|----------|
-| **Line art** (the default) | The drawn lines. The color behind them is dropped. | Communication symbols, and any drawing on a colored background |
-| **Solid shape** | The outline of the whole picture, filled in. | Very small pieces, where detail could not be felt anyway |
+| **Line art** (the default) | The drawn lines. The color behind them is dropped. | Communication symbols, line drawings, and photos of a printed symbol |
+| **Solid shape** | The outline of the whole picture, filled in. | Very small pieces, and a photo where the shapes matter more than the lines |
 | **Light and dark** | Whatever is darker than the background. What Forge did before. | A plain pencil drawing on white paper |
 | **Colors** | The picture separated into flat colors, one shape per color, with the color behind the picture as the wall. | A colored drawing or a logo whose colors are the point |
 
@@ -505,9 +531,38 @@ and shows the dialog only if it takes longer. A setting changed afterwards
 never starts a conversion by itself: it offers **Convert again**. When the
 drawing needs a look, the editor opens once the dialog has gone.
 
+**A photo of a printed symbol.** A camera picture is not a file: it has
+paper grain, uneven light and far more pixels than a charm can use, and
+traced as it comes it turns into thousands of specks. When the picture came
+from a camera (no transparent background, grain, and a ground that is
+lighter on one side than the other), Forge works it at the size the charm
+can print, forty pixels for every millimeter, smooths it first, and leaves
+out specks smaller than a tenth of a square millimeter. It says what it did:
+"Worked at 413 px wide, the size a 10.3 mm design can use." and "132 specks
+smaller than 0.1 mm² at 10.3 mm wide were left out." Two switches under the
+modes, **Smooth the picture first** and **Leave out specks under 0.1 mm²**,
+start on for a camera picture and off for a file, so a logo's small letters
+are never taken for grain. Turn one off and press Convert again if a mark
+that mattered was lost.
+
+**Crop first.** A photograph of a page is mostly page. **Crop first**,
+beside Start conversion, opens the editor's crop view on the photograph
+before anything is converted: four sliders take an edge off, the sentence
+says what is kept, and **Save crop** converts the part you kept. Cancel or
+Escape closes it with nothing converted. After a conversion the same button
+reads **Crop** and traces the picture again from the kept part; Undo crop
+puts it back.
+
+**Too many shapes.** The editor lists up to a thousand shapes. A picture
+that traces into more is refused before anything is prepared: the card says
+how many it found and what to try (Solid shape, fewer colors, or a closer
+crop), nothing is sent to the charm, and Convert again waits under it.
+Cancel lands at every stage, including while the drawing is prepared.
+
 Before you commit, Forge takes a **quick look** at a thumbnail and says
 roughly what it will find: how busy the drawing is and how much of it will
-become ink. It is a forecast, not a promise.
+become ink. It is a forecast, not a promise. For a photo it says so, and
+suggests cropping first to the part you want.
 
 **Stock icons: the caption comes off.** Icons from symbol libraries usually
 carry a line of credit along the bottom, and across nine of them the caption

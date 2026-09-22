@@ -8,7 +8,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -38,6 +38,7 @@ import {
   countTracedShapes,
   strokeToFill,
   applyPerPathOffsets,
+  offsetRings,
   getEffectivePaint,
   measureSvgAspect,
   FLATTEN_BUDGET_MS,
@@ -49,7 +50,12 @@ import {
   flattenLayers,
   LAYER_EMIT_CAP,
   wallRoleOverrides,
+  analyzeSvgAsync,
+  parseSvgElementsAsync,
+  nestingTreeNeeded,
+  shapeCapRefusal,
 } from '../../src/js/svg-preparer.js';
+import * as ringEngine from '../../src/js/ring-geometry.js';
 import { separateColours } from '../../src/js/colour-separation.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1840,13 +1846,96 @@ describe('analyzeSvg', () => {
 
 describe('applyPerPathOffsets', () => {
   const SQUARE = 'M10,10 L90,10 L90,90 L10,90 Z';
+  // DP-82: the offset reads the path's rings through the engine, so the
+  // engine is an argument; a call without one is a programming error.
+  const widthsOf = (d) => {
+    const rings = ringEngine.ringsFromPathData(d);
+    return rings
+      .map((r) => {
+        const xs = r.map((p) => p.x);
+        return Math.max(...xs) - Math.min(...xs);
+      })
+      .sort((a, b) => b - a);
+  };
+
+  it('DP-82: refuses to run without the engine', () => {
+    const elements = [{ pathData: SQUARE, role: 'foreground' }];
+    expect(() => applyPerPathOffsets(elements, [5])).toThrow(/ring engine/);
+  });
+
+  it('★ D-174: a drawn line, two rings in one path, THICKENS by twice the offset', () => {
+    // The plan's guard: a 10-unit square line on a 100-unit page at 14 mm,
+    // +0.3 mm (2.143 units) comes back 14.3 units wide; -0.3 mm, 5.7. On the
+    // build before this the whole path was sampled as ONE polygon and both
+    // rings grew by 2.14: the line 10 wide still, shifted outward (MEASURED
+    // at DP-R6 planning, `measure-offset.mjs`).
+    const line = 'M0,0 L100,0 L100,100 L0,100 Z M10,10 L90,10 L90,90 L10,90 Z';
+    const u = (0.3 * 100) / 14;
+    const plus = applyPerPathOffsets(
+      [{ pathData: line, role: 'foreground' }],
+      [u],
+      ringEngine
+    );
+    const [outerPlus, innerPlus] = widthsOf(plus[0].pathData);
+    expect(Math.abs((outerPlus - innerPlus) / 2 - 14.29)).toBeLessThan(0.15);
+    expect(Math.abs(outerPlus - 104.29)).toBeLessThan(0.15);
+    const minus = applyPerPathOffsets(
+      [{ pathData: line, role: 'foreground' }],
+      [-u],
+      ringEngine
+    );
+    const [outerMinus, innerMinus] = widthsOf(minus[0].pathData);
+    expect(Math.abs((outerMinus - innerMinus) / 2 - 5.71)).toBeLessThan(0.15);
+    expect(Math.abs(innerMinus - 84.29)).toBeLessThan(0.15);
+  });
+
+  it('★ a Cut out element under "+" shrinks: more ink means a smaller cut', () => {
+    const out = applyPerPathOffsets(
+      [{ pathData: SQUARE, role: 'hole' }],
+      [5],
+      ringEngine
+    );
+    const [w] = widthsOf(out[0].pathData);
+    expect(Math.abs(w - 70)).toBeLessThan(0.15);
+  });
+
+  it('a filled shape under "+" grows on every side, as before', () => {
+    const out = applyPerPathOffsets(
+      [{ pathData: SQUARE, role: 'foreground' }],
+      [5],
+      ringEngine
+    );
+    const rings = ringEngine.ringsFromPathData(out[0].pathData);
+    expect(rings).toHaveLength(1);
+    const xs = rings[0].map((p) => p.x);
+    const ys = rings[0].map((p) => p.y);
+    expect(Math.abs(Math.min(...xs) - 5)).toBeLessThan(0.15);
+    expect(Math.abs(Math.max(...xs) - 95)).toBeLessThan(0.15);
+    expect(Math.abs(Math.min(...ys) - 5)).toBeLessThan(0.15);
+    expect(Math.abs(Math.max(...ys) - 95)).toBeLessThan(0.15);
+  });
+
+  it('a hole shrunk to nothing is closed, and a shape shrunk to nothing is gone', () => {
+    const line = 'M0,0 L100,0 L100,100 L0,100 Z M10,10 L90,10 L90,90 L10,90 Z';
+    const closed = offsetRings(line, 45, ringEngine);
+    expect(ringEngine.ringsFromPathData(closed)).toHaveLength(1);
+    expect(offsetRings('M40,40 L60,40 L60,60 L40,60 Z', -30, ringEngine)).toBe(
+      ''
+    );
+  });
+
+  it('offsetRings hands back what it cannot read, and the path untouched at 0', () => {
+    expect(offsetRings(SQUARE, 0, ringEngine)).toBe(SQUARE);
+    expect(offsetRings('', 5, ringEngine)).toBe('');
+    expect(offsetRings(null, 5, ringEngine)).toBe(null);
+  });
 
   it('applies offset to elements with non-zero values', () => {
     const elements = [
       { pathData: SQUARE, role: 'foreground' },
       { pathData: SQUARE, role: 'hole' },
     ];
-    const result = applyPerPathOffsets(elements, [5, 0]);
+    const result = applyPerPathOffsets(elements, [5, 0], ringEngine);
 
     expect(result[0].pathData).not.toBe(SQUARE);
     expect(result[0].pathData).toMatch(/^M/);
@@ -1855,7 +1944,7 @@ describe('applyPerPathOffsets', () => {
 
   it('skips elements with role "ignore" even with non-zero offset', () => {
     const elements = [{ pathData: SQUARE, role: 'ignore' }];
-    const result = applyPerPathOffsets(elements, [5]);
+    const result = applyPerPathOffsets(elements, [5], ringEngine);
 
     expect(result[0].pathData).toBe(SQUARE);
     expect(result[0].role).toBe('ignore');
@@ -1863,21 +1952,21 @@ describe('applyPerPathOffsets', () => {
 
   it('returns elements unchanged when offsets array is empty', () => {
     const elements = [{ pathData: SQUARE, role: 'foreground' }];
-    const result = applyPerPathOffsets(elements, []);
+    const result = applyPerPathOffsets(elements, [], ringEngine);
 
     expect(result).toBe(elements);
   });
 
   it('returns elements unchanged when offsets is null', () => {
     const elements = [{ pathData: SQUARE, role: 'foreground' }];
-    const result = applyPerPathOffsets(elements, null);
+    const result = applyPerPathOffsets(elements, null, ringEngine);
 
     expect(result).toBe(elements);
   });
 
   it('returns elements unchanged when offsets is undefined', () => {
     const elements = [{ pathData: SQUARE, role: 'foreground' }];
-    const result = applyPerPathOffsets(elements, undefined);
+    const result = applyPerPathOffsets(elements, undefined, ringEngine);
 
     expect(result).toBe(elements);
   });
@@ -1886,7 +1975,7 @@ describe('applyPerPathOffsets', () => {
     const elements = [
       { pathData: SQUARE, role: 'foreground', fill: 'black', luminance: 0 },
     ];
-    const result = applyPerPathOffsets(elements, [3]);
+    const result = applyPerPathOffsets(elements, [3], ringEngine);
 
     expect(result[0].role).toBe('foreground');
     expect(result[0].fill).toBe('black');
@@ -1900,7 +1989,7 @@ describe('applyPerPathOffsets', () => {
       { pathData: SQUARE, role: 'foreground' },
       { pathData: SQUARE, role: 'foreground' },
     ];
-    const result = applyPerPathOffsets(elements, [0, 5, 0]);
+    const result = applyPerPathOffsets(elements, [0, 5, 0], ringEngine);
 
     expect(result[0].pathData).toBe(SQUARE);
     expect(result[1].pathData).not.toBe(SQUARE);
@@ -1912,7 +2001,7 @@ describe('applyPerPathOffsets', () => {
       { pathData: SQUARE, role: 'foreground' },
       { pathData: SQUARE, role: 'foreground' },
     ];
-    const result = applyPerPathOffsets(elements, [5]);
+    const result = applyPerPathOffsets(elements, [5], ringEngine);
 
     expect(result[0].pathData).not.toBe(SQUARE);
     expect(result[1].pathData).toBe(SQUARE);
@@ -1927,7 +2016,7 @@ describe('applyPerPathOffsets', () => {
     const elements = parseSvgElements(svg);
     const classified = classifyElements(elements);
     const offsets = [2, 0];
-    const result = applyPerPathOffsets(classified, offsets);
+    const result = applyPerPathOffsets(classified, offsets, ringEngine);
 
     expect(result[0].pathData).not.toBe(classified[0].pathData);
     expect(result[1].pathData).toBe(classified[1].pathData);
@@ -2872,6 +2961,176 @@ describe('the wall on a charm (D-137, DP-Q53)', () => {
       'foreground',
       'hole',
     ]);
+  });
+});
+
+describe('the shape cap refusal (DP-78, D-172)', () => {
+  it('names the count and the cap with thousands separators, and what a charm host can try', () => {
+    expect(shapeCapRefusal(3939)).toEqual({
+      badge: 'Too many shapes to work with (3,939)',
+      sentence:
+        'This picture traced into 3,939 shapes, and the editor can work with 1,000 at a time. ' +
+        'Try Solid shape, fewer colors, or a closer crop, then Convert again.',
+    });
+  });
+
+  it('the door gets the crop alone: it has no Convert again, and no mode to choose before its editor is open', () => {
+    expect(shapeCapRefusal(1270, 'door').sentence).toBe(
+      'This picture traced into 1,270 shapes, and the editor can work with 1,000 at a time. ' +
+        'Try a closer crop of the picture.'
+    );
+  });
+
+  it('the cap in the sentence is SHAPE_LIST_CAP, not a number written twice', () => {
+    expect(shapeCapRefusal(5).sentence).toContain(
+      `${SHAPE_LIST_CAP.toLocaleString('en-US')} at a time`
+    );
+  });
+});
+
+describe('parseSvgElementsAsync: the parse in slices (DP-78 P3, D-171)', () => {
+  // DOM elements from two parses are two objects; everything else must agree.
+  const comparable = (list) =>
+    list.map(({ element, ...rest }) => ({ ...rest, tag: element.tagName }));
+  // A drawn compound path: nested rings under even-odd, and a stray one.
+  const drawnRings =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#000" fill-rule="evenodd" d="M0 0 L100 0 L100 100 L0 100 Z ' +
+    'M20 20 L80 20 L80 80 L20 80 Z M40 40 L60 40 L60 60 L40 60 Z ' +
+    'M5 90 L10 90 L10 95 L5 95 Z"/></svg>';
+  // Two traced regions, one with a hole folded in (D-159).
+  const colourRegions =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#fff" data-colour="#ffffff" d="M0 0 L100 0 L100 100 L0 100 Z ' +
+    'M20 20 L80 20 L80 80 L20 80 Z"/>' +
+    '<path fill="#000" data-colour="#000000" d="M30 30 L70 30 L70 70 L30 70 Z"/>' +
+    '</svg>';
+  // Shapes under a transform, and a stroke-only one.
+  const transformed =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<g transform="translate(10 10)"><rect x="0" y="0" width="20" height="20"/>' +
+    '<circle cx="50" cy="50" r="10" fill="#fff"/>' +
+    '<path d="M0 90 L90 90" fill="none" stroke="#000"/></g></svg>';
+
+  it('★ returns what parseSvgElements returns: rings, traced regions, transforms, the smiley, the separation', async () => {
+    for (const svg of [
+      drawnRings,
+      colourRegions,
+      transformed,
+      SMILEY_SVG,
+      separationSvg(),
+    ]) {
+      const whole = parseSvgElements(svg);
+      const sliced = await parseSvgElementsAsync(svg, { every: 1 });
+      expect(comparable(sliced)).toEqual(comparable(whole));
+      expect(sliced.length).toBe(whole.length);
+    }
+  });
+
+  it('checkpoints between elements, and between the rings of one compound path', async () => {
+    // One element, four rings, slices of two: once while the rings are
+    // measured (before the third) and once while they are judged.
+    const inside = vi.fn(async () => {});
+    await parseSvgElementsAsync(drawnRings, { checkpoint: inside, every: 2 });
+    expect(inside).toHaveBeenCalledTimes(2);
+    // Three single-ring elements, slices of one: before the second and the
+    // third; no ring pass for a single ring.
+    const between = vi.fn(async () => {});
+    await parseSvgElementsAsync(transformed, { checkpoint: between, every: 1 });
+    expect(between).toHaveBeenCalledTimes(2);
+  });
+
+  it('a text that is not an SVG parses to nothing, both ways', async () => {
+    expect(await parseSvgElementsAsync('<html></html>')).toEqual([]);
+    expect(parseSvgElements('<html></html>')).toEqual([]);
+  });
+
+  it('a Cancel thrown by the checkpoint ends the parse', async () => {
+    await expect(
+      parseSvgElementsAsync(drawnRings, {
+        every: 1,
+        checkpoint: async () => {
+          throw new Error('stopped');
+        },
+      })
+    ).rejects.toThrow('stopped');
+  });
+});
+
+describe('analyzeSvgAsync: the analysis in slices (DP-78 P3, D-171)', () => {
+  // DOM elements from two parses are two objects; everything else must agree.
+  const comparable = (analysis) => ({
+    ...analysis,
+    elements: (analysis.elements || []).map(({ element, ...rest }) => ({
+      ...rest,
+      tag: element ? element.tagName : null,
+    })),
+  });
+  const dark =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#000" d="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+    '<path fill="#222" d="M40 40 L60 40 L60 60 L40 60 Z"/></svg>';
+  const plain =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<path fill="#000" d="M0 0 L100 0 L100 100 L0 100 Z"/>' +
+    '<path fill="#fff" d="M40 40 L60 40 L60 60 L40 60 Z"/></svg>';
+
+  it('★ returns what analyzeSvg returns: the smiley, the separation, a plain drawing, a dark one', async () => {
+    for (const svg of [SMILEY_SVG, separationSvg(), plain, dark]) {
+      const whole = analyzeSvg(svg);
+      const sliced = await analyzeSvgAsync(svg);
+      expect(comparable(sliced)).toEqual(comparable(whole));
+    }
+  });
+
+  it('checkpoints after the parse and after the tree, and carries the tree it built', async () => {
+    const checkpoint = vi.fn(async () => {});
+    const analysis = await analyzeSvgAsync(separationSvg(), { checkpoint });
+    // A wall and something else: the tree is built (three elements, one
+    // slice of it), and the analysis carries it for the editor's opening.
+    expect(nestingTreeNeeded(parseSvgElements(separationSvg()))).toBe(true);
+    expect(checkpoint).toHaveBeenCalledTimes(2);
+    expect(analysis.nestingTree).not.toBeNull();
+    expect(analysis.nestingTree.nodes).toHaveLength(analysis.elements.length);
+    expect(analyzeSvg(separationSvg()).nestingTree).toEqual(
+      analysis.nestingTree
+    );
+  });
+
+  it('a drawing with no wall and no light fill needs no tree, and carries none', async () => {
+    const checkpoint = vi.fn(async () => {});
+    expect(nestingTreeNeeded(parseSvgElements(dark))).toBe(false);
+    const analysis = await analyzeSvgAsync(dark, { checkpoint });
+    expect(checkpoint).toHaveBeenCalledTimes(2);
+    expect(analysis.nestingTree).toBeNull();
+  });
+
+  it('a Cancel thrown by the checkpoint ends the analysis', async () => {
+    await expect(
+      analyzeSvgAsync(SMILEY_SVG, {
+        checkpoint: async () => {
+          throw new Error('stopped');
+        },
+      })
+    ).rejects.toThrow('stopped');
+  });
+
+  it('over the cap it refuses at the parse, with only the parse\'s own slices behind it, as analyzeSvg does', async () => {
+    const rects = [];
+    for (let i = 0; i <= SHAPE_LIST_CAP; i++) {
+      rects.push(`<rect x="${(i % 50) * 2}" y="${Math.floor(i / 50) * 2}" width="1" height="1"/>`);
+    }
+    const many =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      rects.join('') +
+      '</svg>';
+    const checkpoint = vi.fn(async () => {});
+    const analysis = await analyzeSvgAsync(many, { checkpoint });
+    expect(analysis.recommendation).toBe('reject');
+    expect(analysis.elementCount).toBe(SHAPE_LIST_CAP + 1);
+    // 1,001 elements in slices of a hundred: ten checkpoints inside the
+    // parse, and none after the verdict (no tree, no classification).
+    expect(checkpoint).toHaveBeenCalledTimes(10);
   });
 
   it('★ runs on what separateColours actually writes, not on a hand-made copy', () => {

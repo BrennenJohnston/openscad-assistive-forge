@@ -2576,7 +2576,8 @@ describe('Phase 9: offset inputs (flag enabled)', () => {
     expect(input.type).toBe('number');
     expect(input.min).toBe('-2');
     expect(input.max).toBe('2');
-    expect(input.step).toBe('0.1');
+    // DP-Q74 (2026-09-20): 0.05 mm, the step the owner found useful.
+    expect(input.step).toBe('0.05');
     expect(input.value).toBe('0');
 
     ws.destroy();
@@ -3510,8 +3511,8 @@ describe('the thin-line advisory (DP-36 P3)', () => {
     const said = thinLineSentence(px(10), 700, 14);
     expect(said).toBe(
       'Thin lines: about 0.20 mm at 14 mm wide. Lines under 0.5 mm may not ' +
-        'print. Raise Design offset (0.6 suits a 0.4 mm nozzle) or make the ' +
-        'design bigger.'
+        'print. Raise Offset in the Design group (0.6 suits a 0.4 mm nozzle), ' +
+        'or make the design bigger.'
     );
   });
 
@@ -3551,7 +3552,8 @@ describe('the thin-line advisory (DP-36 P3)', () => {
     // The plan is explicit that this is a proposal. Nine icons at 0.31 to
     // 0.65 mm means a blanket offset would fatten the ones already fine.
     const said = thinLineSentence(px(3), 700, 14);
-    expect(said).toContain('Raise Design offset');
+    // DP-82: the dial has read "Offset" since DP-44; the lever names it.
+    expect(said).toContain('Raise Offset in the Design group');
     expect(said).toContain('or make the design bigger');
   });
 });
@@ -4698,6 +4700,113 @@ describe('three layers, whatever the drawing nests to (D-162)', () => {
     expect(options).toEqual(['1', '2', '3']);
     expect(ws._refs.layerSummary.textContent).toMatch(/^3 layers/);
     expect(ws._refs.layerSummary.textContent).not.toMatch(/supports/);
+    ws.destroy();
+  });
+});
+
+// ── DP-83: the review of every control, the three fixes ─────────────────────
+
+describe('DP-83: Reset puts the Layer column back and says what it reset', () => {
+  it('★ resets a layer a person set, so no stack is left standing', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const { svgString, analysis } = makeNestedAnalysis(3);
+    ws.open(svgString, analysis, { layersEnabled: true });
+    const selects = layerSelects(ws);
+    selects[1].value = '2';
+    selects[1].dispatchEvent(new Event('change', { bubbles: true }));
+    expect(ws.getLayerAssignments().layers).not.toBeNull();
+    expect(ws._refs.layerSummary.textContent).not.toContain(
+      'Every shape starts on layer 1'
+    );
+
+    ws._root.querySelector('[data-action="reset"]').click();
+
+    expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
+    // A column of ones is no stack (D-142): Apply will emit none.
+    expect(ws.getLayerAssignments().layers).toBeNull();
+    expect(ws._refs.layerSummary.textContent).toContain(
+      'Every shape starts on layer 1'
+    );
+    const liveRegion = ws._root.querySelector(
+      '[aria-live="polite"][aria-atomic="true"]'
+    );
+    expect(liveRegion.textContent).toBe('Roles, offsets and layers reset.');
+    ws.destroy();
+  });
+
+  it('names only what the editor has: no Layer column, no "layers"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    ws._root.querySelector('[data-action="reset"]').click();
+    const liveRegion = ws._root.querySelector(
+      '[aria-live="polite"][aria-atomic="true"]'
+    );
+    expect(liveRegion.textContent).toBe('Roles and offsets reset.');
+    ws.destroy();
+  });
+});
+
+describe('DP-83: the Design width box says where its number came from', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('★ describes the box, in words a person can see, when the charm set the width', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), {
+      designWidthMm: 11.97,
+      designWidthKnown: true,
+    });
+    const help = ws._root.querySelector('.svg-prep-design-width-help');
+    const input = ws._root.querySelector('.svg-prep-design-width-input');
+    expect(help.hidden).toBe(false);
+    expect(help.id).toBeTruthy();
+    expect(input.getAttribute('aria-describedby')).toBe(help.id);
+    expect(help.textContent).toBe(
+      'The charm sets this from its size. Type a width only to see what would change.'
+    );
+    ws.destroy();
+  });
+
+  it('says the width is the editor\'s own where no charm set it', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { designWidthKnown: false });
+    const help = ws._root.querySelector('.svg-prep-design-width-help');
+    expect(help.textContent).toBe(
+      "The editor's default width. Type the width your design prints at."
+    );
+    // The charm's width arriving later (D-144) changes the words with it.
+    ws.setDesignWidthMm(9.3);
+    expect(help.textContent).toContain('The charm sets this from its size.');
+    ws.destroy();
+  });
+
+  it('is hidden with the box when the offset flag is off', () => {
+    isEnabled.mockReturnValue(false);
+    const ws = createSvgPrepWorkspace(container);
+    expect(ws._root.querySelector('.svg-prep-design-width-help').hidden).toBe(
+      true
+    );
+    ws.destroy();
+  });
+});
+
+describe('DP-83: the bulk bar says which size it measures', () => {
+  it('names the box around each shape, and what that does to a long thin line', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const help = ws._root.querySelector('.svg-prep-bulk-help');
+    expect(help.textContent).toBe(
+      'Sizes are the box around each shape at the design width, so a long thin line measures big. ' +
+        "Thinner than measures each shape's narrowest part."
+    );
+    // All three fields: the two sizes and the thin threshold.
+    expect(ws._root.querySelectorAll('.svg-prep-bulk-input')).toHaveLength(3);
+    for (const input of ws._root.querySelectorAll('.svg-prep-bulk-input')) {
+      expect(input.getAttribute('aria-describedby')).toBe(help.id);
+    }
     ws.destroy();
   });
 });

@@ -24,7 +24,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { flattenWithRings } from './flatten-rings.js';
+import { flattenWithRings, flattenCompoundRings } from './flatten-rings.js';
 
 function post(message) {
   self.postMessage(message);
@@ -32,7 +32,7 @@ function post(message) {
 
 self.onmessage = async (event) => {
   const data = event.data || {};
-  const { id, elements, svgMeta } = data;
+  const { id, elements, svgMeta, compound } = data;
   if (!id) return;
 
   try {
@@ -52,7 +52,11 @@ self.onmessage = async (event) => {
     // goes back is what DP-37 P3 calibrates its budget on, so it has to be the
     // cost of the work and nothing else.
     const started = performance.now();
-    const svg = flattenWithRings(engine, elements, svgMeta || {}, warnings);
+    // DP-82: a traced drawing's rows with an offset among them take the
+    // parity-aware combine; every other drawing the fold of regions.
+    const svg = compound
+      ? flattenCompoundRings(engine, elements, svgMeta || {}, warnings)
+      : flattenWithRings(engine, elements, svgMeta || {}, warnings);
     const ms = performance.now() - started;
     post({ id, type: 'done', svg, warnings, ms });
   } catch (err) {

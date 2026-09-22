@@ -213,27 +213,179 @@ export function medianFilter3x3(imageData, makeImageData) {
   const out = makeImageData(width, height);
   const window = new Uint8Array(9);
 
+  // The nine values are sorted in place by insertion, with nothing allocated
+  // per pixel. MEASURED (DP-79 P0b) on a 1331 x 1200 photograph: the sort by
+  // Array.prototype.slice and sort took 8,847 ms, this 413 ms, the output
+  // identical byte for byte. The median is on for every camera picture now,
+  // and a photograph at the cap is 2 MP.
   for (let y = 0; y < height; y++) {
+    const y0 = y > 0 ? y - 1 : 0;
+    const y2 = y < height - 1 ? y + 1 : y;
     for (let x = 0; x < width; x++) {
+      const x0 = x > 0 ? x - 1 : 0;
+      const x2 = x < width - 1 ? x + 1 : x;
       const target = (y * width + x) * 4;
       for (let channel = 0; channel < 3; channel++) {
-        let n = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          const sy = Math.min(height - 1, Math.max(0, y + dy));
-          for (let dx = -1; dx <= 1; dx++) {
-            const sx = Math.min(width - 1, Math.max(0, x + dx));
-            window[n++] = data[(sy * width + sx) * 4 + channel];
+        window[0] = data[(y0 * width + x0) * 4 + channel];
+        window[1] = data[(y0 * width + x) * 4 + channel];
+        window[2] = data[(y0 * width + x2) * 4 + channel];
+        window[3] = data[(y * width + x0) * 4 + channel];
+        window[4] = data[target + channel];
+        window[5] = data[(y * width + x2) * 4 + channel];
+        window[6] = data[(y2 * width + x0) * 4 + channel];
+        window[7] = data[(y2 * width + x) * 4 + channel];
+        window[8] = data[(y2 * width + x2) * 4 + channel];
+        for (let i = 1; i < 9; i++) {
+          const v = window[i];
+          let j = i - 1;
+          while (j >= 0 && window[j] > v) {
+            window[j + 1] = window[j];
+            j--;
           }
+          window[j + 1] = v;
         }
-        const sorted = Array.prototype.slice
-          .call(window, 0, n)
-          .sort((a, b) => a - b);
-        out.data[target + channel] = sorted[4];
+        out.data[target + channel] = window[4];
       }
       out.data[target + 3] = data[target + 3];
     }
   }
   return out;
+}
+
+/**
+ * The smallest region worth keeping, in PIXELS of the traced image.
+ *
+ * ★ Four is the floor, and it scales with how big a pixel is in millimeters.
+ * A picture traced at 0.1 mm per pixel has a 4-pixel region 0.04 mm2 across,
+ * which no printer or laser can make and no eye can see; the same 4 pixels at
+ * 1 mm per pixel is 4 mm2, which is a real mark. The rule is therefore "at
+ * least four pixels, and at least a tenth of a square millimeter", and the
+ * second half is what a caller who knows the scale gets. Written for the
+ * color separation, and since DP-79 the ink modes' speck floor as well; it
+ * lives here so the trace worker's ink road reaches it without the tracer.
+ *
+ * @param {number} [mmPerPixel] - Millimeters one pixel will become
+ * @returns {number} Area floor in square pixels
+ */
+export function floorPx(mmPerPixel = 0) {
+  if (!(mmPerPixel > 0)) return 4;
+  return Math.max(4, 0.1 / (mmPerPixel * mmPerPixel));
+}
+
+/**
+ * Remove connected pieces smaller than the floor, BEFORE a mask grows.
+ *
+ * ★ Growth alone resurrected what the floor exists to drop: a stray
+ * anti-alias pixel grew into a five-pixel cross and sailed over the
+ * four-pixel floor - MEASURED on the owner's cat, the shape count exploded
+ * from under eighty to 1,853. So the too-small pieces leave the MASK first,
+ * counted, and only what was already worth keeping gets to grow.
+ *
+ * @param {Uint8Array} mask - Cleaned in place
+ * @param {number} width
+ * @param {number} height
+ * @param {number} floorPx
+ * @returns {number} How many pieces were removed
+ */
+export function dropSmallPieces(mask, width, height, floorPx) {
+  const seen = new Uint8Array(mask.length);
+  const stack = [];
+  const piece = [];
+  let dropped = 0;
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || seen[start]) continue;
+    stack.length = 0;
+    piece.length = 0;
+    stack.push(start);
+    seen[start] = 1;
+    while (stack.length) {
+      const i = stack.pop();
+      piece.push(i);
+      const x = i % width;
+      if (x > 0 && mask[i - 1] && !seen[i - 1]) {
+        seen[i - 1] = 1;
+        stack.push(i - 1);
+      }
+      if (x + 1 < width && mask[i + 1] && !seen[i + 1]) {
+        seen[i + 1] = 1;
+        stack.push(i + 1);
+      }
+      if (i >= width && mask[i - width] && !seen[i - width]) {
+        seen[i - width] = 1;
+        stack.push(i - width);
+      }
+      if (i + width < mask.length && mask[i + width] && !seen[i + width]) {
+        seen[i + width] = 1;
+        stack.push(i + width);
+      }
+    }
+    if (piece.length < floorPx) {
+      for (const i of piece) mask[i] = 0;
+      dropped += 1;
+    }
+  }
+  return dropped;
+}
+
+/**
+ * A morphological close: dilate `radius` times, then erode `radius` times,
+ * four-connected. It bridges a gap up to twice the radius wide and fills a
+ * hole up to that size, and leaves everything larger where it was. DP-79
+ * runs it on a camera picture's Solid shape at 0.1 mm, where crayon leaves
+ * gaps in a fill that the eye reads as one object.
+ *
+ * @param {Uint8Array} mask - 0 or 1 per pixel; not changed
+ * @param {number} width
+ * @param {number} height
+ * @param {number} radius - Passes, in pixels
+ * @returns {Uint8Array} A new mask
+ */
+export function closeMask(mask, width, height, radius) {
+  const passes = Math.max(0, Math.round(radius));
+  let current = mask;
+  const dilate = (m) => {
+    const out = new Uint8Array(m);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        if (m[i]) continue;
+        if (
+          (x > 0 && m[i - 1]) ||
+          (x + 1 < width && m[i + 1]) ||
+          (y > 0 && m[i - width]) ||
+          (y + 1 < height && m[i + width])
+        ) {
+          out[i] = 1;
+        }
+      }
+    }
+    return out;
+  };
+  const erode = (m) => {
+    const out = new Uint8Array(m);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        if (!m[i]) continue;
+        if (
+          x === 0 ||
+          y === 0 ||
+          x + 1 === width ||
+          y + 1 === height ||
+          !m[i - 1] ||
+          !m[i + 1] ||
+          !m[i - width] ||
+          !m[i + width]
+        ) {
+          out[i] = 0;
+        }
+      }
+    }
+    return out;
+  };
+  for (let k = 0; k < passes; k++) current = dilate(current);
+  for (let k = 0; k < passes; k++) current = erode(current);
+  return current === mask ? new Uint8Array(mask) : current;
 }
 
 /**

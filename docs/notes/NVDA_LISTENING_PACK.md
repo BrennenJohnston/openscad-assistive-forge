@@ -105,6 +105,12 @@ ask for it.
 | Letting it finish says "Converted: N shapes" once; a one-shape picture says "1 shape", not "1 shapes" | ☐ | |
 | When a credit line came off, that is said once with the count, and "Undo" is the next control after the sentence | ☐ | |
 | The thin-line advisory reads as a sentence with a real millimeter number in it, not as a warning symbol alone | ☐ | |
+| Choosing a photo says "Looks like a photo. Crop first to the part you want." with the cost sentence after it, and both "Start conversion" and "Crop first" are buttons; "Crop first" reads "Crop first, before converting the picture" | ☐ | |
+| The two switches under the modes read as switches named "Smooth the picture first" and "Leave out specks under 0.1 mm²", each with its help sentence as its description, and a change says "Smooth the picture first: on." (or off) once | ☐ | |
+| After a camera picture converts, the summary says the size it was worked at ("Worked at 413 px wide, the size a 10.3 mm design can use.") and how many specks were left out, once, with the count | ☐ | |
+| A picture that traces into too many shapes says once "This picture traced into N shapes, and the editor can work with 1,000 at a time. Try Solid shape, fewer colors, or a closer crop, then Convert again." and the badge under it reads "Too many shapes to work with (N)" as a status; nothing reaches the charm | ☐ | |
+| Cancel pressed while the stage line reads "Preparing the drawing" says "Conversion canceled" once, and the design is as it was | ☐ | |
+| Crop first opens the editor with the status "Crop view open on your picture. Four sliders take an edge off; Save crop starts the conversion." and focus on the Top slider; Escape says "Crop canceled. Nothing was converted." once and focus is back on Crop first | ☐ | |
 
 ## 8. The shapes list in the drawing editor (rebuilt this round)
 
@@ -154,6 +160,11 @@ knowing it is real is worth more than the whole rest of the section.**
 | A too-thin row's description is read after its name and role: "too thin to print", or "too small to trace clearly", or both; the word "thin" beside the name is NOT read a second time | ☐ | |
 | "Turn those off" says "5 thin shapes turned off. Each can be turned back on in the list." once, and "Turn those back on" says "Undone. 5 shapes are back to how they were." | ☐ | |
 | The layer sentence under the notice ("3 layers, each with its own height on the charm. Every shape starts on layer 1. Choose a layer under More to build a stack.") is findable by browsing and not announced at every change | ☐ | |
+| Reopening the editor after Apply says "Drawing editor open, as you left it. N shapes on, M off." once, and Apply reads enabled at once | ☐ | |
+| Reset says "Roles, offsets and layers reset." once (on a design without layers, "Roles and offsets reset."), and every Layer select reads Layer 1 after it | ☐ | |
+| The Design width box's description reads "The charm sets this from its size. Type a width only to see what would change." after its name and value | ☐ | |
+| The Smaller than, Keep largest and Thinner than fields share one description: "Sizes are the box around each shape at the design width, so a long thin line measures big. Thinner than measures each shape's narrowest part." | ☐ | |
+| An offset change says "Offset for Shape N updated to 0.05 mm" once, and the box steps by 0.05 | ☐ | |
 
 ## 9. Combining a big drawing (it combines by itself now)
 

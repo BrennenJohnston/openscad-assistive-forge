@@ -16,6 +16,21 @@ import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import path from 'node:path'
 
+// Every press in this file waits for the CI runner's page. A press lands at
+// once and then waits for the page to acknowledge it, and on the Chromium
+// shard-6 runner the page is held for tens of seconds by work a person also
+// waits for: the emit after Apply (D-150's family), and the close of the
+// editor, which marks the charm preview stale and brings its canvas back.
+// MEASURED in three traces (PRs #274 and #275, 2026-09-21): the Apply press
+// acknowledged after 23 s and 64 s; the Close press after a combine never
+// within ten seconds, the page silent for 78 s on one board and 31 s on the
+// next, the app's own memory alert on every snapshot. Locally the same
+// presses acknowledge in 10 to 80 ms, three of three with tracing. Nothing
+// in this file asserts a press's speed (the reopen's own timing assertion is
+// Apply ready within three seconds), so the presses get the runner's time
+// rather than the config's ten seconds.
+test.use({ actionTimeout: 120000 })
+
 const surface = (page) => page.locator('#drawingEditorSurface')
 const canvas = (page) => page.locator('#previewContainer canvas').first()
 
@@ -166,24 +181,34 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     await charm(page).click()
     await expect(canvas(page)).toBeVisible()
 
-    const boxes = await page.evaluate(() => {
-      const r = (el) => {
-        const b = el.getBoundingClientRect()
-        return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]
-      }
-      return {
-        canvas: r(document.querySelector('#previewContainer canvas')),
-        stage: r(document.querySelector('.drawing-editor-stage')),
-        container: r(document.getElementById('previewContainer')),
-      }
-    })
+    const readBoxes = () =>
+      page.evaluate(() => {
+        const r = (el) => {
+          const b = el.getBoundingClientRect()
+          return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]
+        }
+        return {
+          canvas: r(document.querySelector('#previewContainer canvas')),
+          stage: r(document.querySelector('.drawing-editor-stage')),
+          container: r(document.getElementById('previewContainer')),
+        }
+      })
     // The canvas sits on the window, not on the whole area behind the editor.
-    for (let i = 0; i < 4; i++) {
-      expect(
-        Math.abs(boxes.canvas[i] - boxes.stage[i]),
-        `canvas ${JSON.stringify(boxes.canvas)} vs stage ${JSON.stringify(boxes.stage)}`
-      ).toBeLessThanOrEqual(2)
-    }
+    // D-170: the canvas is re-framed to the stage a beat after it becomes
+    // visible, and one sample taken in that beat read the previous layout's
+    // box (CI, twice: canvas [531,334,692,330] against stage
+    // [529,311,692,351]). So this waits for the two boxes to agree instead
+    // of reading them once.
+    await expect
+      .poll(
+        async () => {
+          const b = await readBoxes()
+          return Math.max(...[0, 1, 2, 3].map((i) => Math.abs(b.canvas[i] - b.stage[i])))
+        },
+        { timeout: 15000, message: 'the canvas never settled on the stage' }
+      )
+      .toBeLessThanOrEqual(2)
+    const boxes = await readBoxes()
     // And it is really a different box from the one it would otherwise have.
     expect(boxes.stage[3]).toBeLessThan(boxes.container[3] - 50)
 
@@ -1342,5 +1367,774 @@ test.describe('the automatic preparation that keeps nothing (D-167)', () => {
     })
     expect(design).not.toMatch(/<path d=""/)
     expect(design).toContain('M4 8')
+  })
+})
+
+// ── DP-80: Crop first ────────────────────────────────────────────────────────
+//
+// The owner's report: "I wanted to crop the picture before it was processed
+// by the drawing editor, but it wouldn't let me." A photograph of a whole
+// page is mostly the page. Crop first sits beside Start from the moment the
+// pixels are read and opens the editor straight into the crop view on the
+// picture itself; Save crop converts the part that is kept, as the person's
+// press; Cancel or Escape closes the editor with nothing converted. RED on
+// the build before this release: no such button on the control.
+test.describe('Crop first (DP-80)', () => {
+  /**
+   * A sheet like the owner's: four panels of outlined shapes on a lit,
+   * grainy paper, 1400 px (over the self-start line, so it waits for a
+   * press), a camera picture by the quick look's verdict (DP-79).
+   */
+  async function chooseSheet(page) {
+    await page.evaluate(async () => {
+      const w = 1400
+      const h = 1400
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      const img = ctx.createImageData(w, h)
+      let seed = 777
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff
+          const noise = ((seed >> 16) & 31) - 15
+          const base = 236 - Math.round((30 * x) / w)
+          const i = (y * w + x) * 4
+          img.data[i] = base + noise
+          img.data[i + 1] = base + noise - 3
+          img.data[i + 2] = base + noise - 8
+          img.data[i + 3] = 255
+        }
+      }
+      ctx.putImageData(img, 0, 0)
+      const shape = (draw, fill) => {
+        ctx.lineWidth = 12
+        ctx.strokeStyle = '#141414'
+        ctx.fillStyle = fill
+        ctx.beginPath()
+        draw()
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+      }
+      const panels = [
+        [0, 0],
+        [700, 0],
+        [0, 700],
+        [700, 700],
+      ]
+      const fills = ['#c9a06a', '#6f8f5e', '#b04a3c', '#5b6b8a']
+      panels.forEach(([px, py], k) => {
+        shape(() => ctx.rect(px + 80, py + 90, 220, 260), fills[k])
+        shape(
+          () => ctx.arc(px + 500, py + 380, 130, 0, Math.PI * 2),
+          fills[(k + 1) % 4]
+        )
+      })
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'sheet.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  const designName = (page) =>
+    page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file
+      return v && typeof v === 'object' ? v.name : v || null
+    })
+
+  /** What the polite announcer said, from now on. */
+  const listen = (page) =>
+    page.evaluate(() => {
+      window.__heard = []
+      const node = document.getElementById('srAnnouncer')
+      if (!node) return
+      new MutationObserver(() => {
+        const t = node.textContent.trim()
+        if (t) window.__heard.push(t)
+      }).observe(node, { childList: true, characterData: true, subtree: true })
+    })
+
+  test('★ the sheet: Crop first opens the crop view on the photograph before anything is converted, and Save crop converts the one panel', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await chooseSheet(page)
+    const start = page.locator('.trace-progress-start').first()
+    const cropFirst = page.locator('.trace-progress-crop').first()
+    await expect(start).toBeVisible({ timeout: 120000 })
+    await expect(start).toHaveText('Start conversion')
+    // Beside Start, with the visible words in its name; nothing converted.
+    await expect(cropFirst).toBeVisible()
+    await expect(cropFirst).toHaveText('Crop first')
+    await expect(cropFirst).toHaveAttribute(
+      'aria-label',
+      'Crop first, before converting the picture'
+    )
+    expect(await designName(page)).toBeFalsy()
+
+    await cropFirst.click()
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const view = editor.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible()
+    // The photograph itself is on the crop view, and its first row has focus.
+    await expect(view.locator('image')).toHaveAttribute(
+      'href',
+      /^data:image\/png/
+    )
+    await expect(
+      view.locator('input[type="range"][data-inset="top"]')
+    ).toBeFocused()
+    // No drawing behind it: no rows, no drawing tools, and the sentence for a
+    // picture on the status line.
+    await expect(page.locator('.svg-prep-object')).toHaveCount(0)
+    await expect(editor.locator('.drawing-editor-toolbar-row--view')).toBeHidden()
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Crop view open on your picture\./
+    )
+    expect(await designName(page)).toBeFalsy()
+
+    // The top-left panel: half the width, half the height.
+    await view.locator('.slider-spinbox[data-inset="right"]').fill('50')
+    await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50')
+    await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
+      'Keeping 50 % of the width and 50 % of the height.'
+    )
+    await view.locator('[data-action="save-crop"]').click()
+
+    // The conversion is the person's press: the dialog, then the editor on
+    // the result, which says it was cropped.
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. \d+ shapes?\.$/,
+      { timeout: 240000 }
+    )
+    const rows = await page.locator('.svg-prep-object').count()
+    expect(rows).toBeGreaterThanOrEqual(2)
+    expect(rows).toBeLessThan(60)
+    // The charm holds the crop's drawing, and the control says where it
+    // came from.
+    await expect.poll(() => designName(page), { timeout: 60000 }).toBe(
+      'sheet.svg'
+    )
+    await expect(page.locator('.file-info').first()).toContainText(
+      'converted from sheet.png'
+    )
+    // The button reads Crop now: the same crop, on a converted picture.
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden()
+    await expect(cropFirst).toHaveText('Crop')
+    await expect(cropFirst).toHaveAttribute('aria-label', 'Crop the picture')
+  })
+
+  test('★ Escape in the crop view closes the editor, converts nothing, says so once, and puts focus back on Crop first', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    await chooseSheet(page)
+    const cropFirst = page.locator('.trace-progress-crop').first()
+    await expect(cropFirst).toBeVisible({ timeout: 120000 })
+    // The page's own start-up announcements are over (the first preview is
+    // ready); from here the listener counts.
+    await page.waitForTimeout(2000)
+    await listen(page)
+
+    await cropFirst.click()
+    const editor = surface(page)
+    await expect(editor.locator('.drawing-editor-crop')).toBeVisible({
+      timeout: 60000,
+    })
+    await page.keyboard.press('Escape')
+    await expect(editor).toBeHidden()
+    await expect(cropFirst).toBeFocused()
+    await expect(cropFirst).toHaveText('Crop first')
+    expect(await designName(page)).toBeFalsy()
+    await expect(page.locator('.file-info').first()).toContainText(
+      'Ready to convert'
+    )
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.__heard ?? [])).filter((t) =>
+            t.startsWith('Crop canceled. Nothing was converted.')
+          ).length,
+        { timeout: 15000 }
+      )
+      .toBe(1)
+    const heard = await page.evaluate(() => window.__heard ?? [])
+    expect(
+      heard.filter((t) => t.startsWith('Converted:')),
+      `heard: ${heard.join(' | ')}`
+    ).toEqual([])
+  })
+
+  test('★ a small quick picture that started converting by itself is stopped by Crop first, and the one conversion that lands is the crop', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    await page.waitForTimeout(2000)
+    await listen(page)
+    // The press has to land WHILE the self-started run is under way, and
+    // that window is the run itself. A CPU throttle cannot widen it: the
+    // quick look measures the device, and under a throttle it calls the
+    // picture slow, so DP-Q32's rule waits for a press and nothing starts
+    // by itself (MEASURED at 6x: Start stayed on screen for 30 s). So the
+    // press comes from inside the page, the moment Start goes away with
+    // Crop first still on offer, which is the moment the run began.
+    // The quick look's sentence is read by the same observer, because the
+    // Start panel hides it once a run begins and a run on this grid is over
+    // in under a second: read afterwards, the note is empty.
+    await page.evaluate(() => {
+      window.__cropPressed = false
+      window.__quickLookSaid = null
+      // q-charm has two file controls; only the design's is watched.
+      const control = document
+        .querySelector('#param-design_file')
+        .closest('.param-control--file')
+      const obs = new MutationObserver(() => {
+        const note = control.querySelector('.trace-progress-note')
+        if (
+          note &&
+          !window.__quickLookSaid &&
+          /Converting should take/.test(note.textContent)
+        ) {
+          window.__quickLookSaid = note.textContent
+        }
+        const crop = control.querySelector('.trace-progress-crop')
+        const start = control.querySelector('.trace-progress-start')
+        if (window.__cropPressed || !crop || crop.hidden || !start || !start.hidden)
+          return
+        window.__cropPressed = true
+        obs.disconnect()
+        crop.click()
+      })
+      obs.observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['hidden'],
+      })
+    })
+    // 450 px, a grid of 400 dots on white: under the self-start line and
+    // quick, so it starts converting the moment it is chosen (DP-Q32).
+    await page.evaluate(async () => {
+      const n = 450
+      const perSide = 20
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.fillStyle = '#000000'
+      const cell = n / perSide
+      for (let row = 0; row < perSide; row++) {
+        for (let col = 0; col < perSide; col++) {
+          ctx.beginPath()
+          ctx.arc((col + 0.5) * cell, (row + 0.5) * cell, 6, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'dots-quick.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    // DP-Q32's rule is measured on the device: only a picture the quick look
+    // calls quick starts by itself. On a starved CI runner the same 450 px
+    // grid can be called "a few seconds", and then nothing starts and the
+    // press this guard waits for never comes (PR #274's board: the poll
+    // timed out at 120 s and the retry passed). A machine that does not
+    // self-start cannot test what a self-start does; the guard says so
+    // instead of failing on the runner's speed.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => window.__cropPressed || window.__quickLookSaid),
+        { timeout: 120000 }
+      )
+      .toBeTruthy()
+    if (!(await page.evaluate(() => window.__cropPressed))) {
+      const said = await page.evaluate(() => window.__quickLookSaid)
+      test.skip(
+        !/under a second/.test(said || ''),
+        `this machine's quick look did not call the picture quick (${said}), so DP-Q32's rule waits for a press and nothing starts by itself`
+      )
+    }
+    // The run began by itself and the press landed inside it.
+    await expect
+      .poll(() => page.evaluate(() => window.__cropPressed), { timeout: 120000 })
+      .toBe(true)
+    const editor = surface(page)
+    const view = editor.locator('.drawing-editor-crop')
+    await expect(view).toBeVisible({ timeout: 60000 })
+    await expect(page.locator('.conversion-dialog:not(.hidden)')).toHaveCount(0)
+    // Keep the lower-right quarter: ten dots by ten.
+    await view.locator('.slider-spinbox[data-inset="top"]').fill('50')
+    await view.locator('.slider-spinbox[data-inset="left"]').fill('50')
+    await view.locator('[data-action="save-crop"]').click()
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Cropped\. \d+ shapes\.$/,
+      { timeout: 240000 }
+    )
+    const rows = await page.locator('.svg-prep-object').count()
+    expect(rows).toBeGreaterThanOrEqual(90)
+    expect(rows).toBeLessThanOrEqual(110)
+    // One conversion landed, the crop's: the self-started one never got to
+    // say "Converted".
+    const heard = await page.evaluate(() => window.__heard ?? [])
+    expect(
+      heard.filter((t) => t.startsWith('Converted:')),
+      `heard: ${heard.join(' | ')}`
+    ).toEqual([])
+    await expect.poll(() => designName(page), { timeout: 60000 }).toBe(
+      'dots-quick.svg'
+    )
+  })
+})
+
+// ── DP-81: the editor reopens where it was left (D-175) ─────────────────────
+//
+// The owner's report: after a long conversion and a simplification, testing
+// the position on the charm and reopening the editor "did not save the
+// previous process of simplifying and had to run through the simplification
+// process all over again", on every visit. Two halves, both MEASURED at
+// DP-77 P0c. (a) On the ring road every reopen combined everything again
+// and Apply waited for all of it: now a reopen whose stored result was made
+// from the choices it restores, at the width it measures, paints that result
+// and arms Apply at once. (b) A customizer re-render (a preset, an undo, a
+// reset) built a new file control that knew only its file's name, so the
+// door into the editor, Start and the ink panel were gone: now the control
+// restores its drawing, its picture and its settings from the stores. Both
+// RED on the build before this release.
+test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
+  const designName = (page) =>
+    page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file
+      return v && typeof v === 'object' ? v.name : v || null
+    })
+
+  test('★ Off, Apply, move the design, reopen: the editor opens as it was left with Apply ready at once, and no combine runs', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
+    const total = await rows.count()
+
+    // One shape Off, then Apply once the combine has landed. The counts the
+    // reopen will say are read from the rows now: the logo's wall is already
+    // Off by the wall rule, so "one off" is not the whole story.
+    const off = rows.nth(1).locator('input[type="radio"][value="ignore"]')
+    await off.check()
+    const offCount = await page
+      .locator('.svg-prep-object input[type="radio"][value="ignore"]:checked')
+      .count()
+    expect(offCount).toBeGreaterThanOrEqual(1)
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+    await apply.click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
+    const control = page.locator('.param-control--file', {
+      has: page.locator('#param-design_file'),
+    })
+    await expect(control.locator('.svg-prep-status-badge')).toHaveText(
+      'Prepared in the drawing editor.',
+      { timeout: 30000 }
+    )
+
+    // Reposition on the charm: Left / right moves the design, not its size.
+    const leftRight = page.locator('#param-design_left_right')
+    await leftRight.fill('2')
+    await leftRight.dispatchEvent('change')
+    await expect(page.locator('.preview-state-indicator')).toHaveText(
+      /Preview ready|Preview \(cached\)/,
+      { timeout: 240000 }
+    )
+
+    // Reopen. RED before this: "Drawing editor open. The model preview is
+    // behind it." and Apply disabled under "Combining N shapes, about N
+    // seconds" for the whole combine (14.7 s at 200 shapes, MEASURED).
+    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    await door.scrollIntoViewIfNeeded()
+    await door.click()
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      /^Drawing editor open, as you left it\. \d+ shapes? on, \d+ off\.$/,
+      { timeout: 10000 }
+    )
+    await expect(apply).toBeEnabled({ timeout: 3000 })
+    await expect(editor.locator('.drawing-editor-status')).toHaveText(
+      new RegExp(`${total - offCount} shapes on, ${offCount} off\\.$`)
+    )
+    // The choice came back with the result.
+    await expect(
+      rows.nth(1).locator('input[type="radio"][value="ignore"]')
+    ).toBeChecked()
+    // No combine is under way: the render row stays quiet.
+    await expect(editor.locator('.svg-prep-render-progress')).toBeHidden()
+
+    // The first change combines as ever: Apply waits again.
+    await rows.nth(2).locator('input[type="radio"][value="ignore"]').check()
+    await expect(apply).toBeDisabled()
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
+  })
+
+  test('★ a preset, an undo and a slider undo leave the door in place, and Convert again still works after the rebuild', async ({
+    page,
+  }) => {
+    test.setTimeout(480000)
+    await openCharmHost(page)
+    // A picture, so the control has pixels and settings to lose: 800 px is
+    // above the self-start line, so Start is pressed.
+    await page.evaluate(async () => {
+      const n = 800
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(n * 0.2, n * 0.2, n * 0.6, n * 0.6)
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(new File([blob], 'square.png', { type: 'image/png' }))
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const control = () =>
+      page.locator('.param-control--file', {
+        has: page.locator('#param-design_file'),
+      })
+    const start = () => control().locator('.trace-progress-start')
+    await expect(start()).toBeVisible({ timeout: 120000 })
+    await expect(start()).toHaveText('Start conversion')
+    await start().click()
+    await expect(control().locator('.file-info')).toContainText(
+      'converted from square.png',
+      { timeout: 240000 }
+    )
+    const door = () =>
+      control().getByRole('button', { name: 'Open the drawing editor' })
+    await expect(door()).toBeVisible({ timeout: 30000 })
+    await expect(page.locator('.preview-state-indicator')).toHaveText(
+      /Preview ready|Preview \(cached\)/,
+      { timeout: 240000 }
+    )
+
+    // The owner's order (DP-77 P0c): a change on the charm first, then a
+    // preset that clears the design, then Undo. Applying a preset records no
+    // undo step of its own (REPORTED at DP-81), so Undo restores the state
+    // from before the change that preceded it, which here holds the design;
+    // RED before this the control then showed its name with no card, no
+    // door, no Start and no ink panel (MEASURED twice at DP-77).
+    const scale = page.locator('#param-design_scale')
+    await scale.fill('80')
+    await scale.dispatchEvent('change')
+    await page.waitForTimeout(500)
+    const presetValue = await page.evaluate(() => {
+      const sel = document.querySelector('#presetSelect')
+      const opt = [...(sel?.options || [])].find(
+        (o) => o.value && !/custom|choose|select/i.test(o.value)
+      )
+      return opt ? opt.value : null
+    })
+    expect(presetValue, 'a preset to apply').toBeTruthy()
+    await page.evaluate((v) => {
+      const sel = document.querySelector('#presetSelect')
+      sel.value = v
+      sel.dispatchEvent(new Event('change', { bubbles: true }))
+    }, presetValue)
+    await expect.poll(() => designName(page), { timeout: 30000 }).toBeFalsy()
+    await page.locator('#undoBtn').click()
+    await expect.poll(() => designName(page), { timeout: 30000 }).toBe(
+      'square.svg'
+    )
+    await expect(door()).toBeVisible({ timeout: 30000 })
+    // One square is one shape, and the card calls that "SVG Ready".
+    await expect(control().locator('.svg-prep-status-badge')).toHaveText(
+      /shapes?|SVG Ready/
+    )
+    await expect(start()).toBeVisible()
+    await expect(start()).toHaveText('Convert again')
+    await expect(control().locator('.trace-progress-crop')).toHaveText('Crop')
+    await expect(control().locator('.ink-controls')).toBeVisible()
+
+    // A slider change and its undo: another re-render, the door stays.
+    await scale.fill('80')
+    await scale.dispatchEvent('change')
+    await page.waitForTimeout(500)
+    await page.locator('#undoBtn').click()
+    await expect.poll(() => designName(page), { timeout: 30000 }).toBe(
+      'square.svg'
+    )
+    await expect(door()).toBeVisible({ timeout: 30000 })
+
+    // And the pixels are still there: Convert again converts again.
+    await start().click()
+    await expect(control().locator('.file-info')).toContainText(
+      'converted from square.png',
+      { timeout: 240000 }
+    )
+    await expect(door()).toBeVisible({ timeout: 30000 })
+
+    // The door goes in.
+    await door().scrollIntoViewIfNeeded()
+    await door().click()
+    await expect(surface(page)).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
+      .toBeGreaterThan(0)
+  })
+})
+
+// ── DP-82: the offset, per ring with its own sign (D-174) ───────────────────
+//
+// The owner: stepping the offset by 0.05 mm smoothed a hand-drawn line
+// usefully, "but even a 1mm offset completely broke the process". MEASURED
+// at DP-R6 planning and again at DP-77 P0d: the per-shape Offset offset ONE
+// RING, and a drawn line is two rows, so "+" on the outline thickened it
+// outward only, "+" on the inner ring THINNED it, and "+" on both moved the
+// line; past a neighbor, the even-odd concatenation inverted the neighbor.
+// Now "+" is more ink on every ring: the outer ring grows, the hole ring
+// shrinks, and a line thickens by twice the offset; an offset drawing is
+// combined by its rings' parity, never concatenated. RED on the build
+// before this release.
+test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
+  // The rows' boxes in the combined result, largest first, in svg units,
+  // and the units one millimeter is at the width the editor measures at.
+  const measure = (page) =>
+    page.evaluate(() => {
+      const root = document.querySelector('#drawingEditorSurface')
+      const svg = root.querySelector('.svg-prep-result-pane svg')
+      const d = svg.querySelector('path.svg-prep-result-ink').getAttribute('d')
+      const probe = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      probe.setAttribute('viewBox', svg.getAttribute('viewBox'))
+      probe.style.position = 'absolute'
+      probe.style.width = '100px'
+      probe.style.height = '100px'
+      document.body.appendChild(probe)
+      const boxes = d
+        .split(/(?=[Mm])/)
+        .map((sub) => sub.trim())
+        .filter(Boolean)
+        .map((sub) => {
+          const path = document.createElementNS(
+            'http://www.w3.org/2000/svg',
+            'path'
+          )
+          path.setAttribute('d', sub)
+          probe.appendChild(path)
+          const b = path.getBBox()
+          return { x: b.x, y: b.y, w: b.width, h: b.height }
+        })
+        .sort((a, b) => b.w * b.h - a.w * a.h)
+      probe.remove()
+      const vbWidth = svg.viewBox.baseVal.width
+      const widthMm = parseFloat(
+        root.querySelector('.svg-prep-design-width-input').value
+      )
+      return { boxes, unitsPerMm: vbWidth / widthMm }
+    })
+
+  test('★ +0.3 mm on both rows of a square line: the outer ring out, the inner ring in, the line 0.6 mm wider', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    // A square line, 60 px thick, drawn in the test: one traced path of two
+    // rings, so two rows, the inner one a Cut out by the drawing's own
+    // parity.
+    await page.evaluate(async () => {
+      const n = 600
+      const canvas = document.createElement('canvas')
+      canvas.width = n
+      canvas.height = n
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, n, n)
+      ctx.lineWidth = 60
+      ctx.strokeStyle = '#000000'
+      ctx.strokeRect(150, 150, 300, 300)
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'))
+      window.__testPicture = new File([blob], 'square-line.png', {
+        type: 'image/png',
+      })
+    })
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file')
+      const dt = new DataTransfer()
+      dt.items.add(window.__testPicture)
+      input.files = dt.files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const control = page.locator('.param-control--file', {
+      has: page.locator('#param-design_file'),
+    })
+    const door = control.getByRole('button', { name: 'Open the drawing editor' })
+    // A small picture starts converting by itself on a quick machine
+    // (DP-Q32); a slow one waits for the press: PR #275's CI runner called
+    // this 0.36 MP grid "a few seconds" and offered Start, so the door never
+    // came (three attempts). The trace is the same either way, so the guard
+    // presses Start when Start is what is offered.
+    const start = control.locator('.trace-progress-start')
+    await expect(door.or(start)).toBeVisible({ timeout: 120000 })
+    if (!(await door.isVisible())) await start.click()
+    await expect(door).toBeVisible({ timeout: 120000 })
+    await door.click()
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect(rows).toHaveCount(2, { timeout: 60000 })
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+    await expect(apply).toBeEnabled({ timeout: 120000 })
+
+    const before = await measure(page)
+    expect(before.boxes).toHaveLength(2)
+    const [outer0, inner0] = before.boxes
+    const band0 = (outer0.w - inner0.w) / 2
+    const mm = before.unitsPerMm
+    expect(band0).toBeGreaterThan(0)
+
+    // +0.3 mm on each row, through the row's More panel.
+    for (const i of [0, 1]) {
+      const row = rows.nth(i)
+      await row.locator('.svg-prep-more-btn').click()
+      const input = row.locator(`input[name="svg-prep-offset-${i}"]`)
+      await expect(input).toBeVisible()
+      await input.fill('0.3')
+      await input.dispatchEvent('input')
+      await input.dispatchEvent('change')
+      await expect(apply).toBeDisabled({ timeout: 5000 })
+      await expect(apply).toBeEnabled({ timeout: 120000 })
+    }
+
+    // RED before this: the inner ring GREW by 0.3 mm (the band 0.6 mm
+    // narrower than here, shifted outward, its width unchanged).
+    const after = await measure(page)
+    expect(after.boxes).toHaveLength(2)
+    const [outer1, inner1] = after.boxes
+    const tolerance = 0.06 * mm
+    expect(Math.abs(outer1.w - (outer0.w + 0.6 * mm))).toBeLessThan(tolerance)
+    expect(Math.abs(inner1.w - (inner0.w - 0.6 * mm))).toBeLessThan(tolerance)
+    const band1 = (outer1.w - inner1.w) / 2
+    expect(Math.abs(band1 - (band0 + 0.6 * mm))).toBeLessThan(tolerance)
+    // DP-Q74: the step the owner found useful.
+    await expect(
+      rows.nth(0).locator('input[name="svg-prep-offset-0"]')
+    ).toHaveAttribute('step', '0.05')
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
+  })
+})
+
+// ── DP-83: the review fixes ─────────────────────────────────────────────────
+//
+// The review of every control (the plan's §1.5) found two sentences and one
+// button short of their words: Reset put roles and offsets back and left the
+// Layer column where it was, saying "Roles reset"; the Design width box
+// arrived filled by the charm with no word on where the number came from;
+// the bulk bar's help said its sizes were "the size the shape will really
+// print" when they are the box around each shape. RED on the build before
+// this release: the layer select still read 2 after Reset.
+test.describe('Reset puts the Layer column back and says so (DP-83)', () => {
+  test('★ a layer, an offset and an Off row all go back on Reset, the sentence names all three, and the width box says where its number came from', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openCharmHost(page)
+    await page.setInputFiles('#param-design_file', LOGO_TRACE)
+    const editor = surface(page)
+    await expect(editor).toBeVisible({ timeout: 60000 })
+    const rows = page.locator('.svg-prep-object')
+    await expect.poll(() => rows.count(), { timeout: 60000 }).toBeGreaterThan(10)
+    const apply = editor.locator('.svg-prep-footer [data-action="apply"]')
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+
+    // The width box carries the charm's fit box, and says so.
+    const help = editor.locator('.svg-prep-design-width-help')
+    await expect(help).toBeVisible()
+    await expect(help).toHaveText(
+      'The charm sets this from its size. Type a width only to see what would change.'
+    )
+    const widthInput = editor.locator('.svg-prep-design-width-input')
+    await expect(widthInput).toHaveAttribute(
+      'aria-describedby',
+      await help.getAttribute('id')
+    )
+    await expect(editor.locator('.svg-prep-bulk-help')).toHaveText(
+      'Sizes are the box around each shape at the design width, so a long thin line measures big. ' +
+        "Thinner than measures each shape's narrowest part."
+    )
+
+    // A stack, an offset and an Off, on three rows.
+    const row = rows.nth(3)
+    await row.locator('.svg-prep-more-btn').click()
+    const layer = row.locator('select[name="svg-prep-layer-3"]')
+    await layer.selectOption('2')
+    await expect(layer).toHaveValue('2')
+    await expect(editor.locator('.svg-prep-layer-summary')).toContainText(
+      'Layers show on the charm after you press Apply.'
+    )
+    const offset = row.locator('input[name="svg-prep-offset-3"]')
+    await offset.fill('0.3')
+    await offset.dispatchEvent('input')
+    await rows.nth(4).locator('input[type="radio"][value="ignore"]').check()
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+
+    // Reset. RED before this: the layer select still read 2, and the
+    // sentence was "Roles reset to auto-classification".
+    await editor.locator('.svg-prep-footer [data-action="reset"]').click()
+    await expect(layer).toHaveValue('1')
+    await expect(offset).toHaveValue('0')
+    await expect(
+      rows.nth(4).locator('input[type="radio"][value="ignore"]')
+    ).not.toBeChecked()
+    await expect(
+      editor.locator('.svg-prep-workspace [aria-live="polite"][aria-atomic="true"]')
+    ).toHaveText('Roles, offsets and layers reset.')
+    await expect(editor.locator('.svg-prep-layer-summary')).toContainText(
+      'Every shape starts on layer 1.'
+    )
+    await expect(apply).toBeEnabled({ timeout: 240000 })
+
+    // The editor with its two new sentences still passes the scan.
+    const results = await new AxeBuilder({ page })
+      .include('#drawingEditorSurface')
+      .analyze()
+    expect(
+      results.violations,
+      JSON.stringify(results.violations, null, 2)
+    ).toEqual([])
+    await editor.locator('.drawing-editor-close').click()
+    await expect(editor).toBeHidden({ timeout: 30000 })
   })
 })

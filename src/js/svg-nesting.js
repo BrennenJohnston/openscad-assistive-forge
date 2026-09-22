@@ -48,6 +48,14 @@ export const LAYER_CAP = 3;
 const CURVE_STEPS = 16;
 
 /**
+ * How many elements the sliced builder takes between two checkpoints
+ * (DP-78 P3). MEASURED at the list cap in Chromium on a 4x-throttled CPU:
+ * the whole tree over 1,000 traced shapes is 223 to 316 ms, so a slice of a
+ * hundred is tens of milliseconds and a Cancel never waits for the tree.
+ */
+const NEST_SLICE = 100;
+
+/**
  * Segment budget for the self-intersection check. Past this the answer is
  * reported as unknown rather than guessed - see selfIntersects().
  */
@@ -431,36 +439,88 @@ export function buildNestingTree(elements, options = {}) {
   const list = Array.isArray(elements) ? elements : [];
   const steps = options.curveSteps || CURVE_STEPS;
 
-  const nodes = list.map((el, index) => {
-    const { points, closed } = polygonFromPathData(el?.pathData, steps);
-    const area = points.length >= 3 ? Math.abs(signedArea(points)) : 0;
-    const probe = interiorPoint(points);
-    const notes = [];
-    if (points.length === 0) notes.push('empty');
-    else if (!closed) notes.push('open');
-    if (points.length >= 3 && area <= 1e-9) notes.push('zero-area');
-    if (!probe && points.length > 0) notes.push('no-interior');
-    return {
-      index,
-      polygon: points,
-      probe,
-      bounds: boundsOf(points),
-      area,
-      closed,
-      degenerate: !probe,
-      depth: 0,
-      parent: null,
-      children: [],
-      notes,
-    };
-  });
+  const nodes = list.map((el, index) => nestingNodeOf(el, index, steps));
+  const byAreaAsc = nodesByAreaAsc(nodes);
+  linkParents(byAreaAsc, 0, byAreaAsc.length);
+  return finishNestingTree(nodes);
+}
 
-  // Smallest enclosing element wins, so walk candidates from small to large
-  // and stop at the first hit - the same ordering stencil-forge uses.
-  const usable = nodes.filter((n) => !n.degenerate);
-  const byAreaAsc = [...usable].sort((a, b) => a.area - b.area);
+/**
+ * The same tree, built a slice at a time (DP-78 P3, D-171): `checkpoint` is
+ * awaited every NEST_SLICE elements of the polygon pass and again every
+ * NEST_SLICE of the parent search, so the page can paint and a Cancel can
+ * land while the tree is being built. The result is exactly what
+ * buildNestingTree returns: each slice of the parent search touches only its
+ * own nodes, so the order of the work does not change the answer.
+ *
+ * @param {Array<{pathData: string}>} elements
+ * @param {object} [options]
+ * @param {Function} [options.checkpoint] - Awaited between slices; the
+ *   conversion job's own, which yields to the page and throws on a Cancel
+ * @param {number} [options.every] - Elements per slice
+ * @param {number} [options.curveSteps]
+ * @returns {Promise<ReturnType<typeof buildNestingTree>>}
+ */
+export async function buildNestingTreeAsync(elements, options = {}) {
+  const list = Array.isArray(elements) ? elements : [];
+  const steps = options.curveSteps || CURVE_STEPS;
+  const every = options.every > 0 ? options.every : NEST_SLICE;
+  const checkpoint =
+    typeof options.checkpoint === 'function'
+      ? options.checkpoint
+      : async () => {};
 
-  for (let i = 0; i < byAreaAsc.length; i++) {
+  const nodes = [];
+  for (let i = 0; i < list.length; i++) {
+    if (i > 0 && i % every === 0) await checkpoint();
+    nodes.push(nestingNodeOf(list[i], i, steps));
+  }
+  const byAreaAsc = nodesByAreaAsc(nodes);
+  for (let from = 0; from < byAreaAsc.length; from += every) {
+    if (from > 0) await checkpoint();
+    linkParents(byAreaAsc, from, Math.min(from + every, byAreaAsc.length));
+  }
+  return finishNestingTree(nodes);
+}
+
+/** One element's node: its polygon, its probe point and its measurements. */
+function nestingNodeOf(el, index, steps) {
+  const { points, closed } = polygonFromPathData(el?.pathData, steps);
+  const area = points.length >= 3 ? Math.abs(signedArea(points)) : 0;
+  const probe = interiorPoint(points);
+  const notes = [];
+  if (points.length === 0) notes.push('empty');
+  else if (!closed) notes.push('open');
+  if (points.length >= 3 && area <= 1e-9) notes.push('zero-area');
+  if (!probe && points.length > 0) notes.push('no-interior');
+  return {
+    index,
+    polygon: points,
+    probe,
+    bounds: boundsOf(points),
+    area,
+    closed,
+    degenerate: !probe,
+    depth: 0,
+    parent: null,
+    children: [],
+    notes,
+  };
+}
+
+/** The usable nodes, smallest first: the order the parent search walks. */
+function nodesByAreaAsc(nodes) {
+  return nodes.filter((n) => !n.degenerate).sort((a, b) => a.area - b.area);
+}
+
+/**
+ * Give the nodes at `from` to `to` (exclusive) of the small-to-large order
+ * their parents. Smallest enclosing element wins, so candidates are walked
+ * from small to large and the first hit is kept - the same ordering
+ * stencil-forge uses.
+ */
+function linkParents(byAreaAsc, from, to) {
+  for (let i = from; i < to; i++) {
     const node = byAreaAsc[i];
     for (let j = i + 1; j < byAreaAsc.length; j++) {
       const candidate = byAreaAsc[j];
@@ -481,7 +541,10 @@ export function buildNestingTree(elements, options = {}) {
       }
     }
   }
+}
 
+/** The tree from its linked nodes: the roots, the depths, the counts. */
+function finishNestingTree(nodes) {
   const roots = [];
   for (const node of nodes) {
     if (node.parent === null && !node.degenerate) roots.push(node.index);

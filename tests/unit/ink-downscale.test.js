@@ -19,7 +19,10 @@ const extractInk = vi.fn((imageData) => ({
   summary: { mode: 'lineart', applied: true, inkCoverage: 0.2, warnings: [] },
 }))
 
-vi.mock('../../src/js/ink-extraction.js', () => ({
+// Only extractInk is stood in for; the rest of the module is real, because
+// the photo defaults (DP-79, ink-prepare.js) reach it through the same door.
+vi.mock('../../src/js/ink-extraction.js', async (importActual) => ({
+  ...(await importActual()),
   extractInk: (...args) => extractInk(...args),
 }))
 
@@ -37,6 +40,38 @@ const { convertImageDataToSvg, IMAGE_IMPORT_LIMITS } = await import(
 function picture(width, height) {
   return { width, height, data: new Uint8ClampedArray(width * height * 4) }
 }
+
+describe('the working resolution on the main-thread road, after the cap (DP-79)', () => {
+  beforeEach(() => {
+    extractInk.mockClear()
+    imagedataToSVG.mockClear()
+  })
+
+  it('★ a camera picture over the cap is worked at the print, and extractInk gets the worked pixels', async () => {
+    // 2000 x 1500 is 3 MP: capped by two to 1000 x 750, then worked at forty
+    // pixels per printed millimeter of a 14 mm print: 560 x 420. The host's
+    // mmPerPixel is for the source; the cap's factor is carried across so
+    // the print, not the cap, decides (the sharpie photograph said "1.9 mm"
+    // for a 7.6 mm print before this).
+    const { summary } = await convertImageDataToSvg(picture(2000, 1500), {
+      ink: { mode: 'lineart', camera: true, mmPerPixel: 14 / 2000 },
+    })
+    expect(extractInk).toHaveBeenCalledTimes(1)
+    const given = extractInk.mock.calls[0][0]
+    expect(given.width).toBe(560)
+    expect(given.height).toBe(420)
+    expect(summary.downscale.factor).toBe(2)
+    expect(summary.working).toMatchObject({ from: 1000, width: 560, printedWidthMm: 14 })
+    expect(summary.printedWidthMm).toBe(14)
+  })
+
+  it('a file over the cap is only capped, as before', async () => {
+    await convertImageDataToSvg(picture(2000, 1500), {
+      ink: { mode: 'lineart', camera: false, mmPerPixel: 14 / 2000 },
+    })
+    expect(extractInk.mock.calls[0][0].width).toBe(1000)
+  })
+})
 
 describe('the pixel cap actually reaches the ink path (D-131)', () => {
   beforeEach(() => {

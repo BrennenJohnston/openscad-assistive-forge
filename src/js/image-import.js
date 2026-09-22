@@ -135,26 +135,59 @@ export async function convertImageDataToSvg(imageData, options = {}) {
     );
   }
 
+  // DP-79: the photo defaults, through the SAME functions the trace worker
+  // calls, so the two roads cannot drift (the D-138 lesson). A camera picture
+  // is worked at the print's cell; `inkAt` carries the millimeters per pixel
+  // of the pixels in hand.
+  const { workingPicture, inkStage, SPECK_FLOOR_MM2 } =
+    await import('./ink-prepare.js');
+  // The host's mmPerPixel is for the SOURCE pixels; the cap above may have
+  // made each pixel `factor` times bigger, and the print, not the cap,
+  // decides the working size and the floor (the same carry-over as in the
+  // worker).
+  const capped =
+    ink && ink.mmPerPixel > 0 && downscale
+      ? { ...ink, mmPerPixel: ink.mmPerPixel * downscale.factor }
+      : ink;
+  const worked = workingPicture(pixels, capped);
+  pixels = worked.pixels;
+  const working = worked.working;
+  const inkAt = ink ? { ...ink, mmPerPixel: worked.mmPerPixel } : ink;
+  const printedWidthMm =
+    inkAt && inkAt.mmPerPixel > 0
+      ? +(inkAt.mmPerPixel * pixels.width).toFixed(2)
+      : null;
+  const makeImageData = (w, h) =>
+    typeof ImageData === 'function'
+      ? new ImageData(w, h)
+      : { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+
   // The Colors mode does not trace ink at all: it separates the picture into
   // flat colors and hands back regions with their fills, which is the shape a
   // colored vector drawing already arrives in. filterForegroundPaths is
   // deliberately NOT applied - it drops the lightest layer, and here the
   // lightest layer is usually the wall, which is a first-class part of a
   // stencil plan rather than something to throw away.
-  if (ink && ink.mode === 'colours') {
+  if (inkAt && inkAt.mode === 'colours') {
     const { separateColours } = await import('./colour-separation.js');
+    const { medianFilter3x3 } = await import('./ink-extraction.js');
     const { colourLabel } = await import('./stencil-colours.js');
     const wall =
-      ink.wallColour && ink.wallColour !== 'auto' ? ink.wallColour : null;
-    const first = separateColours(pixels, {
-      count: ink.colourCount ?? 6,
-      mmPerPixel: ink.mmPerPixel ?? 0,
-      shareFloor: ink.shareFloor ?? 0,
+      inkAt.wallColour && inkAt.wallColour !== 'auto' ? inkAt.wallColour : null;
+    const source = inkAt.smooth
+      ? medianFilter3x3(pixels, makeImageData)
+      : pixels;
+    const floorOn = !!inkAt.speckFloor && inkAt.mmPerPixel > 0;
+    const options = {
+      count: inkAt.colourCount ?? 6,
+      mmPerPixel: floorOn ? inkAt.mmPerPixel : 0,
+      shareFloor: inkAt.shareFloor ?? 0,
       nameFor: (c) =>
         colourLabel(
           `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`
         ),
-    });
+    };
+    const first = separateColours(source, options);
     // A wall the person chose is applied by re-running with that color named
     // as the background, so the separation and the choice cannot disagree.
     const chosen = wall
@@ -164,15 +197,9 @@ export async function convertImageDataToSvg(imageData, options = {}) {
       : -1;
     const result =
       chosen >= 0
-        ? separateColours(pixels, {
-            count: ink.colourCount ?? 6,
-            mmPerPixel: ink.mmPerPixel ?? 0,
-            shareFloor: ink.shareFloor ?? 0,
+        ? separateColours(source, {
+            ...options,
             backgroundIndex: first.colours[chosen].index,
-            nameFor: (c) =>
-              colourLabel(
-                `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`
-              ),
           })
         : first;
     return {
@@ -181,16 +208,19 @@ export async function convertImageDataToSvg(imageData, options = {}) {
         mode: 'colours',
         colours: result.colours,
         droppedTotal: result.droppedTotal,
+        smoothed: !!inkAt.smooth,
+        specksDropped: floorOn ? result.droppedTotal : 0,
+        speckFloorMm2: floorOn ? SPECK_FLOOR_MM2 : null,
+        ...(printedWidthMm != null ? { printedWidthMm } : {}),
         ...(downscale ? { downscale } : {}),
+        ...(working ? { working } : {}),
       },
     };
   }
 
   let summary = null;
 
-  if (ink && ink.mode && ink.mode !== 'standard') {
-    // Lazy: nobody pays for the extractor until a picture actually needs it.
-    const { extractInk } = await import('./ink-extraction.js');
+  if (inkAt && inkAt.mode && inkAt.mode !== 'standard') {
     // ★ D-131: this read `imageData`, the ORIGINAL, so the downscale computed
     // twenty lines above was thrown away for every ink mode - which is every
     // mode an icon or a photo goes through. An 8 MP picture was ink-extracted
@@ -198,9 +228,25 @@ export async function convertImageDataToSvg(imageData, options = {}) {
     // cheerfully reported that it had been scaled down by N. The cap was dead
     // code on the one path that needed it most, and the shipped conversion ran
     // three to ten times slower than its own stages because of this one word.
-    const extracted = extractInk(pixels, ink);
-    pixels = extracted.imageData;
-    summary = extracted.summary;
+    const stage = inkStage(pixels, inkAt, { makeImageData });
+    pixels = stage.pixels;
+    summary = stage.summary;
+  } else if (inkAt && inkAt.smooth) {
+    const { medianFilter3x3 } = await import('./ink-extraction.js');
+    pixels = medianFilter3x3(pixels, makeImageData);
+    summary = { mode: 'standard', applied: false, smoothed: true };
+  }
+  if (working) {
+    summary = {
+      ...(summary || {
+        mode: (inkAt && inkAt.mode) || 'standard',
+        applied: false,
+      }),
+      working,
+    };
+  }
+  if (summary && printedWidthMm != null && summary.printedWidthMm == null) {
+    summary = { ...summary, printedWidthMm };
   }
 
   // DP-34: imagetracerjs is loaded here on demand rather than at the top of the

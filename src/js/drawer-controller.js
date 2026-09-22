@@ -85,8 +85,12 @@ export function initDrawerController() {
 
   /**
    * Open the drawer
+   *
+   * @param {HTMLElement} [trigger] - Where focus returns when it closes
+   * @param {{initialFocus?: HTMLElement}} [options] - Where focus lands on
+   *   opening; by default the trap picks the first thing inside
    */
-  function open(trigger) {
+  function open(trigger, { initialFocus } = {}) {
     if (isOpen || window.innerWidth >= MOBILE_BREAKPOINT_PX) return;
     // Classic lays the Customizer into its own stacked pane (classic.css
     // resets the off-canvas positioning); engaging the drawer there would
@@ -136,9 +140,43 @@ export function initDrawerController() {
       alsoTrap: tourOverlay,
     });
     focusTrap.activate({
+      ...(initialFocus ? { initialFocus } : {}),
       initialFocusDelay: 250, // --motion-slow (240ms) + 10ms buffer
     });
   }
+
+  /**
+   * DP-80 (D-178). The drawing editor takes the preview area, and at phone
+   * width this drawer stood over it, modal, its focus trap holding Tab: a
+   * person who pressed "Open the drawing editor" or "Crop first" IN the
+   * drawer got an editor they could neither see nor reach until they found
+   * the drawer's own Close (MEASURED at 412: a press on the editor's Save
+   * crop landed on the drawer's ink panel instead). The drawer stands
+   * aside while the editor is open and comes back when it closes, keeping
+   * whatever focus the editor's host has just set inside it (the button
+   * the person pressed), so the place they were at is the place they land.
+   */
+  let closedForEditor = false;
+  let editorTrigger = null;
+  window.addEventListener('drawing-editor:open', () => {
+    if (!isOpen) return;
+    editorTrigger = triggerEl;
+    close();
+    closedForEditor = true;
+  });
+  window.addEventListener('drawing-editor:close', () => {
+    if (!closedForEditor) return;
+    closedForEditor = false;
+    const trigger = editorTrigger;
+    editorTrigger = null;
+    const active = document.activeElement;
+    open(trigger || toggleBtn, {
+      initialFocus:
+        active && active !== document.body && drawer.contains(active)
+          ? active
+          : undefined,
+    });
+  });
 
   /**
    * Close the drawer

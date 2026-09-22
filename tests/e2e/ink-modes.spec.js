@@ -490,7 +490,7 @@ test.describe('how thin the lines are (DP-36 P3)', () => {
     // It names the width it used, because the person did not choose it.
     await expect(advisory).toContainText("the editor's default width");
     // And it names the lever without pulling it.
-    await expect(advisory).toContainText('Raise Design offset');
+    await expect(advisory).toContainText('Raise Offset in the Design group');
   });
 
   test('a thick-lined drawing is told it is fine', async ({ page }) => {
@@ -513,5 +513,240 @@ test.describe('how thin the lines are (DP-36 P3)', () => {
       .locator('.svg-prep-offset-input')
       .evaluateAll((els) => els.map((el) => el.value));
     for (const value of offsets) expect(Number(value)).toBe(0);
+  });
+});
+
+// ── DP-79: a photograph of a printed symbol (D-173, D-176) ──────────────────
+//
+// The owner's sixth walk: a phone photo of a printed AAC panel "only resulted
+// in either a too complicated to process shape, or a noisy result". MEASURED
+// (DP-77, the panel photo through the app): Line art 1,270 shapes, Solid shape
+// 341, Light and dark 3,686, Colors 3,939, and since DP-78 anything over 1,000
+// is refused before the page's own stages. A camera picture is worked at the
+// print's cell now, smoothed, and floored at 0.1 mm² (DP-79): the same panel
+// measures 25 / 6 / 274 / 42 (build/dp-r6/dp-79/p0.log). The picture below is
+// drawn in the test in the panel's own kind: lit paper with grain, and five
+// filled crayon shapes with black outlines. RED on the build before DP-79:
+// every mode traced its grain into thousands of shapes and the gate refused it.
+test.describe('a photograph of a printed symbol (DP-79)', () => {
+  /** Lit, grainy paper with five outlined crayon shapes, 1400 x 1200, as a File. */
+  async function choosePanelPhoto(page) {
+    await page.evaluate(async () => {
+      const w = 1400;
+      const h = 1200;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      // The paper: brighter on the left than the right, the way a lamp
+      // lights a page, with per-pixel grain on top, and paper fibers: a
+      // scatter of dark two-pixel clusters, the texture a camera sees in
+      // crayon and paper. MEASURED (DP-77): that texture is what traced the
+      // real panel into thousands of shapes; here it is what makes the build
+      // before DP-79 refuse this picture, and what the median removes.
+      const img = ctx.createImageData(w, h);
+      let seed = 4242;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+          const noise = ((seed >> 16) & 31) - 15;
+          const base = 236 - Math.round((30 * x) / w);
+          const i = (y * w + x) * 4;
+          img.data[i] = base + noise;
+          img.data[i + 1] = base + noise - 3;
+          img.data[i + 2] = base + noise - 8;
+          img.data[i + 3] = 255;
+        }
+      }
+      for (let k = 0; k < 1500; k++) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        const fx = (seed >> 8) % (w - 2);
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        const fy = (seed >> 8) % (h - 2);
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const i = ((fy + dy) * w + fx + dx) * 4;
+            img.data[i] = 70;
+            img.data[i + 1] = 66;
+            img.data[i + 2] = 60;
+          }
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      const shape = (draw, fill) => {
+        ctx.lineWidth = 14;
+        ctx.strokeStyle = '#141414';
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        draw();
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      };
+      shape(() => ctx.rect(120, 140, 320, 420), '#c9a06a');
+      shape(() => ctx.arc(760, 340, 190, 0, Math.PI * 2), '#6f8f5e');
+      shape(() => {
+        ctx.moveTo(1080, 160);
+        ctx.lineTo(1300, 520);
+        ctx.lineTo(880, 520);
+      }, '#b04a3c');
+      shape(() => ctx.rect(200, 700, 500, 300), '#5b6b8a');
+      shape(() => ctx.arc(1000, 880, 200, 0, Math.PI * 2), '#8a6a9a');
+      // Crayon crumbs: sixty dark dots twelve pixels across on the paper.
+      // Worked 2.9 times smaller each is about four pixels across, under a
+      // tenth of a square millimeter, which is what the floor exists to
+      // leave out, and wide enough to outlive the median (the fibers above
+      // are not, and the median is what takes them).
+      ctx.fillStyle = '#2a2a2a';
+      for (let k = 0; k < 60; k++) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        const cx = 40 + ((seed >> 8) % (w - 80));
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        const cy = 40 + ((seed >> 8) % (h - 80));
+        // Kept off the shapes: the crumbs are the paper's, not the drawing's.
+        const onShape =
+          (cx > 100 && cx < 460 && cy > 120 && cy < 580) ||
+          Math.hypot(cx - 760, cy - 340) < 215 ||
+          (cx > 860 && cx < 1320 && cy > 140 && cy < 540) ||
+          (cx > 180 && cx < 720 && cy > 680 && cy < 1020) ||
+          Math.hypot(cx - 1000, cy - 880) < 225;
+        if (onShape) continue;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      window.__testPicture = new File([blob], 'panel-photo.png', {
+        type: 'image/png',
+      });
+    });
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file');
+      const dt = new DataTransfer();
+      dt.items.add(window.__testPicture);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  /** The shape count the card says, in any of its words; "SVG Ready" is one. */
+  const shapesOnCard = async (page) => {
+    const badge = (await page.locator('.svg-prep-status-badge').first().textContent()) || '';
+    if (/^SVG Ready/.test(badge)) return 1;
+    const m = badge.match(/(\d[\d,]*) shapes?/);
+    return m ? Number(m[1].replace(/,/g, '')) : null;
+  };
+
+  /**
+   * A fingerprint of the design the charm holds, so a step waits for ITS
+   * conversion's emit and never reads the card of the mode before it.
+   */
+  const designMark = (page) =>
+    page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file;
+      if (!v || typeof v !== 'object') return v ?? null;
+      const s = String(v.data || '');
+      let h = 0;
+      for (let i = 0; i < s.length; i += 7) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return `${v.name}:${v.size}:${h}`;
+    });
+
+  test('★ every mode gives tens of shapes, the panel says the worked size, and the editor is offered', async ({
+    page,
+  }) => {
+    test.slow();
+    test.setTimeout(300000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/?example=q-charm');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 120000,
+    });
+    await expect
+      .poll(() => page.locator('#param-design_file').count(), {
+        timeout: 120000,
+      })
+      .toBeGreaterThan(0);
+    for (let i = 0; i < 3; i++) {
+      const notNow = page.locator('#saveProjectNotNow');
+      if (await notNow.isVisible().catch(() => false)) {
+        await notNow.click();
+        await page.waitForTimeout(200);
+      }
+    }
+    await page.evaluate(() => {
+      const input = document.querySelector('#param-design_file');
+      let d = input?.closest('details');
+      while (d) {
+        d.open = true;
+        d = d.parentElement?.closest('details');
+      }
+    });
+
+    await choosePanelPhoto(page);
+    const start = page.locator('.trace-progress-start').first();
+    await expect(start).toBeVisible({ timeout: 120000 });
+    await expect(start).toHaveText('Start conversion');
+    await start.click();
+
+    const summary = page.locator('.ink-controls-summary').first();
+    const info = page.locator('.file-info').first();
+    const badge = page.locator('.svg-prep-status-badge').first();
+    // Line art. The defect first: before DP-79 this photo traced into
+    // thousands of shapes and was refused at the gate, and the info line
+    // never read "converted from". Either outcome ends the wait, so a RED
+    // says the card's words instead of timing out.
+    await expect
+      .poll(async () => `${await info.textContent()} | ${await badge.textContent()}`, {
+        timeout: 240000,
+      })
+      .toMatch(/converted from|too many shapes/i);
+    await expect(info, `card: ${await badge.textContent()}`).toContainText('converted from');
+    const lineArt = await shapesOnCard(page);
+    expect(lineArt, 'Line art shapes on the card').not.toBeNull();
+    expect(lineArt).toBeLessThan(60);
+    await expect(badge).not.toContainText('Too many shapes');
+    await expect(page.locator('.svg-prep-status .svg-prep-edit-btn')).toHaveCount(1);
+    // What the panel says: the worked size, and the crumbs the floor left out.
+    await expect(summary).toContainText(/Worked at \d+ px wide, the size a [\d.]+ mm design can use\./);
+    await expect(summary).toContainText(/specks? smaller than 0\.1 mm² at [\d.]+ mm wide (was|were) left out\./);
+    // The quick look called it a camera picture: both switches started on.
+    await expect(page.locator('.ink-controls input[id$="-smooth"]')).toBeChecked();
+    await expect(page.locator('.ink-controls input[id$="-specks"]')).toBeChecked();
+
+    // Solid shape: the objects, whole. The card is read only once THIS
+    // conversion has emitted, never the mode before's.
+    const afterLineArt = await designMark(page);
+    const silhouette = page.locator('.ink-controls input[type="radio"][value="silhouette"]');
+    await silhouette.evaluate((el) => {
+      el.checked = true;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect(start).toHaveText('Convert again', { timeout: 30000 });
+    await start.click();
+    await expect.poll(() => designMark(page), { timeout: 240000 }).not.toBe(afterLineArt);
+    await expect(summary).toContainText(/shapes? traced/);
+    const solid = await shapesOnCard(page);
+    expect(solid, `Solid shape card: ${await badge.textContent()}`).not.toBeNull();
+    expect(solid).toBeLessThanOrEqual(12);
+
+    // Colors: the wall found, tens of paths.
+    const afterSolid = await designMark(page);
+    const colours = page.locator('.ink-controls input[type="radio"][value="colours"]');
+    await colours.evaluate((el) => {
+      el.checked = true;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect(start).toHaveText('Convert again', { timeout: 30000 });
+    await start.click();
+    await expect.poll(() => designMark(page), { timeout: 240000 }).not.toBe(afterSolid);
+    await expect(summary).toContainText(/colors? in the artwork, and the wall/);
+    await expect(summary).toContainText(/Worked at \d+ px wide/);
+    const coloured = await shapesOnCard(page);
+    expect(coloured, `Colors card: ${await badge.textContent()}`).not.toBeNull();
+    expect(coloured).toBeLessThan(60);
+    await expect(badge).not.toContainText('Too many shapes');
   });
 });

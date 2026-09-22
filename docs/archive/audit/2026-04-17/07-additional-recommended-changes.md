@@ -228,7 +228,7 @@ Provenance flags `OBSERVED` / `INFERRED` / `UNVERIFIED` as in prior phases.
 
 ## 3. Log-for-later (Option C — explicitly out of scope per charter)
 
-These items are recorded for future audit cycles. The charter ([plan §non-goals](../../../.cursor/plans/professional_code_review_plan_68eb907c.plan.md)) explicitly defers all of them.
+These items are recorded for future audit cycles. The charter (plan §non-goals (a local planning note, not in the repository)) explicitly defers all of them.
 
 ### 3.1 OpenSCAD WASM upstream contributions
 

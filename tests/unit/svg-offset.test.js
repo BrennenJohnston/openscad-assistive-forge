@@ -11,6 +11,8 @@ import {
   pathToPolygon,
   polygonToPath,
   offsetPath,
+  offsetRing,
+  resampleRing,
   mmToSvgUnits,
   adaptiveSampleCount,
   chaikinSmooth,
@@ -452,5 +454,125 @@ describe('offsetPath smoothing', () => {
 
     const countLs = (d) => (d.match(/L/g) || []).length;
     expect(countLs(defaultResult)).toBe(countLs(explicitSmooth));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// offsetRing — the per-ring half of offsetPath (DP-82, D-174)
+// ---------------------------------------------------------------------------
+
+describe('offsetRing (DP-82)', () => {
+  const square = [
+    { x: 10, y: 10 },
+    { x: 90, y: 10 },
+    { x: 90, y: 90 },
+    { x: 10, y: 90 },
+  ];
+  const bboxOf = (rings) => pointsBBox(rings.flat());
+
+  it('outsets one ring by the amount, as rings', () => {
+    const rings = offsetRing(square, 5, { smooth: false });
+    expect(rings.length).toBe(1);
+    const b = bboxOf(rings);
+    expect(Math.abs(b.minX - 5)).toBeLessThan(0.15);
+    expect(Math.abs(b.maxX - 95)).toBeLessThan(0.15);
+  });
+
+  it('insets one ring by the amount', () => {
+    const b = bboxOf(offsetRing(square, -5, { smooth: false }));
+    expect(Math.abs(b.minX - 15)).toBeLessThan(0.15);
+    expect(Math.abs(b.maxX - 85)).toBeLessThan(0.15);
+  });
+
+  it('★ a ring wound the other way offsets the same way: outward is outward', () => {
+    // A hole ring arrives wound negative (clipper's convention) and the
+    // caller decides its sign; the builder must not flip it a second time.
+    const reversed = [...square].reverse();
+    const b = bboxOf(offsetRing(reversed, 5, { smooth: false }));
+    expect(Math.abs(b.minX - 5)).toBeLessThan(0.15);
+    expect(Math.abs(b.maxX - 95)).toBeLessThan(0.15);
+  });
+
+  it('returns [] when the ring collapses, so a hole can close and a sliver can go', () => {
+    expect(offsetRing(square, -100)).toEqual([]);
+  });
+
+  it('returns null for a ring it cannot offset, and [ring] for no offset', () => {
+    expect(offsetRing([{ x: 0, y: 0 }, { x: 1, y: 1 }], 5)).toBeNull();
+    expect(offsetRing(null, 5)).toBeNull();
+    expect(offsetRing(square, 0)).toEqual([square]);
+  });
+
+  it('★ D-180: the default smoothing rounds a corner by about one sample, not by a quarter of its edges', () => {
+    // MEASURED before the fix: clipper's union of the offset outline left
+    // 417 points along the first edge of an inset square and the bare corner
+    // on each of the other three, and Chaikin cut those bare corners by a
+    // quarter of their 70-unit edges: the inset's worst point sat 4.7 units
+    // (offsetRing) and 9.7 units (offsetPath) inside the ideal square. The
+    // union's points are spaced evenly along the perimeter first now.
+    const ideal = { lo: 15, hi: 85 };
+    const worstOf = (ring) =>
+      Math.max(
+        ...ring.map((p) =>
+          Math.min(
+            Math.abs(p.x - ideal.lo),
+            Math.abs(p.x - ideal.hi),
+            Math.abs(p.y - ideal.lo),
+            Math.abs(p.y - ideal.hi)
+          )
+        )
+      );
+    const dense = pathToPolygon(SQUARE_PATH);
+    expect(worstOf(offsetRing(dense, -5)[0])).toBeLessThan(1);
+    // The path's own vertices (M x,y L x,y ... Z): resampling a few
+    // thousand points through getPointAtLength takes seconds for nothing.
+    const vertices = (d) =>
+      [...d.matchAll(/[ML]\s*(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({
+        x: Number(m[1]),
+        y: Number(m[2]),
+      }));
+    const smoothed = vertices(offsetPath(SQUARE_PATH, -5));
+    expect(smoothed.length).toBeGreaterThan(100);
+    expect(worstOf(smoothed)).toBeLessThan(1);
+  });
+});
+
+describe('resampleRing (DP-82)', () => {
+  const rect = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 50 },
+    { x: 0, y: 50 },
+  ];
+
+  it('spaces the points evenly along the perimeter', () => {
+    const out = resampleRing(rect, 30);
+    expect(out).toHaveLength(30);
+    const step = 300 / 30;
+    for (let i = 0; i < out.length; i++) {
+      const a = out[i];
+      const b = out[(i + 1) % out.length];
+      expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(step, 6);
+    }
+    expect(out[0]).toEqual({ x: 0, y: 0 });
+  });
+
+  it('keeps every point on the ring', () => {
+    for (const p of resampleRing(rect, 77)) {
+      const onEdge =
+        (p.y === 0 && p.x >= 0 && p.x <= 100) ||
+        (p.x === 100 && p.y >= 0 && p.y <= 50) ||
+        (Math.abs(p.y - 50) < 1e-9 && p.x >= 0 && p.x <= 100) ||
+        (Math.abs(p.x) < 1e-9 && p.y >= 0 && p.y <= 50);
+      expect(onEdge).toBe(true);
+    }
+  });
+
+  it('hands back what it cannot resample', () => {
+    const two = [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+    expect(resampleRing(two, 10)).toBe(two);
+    expect(resampleRing(rect, 2)).toBe(rect);
+    const dot = [{ x: 1, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 1 }];
+    expect(resampleRing(dot, 10)).toBe(dot);
   });
 });

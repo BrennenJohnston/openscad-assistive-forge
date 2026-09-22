@@ -91,6 +91,114 @@ async function choosePicture(page, size = 2000, kind = 'noise') {
   });
 }
 
+/**
+ * A grid of gears on white, one traced shape each and many curve points per
+ * shape: a big picture (1400 px, 1.96 MP, so it waits to be started) whose
+ * shape count a test can choose and whose parse is long. 30 x 30 with twelve
+ * teeth is 900 shapes, under the cap of 1,000, so the whole conversion runs.
+ * MEASURED on the charm host: 900 shapes, an 870 KB trace of 248,000 ring
+ * points; at 4x the build before DP-78 spent 210 ms on the credit line and
+ * 530 ms on the parse, in one task with the card. The noise field is the
+ * picture for a trace OVER the cap, which DP-78 refuses before the page's
+ * own stages.
+ */
+async function chooseGearGrid(page, perSide, teeth) {
+  await page.evaluate(
+    async ({ perSide, teeth }) => {
+      const n = 1400;
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.fillStyle = '#000000';
+      const cell = n / perSide;
+      const rOut = cell * 0.42;
+      const rIn = cell * 0.3;
+      const steps = teeth * 2;
+      for (let row = 0; row < perSide; row++) {
+        for (let col = 0; col < perSide; col++) {
+          const cx = (col + 0.5) * cell;
+          const cy = (row + 0.5) * cell;
+          ctx.beginPath();
+          for (let k = 0; k < steps; k++) {
+            const a = (k / steps) * Math.PI * 2;
+            const r = k % 2 === 0 ? rOut : rIn;
+            const x = cx + Math.cos(a) * r;
+            const y = cy + Math.sin(a) * r;
+            if (k === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      window.__testPicture = new File([blob], 'gears.png', {
+        type: 'image/png',
+      });
+    },
+    { perSide, teeth }
+  );
+  await page.evaluate(() => {
+    const input = document.querySelector('#param-design_file');
+    const dt = new DataTransfer();
+    dt.items.add(window.__testPicture);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+/**
+ * A grid of filled dots on flat white, one traced shape each: a FILE (no
+ * grain, a flat ground, so the photo defaults of DP-79 leave it alone) whose
+ * shape count a test can choose. 34 x 34 is 1,156, over the editor's cap of
+ * 1,000, whatever the tracer does with the noise field: since DP-79 a
+ * photograph is smoothed and floored before it is traced, and white noise
+ * is a photograph by every measure, so it is no longer a picture that is
+ * refused; this one is refused by construction.
+ */
+async function chooseDotGrid(page, perSide, size = 2000) {
+  await page.evaluate(
+    async ({ perSide, n }) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = n;
+      canvas.height = n;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, n, n);
+      ctx.fillStyle = '#000000';
+      const cell = n / perSide;
+      for (let row = 0; row < perSide; row++) {
+        for (let col = 0; col < perSide; col++) {
+          ctx.beginPath();
+          ctx.arc(
+            (col + 0.5) * cell,
+            (row + 0.5) * cell,
+            cell * 0.28,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+      }
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      window.__testPicture = new File([blob], 'dots.png', {
+        type: 'image/png',
+      });
+    },
+    { perSide, n: size }
+  );
+  await page.evaluate(() => {
+    const input = document.querySelector('#param-design_file');
+    const dt = new DataTransfer();
+    dt.items.add(window.__testPicture);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
 async function openCharm(page) {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
@@ -199,7 +307,11 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     // which is the device the report came from.
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-    await choosePicture(page, 2000, 'noise');
+    // DP-78: the noise field this case used to convert traces into thousands
+    // of shapes, over the editor's cap, and is refused now before the page's
+    // own stages run (its own guard is below). A big picture that CONVERTS
+    // is the gear grid: 1.96 MP, so it waits to be started, and 900 shapes.
+    await chooseGearGrid(page, 30, 12);
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
     await expect(p.start).toHaveText('Start conversion');
@@ -297,13 +409,18 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-    await choosePicture(page, 2000, 'noise');
+    // The gear grid, a FILE of 900 shapes: seconds of trace and sliced
+    // stages at 4x, which is the window a Cancel needs. This used to be the
+    // noise field, and since DP-79 noise is a photograph that is smoothed
+    // and floored to almost nothing in the worker (which the throttle does
+    // not slow): on CI the dialog closed before the click could land, twice
+    // (PR #273's first board).
+    await chooseGearGrid(page, 30, 12);
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
 
-    // Cancel is the first thing that happens after the bar appears: the whole
-    // conversion is under two seconds now, and anything else in front of the
-    // click spends that window.
+    // Cancel is the first thing that happens after the bar appears: anything
+    // else in front of the click spends the window.
     await p.start.click();
     await expect(p.cancel).toBeVisible({ timeout: 30_000 });
     await p.cancel.click({ timeout: 10_000 });
@@ -769,5 +886,215 @@ test.describe('a changed setting waits for the press, quick picture or not (DP-5
       /colors? in the artwork, and the wall/,
       { timeout: 120_000 }
     );
+  });
+});
+
+// ── DP-78: the shape gate, and a Cancel that lands (D-171, D-172) ───────────
+//
+// The owner's sixth walk, on a photograph of a printed AAC symbol: "the
+// cancel button on the processing modal for the drawing editor still does
+// not let the user cancel the process. I tried to click cancel several times
+// and it essentially did nothing." MEASURED (DP-77 P0b, the panel photo in
+// Colors at 4x): "Preparing the drawing" was ONE task of 5,144 ms, the click
+// could not land for two seconds, and the job finished with 1.89 MB emitted
+// under "Too complex (3939 elements)". Two defects: a trace over the cap was
+// analyzed for seconds, refused, and emitted anyway (D-172); and a Cancel had
+// nowhere to land inside the page's own stages (D-171). Both RED on the
+// build before this release.
+test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', () => {
+  /** Every sentence the stage line shows, from before the dialog exists. */
+  async function watchStages(page) {
+    await page.evaluate(() => {
+      window.__stages = [];
+      window.__preparingSeen = false;
+      const attach = () => {
+        const el = document.querySelector('.conversion-dialog-stage');
+        if (!el) return false;
+        const note = () => {
+          const t = (el.textContent || '').trim();
+          if (t && !window.__stages.includes(t)) window.__stages.push(t);
+          if (t === 'Preparing the drawing') window.__preparingSeen = true;
+        };
+        new MutationObserver(note).observe(el, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+        note();
+        return true;
+      };
+      if (!attach()) {
+        new MutationObserver((_, obs) => {
+          if (attach()) obs.disconnect();
+        }).observe(document.body, { childList: true });
+      }
+    });
+  }
+
+  const designFile = (page) =>
+    page.evaluate(() => {
+      const v = window.stateManager?.getState()?.parameters?.design_file;
+      return v && typeof v === 'object' ? v.name : v;
+    });
+
+  test('★ D-172: a trace over the cap is refused before anything is prepared: nothing emitted, the card says what to try', async ({
+    page,
+  }) => {
+    test.slow();
+    test.setTimeout(300_000);
+    await openCharm(page);
+    // The page's own start-up announcements ("Preview ready", then the
+    // model's echo messages) must be over before the refusal is announced:
+    // the polite announcer replaces a sentence still inside its 350 ms
+    // debounce with the next one, and the dot grid below is refused within
+    // two seconds of Start, while the first preview can still be landing.
+    // MEASURED: run alone, the refusal was announced into that window and
+    // what was heard was "Preview ready" and the echo lines, never the
+    // sentence.
+    await expect(page.locator('#statusArea')).toContainText('Preview ready', {
+      timeout: 240_000,
+    });
+    await page.waitForTimeout(2_000);
+    await page.evaluate(() => {
+      window.__heard = [];
+      const node = document.getElementById('srAnnouncer');
+      if (!node) return;
+      new MutationObserver(() => {
+        const t = node.textContent.trim();
+        if (t) window.__heard.push(t);
+      }).observe(node, { childList: true, characterData: true, subtree: true });
+    });
+    await watchStages(page);
+
+    // 1,156 dots, a file over the cap. (This used to be the noise field,
+    // which traced into 11,962 shapes; since DP-79 noise is a photograph and
+    // is smoothed and floored first, so it is no longer over the cap.)
+    await chooseDotGrid(page, 34, 2000);
+    const p = panel(page);
+    await expect(p.start).toBeVisible({ timeout: 120_000 });
+    await expect(p.start).toHaveText('Start conversion');
+    await p.start.click();
+
+    // The card says what happened, in the words of the text pack, with no
+    // editor button: there is no drawing to open. Before this it read "Too
+    // complex (N elements)" over a design that had been emitted.
+    const badge = page.locator('.svg-prep-status-badge').first();
+    await expect(badge).toContainText('Too many shapes to work with (', {
+      timeout: 240_000,
+    });
+    await expect(page.locator('.svg-prep-status-guidance').first()).toContainText(
+      'and the editor can work with 1,000 at a time. Try Solid shape, fewer colors, or a closer crop, then Convert again.'
+    );
+    await expect(page.locator('.svg-prep-status .svg-prep-edit-btn')).toHaveCount(
+      0
+    );
+
+    // Nothing was emitted: the model keeps whatever design it had.
+    await expect(p.info).toContainText('too many shapes to work with');
+    await expect(p.info).not.toContainText('converted from');
+    const design = await designFile(page);
+    expect(design, `design_file after a refused conversion: ${design}`).toBeFalsy();
+
+    // The dialog is gone, the page is live, Convert again is the next press.
+    await expect(p.running).toBeHidden();
+    await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
+    await expect(p.start).toBeVisible();
+    await expect(p.start).toHaveText('Convert again');
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+
+    // The page's own stages were never entered: the refusal came before the
+    // credit line and the parse.
+    const stages = await page.evaluate(() => window.__stages);
+    expect(stages, `stage line showed ${JSON.stringify(stages)}`).not.toContain(
+      'Preparing the drawing'
+    );
+    expect(stages).not.toContain('Updating the charm');
+
+    // One announcement, the sentence itself; never "Converted". Polled, then
+    // judged with everything that WAS heard in the message, so a miss says
+    // what took its place.
+    const deadline = Date.now() + 15_000;
+    let heard = [];
+    while (Date.now() < deadline) {
+      heard = await page.evaluate(() => window.__heard ?? []);
+      if (heard.some((t) => t.startsWith('This picture traced into'))) break;
+      await page.waitForTimeout(300);
+    }
+    expect(
+      heard.filter((t) => t.startsWith('This picture traced into')).length,
+      `heard: ${heard.join(' | ')}`
+    ).toBe(1);
+    expect(
+      heard.filter((t) => t.startsWith('Converted: ')),
+      `heard: ${heard.join(' | ')}`
+    ).toEqual([]);
+  });
+
+  test('★ D-171: Cancel pressed while the drawing is being prepared lands within a second, and nothing is emitted', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
+    test.setTimeout(300_000);
+    await openCharm(page);
+    const cdp = await page.context().newCDPSession(page);
+    // Eight times slower, not four. MEASURED on this drawing at 4x: the
+    // whole stage on the build before this release was under a second (the
+    // credit line 210 ms, the parse 530 ms, the card), so a Cancel pressed
+    // there landed at the checkpoint DP-52 already had, and the guard could
+    // not tell the two builds apart. At 8x the old stage is one task of
+    // about 1.5 s, the emit's task 1.7 s behind it, and a click waits for
+    // both; the release's slices are a tenth of that each, whatever the
+    // throttle, and the label is painted before the first of them.
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
+
+    await chooseGearGrid(page, 30, 12);
+    const p = panel(page);
+    await expect(p.start).toBeVisible({ timeout: 120_000 });
+    await expect(p.start).toHaveText('Start conversion');
+    await watchStages(page);
+
+    await p.start.click();
+    await expect
+      .poll(() => page.evaluate(() => window.__preparingSeen === true), {
+        timeout: 120_000,
+        intervals: [25, 50, 100],
+      })
+      .toBe(true);
+
+    // Cancel, the moment the page says it is preparing: a pointer press at
+    // the button's center, with none of the actionability round trips a
+    // locator click makes (each of those waits for the thread too, and on
+    // the first try of this guard the stage was over before they were). The
+    // press lands at the next checkpoint inside the stage, and
+    // cancelConversion closes the dialog the instant it lands: how long that
+    // takes is the measurement.
+    const box = await p.cancel.boundingBox();
+    expect(box, 'the Cancel button was on screen to be pressed').not.toBeNull();
+    const pressedAt = Date.now();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(p.running).toBeHidden({ timeout: 15_000 });
+    const gone = Date.now() - pressedAt;
+    expect(
+      gone,
+      `the dialog was gone ${gone} ms after Cancel was pressed`
+    ).toBeLessThan(1000);
+    await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
+    await expect(p.info).toHaveText('Conversion canceled');
+    await expect(p.start).toBeVisible();
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+
+    // Nothing was emitted, then or a moment later: the job stopped at its
+    // checkpoint and the emit never ran.
+    await page.waitForTimeout(1500);
+    const design = await designFile(page);
+    expect(design, `design_file after a cancelled conversion: ${design}`).toBeFalsy();
+    await expect(p.info).toHaveText('Conversion canceled');
+
+    const stages = await page.evaluate(() => window.__stages);
+    expect(stages, `stage line showed ${JSON.stringify(stages)}`).toContain(
+      'Preparing the drawing'
+    );
+    expect(stages).not.toContain('Updating the charm');
   });
 });

@@ -340,4 +340,22 @@ export const EDITOR_STRINGS = Object.freeze({
   cropNothing: 'The crop would keep nothing of the picture.',
   undoCrop: 'Undo crop',
   cropUndone: (n) => `Crop undone. ${count(n, 'shape', 'shapes')}.`,
+
+  /**
+   * DP-80: Crop first. The crop view on a picture nothing has converted yet:
+   * its own opening sentence (which the status line carries too), and the
+   * sentence for leaving it (the editor closes; nothing was converted).
+   * STRINGS: owner review pending (DP-R6 text pack rows 15 and 16).
+   */
+  cropFirstViewOpen:
+    'Crop view open on your picture. Four sliders take an edge off; Save crop starts the conversion.',
+  cropFirstCanceled: 'Crop canceled. Nothing was converted.',
+
+  /**
+   * DP-81 (D-175): a reopen whose stored result is trusted, so Apply is
+   * ready at once and nothing is combined again. A11Y.
+   * STRINGS: owner review pending (DP-R6 text pack rows 18 and 19).
+   */
+  openedAsLeft: (on, off) =>
+    `Drawing editor open, as you left it. ${count(on, 'shape', 'shapes')} on, ${off} off.`,
 });
