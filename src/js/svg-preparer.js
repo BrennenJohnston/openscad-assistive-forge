@@ -31,11 +31,12 @@ import {
   compose,
   applyToPoint,
 } from 'transformation-matrix';
-import { offsetPath } from './svg-offset.js';
+import { offsetDrawing } from './flatten-rings.js';
 import {
   polygonFromPathData,
   boundsOf,
   buildNestingTree,
+  buildNestingTreeAsync,
   estimateRingPoints,
   signedArea,
   pointInPolygon,
@@ -87,6 +88,41 @@ export const SHAPE_LIST_CAP = 1000;
 /** @param {number} count @returns {boolean} */
 export function isOverListCap(count) {
   return count > SHAPE_LIST_CAP;
+}
+
+/**
+ * How many elements, or rings of one compound path, the sliced parse takes
+ * between two checkpoints (DP-78 P3, D-171). MEASURED in Chromium at 4x on
+ * a 900-ring traced drawing of 248,000 ring points: the whole parse is 530
+ * ms, so a slice of a hundred rings is about 60 ms and a Cancel pressed
+ * while the drawing is parsed lands within that.
+ */
+const PARSE_SLICE = 100;
+
+/**
+ * What a person is told when a TRACED picture comes back with more shapes
+ * than the editor lists (DP-78, D-172). The charm host says it on the file
+ * control's card and announces it once; the door says it in its error toast.
+ * The analyzer's own sentence, further down, is for a vector FILE over the
+ * cap, whose remedy is a vector editor rather than a mode or a crop.
+ *
+ * @param {number} count - The traced shape count
+ * @param {'charm'|'door'} [host] - The door has no Convert again, and no
+ *   mode to choose before its editor is open
+ * @returns {{badge: string, sentence: string}}
+ */
+export function shapeCapRefusal(count, host = 'charm') {
+  const n = Number(count).toLocaleString('en-US');
+  const cap = SHAPE_LIST_CAP.toLocaleString('en-US');
+  const fact = `This picture traced into ${n} shapes, and the editor can work with ${cap} at a time.`;
+  const advice =
+    host === 'door'
+      ? 'Try a closer crop of the picture.'
+      : 'Try Solid shape, fewer colors, or a closer crop, then Convert again.';
+  return {
+    badge: `Too many shapes to work with (${n})`,
+    sentence: `${fact} ${advice}`,
+  };
 }
 
 /**
@@ -685,30 +721,33 @@ function splitSubpaths(pathData) {
 const RING_RULE_MAX_RINGS = 1500;
 
 function measureRings(subpaths) {
-  return subpaths.map((sp) => {
-    const { points } = polygonFromPathData(sp);
-    const usable = points.length >= 3;
-    const area = usable ? signedArea(points) : 0;
-    // The probe for "is this ring inside that one" is the ring's own leftmost
-    // vertex, not a point of its interior: the interior of a letter O's outer
-    // ring is mostly its counter, and a probe there would put the outer ring
-    // inside its own hole. A vertex is outside every ring nested in this one
-    // and inside every ring around it, as long as rings do not touch.
-    let probe = null;
-    if (usable) {
-      probe = points[0];
-      for (const pt of points) {
-        if (pt.x < probe.x || (pt.x === probe.x && pt.y < probe.y)) probe = pt;
-      }
+  return subpaths.map(measureRing);
+}
+
+/** One ring of a compound path, measured (see measureRings). */
+function measureRing(sp) {
+  const { points } = polygonFromPathData(sp);
+  const usable = points.length >= 3;
+  const area = usable ? signedArea(points) : 0;
+  // The probe for "is this ring inside that one" is the ring's own leftmost
+  // vertex, not a point of its interior: the interior of a letter O's outer
+  // ring is mostly its counter, and a probe there would put the outer ring
+  // inside its own hole. A vertex is outside every ring nested in this one
+  // and inside every ring around it, as long as rings do not touch.
+  let probe = null;
+  if (usable) {
+    probe = points[0];
+    for (const pt of points) {
+      if (pt.x < probe.x || (pt.x === probe.x && pt.y < probe.y)) probe = pt;
     }
-    return {
-      points,
-      usable,
-      area: Math.abs(area),
-      sign: Math.sign(area),
-      probe,
-    };
-  });
+  }
+  return {
+    points,
+    usable,
+    area: Math.abs(area),
+    sign: Math.sign(area),
+    probe,
+  };
 }
 
 /**
@@ -744,10 +783,52 @@ function ringHoleFlags(subpaths, fillRule) {
   // has that many rings in one path.
   if (subpaths.length > RING_RULE_MAX_RINGS) return subpaths.map(() => false);
   const rings = measureRings(subpaths);
-  const boxes = rings.map((r) => (r.usable ? boundsOf(r.points) : null));
+  return holeFlagsOf(rings, fillRule, 0, rings.length, ringBoxes(rings));
+}
+
+/**
+ * The same flags, the rings measured and judged a slice at a time (DP-78
+ * P3): `checkpoint` is awaited every `every` rings of each pass. A traced
+ * photograph is one path of hundreds of rings, and measuring them was the
+ * one piece of the parse nothing could interrupt.
+ */
+async function ringHoleFlagsAsync(subpaths, fillRule, checkpoint, every) {
+  if (subpaths.length > RING_RULE_MAX_RINGS) return subpaths.map(() => false);
+  const rings = [];
+  for (let i = 0; i < subpaths.length; i++) {
+    if (i > 0 && i % every === 0) await checkpoint();
+    rings.push(measureRing(subpaths[i]));
+  }
+  const boxes = ringBoxes(rings);
+  const flags = [];
+  for (let from = 0; from < rings.length; from += every) {
+    if (from > 0) await checkpoint();
+    const to = Math.min(from + every, rings.length);
+    flags.push(...holeFlagsOf(rings, fillRule, from, to, boxes));
+  }
+  return flags;
+}
+
+/** Each ring's bounding box, null for one that cannot hold anything. */
+function ringBoxes(rings) {
+  return rings.map((r) => (r.usable ? boundsOf(r.points) : null));
+}
+
+/**
+ * The hole flags of rings `from` to `to` (exclusive) of a measured list:
+ * each against every bigger ring whose box holds its probe. One ring's
+ * answer never depends on another's, so the sliced variant takes the list
+ * in pieces and the answer is the same.
+ */
+function holeFlagsOf(rings, fillRule, from, to, boxes) {
   const evenOdd = String(fillRule || '').toLowerCase() === 'evenodd';
-  return rings.map((ring, j) => {
-    if (!ring.probe) return false;
+  const out = [];
+  for (let j = from; j < to; j++) {
+    const ring = rings[j];
+    if (!ring.probe) {
+      out.push(false);
+      continue;
+    }
     const pt = ring.probe;
     let depth = 0;
     let winding = ring.sign;
@@ -771,8 +852,9 @@ function ringHoleFlags(subpaths, fillRule) {
         winding += other.sign;
       }
     }
-    return evenOdd ? depth % 2 === 1 : winding === 0;
-  });
+    out.push(evenOdd ? depth % 2 === 1 : winding === 0);
+  }
+  return out;
 }
 
 /**
@@ -797,6 +879,60 @@ function ringHoleFlags(subpaths, fillRule) {
  * @returns {Array<{element: Element, pathData: string, fill: string, stroke: string, luminance: number|null, subpathIndex?: number}>}
  */
 export function parseSvgElements(svgString) {
+  const result = [];
+  for (const element of shapeElementsOf(svgString)) {
+    const parsed = parseShapeElement(element);
+    const holes = parsed.needsHoleFlags
+      ? ringHoleFlags(parsed.subpaths, parsed.fillRule)
+      : null;
+    pushParsedElement(result, element, parsed, holes);
+  }
+  return result;
+}
+
+/**
+ * parseSvgElements a slice at a time (DP-78 P3, D-171): `checkpoint` is
+ * awaited every `every` elements, and inside a compound path every `every`
+ * rings, so a Cancel pressed while a traced drawing is parsed lands within
+ * one slice. The result is exactly what parseSvgElements returns.
+ *
+ * @param {string} svgString - Complete SVG markup
+ * @param {object} [options]
+ * @param {Function} [options.checkpoint] - The conversion job's own, which
+ *   yields to the page and throws on a Cancel
+ * @param {number} [options.every] - Elements (or rings) per slice
+ * @returns {Promise<Array>}
+ */
+export async function parseSvgElementsAsync(svgString, options = {}) {
+  const every = options.every > 0 ? options.every : PARSE_SLICE;
+  const checkpoint =
+    typeof options.checkpoint === 'function'
+      ? options.checkpoint
+      : async () => {};
+  const shapes = shapeElementsOf(svgString);
+  const result = [];
+  for (let i = 0; i < shapes.length; i++) {
+    if (i > 0 && i % every === 0) await checkpoint();
+    const element = shapes[i];
+    const parsed = parseShapeElement(element);
+    const holes = parsed.needsHoleFlags
+      ? await ringHoleFlagsAsync(
+          parsed.subpaths,
+          parsed.fillRule,
+          checkpoint,
+          every
+        )
+      : null;
+    pushParsedElement(result, element, parsed, holes);
+  }
+  return result;
+}
+
+/**
+ * The shape elements of a drawing in document order; none when the text is
+ * not an SVG.
+ */
+function shapeElementsOf(svgString) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgString, 'image/svg+xml');
   const svg = doc.querySelector('svg');
@@ -805,67 +941,80 @@ export function parseSvgElements(svgString) {
   // Use querySelectorAll('*') + filter for reliable document-order results.
   // Comma-separated selectors in querySelectorAll may not return document
   // order in all DOM implementations (observed in jsdom).
-  const shapes = Array.from(svg.querySelectorAll('*')).filter((el) =>
+  return Array.from(svg.querySelectorAll('*')).filter((el) =>
     SHAPE_TAGS.has(el.tagName.toLowerCase())
   );
+}
 
-  const result = [];
-  for (const element of shapes) {
-    const rawPathData = elementToPathData(element);
-    const baking = bakeElementTransforms(element, rawPathData);
-    const pathData = baking.pathData;
-    // Resolve paint from attribute, style attribute, or ancestors
-    const rawFill = getEffectivePaint(element, 'fill');
-    const fill = rawFill ?? '';
-    const stroke = getEffectivePaint(element, 'stroke') ?? '';
-    // SVG default fill is black when unset anywhere in the tree
-    const resolvedFill =
-      rawFill === null ? '#000000' : resolveColorToHex(rawFill);
-    const luminance =
-      resolvedFill !== null ? parseLuminance(resolvedFill) : null;
+/** One element's geometry and paint, before its rings are told apart. */
+function parseShapeElement(element) {
+  const rawPathData = elementToPathData(element);
+  const baking = bakeElementTransforms(element, rawPathData);
+  const pathData = baking.pathData;
+  // Resolve paint from attribute, style attribute, or ancestors
+  const rawFill = getEffectivePaint(element, 'fill');
+  const fill = rawFill ?? '';
+  const stroke = getEffectivePaint(element, 'stroke') ?? '';
+  // SVG default fill is black when unset anywhere in the tree
+  const resolvedFill =
+    rawFill === null ? '#000000' : resolveColorToHex(rawFill);
+  const luminance = resolvedFill !== null ? parseLuminance(resolvedFill) : null;
 
-    const subpaths = splitSubpaths(pathData);
-    if (subpaths.length > 1 && element.hasAttribute('data-colour')) {
+  const subpaths = splitSubpaths(pathData);
+  const colourRegion =
+    subpaths.length > 1 && element.hasAttribute('data-colour');
+  const needsHoleFlags = subpaths.length > 1 && !colourRegion;
+  return {
+    pathData,
+    fill,
+    stroke,
+    luminance,
+    baking,
+    subpaths,
+    colourRegion,
+    needsHoleFlags,
+    fillRule: needsHoleFlags ? getEffectivePaint(element, 'fill-rule') : null,
+  };
+}
+
+/** The parsed element's entries in the list: one per ring, or one. */
+function pushParsedElement(result, element, parsed, holes) {
+  const { pathData, fill, stroke, luminance, baking, subpaths } = parsed;
+  if (parsed.colourRegion) {
+    result.push({
+      element,
+      pathData: outerRingOf(subpaths),
+      fill,
+      stroke,
+      luminance,
+      transformBaked: baking.baked,
+      transformBakeFailed: baking.failed,
+    });
+  } else if (parsed.needsHoleFlags) {
+    subpaths.forEach((sp, idx) => {
       result.push({
         element,
-        pathData: outerRingOf(subpaths),
+        pathData: sp,
         fill,
         stroke,
         luminance,
+        subpathIndex: idx,
+        ringHole: holes[idx] === true,
         transformBaked: baking.baked,
         transformBakeFailed: baking.failed,
       });
-    } else if (subpaths.length > 1) {
-      const holes = ringHoleFlags(
-        subpaths,
-        getEffectivePaint(element, 'fill-rule')
-      );
-      subpaths.forEach((sp, idx) => {
-        result.push({
-          element,
-          pathData: sp,
-          fill,
-          stroke,
-          luminance,
-          subpathIndex: idx,
-          ringHole: holes[idx] === true,
-          transformBaked: baking.baked,
-          transformBakeFailed: baking.failed,
-        });
-      });
-    } else {
-      result.push({
-        element,
-        pathData,
-        fill,
-        stroke,
-        luminance,
-        transformBaked: baking.baked,
-        transformBakeFailed: baking.failed,
-      });
-    }
+    });
+  } else {
+    result.push({
+      element,
+      pathData,
+      fill,
+      stroke,
+      luminance,
+      transformBaked: baking.baked,
+      transformBakeFailed: baking.failed,
+    });
   }
-  return result;
 }
 
 /**
@@ -958,20 +1107,59 @@ function plainFrameOf(elements, tree, options = {}) {
  * @returns {Object} Element index to forced role; empty when the rule does
  *   not apply, which leaves every existing drawing exactly as it was
  */
-export function wallRoleOverrides(elements, nestingTree = null, options = {}) {
-  const out = {};
-  if (!Array.isArray(elements) || elements.length === 0) return out;
+/**
+ * The separation's facts about a drawing, as the wall rule reads them: which
+ * elements are flagged as the wall, whether anything else is there to raise,
+ * and (when nothing is flagged) whether a light filled shape could be the
+ * paper. One reading, shared by the rule and by nestingTreeNeeded so the two
+ * cannot drift.
+ */
+function wallFacts(elements, options = {}) {
   const isWall = (el) =>
     el && el.element && typeof el.element.getAttribute === 'function'
       ? el.element.getAttribute('data-background') === 'true'
       : false;
-
   const walls = [];
   let somethingElse = false;
   elements.forEach((el, i) => {
     if (isWall(el)) walls.push(i);
     else somethingElse = true;
   });
+  const { luminanceThreshold = 200 } = options;
+  const hasLightFill =
+    walls.length === 0 &&
+    elements.some((el) => {
+      const fillLower = (el.fill || '').toLowerCase();
+      return (
+        fillLower !== 'none' &&
+        fillLower !== 'transparent' &&
+        !el.ringHole &&
+        el.luminance !== null &&
+        el.luminance > luminanceThreshold
+      );
+    });
+  return { walls, somethingElse, hasLightFill };
+}
+
+/**
+ * Whether the wall rule will want a nesting tree for this drawing (DP-78
+ * P3). A host that knows builds the tree a slice at a time between two
+ * checkpoints and hands it to wallRoleOverrides, so the analysis never
+ * holds the thread for it.
+ *
+ * @param {Array} elements - Output of parseSvgElements()
+ * @returns {boolean}
+ */
+export function nestingTreeNeeded(elements, options = {}) {
+  if (!Array.isArray(elements) || elements.length === 0) return false;
+  const { walls, somethingElse, hasLightFill } = wallFacts(elements, options);
+  return somethingElse && (walls.length > 0 || hasLightFill);
+}
+
+export function wallRoleOverrides(elements, nestingTree = null, options = {}) {
+  const out = {};
+  if (!Array.isArray(elements) || elements.length === 0) return out;
+  const { walls, somethingElse, hasLightFill } = wallFacts(elements, options);
   if (!somethingElse) return out;
 
   if (walls.length === 0) {
@@ -986,17 +1174,6 @@ export function wallRoleOverrides(elements, nestingTree = null, options = {}) {
     //
     // A drawing with no light filled shape has no paper to find, and skips
     // the nesting tree it would otherwise build for nothing.
-    const { luminanceThreshold = 200 } = options;
-    const hasLightFill = elements.some((el) => {
-      const fillLower = (el.fill || '').toLowerCase();
-      return (
-        fillLower !== 'none' &&
-        fillLower !== 'transparent' &&
-        !el.ringHole &&
-        el.luminance !== null &&
-        el.luminance > luminanceThreshold
-      );
-    });
     if (!hasLightFill) return out;
     const tree = nestingTree || buildNestingTree(elements);
     const frame = plainFrameOf(elements, tree, options);
@@ -1105,26 +1282,74 @@ export function classifyElements(elements, options = {}) {
 }
 
 /**
+ * Offset one element's path RING BY RING, with each ring's own sign (DP-82,
+ * D-174).
+ *
+ * "+" means more ink. An element's path is read as the drawing it is (a ring
+ * inside a ring is a hole), a solid ring grows by the offset and a hole ring
+ * shrinks by it, and the rings come back as one clean region: a letter O at
+ * +0.3 mm is a fatter O, not an O shifted outward. A Cut out element is a
+ * hole in the design, so for it every sign flips: "+" shrinks the cut and
+ * grows its islands. A hole shrunk to nothing is closed; an element shrunk
+ * to nothing is gone (an empty path).
+ *
+ * `offsetPath` sampled the whole `d` as ONE polygon: right for a single
+ * ring, and on a drawn line (two rings) it moved the line instead of
+ * thickening it, MEASURED at DP-R6 planning on a 10-unit square line: +0.3
+ * mm grew the outer ring AND the inner ring by 2.14 units, the line 10 wide
+ * still, shifted outward.
+ *
+ * @param {string} pathData
+ * @param {number} delta - In SVG units, before the sign
+ * @param {object} engine - The ring-geometry module
+ * @param {object} [options]
+ * @param {string} [options.role='foreground'] - 'hole' flips every sign
+ * @returns {string} The offset region's path data; '' when nothing is left
+ */
+export function offsetRings(
+  pathData,
+  delta,
+  engine,
+  { role = 'foreground' } = {}
+) {
+  if (!delta || !pathData || typeof pathData !== 'string') return pathData;
+  const rings = engine.ringsFromPathData(pathData);
+  if (rings.length === 0) return pathData;
+  const sign = role === 'hole' ? -1 : 1;
+  const region = offsetDrawing(engine, rings, () => delta * sign);
+  return region.length > 0 ? engine.ringsToPathData(region) : '';
+}
+
+/**
  * Apply per-element polygon offsets to classified SVG elements.
  *
  * For each element whose corresponding offset value is non-zero, the path
- * is inflated (positive) or deflated (negative) via clipper2-js. Elements
- * with role 'ignore' are never offset. The offset values are in SVG
- * coordinate units — callers convert from mm using mmToSvgUnits().
+ * is offset ring by ring through `offsetRings`. Elements with role 'ignore'
+ * are never offset. The offset values are in SVG coordinate units — callers
+ * convert from mm using mmToSvgUnits().
  *
  * @param {Array} classifiedElements - Output of classifyElements()
  * @param {number[]} offsets - Per-element offset in SVG units (parallel array)
+ * @param {object} engine - The ring-geometry module (DP-82: the offset needs
+ *   the rings, and the engine lives in the lazy chunk the caller holds)
  * @returns {Array} Elements with pathData replaced where offset was applied
  */
-export function applyPerPathOffsets(classifiedElements, offsets) {
+export function applyPerPathOffsets(classifiedElements, offsets, engine) {
   if (!offsets || offsets.length === 0) return classifiedElements;
 
   return classifiedElements.map((el, i) => {
     const offset = offsets[i];
     if (!offset || offset === 0) return el;
     if (el.role === 'ignore') return el;
+    // Asked for only when a ring is about to be offset: a column of zeros
+    // is the usual call and needs no engine.
+    if (!engine) {
+      throw new Error('applyPerPathOffsets needs the ring engine');
+    }
 
-    const newPathData = offsetPath(el.pathData, offset);
+    const newPathData = offsetRings(el.pathData, offset, engine, {
+      role: el.role,
+    });
     return { ...el, pathData: newPathData };
   });
 }
@@ -1652,9 +1877,66 @@ export function measureSvgAspect(svgString) {
  *   elementCount?: number,
  *   ringPoints?: number,
  *   predictedFlattenMs?: number,
+ *   nestingTree?: object|null,
  * }}
  */
 export function analyzeSvg(svgString) {
+  const parsed = parseForAnalysis(svgString);
+  if (parsed.verdict) return parsed.verdict;
+  const { renderElements, defsCount } = parsed;
+  const tree = nestingTreeNeeded(renderElements)
+    ? buildNestingTree(renderElements)
+    : null;
+  return analyzeParsed(renderElements, defsCount, tree);
+}
+
+/**
+ * analyzeSvg in slices (DP-78 P3, D-171): the parse, then a checkpoint, then
+ * the nesting tree a slice at a time when the wall rule needs one, then a
+ * checkpoint, then the classification. The result is the one analyzeSvg
+ * returns; a Cancel pressed while it runs lands at the nearest checkpoint.
+ * MEASURED at the list cap in Chromium at 4x: the parse whole is 300 to
+ * 570 ms and goes in slices of a hundred rings; the tree, 223 ms whole, in
+ * slices of a hundred elements; the classification is milliseconds.
+ *
+ * @param {string} svgString - Complete SVG markup
+ * @param {object} [options]
+ * @param {Function} [options.checkpoint] - Awaited between the slices; the
+ *   conversion job's own, which yields to the page and honors a Cancel
+ * @returns {Promise<ReturnType<typeof analyzeSvg>>}
+ */
+export async function analyzeSvgAsync(svgString, options = {}) {
+  const checkpoint =
+    typeof options.checkpoint === 'function'
+      ? options.checkpoint
+      : async () => {};
+  const parsed = finishParse(
+    await parseSvgElementsAsync(svgString, { checkpoint })
+  );
+  if (parsed.verdict) return parsed.verdict;
+  await checkpoint();
+  const { renderElements, defsCount } = parsed;
+  const tree = nestingTreeNeeded(renderElements)
+    ? await buildNestingTreeAsync(renderElements, { checkpoint })
+    : null;
+  await checkpoint();
+  return analyzeParsed(renderElements, defsCount, tree);
+}
+
+/**
+ * The parse half of analyzeSvg: either a finished verdict (nothing to
+ * analyze, or more shapes than the editor lists) or the elements the rest
+ * works on. A text with no <svg> root parses to no elements, which is the
+ * same verdict.
+ *
+ * @returns {{verdict: object}|{renderElements: Array, defsCount: {value: number}}}
+ */
+function parseForAnalysis(svgString) {
+  return finishParse(parseSvgElements(svgString));
+}
+
+/** The verdict half of the parse, from the elements the parse found. */
+function finishParse(allElements) {
   const passThrough = {
     status: 'ready',
     confidence: 1.0,
@@ -1665,13 +1947,7 @@ export function analyzeSvg(svgString) {
     singleElement: true,
   };
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(svgString, 'image/svg+xml');
-  const svg = doc.querySelector('svg');
-  if (!svg) return passThrough;
-
-  const allElements = parseSvgElements(svgString);
-  if (allElements.length === 0) return passThrough;
+  if (allElements.length === 0) return { verdict: passThrough };
 
   const renderElements = [];
   const defsCount = { value: 0 };
@@ -1685,20 +1961,36 @@ export function analyzeSvg(svgString) {
 
   if (isOverListCap(renderElements.length)) {
     return {
-      status: 'too_complex',
-      confidence: 0,
-      elements: [],
-      warnings: [
-        `This drawing has ${renderElements.length} shapes, and Forge can work with ${SHAPE_LIST_CAP} at a time. ` +
-          'Simplify it in a vector editor (merge paths, remove hidden layers) and try again.',
-      ],
-      unsupportedFeatures: [],
-      recommendation: 'reject',
-      singleElement: false,
-      elementCount: renderElements.length,
+      verdict: {
+        status: 'too_complex',
+        confidence: 0,
+        elements: [],
+        warnings: [
+          `This drawing has ${renderElements.length} shapes, and Forge can work with ${SHAPE_LIST_CAP} at a time. ` +
+            'Simplify it in a vector editor (merge paths, remove hidden layers) and try again.',
+        ],
+        unsupportedFeatures: [],
+        recommendation: 'reject',
+        singleElement: false,
+        elementCount: renderElements.length,
+      },
     };
   }
 
+  return { renderElements, defsCount };
+}
+
+/**
+ * The rest of analyzeSvg, from the elements the parse kept: the roles, the
+ * warnings, the confidence, the recommendation.
+ *
+ * @param {Array} renderElements
+ * @param {{value: number}} defsCount
+ * @param {object|null} nestingTree - The tree the wall rule uses, when the
+ *   drawing needs one; built whole by analyzeSvg, in slices by
+ *   analyzeSvgAsync
+ */
+function analyzeParsed(renderElements, defsCount, nestingTree) {
   const filledElements = renderElements.filter((el) => {
     const fill = (el.fill || '').toLowerCase();
     return fill !== 'none' && fill !== 'transparent';
@@ -1723,7 +2015,7 @@ export function analyzeSvg(svgString) {
   // luminance gets a say. An ordinary drawing carries no such facts and gets
   // an empty override map, so nothing about it changes.
   const classified = classifyElements(renderElements, {
-    roleOverrides: wallRoleOverrides(renderElements),
+    roleOverrides: wallRoleOverrides(renderElements, nestingTree),
   });
 
   const warnings = [];
@@ -1884,6 +2176,14 @@ export function analyzeSvg(svgString) {
     recommendation = 'open_editor';
   }
 
+  // DP-78 P3: the tree the wall rule used is over these same elements in
+  // this same order, so the editor can take it instead of building a second
+  // one at its opening (P0 found it built twice on a Colors drawing). Only
+  // while the geometry is the parse's own: a stroke converted to a filled
+  // outline changes the pathData the editor's tree must be built on (DP-7).
+  const treeStands =
+    nestingTree !== null && !elements.some((el) => el.strokeConverted);
+
   return {
     status,
     ringPoints,
@@ -1896,6 +2196,7 @@ export function analyzeSvg(svgString) {
     singleElement,
     isCompoundPathOnly,
     elementCount: renderElements.length,
+    nestingTree: treeStands ? nestingTree : null,
   };
 }
 

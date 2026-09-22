@@ -109,6 +109,66 @@ export function chaikinSmooth(points, iterations = 2) {
 }
 
 /**
+ * The ring's points spaced evenly along its perimeter, `count` of them
+ * (DP-82, D-180).
+ *
+ * Clipper writes a union with whatever vertices the outline's overlaps
+ * left: MEASURED on an inset square, 417 points along the first edge and
+ * the bare corner on each of the other three. Chaikin's corner cutting
+ * works on vertices, not lengths, so a bare corner between two 70-unit
+ * edges was cut by a quarter of each, and the inset came back with its
+ * corners 5 to 10 units inside a 100-unit page (the magnitude tests never
+ * saw it: they measure with the smoothing off). Spaced evenly first, the
+ * smoothing rounds every corner by about one sample, which is the mild
+ * rounding the smoothing is for.
+ *
+ * @param {Array<{x: number, y: number}>} ring - Closed ring, >= 3 points
+ * @param {number} count - Points wanted
+ * @returns {Array<{x: number, y: number}>}
+ */
+export function resampleRing(ring, count) {
+  if (!ring || ring.length < 3 || !(count >= 3)) return ring;
+  const n = ring.length;
+  const lengths = [];
+  let perimeter = 0;
+  for (let i = 0; i < n; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    lengths.push(len);
+    perimeter += len;
+  }
+  if (perimeter <= 0) return ring;
+  const step = perimeter / count;
+  const out = [];
+  let edge = 0;
+  let along = 0;
+  for (let k = 0; k < count; k++) {
+    const target = k * step;
+    while (edge < n - 1 && along + lengths[edge] < target) {
+      along += lengths[edge];
+      edge++;
+    }
+    const a = ring[edge];
+    const b = ring[(edge + 1) % n];
+    const t = lengths[edge] > 0 ? (target - along) / lengths[edge] : 0;
+    out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  }
+  return out;
+}
+
+/** The closed length of a ring. */
+function perimeterOf(ring) {
+  let total = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    total += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return total;
+}
+
+/**
  * Signed shoelace area of a polygon.
  * @param {Array<{x: number, y: number}>} points
  * @returns {number}
@@ -207,11 +267,72 @@ function buildOffsetOutline(ring, delta, arcTolerance) {
 }
 
 /**
+ * Offset ONE closed ring, given as points, by delta along its own boundary:
+ * positive moves the boundary outward from the ring's interior, negative
+ * inward, whichever way the ring was wound (the outline builder normalizes
+ * the winding first). This is the per-ring half of `offsetPath`, split out
+ * for DP-82 (D-174): a drawn line is two rings with opposite meanings, and
+ * the callers that know which is which offset them one at a time with their
+ * own sign.
+ *
+ * @param {Array<{x: number, y: number}>} ring - Closed ring, >= 3 points
+ * @param {number} delta - Offset in the ring's units
+ * @param {object} [options] - As for `offsetPath`
+ * @returns {Array<Array<{x: number, y: number}>>|null} The offset region's
+ *   rings in clipper's convention (solids positive), EMPTY when the ring
+ *   collapsed to nothing, null when the ring could not be offset at all
+ *   (fewer than three usable edges)
+ */
+export function offsetRing(ring, delta, options = {}) {
+  const { arcTolerance = 0.25, smooth = true, smoothIterations = 2 } = options;
+  if (!Array.isArray(ring) || ring.length < 3) return null;
+  if (!delta) return [ring];
+
+  const outline = buildOffsetOutline(ring, delta, arcTolerance);
+  if (outline.length < 3) return null;
+
+  const flatCoords = [];
+  for (const pt of outline) {
+    flatCoords.push(Math.round(pt.x * SCALE), Math.round(pt.y * SCALE));
+  }
+  const paths = new Paths64();
+  paths.push(Clipper.makePath(flatCoords));
+
+  // Positive fill keeps the correctly-wound region and drops inverted
+  // overshoot loops (the port's flat booleans are correct; only its
+  // ClipperOffset is broken — see the module header).
+  const result = Clipper.Union(paths, undefined, FillRule.Positive);
+  if (!result || result.length === 0) return [];
+
+  const out = [];
+  for (const rp of result) {
+    if (rp.length < 3) continue;
+    let unscaled = rp.map((pt) => ({
+      x: Number(pt.x) / SCALE,
+      y: Number(pt.y) / SCALE,
+    }));
+    if (smooth) {
+      unscaled = chaikinSmooth(
+        resampleRing(unscaled, adaptiveSampleCount(perimeterOf(unscaled))),
+        smoothIterations
+      );
+    }
+    out.push(unscaled);
+  }
+  return out;
+}
+
+/**
  * Offset an SVG path by a given amount in SVG coordinate units.
  *
  * Positive offset expands (outset), negative shrinks (inset).
  * Returns the original pathData unchanged when offset is 0 or
  * when the result collapses to nothing (full collapse).
+ *
+ * The whole `d` is sampled as ONE polygon, so a path of several rings is
+ * offset as if the segments joining its rings were edges: right for a
+ * single ring, and the reason `offsetRings` (svg-preparer.js) reads a
+ * path's rings apart before it calls `offsetRing` on each.
  *
  * @param {string} pathData - SVG path `d` attribute
  * @param {number} offsetSvgUnits - Offset in SVG coordinate units
@@ -229,43 +350,17 @@ export function offsetPath(pathData, offsetSvgUnits, options = {}) {
   if (!offsetSvgUnits || offsetSvgUnits === 0) return pathData;
   if (!pathData || typeof pathData !== 'string') return pathData;
 
-  const {
-    sampleCount,
-    arcTolerance = 0.25,
-    smooth = true,
-    smoothIterations = 2,
-  } = options;
+  const { sampleCount, ...ringOptions } = options;
 
   const points = pathToPolygon(pathData, sampleCount);
   if (points.length < 3) return pathData;
 
-  const outline = buildOffsetOutline(points, offsetSvgUnits, arcTolerance);
-  if (outline.length < 3) return pathData;
-
-  const flatCoords = [];
-  for (const pt of outline) {
-    flatCoords.push(Math.round(pt.x * SCALE), Math.round(pt.y * SCALE));
-  }
-  const paths = new Paths64();
-  paths.push(Clipper.makePath(flatCoords));
-
-  // Positive fill keeps the correctly-wound region and drops inverted
-  // overshoot loops (the port's flat booleans are correct; only its
-  // ClipperOffset is broken — see the module header).
-  const result = Clipper.Union(paths, undefined, FillRule.Positive);
-  if (!result || result.length === 0) return pathData;
+  const rings = offsetRing(points, offsetSvgUnits, ringOptions);
+  if (!rings || rings.length === 0) return pathData;
 
   const parts = [];
-  for (const rp of result) {
-    if (rp.length < 3) continue;
-    let unscaled = rp.map((pt) => ({
-      x: Number(pt.x) / SCALE,
-      y: Number(pt.y) / SCALE,
-    }));
-    if (smooth) {
-      unscaled = chaikinSmooth(unscaled, smoothIterations);
-    }
-    const d = polygonToPath(unscaled);
+  for (const ring of rings) {
+    const d = polygonToPath(ring);
     if (d) parts.push(d);
   }
 

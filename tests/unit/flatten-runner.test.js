@@ -126,6 +126,38 @@ describe('the flatten runner (DP-37 P2)', () => {
     return settled
   })
 
+  it("★ DP-82: a row's offset travels only when it has one, and the compound road is named", () => {
+    const r = runner()
+    const els = shapes(3)
+    els[1].offset = 2.5
+    els[2].offset = 0
+    const promise = r.start(els, META, { compound: true })
+    const settled = expect(promise).rejects.toMatchObject({
+      reason: 'cancelled',
+    })
+    const sent = latest().posted[0]
+    expect(sent.elements).toEqual([
+      { pathData: 'M0 0L1 0L1 1Z', role: 'foreground' },
+      { pathData: 'M1 0L2 0L2 1Z', role: 'hole', offset: 2.5 },
+      { pathData: 'M2 0L3 0L3 1Z', role: 'hole' },
+    ])
+    expect(Object.keys(sent.elements[0])).toEqual(['pathData', 'role'])
+    expect(sent.compound).toBe(true)
+    r.cancel()
+    return settled
+  })
+
+  it("DP-82: the ring road's message carries no road flag", () => {
+    const r = runner()
+    const promise = r.start(shapes(1), META)
+    const settled = expect(promise).rejects.toMatchObject({
+      reason: 'cancelled',
+    })
+    expect('compound' in latest().posted[0]).toBe(false)
+    r.cancel()
+    return settled
+  })
+
   it("★ leaves the caller's own shapes alone, so a re-run needs no re-read", () => {
     const els = shapes(2)
     const before = els.map((el) => ({ ...el }))

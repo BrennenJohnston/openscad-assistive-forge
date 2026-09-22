@@ -117,6 +117,9 @@ export function createFlattenRunner(options = {}) {
    * @param {object} svgMeta - {viewBox, width, height}
    * @param {object} [opts]
    * @param {Function} [opts.onStage] - Called with {stage}
+   * @param {boolean} [opts.compound] - DP-82: the rows of a traced drawing
+   *   with an offset among them, combined by their parity (see
+   *   flattenCompoundRings); each element's `offset` in svg units travels
    * @returns {Promise<{svg: string|null, warnings: string[], ms: number|null}>}
    */
   function start(elements, svgMeta, opts = {}) {
@@ -138,8 +141,12 @@ export function createFlattenRunner(options = {}) {
       elements: (elements || []).map((el) => ({
         pathData: el.pathData,
         role: el.role,
+        ...(Number.isFinite(el.offset) && el.offset !== 0
+          ? { offset: el.offset }
+          : {}),
       })),
       svgMeta: svgMeta || {},
+      ...(opts.compound ? { compound: true } : {}),
     });
 
     return promise;

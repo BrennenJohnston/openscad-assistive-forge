@@ -1,5 +1,18 @@
 # Release Notes
 
+## v5.1.0 (2026-09-21)
+
+A photograph of a printed communication symbol converts into a charm now.
+A camera picture is worked at the size the charm can print, smoothed and
+floored, with two switches to turn each step off; Crop first opens the crop
+view on the photograph before anything is converted; a trace over a
+thousand shapes is refused before it is prepared, and Cancel lands inside
+every stage; the editor reopens where it was left with Apply ready at once;
+the offset thickens a drawn line on both sides and steps by 0.05 mm; Reset
+puts the layers back and says so. The illustrated version is
+[docs/updates/WHATS_NEW_v5.md](../updates/WHATS_NEW_v5.md), under "Version
+5.1".
+
 ## v5.0.0 (2026-09-19)
 
 Since 4.5.0 the app gained three switchable interfaces (Simplified, Standard,
