@@ -9178,15 +9178,14 @@ if (rounded) {
                 mergedParams
               );
 
-              // Update preset dropdown to reflect selection
-              const presetSelect = document.getElementById('presetSelect');
-              if (presetSelect) {
-                presetSelect.value = match.id;
-              }
               stateManager.setState({
                 currentPresetId: match.id,
                 currentPresetName: match.name,
               });
+              // D-192: the hidden select AND the searchable list a person
+              // sees, both drawn from the state just set, as every other
+              // path that selects a preset does.
+              updatePresetDropdown();
 
               // Trigger auto-preview with preset parameters
               if (autoPreviewController) {

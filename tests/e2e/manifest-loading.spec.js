@@ -782,3 +782,54 @@ test.describe('Starter subset (IR-9)', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// D-192: the preset a link applies is the preset the list shows
+//
+// The handler applied the preset and set the hidden native select, but never
+// refreshed the searchable list a person sees, which kept saying "design
+// default values". The load test above says "preset auto-selects" and never
+// looked, so this went unseen until the example's presets could import.
+// ---------------------------------------------------------------------------
+
+test.describe('The preset a link applies is the one the list shows (D-192)', () => {
+  const PRESETS = JSON.stringify({
+    parameterSets: {
+      'Config A': { width: '75', height: '50' },
+      'Config B': { width: '100', height: '80' },
+    },
+    fileFormatVersion: '1',
+  })
+
+  const selectedOption = (page) =>
+    page.evaluate(() => {
+      const select = document.getElementById('presetSelect')
+      return select && select.selectedIndex >= 0
+        ? select.options[select.selectedIndex].text
+        : null
+    })
+
+  for (const [how, query, expected] of [
+    ['the manifest default', '', 'Config A'],
+    ['a ?preset= override', '&preset=Config+B', 'Config B'],
+  ]) {
+    test(`${how} is named in the visible preset list`, async ({ page }) => {
+      test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+      await setupMockManifestServer(page, {
+        manifest: fullManifest(),
+        files: {
+          'test.scad': MINIMAL_SCAD,
+          'helper.txt': '// companion content\n',
+          'presets.json': PRESETS,
+        },
+      })
+      await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}${query}`)
+
+      // The handler has applied it: the hidden select holds it.
+      await expect.poll(() => selectedOption(page), { timeout: 60_000 }).toBe(expected)
+      // And the list a person sees says the same.
+      await expect(page.locator('#presetComboboxInput')).toHaveValue(expected)
+    })
+  }
+})
