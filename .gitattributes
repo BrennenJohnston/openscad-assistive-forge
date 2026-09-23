@@ -11,5 +11,6 @@
 #
 # GitHub's "Download ZIP" and web-based uploads work without LFS installed.
 *.zip filter=lfs diff=lfs merge=lfs -text
+ready_to_print_designs-lean.zip -filter -diff -merge
 *.stl filter=lfs diff=lfs merge=lfs -text
 *.3mf filter=lfs diff=lfs merge=lfs -text
