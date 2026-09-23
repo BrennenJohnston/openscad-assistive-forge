@@ -14831,6 +14831,51 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================
+   A shared link that failed (D-187): at the top of "Open or start
+   a project" on the Main Page, until dismissed
+   ============================================================ */
+
+.link-failure-notice {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md);
+  border: 2px solid var(--color-error);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  text-align: start;
+}
+
+.link-failure-notice-title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.link-failure-notice-reason {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.link-failure-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+[data-high-contrast='true'] .link-failure-notice {
+  border-width: 3px;
+}
+
+@media (forced-colors: active) {
+  .link-failure-notice {
+    border: 2px solid CanvasText;
+  }
+}
+
+/* ============================================================
    Start, a bar that moves, and Cancel (DP-34)
    ============================================================ */
 

@@ -6,6 +6,7 @@ import {
   loadManifest,
   detectLfsPointer,
   resolveGitHubLfsUrl,
+  fetchProjectBlob,
 } from '../../src/js/manifest-loader.js'
 
 // ---------------------------------------------------------------------------
@@ -887,6 +888,48 @@ describe('loadManifest — LFS pointer redirect', () => {
 
     await expect(loadManifest(manifestUrl)).rejects.toSatisfy(
       (err) => err instanceof ManifestError && err.code === 'LFS_POINTER'
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fetchProjectBlob: the ?project= lane's download follows LFS pointers too
+// (IR-R2 A2, D-186)
+// ---------------------------------------------------------------------------
+
+describe('fetchProjectBlob', () => {
+  const lfsPointerText = [
+    'version https://git-lfs.github.com/spec/v1',
+    'oid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393',
+    'size 14754',
+  ].join('\n')
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('follows a Git LFS pointer on raw.githubusercontent.com to the file on media.githubusercontent.com', async () => {
+    const zipBlob = await makeZipBlob({ 'design.scad': 'module x() {}' })
+
+    global.fetch
+      // 1. the raw URL answers with the pointer (small, < 1 KB)
+      .mockResolvedValueOnce(makeMockBlobResponse(
+        new Blob([lfsPointerText], { type: 'text/plain' }),
+        { contentLength: lfsPointerText.length, textContent: lfsPointerText }
+      ))
+      // 2. media answers with the archive itself
+      .mockResolvedValueOnce(makeMockBlobResponse(zipBlob))
+
+    const blob = await fetchProjectBlob(
+      'https://raw.githubusercontent.com/alice/my-project/main/project.zip',
+      'project.zip'
+    )
+
+    expect(blob).toBe(zipBlob)
+    const calls = global.fetch.mock.calls
+    expect(calls).toHaveLength(2)
+    expect(calls[1][0]).toBe(
+      'https://media.githubusercontent.com/media/alice/my-project/main/project.zip'
     )
   })
 })

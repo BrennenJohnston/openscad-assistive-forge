@@ -80,6 +80,7 @@ import {
   getOverlaySvgTarget,
 } from './js/zip-handler.js';
 import {
+  fetchProjectBlob,
   loadManifest,
   ManifestError,
   validateManifest,
@@ -7308,6 +7309,20 @@ async function initApp() {
    * @param {boolean} deferIfNotReady - If true, will attempt to init WASM first if not ready
    */
   async function initAutoPreviewController(deferIfNotReady = false) {
+    // D-181: renderController exists from the first line of
+    // ensureWasmInitialized, long before its worker can render. A controller
+    // made in that window previews at once, fails ("Worker not ready") and
+    // tells the person "Preview failed" about a project that never had a
+    // chance. The code that awaits the engine makes the controller instead:
+    // handleFirstVisitClose's deferred block, once the engine is ready. Not
+    // ensureWasmInitialized() here: a second call during the download
+    // returns false at once, and on a metered connection asks again.
+    if (renderController && !wasmInitialized) {
+      console.log(
+        '[AutoPreview] Engine still starting; the first preview waits for it'
+      );
+      return;
+    }
     if (!renderController || !previewManager) {
       if (deferIfNotReady && previewManager) {
         // WASM not ready yet - try to initialize it first
@@ -8897,6 +8912,62 @@ if (rounded) {
   }
 
   // =========================================
+  // D-187: a shared link that failed says so on the Main Page.
+  // The link handlers below return to the Main Page when a download fails.
+  // Their sentence used to reach only the visually hidden status region, and
+  // the link was stripped from the address bar, so a sighted person saw the
+  // Main Page and nothing else. The notice stands at the top of "Open or
+  // start a project" until dismissed, gives the loader's own reason, and
+  // offers the same link again.
+  // =========================================
+  const LINK_FAILURE_HEADING = 'The shared project could not be opened.';
+  let linkFailureRetryUrl = null;
+
+  async function showLinkFailureNotice({ reason, retryUrl }) {
+    const notice = document.getElementById('linkFailureNotice');
+    const message = document.getElementById('linkFailureNoticeMessage');
+    if (!notice || !message) {
+      console.warn(
+        '[DeepLink] The failed-link notice is missing from the page'
+      );
+      return;
+    }
+    // #app is inert and aria-hidden while the welcome dialog blocks, and an
+    // alert filled in there is never heard; a ?project= link can fail before
+    // the dialog is answered.
+    await waitForFirstVisitAcceptance();
+    linkFailureRetryUrl = retryUrl;
+    message.replaceChildren();
+    notice.hidden = false;
+    // Filled once the region is in the accessibility tree, so the alert is
+    // announced, and announced once (the welcome dialog's choice error does
+    // the same). A second failure replaces the message; nothing stacks.
+    setTimeout(() => {
+      const heading = document.createElement('h4');
+      heading.className = 'link-failure-notice-title';
+      heading.textContent = LINK_FAILURE_HEADING;
+      const why = document.createElement('p');
+      why.className = 'link-failure-notice-reason';
+      why.textContent = reason;
+      message.replaceChildren(heading, why);
+    }, 50);
+  }
+
+  document.getElementById('linkFailureRetry')?.addEventListener('click', () => {
+    if (linkFailureRetryUrl) {
+      window.location.assign(linkFailureRetryUrl);
+    }
+  });
+  document
+    .getElementById('linkFailureDismiss')
+    ?.addEventListener('click', () => {
+      const notice = document.getElementById('linkFailureNotice');
+      if (notice) notice.hidden = true;
+      document.getElementById('linkFailureNoticeMessage')?.replaceChildren();
+      document.getElementById('uploadZone')?.focus();
+    });
+
+  // =========================================
   // Manifest deep-link: ?manifest=<url> support
   // Loads a full project from a forge-manifest.json hosted externally.
   // This is the primary "one-link sharing" path for external project authors
@@ -8906,6 +8977,8 @@ if (rounded) {
   const manifestParam = initUrlParams.get('manifest');
 
   if (manifestParam && !exampleParam) {
+    // Kept before the handler strips the query, for the notice's Try again.
+    const manifestLinkHref = window.location.href;
     console.log(`[DeepLink] Loading project from manifest: ${manifestParam}`);
     updateStatus('Loading project from manifest...');
 
@@ -9222,6 +9295,10 @@ if (rounded) {
         welcomeScreen.classList.remove('hidden');
         mainInterface.classList.add('hidden');
         setAppSurface('welcome');
+        void showLinkFailureNotice({
+          reason: friendlyMsg,
+          retryUrl: manifestLinkHref,
+        });
       }
     }, 500);
   }
@@ -9235,6 +9312,8 @@ if (rounded) {
     initUrlParams.get('project') || initUrlParams.get('scad');
 
   if (projectParam && !exampleParam && !manifestParam) {
+    // Kept before the handler strips the query, for the notice's Try again.
+    const projectLinkHref = window.location.href;
     console.log(`[DeepLink] Loading project from URL: ${projectParam}`);
     updateStatus('Loading project from URL...');
 
@@ -9250,22 +9329,24 @@ if (rounded) {
           `[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`
         );
 
-        const response = await fetch(projectParam);
-        if (!response.ok) {
-          throw new Error(
-            `Server returned ${response.status}: ${response.statusText}`
-          );
-        }
-
+        const loadedBefore = stateManager.getState().uploadedFile;
         if (isZipUrl) {
-          // Handle ZIP file: convert response to blob, create File object, pass to handleFile
-          const blob = await response.blob();
+          // D-186: the manifest lane's download, which follows a Git LFS
+          // pointer on raw.githubusercontent.com to the archive itself
+          // instead of handing the 130-byte pointer to the unzipper.
+          const blob = await fetchProjectBlob(projectParam, urlFileName);
           const file = new File([blob], urlFileName, {
             type: 'application/zip',
           });
           await fileHandler.handleFile(file, null, null, null, 'user');
         } else {
           // Handle single .scad file
+          const response = await fetch(projectParam);
+          if (!response.ok) {
+            throw new Error(
+              `Server returned ${response.status}: ${response.statusText}`
+            );
+          }
           const scadContent = await response.text();
           await fileHandler.handleFile(
             { name: urlFileName },
@@ -9282,6 +9363,15 @@ if (rounded) {
         const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
+        // D-186: handleFile reports its own failures (an archive it cannot
+        // open gets the "ZIP Extraction Failed" dialog and the status "Failed
+        // to extract ZIP file") and returns without loading anything. Only a
+        // project that changed is a success worth announcing.
+        if (stateManager.getState().uploadedFile === loadedBefore) {
+          console.warn(`[DeepLink] Project not loaded: ${urlFileName}`);
+          return;
+        }
+
         console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
         updateStatus(`Loaded ${urlFileName} from URL`);
         announceImmediate(`${urlFileName} loaded from URL link`);
@@ -9296,6 +9386,10 @@ if (rounded) {
           `Couldn't load the project from URL. ${friendlyMsg} You can still upload a file manually.`,
           'error'
         );
+        void showLinkFailureNotice({
+          reason: friendlyMsg,
+          retryUrl: projectLinkHref,
+        });
       }
     }, 500);
   }

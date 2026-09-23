@@ -6,6 +6,13 @@
 
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import {
+  MANIFEST_URL,
+  MINIMAL_SCAD,
+  MOCK_BASE,
+  minimalManifest,
+  setupMockManifestServer,
+} from './helpers/mock-manifest-server.js'
 
 // Skip WASM-dependent tests in CI
 const isCI = !!process.env.CI
@@ -21,65 +28,6 @@ test.beforeEach(async ({ page }) => {
 // ---------------------------------------------------------------------------
 // Mock server helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Set up route interception to serve mock manifest and project files.
- * This simulates a GitHub-hosted manifest without requiring real network calls.
- */
-async function setupMockManifestServer(page, {
-  manifest = null,
-  files = {},
-  manifestStatus = 200,
-  manifestContentType = 'application/json',
-  fileStatuses = {},
-  corsHeaders = true,
-} = {}) {
-  const MOCK_BASE = 'https://raw.githubusercontent.com/testuser/testrepo/main'
-
-  // Intercept manifest URL
-  await page.route(`${MOCK_BASE}/forge-manifest.json`, async (route) => {
-    const headers = corsHeaders
-      ? { 'Access-Control-Allow-Origin': '*', 'Content-Type': manifestContentType }
-      : { 'Content-Type': manifestContentType }
-
-    if (manifest === null) {
-      await route.fulfill({ status: 404, body: 'Not Found' })
-      return
-    }
-
-    const body = typeof manifest === 'string' ? manifest : JSON.stringify(manifest)
-    await route.fulfill({ status: manifestStatus, headers, body })
-  })
-
-  // Intercept project file URLs
-  for (const [filename, content] of Object.entries(files)) {
-    const status = fileStatuses[filename] || 200
-    await page.route(`${MOCK_BASE}/${filename}`, async (route) => {
-      const headers = corsHeaders
-        ? { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/plain' }
-        : { 'Content-Type': 'text/plain' }
-      await route.fulfill({ status, headers, body: content })
-    })
-  }
-
-  return MOCK_BASE
-}
-
-/** Minimal valid SCAD content for testing */
-const MINIMAL_SCAD = `
-// Test design
-width = 50; // [10:1:100]
-height = 30; // [10:1:100]
-cube([width, height, 10]);
-`
-
-/** Minimal valid manifest with just files.main */
-function minimalManifest(mainFile = 'test.scad') {
-  return {
-    forgeManifest: '1.0',
-    files: { main: mainFile },
-  }
-}
 
 /** Full manifest with all optional fields */
 function fullManifest() {
@@ -100,9 +48,6 @@ function fullManifest() {
     },
   }
 }
-
-const MOCK_BASE = 'https://raw.githubusercontent.com/testuser/testrepo/main'
-const MANIFEST_URL = `${MOCK_BASE}/forge-manifest.json`
 
 // UF-9 P1: parameter groups render as <details> collapsed by default
 // (F5, owner decision 2026-05-15) — even a group-less SCAD lands in one
