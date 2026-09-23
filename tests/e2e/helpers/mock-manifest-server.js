@@ -72,10 +72,11 @@ export function minimalManifest(mainFile = 'test.scad') {
  * speaks, and a polite message inside another's debounce is replaced, so a
  * sample taken at the end proves nothing; the history does. Also notes the
  * moment the engine reports itself ready (body[data-wasm-ready="true"]).
+ * extraIds adds more elements to watch by id (an alert region of a feature).
  * Read it back with liveHistory(page).
  */
-export async function recordLiveRegions(page) {
-  await page.addInitScript(() => {
+export async function recordLiveRegions(page, { extraIds = [] } = {}) {
+  await page.addInitScript((extra) => {
     window.__statusHistory = []
     window.__wasmReadyAt = null
     const watch = (id) => {
@@ -97,7 +98,7 @@ export async function recordLiveRegions(page) {
       })
     }
     const start = () => {
-      for (const id of ['statusArea', 'srAnnouncer', 'srAnnouncerAssertive']) watch(id)
+      for (const id of ['statusArea', 'srAnnouncer', 'srAnnouncerAssertive', ...extra]) watch(id)
       const markReady = () => {
         if (window.__wasmReadyAt === null && document.body.getAttribute('data-wasm-ready') === 'true') {
           window.__wasmReadyAt = performance.now()
@@ -114,7 +115,7 @@ export async function recordLiveRegions(page) {
     } else {
       start()
     }
-  })
+  }, extraIds)
 }
 
 /** The recorded history: [{ t, src, text }] in the order it happened. */
