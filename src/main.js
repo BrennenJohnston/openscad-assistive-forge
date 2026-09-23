@@ -9178,14 +9178,11 @@ if (rounded) {
                 mergedParams
               );
 
-              stateManager.setState({
-                currentPresetId: match.id,
-                currentPresetName: match.name,
-              });
-              // D-192: the hidden select AND the searchable list a person
-              // sees, both drawn from the state just set, as every other
-              // path that selects a preset does.
-              updatePresetDropdown();
+              // D-192: the selection a person makes from the list (state,
+              // hidden select, the preset's signature, nothing changed yet),
+              // and the searchable list a person sees says so as well.
+              setCurrentPresetSelection(match);
+              _presetCombobox?.setValue(match.id);
 
               // Trigger auto-preview with preset parameters
               if (autoPreviewController) {

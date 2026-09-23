@@ -788,11 +788,19 @@ test.describe('Starter subset (IR-9)', () => {
 //
 // The handler applied the preset and set the hidden native select, but never
 // refreshed the searchable list a person sees, which kept saying "design
-// default values". The load test above says "preset auto-selects" and never
+// default values". The design here has a parameter the presets leave alone,
+// like the example's $fn: a preset that sets some of a design's parameters
+// is applied, not changed. The load test above says "preset auto-selects" and never
 // looked, so this went unseen until the example's presets could import.
 // ---------------------------------------------------------------------------
 
 test.describe('The preset a link applies is the one the list shows (D-192)', () => {
+  const THREE_PARAMETER_SCAD = `
+width = 50; // [10:1:100]
+height = 30; // [10:1:100]
+depth = 10; // [5:1:40]
+cube([width, height, depth]);
+`
   const PRESETS = JSON.stringify({
     parameterSets: {
       'Config A': { width: '75', height: '50' },
@@ -819,7 +827,7 @@ test.describe('The preset a link applies is the one the list shows (D-192)', () 
       await setupMockManifestServer(page, {
         manifest: fullManifest(),
         files: {
-          'test.scad': MINIMAL_SCAD,
+          'test.scad': THREE_PARAMETER_SCAD,
           'helper.txt': '// companion content\n',
           'presets.json': PRESETS,
         },
@@ -828,8 +836,9 @@ test.describe('The preset a link applies is the one the list shows (D-192)', () 
 
       // The handler has applied it: the hidden select holds it.
       await expect.poll(() => selectedOption(page), { timeout: 60_000 }).toBe(expected)
-      // And the list a person sees says the same.
+      // And the list a person sees says the same, with nothing marked changed.
       await expect(page.locator('#presetComboboxInput')).toHaveValue(expected)
+      await expect(page.locator('#savePresetBtn')).toHaveAttribute('data-dirty', 'false')
     })
   }
 })
