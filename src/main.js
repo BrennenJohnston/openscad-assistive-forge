@@ -7308,6 +7308,20 @@ async function initApp() {
    * @param {boolean} deferIfNotReady - If true, will attempt to init WASM first if not ready
    */
   async function initAutoPreviewController(deferIfNotReady = false) {
+    // D-181: renderController exists from the first line of
+    // ensureWasmInitialized, long before its worker can render. A controller
+    // made in that window previews at once, fails ("Worker not ready") and
+    // tells the person "Preview failed" about a project that never had a
+    // chance. The code that awaits the engine makes the controller instead:
+    // handleFirstVisitClose's deferred block, once the engine is ready. Not
+    // ensureWasmInitialized() here: a second call during the download
+    // returns false at once, and on a metered connection asks again.
+    if (renderController && !wasmInitialized) {
+      console.log(
+        '[AutoPreview] Engine still starting; the first preview waits for it'
+      );
+      return;
+    }
     if (!renderController || !previewManager) {
       if (deferIfNotReady && previewManager) {
         // WASM not ready yet - try to initialize it first
