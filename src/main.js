@@ -80,6 +80,7 @@ import {
   getOverlaySvgTarget,
 } from './js/zip-handler.js';
 import {
+  fetchProjectBlob,
   loadManifest,
   ManifestError,
   validateManifest,
@@ -9264,22 +9265,24 @@ if (rounded) {
           `[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`
         );
 
-        const response = await fetch(projectParam);
-        if (!response.ok) {
-          throw new Error(
-            `Server returned ${response.status}: ${response.statusText}`
-          );
-        }
-
+        const loadedBefore = stateManager.getState().uploadedFile;
         if (isZipUrl) {
-          // Handle ZIP file: convert response to blob, create File object, pass to handleFile
-          const blob = await response.blob();
+          // D-186: the manifest lane's download, which follows a Git LFS
+          // pointer on raw.githubusercontent.com to the archive itself
+          // instead of handing the 130-byte pointer to the unzipper.
+          const blob = await fetchProjectBlob(projectParam, urlFileName);
           const file = new File([blob], urlFileName, {
             type: 'application/zip',
           });
           await fileHandler.handleFile(file, null, null, null, 'user');
         } else {
           // Handle single .scad file
+          const response = await fetch(projectParam);
+          if (!response.ok) {
+            throw new Error(
+              `Server returned ${response.status}: ${response.statusText}`
+            );
+          }
           const scadContent = await response.text();
           await fileHandler.handleFile(
             { name: urlFileName },
@@ -9295,6 +9298,15 @@ if (rounded) {
         initUrlParams.delete('scad');
         const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
+
+        // D-186: handleFile reports its own failures (an archive it cannot
+        // open gets the "ZIP Extraction Failed" dialog and the status "Failed
+        // to extract ZIP file") and returns without loading anything. Only a
+        // project that changed is a success worth announcing.
+        if (stateManager.getState().uploadedFile === loadedBefore) {
+          console.warn(`[DeepLink] Project not loaded: ${urlFileName}`);
+          return;
+        }
 
         console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
         updateStatus(`Loaded ${urlFileName} from URL`);
