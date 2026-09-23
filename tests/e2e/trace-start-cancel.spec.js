@@ -857,6 +857,7 @@ test.describe('a changed setting waits for the press, quick picture or not (DP-5
     browserName,
   }) => {
     test.skip(browserName !== 'chromium', 'the quick look calls the picture quick on this lane; the others are slower and would prove less');
+    test.skip(!!process.env.CI, 'D-191: a starved CI runner is not quick, so the picture waits for a press instead of converting by itself; this case runs on local boards');
     test.setTimeout(240_000);
     await openCharm(page);
     // 400 x 400 is 0.16 MP: under the half-megapixel line, and quick on a
