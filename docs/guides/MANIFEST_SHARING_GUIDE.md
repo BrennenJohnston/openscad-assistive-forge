@@ -84,10 +84,10 @@ The manifest file tells Forge which files to load and how to set things up.
 | `"files.main"` | **Yes** (unless `files.bundle` is set) | The filename of your main `.scad` file |
 | `"files.companions"` | No | A list of companion files, e.g., `["helper.txt", "parts.scad"]` |
 | `"files.presets"` | No | Your preset JSON file, e.g., `"my_presets.json"` |
-| `"files.bundle"` | No | Path to a `.zip` file — see [ZIP Bundle](#zip-bundle-single-zip-file) section |
+| `"files.bundle"` | No | Path to a `.zip` file; see the [ZIP Bundle](#zip-bundle-single-zip-file) section |
 | `"defaults.preset"` | No | Name of a preset to auto-select on load |
 | `"defaults.autoPreview"` | No | `true` to start a 3D preview automatically |
-| `"defaults.skipWelcome"` | No | `true` to skip the welcome screen |
+| `"defaults.skipWelcome"` | No | Accepted, but Forge does not read it: a manifest link always opens straight into the project, and a first-time visitor still sees the welcome dialog. You can leave it out. |
 
 4. Click **Commit new file**
 
@@ -115,14 +115,17 @@ https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubuserconte
 
 ## Step 6: Test Your Link
 
-1. Open a new browser tab (or use incognito/private browsing)
-2. Paste your link into the address bar
-3. Verify that:
-   - The design loads without errors
-   - Parameters appear in the sidebar
-   - If you included presets, they appear in the preset dropdown
-   - If you set `autoPreview: true`, the 3D preview starts automatically
-4. Try changing a parameter and clicking Preview to confirm everything works
+Test it the way the people you send it to will meet it: in a private window (Ctrl+Shift+N in Chrome and Edge), which behaves like a first-time visitor.
+
+1. Paste your link into the address bar.
+2. From Forge 5.1.1, this is what a person sees, in order:
+   - The welcome dialog, "Welcome to OpenSCAD Assistive Forge", with "Choose your interface" and a **Download & Continue** button. It comes back on every visit until the person ticks "Remember my choice on this device".
+   - A short "Loading OpenSCAD Engine" screen, then a "Shared Project" dialog that offers to save a copy ("Save My Copy" or "Skip for Now").
+   - Your project: its parameters, the banner "Shared project: <name> by <author>", and, if you set `defaults.preset`, that preset named in the preset list.
+   - The 3D preview, drawn once the engine is ready, with "Preview ready" under it (if you set `autoPreview: true`).
+3. Try changing a parameter to confirm everything works.
+
+If the link cannot load, Forge says so on its Main Page: a notice at the top of "Open or start a project" reads "The shared project could not be opened.", gives the reason (for example `Failed to download "forge-manifest.json": server returned 404`), and offers **Try again** and **Dismiss**.
 
 ---
 
@@ -283,12 +286,14 @@ When you have a new version of your design:
 
 | Problem | Solution |
 |---------|----------|
-| "Couldn't fetch" error | Your files must be on a server that supports CORS. GitHub works. WordPress, Squarespace, and most CMS platforms do **not**. Host your files on GitHub even if your website is elsewhere. |
-| "Server returned 404" error | Check that the file URL is correct and the repository is set to **Public**. |
+| "Couldn't reach the file server" | Your files must be in a **Public** repository, on one of the hosts in **Hosting Requirements**. GitHub works. WordPress, Squarespace, and most CMS platforms do **not**. Host your files on GitHub even if your website is elsewhere. |
+| "server returned 404" | Check that the file URL is correct and the repository is set to **Public**. File names are case-sensitive. |
 | "Invalid manifest" error | Validate your JSON at [jsonlint.com](https://jsonlint.com). Common mistakes: missing commas, trailing commas, or mismatched quotes. |
-| Preset not found | The preset name in `defaults.preset` must exactly match a preset name in your JSON file (case-sensitive). |
+| Your preset is not selected (the list says "design default values") | The name in `defaults.preset` must match a preset's name in your presets file; Forge ignores the difference between capital and small letters. The file must be in OpenSCAD's own format, `{ "parameterSets": {...}, "fileFormatVersion": "1" }`, or the format Forge's own Import / Export writes. A file in any other shape is not imported. |
 | Companion file not loading | Make sure the filename in `files.companions` exactly matches the uploaded filename (case-sensitive). |
 | Design loads but parameters don't appear | Your `.scad` file may not have annotated parameters. Parameters need comments like `width = 10; // [5:1:50]` to be detected. |
+| "server returned 403" on a file stored with Git LFS | The month's LFS bandwidth has run out (see **Large File Hosting**). Make the file small enough for plain git, or move it to your own GitHub Pages site. |
+| "server returned 429" | Too many downloads from one internet address in a short time (see **Large File Hosting**). Wait a little and press **Try again**, or use a GitHub Pages copy. |
 
 ### Privacy Note
 
@@ -344,6 +349,8 @@ https://openscad-assistive-forge.pages.dev/?project=https://raw.githubuserconten
 ```
 
 Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forge will extract it, detect the main file, and auto-import presets -- but without manifest metadata (name, author, custom defaults).
+
+From Forge 5.1.1 this road also follows a Git LFS pointer to the archive itself, reports a file that is not a ZIP archive instead of loading it, and, on a first visit, waits for the welcome dialog to be answered before it opens anything.
 
 ### When to use which approach
 
@@ -406,6 +413,19 @@ rest of the developer CLI. The Publish dialog is its replacement.)
 
 ## Examples
 
+### Examples you can open
+
+These live on the `example-manifest` branch of this repository, which is also the template to copy; its README walks through it.
+
+- **A keyguard designer** from Volksswitch.org, the lean bundle (text and SVG, 8.9 MB, a plain file):
+  <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-volksswitch.json>
+- **The same designer with its overlay pictures** (65.7 MB, stored with Git LFS):
+  <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-volksswitch-full.json>
+- **A parametric box with five presets**:
+  <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest.json>
+- **A braille card and cylinder generator**:
+  <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-braille.json>
+
 ### Example 1: Simple Box Customizer (single file, no companions)
 
 ```json
@@ -438,8 +458,7 @@ rest of the developer CLI. The Publish dialog is its replacement.)
   },
   "defaults": {
     "preset": "iPad 10.9 - TouchChat 45",
-    "autoPreview": true,
-    "skipWelcome": true
+    "autoPreview": true
   }
 }
 ```
@@ -475,13 +494,12 @@ rest of the developer CLI. The Publish dialog is its replacement.)
     "bundle": "ready_to_print_designs.zip"
   },
   "defaults": {
-    "autoPreview": true,
-    "skipWelcome": true
+    "autoPreview": true
   }
 }
 ```
 
-This is ideal for projects with many files — just upload a single `.zip` and let Forge detect the main file automatically.
+This suits a project with many files: upload a single `.zip` and let Forge detect the main file.
 
 ---
 
@@ -499,7 +517,7 @@ This is ideal for projects with many files — just upload a single `.zip` and l
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | `string` | Human-readable project name (shown in status bar). |
-| `id` | `string` | Stable identifier (survives filename changes). |
+| `id` | `string` | Accepted, but Forge does not use it yet. Saved presets are kept under the main file's name, so keep that name when you update your design. |
 | `author` | `string` | Author name or attribution. |
 | `description` | `string` | Brief project description. |
 | `homepage` | `string` | URL to the project's home page. |
@@ -509,7 +527,7 @@ This is ideal for projects with many files — just upload a single `.zip` and l
 | `files.assets` | `string[]` | Additional assets (SVG, etc.). |
 | `defaults.preset` | `string` | Preset name to auto-select after loading. |
 | `defaults.autoPreview` | `boolean` | If `true`, trigger preview immediately after loading. |
-| `defaults.skipWelcome` | `boolean` | If `true`, skip the welcome screen. |
+| `defaults.skipWelcome` | `boolean` | Accepted, but Forge does not read it: a manifest link always opens straight into the project. (The URL parameter `?skipWelcome=true` is read.) |
 
 ### File Path Resolution
 
@@ -569,11 +587,15 @@ URL in `files.bundle`, has to be on the list above.
 
 Forge supports ZIP bundles up to **500 MB**. For bundles over 100 MB, you need to choose a hosting strategy that fits your file size and expected traffic.
 
+### Start with a lean bundle
+
+Before reaching for Git LFS, look at what the bundle carries that the design does not need. The keyguard example's full package is 65.7 MB, and 56.7 MB of that is 54 overlay screenshots. Its text and SVG files alone come to 8.9 MB (155 files), and they open the same design with the same 292 presets. A bundle under 100 MB can live in your repository as a plain file: no Git LFS and no monthly quota. The example branch keeps both: `forge-manifest-volksswitch.json` opens the lean bundle, and `forge-manifest-volksswitch-full.json` the full one.
+
 ### Git LFS (recommended for 100 MB – 2 GB bundles)
 
 GitHub blocks files over 100 MB and warns above 50 MB. **Git LFS** stores large files outside the regular Git object store, allowing bundles up to 2 GB.
 
-Forge automatically detects Git LFS pointer files and re-fetches the real content from `media.githubusercontent.com`. No manifest changes are needed — the same relative path works whether the file is in regular Git or LFS.
+Forge automatically detects Git LFS pointer files and re-fetches the real content from `media.githubusercontent.com`. No manifest changes are needed: the same relative path works whether the file is in regular Git or LFS.
 
 **Setup (one-time, per machine):**
 
@@ -584,7 +606,7 @@ git add .gitattributes
 git commit -m "chore: add Git LFS tracking"
 ```
 
-Then add and commit your ZIP as normal — Git LFS handles the rest.
+Then add and commit your ZIP as normal, and Git LFS handles the rest.
 
 **GitHub Free LFS quotas:**
 
@@ -595,13 +617,14 @@ Then add and commit your ZIP as normal — Git LFS handles the rest.
 | Bandwidth quota | 10 GiB/month | 250 GiB/month |
 | Extra data packs | $5/month for +50 GiB | same |
 
-**Important:** Bandwidth is a hard cutoff. When the monthly quota is exhausted, LFS downloads stop entirely — users receive the ~130-byte pointer file. Downloads do not slow down; they stop. Forge will show an error rather than silently failing.
+**Important:** bandwidth is a hard cutoff. When the month's 10 GiB is spent and the account has no payment method, GitHub switches LFS off until the next month. Downloads do not slow down; they stop, and the link fails with "server returned 403". From Forge 5.1.1 the person sees that on the Main Page, with the reason and **Try again**.
 
-**Practical download limits per month (GitHub Free — 10 GiB bandwidth):**
+**Practical download limits per month (GitHub Free, 10 GiB bandwidth):**
 
 | Bundle size | Free tier | With 1 data pack (+50 GiB) |
 |-------------|-----------|---------------------------|
 | 50 MB | ~200 loads/month | ~1,200 loads/month |
+| 65.7 MB (the full keyguard example) | ~150 loads/month | ~935 loads/month |
 | 100 MB | ~100 loads/month | ~600 loads/month |
 | 170 MB | ~59 loads/month | ~352 loads/month |
 | 250 MB | ~40 loads/month | ~240 loads/month |
@@ -609,7 +632,7 @@ Then add and commit your ZIP as normal — Git LFS handles the rest.
 | 1 GB | ~10 loads/month | ~60 loads/month |
 | 2 GB (max) | ~5 loads/month | ~30 loads/month |
 
-**Recommendation:** Best for projects under ~200 MB with moderate traffic (fewer than 50 loads/month). For higher traffic, use GitHub Releases.
+**Recommendation:** Best for projects under ~200 MB with moderate traffic (fewer than 50 loads/month). For higher traffic, make a lean bundle small enough for plain git, or put a copy on your own GitHub Pages site (below).
 
 ### GitHub Releases (a manifest cannot point at one)
 
@@ -636,6 +659,14 @@ somewhere on the allowlist and point the manifest there:
 The release itself stays a perfectly good way to publish a versioned download
 for people who are not using Forge.
 
+### Your own GitHub Pages site (busy or very large projects)
+
+A GitHub Pages site under your own account is on Forge's allowlist (`*.github.io`), answers every request with CORS, and has no LFS quota. GitHub allows a site of up to 1 GB and a soft limit of 100 GB of traffic a month ([GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)). At 65.7 MB that is about 1,500 opens a month, and about ten times that for a lean bundle. Publish the same files there and point your link at the manifest on your Pages address, for example `?manifest=https://YOUR_USERNAME.github.io/YOUR_REPO/forge-manifest.json`; relative paths in the manifest resolve against it.
+
+### Many people behind one address
+
+Since May 2025, GitHub limits how often one internet address can download raw files without signing in, and it does not publish the numbers. A classroom or a clinic where many people open your link from one address can reach that limit, and the link then fails with "server returned 429". Waiting a little and pressing **Try again** usually works, and a GitHub Pages copy avoids it.
+
 ### External Object Storage (Forge cannot load these either)
 
 Object stores are the usual answer for very large files, and for the same
@@ -661,6 +692,9 @@ which host and why.
 ### Decision guide
 
 ```
+Pictures or other files the design does not need?
+  -> Leave them out: a lean bundle under 100 MB needs no LFS at all
+
 Bundle under 100 MB?
   -> Commit directly, relative path in the manifest, no LFS needed
 
