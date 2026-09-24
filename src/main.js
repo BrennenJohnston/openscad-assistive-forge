@@ -2865,6 +2865,7 @@ async function initApp() {
   //
   // Subsystems that respect this gate:
   //   - Manifest deep-link handler  (?manifest=<url>)
+  //   - Project deep-link handler   (?project=<url>, ?scad=<url>)
   //   - WASM initialization         (ensureWasmInitialized)
   //   - Draft restoration           (pendingDraft)
   //   - Save-copy modal             (showManifestSaveCopyModal)
@@ -9319,6 +9320,15 @@ if (rounded) {
 
     setTimeout(async () => {
       try {
+        // D-188: the manifest handler's step 1, for the same reason. The
+        // file handler shows the processing overlay and then asks to save
+        // the file, and neither may stand over the welcome dialog.
+        if (firstVisitBlocking || !hasUserAcceptedDownload) {
+          updateStatus('Waiting for download acceptance...');
+          await waitForFirstVisitAcceptance();
+          updateStatus('Loading project from URL...');
+        }
+
         // Validate URL
         const projectUrl = new URL(projectParam);
         const urlFileName =
