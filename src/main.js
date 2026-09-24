@@ -9179,15 +9179,11 @@ if (rounded) {
                 mergedParams
               );
 
-              // Update preset dropdown to reflect selection
-              const presetSelect = document.getElementById('presetSelect');
-              if (presetSelect) {
-                presetSelect.value = match.id;
-              }
-              stateManager.setState({
-                currentPresetId: match.id,
-                currentPresetName: match.name,
-              });
+              // D-192: the selection a person makes from the list (state,
+              // hidden select, the preset's signature, nothing changed yet),
+              // and the searchable list a person sees says so as well.
+              setCurrentPresetSelection(match);
+              _presetCombobox?.setValue(match.id);
 
               // Trigger auto-preview with preset parameters
               if (autoPreviewController) {
