@@ -9191,7 +9191,9 @@ if (rounded) {
               }
               updatePrimaryActionButton();
 
-              updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
+              // D-194: the sentence the announcement below says, so what is
+              // seen and heard match, and no em dash in the status line.
+              updateStatus(`${projectName} loaded with preset ${match.name}`);
               announceImmediate(
                 `${projectName} loaded with preset ${match.name}`
               );

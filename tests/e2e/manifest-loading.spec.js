@@ -10,7 +10,9 @@ import {
   MANIFEST_URL,
   MINIMAL_SCAD,
   MOCK_BASE,
+  liveHistory,
   minimalManifest,
+  recordLiveRegions,
   setupMockManifestServer,
 } from './helpers/mock-manifest-server.js'
 
@@ -841,4 +843,45 @@ cube([width, height, depth]);
       await expect(page.locator('#savePresetBtn')).toHaveAttribute('data-dirty', 'false')
     })
   }
+})
+
+// ---------------------------------------------------------------------------
+// D-194: the status line after a preset link says what the announcement says
+//
+// It put an em dash between the project and the preset, the one em dash among
+// the app's status lines, while the announcement right after it said
+// "{project} loaded with preset {name}". The status region is a live region
+// too, so a screen reader heard one event in two wordings.
+// ---------------------------------------------------------------------------
+
+test.describe('The status line after a preset link (D-194)', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test('is the sentence the announcement says, with no em dash', async ({ page }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const sentence = 'Test Project loaded with preset Config A'
+    const said = async (src) =>
+      (await liveHistory(page)).filter((h) => h.src === src).map((h) => h.text)
+    // The announcement says it right after the handler writes its status line.
+    await expect.poll(() => said('srAnnouncer'), { timeout: 60_000 }).toContain(sentence)
+    const status = await said('statusArea')
+    expect(status, status.join(' | ')).toContain(sentence)
+    const withDash = (await liveHistory(page)).filter((h) => h.text.includes('—'))
+    expect(withDash.map((h) => `${h.src}: ${h.text}`)).toEqual([])
+  })
 })
