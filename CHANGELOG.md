@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-09-23
+
+My own example links stopped opening: a person who followed one saw the
+Main Page and nothing else. This release is what came of opening those
+links the way the person who receives them does, as a first-time visitor,
+and of making the example branch that an author copies true again.
+
+### Shared project links
+
+- A link that fails says so. When a shared link's download failed
+  (GitHub's download limit, a spent Git LFS month, a wrong address), Forge
+  went back to the Main Page, put its explanation only in a hidden status
+  region, and removed the link from the address bar. Now a notice at the
+  top of "Open or start a project" reads "The shared project could not be
+  opened.", gives the loader's reason, and offers Try again, which opens
+  the same link again, and Dismiss. It is announced once.
+- A first visit previews the project. The engine download waits for the
+  welcome dialog, so a small shared project arrived before the engine
+  could draw it; the first preview ran anyway, and the page said "Preview
+  failed: Something Went Wrong", out loud as well. On the deployed 5.1.0
+  that happened on 11 of 11 first visits of the box and braille links.
+  The first preview now waits for the engine.
+- A direct link to a project archive (`?project=`) follows a Git LFS
+  pointer to the archive itself, reports an archive it cannot open, and no
+  longer says "Loaded" after a load that did not happen. On a first visit
+  it waits for the welcome dialog before it opens anything, so neither
+  its processing screen nor the "Save this file for quick access?"
+  question stands over the dialog.
+- The preset a link applies, from the manifest or from `?preset=`, is
+  named in the preset list, which had kept saying "design default values"
+  over the preset's values.
+
+### The example projects
+
+- The example branch's presets file is in OpenSCAD's own format, so the
+  box link opens on its "Small Gift Box" preset with its five presets in
+  the list. The old file was in a shape Forge never imported.
+- The keyguard example opens a lean bundle: the same designer and its 292
+  presets without the 54 overlay screenshots, 8.9 MB in plain git instead
+  of 65.7 MB through Git LFS, so it no longer runs out with the month's LFS
+  bandwidth (about 150 opens on a Free account). The full bundle is one
+  manifest away.
+- The branch's README is rewritten as the walkthrough for an author
+  sharing their own design: the steps from a repository to one link on
+  their own site, one link per client, the presets file, the hosts Forge
+  may fetch from, and the LFS arithmetic. It no longer recommends a
+  command-line generator that was removed, GitHub Releases hosting that
+  Forge refuses, or a presets shape Forge never read.
+
+### Accessibility
+
+- The memory warning banner, when it is not showing, is hidden from the
+  keyboard and from screen readers. It had only been moved above the
+  window, so on every page two Tab presses landed on buttons nobody could
+  see, and a screen reader could reach "High memory usage detected" while
+  memory was normal.
+
+### The sharing guide
+
+- The hosting section starts with a lean bundle, adds the 65.7 MB row to
+  the LFS table and what happens when the month's bandwidth runs out, names
+  your own GitHub Pages site for busy or very large projects, and explains
+  "server returned 429" behind one shared address. Step 6 says what a
+  first-time visitor sees, the `?project=` section says what that road now
+  does, and a short list opens the four examples. The manifest fields `id`
+  and `defaults.skipWelcome` are described as what they are: accepted,
+  and not used.
+
+### Engineering
+
+- Microsoft Edge 153 closes its whole browser when a page reads a stored
+  folder handle back from the browser's database, which every
+  linked-folder test does, so those tests skip on Edge and keep running on
+  Chromium. A drawing test that needs a quick machine skips on CI, where
+  the runner never is, and keeps running on local boards.
+
 ## [5.1.0] - 2026-09-21
 
 A photograph of a printed communication symbol is a third kind of picture,

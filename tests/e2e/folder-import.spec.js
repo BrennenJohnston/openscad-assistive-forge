@@ -187,6 +187,10 @@ test.describe('linked folders on the welcome screen', () => {
     ({ browserName }) => browserName !== 'chromium',
     'File System Access API + OPFS handles are Chromium-only'
   )
+  test.skip(
+    ({ channel }) => channel === 'msedge',
+    'D-189: Edge 153 closes its whole browser when a page reads an OPFS folder handle back from IndexedDB, which every case here does; they run on Chromium'
+  )
 
   const rows = (page) => page.locator('#linkedFoldersList li.linked-folder')
 

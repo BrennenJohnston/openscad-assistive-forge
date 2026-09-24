@@ -1110,6 +1110,33 @@
                   data-tutorial-target="welcome-open-panel"
                 >
                   <h3 id="upload-panel-heading">Open or start a project</h3>
+                  <!-- D-187: a shared link that failed says so here, where the
+                       person lands. The alert is filled after the notice is
+                       shown, so it is announced once; the buttons sit outside
+                       it so they are not read out as part of the message. -->
+                  <div
+                    class="link-failure-notice"
+                    id="linkFailureNotice"
+                    hidden
+                  >
+                    <div id="linkFailureNoticeMessage" role="alert"></div>
+                    <div class="link-failure-notice-actions">
+                      <button
+                        type="button"
+                        class="btn btn-primary"
+                        id="linkFailureRetry"
+                      >
+                        Try again
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline"
+                        id="linkFailureDismiss"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
                   <p>
                     Upload an OpenSCAD (.scad) file to customize its parameters
                     and generate STL files

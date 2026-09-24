@@ -6,6 +6,13 @@
 
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import {
+  MANIFEST_URL,
+  MINIMAL_SCAD,
+  MOCK_BASE,
+  minimalManifest,
+  setupMockManifestServer,
+} from './helpers/mock-manifest-server.js'
 
 // Skip WASM-dependent tests in CI
 const isCI = !!process.env.CI
@@ -21,65 +28,6 @@ test.beforeEach(async ({ page }) => {
 // ---------------------------------------------------------------------------
 // Mock server helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Set up route interception to serve mock manifest and project files.
- * This simulates a GitHub-hosted manifest without requiring real network calls.
- */
-async function setupMockManifestServer(page, {
-  manifest = null,
-  files = {},
-  manifestStatus = 200,
-  manifestContentType = 'application/json',
-  fileStatuses = {},
-  corsHeaders = true,
-} = {}) {
-  const MOCK_BASE = 'https://raw.githubusercontent.com/testuser/testrepo/main'
-
-  // Intercept manifest URL
-  await page.route(`${MOCK_BASE}/forge-manifest.json`, async (route) => {
-    const headers = corsHeaders
-      ? { 'Access-Control-Allow-Origin': '*', 'Content-Type': manifestContentType }
-      : { 'Content-Type': manifestContentType }
-
-    if (manifest === null) {
-      await route.fulfill({ status: 404, body: 'Not Found' })
-      return
-    }
-
-    const body = typeof manifest === 'string' ? manifest : JSON.stringify(manifest)
-    await route.fulfill({ status: manifestStatus, headers, body })
-  })
-
-  // Intercept project file URLs
-  for (const [filename, content] of Object.entries(files)) {
-    const status = fileStatuses[filename] || 200
-    await page.route(`${MOCK_BASE}/${filename}`, async (route) => {
-      const headers = corsHeaders
-        ? { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/plain' }
-        : { 'Content-Type': 'text/plain' }
-      await route.fulfill({ status, headers, body: content })
-    })
-  }
-
-  return MOCK_BASE
-}
-
-/** Minimal valid SCAD content for testing */
-const MINIMAL_SCAD = `
-// Test design
-width = 50; // [10:1:100]
-height = 30; // [10:1:100]
-cube([width, height, 10]);
-`
-
-/** Minimal valid manifest with just files.main */
-function minimalManifest(mainFile = 'test.scad') {
-  return {
-    forgeManifest: '1.0',
-    files: { main: mainFile },
-  }
-}
 
 /** Full manifest with all optional fields */
 function fullManifest() {
@@ -100,9 +48,6 @@ function fullManifest() {
     },
   }
 }
-
-const MOCK_BASE = 'https://raw.githubusercontent.com/testuser/testrepo/main'
-const MANIFEST_URL = `${MOCK_BASE}/forge-manifest.json`
 
 // UF-9 P1: parameter groups render as <details> collapsed by default
 // (F5, owner decision 2026-05-15) — even a group-less SCAD lands in one
@@ -836,4 +781,64 @@ test.describe('Starter subset (IR-9)', () => {
       ).toBe(0)
     }
   })
+})
+
+// ---------------------------------------------------------------------------
+// D-192: the preset a link applies is the preset the list shows
+//
+// The handler applied the preset and set the hidden native select, but never
+// refreshed the searchable list a person sees, which kept saying "design
+// default values". The design here has a parameter the presets leave alone,
+// like the example's $fn: a preset that sets some of a design's parameters
+// is applied, not changed. The load test above says "preset auto-selects" and never
+// looked, so this went unseen until the example's presets could import.
+// ---------------------------------------------------------------------------
+
+test.describe('The preset a link applies is the one the list shows (D-192)', () => {
+  const THREE_PARAMETER_SCAD = `
+width = 50; // [10:1:100]
+height = 30; // [10:1:100]
+depth = 10; // [5:1:40]
+cube([width, height, depth]);
+`
+  const PRESETS = JSON.stringify({
+    parameterSets: {
+      'Config A': { width: '75', height: '50' },
+      'Config B': { width: '100', height: '80' },
+    },
+    fileFormatVersion: '1',
+  })
+
+  const selectedOption = (page) =>
+    page.evaluate(() => {
+      const select = document.getElementById('presetSelect')
+      return select && select.selectedIndex >= 0
+        ? select.options[select.selectedIndex].text
+        : null
+    })
+
+  for (const [how, query, expected] of [
+    ['the manifest default', '', 'Config A'],
+    ['a ?preset= override', '&preset=Config+B', 'Config B'],
+  ]) {
+    test(`${how} is named in the visible preset list`, async ({ page }) => {
+      test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+      await setupMockManifestServer(page, {
+        manifest: fullManifest(),
+        files: {
+          'test.scad': THREE_PARAMETER_SCAD,
+          'helper.txt': '// companion content\n',
+          'presets.json': PRESETS,
+        },
+      })
+      await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}${query}`)
+
+      // The handler has applied it: the hidden select holds it.
+      await expect.poll(() => selectedOption(page), { timeout: 60_000 }).toBe(expected)
+      // And the list a person sees says the same, with nothing marked changed.
+      await expect(page.locator('#presetComboboxInput')).toHaveValue(expected)
+      await expect(page.locator('#savePresetBtn')).toHaveAttribute('data-dirty', 'false')
+    })
+  }
 })

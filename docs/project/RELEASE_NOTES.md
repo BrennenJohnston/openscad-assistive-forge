@@ -1,5 +1,17 @@
 # Release Notes
 
+## v5.1.1 (2026-09-23)
+
+Shared project links open for the person who receives them. A first visit
+previews the project instead of saying "Preview failed"; a link that fails
+says why on the Main Page, with Try again; a direct link to an archive
+follows Git LFS, waits for the welcome dialog, and reports an archive it
+cannot open; the preset a link applies is named in the preset list. The
+example branch an author copies is true again: its presets load, its
+README walks through sharing your own design, and its keyguard example
+opens an 8.9 MB bundle with no Git LFS limit. The memory warning banner no
+longer takes keyboard focus while it is hidden.
+
 ## v5.1.0 (2026-09-21)
 
 A photograph of a printed communication symbol converts into a charm now.

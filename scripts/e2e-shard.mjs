@@ -307,6 +307,20 @@ export const MEASURED_SECONDS = {
   // tenth of their size, and rounding 7.8 to 10 is already the whole margin
   // those ratios exist to buy.
   'potrace-engine.spec.js': 10.0,
+  // IR-R2, the shared-link road: three new files, MEASURED locally on
+  // Chromium. Booked at DEFAULT_WEIGHT_S they added three minutes of test time
+  // to every lane and put the three-shard Edge and Firefox lanes at 35.2 and
+  // 35.1 of their 35-minute ceiling (34.7 and 34.6 without them); booked at
+  // what they cost, the lanes project to 34.9 and 34.8.
+  //   first-visit-links   two cases, 3 s and 27 s (the second holds the
+  //                       engine 6 s on every worker restart); both skip on
+  //                       CI, so this is what a local board pays.
+  //   project-link-lane   two cases, 3.9 s (Firefox 8.6 s); one skips on CI.
+  //   link-failure-notice six cases, 17.8 to 18.5 s (Firefox 36 s); no
+  //                       engine, so all six run on CI.
+  'first-visit-links.spec.js': 40.0,
+  'project-link-lane.spec.js': 10.0,
+  'link-failure-notice.spec.js': 30.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

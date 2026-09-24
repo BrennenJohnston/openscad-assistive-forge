@@ -444,3 +444,72 @@ test('the complexity advisory is announced once', async ({ page }) => {
     .poll(() => statusEverShowed(page, /This model is complex/))
     .toBe(true);
 });
+
+// ── D-190: a banner that is not showing is not there for anyone ───────────
+//
+// The banner was hidden only by sliding it above the window. Its "Save
+// Project" and "Dismiss" buttons stayed in the Tab order on every page, two
+// presses on buttons nobody could see, and its role="alert" text, "High
+// memory usage detected", stayed where a screen reader could reach it while
+// memory was normal. Measured on 2026-09-23 in Chrome 150: the banner at
+// y = -46 px, 46 px tall, two focusable buttons between "Classic" and "High
+// contrast".
+
+async function mainPage(page) {
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 });
+}
+
+/** The ids Tab reaches from the top of the page, in order. */
+async function tabStops(page, count) {
+  await page.evaluate(() => document.activeElement?.blur());
+  const stops = [];
+  for (let i = 0; i < count; i++) {
+    await page.keyboard.press('Tab');
+    stops.push(
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        return el ? el.id || el.tagName : null;
+      })
+    );
+  }
+  return stops;
+}
+
+test.describe('the memory banner when memory is normal (D-190)', () => {
+  test('Tab never lands in it, and it is hidden, not only slid away', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await mainPage(page);
+    const banner = page.locator('#memoryBanner');
+    await expect(banner).toHaveAttribute('data-visible', 'false');
+
+    const stops = await tabStops(page, 12);
+    const inBanner = await page.evaluate(
+      (ids) =>
+        ids.filter((id) => document.getElementById(id)?.closest('#memoryBanner')),
+      stops.filter(Boolean)
+    );
+    expect(inBanner, `Tab stops: ${stops.join(', ')}`).toEqual([]);
+    await expect(banner).toBeHidden();
+  });
+
+  test('once it shows, it is seen and reachable again', async ({ page }) => {
+    test.setTimeout(240_000);
+    await mainPage(page);
+    await page.evaluate(() => {
+      const b = document.getElementById('memoryBanner');
+      b.dataset.state = 'critical';
+      b.dataset.visible = 'true';
+    });
+    await expect(page.locator('#memoryBanner')).toBeVisible();
+    await expect(page.locator('#memoryBannerSave')).toBeVisible();
+    const stops = await tabStops(page, 12);
+    expect(stops, `Tab stops: ${stops.join(', ')}`).toContain('memoryBannerSave');
+  });
+});

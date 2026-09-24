@@ -390,6 +390,20 @@ async function fetchBlob(url, fileName) {
 }
 
 /**
+ * Download a project archive for a direct link (`?project=`), the same way a
+ * manifest's bundle is downloaded: a Git LFS pointer served by
+ * raw.githubusercontent.com is followed to media.githubusercontent.com, and
+ * every failure is a ManifestError whose message names the file.
+ *
+ * @param {string} url       The archive's URL
+ * @param {string} fileName  Human-readable name for error messages
+ * @returns {Promise<Blob>}
+ */
+export async function fetchProjectBlob(url, fileName) {
+  return fetchBlob(url, fileName);
+}
+
+/**
  * Fetch a single file with CORS-aware error handling.
  *
  * @param {string} url       Fully-resolved URL

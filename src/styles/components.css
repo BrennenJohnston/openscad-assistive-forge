@@ -9680,11 +9680,20 @@ button.file-nav-folder-row {
   gap: var(--space-md);
   font-weight: 500;
   transform: translateY(-100%);
-  transition: transform var(--motion-slow) ease-out;
+  /* D-190: sliding it away left its buttons in the Tab order and its alert
+     text within a screen reader's reach. Hidden, once the slide is over. */
+  visibility: hidden;
+  transition:
+    transform var(--motion-slow) ease-out,
+    visibility 0s linear var(--motion-slow);
 }
 
 .memory-banner[data-visible='true'] {
   transform: translateY(0);
+  visibility: visible;
+  transition:
+    transform var(--motion-slow) ease-out,
+    visibility 0s;
 }
 
 .memory-banner[data-state='critical'] {
@@ -9748,7 +9757,8 @@ button.file-nav-folder-row {
   .memory-status-badge[data-state='emergency'] {
     animation: none;
   }
-  .memory-banner {
+  .memory-banner,
+  .memory-banner[data-visible='true'] {
     transition: none;
   }
 }
@@ -14828,6 +14838,51 @@ body.tutorial-body-locked {
 
 .parameter-notice-dismiss {
   min-height: var(--size-touch-target);
+}
+
+/* ============================================================
+   A shared link that failed (D-187): at the top of "Open or start
+   a project" on the Main Page, until dismissed
+   ============================================================ */
+
+.link-failure-notice {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md);
+  border: 2px solid var(--color-error);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  text-align: start;
+}
+
+.link-failure-notice-title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.link-failure-notice-reason {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.link-failure-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+[data-high-contrast='true'] .link-failure-notice {
+  border-width: 3px;
+}
+
+@media (forced-colors: active) {
+  .link-failure-notice {
+    border: 2px solid CanvasText;
+  }
 }
 
 /* ============================================================
