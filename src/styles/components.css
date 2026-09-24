@@ -9680,11 +9680,20 @@ button.file-nav-folder-row {
   gap: var(--space-md);
   font-weight: 500;
   transform: translateY(-100%);
-  transition: transform var(--motion-slow) ease-out;
+  /* D-190: sliding it away left its buttons in the Tab order and its alert
+     text within a screen reader's reach. Hidden, once the slide is over. */
+  visibility: hidden;
+  transition:
+    transform var(--motion-slow) ease-out,
+    visibility 0s linear var(--motion-slow);
 }
 
 .memory-banner[data-visible='true'] {
   transform: translateY(0);
+  visibility: visible;
+  transition:
+    transform var(--motion-slow) ease-out,
+    visibility 0s;
 }
 
 .memory-banner[data-state='critical'] {
@@ -9748,7 +9757,8 @@ button.file-nav-folder-row {
   .memory-status-badge[data-state='emergency'] {
     animation: none;
   }
-  .memory-banner {
+  .memory-banner,
+  .memory-banner[data-visible='true'] {
     transition: none;
   }
 }
