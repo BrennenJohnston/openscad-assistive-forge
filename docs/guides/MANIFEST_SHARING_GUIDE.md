@@ -608,29 +608,29 @@ git commit -m "chore: add Git LFS tracking"
 
 Then add and commit your ZIP as normal, and Git LFS handles the rest.
 
-**GitHub Free LFS quotas:**
+**GitHub LFS quotas:**
 
 | Resource | GitHub Free | GitHub Team/Enterprise |
 |----------|-------------|----------------------|
 | Per-file size | 2 GB | 4–5 GB |
 | Storage quota | 10 GiB | 250 GiB |
 | Bandwidth quota | 10 GiB/month | 250 GiB/month |
-| Extra data packs | $5/month for +50 GiB | same |
+| Beyond the quota | blocked, or billed per GiB (see below) | same |
 
-**Important:** bandwidth is a hard cutoff. When the month's 10 GiB is spent and the account has no payment method, GitHub switches LFS off until the next month. Downloads do not slow down; they stop, and the link fails with "server returned 403". From Forge 5.1.1 the person sees that on the Main Page, with the reason and **Try again**.
+**Important:** bandwidth is a hard cutoff unless you choose to pay for more. GitHub no longer sells data packs; LFS use beyond the quota is metered instead. When the month's 10 GiB is spent and the account has no payment method, or has a $0 budget for Git LFS, GitHub switches LFS off until the next month. Downloads do not slow down; they stop, and the link fails with "server returned 403". From Forge 5.1.1 the person sees that on the Main Page, with the reason and **Try again**. With a payment method and no spending limit on Git LFS, the extra downloads are billed per GiB instead. GitHub's [Git LFS billing](https://docs.github.com/en/billing/concepts/product-billing/git-lfs) page has the current prices and explains budgets.
 
 **Practical download limits per month (GitHub Free, 10 GiB bandwidth):**
 
-| Bundle size | Free tier | With 1 data pack (+50 GiB) |
-|-------------|-----------|---------------------------|
-| 50 MB | ~200 loads/month | ~1,200 loads/month |
-| 65.7 MB (the full keyguard example) | ~150 loads/month | ~935 loads/month |
-| 100 MB | ~100 loads/month | ~600 loads/month |
-| 170 MB | ~59 loads/month | ~352 loads/month |
-| 250 MB | ~40 loads/month | ~240 loads/month |
-| 500 MB | ~20 loads/month | ~120 loads/month |
-| 1 GB | ~10 loads/month | ~60 loads/month |
-| 2 GB (max) | ~5 loads/month | ~30 loads/month |
+| Bundle size | Opens a month on GitHub Free |
+|-------------|------------------------------|
+| 50 MB | ~200 |
+| 65.7 MB (the full keyguard example) | ~150 |
+| 100 MB | ~100 |
+| 170 MB | ~59 |
+| 250 MB | ~40 |
+| 500 MB | ~20 |
+| 1 GB | ~10 |
+| 2 GB (max) | ~5 |
 
 **Recommendation:** Best for projects under ~200 MB with moderate traffic (fewer than 50 loads/month). For higher traffic, make a lean bundle small enough for plain git, or put a copy on your own GitHub Pages site (below).
 
