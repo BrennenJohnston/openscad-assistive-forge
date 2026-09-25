@@ -74,12 +74,32 @@ export function describeAdjustments(adjustments, appliedValues = {}) {
 }
 
 /**
+ * The notice for a link that names a preset the project does not have (D-195).
+ * It used to be a status line that stood about 300 ms before the render
+ * replaced it, and the announcer replaced it at once: nobody learned that no
+ * preset was applied.
+ *
+ * @param {string} name - The preset name the link asked for
+ * @returns {{title: string, lines: string[], kind: string, dismissLabel: string}}
+ */
+export function describeMissingPreset(name) {
+  return {
+    kind: 'missing-preset',
+    title: 'This link asks for a preset this project does not have',
+    lines: [
+      `There is no preset named "${name}". No preset was applied. You can choose one under Presets.`,
+    ],
+    dismissLabel: 'Dismiss the notice about the preset',
+  };
+}
+
+/**
  * Create the notice area.
  *
  * @param {HTMLElement} container - Where notices are rendered
  * @param {Object} [deps]
  * @param {Function} [deps.announce] - Speak a sentence
- * @returns {{show: Function, clear: Function}}
+ * @returns {{show: Function, add: Function, clear: Function}}
  */
 export function createParameterNotices(container, { announce } = {}) {
   function clear() {
@@ -89,22 +109,18 @@ export function createParameterNotices(container, { announce } = {}) {
   }
 
   /**
-   * Show a dismissible notice. Replaces any notice already showing: two
-   * link-adjustment notices at once would mean the older one is about a
-   * project that is no longer loaded.
+   * Build one notice, with a Dismiss button that removes this notice alone.
    *
-   * @param {{title: string, lines: string[]}} notice
+   * @param {{title: string, lines: string[], kind?: string, dismissLabel?: string}} notice
+   * @returns {HTMLElement}
    */
-  function show(notice) {
-    if (!container || !notice) return;
-    clear();
-
+  function build(notice) {
     const box = document.createElement('div');
     box.className = 'parameter-notice';
     // Not role="alert": that interrupts, and this is information about
     // something that has already happened. The container is a polite live
     // region, which announces it once without cutting anything off.
-    box.setAttribute('data-notice', 'url-adjustments');
+    box.setAttribute('data-notice', notice.kind || 'url-adjustments');
 
     const heading = document.createElement('p');
     heading.className = 'parameter-notice-title';
@@ -124,23 +140,64 @@ export function createParameterNotices(container, { announce } = {}) {
     dismiss.textContent = 'Dismiss';
     dismiss.setAttribute(
       'aria-label',
-      'Dismiss the notice about changed values'
+      notice.dismissLabel || 'Dismiss the notice about changed values'
     );
     dismiss.addEventListener('click', () => {
-      clear();
+      box.remove();
+      // The button took the focus away with it. When another notice is
+      // still showing, the focus goes to its Dismiss button.
+      const next = container.querySelector('.parameter-notice-dismiss');
+      if (next) {
+        next.focus();
+      } else {
+        container.hidden = true;
+      }
       if (typeof announce === 'function') {
         announce('Notice dismissed.');
       }
     });
 
     box.append(heading, list, dismiss);
+    return box;
+  }
+
+  function reveal(notice, box) {
     container.appendChild(box);
     container.hidden = false;
-
     if (typeof announce === 'function') {
       announce([notice.title, ...notice.lines].join(' '));
     }
   }
 
-  return { show, clear };
+  /**
+   * Show a dismissible notice. Replaces any notice already showing: two
+   * link-adjustment notices at once would mean the older one is about a
+   * project that is no longer loaded.
+   *
+   * @param {{title: string, lines: string[], kind?: string, dismissLabel?: string}} notice
+   */
+  function show(notice) {
+    if (!container || !notice) return;
+    clear();
+    reveal(notice, build(notice));
+  }
+
+  /**
+   * Show a notice beside the ones already showing, for a second thing the
+   * same link has to say. D-195: a missing preset is found after a changed
+   * value or an unknown starter setting was reported, and saying it must not
+   * erase them. With nothing showing, this is show().
+   *
+   * @param {{title: string, lines: string[], kind?: string, dismissLabel?: string}} notice
+   */
+  function add(notice) {
+    if (!container || !notice) return;
+    if (!container.querySelector('.parameter-notice')) {
+      show(notice);
+      return;
+    }
+    reveal(notice, build(notice));
+  }
+
+  return { show, add, clear };
 }

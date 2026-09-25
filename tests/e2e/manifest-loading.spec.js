@@ -885,3 +885,185 @@ test.describe('The status line after a preset link (D-194)', () => {
     expect(withDash.map((h) => `${h.src}: ${h.text}`)).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+// D-195: a link that names a preset the project does not have says so
+//
+// It said so only in the status line, which stood about 300 ms before the
+// render replaced it, and the announcer replaced it at once with "loaded from
+// manifest": nobody learned that no preset was applied. Now it is a notice
+// that stays until dismissed, like the one for a starter setting the design
+// does not have.
+// ---------------------------------------------------------------------------
+
+test.describe('A link that names a missing preset (D-195)', () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  const TITLE = 'This link asks for a preset this project does not have'
+  const LINE =
+    'There is no preset named "No Such Preset". No preset was applied. You can choose one under Presets.'
+  const PRESETS = JSON.stringify({
+    parameterSets: { 'Config A': { width: '75', height: '50' } },
+    fileFormatVersion: '1',
+  })
+
+  // Every time the status region or the announcer goes to a new sentence. The
+  // announcer empties itself before each announcement, so a sentence said
+  // twice is counted twice, and a sentence said once is counted once.
+  async function recordSaid(page) {
+    await page.addInitScript(() => {
+      window.__said = []
+      const start = () => {
+        for (const id of ['statusArea', 'srAnnouncer']) {
+          const el = document.getElementById(id)
+          if (!el) continue
+          let last = el.textContent.trim()
+          new MutationObserver(() => {
+            const text = el.textContent.trim()
+            if (text && text !== last) window.__said.push({ src: id, text })
+            last = text
+          }).observe(el, { childList: true, characterData: true, subtree: true })
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start)
+      } else {
+        start()
+      }
+    })
+  }
+
+  const said = (page, src) =>
+    page.evaluate(
+      (s) => window.__said.filter((e) => e.src === s).map((e) => e.text),
+      src
+    )
+
+  // The save-copy question may follow the load; the keyboard needs the page.
+  async function skipSaveCopyIfAsked(page) {
+    const skip = page.locator('#manifestSaveCopySkip')
+    const asked = await skip
+      .waitFor({ state: 'visible', timeout: 3000 })
+      .then(
+        () => true,
+        () => false
+      )
+    if (asked) {
+      await skip.click()
+      await skip.waitFor({ state: 'hidden', timeout: 3000 })
+      // closeModal gives the focus back, then again 50 ms and one frame
+      // later (its WebKit retry). MEASURED: a test that moved the focus
+      // inside those 50 ms lost it to the retry in 3 runs of 10.
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => requestAnimationFrame(() => resolve()), 60)
+          )
+      )
+    }
+  }
+
+  async function openMissingPresetLink(page) {
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': PRESETS,
+      },
+    })
+    await recordSaid(page)
+    await page.goto(
+      `/?manifest=${encodeURIComponent(MANIFEST_URL)}&preset=No+Such+Preset`
+    )
+  }
+
+  const presetNotice = (page) =>
+    page.locator('#parameterNotices .parameter-notice[data-notice="missing-preset"]')
+
+  test('says so in a notice, once, and the notice can be dismissed from the keyboard', async ({
+    page,
+  }) => {
+    await openMissingPresetLink(page)
+
+    const notice = presetNotice(page)
+    await expect(notice).toBeVisible({ timeout: 60_000 })
+    await expect(notice.locator('.parameter-notice-title')).toHaveText(TITLE)
+    await expect(notice.locator('li')).toHaveText(LINE)
+
+    // Said once, not again a moment later.
+    const count = async () =>
+      (await said(page, 'srAnnouncer')).filter((t) => t.includes(LINE)).length
+    await expect.poll(count, { timeout: 5_000 }).toBeGreaterThan(0)
+    await page.waitForTimeout(1_500)
+    expect(await count()).toBe(1)
+
+    // The status line says what the plain load says, and the old sentence
+    // that stood for a moment is gone.
+    const status = await said(page, 'statusArea')
+    expect(status).toContain('Test Project loaded from manifest')
+    expect(status.filter((t) => t.includes('not found'))).toEqual([])
+
+    await skipSaveCopyIfAsked(page)
+    const dismiss = page.getByRole('button', {
+      name: 'Dismiss the notice about the preset',
+    })
+    await dismiss.focus()
+    await expect(dismiss).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(notice).toHaveCount(0)
+    await expect(page.locator('#parameterNotices')).toBeHidden()
+    await expect.poll(() => said(page, 'srAnnouncer')).toContain('Notice dismissed.')
+  })
+
+  test('stays on screen after the preview is ready', async ({ page }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+    await openMissingPresetLink(page)
+
+    await expect
+      .poll(() => said(page, 'statusArea'), { timeout: 90_000 })
+      .toContain('Preview ready')
+    await expect(presetNotice(page)).toBeVisible()
+    await expect(presetNotice(page)).toContainText(LINE)
+  })
+
+  test('keeps what else the link reported, and each notice has its own Dismiss', async ({
+    page,
+  }) => {
+    await setupMockManifestServer(page, {
+      manifest: {
+        forgeManifest: '1.0',
+        name: 'Starter Test Project',
+        files: { main: 'test.scad' },
+        defaults: {
+          starterParameters: ['width', 'not_a_parameter'],
+          preset: 'No Such Preset',
+        },
+      },
+      files: { 'test.scad': STARTER_SCAD },
+    })
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const notices = page.locator('#parameterNotices .parameter-notice')
+    await expect(notices).toHaveCount(2, { timeout: 60_000 })
+    await expect(notices.nth(0)).toContainText(
+      'One starting setting in this link is not part of this design'
+    )
+    await expect(notices.nth(1)).toContainText(TITLE)
+
+    await skipSaveCopyIfAsked(page)
+    await page
+      .getByRole('button', { name: 'Dismiss the notice about the preset' })
+      .focus()
+    await page.keyboard.press('Enter')
+
+    await expect(notices).toHaveCount(1)
+    await expect(notices.first()).toContainText(
+      'One starting setting in this link is not part of this design'
+    )
+    // The focus goes to the notice still showing, not to the page.
+    await expect(
+      page.getByRole('button', { name: 'Dismiss the notice about changed values' })
+    ).toBeFocused()
+  })
+})
