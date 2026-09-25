@@ -9202,14 +9202,21 @@ if (rounded) {
                 `[DeepLink] Preset not found: "${presetName}". Available:`,
                 presets.map((p) => p.name)
               );
-              updateStatus(
-                `Loaded: ${projectName} (preset "${presetName}" not found)`
-              );
-              announceImmediate(`${projectName} loaded from manifest`);
+              // D-195: a notice, not the status line. The status line stood
+              // about 300 ms before the render replaced it, and the announcer
+              // replaced it at once, so nobody learned no preset was applied.
+              // add(), not show(): what else this link reported stays.
+              updateStatus(`${projectName} loaded from manifest`);
+              const { createParameterNotices, describeMissingPreset } =
+                await import('./js/parameter-notices.js');
+              createParameterNotices(
+                document.getElementById('parameterNotices'),
+                { announce: (text) => announceImmediate(text) }
+              ).add(describeMissingPreset(presetName));
             }
           }
         } else {
-          updateStatus(`Loaded: ${projectName}`);
+          updateStatus(`${projectName} loaded from manifest`);
           announceImmediate(`${projectName} loaded from manifest`);
         }
 
