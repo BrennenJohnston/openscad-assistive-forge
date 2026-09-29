@@ -71,7 +71,6 @@ jobs:
           # "type": "module", so Node would load openscad.js as a module.
           engine="$RUNNER_TEMP/openscad.cjs"
           cp "$out/openscad.js" "$engine"
-          node "$engine" --version
           for f in Plug_Puller_SingleFile Plug_Puller_Two_Sided_SingleFile; do
             git show "origin/example-manifest:plug-puller/$f.scad" > "$out/$f.scad"
             status=0
