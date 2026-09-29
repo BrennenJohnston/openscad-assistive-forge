@@ -67,11 +67,15 @@ jobs:
           echo "| File | Time | Fallback warnings | Result |" > "$summary"
           echo "|---|---|---|---|" >> "$summary"
           failed=0
-          node "$out/openscad.js" --version
+          # The node build is CommonJS, and this repo's package.json says
+          # "type": "module", so Node would load openscad.js as a module.
+          engine="$RUNNER_TEMP/openscad.cjs"
+          cp "$out/openscad.js" "$engine"
+          node "$engine" --version
           for f in Plug_Puller_SingleFile Plug_Puller_Two_Sided_SingleFile; do
             git show "origin/example-manifest:plug-puller/$f.scad" > "$out/$f.scad"
             status=0
-            node "$out/openscad.js" --backend=Manifold -D '$fa=12' -D '$fs=2' \
+            node "$engine" --backend=Manifold -D '$fa=12' -D '$fs=2' \
               --export-format=off -o "$out/$f.off" "$out/$f.scad" > "$out/$f.log" 2>&1 || status=$?
             fallback=$(grep -c 'Minkowski failed' "$out/$f.log" || true)
             time=$( (grep -h 'Total rendering time' "$out/$f.log" || true) | tail -1 | sed 's/.*time: //')

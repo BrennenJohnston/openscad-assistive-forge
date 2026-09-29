@@ -104,7 +104,7 @@ fi
   echo "WASM build type:  $WASM_TYPE"
   echo "Build image:      $IMAGE"
   echo "Emscripten:       $(docker run --rm "$IMAGE" emcc --version | head -1)"
-  echo "CGAL:             $(docker run --rm "$IMAGE" grep -h 'define CGAL_VERSION_STR' /emsdk/upstream/emscripten/cache/sysroot/include/CGAL/version.h | sed 's/.*CGAL_VERSION_STR //')"
+  echo "CGAL:             $(docker run --rm "$IMAGE" awk '/#define CGAL_VERSION /{print $3}' /emsdk/upstream/emscripten/cache/sysroot/include/CGAL/version.h)"
   echo "CMake settings:   -DCMAKE_BUILD_TYPE=Release -DSNAPSHOT=ON -DEXPERIMENTAL=ON"
   echo
   if [ "$VARIANT" = "round-to-nearest" ]; then
