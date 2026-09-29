@@ -1,0 +1,108 @@
+name: Build OpenSCAD wasm
+
+# OpenSCAD's WebAssembly engine is built here from one pinned upstream commit,
+# so the app can say exactly what went into the engine it ships and anybody
+# can reproduce it by running this workflow. The recipe is
+# scripts/build-openscad-wasm.sh; its header says what the round-to-nearest
+# variant changes and why.
+#
+# It runs on request, and on a pull request that touches the recipe. The
+# output is an artifact; a session downloads it, checks the numbers against
+# the run log, and commits it with the recipe. Nothing here writes to
+# public/wasm/.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: round-to-nearest (the fix) or baseline (upstream unchanged)
+        required: true
+        default: round-to-nearest
+        type: choice
+        options: [round-to-nearest, baseline]
+  pull_request:
+    paths:
+      - 'scripts/build-openscad-wasm.sh'
+      - '.github/workflows/build-openscad-wasm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ inputs.variant || 'round-to-nearest' }} (${{ matrix.wasm_type }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        wasm_type: [web, node]
+    env:
+      VARIANT: ${{ inputs.variant || 'round-to-nearest' }}
+      WASM_TYPE: ${{ matrix.wasm_type }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: ./scripts/build-openscad-wasm.sh
+
+      - name: Setup Node.js
+        if: matrix.wasm_type == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The model that showed the problem. Its rounded edges were minkowski()
+      # with a sphere; with the baseline engine both files print "Minkowski
+      # failed" and take most of a minute. The round-to-nearest build must
+      # render both without falling back.
+      - name: Render the Plug Puller 0.13.0 with Forge's flags
+        if: matrix.wasm_type == 'node'
+        run: |
+          git fetch --quiet --depth=1 origin 'refs/heads/example-manifest:refs/remotes/origin/example-manifest'
+          out="build/openscad-wasm/${VARIANT}-node"
+          summary="$out/plug-puller.md"
+          echo "| File | Time | Fallback warnings | Result |" > "$summary"
+          echo "|---|---|---|---|" >> "$summary"
+          failed=0
+          for f in Plug_Puller_SingleFile Plug_Puller_Two_Sided_SingleFile; do
+            git show "origin/example-manifest:plug-puller/$f.scad" > "$out/$f.scad"
+            status=0
+            node "$out/openscad.js" --backend=Manifold -D '$fa=12' -D '$fs=2' \
+              --export-format=off -o "$out/$f.off" "$out/$f.scad" > "$out/$f.log" 2>&1 || status=$?
+            fallback=$(grep -c 'Minkowski failed' "$out/$f.log" || true)
+            time=$( (grep -h 'Total rendering time' "$out/$f.log" || true) | tail -1 | sed 's/.*time: //')
+            result=$( (grep -h 'Facets:' "$out/$f.log" || true) | tail -1 | tr -s ' ')
+            echo "| $f | $time | $fallback | exit $status,$result |" >> "$summary"
+            if [ "$status" != "0" ]; then failed=1; fi
+            if [ "$VARIANT" = "round-to-nearest" ] && [ "$fallback" != "0" ]; then failed=1; fi
+          done
+          cat "$summary"
+          exit $failed
+
+      - name: Record what was built
+        if: always()
+        run: |
+          out="build/openscad-wasm/${VARIANT}-${WASM_TYPE}"
+          {
+            echo "## OpenSCAD wasm, ${VARIANT} (${WASM_TYPE})"
+            echo
+            echo '```'
+            cat "$out/BUILD-INFO.txt" 2>/dev/null || echo "no BUILD-INFO.txt: the build did not finish"
+            echo '```'
+            if [ -f "$out/plug-puller.md" ]; then
+              echo
+              cat "$out/plug-puller.md"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: openscad-wasm-${{ env.VARIANT }}-${{ matrix.wasm_type }}
+          path: |
+            build/openscad-wasm/${{ env.VARIANT }}-${{ matrix.wasm_type }}/
+          retention-days: 30
+          if-no-files-found: error
