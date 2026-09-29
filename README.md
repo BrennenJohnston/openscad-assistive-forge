@@ -10,7 +10,7 @@ You keep your project in your own public GitHub repository and edit it whenever 
 
 ## 2. Try it live
 
-These four links open the examples stored on this branch:
+These six links open the examples stored on this branch:
 
 - **The box**, a small parametric storage box with five presets:
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest.json>
@@ -20,6 +20,12 @@ These four links open the examples stored on this branch:
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-volksswitch-full.json>
 - **The braille card and cylinder generator**:
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-braille.json>
+- **The Plug Puller, one-sided puller**, from the [Plug Puller](https://github.com/BrennenJohnston/openscad-plug-puller) project: a 3D-printed tool that pulls a wall plug with the whole hand instead of a fingertip pinch, shaped to the plug and the hand, for a plug up to 24 mm thick. Its four Customizer steps are shown first (`defaults.starterParameters`); **Show all parameters** reveals the rest.
+  <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/plug-puller/forge-manifest-one-sided.json>
+- **The Plug Puller, two-sided puller**, for a thicker plug, a USB-C tip or a round cord plug:
+  <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/plug-puller/forge-manifest-two-sided.json>
+
+The Plug Puller's files live under `plug-puller/`: its two manifests, with copies of that project's single-file builds and preset files at version 0.13.0. Refresh the copies from its `dist/` and `presets/` folders when it releases a new version; the links stay the same. Those files keep the Plug Puller's own license, PolyForm Noncommercial 1.0.0.
 
 Someone opening Forge for the first time sees the welcome dialog first ("Choose your interface", then "Download & Continue"), and then the project.
 

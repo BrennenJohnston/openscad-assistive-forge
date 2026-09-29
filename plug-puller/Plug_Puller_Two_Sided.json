@@ -1,0 +1,37 @@
+{
+    "fileFormatVersion": "1",
+    "parameterSets": {
+        "Round extension cord - NEMA 5-15": {
+            "plug_preset": "Heavy-duty extension cord - NEMA 5-15",
+            "size": "Medium",
+            "attachment": "Zip ties + Velcro strap",
+            "quality": "64"
+        },
+        "USB-C laptop plug - measured": {
+            "plug_preset": "Measure my plug",
+            "measure_plug_length": "23",
+            "measure_plug_width_prong_end": "13",
+            "measure_plug_width_cord_end": "13",
+            "measure_cord_thickness": "7",
+            "plug_sides": "Rounded sides",
+            "size": "Medium",
+            "attachment": "Zip ties",
+            "quality": "64"
+        },
+        "USB-C laptop tip": {
+            "plug_preset": "USB-C laptop tip",
+            "size": "Medium",
+            "quality": "64"
+        },
+        "Flat 2-prong lamp plug - NEMA 1-15": {
+            "plug_preset": "Flat 2-prong lamp plug - NEMA 1-15",
+            "size": "Medium",
+            "quality": "64"
+        },
+        "Standard 3-prong plug - NEMA 5-15": {
+            "plug_preset": "Standard 3-prong plug - NEMA 5-15",
+            "size": "Medium",
+            "quality": "64"
+        }
+    }
+}
