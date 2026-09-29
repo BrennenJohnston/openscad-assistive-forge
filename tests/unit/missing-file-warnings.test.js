@@ -204,6 +204,61 @@ describe('generateMissingFileWarnings — quoted-path directives', () => {
   });
 });
 
+// D-198: OpenSCAD never reads a directive written inside a comment, so no
+// warning may come from one. The Plug Puller's single-file build explains
+// its old include order in comments and was warned about files it never uses.
+describe('generateMissingFileWarnings — comments (D-198)', () => {
+  const noFilesExist = () => false;
+
+  it('ignores a directive in a line comment', () => {
+    const scad = '// include <presets.scad>\ncube(10);';
+    expect(generateMissingFileWarnings(scad, noFilesExist)).toEqual([]);
+  });
+
+  it('ignores the Plug Puller comments that were warned about', () => {
+    const scad = [
+      '// `include <presets.scad>`. Include order matters: OpenSCAD evaluates',
+      '// main SCAD must `include <fit_measured.scad>` BEFORE `include <presets.scad>`.',
+      'quality = 64;',
+    ].join('\n');
+    expect(generateMissingFileWarnings(scad, noFilesExist)).toEqual([]);
+  });
+
+  it('ignores a directive in a block comment over several lines', () => {
+    const scad = '/* Usage:\n   use <lib/utils.scad>\n   include "config.txt"\n*/\ncube(10);';
+    expect(generateMissingFileWarnings(scad, noFilesExist)).toEqual([]);
+  });
+
+  it('still warns about a real directive after a comment', () => {
+    const scad = '// include <old.scad>\ninclude <real.scad> // real\n/* use <old2.scad> */ use <real2.scad>';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain("'real.scad'");
+    expect(warnings[1]).toContain("'real2.scad'");
+  });
+
+  it('does not treat // inside a string as a comment', () => {
+    const scad = 'echo("https://example.com"); include <real.scad>';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'real.scad'");
+  });
+
+  it('does not treat /* inside a string as a comment', () => {
+    const scad = 'echo("/*");\ninclude <real.scad>\necho("*/");';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'real.scad'");
+  });
+
+  it('keeps an escaped quote inside a string from ending it', () => {
+    const scad = 'echo("say \\"//\\" here"); include <real.scad>';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'real.scad'");
+  });
+});
+
 describe('ConsolePanel + ErrorLogPanel compatibility', () => {
   it('WARNING: prefix is recognized by ConsolePanel.parseLine pattern', () => {
     const warningLine =
