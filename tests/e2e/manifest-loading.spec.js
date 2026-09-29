@@ -1069,6 +1069,49 @@ test.describe('A link that names a missing preset (D-195)', () => {
 })
 
 // ---------------------------------------------------------------------------
+// D-199: a manifest project goes by its main file's name
+//
+// The manifest lane hands the loader no file object, so the loader fell back
+// to the placeholder "example.scad": the name in the file box and the Classic
+// title bar, in "Loaded: ... + N presets" (said to screen readers too), and
+// the key the project's interface preferences are kept under. Every manifest
+// project was "example.scad".
+// ---------------------------------------------------------------------------
+
+test.describe('The name a manifest project goes by (D-199)', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test('is its main file, in the file box and in what is said', async ({ page }) => {
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    await expect(page.locator('#fileInfoSummary')).toHaveText('test.scad', {
+      timeout: 60_000,
+    })
+    const said = async () =>
+      (await liveHistory(page)).map((h) => `${h.src}: ${h.text}`)
+    await expect
+      .poll(async () => (await said()).some((s) => s.includes('Loaded: test.scad')), {
+        timeout: 30_000,
+      })
+      .toBe(true)
+    const all = await said()
+    expect(all.filter((s) => s.includes('example.scad')), all.join(' | ')).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
 // D-200: a link that applies a preset renders the preset, and only that
 //
 // The file loader started its first preview with the design's own values,

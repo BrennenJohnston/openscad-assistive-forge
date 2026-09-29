@@ -571,7 +571,9 @@ export function initFileHandler({
       typeof file?.name === 'string' && file.name.trim().length > 0
         ? file.name
         : '';
-    let fileName = rawFileName || 'example.scad';
+    // D-199: a manifest link or Reload passes content with no file object,
+    // but it does name the main file, which is what a ZIP goes by as well.
+    let fileName = rawFileName || mainFilePathArg || 'example.scad';
     let fileContent = content;
     let projectFiles = extractedFiles;
     let mainFilePath = mainFilePathArg;
