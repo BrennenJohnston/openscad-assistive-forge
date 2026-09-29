@@ -557,7 +557,8 @@ export function initFileHandler({
     extractedFiles = null,
     mainFilePathArg = null,
     source = 'user',
-    originalFileNameArg = null
+    originalFileNameArg = null,
+    { deferInitialPreview = false } = {}
   ) {
     if (!file && !content) return;
 
@@ -1390,7 +1391,9 @@ export function initFileHandler({
         }
       }
 
-      if (autoPreviewController) {
+      // D-200: a link that applies a preset next asks for the first preview
+      // itself; one started here would render values it is about to replace.
+      if (autoPreviewController && !deferInitialPreview) {
         if (getAutoPreviewEnabled()) {
           autoPreviewController
             .forcePreview(stateManager.getState().parameters)

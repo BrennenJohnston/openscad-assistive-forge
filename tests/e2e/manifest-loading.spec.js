@@ -1110,3 +1110,85 @@ test.describe('The name a manifest project goes by (D-199)', () => {
     expect(all.filter((s) => s.includes('example.scad')), all.join(' | ')).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+// D-200: a link that applies a preset renders the preset, and only that
+//
+// The file loader started its first preview with the design's own values,
+// then the link applied its preset and rendered again; the first picture was
+// thrown away unseen. My Plug Puller's defaults take 19 s in the browser and
+// its "Small hands" preset under 1 s, so that link made a person wait 20 s
+// for a picture that cost one.
+// ---------------------------------------------------------------------------
+
+test.describe('A link that applies a preset (D-200)', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test('renders once, with the preset values', async ({ page }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+    const dispatches = []
+    const defineArgs = []
+    page.on('console', (msg) => {
+      const text = msg.text()
+      if (text.includes('[AutoPreview Diag] Render dispatch')) dispatches.push(text)
+      if (text.includes('[AutoPreview Diag] Worker defineArgs')) defineArgs.push(text)
+    })
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const status = async () =>
+      (await liveHistory(page)).filter((h) => h.src === 'statusArea').map((h) => h.text)
+    await expect.poll(status, { timeout: 60_000 }).toContain('Preview ready')
+    // A second render would start within the auto-preview debounce.
+    await page.waitForTimeout(3000)
+
+    expect(dispatches, dispatches.join('\n')).toHaveLength(1)
+    expect(defineArgs.join('\n')).toContain('width=75')
+  })
+
+  test('still renders once, with the design values, when the preset is not found', async ({
+    page,
+  }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+    const dispatches = []
+    page.on('console', (msg) => {
+      if (msg.text().includes('[AutoPreview Diag] Render dispatch')) {
+        dispatches.push(msg.text())
+      }
+    })
+    // No autoPreview: the preview must come from the link's own request.
+    await setupMockManifestServer(page, {
+      manifest: { ...fullManifest(), defaults: { preset: 'No Such Preset' } },
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const status = async () =>
+      (await liveHistory(page)).filter((h) => h.src === 'statusArea').map((h) => h.text)
+    await expect.poll(status, { timeout: 60_000 }).toContain('Preview ready')
+    await page.waitForTimeout(3000)
+
+    expect(dispatches, dispatches.join('\n')).toHaveLength(1)
+  })
+})
