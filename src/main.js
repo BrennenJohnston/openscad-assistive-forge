@@ -9073,6 +9073,11 @@ if (rounded) {
         // then take most of them away again, which is worse than either state.
         setStarterParameters(defaults?.starterParameters);
 
+        // ?preset=<name> or manifest defaults.preset. D-200: with one, the
+        // first preview waits until the preset is applied below, so the
+        // design's own values are not rendered and thrown away first.
+        const presetName = initUrlParams.get('preset') || defaults?.preset;
+
         // Step 4 — PROCESS: parse and load the project into the editor
         await fileHandler.handleFile(
           null,
@@ -9080,7 +9085,8 @@ if (rounded) {
           projectFiles,
           mainFile,
           'manifest',
-          projectName
+          projectName,
+          { deferInitialPreview: Boolean(presetName) }
         );
 
         // A name in that list this design does not have is worth saying out
@@ -9140,7 +9146,6 @@ if (rounded) {
         }
 
         // --- ?preset=<name> or manifest defaults.preset -----------------
-        const presetName = initUrlParams.get('preset') || defaults?.preset;
         if (presetName) {
           // After handleFile, presets have been auto-imported from JSON files.
           // Find the matching preset by name and programmatically select it.
@@ -9218,6 +9223,15 @@ if (rounded) {
         } else {
           updateStatus(`${projectName} loaded from manifest`);
           announceImmediate(`${projectName} loaded from manifest`);
+        }
+
+        // D-200: the first preview handleFile left to this handler, with the
+        // preset's values, or the design's own when the preset was not found.
+        // It joins the debounced request above rather than adding a render.
+        if (presetName && autoPreviewController) {
+          autoPreviewController.onParameterChange(
+            stateManager.getState().parameters
+          );
         }
 
         // Auto-preview if manifest requests it
