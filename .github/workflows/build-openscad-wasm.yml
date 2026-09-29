@@ -67,6 +67,7 @@ jobs:
           echo "| File | Time | Fallback warnings | Result |" > "$summary"
           echo "|---|---|---|---|" >> "$summary"
           failed=0
+          node "$out/openscad.js" --version
           for f in Plug_Puller_SingleFile Plug_Puller_Two_Sided_SingleFile; do
             git show "origin/example-manifest:plug-puller/$f.scad" > "$out/$f.scad"
             status=0
@@ -76,7 +77,12 @@ jobs:
             time=$( (grep -h 'Total rendering time' "$out/$f.log" || true) | tail -1 | sed 's/.*time: //')
             result=$( (grep -h 'Facets:' "$out/$f.log" || true) | tail -1 | tr -s ' ')
             echo "| $f | $time | $fallback | exit $status,$result |" >> "$summary"
-            if [ "$status" != "0" ]; then failed=1; fi
+            if [ "$status" != "0" ]; then
+              failed=1
+              echo "::group::$f: the engine's last output"
+              grep -v '^ECHO:' "$out/$f.log" | tail -40
+              echo "::endgroup::"
+            fi
             if [ "$VARIANT" = "round-to-nearest" ] && [ "$fallback" != "0" ]; then failed=1; fi
           done
           cat "$summary"
@@ -99,6 +105,7 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the build
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: openscad-wasm-${{ env.VARIANT }}-${{ matrix.wasm_type }}
