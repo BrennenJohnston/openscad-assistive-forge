@@ -1,0 +1,65 @@
+{
+    "fileFormatVersion": "1",
+    "parameterSets": {
+        "Medium (v6 reference)": {
+            "plug_preset": "Measure my plug",
+            "size": "Medium",
+            "attachment": "Zip ties + Velcro",
+            "velcro_style": "Wing",
+            "hook_hand": "Right",
+            "quality": "64"
+        },
+        "Flat 2-prong lamp plug (NEMA 1-15)": {
+            "plug_preset": "Flat 2-prong lamp plug - NEMA 1-15",
+            "size": "Medium",
+            "attachment": "Zip ties + Velcro",
+            "quality": "64"
+        },
+        "Standard 3-prong plug (NEMA 5-15)": {
+            "plug_preset": "Standard 3-prong plug - NEMA 5-15",
+            "size": "Medium",
+            "attachment": "Zip ties + Velcro",
+            "quality": "64"
+        },
+        "Small hands": {
+            "plug_preset": "Measure my plug",
+            "size": "Small",
+            "attachment": "Zip ties + Velcro",
+            "quality": "64"
+        },
+        "Large hands": {
+            "plug_preset": "Measure my plug",
+            "size": "Large",
+            "attachment": "Zip ties + Velcro",
+            "quality": "64"
+        },
+        "Measure my plug + hand (US vacuum plug)": {
+            "plug_preset": "Measure my plug",
+            "size": "Measure my hand",
+            "attachment": "Zip ties + Velcro",
+            "measure_plug_length": "38",
+            "measure_plug_width_prong_end": "34",
+            "measure_plug_width_cord_end": "34",
+            "measure_plug_thickness_prong_end": "16",
+            "measure_plug_thickness_cord_end": "16",
+            "measure_cord_thickness": "5",
+            "measure_wall_plate_style": "Rocker / Decora",
+            "measure_finger_width": "22",
+            "measure_hand_width": "88",
+            "quality": "64"
+        },
+        "Left-handed + classic velcro slots": {
+            "plug_preset": "Measure my plug",
+            "size": "Medium",
+            "attachment": "Zip ties + Velcro",
+            "velcro_style": "Classic slot",
+            "hook_hand": "Left",
+            "quality": "64"
+        },
+        "Wide 2-prong appliance plug - NEMA 1-15": {
+            "plug_preset": "Wide 2-prong appliance plug - NEMA 1-15",
+            "size": "Medium",
+            "quality": "64"
+        }
+    }
+}

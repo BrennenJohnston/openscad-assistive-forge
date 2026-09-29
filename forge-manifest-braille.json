@@ -1,0 +1,15 @@
+{
+  "forgeManifest": "1.0",
+  "name": "Braille Card & Cylinder STL Generator",
+  "author": "BrennenJohnston",
+  "description": "Parametric generator for 3D-printable Braille cards and cylinders — enter text and print tactile output",
+  "homepage": "https://github.com/BrennenJohnston/openscad-assistive-forge/tree/example-manifest",
+  "files": {
+    "bundle": "Braille_Card_And_Cylinder_STL_Generator.zip",
+    "main": "Braille_Card_And_Cylinder_STL_Generator/Braille_Card_And_Cylinder_STL_Generator.scad"
+  },
+  "defaults": {
+    "autoPreview": true,
+    "skipWelcome": false
+  }
+}

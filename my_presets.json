@@ -1,0 +1,65 @@
+{
+  "parameterSets": {
+    "Small Gift Box": {
+      "box_width": "60",
+      "box_depth": "40",
+      "box_height": "35",
+      "wall_thickness": "2",
+      "include_lid": "yes",
+      "lid_fit_gap": "0.3",
+      "rounded_corners": "yes",
+      "corner_radius": "4",
+      "add_feet": "yes",
+      "foot_height": "2"
+    },
+    "Desktop Tray": {
+      "box_width": "150",
+      "box_depth": "100",
+      "box_height": "25",
+      "wall_thickness": "2.5",
+      "include_lid": "no",
+      "lid_fit_gap": "0.3",
+      "rounded_corners": "yes",
+      "corner_radius": "6",
+      "add_feet": "yes",
+      "foot_height": "3"
+    },
+    "Tall Storage Box": {
+      "box_width": "80",
+      "box_depth": "50",
+      "box_height": "120",
+      "wall_thickness": "2",
+      "include_lid": "no",
+      "lid_fit_gap": "0.3",
+      "rounded_corners": "yes",
+      "corner_radius": "5",
+      "add_feet": "yes",
+      "foot_height": "2"
+    },
+    "Snap-Lid Keepsake Box": {
+      "box_width": "90",
+      "box_depth": "65",
+      "box_height": "45",
+      "wall_thickness": "3",
+      "include_lid": "yes",
+      "lid_fit_gap": "0.2",
+      "rounded_corners": "yes",
+      "corner_radius": "8",
+      "add_feet": "yes",
+      "foot_height": "3"
+    },
+    "No-Frills Utility Box": {
+      "box_width": "100",
+      "box_depth": "60",
+      "box_height": "50",
+      "wall_thickness": "2",
+      "include_lid": "no",
+      "lid_fit_gap": "0.3",
+      "rounded_corners": "no",
+      "corner_radius": "3",
+      "add_feet": "no",
+      "foot_height": "2"
+    }
+  },
+  "fileFormatVersion": "1"
+}

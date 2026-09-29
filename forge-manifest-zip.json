@@ -1,0 +1,15 @@
+{
+  "forgeManifest": "1.0",
+  "name": "My First Forge Project",
+  "author": "Your Name Here",
+  "description": "A parametric storage box — replace this description with your own",
+  "homepage": "https://github.com/YOUR_USERNAME/YOUR_REPO",
+  "files": {
+    "bundle": "my_project.zip"
+  },
+  "defaults": {
+    "preset": "Small Gift Box",
+    "autoPreview": true,
+    "skipWelcome": false
+  }
+}

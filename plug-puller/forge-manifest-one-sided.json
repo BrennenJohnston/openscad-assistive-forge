@@ -1,0 +1,32 @@
+{
+  "forgeManifest": "1.0",
+  "name": "Plug Puller, one-sided puller",
+  "author": "Brennen Johnston",
+  "description": "A 3D-printed tool that pulls a wall plug with your whole hand instead of a fingertip pinch, shaped to your plug and your hand. For a plug up to 24 mm thick: a pocket around the plug's back and sides with two finger holes below it. Fill in Step 1 to Step 4; everything else is optional.",
+  "homepage": "https://github.com/BrennenJohnston/openscad-plug-puller",
+  "files": {
+    "main": "Plug_Puller_SingleFile.scad",
+    "presets": "Plug_Puller_Parametric.json"
+  },
+  "defaults": {
+    "autoPreview": true,
+    "starterParameters": [
+      "plug_preset",
+      "measure_plug_length",
+      "measure_plug_width_prong_end",
+      "measure_plug_width_cord_end",
+      "measure_plug_thickness_prong_end",
+      "measure_plug_thickness_cord_end",
+      "measure_cord_thickness",
+      "measure_wall_plate_style",
+      "show_plug_preview",
+      "size",
+      "measure_finger_width",
+      "measure_hand_width",
+      "attachment",
+      "velcro_style",
+      "strap_width",
+      "hook_hand"
+    ]
+  }
+}
