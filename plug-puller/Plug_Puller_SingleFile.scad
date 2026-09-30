@@ -164,6 +164,10 @@ render_mode = "Full"; // [Full, Body Only, Body No Cutouts, Only Finger Holes, O
 // suitable for slicing without repair.
 eps = 0.01;
 
+// Height of one layer in the stacked edge roundovers (roundover_layers_3d):
+// half a typical 0.2 mm print layer, so the printed edge matches a smooth one.
+ROUNDOVER_STEP = 0.1;
+
 /* [Custom Mode] */
 // EXPERT TIER. Every section below is marked "(Custom size only)" and is ignored unless Step 2's Size = Custom - in Custom, all plug/hand measurements are ignored and these sliders control the geometry directly. This switch: render once with everything reset to the Medium reference geometry (a clean baseline to diverge from), then turn it back off.
 reset_custom_to_medium = false;
@@ -323,7 +327,7 @@ custom_t_hook_top_bottom_rounding = 0; // [0:0.1:3]
 //   standard   = 46.2 / 26.6-13.4 / 18.9-15.0 / 7.0
 //   heavy-duty = 43.8 / 25.8-21.9 / 27.0-27.0 / 8.2
 // The wide 2-prong appliance plug (the owner's US vacuum plug, measured with
-// a ruler; R2 Gate A) is straight-sided:
+// a ruler) is straight-sided:
 //   wide 2-prong appliance = 38.0 / 34.0-34.0 / 16.0-16.0 / 5.0
 // The heavy-duty plug is 27.0 mm thick, past W-20's 24 mm limit: it belongs
 // to the two-sided puller file.
@@ -1819,16 +1823,38 @@ module pocket_ellipse_2d() {
 // 3D BODIES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Z-edge roundover, rolling-ball style. The minkowski of `offset(-r)
-// outline` with a sphere reproduces the exact ball-fillet surface inside
-// the top band (z in [thickness - r, thickness]) — but at every height its
-// cross-section is the morphological OPENING of the outline, which also
-// rounds convex plan corners (the crisp plug-end corners, the notch mouth)
-// through the full thickness. The original only loses the corners inside
-// the fillet band, so each minkowski is unioned with a full-outline prism
-// that stops where its band begins: below that plane the sharp outline
+// A rolling-ball roundover band, 0 <= Z <= r, its face at Z = r. At each
+// height the ball's cross-section is the morphological OPENING of the
+// outline, offset(r = w) of offset(delta = -r), with w = sqrt(r^2 - h^2) at
+// height h. The band is stacked from ROUNDOVER_STEP layers, each taking w at
+// its own top, so every step sits on or just inside the smooth surface.
+// This replaces minkowski() with a sphere, which gave the same surface but
+// which the WebAssembly build of OpenSCAD (the one browsers run) cannot
+// finish its fast way: its CGAL hull fails and it falls back to a method
+// that took 23 s to preview this body, against 0.4 s on desktop.
+module roundover_layers_3d(r) {
+    assert(quality >= 24 && quality <= 128, "quality must be 24 to 128");
+    _n  = max(1, ceil(r / ROUNDOVER_STEP));
+    _dz = r / _n;
+    for (i = [0 : _n - 1]) {
+        _h = (i + 1) * _dz;
+        translate([0, 0, i * _dz])
+            linear_extrude(height = _dz + (i < _n - 1 ? eps : 0))
+                offset(r = sqrt(max(0, r * r - _h * _h)))
+                    offset(delta = -r) children();
+    }
+}
+
+// Z-edge roundover. The opening also rounds convex plan corners (the crisp
+// plug-end corners, the notch mouth), but the original only loses them
+// inside the fillet band, so each band is unioned with a full-outline prism
+// that stops where the band begins: below that plane the sharp outline
 // wins, above it the ball fillet is the only material.
 module plug_puller_body_3d() {
+    assert(body_top_rounding >= 0 && body_top_rounding <= 5,
+           "body_top_rounding must be 0 to 5 mm");
+    assert(body_bottom_rounding >= 0 && body_bottom_rounding <= 5,
+           "body_bottom_rounding must be 0 to 5 mm");
     _rt = min(body_top_rounding, body_thickness / 2);
     _rb = min(body_bottom_rounding, body_thickness / 2);
 
@@ -1837,25 +1863,19 @@ module plug_puller_body_3d() {
             body_outline_2d();
         if (_rt > 0)
             union() {
-                linear_extrude(height = body_thickness - _rt)
+                linear_extrude(height = body_thickness - _rt + eps)
                     body_outline_2d();
-                minkowski() {
-                    linear_extrude(height = max(eps, body_thickness - _rt))
-                        offset(delta = -_rt) body_outline_2d();
-                    sphere(r = _rt, $fn = quality);
-                }
+                translate([0, 0, body_thickness - _rt])
+                    roundover_layers_3d(_rt) body_outline_2d();
             }
         if (_rb > 0)
             union() {
-                translate([0, 0, _rb])
-                    linear_extrude(height = body_thickness - _rb)
+                translate([0, 0, _rb - eps])
+                    linear_extrude(height = body_thickness - _rb + eps)
                         body_outline_2d();
                 translate([0, 0, _rb])
-                    minkowski() {
-                        linear_extrude(height = max(eps, body_thickness - _rb))
-                            offset(delta = -_rb) body_outline_2d();
-                        sphere(r = _rb, $fn = quality);
-                    }
+                    mirror([0, 0, 1])
+                        roundover_layers_3d(_rb) body_outline_2d();
             }
     }
 }
