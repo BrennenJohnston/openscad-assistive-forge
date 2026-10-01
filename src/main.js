@@ -6697,9 +6697,11 @@ async function initApp() {
       (state.complexityAnalysis?.warnings?.length ?? 0) > 0;
     if (!isComplex) return;
     lastComplexityAdvisedFile = fileName;
+    // D-202: the advisory fires before the first preview, so it cannot know
+    // the preview will be slow, and it said so of a model that draws in 2 s.
     const advisoryMsg =
-      'This model is complex — Desktop-quality previews may be slow. ' +
-      'Switch Preview quality to "Performance (auto)" for faster previews.';
+      'This model has many parts. If previews are slow, switch Preview ' +
+      'quality to "Performance (auto)".';
     // updateStatus announces on its own; a second call here said the whole
     // advisory twice.
     updateStatus(advisoryMsg, 'info');

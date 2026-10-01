@@ -424,7 +424,7 @@ test('the complexity advisory is announced once', async ({ page }) => {
   // A REAL advisory from the fixture's own analysis may already have spoken
   // before this point; the synthetic dispatch below must add exactly ONE
   // more, so the count is a delta from here, not an absolute.
-  const before = (await saidMatching(page, /This model is complex/)).length;
+  const before = (await saidMatching(page, /This model has many parts/)).length;
 
   // The advisory fires from a state subscriber when a fresh complexityAnalysis
   // carrying warnings lands, which is how file-handler delivers it.
@@ -437,11 +437,11 @@ test('the complexity advisory is announced once', async ({ page }) => {
   // Measured on the parent commit: 2 — updateStatus announced it and the line
   // below it announced the identical string again.
   await expectSaidExactlyOnce(page, async () =>
-    (await saidMatching(page, /This model is complex/)).length - before
+    (await saidMatching(page, /This model has many parts/)).length - before
   );
 
   await expect
-    .poll(() => statusEverShowed(page, /This model is complex/))
+    .poll(() => statusEverShowed(page, /This model has many parts/))
     .toBe(true);
 });
 
