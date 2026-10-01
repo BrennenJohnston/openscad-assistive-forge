@@ -1,5 +1,5 @@
 {
-  "engineVersion": "OpenSCAD-2026.04.03 WASM (Manifold)",
+  "engineVersion": "OpenSCAD-2026.04.03+forge.1 WASM (Manifold)",
   "fixtures": {
     "cube-cyl-diff": {
       "facets": 272,
