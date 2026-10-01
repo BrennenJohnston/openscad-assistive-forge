@@ -150,8 +150,8 @@ The memory monitoring feature is controlled by the `memory_monitoring` feature f
 
 ## Browser differences
 
-The WASM build is the **official OpenSCAD 2026.04.03 web build with Manifold**,
-vendored in `public/wasm/openscad-official/`. It replaced the
+The WASM build is **OpenSCAD 2026.04.03 with Manifold, built from OpenSCAD's
+source with one rounding fix**, vendored in `public/wasm/openscad-official/`. It replaced the
 `openscad-wasm-prebuilt@1.2.0` npm package, which had no Manifold and was slow
 on complex models; `public/wasm/README.txt` records the swap and why.
 
