@@ -82,8 +82,11 @@ if [ "$VARIANT" = "round-to-nearest" ]; then
   fi
 fi
 
+# OpenSCAD's CI gives CMake the abbreviated hash git prints for the commit,
+# 8 characters here: the official engine reports "2026.04.03 (git 98d89134)".
+# The full hash would be a different string in the binary.
 docker run --rm -v "$SRC:/root/project" -v "$BUILD:/root/build" -w /root/project \
-  -e WASM_TYPE="$WASM_TYPE" -e OPENSCAD_COMMIT="$OPENSCAD_COMMIT" \
+  -e WASM_TYPE="$WASM_TYPE" -e OPENSCAD_COMMIT="${OPENSCAD_COMMIT:0:8}" \
   -e OPENSCAD_VERSION="$OPENSCAD_VERSION" "$IMAGE" bash -c '
     set -euo pipefail
     find /root/build -mindepth 1 -delete
@@ -114,6 +117,7 @@ fi
   echo "CGAL:             $(docker run --rm "$IMAGE" awk '/#define CGAL_VERSION /{print $3}' /emsdk/upstream/emscripten/cache/sysroot/include/CGAL/version.h)"
   echo "CMake settings:   -DCMAKE_BUILD_TYPE=Release -DSNAPSHOT=ON -DEXPERIMENTAL=ON"
   echo "Build paths:      /root/project (source), /root/build (output)"
+  echo "Commit in engine: ${OPENSCAD_COMMIT:0:8}"
   echo
   if [ "$VARIANT" = "round-to-nearest" ]; then
     echo "Change to upstream (CMakeLists.txt):"
