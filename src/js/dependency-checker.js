@@ -4,6 +4,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { withoutComments } from './scad-comments.js';
+
 /**
  * Parse SCAD file for dependencies (best-effort regex, not full parser)
  * @param {string} scadContent - OpenSCAD source code
@@ -18,11 +20,13 @@ export function extractDependencies(scadContent) {
 
   if (!scadContent) return dependencies;
 
+  const source = withoutComments(scadContent);
+
   // Match include <filename> or include "filename"
   // Handles various extensions: .txt, .scad, .json, etc.
   const includeRegex = /include\s*[<"]([^>"]+)[>"]/g;
   let match;
-  while ((match = includeRegex.exec(scadContent)) !== null) {
+  while ((match = includeRegex.exec(source)) !== null) {
     const filename = match[1].trim();
     if (filename && !dependencies.includes.includes(filename)) {
       dependencies.includes.push(filename);
@@ -31,7 +35,7 @@ export function extractDependencies(scadContent) {
 
   // Match use <filename> or use "filename"
   const useRegex = /use\s*[<"]([^>"]+)[>"]/g;
-  while ((match = useRegex.exec(scadContent)) !== null) {
+  while ((match = useRegex.exec(source)) !== null) {
     const filename = match[1].trim();
     if (filename && !dependencies.uses.includes(filename)) {
       dependencies.uses.push(filename);
@@ -40,7 +44,7 @@ export function extractDependencies(scadContent) {
 
   // Match import("filename") - for SVG, STL, etc.
   const importRegex = /import\s*\(\s*["']([^"']+)["']\s*(?:,\s*[^)]+)?\)/g;
-  while ((match = importRegex.exec(scadContent)) !== null) {
+  while ((match = importRegex.exec(source)) !== null) {
     const filename = match[1].trim();
     if (filename && !dependencies.imports.includes(filename)) {
       dependencies.imports.push(filename);
