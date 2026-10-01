@@ -9,7 +9,7 @@ each major release; the table below is the 2026-09-01 reading.
 
 | Piece | We ship | Upstream newest | Decision |
 |---|---|---|---|
-| OpenSCAD WASM engine | OpenSCAD-2026.04.03 (vendored, integrity-pinned) | snapshot channel: OpenSCAD-2025.09.10.wasm27277 | **Hold.** The channel's newest build is older-dated than what we already vendor; no upgrade exists to take. |
+| OpenSCAD WASM engine | OpenSCAD-2026.04.03+forge.1: OpenSCAD's 2026.04.03 source built here with one rounding fix (vendored, integrity-pinned) | snapshot channel: OpenSCAD-2026.09.29 (read 2026-09-30) | **Hold.** A newer upstream build has the same rounding fault until OpenSCAD takes the fix, and it needs its own parity run. |
 | OpenSCAD desktop (verification binary) | 2026.01.03 nightly (CI pin) | snapshot channel: OpenSCAD-2025.09.10 win64 | **Hold**, same reason. |
 | liblouis engine + tables | liblouis-build 3.2.0-rc (published 2017) + easy-api (liblouis npm ^0.4.0), curated UEB/US tables with their include closure | liblouis v3.38.0 (2026-06-01); liblouis/js-build has no releases (latest commit 2026-08-28) | **Proposal below — nothing moves without a decision and a translation parity check.** Braille output is accessibility-critical. |
 | npm dependencies | lockfile at v5 prep | `npm audit`: **0 vulnerabilities** (2026-09-01) | Nothing to patch. Major bumps stay post-v5 candidates. |
@@ -17,16 +17,27 @@ each major release; the table below is the 2026-09-01 reading.
 ## The OpenSCAD engine, in detail
 
 The vendored engine lives in `public/wasm/openscad-official/` with
-SHA-256 pins in `INTEGRITY.json` (build OpenSCAD-2026.04.03, Manifold and
-CGAL enabled, known issues listed in the manifest). The official
-snapshot channel at files.openscad.org has not published a newer
-WebAssembly build since 2025-09-10 — that is *older* than the build we
-vendor, so there is nothing to upgrade to. If the channel wakes up with
-a newer build, the path is already written: run the geometry parity
-harness (`npm run parity`) across versions, read the known-issues delta,
-and replace the vendored bytes only with the integrity manifest updated
-in the same change. The WASM files are a protected class in this repo;
-they never move silently.
+SHA-256 pins in `INTEGRITY.json` (build OpenSCAD-2026.04.03+forge.1,
+Manifold and CGAL enabled, known issues listed in the manifest). It is
+OpenSCAD's own source at the commit behind the official 2026.04.03
+snapshot, built by `scripts/build-openscad-wasm.sh` with one compile
+definition added, `CGAL_ALWAYS_ROUND_TO_NEAREST`. WebAssembly can only
+round to nearest, and without that definition `minkowski()` could take
+about a minute and gave meshes slightly off desktop OpenSCAD's;
+`public/wasm/README.txt` has the detail. Built without the change, the
+recipe gives the official engine back byte for byte, and the "Build
+OpenSCAD wasm" workflow fails a pull request whose engine files are not
+what the recipe builds.
+
+The official snapshot channel at files.openscad.org publishes
+WebAssembly builds again (2026.09.29 when I read it on 2026-09-30).
+OpenSCAD's build still lacks the definition, so a newer official build
+would bring the fault back. Moving to newer OpenSCAD source means a new
+pinned commit in the recipe, the geometry parity harness
+(`npm run parity`) across versions, the known-issues delta, and the
+vendored bytes replaced only with the integrity manifest updated in the
+same change. The WASM files are a protected class in this repo; they
+never move silently.
 
 ## The liblouis question, and my proposal
 

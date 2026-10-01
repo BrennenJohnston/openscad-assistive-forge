@@ -279,12 +279,12 @@ Run \`npm run setup-wasm\` to re-download fonts if they are missing.
 console.log('OpenSCAD WASM Setup');
 console.log('===================');
 console.log('');
-console.log('✓ OpenSCAD WASM: Official build with Manifold support');
-console.log('✓ Source: https://files.openscad.org/snapshots/');
-console.log('✓ Build: OpenSCAD-2026.04.03 WebAssembly-web');
+console.log('✓ OpenSCAD WASM: built from OpenSCAD source, with Manifold support');
+console.log('✓ Source: scripts/build-openscad-wasm.sh (OpenSCAD commit 98d891340e)');
+console.log('✓ Build: OpenSCAD-2026.04.03+forge.1 WebAssembly-web');
 console.log('✓ Location: public/wasm/openscad-official/');
 console.log('');
-console.log('The official WASM files are vendored in the repository.');
+console.log('The engine files are vendored in the repository.');
 console.log('They include Manifold support for 5-30x faster CSG operations.');
 console.log('');
 

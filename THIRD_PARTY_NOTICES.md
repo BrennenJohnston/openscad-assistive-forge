@@ -9,9 +9,9 @@ Generated web applications include OpenSCAD compiled to WebAssembly (WASM) for c
 **License**: GNU General Public License v2.0 or later
 **Project**: https://openscad.org/
 **Source Code**: https://github.com/openscad/openscad
-**WASM Build**: Official OpenSCAD Playground build (includes Manifold support)
-**Build Source**: https://files.openscad.org/playground/
-**Build Date**: April 3, 2026 (OpenSCAD-2026.04.03-WebAssembly-web)
+**WASM Build**: OpenSCAD-2026.04.03+forge.1, built for Forge from OpenSCAD's source (includes Manifold support)
+**Build Source**: OpenSCAD commit `98d891340e6007524e69f399162016f9b22584ff`, the commit behind the official 2026.04.03 snapshot, built by `scripts/build-openscad-wasm.sh` in this repository
+**Change to OpenSCAD's source**: one compile definition, `CGAL_ALWAYS_ROUND_TO_NEAREST`, added in `CMakeLists.txt`; `public/wasm/README.txt` says why
 **Vendored Location**: `public/wasm/openscad-official/`
 
 ### Manifold Geometry Library

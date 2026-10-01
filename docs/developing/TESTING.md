@@ -138,7 +138,7 @@ These are known differences between Forge's WASM-based rendering and the desktop
 |---------|---------|-------------|-------|
 | **Animations (`$t`)** | Supported | Supported, but slower | The Animate panel sets `$t` per frame and re-renders for real. A WASM render takes 0.3 to 10 seconds, so the frame rate you ask for is a ceiling, not a promise -- playback renders a frame, then waits out whatever is left of the budget |
 | **Text rendering** | Uses system fonts | Requires bundled fonts | Only the Liberation family is bundled; other fonts are unavailable |
-| **OpenSCAD version** | Latest release | 2026.04.03 official WASM build, with Manifold | Vendored in `public/wasm/openscad-official/`; see its `README.txt` for how to update |
+| **OpenSCAD version** | Latest release | 2026.04.03 built from OpenSCAD's source with one rounding fix, with Manifold | Vendored in `public/wasm/openscad-official/`; see its `README.txt` for how to update |
 | **Performance** | Native speed | Slower for complex models | Models with >100K faces may be significantly slower in WASM |
 | **File access** | Full filesystem | Upload/URL only | No direct filesystem access; all files must be uploaded or fetched via URL |
 | **Customizer GUI** | Native Qt widgets | HTML form controls | Behavior should match, but rendering differs |
