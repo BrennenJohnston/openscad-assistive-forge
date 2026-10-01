@@ -85,6 +85,41 @@ describe('extractDependencies', () => {
   });
 });
 
+// D-201: OpenSCAD never reads a directive written inside a comment. My Plug
+// Puller explains its old include order in comments, and uploading it warned
+// about two companion files it does not use.
+describe('extractDependencies: comments (D-201)', () => {
+  it('ignores a directive in a line comment', () => {
+    const result = extractDependencies(
+      '// `include <presets.scad>`. Include order matters.\ncube(1);'
+    );
+    expect(result.includes).toEqual([]);
+  });
+
+  it('ignores use and import in a block comment over several lines', () => {
+    const result = extractDependencies(
+      '/* the old way:\n   use <lib.scad>\n   import("logo.svg");\n*/\ncube(1);'
+    );
+    expect(result.uses).toEqual([]);
+    expect(result.imports).toEqual([]);
+  });
+
+  it('still reads a real directive after a comment', () => {
+    const result = extractDependencies(
+      '// include <old.scad>\ninclude <real.scad>\nuse <lib.scad> // use <gone.scad>'
+    );
+    expect(result.includes).toEqual(['real.scad']);
+    expect(result.uses).toEqual(['lib.scad']);
+  });
+
+  it('does not treat // inside a string as a comment', () => {
+    const result = extractDependencies(
+      'echo("see http://example.org"); import("shape.svg");'
+    );
+    expect(result.imports).toEqual(['shape.svg']);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // checkDependencies
 // ---------------------------------------------------------------------------
@@ -238,6 +273,17 @@ describe('runPreflightCheck — single-file upload', () => {
     const result = runPreflightCheck(scad, ['model.scad', 'helper.scad']);
     expect(result.success).toBe(true);
     expect(result.totalMissing).toBe(0);
+  });
+
+  it('returns success when the only directives are inside comments (D-201)', () => {
+    const scad = [
+      '// `include <presets.scad>`. Include order matters.',
+      '// main SCAD must `include <fit_measured.scad>` BEFORE `include <presets.scad>`.',
+      'cube([10, 10, 10]);',
+    ].join('\n');
+    const result = runPreflightCheck(scad, ['Plug_Puller_SingleFile.scad']);
+    expect(result.success).toBe(true);
+    expect(result.totalDependencies).toBe(0);
   });
 
   it('returns failure when companion include file is absent (single-file upload)', () => {
