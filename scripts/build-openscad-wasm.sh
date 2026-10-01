@@ -8,6 +8,11 @@
 # build image pinned by digest, with the snapshot settings OpenSCAD uses, and
 # writes BUILD-INFO.txt beside the result recording every one of those facts.
 #
+# The build runs at the paths OpenSCAD's own CI builds at (/root/project for
+# the source, /root/build for the output). The compiler writes source paths
+# into the engine's assertion messages, so any other path gives different
+# bytes for the same code.
+#
 # The "round-to-nearest" variant makes one change to upstream: it adds
 # CGAL_ALWAYS_ROUND_TO_NEAREST beside the CGAL_DISABLE_ROUNDING_MATH_CHECK
 # that OpenSCAD's CMakeLists.txt already sets for Emscripten. WebAssembly can
@@ -49,10 +54,11 @@ esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="${ROOT}/build/openscad-wasm"
 SRC="${WORK}/openscad"
+BUILD="${WORK}/cmake-build"
 OUT="${WORK}/${VARIANT}-${WASM_TYPE}"
 FPU_H=/emsdk/upstream/emscripten/cache/sysroot/include/CGAL/FPU.h
 
-mkdir -p "$WORK"
+mkdir -p "$WORK" "$BUILD"
 if [ ! -d "$SRC/.git" ]; then
   git clone --quiet https://github.com/openscad/openscad.git "$SRC"
 fi
@@ -69,30 +75,31 @@ if [ "$VARIANT" = "round-to-nearest" ]; then
   sed -i 's/PUBLIC CGAL_DISABLE_ROUNDING_MATH_CHECK)/PUBLIC CGAL_DISABLE_ROUNDING_MATH_CHECK CGAL_ALWAYS_ROUND_TO_NEAREST)/' \
     "$SRC/CMakeLists.txt"
   # A CGAL that does not know the macro would build without complaint and
-  # without the fix.
-  if [ "$(docker run --rm "$IMAGE" grep -c CGAL_ALWAYS_ROUND_TO_NEAREST "$FPU_H")" = "0" ]; then
+  # without the fix. A header that is missing or has moved fails here too.
+  if ! docker run --rm "$IMAGE" grep -q CGAL_ALWAYS_ROUND_TO_NEAREST "$FPU_H"; then
     echo "The build image's CGAL does not know CGAL_ALWAYS_ROUND_TO_NEAREST." >&2
     exit 1
   fi
 fi
 
-docker run --rm -v "$SRC:/src" -w /src \
+docker run --rm -v "$SRC:/root/project" -v "$BUILD:/root/build" -w /root/project \
   -e WASM_TYPE="$WASM_TYPE" -e OPENSCAD_COMMIT="$OPENSCAD_COMMIT" \
   -e OPENSCAD_VERSION="$OPENSCAD_VERSION" "$IMAGE" bash -c '
     set -euo pipefail
-    emcmake cmake -G Ninja -B build . \
+    find /root/build -mindepth 1 -delete
+    emcmake cmake -G Ninja -B ../build . \
       -DCMAKE_BUILD_TYPE=Release \
       -DWASM_BUILD_TYPE="$WASM_TYPE" \
       -DOPENSCAD_COMMIT="$OPENSCAD_COMMIT" \
       -DOPENSCAD_VERSION="$OPENSCAD_VERSION" \
       -DSNAPSHOT=ON -DEXPERIMENTAL=ON
-    cmake --build build'
+    cmake --build ../build'
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
-cp "$SRC/build/openscad.js" "$OUT/"
+cp "$BUILD/openscad.js" "$OUT/"
 if [ "$WASM_TYPE" = "web" ]; then
-  cp "$SRC/build/openscad.wasm" "$OUT/"
+  cp "$BUILD/openscad.wasm" "$OUT/"
 fi
 
 {
@@ -106,6 +113,7 @@ fi
   echo "Emscripten:       $(docker run --rm "$IMAGE" emcc --version | head -1)"
   echo "CGAL:             $(docker run --rm "$IMAGE" awk '/#define CGAL_VERSION /{print $3}' /emsdk/upstream/emscripten/cache/sysroot/include/CGAL/version.h)"
   echo "CMake settings:   -DCMAKE_BUILD_TYPE=Release -DSNAPSHOT=ON -DEXPERIMENTAL=ON"
+  echo "Build paths:      /root/project (source), /root/build (output)"
   echo
   if [ "$VARIANT" = "round-to-nearest" ]; then
     echo "Change to upstream (CMakeLists.txt):"
