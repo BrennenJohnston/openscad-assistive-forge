@@ -118,8 +118,21 @@ export class ErrorLogPanel {
     let lineNum = null;
     const message = trimmed;
 
-    // ERROR: patterns
-    if (/\bERROR:/i.test(trimmed)) {
+    // D-203: a line OpenSCAD labels a warning is one, whatever its text
+    // quotes. "WARNING: [manifold] Minkowski failed with error, falling back
+    // to Nef operation: CGAL ERROR: assertion violation!" matched the ERROR:
+    // test below on the words after the colon, and a preview that had worked
+    // was announced as an error.
+    if (/^WARNING:/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.WARNING;
+      group = 'Compile';
+    } else if (/^CGAL error: \w+ violation!/i.test(trimmed)) {
+      // CGAL prints this itself, before OpenSCAD decides what it means.
+      // OpenSCAD's next line says: "ERROR: CGAL error in ..." when the render
+      // fails, "WARNING: ..., falling back ..." when it recovers.
+      type = ERROR_LOG_TYPE.WARNING;
+      group = 'Geometry';
+    } else if (/\bERROR:/i.test(trimmed)) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Compile';
     } else if (/\bWARNING:/i.test(trimmed)) {
