@@ -178,3 +178,50 @@ describe('ErrorLogPanel.parseLine — the manifold status line (P7)', () => {
     ).toBe('Compile');
   });
 });
+
+// D-203: my two-sided Plug Puller previewed, and the page interrupted with
+// "Error: WARNING: [manifold] Minkowski failed with error, falling back to
+// Nef operation: CGAL ERROR: assertion violation!" and "Error: CGAL error:
+// assertion violation!". OpenSCAD had recovered; both lines were warnings.
+describe('ErrorLogPanel.parseLine: a warning that quotes an error (D-203)', () => {
+  let panel;
+
+  beforeEach(() => {
+    resetErrorLogPanel();
+    panel = new ErrorLogPanel({ container: null, badge: null });
+  });
+
+  it('a line OpenSCAD labels WARNING: is a warning, whatever its text quotes', () => {
+    const result = panel.parseLine(
+      'WARNING: [manifold] Minkowski failed with error, falling back to Nef operation: CGAL ERROR: assertion violation!'
+    );
+    expect(result.type).toBe(ERROR_LOG_TYPE.WARNING);
+    expect(result.group).toBe('Compile');
+  });
+
+  it("CGAL's own violation printout is a warning: OpenSCAD's next line says what it means", () => {
+    for (const line of [
+      'CGAL error: assertion violation!',
+      'CGAL error: precondition violation!',
+    ]) {
+      const result = panel.parseLine(line);
+      expect(result, line).not.toBeNull();
+      expect(result.type, line).toBe(ERROR_LOG_TYPE.WARNING);
+      expect(result.group, line).toBe('Geometry');
+    }
+  });
+
+  it('the line OpenSCAD prints when the render does fail is still an error', () => {
+    const result = panel.parseLine(
+      'ERROR: CGAL error in applyHull(): CGAL ERROR: assertion violation!'
+    );
+    expect(result.type).toBe(ERROR_LOG_TYPE.ERROR);
+  });
+
+  it('a warning inside an error line does not make it a warning', () => {
+    const result = panel.parseLine(
+      'ERROR: Parser error: WARNING: is not a valid name'
+    );
+    expect(result.type).toBe(ERROR_LOG_TYPE.ERROR);
+  });
+});
