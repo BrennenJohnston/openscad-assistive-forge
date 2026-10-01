@@ -141,7 +141,7 @@ zip_pos_3 = 30; // [0:0.5:55]
 zip_edge_offset = 4; // [2.5:0.25:12]
 
 /* [Advanced - Velcro Placement] */
-// Where the tool's velcro strap openings sit. Auto (recommended) derives the wing region / classic-slot placement from the body. Manual slides a pair of classic slots along the plug side rail with the dial below (the Wing style always uses Auto).
+// Where the tool's velcro strap openings sit. Auto (recommended) derives the wing region / classic-slot placement from the body. Manual slides a pair of classic slots along the plug side rail with the dial below, even when the opening style is Wing.
 velcro_placement = "Auto"; // [Auto, Manual]
 // Manual placement only: slot distance along the plug side rail, measured from the plug face toward the cord. (mm)
 velcro_pos = 12; // [0:0.5:55]
@@ -171,7 +171,7 @@ ROUNDOVER_STEP = 0.1;
 /* [Custom Mode] */
 // EXPERT TIER. Every section below is marked "(Custom size only)" and is ignored unless Step 2's Size = Custom - in Custom, all plug/hand measurements are ignored and these sliders control the geometry directly. This switch: render once with everything reset to the Medium reference geometry (a clean baseline to diverge from), then turn it back off.
 reset_custom_to_medium = false;
-// Auto-fit clamps every Custom slider so features stay inside the body and keep printable walls to their neighbours; each adjustment is reported in the console. Turn OFF only when you deliberately need features past the body edge - the red warning tags will tell you what broke. The measured sizes always auto-fit.
+// Auto-fit clamps every Custom slider so features stay inside the body and keep printable walls to their neighbors; each adjustment is reported in the console. Turn OFF only when you deliberately need features past the body edge - the red warning tags will tell you what broke. The measured sizes always auto-fit.
 custom_enable_auto_fit = true;
 
 /* [Body Shape (Custom size only)] */
@@ -219,7 +219,7 @@ custom_finger_hole_spacing = 33;       // [20:0.5:50]
 custom_finger_hole_y_position = 19.8;  // [10:0.1:50]
 
 /* [T Hook (Custom size only)] */
-// Enable T-shaped cord-wrap cutout at the narrow end
+// Enable the J-shaped cord hook cutout at the narrow end
 custom_enable_t_hook = true;
 // Stem (narrow slot) width (mm) [default: 4.7625 = 3/16in]
 custom_t_hook_base_gap = 4.7625;       // [3:0.05:10]
@@ -263,7 +263,7 @@ custom_zip_tie_distance_from_notch = 5.1;  // [1:0.05:15]
 custom_zip_tie_countersink = 0.9;          // [0:0.05:3]
 
 /* [Velcro / Wing Strap Holes (Custom size only)] */
-// Classic slot length along the long axis — the v4/v5 12x7 slot (mm) [default: 12]
+// Classic slot length along the long axis (mm) [default: 12]
 custom_velcro_hole_length = 12;        // [6:0.5:20]
 // Classic slot width along the short axis (mm) [default: 7]
 custom_velcro_hole_width = 7;          // [3:0.5:14]
@@ -271,7 +271,7 @@ custom_velcro_hole_width = 7;          // [3:0.5:14]
 custom_velcro_hole_x_center = 19.4;    // [5:0.05:35]
 // Y position of Classic slot centers (wings ignore this) (mm) [default: 46]
 custom_velcro_hole_y_center = 46;      // [30:0.5:80]
-// Lean angle from vertical; the slots/wings lean parallel to the body's side edges (left slot CW, right slot CCW) (degrees) [default: 23.5]
+// Lean angle from vertical; the slots lean parallel to the body's side edges (left slot CW, right slot CCW) (degrees) [default: 23.5]
 custom_velcro_hole_rotation = 23.5;    // [0:0.5:180]
 
 /* [Edge Rounding (Custom size only)] */

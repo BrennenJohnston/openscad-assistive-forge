@@ -529,7 +529,9 @@ function _vw_clam_taper_steep() =
         > tan(20) * max(1, _eff_plug_length);
 // WC-10 — Step 3 turned the zip stations off on a clamshell build. Zip ties
 // are what cinch the two plates together, so without them nothing holds the
-// sandwich closed.
+// sandwich closed. It cannot fire today, because every Step 3 choice keeps
+// the zip ties (_attach_zip is always true); it stays as a guard in case a
+// choice without zip ties ever returns, and the guides leave it out.
 function _vw_clam_no_zip_attachment() =
     _is_clamshell && !_attach_zip;
 // WC-11 — the strap is wider than the slot window the arm can offer, so the
