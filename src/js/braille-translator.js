@@ -167,8 +167,10 @@ export async function translateLeavingOut(text, translate) {
  *   inputPos: number[]|null,
  *   hadUntranslatable: boolean,
  *   strippedChars: string[],
+ *   leftOutChars: string[],
  * }>} `hadUntranslatable` is true when a character with no braille in the
- *   selected table was left out. `inputPos` gives, for each cell, the index
+ *   selected table was left out, and `leftOutChars` names every such
+ *   character, the stripped ones included. `inputPos` gives, for each cell, the index
  *   in `text` of the character it came from; it is null when stripping,
  *   lowercasing or leaving a character out changed the text, because the
  *   positions would no longer line up
@@ -191,6 +193,7 @@ export async function translateText(
       inputPos: text === '' ? [] : null,
       hadUntranslatable: stripped.length > 0,
       strippedChars: stripped,
+      leftOutChars: stripped,
     };
   }
 
@@ -218,6 +221,7 @@ export async function translateText(
         : null,
     hadUntranslatable: stripped.length > 0 || cached.leftOut.length > 0,
     strippedChars: stripped,
+    leftOutChars: [...stripped, ...cached.leftOut],
   };
 }
 

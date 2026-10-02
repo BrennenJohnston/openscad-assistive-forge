@@ -179,9 +179,9 @@ test.describe('Braille translation workflow (card)', () => {
       page.locator('.param-control[data-param-name="Line_1"]')
     ).toBeAttached({ timeout: 10000 })
 
-    // Table catalog populated with the UEB default
+    // Table catalog populated; the card starts on contracted (Grade 2) UEB
     const selectedTable = await page.locator('#brailleTableSelect').inputValue()
-    expect(selectedTable).toBe('en-ueb-g1.ctb')
+    expect(selectedTable).toBe('en-ueb-g2.ctb')
   })
 
   test('typing text translates to braille and updates Line_N params', async ({ page }) => {
@@ -198,7 +198,7 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(preview).toContainText('\u2813\u2811\u2807\u2807\u2815', {
       timeout: 20000,
     }) // ⠓⠑⠇⠇⠕
-    await expect(preview).toContainText('\u283A\u2815\u2817\u2807\u2819') // ⠺⠕⠗⠇⠙
+    await expect(preview).toContainText('\u2838\u283A') // ⠸⠺, "world" in Grade 2
 
     // Source text is shown under the braille line. The panel's initial
     // layout of its default text ('hello\nworld', two lines) may render
@@ -214,7 +214,7 @@ test.describe('Braille translation workflow (card)', () => {
       '.param-control[data-param-name="Line_1"] input'
     )
     await expect(line1Input).toHaveValue(
-      '\u2813\u2811\u2807\u2807\u2815\u2800\u283A\u2815\u2817\u2807\u2819',
+      '\u2813\u2811\u2807\u2807\u2815\u2800\u2838\u283A',
       { timeout: 10000 }
     )
   })
@@ -775,6 +775,31 @@ test.describe('Braille Sign workflow', () => {
     )
   })
 
+  test('sign braille carries no capital signs until the switch is turned on', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const caps = page.locator('#brailleCapsToggle')
+    await expect(caps).not.toBeChecked()
+    const first = page.locator('#braillePreview .braille-preview-braille').first()
+    // The first layout of the default "Room 101": no capital sign
+    await expect(first).toHaveText(
+      '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+    await page.locator('#brailleTextInput').fill('ROOM 101')
+    await expect(first).toHaveText(
+      '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+    await expect(page.locator('#brailleWarnings')).toBeHidden()
+    await caps.check()
+    await expect(first).toHaveText(
+      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+  })
+
   test('sign translates a word that mixes letters and a number, with no engine error', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
@@ -800,17 +825,49 @@ test.describe('Braille Sign workflow', () => {
     if (!(await caps.isChecked())) await caps.check()
 
     await page.locator('#brailleTextInput').fill('ROOM \u2603 101')
-    // Capital word ROOM, a blank cell either side of where the snowman
-    // stood, number 101: no escape cells, and none with dot 7
+    // Capital word ROOM, one blank cell, number 101: the snowman is left
+    // out, with no escape cells and none with dot 7
     await expect(
       page.locator('#braillePreview .braille-preview-braille').first()
     ).toHaveText(
-      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u2800\u283C\u2801\u281A\u2801',
+      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
       { timeout: 20000 }
     )
     await expect(page.locator('#brailleWarnings')).toContainText(
       'Some characters could not be translated to braille (in: "\u2603"). They are left out of the braille.'
     )
+  })
+
+  test('sign translates a run of capital words as one passage', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const caps = page.locator('#brailleCapsToggle')
+    if (!(await caps.isChecked())) await caps.check()
+
+    await page.locator('#brailleTextInput').fill('ROOM ROOM ROOM ROOM')
+    // One capital passage indicator, the four words, one terminator
+    const passage =
+      '\u2820\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u2817\u2815\u2815\u280D\u2800' +
+      '\u2817\u2815\u2815\u280D\u2800\u2817\u2815\u2815\u280D\u2820\u2804'
+    const rows = page.locator('#braillePreview .braille-preview-braille')
+    await expect
+      .poll(async () => (await rows.allTextContents()).join('\u2800'), {
+        timeout: 20000,
+      })
+      .toBe(passage)
+    const lineParams = page.locator(
+      '.param-control[data-param-name^="Line_"] input'
+    )
+    await expect
+      .poll(
+        async () =>
+          (await lineParams.evaluateAll((inputs) => inputs.map((i) => i.value)))
+            .filter((value) => value !== '')
+            .join('\u2800'),
+        { timeout: 10000 }
+      )
+      .toBe(passage)
   })
 
   test('sign warns about an emoji typed on its own', async ({ page }) => {
@@ -859,6 +916,26 @@ test.describe('Braille Sign workflow', () => {
     })
     await expect(text1).toHaveValue('go', { timeout: 10000 })
     await expect(line1).toHaveValue('\u281B')
+  })
+
+  test('sign gives a phone number three number signs with hyphens and one with periods', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const first = page.locator('#braillePreview .braille-preview-braille').first()
+    // A hyphen ends a number, so each group needs its own number sign
+    await page.locator('#brailleTextInput').fill('206-555-0147')
+    await expect(first).toHaveText(
+      '\u283C\u2803\u281A\u280B\u2824\u283C\u2811\u2811\u2811\u2824\u283C\u281A\u2801\u2819\u281B',
+      { timeout: 20000 }
+    )
+    // A period inside a number keeps it going: one number sign
+    await page.locator('#brailleTextInput').fill('206.555.0147')
+    await expect(first).toHaveText(
+      '\u283C\u2803\u281A\u280B\u2832\u2811\u2811\u2811\u2832\u281A\u2801\u2819\u281B',
+      { timeout: 20000 }
+    )
+    await expect(page.locator('#brailleErrors')).toBeHidden()
   })
 
   test('the table list offers Unified English Braille only', async ({ page }) => {

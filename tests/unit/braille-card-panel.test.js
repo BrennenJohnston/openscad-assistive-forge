@@ -18,6 +18,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 vi.mock('../../src/js/braille-translator.js', () => {
   // Fake per-character translator: one braille cell per letter, plus a
@@ -29,6 +32,7 @@ vi.mock('../../src/js/braille-translator.js', () => {
     translateText: vi.fn(async (text, _table, { preserveCaps } = {}) => {
       let braille = '';
       let hadUntranslatable = false;
+      const leftOutChars = [];
       for (const ch of text) {
         if (/\s/u.test(ch)) {
           braille += '\u2800';
@@ -37,13 +41,17 @@ vi.mock('../../src/js/braille-translator.js', () => {
           braille += charCell(ch);
         } else {
           hadUntranslatable = true;
+          leftOutChars.push(ch);
         }
       }
-      return { braille, hadUntranslatable };
+      return { braille, hadUntranslatable, leftOutChars };
     }),
     backTranslateText: vi.fn(async () => 'hello back'),
     getTables: vi.fn(async () => ({
-      tables: [{ file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' }],
+      tables: [
+        { file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' },
+        { file: 'en-ueb-g2.ctb', label: 'English (UEB) Grade 2' },
+      ],
       defaultTable: 'en-ueb-g1.ctb',
     })),
     disposeTranslator: vi.fn(),
@@ -76,6 +84,7 @@ import {
 } from '../../src/js/braille-panel.js';
 import {
   backTranslateText,
+  getTables,
   translateText,
 } from '../../src/js/braille-translator.js';
 import { announceImmediate } from '../../src/js/announcer.js';
@@ -88,7 +97,7 @@ const CARD_CONFIG = {
   mode: 'card',
   lineParams: LINE_PARAMS,
   tablesCatalog: '/liblouis/tables.json',
-  defaultTable: 'en-ueb-g1.ctb',
+  defaultTable: 'en-ueb-g2.ctb',
   capacityParams: {
     cardWidth: 'card_face_width_mm',
     cardHeight: 'card_face_height_mm',
@@ -130,7 +139,7 @@ async function typeBraille(text, expectSettled) {
   await vi.waitFor(expectSettled, { timeout: 3000, interval: 25 });
 }
 
-function mountCardPanel() {
+function mountCardPanel(extra = {}) {
   document.body.innerHTML =
     '<div id="app"><div id="parametersContainer"></div></div>';
   // Mirror the SCAD defaults the parameter UI would expose. With the
@@ -149,7 +158,7 @@ function mountCardPanel() {
     ...Object.fromEntries(LINE_PARAMS.map((name) => [name, ''])),
   };
   stateManager.setState({ parameters: { ...defaults }, defaults });
-  initBraillePanel(CARD_CONFIG);
+  initBraillePanel({ ...CARD_CONFIG, ...extra });
 }
 
 describe('braille panel card mode — braille editor (Unicode)', () => {
@@ -311,7 +320,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     );
     expect(backTranslateText).toHaveBeenCalledWith(
       '\u2813\u2811',
-      'en-ueb-g1.ctb'
+      'en-ueb-g2.ctb'
     );
   });
 });
@@ -706,4 +715,134 @@ describe('braille panel — characters with no braille (D-218)', () => {
         'They are left out of the braille.'
     );
   });
+});
+
+describe('braille panel sign mode — capitals off by default (D-208)', () => {
+  const SIGN_LINES = Array.from({ length: 6 }, (_, i) => `Line_${i + 1}`);
+  const SIGN_TEXTS = Array.from({ length: 6 }, (_, i) => `sign_text_${i + 1}`);
+
+  function mountSign(extra = {}) {
+    document.body.innerHTML =
+      '<div id="app"><div id="parametersContainer"></div></div>';
+    const defaults = {
+      sign_width_mm: '160',
+      braille_plate_height_mm: '40',
+      cell_spacing: '6.2',
+      line_spacing: '10',
+      char_height_mm: '16',
+      letter_spacing: '1.1',
+      ...Object.fromEntries(SIGN_LINES.map((name) => [name, ''])),
+      ...Object.fromEntries(SIGN_TEXTS.map((name) => [name, ''])),
+    };
+    stateManager.setState({ parameters: { ...defaults }, defaults });
+    initBraillePanel({
+      mode: 'sign',
+      lineParams: SIGN_LINES,
+      textParams: SIGN_TEXTS,
+      tablesCatalog: '/liblouis/tables.json',
+      defaultTable: 'en-ueb-g2.ctb',
+      capacityParams: {
+        cardWidth: 'sign_width_mm',
+        cardHeight: 'braille_plate_height_mm',
+        cellSpacing: 'cell_spacing',
+        lineSpacing: 'line_spacing',
+        charHeight: 'char_height_mm',
+        letterSpacing: 'letter_spacing',
+      },
+      ...extra,
+    });
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    destroyBraillePanel();
+    document.body.innerHTML = '';
+  });
+
+  it('starts with capitals off when the sign asks for it, and says nothing about them', async () => {
+    mountSign({ capitals: 'off' });
+    expect(document.getElementById('brailleCapsToggle').checked).toBe(false);
+    await typeText('Exit now', () => {
+      expect(params().sign_text_1).toBe('Exit now');
+    });
+    expect(translateText).toHaveBeenCalledWith(
+      expect.any(String),
+      'en-ueb-g2.ctb',
+      { preserveCaps: false }
+    );
+    expect(document.getElementById('brailleWarnings').hidden).toBe(true);
+  });
+
+  it('keeps capitals on when the configuration does not turn them off', () => {
+    mountSign();
+    expect(document.getElementById('brailleCapsToggle').checked).toBe(true);
+    destroyBraillePanel();
+    mountCardPanel();
+    expect(document.getElementById('brailleCapsToggle').checked).toBe(true);
+  });
+
+  it('explains the sign defaults under the switch, the text box and the table list', () => {
+    mountSign({ capitals: 'off' });
+    expect(document.getElementById('brailleCapsHelp').textContent).toBe(
+      'Off by default on a sign. The raised letters are always uppercase, ' +
+        'and ADA 703.3.1 uses a braille capital sign only for the first ' +
+        'word of a sentence, names, single letters, initials and acronyms. ' +
+        'Turn this on to keep the capitals you type.'
+    );
+    expect(document.getElementById('brailleTextHelp').textContent).toBe(
+      'Translation runs on your device. Each line you type is translated ' +
+        'on its own. Long lines wrap onto new rows of raised letters, and ' +
+        'the braille below packs its own rows to fill the sign width (ADA ' +
+        'places braille in one block below the text). Each plate holds up ' +
+        'to 6 rows, and the sign grows to fit.'
+    );
+    expect(document.getElementById('brailleTableHelp').textContent).toBe(
+      'ADA 703.3 requires contracted (Grade 2) braille on signs. ' +
+        'Uncontracted (Grade 1) spells every word letter by letter.'
+    );
+  });
+});
+
+describe('braille panel card mode — contracted braille by default', () => {
+  afterEach(() => destroyBraillePanel());
+
+  it('starts on Grade 2 with its prefilled text, and says why under the table list', async () => {
+    mountCardPanel();
+    // The card model's Line_1 and Line_2 defaults are this text in Grade 2
+    expect(document.getElementById('brailleTextInput').value).toBe(
+      'hello\nworld'
+    );
+    const select = document.getElementById('brailleTableSelect');
+    await vi.waitFor(() => expect(select.value).toBe('en-ueb-g2.ctb'));
+    expect(document.getElementById('brailleTableHelp').textContent).toBe(
+      'Contracted (Grade 2) fits more on a card; the Braille Authority of ' +
+        'North America uses it in its business card examples. Uncontracted ' +
+        '(Grade 1) spells every word letter by letter.'
+    );
+  });
+});
+
+describe('braille panel — the table list without its catalog (D-222)', () => {
+  const shippedCatalog = JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../public/liblouis/tables.json'
+      ),
+      'utf-8'
+    )
+  );
+
+  afterEach(() => destroyBraillePanel());
+
+  for (const { file, label } of shippedCatalog.tables) {
+    it(`names ${file} with its own label`, async () => {
+      getTables.mockRejectedValueOnce(new Error('Failed to fetch'));
+      mountCardPanel({ defaultTable: file });
+      const select = document.getElementById('brailleTableSelect');
+      await vi.waitFor(() => expect(select.value).toBe(file));
+      expect(select.options).toHaveLength(1);
+      expect(select.options[0].textContent).toBe(label);
+    });
+  }
 });

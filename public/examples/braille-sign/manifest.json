@@ -9,6 +9,7 @@
   "program": "braille-card-customizer",
   "brailleTranslation": {
     "mode": "sign",
+    "capitals": "off",
     "lineParams": ["Line_1", "Line_2", "Line_3", "Line_4", "Line_5", "Line_6"],
     "textParams": [
       "sign_text_1",

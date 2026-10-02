@@ -48,9 +48,13 @@ describe('braille_sign.scad parser integration', () => {
       expect(parsed.parameters[`Line_${i}`], `Line_${i}`).toBeDefined();
     }
     expect(parsed.parameters.sign_text_1.default).toBe('Room 101');
-    // "Room 101" in UEB (capital indicator, r-o-o-m, blank, numeric, 1-0-1)
+    // "Room 101" in UEB with the sign's capitals off (r-o-o-m, blank,
+    // numeric, 1-0-1)
     expect(parsed.parameters.Line_1.default).toBe(
-      '\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801'
+      '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801'
+    );
+    expect(parsed.parameters.Line_1.description).toBe(
+      'Braille for line 1 (Unicode braille). The translation panel fills this in.'
     );
   });
 
@@ -167,6 +171,10 @@ describe('braille-sign manifest', () => {
     const bt = readManifest().brailleTranslation;
     expect(bt.defaultTable).toBe('en-ueb-g2.ctb');
     expect(bt.tablesCatalog).toBe('/liblouis/tables.json');
+  });
+
+  it('turns braille capitals off by default (ADA 703.3.1)', () => {
+    expect(readManifest().brailleTranslation.capitals).toBe('off');
   });
 
   it('description carries the not-a-compliance-guarantee disclaimer', () => {

@@ -108,6 +108,15 @@ const ERROR_TYPES = new Set([
 /** Matches one character of the Unicode braille block. */
 const BRAILLE_CHAR_RE = /^[\u2800-\u28FF]$/;
 
+/**
+ * The catalog's labels for the tables the app ships, for the single entry
+ * the table list falls back to when the catalog itself cannot load.
+ */
+const SHIPPED_TABLE_LABELS = {
+  'en-ueb-g1.ctb': 'English (UEB) Grade 1, uncontracted',
+  'en-ueb-g2.ctb': 'English (UEB) Grade 2, contracted',
+};
+
 /** Geometry params that should trigger a re-wrap when edited directly. */
 const CAPACITY_WATCH_KEYS = [
   'cardWidth',
@@ -134,6 +143,8 @@ let panel = null;
  *   wrapped braille rows
  * @param {string} [config.tablesCatalog] - URL of tables.json
  * @param {string} [config.defaultTable] - Default liblouis table file
+ * @param {string} [config.capitals] - "off" starts "Preserve capital
+ *   letters" unchecked (signs, ADA 703.3.1); anything else starts it checked
  * @param {Object} [config.capacityParams] - SCAD param names for capacity math
  * @param {Object} [config.multiCardParams] - SCAD param names for the
  *   All-cards layout mode (cardLayout, rowsPerCard)
@@ -322,11 +333,11 @@ class BraillePanel {
         `indicator cell shares its charm.`;
     } else if (this.mode === 'sign') {
       textHelp.textContent =
-        `Translation runs on your device. Long lines wrap onto new rows ` +
-        `of raised letters automatically, and the braille below packs ` +
-        `its own rows to fill the sign width (ADA places braille in one ` +
-        `block below the text) — up to ${this.lineParams.length} rows ` +
-        `each, and the sign grows to fit.`;
+        `Translation runs on your device. Each line you type is translated ` +
+        `on its own. Long lines wrap onto new rows of raised letters, and ` +
+        `the braille below packs its own rows to fill the sign width (ADA ` +
+        `places braille in one block below the text). Each plate holds up ` +
+        `to ${this.lineParams.length} rows, and the sign grows to fit.`;
     } else {
       textHelp.textContent =
         'Translation runs on your device. Each new line starts a new braille line; long lines wrap automatically.';
@@ -618,10 +629,16 @@ class BraillePanel {
     const tableHelp = document.createElement('p');
     tableHelp.id = 'brailleTableHelp';
     tableHelp.className = 'braille-panel-help';
-    tableHelp.textContent =
-      this.mode === 'sign'
-        ? 'Contracted (Grade 2) is the ADA-recommended default for signage. Uncontracted (Grade 1) spells everything out letter by letter.'
-        : 'Uncontracted (Grade 1) is recommended for names, emails, and short contact details. Use contracted (Grade 2) only when space is limited.';
+    if (this.mode === 'sign') {
+      tableHelp.textContent =
+        'ADA 703.3 requires contracted (Grade 2) braille on signs. Uncontracted (Grade 1) spells every word letter by letter.';
+    } else if (this.mode === 'card') {
+      tableHelp.textContent =
+        'Contracted (Grade 2) fits more on a card; the Braille Authority of North America uses it in its business card examples. Uncontracted (Grade 1) spells every word letter by letter.';
+    } else {
+      tableHelp.textContent =
+        'Uncontracted (Grade 1) is recommended for names, emails, and short contact details. Use contracted (Grade 2) only when space is limited.';
+    }
     section.appendChild(tableHelp);
   }
 
@@ -632,7 +649,7 @@ class BraillePanel {
     const capsInput = document.createElement('input');
     capsInput.type = 'checkbox';
     capsInput.id = 'brailleCapsToggle';
-    capsInput.checked = true;
+    capsInput.checked = this.config.capitals !== 'off';
     capsInput.setAttribute('aria-describedby', 'brailleCapsHelp');
     capsInput.addEventListener('change', () => this.scheduleLayout(0));
     capsRow.appendChild(capsInput);
@@ -648,7 +665,9 @@ class BraillePanel {
     capsHelp.id = 'brailleCapsHelp';
     capsHelp.className = 'braille-panel-help';
     capsHelp.textContent =
-      'On by default so the braille matches your text exactly. Each capital letter adds an indicator cell; turn this off to convert text to lowercase and save about one cell per capital (common for space-limited cards and labels).';
+      this.mode === 'sign' && !capsInput.checked
+        ? 'Off by default on a sign. The raised letters are always uppercase, and ADA 703.3.1 uses a braille capital sign only for the first word of a sentence, names, single letters, initials and acronyms. Turn this on to keep the capitals you type.'
+        : 'On by default so the braille matches your text exactly. Each capital letter adds an indicator cell; turn this off to convert text to lowercase and save about one cell per capital (common for space-limited cards and labels).';
     section.appendChild(capsHelp);
   }
 
@@ -1005,7 +1024,8 @@ class BraillePanel {
       select.innerHTML = '';
       const opt = document.createElement('option');
       opt.value = this.defaultTable;
-      opt.textContent = 'English (UEB) Grade 1, uncontracted';
+      opt.textContent =
+        SHIPPED_TABLE_LABELS[this.defaultTable] ?? this.defaultTable;
       select.appendChild(opt);
     }
   }
@@ -1178,12 +1198,24 @@ class BraillePanel {
     return this.runCardLayout();
   }
 
-  /** Shared translate wrapper that records untranslatable inputs. */
+  /**
+   * Shared translate wrapper. For the warning it records the typed words
+   * that held a character with no braille, so a whole translated line is
+   * not quoted back (the whole text when no word can be told apart).
+   */
   makeTranslator(table, preserveCaps, untranslatable) {
     return async (t) => {
       const result = await translateText(t, table, { preserveCaps });
-      if (result.hadUntranslatable) untranslatable.add(t);
-      return result.braille;
+      if (result.hadUntranslatable) {
+        const leftOut = result.leftOutChars ?? [];
+        const words = t
+          .split(/\s+/)
+          .filter((word) => [...word].some((ch) => leftOut.includes(ch)));
+        for (const word of words.length > 0 ? words : [t]) {
+          untranslatable.add(word);
+        }
+      }
+      return result;
     };
   }
 
@@ -1232,7 +1264,8 @@ class BraillePanel {
           `(in: "${sample}"). They are left out of the braille.`,
       });
     }
-    if (!preserveCaps && /\p{Lu}/u.test(text)) {
+    // Lowercase is the sign's stated default, not a loss to warn about.
+    if (this.mode !== 'sign' && !preserveCaps && /\p{Lu}/u.test(text)) {
       warnings.push({
         type: 'caps-dropped',
         message:
@@ -1466,7 +1499,7 @@ class BraillePanel {
     const chars = [...text].filter((ch) => !/\s/u.test(ch));
     const charms = [];
     for (const ch of chars) {
-      charms.push({ braille: await translate(ch), source: ch });
+      charms.push({ braille: (await translate(ch)).braille, source: ch });
     }
 
     if (seq !== this.layoutSeq) return;

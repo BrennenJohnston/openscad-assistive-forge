@@ -112,7 +112,7 @@
 // First line of braille text
 Line_1 = "⠓⠑⠇⠇⠕";
 // Second line of braille text
-Line_2 = "⠺⠕⠗⠇⠙";
+Line_2 = "⠸⠺";
 // Third line of braille text
 Line_3 = "";
 // Fourth line of braille text

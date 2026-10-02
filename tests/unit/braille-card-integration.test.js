@@ -51,13 +51,12 @@ describe('braille_wedge_card.scad parser integration', () => {
       expect(param, `Line_${i}`).toBeDefined();
       expect(param.type).toBe('string');
     }
-    // Defaults contain Unicode braille (survives parsing)
+    // Defaults contain Unicode braille (survives parsing): "hello" and
+    // "world" in Grade 2, the card's default table
     expect(parsed.parameters.Line_1.default).toBe(
       '\u2813\u2811\u2807\u2807\u2815'
     );
-    expect(parsed.parameters.Line_2.default).toBe(
-      '\u283A\u2815\u2817\u2807\u2819'
-    );
+    expect(parsed.parameters.Line_2.default).toBe('\u2838\u283A');
   });
 
   it('extracts card size and spacing parameters used for capacity math', () => {
@@ -170,7 +169,7 @@ describe('braille-wedge-card manifest', () => {
 
   it('brailleTranslation declares the default table and catalog URL', () => {
     const bt = readManifest().brailleTranslation;
-    expect(bt.defaultTable).toBe('en-ueb-g1.ctb');
+    expect(bt.defaultTable).toBe('en-ueb-g2.ctb');
     expect(bt.tablesCatalog).toBe('/liblouis/tables.json');
   });
 });

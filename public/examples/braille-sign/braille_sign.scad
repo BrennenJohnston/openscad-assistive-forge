@@ -52,8 +52,8 @@ sign_text_5 = "";
 sign_text_6 = "";
 
 /* [Text Input - Pre-Translated Braille] */
-// Braille for line 1 (Unicode braille, e.g. from branah.com/braille-translator)
-Line_1 = "⠠⠗⠕⠕⠍⠀⠼⠁⠚⠁";
+// Braille for line 1 (Unicode braille). The translation panel fills this in.
+Line_1 = "⠗⠕⠕⠍⠀⠼⠁⠚⠁";
 // Braille for line 2
 Line_2 = "";
 // Braille for line 3
