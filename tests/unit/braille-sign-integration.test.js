@@ -169,6 +169,10 @@ describe('braille-sign manifest', () => {
     expect(bt.tablesCatalog).toBe('/liblouis/tables.json');
   });
 
+  it('turns braille capitals off by default (ADA 703.3.1)', () => {
+    expect(readManifest().brailleTranslation.capitals).toBe('off');
+  });
+
   it('description carries the not-a-compliance-guarantee disclaimer', () => {
     expect(readManifest().description).toMatch(/recommendations only/i);
   });

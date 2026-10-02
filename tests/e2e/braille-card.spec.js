@@ -775,6 +775,31 @@ test.describe('Braille Sign workflow', () => {
     )
   })
 
+  test('sign braille carries no capital signs until the switch is turned on', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const caps = page.locator('#brailleCapsToggle')
+    await expect(caps).not.toBeChecked()
+    const first = page.locator('#braillePreview .braille-preview-braille').first()
+    // The first layout of the default "Room 101": no capital sign
+    await expect(first).toHaveText(
+      '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+    await page.locator('#brailleTextInput').fill('ROOM 101')
+    await expect(first).toHaveText(
+      '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+    await expect(page.locator('#brailleWarnings')).toBeHidden()
+    await caps.check()
+    await expect(first).toHaveText(
+      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+  })
+
   test('sign translates a word that mixes letters and a number, with no engine error', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

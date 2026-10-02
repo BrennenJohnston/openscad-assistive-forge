@@ -709,3 +709,89 @@ describe('braille panel — characters with no braille (D-218)', () => {
     );
   });
 });
+
+describe('braille panel sign mode — capitals off by default (D-208)', () => {
+  const SIGN_LINES = Array.from({ length: 6 }, (_, i) => `Line_${i + 1}`);
+  const SIGN_TEXTS = Array.from({ length: 6 }, (_, i) => `sign_text_${i + 1}`);
+
+  function mountSign(extra = {}) {
+    document.body.innerHTML =
+      '<div id="app"><div id="parametersContainer"></div></div>';
+    const defaults = {
+      sign_width_mm: '160',
+      braille_plate_height_mm: '40',
+      cell_spacing: '6.2',
+      line_spacing: '10',
+      char_height_mm: '16',
+      letter_spacing: '1.1',
+      ...Object.fromEntries(SIGN_LINES.map((name) => [name, ''])),
+      ...Object.fromEntries(SIGN_TEXTS.map((name) => [name, ''])),
+    };
+    stateManager.setState({ parameters: { ...defaults }, defaults });
+    initBraillePanel({
+      mode: 'sign',
+      lineParams: SIGN_LINES,
+      textParams: SIGN_TEXTS,
+      tablesCatalog: '/liblouis/tables.json',
+      defaultTable: 'en-ueb-g2.ctb',
+      capacityParams: {
+        cardWidth: 'sign_width_mm',
+        cardHeight: 'braille_plate_height_mm',
+        cellSpacing: 'cell_spacing',
+        lineSpacing: 'line_spacing',
+        charHeight: 'char_height_mm',
+        letterSpacing: 'letter_spacing',
+      },
+      ...extra,
+    });
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    destroyBraillePanel();
+    document.body.innerHTML = '';
+  });
+
+  it('starts with capitals off when the sign asks for it, and says nothing about them', async () => {
+    mountSign({ capitals: 'off' });
+    expect(document.getElementById('brailleCapsToggle').checked).toBe(false);
+    await typeText('Exit now', () => {
+      expect(params().sign_text_1).toBe('Exit now');
+    });
+    expect(translateText).toHaveBeenCalledWith(
+      expect.any(String),
+      'en-ueb-g2.ctb',
+      { preserveCaps: false }
+    );
+    expect(document.getElementById('brailleWarnings').hidden).toBe(true);
+  });
+
+  it('keeps capitals on when the configuration does not turn them off', () => {
+    mountSign();
+    expect(document.getElementById('brailleCapsToggle').checked).toBe(true);
+    destroyBraillePanel();
+    mountCardPanel();
+    expect(document.getElementById('brailleCapsToggle').checked).toBe(true);
+  });
+
+  it('explains the sign defaults under the switch, the text box and the table list', () => {
+    mountSign({ capitals: 'off' });
+    expect(document.getElementById('brailleCapsHelp').textContent).toBe(
+      'Off by default on a sign. The raised letters are always uppercase, ' +
+        'and ADA 703.3.1 uses a braille capital sign only for the first ' +
+        'word of a sentence, names, single letters, initials and acronyms. ' +
+        'Turn this on to keep the capitals you type.'
+    );
+    expect(document.getElementById('brailleTextHelp').textContent).toBe(
+      'Translation runs on your device. Each line you type is translated ' +
+        'on its own. Long lines wrap onto new rows of raised letters, and ' +
+        'the braille below packs its own rows to fill the sign width (ADA ' +
+        'places braille in one block below the text). Each plate holds up ' +
+        'to 6 rows, and the sign grows to fit.'
+    );
+    expect(document.getElementById('brailleTableHelp').textContent).toBe(
+      'ADA 703.3 requires contracted (Grade 2) braille on signs. ' +
+        'Uncontracted (Grade 1) spells every word letter by letter.'
+    );
+  });
+});
