@@ -29,7 +29,7 @@ export const TABLE_DIR = '/tables';
 export const DISPLAY_TABLE = 'unicode.dis';
 
 const TABLE_NAME = /^[\w.-]+$/;
-const BLANK_CELL = '⠀';
+const BLANK_CELL = '\u2800';
 const LOG_LIMIT = 20;
 /** liblouis writes 32-bit characters (the build is configured --enable-ucs4). */
 const CHAR_BYTES = 4;

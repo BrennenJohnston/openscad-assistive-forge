@@ -81,7 +81,7 @@ const check = (name, condition, detail) => {
 };
 
 /** Both translators may write a blank cell as a space; compare them as U+2800. */
-const blanks = (cells) => cells.replace(/ /g, '⠀');
+const blanks = (cells) => cells.replace(/ /g, '\u2800');
 
 /**
  * The native tool, given one line of text per input line, writes one line of
@@ -193,7 +193,7 @@ check(
   `${positionProblems} line(s) with a position problem`
 );
 
-const knowledge = backTranslate(mod, 'en-ueb-g2.ctb', '⠅');
+const knowledge = backTranslate(mod, 'en-ueb-g2.ctb', '\u2805');
 check(
   'one cell back-translates to its whole word',
   knowledge === 'knowledge',
