@@ -113,7 +113,9 @@ WASM_CONFIGURE_FLAGS=("${CONFIGURE_FLAGS[@]}" --host=wasm32-unknown-emscripten)
   make -C tools lou_translate
 )
 NATIVE_TOOL="${NATIVE_SRC}/tools/lou_translate"
-NATIVE_VERSION="$("${NATIVE_TOOL}" --version | head -1)"
+# --version begins with the tool's own path; only its name is kept, so the
+# README reads the same whichever machine built it.
+NATIVE_VERSION="$("${NATIVE_TOOL}" --version | head -1 | sed 's#^.*/##')"
 echo "Native reference: ${NATIVE_VERSION}"
 
 # ── 3. WebAssembly ───────────────────────────────────────────────────────────
