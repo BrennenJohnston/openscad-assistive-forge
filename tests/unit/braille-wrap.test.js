@@ -13,7 +13,6 @@ import {
   BRAILLE_SPACE,
   countCells,
   computeCapacity,
-  splitWordAfterPunctuation,
   packWords,
   chunkIntoCards,
   layoutBrailleText,
@@ -159,43 +158,6 @@ describe('computeCapacity', () => {
     });
     expect(standard.cellsPerLine).toBeLessThan(narrow.cellsPerLine);
     expect(standard.rowsPerCard).toBeLessThan(narrow.rowsPerCard);
-  });
-});
-
-describe('splitWordAfterPunctuation', () => {
-  it('splits emails after @ and .', () => {
-    expect(splitWordAfterPunctuation('name@example.com')).toEqual([
-      'name@',
-      'example.',
-      'com',
-    ]);
-  });
-
-  it('splits URLs after / and :', () => {
-    expect(splitWordAfterPunctuation('https://a.io/x')).toEqual([
-      'https:',
-      '/',
-      '/',
-      'a.',
-      'io/',
-      'x',
-    ]);
-  });
-
-  it('splits hyphenated words after -', () => {
-    expect(splitWordAfterPunctuation('well-known')).toEqual([
-      'well-',
-      'known',
-    ]);
-  });
-
-  it('returns single segment for plain words', () => {
-    expect(splitWordAfterPunctuation('hello')).toEqual(['hello']);
-  });
-
-  it('segments concatenate back to the input', () => {
-    const word = 'a.b@c-d/e:f';
-    expect(splitWordAfterPunctuation(word).join('')).toBe(word);
   });
 });
 
@@ -627,14 +589,23 @@ describe('layoutSignText', () => {
   it('divides an over-long braille word after punctuation', async () => {
     const { textRows, brailleRows, warnings } = await layoutSignText({
       ...baseOpts,
+      translate: uebStub,
       text: 'name@example.com',
       maxSourceChars: 100,
       brailleCellsPerLine: 10,
     });
     // Letters fit on one row; the 16-cell braille divides into
-    // name@ / example. / com and packs onto three rows.
+    // name@ / example. / com and packs onto three rows, which put back
+    // together are the whole word's braille.
     expect(textRows).toHaveLength(1);
-    expect(brailleRows).toHaveLength(3);
+    expect(brailleRows.map((row) => row.source)).toEqual([
+      'name@',
+      'example.',
+      'com',
+    ]);
+    expect(brailleRows.map((row) => String(row.braille)).join('')).toBe(
+      uebStub('name@example.com').braille
+    );
     expect(warnings).toHaveLength(0);
   });
 
@@ -670,7 +641,7 @@ describe('layoutSignText', () => {
     expect(brailleRows).toEqual([]);
   });
 
-  it('translates each distinct word once across both passes', async () => {
+  it('translates each typed line once, whole', async () => {
     const calls = [];
     const countingTranslate = async (t) => {
       calls.push(t);
@@ -679,10 +650,42 @@ describe('layoutSignText', () => {
     await layoutSignText({
       ...baseOpts,
       translate: countingTranslate,
-      text: 'go go gadget',
+      text: 'go go gadget\ngo',
       maxSourceChars: 6,
       brailleCellsPerLine: 30,
     });
-    expect(calls.sort()).toEqual(['gadget', 'go']);
+    expect(calls).toEqual(['go go gadget', 'go']);
+  });
+
+  it('translates a run of capital words on a sign as one passage', async () => {
+    const { textRows, brailleRows } = await layoutSignText({
+      ...baseOpts,
+      translate: uebStub,
+      text: 'ROOM ROOM ROOM ROOM',
+      maxSourceChars: 9,
+      brailleCellsPerLine: 30,
+    });
+    expect(textRows.map((row) => row.source)).toEqual([
+      'ROOM ROOM',
+      'ROOM ROOM',
+    ]);
+    expect(occurrences(brailleRows, '\u2820\u2820\u2820')).toBe(1);
+    expect(occurrences(brailleRows, '\u2820\u2804')).toBe(1);
+  });
+
+  it('translates only the words whose letter rows survive', async () => {
+    const { textRows, brailleRows } = await layoutSignText({
+      ...baseOpts,
+      translate: uebStub,
+      text: 'AAA BBB CCC DDD EEE',
+      maxSourceChars: 7,
+      brailleCellsPerLine: 40,
+      maxRows: 2,
+    });
+    expect(textRows.map((row) => row.source)).toEqual(['AAA BBB', 'CCC DDD']);
+    // The four surviving words are one passage; EEE is not in the braille
+    expect(
+      brailleRows.map((row) => String(row.braille)).join(BRAILLE_SPACE)
+    ).toBe(uebStub('AAA BBB CCC DDD').braille);
   });
 });

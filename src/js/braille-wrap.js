@@ -10,7 +10,7 @@
  * accepted, read as braille with no positions. This keeps every function
  * in this module either pure or testable with a stub translator.
  *
- * Card wrapping rules (UEB and the BANA fact sheet):
+ * Wrapping rules, for cards and signs (UEB and the BANA fact sheet):
  * - A typed line is translated once, whole: capital passages and other
  *   indicators span words (UEB 8.5.7), so translating word by word changes
  *   the braille. A new typed line starts afresh (UEB 8.5.6).
@@ -85,27 +85,6 @@ export function computeCapacity({
   );
 
   return { cellsPerLine, rowsPerCard };
-}
-
-/**
- * Split an over-long word into segments after BANA punctuation characters.
- * "name@example.com" → ["name@", "example.", "com"].
- * Words without punctuation come back as a single segment.
- * @param {string} word - Source (untranslated) word
- * @returns {string[]} Segments, in order, concat equals the input
- */
-export function splitWordAfterPunctuation(word) {
-  const segments = [];
-  let current = '';
-  for (const ch of word) {
-    current += ch;
-    if (BREAK_AFTER_CHARS.includes(ch)) {
-      segments.push(current);
-      current = '';
-    }
-  }
-  if (current) segments.push(current);
-  return segments;
 }
 
 /**
@@ -351,6 +330,21 @@ async function translateLine(line, translate, cellsPerLine) {
 }
 
 /**
+ * Pack one translated line's words into rows; a row's text leaves out the
+ * gap an empty source would leave.
+ * @param {Array<{ braille: string, cells: number, source: string }>} words
+ * @param {number} cellsPerLine
+ * @param {number} [maxSourceChars=Infinity]
+ * @returns {Array<{ braille: string, source: string }>}
+ */
+function packLine(words, cellsPerLine, maxSourceChars = Infinity) {
+  return packWords(words, cellsPerLine, maxSourceChars).map((row) => ({
+    braille: row.braille,
+    source: row.source.split(' ').filter(Boolean).join(' '),
+  }));
+}
+
+/**
  * Full layout pipeline: translate, wrap, and split plain text into braille
  * cards.
  *
@@ -447,12 +441,7 @@ export async function layoutBrailleText({
       });
     }
 
-    for (const row of packWords(words, cellsPerLine, maxSourceChars)) {
-      wrapped.push({
-        braille: row.braille,
-        source: row.source.split(' ').filter(Boolean).join(' '),
-      });
-    }
+    wrapped.push(...packLine(words, cellsPerLine, maxSourceChars));
   }
 
   // Drop trailing blank lines (they carry no content).
@@ -502,8 +491,11 @@ export async function layoutBrailleText({
  * far fewer characters per row than braille (~7 mm cells), so mirroring
  * the letter rows would leave most of each braille row blank. Instead:
  *
- * 1. Letter rows are packed on source-character capacity alone.
- * 2. Braille rows reflow the same words on cell capacity alone.
+ * 1. Letter rows are packed on source-character capacity alone, from the
+ *    typed words; no translation is needed for them.
+ * 2. Each typed line's surviving words are translated once, whole (capital
+ *    passages span words), and the braille is cut into rows at its blank
+ *    cells on cell capacity alone, as on a card.
  *
  * User newlines stay hard breaks in both scripts. When the letter rows
  * exceed `maxRows`, the overflow is dropped and the braille pass only
@@ -513,8 +505,7 @@ export async function layoutBrailleText({
  * @param {Object} opts
  * @param {string} opts.text - Plain input text
  * @param {function(string): Promise<{ braille: string, inputPos: (number[]|null) }|string>} opts.translate -
- *   Async translator (see layoutBrailleText); the sign still translates
- *   word by word
+ *   Async line translator (see the module notes)
  * @param {number} opts.maxSourceChars - Letter-row capacity in print
  *   characters
  * @param {number|function(number): number} opts.brailleCellsPerLine -
@@ -546,31 +537,14 @@ export async function layoutSignText({
 }) {
   const warnings = [];
 
-  // Translate every distinct word once; both passes share the results.
-  const cache = new Map();
-  const translateCached = async (t) => {
-    if (!cache.has(t)) {
-      cache.set(t, asTranslation(await translate(t)).braille);
-    }
-    return cache.get(t);
-  };
-
-  // Hard user lines -> word lists (null marks an intentional blank line).
+  // Hard user lines -> typed word lists (null marks an intentional blank
+  // line).
   const userLines = [];
   for (const sourceLine of text.replace(/\r\n?/g, '\n').split('\n')) {
     const trimmed = sourceLine.trim();
-    if (trimmed === '') {
-      userLines.push(null);
-      continue;
-    }
-    const words = [];
-    for (const source of trimmed.split(/\s+/)) {
-      // Pass 1 packs on source characters alone, so skipping the braille
-      // pass means no translation is needed at all.
-      const braille = skipBrailleRows ? '' : await translateCached(source);
-      words.push({ source, braille, cells: countCells(braille) });
-    }
-    userLines.push(words);
+    userLines.push(
+      trimmed === '' ? null : trimmed.split(/\s+/).map((source) => ({ source }))
+    );
   }
 
   // Pass 1 — letter rows, packed on source characters only. Each row
@@ -670,55 +644,33 @@ export async function layoutSignText({
     }
   }
 
-  // Pass 2 — braille rows, packed on cells only.
+  // Pass 2 — braille rows: each user line's surviving words are translated
+  // once, whole, and packed on cells only.
   let brailleRows = [];
   for (const group of groups) {
     if (group.words.length === 0) {
       brailleRows.push({ braille: '', source: '' });
       continue;
     }
-    const packable = [];
-    for (const word of group.words) {
-      if (word.cells <= cellsPerLine) {
-        packable.push(word);
-        continue;
-      }
-      // Over-long word: divide after BANA punctuation and translate the
-      // pieces individually (same rule as layoutBrailleText).
-      const segments = splitWordAfterPunctuation(word.source);
-      if (segments.length === 1) {
-        warnings.push({
-          type: 'word-too-long',
-          message:
-            `"${truncateForMessage(word.source)}" needs ${word.cells} ` +
-            `braille cells but a row only holds ${cellsPerLine}. It cannot ` +
-            `be divided automatically — shorten it or widen the sign.`,
-        });
-        packable.push(word);
-        continue;
-      }
-      let anySegmentTooLong = false;
-      for (const segment of segments) {
-        const segBraille = await translateCached(segment);
-        const segCells = countCells(segBraille);
-        if (segCells > cellsPerLine) anySegmentTooLong = true;
-        packable.push({
-          source: segment,
-          braille: segBraille,
-          cells: segCells,
-        });
-      }
-      if (anySegmentTooLong) {
-        warnings.push({
-          type: 'word-too-long',
-          message:
-            `Part of "${truncateForMessage(word.source)}" is still longer ` +
+    const line = group.words.map((word) => word.source).join(' ');
+    const { words, overlong } = await translateLine(
+      line,
+      translate,
+      cellsPerLine
+    );
+    for (const { source, cells, divided } of overlong) {
+      warnings.push({
+        type: 'word-too-long',
+        message: divided
+          ? `Part of "${truncateForMessage(source)}" is still longer ` +
             `than one braille row even after dividing at punctuation. ` +
-            `Shorten it or widen the sign.`,
-        });
-      }
+            `Shorten it or widen the sign.`
+          : `"${truncateForMessage(source)}" needs ${cells} braille cells ` +
+            `but a row only holds ${cellsPerLine}. It cannot be divided ` +
+            `automatically. Shorten it or widen the sign.`,
+      });
     }
-    brailleRows.push(...packWords(packable, cellsPerLine));
+    brailleRows.push(...packLine(words, cellsPerLine));
   }
   if (brailleRows.length > maxRows) {
     warnings.push({

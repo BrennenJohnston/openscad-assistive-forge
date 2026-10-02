@@ -800,17 +800,49 @@ test.describe('Braille Sign workflow', () => {
     if (!(await caps.isChecked())) await caps.check()
 
     await page.locator('#brailleTextInput').fill('ROOM \u2603 101')
-    // Capital word ROOM, a blank cell either side of where the snowman
-    // stood, number 101: no escape cells, and none with dot 7
+    // Capital word ROOM, one blank cell, number 101: the snowman is left
+    // out, with no escape cells and none with dot 7
     await expect(
       page.locator('#braillePreview .braille-preview-braille').first()
     ).toHaveText(
-      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u2800\u283C\u2801\u281A\u2801',
+      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
       { timeout: 20000 }
     )
     await expect(page.locator('#brailleWarnings')).toContainText(
       'Some characters could not be translated to braille (in: "\u2603"). They are left out of the braille.'
     )
+  })
+
+  test('sign translates a run of capital words as one passage', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const caps = page.locator('#brailleCapsToggle')
+    if (!(await caps.isChecked())) await caps.check()
+
+    await page.locator('#brailleTextInput').fill('ROOM ROOM ROOM ROOM')
+    // One capital passage indicator, the four words, one terminator
+    const passage =
+      '\u2820\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u2817\u2815\u2815\u280D\u2800' +
+      '\u2817\u2815\u2815\u280D\u2800\u2817\u2815\u2815\u280D\u2820\u2804'
+    const rows = page.locator('#braillePreview .braille-preview-braille')
+    await expect
+      .poll(async () => (await rows.allTextContents()).join('\u2800'), {
+        timeout: 20000,
+      })
+      .toBe(passage)
+    const lineParams = page.locator(
+      '.param-control[data-param-name^="Line_"] input'
+    )
+    await expect
+      .poll(
+        async () =>
+          (await lineParams.evaluateAll((inputs) => inputs.map((i) => i.value)))
+            .filter((value) => value !== '')
+            .join('\u2800'),
+        { timeout: 10000 }
+      )
+      .toBe(passage)
   })
 
   test('sign warns about an emoji typed on its own', async ({ page }) => {
