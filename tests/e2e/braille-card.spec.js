@@ -918,6 +918,26 @@ test.describe('Braille Sign workflow', () => {
     await expect(line1).toHaveValue('\u281B')
   })
 
+  test('sign gives a phone number three number signs with hyphens and one with periods', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const first = page.locator('#braillePreview .braille-preview-braille').first()
+    // A hyphen ends a number, so each group needs its own number sign
+    await page.locator('#brailleTextInput').fill('206-555-0147')
+    await expect(first).toHaveText(
+      '\u283C\u2803\u281A\u280B\u2824\u283C\u2811\u2811\u2811\u2824\u283C\u281A\u2801\u2819\u281B',
+      { timeout: 20000 }
+    )
+    // A period inside a number keeps it going: one number sign
+    await page.locator('#brailleTextInput').fill('206.555.0147')
+    await expect(first).toHaveText(
+      '\u283C\u2803\u281A\u280B\u2832\u2811\u2811\u2811\u2832\u281A\u2801\u2819\u281B',
+      { timeout: 20000 }
+    )
+    await expect(page.locator('#brailleErrors')).toBeHidden()
+  })
+
   test('the table list offers Unified English Braille only', async ({ page }) => {
     await openBrailleExample(page, 'braille-sign')
     const options = page.locator('#brailleTableSelect option')
