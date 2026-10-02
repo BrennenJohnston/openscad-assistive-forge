@@ -48,7 +48,10 @@ vi.mock('../../src/js/braille-translator.js', () => {
     }),
     backTranslateText: vi.fn(async () => 'hello back'),
     getTables: vi.fn(async () => ({
-      tables: [{ file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' }],
+      tables: [
+        { file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' },
+        { file: 'en-ueb-g2.ctb', label: 'English (UEB) Grade 2' },
+      ],
       defaultTable: 'en-ueb-g1.ctb',
     })),
     disposeTranslator: vi.fn(),
@@ -94,7 +97,7 @@ const CARD_CONFIG = {
   mode: 'card',
   lineParams: LINE_PARAMS,
   tablesCatalog: '/liblouis/tables.json',
-  defaultTable: 'en-ueb-g1.ctb',
+  defaultTable: 'en-ueb-g2.ctb',
   capacityParams: {
     cardWidth: 'card_face_width_mm',
     cardHeight: 'card_face_height_mm',
@@ -317,7 +320,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     );
     expect(backTranslateText).toHaveBeenCalledWith(
       '\u2813\u2811',
-      'en-ueb-g1.ctb'
+      'en-ueb-g2.ctb'
     );
   });
 });
@@ -796,6 +799,25 @@ describe('braille panel sign mode — capitals off by default (D-208)', () => {
     expect(document.getElementById('brailleTableHelp').textContent).toBe(
       'ADA 703.3 requires contracted (Grade 2) braille on signs. ' +
         'Uncontracted (Grade 1) spells every word letter by letter.'
+    );
+  });
+});
+
+describe('braille panel card mode — contracted braille by default', () => {
+  afterEach(() => destroyBraillePanel());
+
+  it('starts on Grade 2 with its prefilled text, and says why under the table list', async () => {
+    mountCardPanel();
+    // The card model's Line_1 and Line_2 defaults are this text in Grade 2
+    expect(document.getElementById('brailleTextInput').value).toBe(
+      'hello\nworld'
+    );
+    const select = document.getElementById('brailleTableSelect');
+    await vi.waitFor(() => expect(select.value).toBe('en-ueb-g2.ctb'));
+    expect(document.getElementById('brailleTableHelp').textContent).toBe(
+      'Contracted (Grade 2) fits more on a card; the Braille Authority of ' +
+        'North America uses it in its business card examples. Uncontracted ' +
+        '(Grade 1) spells every word letter by letter.'
     );
   });
 });

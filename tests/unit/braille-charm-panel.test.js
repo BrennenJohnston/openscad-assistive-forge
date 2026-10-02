@@ -136,6 +136,13 @@ describe('braille panel charm mode (multi-charm)', () => {
     expect(document.getElementById('brailleCardPager').hidden).toBe(true);
   });
 
+  it('keeps its own table help: the charm stays on Grade 1', () => {
+    expect(document.getElementById('brailleTableHelp').textContent).toBe(
+      'Uncontracted (Grade 1) is recommended for names, emails, and short ' +
+        'contact details. Use contracted (Grade 2) only when space is limited.'
+    );
+  });
+
   it('skips whitespace when splitting characters', async () => {
     await typeText('a b', () => {
       expect(params().charm_layout).toBe('All charms');

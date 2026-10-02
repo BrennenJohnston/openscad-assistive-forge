@@ -6,7 +6,8 @@
  * test phrase whose braille words each fit a line. Translating word by
  * word failed this wherever a capital passage or another indicator spans
  * words. The sign model's default braille line is checked the same way:
- * it must be what the panel lays out for the model's default text.
+ * it must be what the panel lays out for the model's default text. So are
+ * the card model's default lines, for the card panel's prefilled text.
  *
  * @license GPL-3.0-or-later
  */
@@ -130,5 +131,36 @@ describe('the sign model opens with its own braille', () => {
     expect(brailleRows.map((row) => String(row.braille))).toEqual([
       parameters.Line_1.default,
     ])
+  })
+})
+
+describe('the card model opens with its own braille', () => {
+  it('holds in Line_1 to Line_20 what the panel lays out for its prefilled text', async () => {
+    const card = path.join(ROOT, 'public', 'examples', 'braille-wedge-card')
+    const { parameters } = extractParameters(
+      readFileSync(path.join(card, 'braille_wedge_card.scad'), 'utf8')
+    )
+    const { brailleTranslation } = readJson(path.join(card, 'manifest.json'))
+    const keepCapitals = brailleTranslation.capitals !== 'off'
+    const translateAsThePanel = async (text) =>
+      engine(brailleTranslation.defaultTable)(
+        keepCapitals ? text : text.toLowerCase()
+      )
+    // The card panel's prefilled text, pinned in braille-card-panel.test.js
+    const { cards } = await layoutBrailleText({
+      text: 'hello\nworld',
+      translate: translateAsThePanel,
+      cellsPerLine: parameters.grid_columns.default,
+      rowsPerCard: parameters.grid_rows.default,
+      maxTotalLines: brailleTranslation.lineParams.length,
+    })
+    // The first layout writes nothing when every Line_N already holds this
+    expect(
+      brailleTranslation.lineParams.map((_, i) =>
+        String(cards[0][i]?.braille ?? '')
+      )
+    ).toEqual(
+      brailleTranslation.lineParams.map((name) => parameters[name].default)
+    )
   })
 })

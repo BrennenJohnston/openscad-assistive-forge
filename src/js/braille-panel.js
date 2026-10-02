@@ -629,10 +629,16 @@ class BraillePanel {
     const tableHelp = document.createElement('p');
     tableHelp.id = 'brailleTableHelp';
     tableHelp.className = 'braille-panel-help';
-    tableHelp.textContent =
-      this.mode === 'sign'
-        ? 'ADA 703.3 requires contracted (Grade 2) braille on signs. Uncontracted (Grade 1) spells every word letter by letter.'
-        : 'Uncontracted (Grade 1) is recommended for names, emails, and short contact details. Use contracted (Grade 2) only when space is limited.';
+    if (this.mode === 'sign') {
+      tableHelp.textContent =
+        'ADA 703.3 requires contracted (Grade 2) braille on signs. Uncontracted (Grade 1) spells every word letter by letter.';
+    } else if (this.mode === 'card') {
+      tableHelp.textContent =
+        'Contracted (Grade 2) fits more on a card; the Braille Authority of North America uses it in its business card examples. Uncontracted (Grade 1) spells every word letter by letter.';
+    } else {
+      tableHelp.textContent =
+        'Uncontracted (Grade 1) is recommended for names, emails, and short contact details. Use contracted (Grade 2) only when space is limited.';
+    }
     section.appendChild(tableHelp);
   }
 

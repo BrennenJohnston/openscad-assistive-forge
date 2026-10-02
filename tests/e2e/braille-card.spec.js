@@ -179,9 +179,9 @@ test.describe('Braille translation workflow (card)', () => {
       page.locator('.param-control[data-param-name="Line_1"]')
     ).toBeAttached({ timeout: 10000 })
 
-    // Table catalog populated with the UEB default
+    // Table catalog populated; the card starts on contracted (Grade 2) UEB
     const selectedTable = await page.locator('#brailleTableSelect').inputValue()
-    expect(selectedTable).toBe('en-ueb-g1.ctb')
+    expect(selectedTable).toBe('en-ueb-g2.ctb')
   })
 
   test('typing text translates to braille and updates Line_N params', async ({ page }) => {
@@ -198,7 +198,7 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(preview).toContainText('\u2813\u2811\u2807\u2807\u2815', {
       timeout: 20000,
     }) // ⠓⠑⠇⠇⠕
-    await expect(preview).toContainText('\u283A\u2815\u2817\u2807\u2819') // ⠺⠕⠗⠇⠙
+    await expect(preview).toContainText('\u2838\u283A') // ⠸⠺, "world" in Grade 2
 
     // Source text is shown under the braille line. The panel's initial
     // layout of its default text ('hello\nworld', two lines) may render
@@ -214,7 +214,7 @@ test.describe('Braille translation workflow (card)', () => {
       '.param-control[data-param-name="Line_1"] input'
     )
     await expect(line1Input).toHaveValue(
-      '\u2813\u2811\u2807\u2807\u2815\u2800\u283A\u2815\u2817\u2807\u2819',
+      '\u2813\u2811\u2807\u2807\u2815\u2800\u2838\u283A',
       { timeout: 10000 }
     )
   })
