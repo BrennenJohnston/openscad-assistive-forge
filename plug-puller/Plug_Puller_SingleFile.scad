@@ -21,7 +21,7 @@
 //   permitted. Contact the maintainer for commercial use.
 // =============================================================================
 
-// Plug Puller 0.13.0 — Parametric Generator for the one-sided puller
+// Plug Puller 0.14.0 — Parametric Generator for the one-sided puller
 // The one-sided puller is the reworked v6 flat puller: a slab with a
 // two-level plug pocket whose side walls follow a parametric "plug side
 // rail", plus rail-placed zip-tie holes and velcro slots, finger bores, and a
@@ -35,7 +35,8 @@
 //      UNCHECKED (older builds: Window ▸ Customizer)
 //   3. Fill in the numbered Steps top to bottom:
 //        Step 1: Your plug — pick a plug preset, or measure your plug
-//                (docs/guides/measuring-guide.md shows every measurement).
+//                (docs/guides/one-sided/quick-start.md shows every
+//                measurement).
 //        Step 2: Size — Medium is the reference; Small / Large for other
 //                hands; "Measure my hand" to type two hand numbers.
 //        Step 3: Attachment — how the tool straps onto the plug.
@@ -46,7 +47,7 @@
 //     "Step 1" … "Step 4"       the guided path — beginners stop here
 //     "Advanced - …" sections   power dials: manual zip/velcro placement and
 //                               render quality
-//                               (see docs/guides/power-user-guide.md)
+//                               (see docs/guides/one-sided/full-guide.md)
 //     "… (Custom size only)"    expert geometry sliders, active only when
 //                               Size = Custom (all measurements are ignored)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@
 // the selection to the default (MakerWorld PMM inherits this behaviour).
 
 /* [Step 1 - Your Plug] */
-// The fastest start: pick your plug from this list and every measurement below fills in automatically. Pick "Measure my plug" to type your own numbers instead - docs/guides/measuring-guide.md walks you through each one in about 5 minutes.
+// The fastest start: pick your plug from this list and every measurement below fills in automatically. Pick "Measure my plug" to type your own numbers instead - the quick start, docs/guides/one-sided/quick-start.md, walks you through each one in about 5 minutes.
 plug_preset = "Measure my plug"; // [Measure my plug, Flat 2-prong lamp plug - NEMA 1-15, Standard 3-prong plug - NEMA 5-15, Heavy-duty extension cord - NEMA 5-15, Wide 2-prong appliance plug - NEMA 1-15]
 // How far the plug body sticks out, from the surface it plugs into to the plug's back end where the cord starts. On a wall outlet, measure from the wall plate; on a laptop or charger, from the device's edge. The tool's pocket runs this full length. Skip if you picked a plug preset. (mm)
 measure_plug_length = 25.5; // [12:0.5:85]
@@ -141,7 +142,7 @@ zip_pos_3 = 30; // [0:0.5:55]
 zip_edge_offset = 4; // [2.5:0.25:12]
 
 /* [Advanced - Velcro Placement] */
-// Where the tool's velcro strap openings sit. Auto (recommended) derives the wing region / classic-slot placement from the body. Manual slides a pair of classic slots along the plug side rail with the dial below (the Wing style always uses Auto).
+// Where the tool's velcro strap openings sit. Auto (recommended) derives the wing region / classic-slot placement from the body. Manual slides a pair of classic slots along the plug side rail with the dial below, even when the opening style is Wing.
 velcro_placement = "Auto"; // [Auto, Manual]
 // Manual placement only: slot distance along the plug side rail, measured from the plug face toward the cord. (mm)
 velcro_pos = 12; // [0:0.5:55]
@@ -164,10 +165,14 @@ render_mode = "Full"; // [Full, Body Only, Body No Cutouts, Only Finger Holes, O
 // suitable for slicing without repair.
 eps = 0.01;
 
+// Height of one layer in the stacked edge roundovers (roundover_layers_3d):
+// half a typical 0.2 mm print layer, so the printed edge matches a smooth one.
+ROUNDOVER_STEP = 0.1;
+
 /* [Custom Mode] */
 // EXPERT TIER. Every section below is marked "(Custom size only)" and is ignored unless Step 2's Size = Custom - in Custom, all plug/hand measurements are ignored and these sliders control the geometry directly. This switch: render once with everything reset to the Medium reference geometry (a clean baseline to diverge from), then turn it back off.
 reset_custom_to_medium = false;
-// Auto-fit clamps every Custom slider so features stay inside the body and keep printable walls to their neighbours; each adjustment is reported in the console. Turn OFF only when you deliberately need features past the body edge - the red warning tags will tell you what broke. The measured sizes always auto-fit.
+// Auto-fit clamps every Custom slider so features stay inside the body and keep printable walls to their neighbors; each adjustment is reported in the console. Turn OFF only when you deliberately need features past the body edge - the red warning tags will tell you what broke. The measured sizes always auto-fit.
 custom_enable_auto_fit = true;
 
 /* [Body Shape (Custom size only)] */
@@ -215,7 +220,7 @@ custom_finger_hole_spacing = 33;       // [20:0.5:50]
 custom_finger_hole_y_position = 19.8;  // [10:0.1:50]
 
 /* [T Hook (Custom size only)] */
-// Enable T-shaped cord-wrap cutout at the narrow end
+// Enable the J-shaped cord hook cutout at the narrow end
 custom_enable_t_hook = true;
 // Stem (narrow slot) width (mm) [default: 4.7625 = 3/16in]
 custom_t_hook_base_gap = 4.7625;       // [3:0.05:10]
@@ -259,7 +264,7 @@ custom_zip_tie_distance_from_notch = 5.1;  // [1:0.05:15]
 custom_zip_tie_countersink = 0.9;          // [0:0.05:3]
 
 /* [Velcro / Wing Strap Holes (Custom size only)] */
-// Classic slot length along the long axis — the v4/v5 12x7 slot (mm) [default: 12]
+// Classic slot length along the long axis (mm) [default: 12]
 custom_velcro_hole_length = 12;        // [6:0.5:20]
 // Classic slot width along the short axis (mm) [default: 7]
 custom_velcro_hole_width = 7;          // [3:0.5:14]
@@ -267,7 +272,7 @@ custom_velcro_hole_width = 7;          // [3:0.5:14]
 custom_velcro_hole_x_center = 19.4;    // [5:0.05:35]
 // Y position of Classic slot centers (wings ignore this) (mm) [default: 46]
 custom_velcro_hole_y_center = 46;      // [30:0.5:80]
-// Lean angle from vertical; the slots/wings lean parallel to the body's side edges (left slot CW, right slot CCW) (degrees) [default: 23.5]
+// Lean angle from vertical; the slots lean parallel to the body's side edges (left slot CW, right slot CCW) (degrees) [default: 23.5]
 custom_velcro_hole_rotation = 23.5;    // [0:0.5:180]
 
 /* [Edge Rounding (Custom size only)] */
@@ -311,8 +316,8 @@ custom_t_hook_top_bottom_rounding = 0; // [0:0.1:3]
 // A chosen plug preset overrides the Step 1 sliders (except when Size =
 // Custom, which ignores measurements entirely). "Measure my plug" (default)
 // keeps the sliders authoritative, so Medium parity holds. Preset values are
-// two-station measurements taken from the reference plug STLs in
-// `plug references/` by scripts/measure_plug_references.py: the plug LENGTH
+// two-station measurements taken during development from the reference
+// plug STLs in `plug references/`: the plug LENGTH
 // is the molded body only (wall plate to back face — the prongs live inside
 // the wall), the WALL station is measured just behind the prong face, and the
 // CABLE station at the cord end of the gripped body (the heavy-duty plug's
@@ -323,7 +328,7 @@ custom_t_hook_top_bottom_rounding = 0; // [0:0.1:3]
 //   standard   = 46.2 / 26.6-13.4 / 18.9-15.0 / 7.0
 //   heavy-duty = 43.8 / 25.8-21.9 / 27.0-27.0 / 8.2
 // The wide 2-prong appliance plug (the owner's US vacuum plug, measured with
-// a ruler; R2 Gate A) is straight-sided:
+// a ruler) is straight-sided:
 //   wide 2-prong appliance = 38.0 / 34.0-34.0 / 16.0-16.0 / 5.0
 // The heavy-duty plug is 27.0 mm thick, past W-20's 24 mm limit: it belongs
 // to the two-sided puller file.
@@ -435,9 +440,9 @@ FIT_SIZE_FINGER_L = 23;    FIT_SIZE_HAND_L = 96;
 // What lives here
 // ---------------
 //   - Clearance / design constants calibrated against the v6.0 CAD reference
-//     (`v6.0/CAD/v6.0.stl` = "Plug Puller 3.1 - B", measured by
-//     scripts/extract_reference_dims.py + scripts/analyze_v6*.py). The
-//     reference is inch-native: 1/4" slab, 1" finger bores, 3/16" cord stem.
+//     ("Plug Puller 3.1 - B", measured during development; the CAD file
+//     is not part of this repository). The reference is inch-native:
+//     1/4" slab, 1" finger bores, 3/16" cord stem.
 //   - The "Measure my hand" passthrough; the size table itself (Small /
 //     Medium / Large hand pairs, ANSUR-II grounded) lives in fit_sizes.scad.
 //   - Derivations mapping the always-active plug measurements plus the hand
@@ -524,6 +529,13 @@ FIT_DOME_DROP = 2.15;
 // (the finger holes sit closer to the pocket than v5's 6.5).
 FIT_POCKET_FINGER_GAP = 5.5;
 
+// The main SCAD's auto-fit trims a finger hole wider than this share of the
+// body's length or bottom width. A trim by the length would be silent, so
+// the fit lengthens the body (D-11a) to keep the full hole; a trim by the
+// width keeps its red tag, FINGER TOO BIG FOR HAND WIDTH, which asks the
+// user to recheck both measurements.
+FIT_FINGER_HOLE_SHARE = 0.4;
+
 // Seat recess = this x plug thickness: 0.15875 x 20 = 3.175 (1/8").
 FIT_RECESS_RATIO_SEAT = 0.15875;
 // Pocket-body recess = this x plug thickness: 0.127 x 20 = 2.54 (1/10").
@@ -533,7 +545,7 @@ FIT_MIN_POCKET_FLOOR = 1.5;
 
 // Body envelope ratios — the v6 reference's own proportions (octagon control
 // values are PRE-ROUNDING; body_side_rounding turns them into the organic
-// outline; see scripts/fit_body_outline_v6.py, silhouette RMS ~0.15 mm).
+// outline; fitted during development to a silhouette RMS of ~0.15 mm).
 FIT_BODY_HAND_RATIO     = 81.55 / 85;   // octagon bottom_width / hand width
 FIT_BODY_CORNER_RATIO   = 3 / 81.55;    // bottom_corners / bottom_width
 FIT_BODY_TOP_RATIO      = 35.75 / 81.55; // top_width / bottom_width
@@ -596,6 +608,7 @@ FIT_ZIP_FINGER_WEB = 2.5;
 
 function _fit_clamp(v, lo, hi) = max(lo, min(v, hi));
 function _fit_round05(v) = floor(v * 20 + 0.5) / 20;
+function _fit_ceil05(v) = ceil(v * 20) / 20;
 function _fit_round_half(v) = floor(v * 2 + 0.5) / 2;
 
 // ---------------------------------------------------------------------------
@@ -632,6 +645,10 @@ _fit_finger_hole_y_position = _fit_round05(
         _fit_t_hook_length
             + sqrt(max(0, _fit_finger_reach * _fit_finger_reach
                           - _fit_finger_dx * _fit_finger_dx))));
+// D-11a (internal) — the body length that holds the full hole; a hair over
+// the exact share, so rounding never leaves the hole a micron past the
+// auto-fit's ceiling.
+_fit_finger_room = _fit_ceil05(_fit_finger_hole_diameter / FIT_FINGER_HOLE_SHARE + 0.001);
 
 // ---------------------------------------------------------------------------
 // D-12 … D-14 — Plug wall notch
@@ -690,8 +707,11 @@ _fit_length_for_zip = _fit_finger_hole_y_position + _fit_zip_dy_req             
 _fit_puller_length = _fit_clamp(                                                            // D-20
     max(_fit_pocket_depth + FIT_POCKET_FINGER_GAP
             + _fit_finger_hole_y_position + _fit_finger_hole_diameter / 2,
-        _fit_length_for_zip),
+        _fit_length_for_zip,
+        _fit_finger_room),
     55, 120);
+assert(_fit_finger_hole_diameter <= FIT_FINGER_HOLE_SHARE * _fit_puller_length,
+       "fit: the fitted body must be long enough for the full finger hole (D-11a)");
 
 // ---------------------------------------------------------------------------
 // D-21 — Slab thickness
@@ -872,10 +892,9 @@ if (size != "Custom") {
 //
 //   - PRESET_MEDIUM       : the calibration reference table. Its values are
 //                           the measured dimensions of the authoritative v6.0
-//                           CAD reference ("Plug Puller 3.1 - B",
-//                           `v6.0/CAD/v6.0.stl`, extracted by
-//                           scripts/extract_reference_dims.py +
-//                           scripts/analyze_v6*.py). The Medium size IS the
+//                           CAD reference ("Plug Puller 3.1 - B", measured
+//                           during development; the CAD file is not part
+//                           of this repository). The Medium size IS the
 //                           v6 Plug Puller.
 //   - preset_lookup(...)  : low-level table lookup; returns undef on miss.
 //   - preset_value(p, key, fallback)
@@ -887,7 +906,8 @@ if (size != "Custom") {
 // FIT_MEASURED value equals PRESET_MEDIUM's value exactly, and both equal the
 // measured v6 reference geometry. Pinned at three levels: tests/fit_formulas.py
 // (pure-Python mirror), the derivation echo parity test, and the mesh-level
-// reference-parity test (tests/test_reference_parity.py).
+// comparison of the Measure my hand render against the `medium` golden
+// fixture (both in tests/test_fit_derivations.py).
 //
 // Include-order dependency
 // ------------------------
@@ -905,9 +925,9 @@ if (size != "Custom") {
 /* [Hidden] */
 
 // ----------- "Medium" reference table (the v6 Plug Puller) -----------
-// Sources: v6.0/reference_dims.json (measured mesh), v6.0/outline_fit.json
-// (octagon + rounding fit, silhouette RMS ~0.15 mm), and
-// scripts/analyze_v6_features.py (seat/pocket/wing/J-hook).
+// Sources, all from development: the measured v6 reference mesh, an
+// octagon + rounding fit of its outline (silhouette RMS ~0.15 mm), and a
+// feature analysis of its seat, pocket, wings and J-hook.
 PRESET_MEDIUM = [
     // -- Body Shape (octagon control points; the rendered outline applies
     //    body_side_rounding below puller_middle_y) --
@@ -1200,7 +1220,7 @@ plug_wall_notch_rounding = _auto_fit
 // --- Finger Holes (adapted) ---
 finger_hole_diameter = _auto_fit
     ? _clamp(_raw_finger_hole_diameter,
-             10, min(puller_bottom_width * 0.4, puller_length * 0.4))
+             10, FIT_FINGER_HOLE_SHARE * min(puller_bottom_width, puller_length))
     : _raw_finger_hole_diameter;
 finger_hole_spacing = _auto_fit
     ? _clamp(_raw_finger_hole_spacing,
@@ -1577,8 +1597,8 @@ module body_octagon_2d(bottom_drop = 0) {
     ]);
 }
 
-// Fitted with the other octagon controls by scripts/fit_body_outline.py
-// (free parameter in the weighted outline optimization): drops the octagon's
+// Fitted with the other octagon controls during development (a free
+// parameter in the weighted outline optimization): drops the octagon's
 // cord-tip vertices below Y = 0 before the opening, so the clipped flat at
 // Y = 0 lands at the T-hook mouth width (the original outline is tangent to
 // Y = 0 at the mouth corners) and the tip arc tracks the original within
@@ -1819,16 +1839,38 @@ module pocket_ellipse_2d() {
 // 3D BODIES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Z-edge roundover, rolling-ball style. The minkowski of `offset(-r)
-// outline` with a sphere reproduces the exact ball-fillet surface inside
-// the top band (z in [thickness - r, thickness]) — but at every height its
-// cross-section is the morphological OPENING of the outline, which also
-// rounds convex plan corners (the crisp plug-end corners, the notch mouth)
-// through the full thickness. The original only loses the corners inside
-// the fillet band, so each minkowski is unioned with a full-outline prism
-// that stops where its band begins: below that plane the sharp outline
+// A rolling-ball roundover band, 0 <= Z <= r, its face at Z = r. At each
+// height the ball's cross-section is the morphological OPENING of the
+// outline, offset(r = w) of offset(delta = -r), with w = sqrt(r^2 - h^2) at
+// height h. The band is stacked from ROUNDOVER_STEP layers, each taking w at
+// its own top, so every step sits on or just inside the smooth surface.
+// This replaces minkowski() with a sphere, which gave the same surface but
+// which the WebAssembly build of OpenSCAD (the one browsers run) cannot
+// finish its fast way: its CGAL hull fails and it falls back to a method
+// that took 23 s to preview this body, against 0.4 s on desktop.
+module roundover_layers_3d(r) {
+    assert(quality >= 24 && quality <= 128, "quality must be 24 to 128");
+    _n  = max(1, ceil(r / ROUNDOVER_STEP));
+    _dz = r / _n;
+    for (i = [0 : _n - 1]) {
+        _h = (i + 1) * _dz;
+        translate([0, 0, i * _dz])
+            linear_extrude(height = _dz + (i < _n - 1 ? eps : 0))
+                offset(r = sqrt(max(0, r * r - _h * _h)))
+                    offset(delta = -r) children();
+    }
+}
+
+// Z-edge roundover. The opening also rounds convex plan corners (the crisp
+// plug-end corners, the notch mouth), but the original only loses them
+// inside the fillet band, so each band is unioned with a full-outline prism
+// that stops where the band begins: below that plane the sharp outline
 // wins, above it the ball fillet is the only material.
 module plug_puller_body_3d() {
+    assert(body_top_rounding >= 0 && body_top_rounding <= 5,
+           "body_top_rounding must be 0 to 5 mm");
+    assert(body_bottom_rounding >= 0 && body_bottom_rounding <= 5,
+           "body_bottom_rounding must be 0 to 5 mm");
     _rt = min(body_top_rounding, body_thickness / 2);
     _rb = min(body_bottom_rounding, body_thickness / 2);
 
@@ -1837,25 +1879,19 @@ module plug_puller_body_3d() {
             body_outline_2d();
         if (_rt > 0)
             union() {
-                linear_extrude(height = body_thickness - _rt)
+                linear_extrude(height = body_thickness - _rt + eps)
                     body_outline_2d();
-                minkowski() {
-                    linear_extrude(height = max(eps, body_thickness - _rt))
-                        offset(delta = -_rt) body_outline_2d();
-                    sphere(r = _rt, $fn = quality);
-                }
+                translate([0, 0, body_thickness - _rt])
+                    roundover_layers_3d(_rt) body_outline_2d();
             }
         if (_rb > 0)
             union() {
-                translate([0, 0, _rb])
-                    linear_extrude(height = body_thickness - _rb)
+                translate([0, 0, _rb - eps])
+                    linear_extrude(height = body_thickness - _rb + eps)
                         body_outline_2d();
                 translate([0, 0, _rb])
-                    minkowski() {
-                        linear_extrude(height = max(eps, body_thickness - _rb))
-                            offset(delta = -_rb) body_outline_2d();
-                        sphere(r = _rb, $fn = quality);
-                    }
+                    mirror([0, 0, 1])
+                        roundover_layers_3d(_rb) body_outline_2d();
             }
     }
 }

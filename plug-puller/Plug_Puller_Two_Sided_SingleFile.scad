@@ -134,6 +134,10 @@ render_mode = "Full"; // [Full, One plate]
 // suitable for slicing without repair.
 eps = 0.01;
 
+// Height of one layer in the stacked edge roundovers (roundover_layers_3d):
+// half a typical 0.2 mm print layer, so the printed edge matches a smooth one.
+ROUNDOVER_STEP = 0.1;
+
 // ── ===========================================================================
 // ── BEGIN: fit_sizes.scad (inlined by scripts/build_flattened.py)
 // ── ===========================================================================
@@ -239,7 +243,7 @@ echo(str("TOOL: Two-sided puller"));
 // plug/arm tip; extruded +Z to plate_thickness (Z = 0 = the OUTER face,
 // Z = thickness = the plug-contact face). Calibrated to the idealized
 // heavy-duty plate (66.6 x 73.7 x 4.5, goggle lobes tangent to Y = 0, arms
-// tapering to ~9 mm rounded tips); see scripts/measure_clamshell_ideal.py.
+// tapering to ~9 mm rounded tips), as measured during development.
 
 // Finger width recovered from the size-table bore (bore = finger width +
 // FIT_GRIP_CLEARANCE) so the fit tracks the Size selection.
@@ -525,7 +529,9 @@ function _vw_clam_taper_steep() =
         > tan(20) * max(1, _eff_plug_length);
 // WC-10 — Step 3 turned the zip stations off on a clamshell build. Zip ties
 // are what cinch the two plates together, so without them nothing holds the
-// sandwich closed.
+// sandwich closed. It cannot fire today, because every Step 3 choice keeps
+// the zip ties (_attach_zip is always true); it stays as a guard in case a
+// choice without zip ties ever returns, and the guides leave it out.
 function _vw_clam_no_zip_attachment() =
     _is_clamshell && !_attach_zip;
 // WC-11 — the strap is wider than the slot window the arm can offer, so the
@@ -619,6 +625,28 @@ module fillet_ring(hole_r, fillet_r) {
                 translate([fillet_r, fillet_r])
                     circle(r = fillet_r, $fn = quality);
             }
+}
+
+// A rolling-ball roundover band, 0 <= Z <= r, its face at Z = r. At each
+// height the ball's cross-section is the morphological OPENING of the
+// outline, offset(r = w) of offset(delta = -r), with w = sqrt(r^2 - h^2) at
+// height h. The band is stacked from ROUNDOVER_STEP layers, each taking w at
+// its own top, so every step sits on or just inside the smooth surface.
+// This replaces minkowski() with a sphere, which gave the same surface but
+// which the WebAssembly build of OpenSCAD (the one browsers run) cannot
+// finish its fast way: its CGAL hull fails and it falls back to a method
+// that took 63 s to preview this plate, against 1.3 s on desktop.
+module roundover_layers_3d(r) {
+    assert(quality >= 24 && quality <= 128, "quality must be 24 to 128");
+    _n  = max(1, ceil(r / ROUNDOVER_STEP));
+    _dz = r / _n;
+    for (i = [0 : _n - 1]) {
+        _h = (i + 1) * _dz;
+        translate([0, 0, i * _dz])
+            linear_extrude(height = _dz + (i < _n - 1 ? eps : 0))
+                offset(r = sqrt(max(0, r * r - _h * _h)))
+                    offset(delta = -r) children();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -751,6 +779,8 @@ module two_sided_gap_cutter_3d() {
 // One full plate (both arms + cable strip), holes and slots subtracted.
 // The tool is two copies of this same plate, one flipped over — print twice.
 module clamshell_plate_3d() {
+    assert(plate_edge_rounding >= 0 && plate_edge_rounding <= 2,
+           "plate_edge_rounding must be 0 to 2 mm");
     _t  = plate_thickness;
     _rb = min(plate_edge_rounding, _t / 3);
     _fr = min(1.2, _clam_finger_dia / 4, _t / 3);
@@ -758,21 +788,18 @@ module clamshell_plate_3d() {
     difference() {
         union() {
             // Plate body. The outer-face (Z = 0) perimeter edge gets a ball
-            // roundover — same minkowski technique as the flat tool's body —
+            // roundover, the same layered band as the flat tool's body,
             // while the plug-contact face (Z = _t) stays square.
             intersection() {
                 linear_extrude(height = _t) clamshell_outline_2d();
                 if (_rb > 0)
                     union() {
-                        translate([0, 0, _rb])
-                            linear_extrude(height = _t - _rb)
+                        translate([0, 0, _rb - eps])
+                            linear_extrude(height = _t - _rb + eps)
                                 clamshell_outline_2d();
                         translate([0, 0, _rb])
-                            minkowski() {
-                                linear_extrude(height = max(eps, _t - _rb))
-                                    offset(delta = -_rb) clamshell_outline_2d();
-                                sphere(r = _rb, $fn = quality);
-                            }
+                            mirror([0, 0, 1])
+                                roundover_layers_3d(_rb) clamshell_outline_2d();
                     }
             }
             // Cable strip: thin bridge across the cord channel, flush with the
@@ -819,7 +846,8 @@ module clamshell_plate_3d() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // See-through plug for the preview only: the % background modifier keeps it
-// out of every render and export. Its width follows the two Step 1 widths and
+// out of every render and export. It spans the plug's length, from its back
+// end to its face at the arm tips. Its width follows the two Step 1 widths and
 // it sits on the mating face (Z = plate_thickness), where the plug's middle
 // lies once the two plates meet. Its height is 0.55 x its width, a stand-in
 // for the plug's other side, which the two-sided puller never needs.
@@ -839,7 +867,7 @@ module plug_preview_2s() {
         %color("SkyBlue", 0.35)
             hull() {
                 slice(_clam_y_back, _eff_plug_width_cord_end);
-                slice(_clam_length + 2, _eff_plug_width_prong_end);
+                slice(_clam_length, _eff_plug_width_prong_end);
             }
 }
 

@@ -25,7 +25,7 @@ These six links open the examples stored on this branch:
 - **The Plug Puller, two-sided puller**, for a thicker plug, a USB-C tip or a round cord plug:
   <https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/plug-puller/forge-manifest-two-sided.json>
 
-The Plug Puller's files live under `plug-puller/`: its two manifests, with copies of that project's single-file builds and preset files at version 0.13.0. Refresh the copies from its `dist/` and `presets/` folders when it releases a new version; the links stay the same. Those files keep the Plug Puller's own license, PolyForm Noncommercial 1.0.0.
+The Plug Puller's files live under `plug-puller/`: its two manifests, with copies of that project's current single-file builds and preset files. Refresh the copies from its `dist/` and `presets/` folders when it releases a new version; the links stay the same. Those files keep the Plug Puller's own license, PolyForm Noncommercial 1.0.0.
 
 Someone opening Forge for the first time sees the welcome dialog first ("Choose your interface", then "Download & Continue"), and then the project.
 
