@@ -113,14 +113,33 @@ THE SOFTWARE.
 
 ---
 
-## liblouis (LGPL-2.1-or-later) and liblouis-js Bindings (GPL-3.0)
+## liblouis (LGPL-2.1-or-later)
 
-The Braille Card Customizer translates text to Unicode braille entirely client-side using liblouis compiled to WebAssembly/asm.js, running in a Web Worker.
+The braille tools translate text to Unicode braille entirely on the visitor's
+device with liblouis, compiled to WebAssembly and run in a module worker. I
+compile it from its release tarball rather than shipping a published build, so
+the exact bytes in the app can be traced back to one tarball and one checksum.
 
-**License**: LGPL-2.1-or-later (engine); GPL-3.0 (JavaScript bindings, `easy-api.js`); individual translation tables carry their own license headers (mostly LGPL-2.1-or-later)
+**License**: GNU Lesser General Public License v2.1 or later, for the library and for every translation table shipped (each table's own header names its authors). The liblouis command line tools are GPL-3.0-or-later and are not shipped.
 **Project**: https://liblouis.io/
-**Source Code**: https://github.com/liblouis/liblouis (engine), https://github.com/liblouis/liblouis-js (JS bindings)
-**Usage**: `scripts/setup-liblouis.js` copies the emscripten engine build and a curated set of UEB/US translation tables (with their full include closure) from the `liblouis` / `liblouis-build` npm packages into `public/liblouis/` (gitignored) at build time; `src/worker/liblouis-worker.js` loads them at runtime. A `NOTICE.txt` with attribution is written alongside the deployed assets.
+**Source Code**: https://github.com/liblouis/liblouis
+**Release**: 3.39.0
+**Source Tarball**: https://github.com/liblouis/liblouis/releases/download/v3.39.0/liblouis-3.39.0.tar.gz
+**sha256**: `629fa8cb0dfd9ad457c5bf47a42f0953b673e62c8ad6b1d03ddc4e2bd20008f1`
+**Vendored Location**: `public/wasm/liblouis/` (the binary, with the upstream `COPYING.LESSER` as `COPYING.LESSER.liblouis` and the build's `README.txt` beside it), `vendor/liblouis/liblouis.mjs` (the loader), and `public/liblouis/` (the Unified English Braille tables with every table they include, a `tables.json` catalog and a `NOTICE.txt`)
+**Build Recipe**: `scripts/build-liblouis-wasm.sh`, run by the "Build liblouis wasm" workflow, which also builds a native `lou_translate` from the same tarball and checks the wasm against it, cell for cell
+**Usage**: `src/js/liblouis-engine.js`, called from `src/worker/liblouis-worker.js`
+
+Compiled unmodified, configured with `--enable-ucs4 --disable-shared
+--without-yaml`. Earlier versions of the app copied a 2017 build of liblouis and
+the liblouis-js JavaScript bindings (GPL-3.0) from npm; neither ships any more.
+
+### Obtaining liblouis Source
+
+The tarball named above is the complete corresponding source for the liblouis
+part of this build. Every release is also published at
+https://github.com/liblouis/liblouis/releases, and I will supply a copy on
+request.
 
 ---
 
