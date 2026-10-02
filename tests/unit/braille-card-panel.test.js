@@ -74,7 +74,10 @@ import {
   destroyBraillePanel,
   getBrailleDownloadName,
 } from '../../src/js/braille-panel.js';
-import { backTranslateText } from '../../src/js/braille-translator.js';
+import {
+  backTranslateText,
+  translateText,
+} from '../../src/js/braille-translator.js';
 import { announceImmediate } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 
@@ -649,5 +652,27 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
       },
       { timeout: 3000, interval: 25 }
     );
+  });
+});
+
+describe('braille panel — when the engine fails (D-209)', () => {
+  beforeEach(() => mountCardPanel());
+  afterEach(() => destroyBraillePanel());
+
+  it('shows no braille for text it could not translate', async () => {
+    const rows = () =>
+      document.querySelectorAll('#braillePreview .braille-preview-braille');
+    await typeText('hello', () => expect(rows()[0]?.textContent).toBe(word('hello')));
+
+    translateText.mockRejectedValueOnce(
+      new Error('liblouis could not translate this text with en-ueb-g1.ctb (test)')
+    );
+    await typeText('world', () =>
+      expect(document.getElementById('brailleErrors').textContent).toContain(
+        'Braille translation is unavailable'
+      )
+    );
+    // The previous text's braille must not stand in for this text's.
+    expect(rows()).toHaveLength(0);
   });
 });

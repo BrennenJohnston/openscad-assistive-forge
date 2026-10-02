@@ -1153,6 +1153,13 @@ class BraillePanel {
     this.debounceTimer = setTimeout(() => {
       this.runLayout().catch((error) => {
         console.error('[BraillePanel] Layout failed:', error);
+        // Braille for the previous text must not stand in for text that
+        // could not be translated (D-209); the error says what happened.
+        this.refs.preview.replaceChildren();
+        if (this.refs.rowSummary) {
+          this.refs.rowSummary.textContent = '';
+          this.refs.rowSummary.hidden = true;
+        }
         this.renderMessages([
           {
             type: 'engine-error',
