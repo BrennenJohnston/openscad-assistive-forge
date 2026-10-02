@@ -157,10 +157,9 @@ mv "${LOADER_OUT}/liblouis.wasm" "${OUT}/liblouis.wasm"
 
 # ── 4. Smoke check: the shipped files, loaded the way a test would ──────────
 SMOKE_LINE="$(node --input-type=module -e "
-import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const { default: createLiblouis } = await import(pathToFileURL(process.argv[1]).href);
-const mod = await createLiblouis({ wasmBinary: readFileSync(process.argv[2]) });
+const mod = await createLiblouis({ locateFile: () => process.argv[2] });
 console.log('SMOKE ' + mod.UTF8ToString(mod._lou_version()) + ' ' + mod._lou_charSize());
 " "${LOADER_OUT}/liblouis.mjs" "${OUT}/liblouis.wasm" | grep '^SMOKE ' || true)"
 read -r _ LOU_VERSION LOU_CHARSIZE <<< "${SMOKE_LINE:-SMOKE none none}"
