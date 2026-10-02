@@ -22,6 +22,7 @@ If you just want to customize models, start here:
 
 - [Keyguard Workflow](./guides/KEYGUARD_WORKFLOW_GUIDE.md) -- AAC keyguard customization for clinicians
 - [Braille Card Designer](./guides/BRAILLE_CARD_GUIDE.md) -- type text, get a 3D-printable braille card (on-device liblouis translation)
+- [Braille Sign Standards](./guides/BRAILLE_STANDARDS.md) -- which ADA and BANA rules the sign's raised letters and braille follow, and how the tool keeps to them
 - [One-Link Sharing](./guides/MANIFEST_SHARING_GUIDE.md) -- publish a design so one link opens it ready to customize
 - [AI toolchain quick start](./guides/AI_TOOLCHAIN_QUICK_START.md) -- pointing a tool or a pipeline at Forge
 - [Welcome Screen](./guides/WELCOME_SCREEN.md) -- the tutorial and role cards on the front page
