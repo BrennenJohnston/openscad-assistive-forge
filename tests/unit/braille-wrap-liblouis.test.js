@@ -5,7 +5,8 @@
  * liblouis gives the whole line, cut only at its blank cells, for every
  * test phrase whose braille words each fit a line. Translating word by
  * word failed this wherever a capital passage or another indicator spans
- * words.
+ * words. The sign model's default braille line is checked the same way:
+ * it must be what the panel lays out for the model's default text.
  *
  * @license GPL-3.0-or-later
  */
@@ -21,7 +22,12 @@ import {
   resetLiblouis,
   translate,
 } from '../../src/js/liblouis-engine.js'
-import { countCells, layoutBrailleText } from '../../src/js/braille-wrap.js'
+import {
+  countCells,
+  layoutBrailleText,
+  layoutSignText,
+} from '../../src/js/braille-wrap.js'
+import { extractParameters } from '../../src/js/parser.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const BUILT = path.join(ROOT, 'vendor', 'liblouis', 'liblouis.mjs')
@@ -99,4 +105,30 @@ describe('a card line holds the cells of the whole line', () => {
       })
     }
   }
+})
+
+describe('the sign model opens with its own braille', () => {
+  it('holds in Line_1 what the panel lays out for its default text', async () => {
+    const sign = path.join(ROOT, 'public', 'examples', 'braille-sign')
+    const { parameters } = extractParameters(
+      readFileSync(path.join(sign, 'braille_sign.scad'), 'utf8')
+    )
+    const { brailleTranslation } = readJson(path.join(sign, 'manifest.json'))
+    const keepCapitals = brailleTranslation.capitals !== 'off'
+    const translateAsThePanel = async (text) =>
+      engine(brailleTranslation.defaultTable)(
+        keepCapitals ? text : text.toLowerCase()
+      )
+    const { brailleRows } = await layoutSignText({
+      text: parameters.sign_text_1.default,
+      translate: translateAsThePanel,
+      maxSourceChars: 100,
+      brailleCellsPerLine: 40,
+      maxRows: brailleTranslation.lineParams.length,
+    })
+    // The first layout writes nothing when the model already holds this
+    expect(brailleRows.map((row) => String(row.braille))).toEqual([
+      parameters.Line_1.default,
+    ])
+  })
 })
