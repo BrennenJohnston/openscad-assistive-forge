@@ -21,7 +21,7 @@
 //   permitted. Contact the maintainer for commercial use.
 // =============================================================================
 
-// Plug Puller 0.13.0 — Parametric Generator for the one-sided puller
+// Plug Puller 0.14.0 — Parametric Generator for the one-sided puller
 // The one-sided puller is the reworked v6 flat puller: a slab with a
 // two-level plug pocket whose side walls follow a parametric "plug side
 // rail", plus rail-placed zip-tie holes and velcro slots, finger bores, and a
@@ -35,7 +35,8 @@
 //      UNCHECKED (older builds: Window ▸ Customizer)
 //   3. Fill in the numbered Steps top to bottom:
 //        Step 1: Your plug — pick a plug preset, or measure your plug
-//                (docs/guides/measuring-guide.md shows every measurement).
+//                (docs/guides/one-sided/quick-start.md shows every
+//                measurement).
 //        Step 2: Size — Medium is the reference; Small / Large for other
 //                hands; "Measure my hand" to type two hand numbers.
 //        Step 3: Attachment — how the tool straps onto the plug.
@@ -46,7 +47,7 @@
 //     "Step 1" … "Step 4"       the guided path — beginners stop here
 //     "Advanced - …" sections   power dials: manual zip/velcro placement and
 //                               render quality
-//                               (see docs/guides/power-user-guide.md)
+//                               (see docs/guides/one-sided/full-guide.md)
 //     "… (Custom size only)"    expert geometry sliders, active only when
 //                               Size = Custom (all measurements are ignored)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@
 // the selection to the default (MakerWorld PMM inherits this behaviour).
 
 /* [Step 1 - Your Plug] */
-// The fastest start: pick your plug from this list and every measurement below fills in automatically. Pick "Measure my plug" to type your own numbers instead - docs/guides/measuring-guide.md walks you through each one in about 5 minutes.
+// The fastest start: pick your plug from this list and every measurement below fills in automatically. Pick "Measure my plug" to type your own numbers instead - the quick start, docs/guides/one-sided/quick-start.md, walks you through each one in about 5 minutes.
 plug_preset = "Measure my plug"; // [Measure my plug, Flat 2-prong lamp plug - NEMA 1-15, Standard 3-prong plug - NEMA 5-15, Heavy-duty extension cord - NEMA 5-15, Wide 2-prong appliance plug - NEMA 1-15]
 // How far the plug body sticks out, from the surface it plugs into to the plug's back end where the cord starts. On a wall outlet, measure from the wall plate; on a laptop or charger, from the device's edge. The tool's pocket runs this full length. Skip if you picked a plug preset. (mm)
 measure_plug_length = 25.5; // [12:0.5:85]
@@ -315,8 +316,8 @@ custom_t_hook_top_bottom_rounding = 0; // [0:0.1:3]
 // A chosen plug preset overrides the Step 1 sliders (except when Size =
 // Custom, which ignores measurements entirely). "Measure my plug" (default)
 // keeps the sliders authoritative, so Medium parity holds. Preset values are
-// two-station measurements taken from the reference plug STLs in
-// `plug references/` by scripts/measure_plug_references.py: the plug LENGTH
+// two-station measurements taken during development from the reference
+// plug STLs in `plug references/`: the plug LENGTH
 // is the molded body only (wall plate to back face — the prongs live inside
 // the wall), the WALL station is measured just behind the prong face, and the
 // CABLE station at the cord end of the gripped body (the heavy-duty plug's
@@ -439,9 +440,9 @@ FIT_SIZE_FINGER_L = 23;    FIT_SIZE_HAND_L = 96;
 // What lives here
 // ---------------
 //   - Clearance / design constants calibrated against the v6.0 CAD reference
-//     (`v6.0/CAD/v6.0.stl` = "Plug Puller 3.1 - B", measured by
-//     scripts/extract_reference_dims.py + scripts/analyze_v6*.py). The
-//     reference is inch-native: 1/4" slab, 1" finger bores, 3/16" cord stem.
+//     ("Plug Puller 3.1 - B", measured during development; the CAD file
+//     is not part of this repository). The reference is inch-native:
+//     1/4" slab, 1" finger bores, 3/16" cord stem.
 //   - The "Measure my hand" passthrough; the size table itself (Small /
 //     Medium / Large hand pairs, ANSUR-II grounded) lives in fit_sizes.scad.
 //   - Derivations mapping the always-active plug measurements plus the hand
@@ -528,6 +529,13 @@ FIT_DOME_DROP = 2.15;
 // (the finger holes sit closer to the pocket than v5's 6.5).
 FIT_POCKET_FINGER_GAP = 5.5;
 
+// The main SCAD's auto-fit trims a finger hole wider than this share of the
+// body's length or bottom width. A trim by the length would be silent, so
+// the fit lengthens the body (D-11a) to keep the full hole; a trim by the
+// width keeps its red tag, FINGER TOO BIG FOR HAND WIDTH, which asks the
+// user to recheck both measurements.
+FIT_FINGER_HOLE_SHARE = 0.4;
+
 // Seat recess = this x plug thickness: 0.15875 x 20 = 3.175 (1/8").
 FIT_RECESS_RATIO_SEAT = 0.15875;
 // Pocket-body recess = this x plug thickness: 0.127 x 20 = 2.54 (1/10").
@@ -537,7 +545,7 @@ FIT_MIN_POCKET_FLOOR = 1.5;
 
 // Body envelope ratios — the v6 reference's own proportions (octagon control
 // values are PRE-ROUNDING; body_side_rounding turns them into the organic
-// outline; see scripts/fit_body_outline_v6.py, silhouette RMS ~0.15 mm).
+// outline; fitted during development to a silhouette RMS of ~0.15 mm).
 FIT_BODY_HAND_RATIO     = 81.55 / 85;   // octagon bottom_width / hand width
 FIT_BODY_CORNER_RATIO   = 3 / 81.55;    // bottom_corners / bottom_width
 FIT_BODY_TOP_RATIO      = 35.75 / 81.55; // top_width / bottom_width
@@ -600,6 +608,7 @@ FIT_ZIP_FINGER_WEB = 2.5;
 
 function _fit_clamp(v, lo, hi) = max(lo, min(v, hi));
 function _fit_round05(v) = floor(v * 20 + 0.5) / 20;
+function _fit_ceil05(v) = ceil(v * 20) / 20;
 function _fit_round_half(v) = floor(v * 2 + 0.5) / 2;
 
 // ---------------------------------------------------------------------------
@@ -636,6 +645,10 @@ _fit_finger_hole_y_position = _fit_round05(
         _fit_t_hook_length
             + sqrt(max(0, _fit_finger_reach * _fit_finger_reach
                           - _fit_finger_dx * _fit_finger_dx))));
+// D-11a (internal) — the body length that holds the full hole; a hair over
+// the exact share, so rounding never leaves the hole a micron past the
+// auto-fit's ceiling.
+_fit_finger_room = _fit_ceil05(_fit_finger_hole_diameter / FIT_FINGER_HOLE_SHARE + 0.001);
 
 // ---------------------------------------------------------------------------
 // D-12 … D-14 — Plug wall notch
@@ -694,8 +707,11 @@ _fit_length_for_zip = _fit_finger_hole_y_position + _fit_zip_dy_req             
 _fit_puller_length = _fit_clamp(                                                            // D-20
     max(_fit_pocket_depth + FIT_POCKET_FINGER_GAP
             + _fit_finger_hole_y_position + _fit_finger_hole_diameter / 2,
-        _fit_length_for_zip),
+        _fit_length_for_zip,
+        _fit_finger_room),
     55, 120);
+assert(_fit_finger_hole_diameter <= FIT_FINGER_HOLE_SHARE * _fit_puller_length,
+       "fit: the fitted body must be long enough for the full finger hole (D-11a)");
 
 // ---------------------------------------------------------------------------
 // D-21 — Slab thickness
@@ -876,10 +892,9 @@ if (size != "Custom") {
 //
 //   - PRESET_MEDIUM       : the calibration reference table. Its values are
 //                           the measured dimensions of the authoritative v6.0
-//                           CAD reference ("Plug Puller 3.1 - B",
-//                           `v6.0/CAD/v6.0.stl`, extracted by
-//                           scripts/extract_reference_dims.py +
-//                           scripts/analyze_v6*.py). The Medium size IS the
+//                           CAD reference ("Plug Puller 3.1 - B", measured
+//                           during development; the CAD file is not part
+//                           of this repository). The Medium size IS the
 //                           v6 Plug Puller.
 //   - preset_lookup(...)  : low-level table lookup; returns undef on miss.
 //   - preset_value(p, key, fallback)
@@ -891,7 +906,8 @@ if (size != "Custom") {
 // FIT_MEASURED value equals PRESET_MEDIUM's value exactly, and both equal the
 // measured v6 reference geometry. Pinned at three levels: tests/fit_formulas.py
 // (pure-Python mirror), the derivation echo parity test, and the mesh-level
-// reference-parity test (tests/test_reference_parity.py).
+// comparison of the Measure my hand render against the `medium` golden
+// fixture (both in tests/test_fit_derivations.py).
 //
 // Include-order dependency
 // ------------------------
@@ -909,9 +925,9 @@ if (size != "Custom") {
 /* [Hidden] */
 
 // ----------- "Medium" reference table (the v6 Plug Puller) -----------
-// Sources: v6.0/reference_dims.json (measured mesh), v6.0/outline_fit.json
-// (octagon + rounding fit, silhouette RMS ~0.15 mm), and
-// scripts/analyze_v6_features.py (seat/pocket/wing/J-hook).
+// Sources, all from development: the measured v6 reference mesh, an
+// octagon + rounding fit of its outline (silhouette RMS ~0.15 mm), and a
+// feature analysis of its seat, pocket, wings and J-hook.
 PRESET_MEDIUM = [
     // -- Body Shape (octagon control points; the rendered outline applies
     //    body_side_rounding below puller_middle_y) --
@@ -1204,7 +1220,7 @@ plug_wall_notch_rounding = _auto_fit
 // --- Finger Holes (adapted) ---
 finger_hole_diameter = _auto_fit
     ? _clamp(_raw_finger_hole_diameter,
-             10, min(puller_bottom_width * 0.4, puller_length * 0.4))
+             10, FIT_FINGER_HOLE_SHARE * min(puller_bottom_width, puller_length))
     : _raw_finger_hole_diameter;
 finger_hole_spacing = _auto_fit
     ? _clamp(_raw_finger_hole_spacing,
@@ -1581,8 +1597,8 @@ module body_octagon_2d(bottom_drop = 0) {
     ]);
 }
 
-// Fitted with the other octagon controls by scripts/fit_body_outline.py
-// (free parameter in the weighted outline optimization): drops the octagon's
+// Fitted with the other octagon controls during development (a free
+// parameter in the weighted outline optimization): drops the octagon's
 // cord-tip vertices below Y = 0 before the opening, so the clipped flat at
 // Y = 0 lands at the T-hook mouth width (the original outline is tangent to
 // Y = 0 at the mouth corners) and the tip arc tracks the original within

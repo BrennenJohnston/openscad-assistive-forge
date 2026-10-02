@@ -243,7 +243,7 @@ echo(str("TOOL: Two-sided puller"));
 // plug/arm tip; extruded +Z to plate_thickness (Z = 0 = the OUTER face,
 // Z = thickness = the plug-contact face). Calibrated to the idealized
 // heavy-duty plate (66.6 x 73.7 x 4.5, goggle lobes tangent to Y = 0, arms
-// tapering to ~9 mm rounded tips); see scripts/measure_clamshell_ideal.py.
+// tapering to ~9 mm rounded tips), as measured during development.
 
 // Finger width recovered from the size-table bore (bore = finger width +
 // FIT_GRIP_CLEARANCE) so the fit tracks the Size selection.
@@ -846,7 +846,8 @@ module clamshell_plate_3d() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // See-through plug for the preview only: the % background modifier keeps it
-// out of every render and export. Its width follows the two Step 1 widths and
+// out of every render and export. It spans the plug's length, from its back
+// end to its face at the arm tips. Its width follows the two Step 1 widths and
 // it sits on the mating face (Z = plate_thickness), where the plug's middle
 // lies once the two plates meet. Its height is 0.55 x its width, a stand-in
 // for the plug's other side, which the two-sided puller never needs.
@@ -866,7 +867,7 @@ module plug_preview_2s() {
         %color("SkyBlue", 0.35)
             hull() {
                 slice(_clam_y_back, _eff_plug_width_cord_end);
-                slice(_clam_length + 2, _eff_plug_width_prong_end);
+                slice(_clam_length, _eff_plug_width_prong_end);
             }
 }
 
