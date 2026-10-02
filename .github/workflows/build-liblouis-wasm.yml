@@ -95,7 +95,10 @@ jobs:
             echo '### Checksums of the files to commit'
             echo
             echo '```'
-            find public/wasm/liblouis vendor/liblouis public/liblouis tests/fixtures/braille-reference -type f | sort | xargs sha256sum
+            {
+              find public/wasm/liblouis vendor/liblouis public/liblouis -type f
+              ls tests/fixtures/braille-reference/liblouis-*.json
+            } | sort | xargs sha256sum
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
