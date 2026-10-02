@@ -1,7 +1,7 @@
 /**
  * Braille translator — lazy main-thread manager for the liblouis worker.
  *
- * The worker (and liblouis's ~1.7 MB engine) is only spawned when the
+ * The worker, and the liblouis engine it loads, is only spawned when the
  * Braille Card Customizer actually asks for a translation, so every other
  * session never pays for it. Results are memoized per (table, text) since
  * the wrap engine re-translates the same words on every keystroke.
@@ -12,8 +12,8 @@
 const WORKER_TIMEOUT_MS = 15000;
 const CACHE_MAX_ENTRIES = 2000;
 
-/** Matches any character outside the Unicode braille block. */
-const NON_BRAILLE_RE = /[^\u2800-\u28FF]/;
+/** Matches any character that is not a six-dot braille cell. */
+const NOT_SIX_DOT_RE = /[^\u2800-\u283F]/;
 
 let worker = null;
 let readyPromise = null;
@@ -23,9 +23,10 @@ const pending = new Map();
 const cache = new Map();
 
 function createWorker() {
-  // Classic worker (importScripts inside) — do NOT pass { type: 'module' }.
+  // A module worker: it imports the engine and the engine's WebAssembly loader.
   const w = new Worker(
-    new URL('../worker/liblouis-worker.js', import.meta.url)
+    new URL('../worker/liblouis-worker.js', import.meta.url),
+    { type: 'module' }
   );
 
   w.onmessage = (e) => {
@@ -87,8 +88,9 @@ export function ensureReady() {
 }
 
 /**
- * Remove characters the UTF-16 liblouis build cannot represent (astral
- * plane code points such as emoji abort the WASM instance outright).
+ * Remove characters outside the Basic Multilingual Plane, such as emoji. The
+ * braille tables define none of them, and liblouis would spell each one out
+ * as an escape sequence in braille cells.
  * @param {string} text
  * @returns {{ text: string, stripped: string[] }}
  */
@@ -106,6 +108,52 @@ export function stripUnsupportedChars(text) {
 }
 
 /**
+ * Make every whitespace character an ordinary space. liblouis hands a
+ * no-break space or a tab back as itself rather than as a blank cell; the
+ * word layout already splits on these same characters, so a line translated
+ * whole now agrees with it. The length does not change.
+ * @param {string} text
+ * @returns {string}
+ */
+export function normalizeSpaces(text) {
+  return text.replace(/\s/g, ' ');
+}
+
+/**
+ * Translate, leaving out every character liblouis cannot write as six-dot
+ * braille. liblouis spells a character the table does not define as an
+ * escape such as '\x2603': eight cells, one with dot 7, which a six-dot
+ * sign would print as a different cell. Every cell of the escape points back
+ * at its character, so that character is removed and the rest translated
+ * again. Each pass removes at least one character (the engine refuses a
+ * position outside the text), so the loop ends.
+ * @param {string} text
+ * @param {(text: string) => Promise<{ translation: string, inputPos: number[] }>} translate
+ * @returns {Promise<{ braille: string, inputPos: number[], leftOut: string[] }>}
+ *   `inputPos` indexes the text finally translated, which is `text` itself
+ *   only when `leftOut` is empty
+ */
+export async function translateLeavingOut(text, translate) {
+  const leftOut = [];
+  let rest = text;
+  while (rest !== '') {
+    const { translation, inputPos } = await translate(rest);
+    const found = new Set();
+    Array.from(translation).forEach((cell, i) => {
+      if (NOT_SIX_DOT_RE.test(cell)) {
+        found.add(String.fromCodePoint(rest.codePointAt(inputPos[i])));
+      }
+    });
+    if (found.size === 0) return { braille: translation, inputPos, leftOut };
+    leftOut.push(...found);
+    rest = Array.from(rest)
+      .filter((ch) => !found.has(ch))
+      .join('');
+  }
+  return { braille: '', inputPos: [], leftOut };
+}
+
+/**
  * Translate plain text to Unicode braille.
  *
  * @param {string} text - Plain text (word, line, or phrase)
@@ -116,9 +164,14 @@ export function stripUnsupportedChars(text) {
  *   per BANA space-saving guidance for cards and labels
  * @returns {Promise<{
  *   braille: string,
+ *   inputPos: number[]|null,
  *   hadUntranslatable: boolean,
  *   strippedChars: string[],
- * }>}
+ * }>} `hadUntranslatable` is true when a character with no braille in the
+ *   selected table was left out. `inputPos` gives, for each cell, the index
+ *   in `text` of the character it came from; it is null when stripping,
+ *   lowercasing or leaving a character out changed the text, because the
+ *   positions would no longer line up
  */
 export async function translateText(
   text,
@@ -128,28 +181,42 @@ export async function translateText(
   await ensureReady();
 
   const { text: safeText, stripped } = stripUnsupportedChars(text);
-  const input = preserveCaps ? safeText : safeText.toLowerCase();
+  const input = normalizeSpaces(
+    preserveCaps ? safeText : safeText.toLowerCase()
+  );
 
   if (input === '') {
-    return { braille: '', hadUntranslatable: false, strippedChars: stripped };
+    return {
+      braille: '',
+      inputPos: text === '' ? [] : null,
+      hadUntranslatable: stripped.length > 0,
+      strippedChars: stripped,
+    };
   }
 
   const cacheKey = `${table}\u0000${input}`;
-  let braille = cache.get(cacheKey);
-  if (braille === undefined) {
-    const result = await sendMessage('translate', { text: input, table });
-    // liblouis emits ASCII spaces between words; the SCAD models expect
-    // the Unicode braille blank cell (U+2800) everywhere.
-    braille = result.translation.replace(/ /g, '\u2800');
+  let cached = cache.get(cacheKey);
+  if (cached === undefined) {
+    try {
+      cached = await translateLeavingOut(input, (rest) =>
+        sendMessage('translate', { text: rest, table })
+      );
+    } catch (error) {
+      // An engine that failed once is not trusted with the next call.
+      disposeTranslator();
+      throw error;
+    }
     if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
-    cache.set(cacheKey, braille);
+    cache.set(cacheKey, cached);
   }
 
   return {
-    braille,
-    // Non-braille output means liblouis passed characters through
-    // untranslated (no definition in the selected table).
-    hadUntranslatable: NON_BRAILLE_RE.test(braille) || stripped.length > 0,
+    braille: cached.braille,
+    inputPos:
+      cached.leftOut.length === 0 && input.length === text.length
+        ? cached.inputPos
+        : null,
+    hadUntranslatable: stripped.length > 0 || cached.leftOut.length > 0,
     strippedChars: stripped,
   };
 }
@@ -179,10 +246,13 @@ export async function backTranslateText(braille, table) {
   const cacheKey = `bt\u0000${table}\u0000${input}`;
   let text = cache.get(cacheKey);
   if (text === undefined) {
-    const result = await sendMessage('backTranslate', {
-      braille: input,
-      table,
-    });
+    let result;
+    try {
+      result = await sendMessage('backTranslate', { braille: input, table });
+    } catch (error) {
+      disposeTranslator();
+      throw error;
+    }
     text = result.text;
     if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
     cache.set(cacheKey, text);

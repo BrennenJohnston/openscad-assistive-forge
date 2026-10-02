@@ -1,208 +1,76 @@
 // @vitest-environment node
 /**
- * Real-liblouis translation tests (Node build of the same engine the
- * browser worker runs) + validation of the assets that
- * scripts/setup-liblouis.js copies into public/liblouis/.
+ * The braille tables the app ships, in public/liblouis/.
  *
- * Runs in the node environment: liblouis's environment sniffing treats
- * jsdom's `window` as a browser GUI thread and refuses to load tables.
- *
- * Requires `npm run setup-liblouis` to have populated public/liblouis/
- * (wired into prebuild + pixi setup); tests are skipped with a clear
- * message when assets are missing.
+ * They are build output: scripts/build-liblouis-wasm.sh copies them, through
+ * scripts/setup-liblouis.js, from the liblouis release it builds the engine
+ * from. These tests read the committed files. The engine itself is tested
+ * against native liblouis in liblouis-engine.test.js.
  *
  * @license GPL-3.0-or-later
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'fs';
-import { join, dirname, resolve } from 'path';
+import { existsSync, readFileSync, readdirSync } from 'fs';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
 
-const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LIBLOUIS_DIR = join(__dirname, '../../public/liblouis');
 const TABLES_DIR = join(LIBLOUIS_DIR, 'tables');
 
-const assetsReady = existsSync(join(TABLES_DIR, 'unicode.dis'));
+describe('public/liblouis, the tables the app ships', () => {
+  const catalog = JSON.parse(
+    readFileSync(join(LIBLOUIS_DIR, 'tables.json'), 'utf-8')
+  );
 
-const BRAILLE_ONLY = /^[\u2800-\u28FF ]+$/;
-
-// In the Node build the table folder is mounted at /tables in the
-// emscripten FS, so chain entries need the tables/ prefix. The browser
-// worker uses on-demand HTTP loading and plain file names instead.
-const chain = (table) => `tables/unicode.dis,tables/${table}`;
-
-describe.skipIf(!assetsReady)(
-  'liblouis translation against public/liblouis tables',
-  () => {
-    let liblouis;
-
-    function getLiblouis() {
-      if (!liblouis) {
-        liblouis = require('liblouis');
-        liblouis.enableOnDemandTableLoading(resolve(TABLES_DIR));
-      }
-      return liblouis;
-    }
-
-    it('translates "hello" to braille under en-ueb-g1', () => {
-      const out = getLiblouis().translateString(
-        chain('en-ueb-g1.ctb'),
-        'hello'
-      );
-      expect(out).toBe('\u2813\u2811\u2807\u2807\u2815'); // ⠓⠑⠇⠇⠕
-    });
-
-    it('translates "hello world" under en-ueb-g1 (uncontracted)', () => {
-      const out = getLiblouis().translateString(
-        chain('en-ueb-g1.ctb'),
-        'hello world'
-      );
-      expect(out).toBe(
-        '\u2813\u2811\u2807\u2807\u2815 \u283A\u2815\u2817\u2807\u2819'
-      ); // ⠓⠑⠇⠇⠕ ⠺⠕⠗⠇⠙
-    });
-
-    it('grade 2 contracts "world"', () => {
-      const g1 = getLiblouis().translateString(
-        chain('en-ueb-g1.ctb'),
-        'world'
-      );
-      const g2 = getLiblouis().translateString(
-        chain('en-ueb-g2.ctb'),
-        'world'
-      );
-      expect(g2.length).toBeLessThan(g1.length);
-    });
-
-    it('capital letters add an indicator cell', () => {
-      const lower = getLiblouis().translateString(
-        chain('en-ueb-g1.ctb'),
-        'hello'
-      );
-      const upper = getLiblouis().translateString(
-        chain('en-ueb-g1.ctb'),
-        'Hello'
-      );
-      expect(upper.length).toBe(lower.length + 1);
-      expect(upper.startsWith('\u2820')).toBe(true); // ⠠ capital indicator
-    });
-
-    it('all four curated tables produce Unicode braille output', () => {
-      for (const table of [
-        'en-ueb-g1.ctb',
-        'en-ueb-g2.ctb',
-        'en-us-g1.ctb',
-        'en-us-g2.ctb',
-      ]) {
-        const out = getLiblouis().translateString(chain(table), 'test');
-        expect(out, `table ${table}`).toBeTruthy();
-        expect(out, `table ${table}`).toMatch(BRAILLE_ONLY);
-      }
-    });
-
-    // Back-translation drives the braille editor's "Translate to text"
-    // button and the download-name fallback (worker 'backTranslate' type).
-    describe('backTranslateString (braille -> text)', () => {
-      it('round-trips "hello" under en-ueb-g1', () => {
-        const braille = getLiblouis().translateString(
-          chain('en-ueb-g1.ctb'),
-          'hello'
-        );
-        const text = getLiblouis().backTranslateString(
-          chain('en-ueb-g1.ctb'),
-          braille
-        );
-        expect(text).toBe('hello');
-      });
-
-      it('round-trips a multi-word phrase under en-ueb-g1', () => {
-        const braille = getLiblouis().translateString(
-          chain('en-ueb-g1.ctb'),
-          'hello world'
-        );
-        const text = getLiblouis().backTranslateString(
-          chain('en-ueb-g1.ctb'),
-          braille
-        );
-        expect(text).toBe('hello world');
-      });
-
-      it('round-trips contracted Grade 2 braille', () => {
-        const braille = getLiblouis().translateString(
-          chain('en-ueb-g2.ctb'),
-          'world'
-        );
-        const text = getLiblouis().backTranslateString(
-          chain('en-ueb-g2.ctb'),
-          braille
-        );
-        expect(text).toBe('world');
-      });
-
-      it('round-trips capital letters (indicator cell)', () => {
-        const braille = getLiblouis().translateString(
-          chain('en-ueb-g1.ctb'),
-          'Hello'
-        );
-        const text = getLiblouis().backTranslateString(
-          chain('en-ueb-g1.ctb'),
-          braille
-        );
-        expect(text).toBe('Hello');
-      });
-    });
-  }
-);
-
-describe.skipIf(!assetsReady)('public/liblouis asset integrity', () => {
-  it('engine files exist', () => {
-    expect(existsSync(join(LIBLOUIS_DIR, 'build-no-tables-utf16.js'))).toBe(
-      true
-    );
-    expect(existsSync(join(LIBLOUIS_DIR, 'easy-api.js'))).toBe(true);
+  it('offers Unified English Braille Grade 1 and Grade 2, and nothing else', () => {
+    expect(catalog.tables).toEqual([
+      { file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1, uncontracted' },
+      { file: 'en-ueb-g2.ctb', label: 'English (UEB) Grade 2, contracted' },
+    ]);
+    expect(catalog.defaultTable).toBe('en-ueb-g1.ctb');
   });
 
-  it('tables.json catalog is valid and lists existing tables', () => {
-    const catalog = JSON.parse(
-      readFileSync(join(LIBLOUIS_DIR, 'tables.json'), 'utf-8')
-    );
-    expect(typeof catalog.defaultTable).toBe('string');
-    expect(Array.isArray(catalog.tables)).toBe(true);
-    expect(catalog.tables.length).toBeGreaterThanOrEqual(4);
-
-    const files = catalog.tables.map((t) => t.file);
-    expect(files).toContain(catalog.defaultTable);
-
-    for (const table of catalog.tables) {
-      expect(typeof table.label).toBe('string');
-      expect(existsSync(join(TABLES_DIR, table.file)), table.file).toBe(true);
-    }
+  it('names the liblouis release the engine is built from', () => {
+    expect(catalog.liblouis).toBe('3.39.0');
   });
 
-  it('every include directive in copied tables resolves (closure complete)', () => {
-    const { readdirSync } = require('fs');
-    for (const file of readdirSync(TABLES_DIR)) {
-      const content = readFileSync(join(TABLES_DIR, file), 'utf-8');
-      for (const line of content.split(/\r?\n/)) {
+  it('lists exactly the files in the tables folder', () => {
+    expect([...catalog.closure].sort()).toEqual(readdirSync(TABLES_DIR).sort());
+  });
+
+  it('ships every table that a shipped table includes', () => {
+    for (const file of catalog.closure) {
+      const text = readFileSync(join(TABLES_DIR, file), 'utf-8');
+      for (const line of text.split(/\r?\n/)) {
         const match = line.match(/^\s*include\s+(\S+)/);
         if (match) {
-          expect(
-            existsSync(join(TABLES_DIR, match[1])),
-            `${file} includes ${match[1]}`
-          ).toBe(true);
+          expect(catalog.closure, `${file} includes ${match[1]}`).toContain(
+            match[1]
+          );
         }
       }
     }
+  });
+
+  it('no longer ships the U.S. code from before 2016', () => {
+    expect(existsSync(join(TABLES_DIR, 'en-us-g1.ctb'))).toBe(false);
+    expect(existsSync(join(TABLES_DIR, 'en-us-g2.ctb'))).toBe(false);
+  });
+
+  it('no longer ships the 2017 engine or its JavaScript binding', () => {
+    expect(existsSync(join(LIBLOUIS_DIR, 'build-no-tables-utf16.js'))).toBe(
+      false
+    );
+    expect(existsSync(join(LIBLOUIS_DIR, 'easy-api.js'))).toBe(false);
   });
 });
 
 // Pure helper from the browser-side translator manager: safe to import in
 // node (the worker is only spawned on demand).
 describe('stripUnsupportedChars', () => {
-  it('removes astral-plane characters that crash the UTF-16 build', async () => {
+  it('removes characters outside the Basic Multilingual Plane, such as emoji', async () => {
     const { stripUnsupportedChars } = await import(
       '../../src/js/braille-translator.js'
     );

@@ -40,14 +40,16 @@ downloaded before each build.
 A `prebuild` npm lifecycle hook runs automatically before every `npm run build`:
 
 ```json
-"prebuild": "node scripts/download-wasm.js --strict && node scripts/setup-libraries.js && node scripts/setup-liblouis.js"
+"prebuild": "node scripts/download-wasm.js --strict && node scripts/setup-libraries.js"
 ```
 
 The first script downloads the 4 required Liberation font files from GitHub
 releases into `public/fonts/`, which Vite then copies to `dist/fonts/`. It
 short-circuits if fonts are already present (fast file-existence check). The
-other two stage OpenSCAD libraries into `public/libraries/` and liblouis
-braille-translation assets into `public/liblouis/` (see `scripts/README.md`).
+second stages OpenSCAD libraries into `public/libraries/` (see
+`scripts/README.md`). The braille engine and its tables need no step: they are
+committed (`public/wasm/liblouis/`, `vendor/liblouis/`, `public/liblouis/`), as
+built from source by `scripts/build-liblouis-wasm.sh`.
 
 **Requirements:**
 - The build environment must have outbound HTTPS access to `github.com`

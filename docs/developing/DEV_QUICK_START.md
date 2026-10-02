@@ -12,14 +12,15 @@ npm install
 # First time only:
 npm run setup-wasm        # downloads Liberation fonts for OpenSCAD text() (~2MB)
 npm run setup-libraries   # downloads the MCAD / BOSL2 / NopSCADlib / dotSCAD bundles
-npm run setup-liblouis    # copies the braille translation engine and tables
 npx playwright install    # for E2E tests
 ```
 
 The OpenSCAD WASM binary is **not** downloaded -- it is vendored in git at
-`public/wasm/openscad-official/`. `setup-wasm` is named after the thing it used
-to do; today it fetches fonts. All three setup scripts run automatically as part
-of `npm run build`.
+`public/wasm/openscad-official/`. So is the braille engine, liblouis, which
+`scripts/build-liblouis-wasm.sh` builds from source: `public/wasm/liblouis/`,
+`vendor/liblouis/` and the tables in `public/liblouis/`. `setup-wasm` is named
+after the thing it used to do; today it fetches fonts. Both setup scripts run
+automatically as part of `npm run build`.
 
 ## Common commands
 
@@ -46,9 +47,9 @@ src/
 public/
   sw.js                Service worker
   examples/            Example .scad files
-  wasm/                OpenSCAD WASM (vendored in git)
+  wasm/                WASM engines: OpenSCAD, Potrace, liblouis (in git)
   libraries/           Library bundles (downloaded)
-  liblouis/            Braille translation engine and tables (copied)
+  liblouis/            Braille translation tables (in git, from the liblouis build)
 tests/
   unit/                Vitest tests
   e2e/                 Playwright tests, against the dev server

@@ -26,8 +26,8 @@ import { gzipSync } from 'zlib';
 
 // Lazy-loaded static payloads fetched on demand at runtime, never part of
 // the initial page load (same rationale as the WASM binary exclusion).
-// liblouis/ holds the braille translation engine + tables loaded only by
-// the Braille Card Customizer's worker; examples/ascii-city/ holds the
+// liblouis/ holds the braille translation tables loaded only by the
+// Braille Card Customizer's worker; examples/ascii-city/ holds the
 // City Walk game's map extracts, fetched only when a player picks a city.
 // Entries are dist-relative path prefixes (POSIX separators).
 const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
@@ -37,6 +37,11 @@ const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
 // going to shrink, and weighing it would make the wasm line so loose it could
 // never catch anything. Kept out by name rather than by accident of extension.
 const WASM_EXCLUDED_DIRS = ['wasm/openscad-official'];
+
+// The braille engine's two files: the binary, and the loader Vite emits as a
+// chunk named after vendor/liblouis/liblouis.mjs (liblouis-<hash>.js). The
+// worker's own chunk, liblouis-worker-<hash>.js, is app code like any other.
+const BRAILLE_ENGINE = /^liblouis(\.wasm|-[A-Za-z0-9_-]{8}\.js)$/;
 
 // Budget definitions (in bytes)
 const BUDGETS = {
@@ -88,10 +93,28 @@ const BUDGETS = {
   // tracked and lands in dist at 3.26 MB gzipped. The decision is unaffected,
   // and the engine is excluded by name above with its reason.
   wasmAssets: {
-    name: 'WebAssembly (excluding the OpenSCAD engine)',
+    name: 'WebAssembly (excluding the OpenSCAD and braille engines)',
     budget: 30000,
     pattern: null,
+    exclude: BRAILLE_ENGINE,
     pool: 'wasm',
+    critical: true,
+  },
+  // The braille engine is weighed on a line of its own, its binary and its
+  // loader together, so that neither it nor the lines around it can grow
+  // behind another. It is loaded only by the braille tools' worker, so Total
+  // Assets leaves its loader out, as it left out the engine it replaced.
+  // MEASURED by this script when the line went in: liblouis.wasm 64,462 B
+  // and its loader 15,251 B gzipped, 79,713 B in all (liblouis 3.39.0, built by
+  // scripts/build-liblouis-wasm.sh). 100,000 is that plus 15 percent, rounded
+  // up to the next 10,000. The line also fails unless it finds both files, so
+  // a renamed chunk cannot slip out of it unweighed.
+  brailleEngine: {
+    name: 'Braille engine (liblouis wasm and loader)',
+    budget: 100000,
+    pattern: BRAILLE_ENGINE,
+    pool: ['wasm', 'code'],
+    expectFiles: 2,
     critical: true,
   },
   totalAssets: {
@@ -104,6 +127,7 @@ const BUDGETS = {
     // browser may fetch, not the vendored WASM engine.
     budget: 1200000,
     pattern: null, // Sum all
+    exclude: BRAILLE_ENGINE,
     critical: true,
   },
 };
@@ -223,7 +247,7 @@ function checkBudgets(distPath) {
     let matchedFiles;
     let totalGzipped;
 
-    const pool = pools[budget.pool || 'code'];
+    const pool = [].concat(budget.pool || 'code').flatMap((name) => pools[name]);
     if (budget.pattern) {
       // Match specific pattern
       matchedFiles = pool.filter((f) => budget.pattern.test(f.name));
@@ -231,9 +255,15 @@ function checkBudgets(distPath) {
       // Sum everything in the pool
       matchedFiles = pool;
     }
+    if (budget.exclude) {
+      matchedFiles = matchedFiles.filter((f) => !budget.exclude.test(f.name));
+    }
     totalGzipped = matchedFiles.reduce((sum, f) => sum + f.gzipped, 0);
 
-    const passed = totalGzipped <= budget.budget;
+    const filesFound =
+      budget.expectFiles === undefined ||
+      matchedFiles.length === budget.expectFiles;
+    const passed = totalGzipped <= budget.budget && filesFound;
     const percentOfBudget = ((totalGzipped / budget.budget) * 100).toFixed(1);
 
     const check = {
@@ -245,6 +275,7 @@ function checkBudgets(distPath) {
       percentOfBudget,
       passed,
       critical: budget.critical,
+      expectFiles: budget.expectFiles,
       files: matchedFiles.map((f) => ({
         name: f.name,
         gzipped: formatBytes(f.gzipped),
@@ -290,6 +321,14 @@ function printResults(results) {
     console.log(`   Budget: ${check.budgetFormatted}`);
     console.log(`   Actual: ${check.actualFormatted} (${check.percentOfBudget}% of budget)`);
     console.log(`   Status: ${status}`);
+    if (
+      check.expectFiles !== undefined &&
+      check.files.length !== check.expectFiles
+    ) {
+      console.log(
+        `   Expected ${check.expectFiles} files, found ${check.files.length}`
+      );
+    }
 
     if (check.files.length > 0 && check.files.length <= 5) {
       console.log('   Files:');

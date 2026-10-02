@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'fs'
 import path from 'path'
-import { devWorkerModuleGraph } from '../../vite.config.js'
+import { devWorkerModuleGraph, DEV_WORKER_ENTRIES } from '../../vite.config.js'
 
 /**
  * D-31 and D-133: WebKit refuses a CACHED module when a worker imports it under
@@ -99,6 +99,29 @@ describe("the trace worker's no-store scope (DP-34)", () => {
       '/src/js/image-import.js',
       '/src/js/ink-extraction.js',
       '/src/js/color-utils.js',
+    ]) {
+      expect(graph.has(url), `${url} must be served no-store in dev`).toBe(true)
+    }
+  })
+})
+
+/**
+ * The braille worker has been a module worker since liblouis was rebuilt from
+ * source. It imports the engine module and, through it, the built loader, so
+ * its whole graph needs the same no-store scope as the two workers above.
+ */
+describe("the braille worker's no-store scope", () => {
+  const graph = devWorkerModuleGraph('src/worker/liblouis-worker.js')
+
+  it('is on the list the dev server serves no-store', () => {
+    expect(DEV_WORKER_ENTRIES).toContain('src/worker/liblouis-worker.js')
+  })
+
+  it('covers the worker, the engine module and the built loader', () => {
+    for (const url of [
+      '/src/worker/liblouis-worker.js',
+      '/src/js/liblouis-engine.js',
+      '/vendor/liblouis/liblouis.mjs',
     ]) {
       expect(graph.has(url), `${url} must be served no-store in dev`).toBe(true)
     }

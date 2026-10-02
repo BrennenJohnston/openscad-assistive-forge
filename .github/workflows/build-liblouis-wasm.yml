@@ -1,0 +1,120 @@
+name: Build liblouis wasm
+
+# liblouis is compiled here, not taken as a pre-built binary, so the app can say
+# exactly what went into it: one pinned tarball, one checked sum, one recorded
+# set of flags. The same run also builds a native lou_translate from the same
+# tarball, which is what the wasm is checked against.
+#
+# It runs on request, and on pull requests that touch the recipe or the code
+# that loads what it builds. The output is an artifact; a session downloads it,
+# checks the numbers against the run log, and commits it with the recipe.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/build-liblouis-wasm.sh'
+      - 'scripts/verify-liblouis-wasm.mjs'
+      - 'scripts/setup-liblouis.js'
+      - 'src/js/liblouis-engine.js'
+      - '.github/workflows/build-liblouis-wasm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile and check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Pinned for the same reason as the Potrace build: an unpinned toolchain
+      # makes "reproducible" a word rather than a fact. The exact emcc version
+      # is also written into the README beside the wasm.
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.9
+          actions-cache-folder: emsdk-cache
+
+      - name: Build
+        run: ./scripts/build-liblouis-wasm.sh
+
+      # A wasm that reports the right version can still translate differently
+      # from liblouis itself. This puts every phrase of the test corpus through
+      # both, the wasm and the native tool built from the same tarball, fails
+      # on any difference, and writes the native tool's answers as the
+      # reference the app's own tests compare against.
+      - name: Verify the wasm against native liblouis
+        run: |
+          set -o pipefail
+          node scripts/verify-liblouis-wasm.mjs \
+            --native build/liblouis/native/liblouis-*/tools/lou_translate \
+            --tables build/liblouis/native/liblouis-*/tables \
+            --write-reference 2>&1 | tee build/liblouis/verify.log
+          {
+            echo '## The wasm against native liblouis'
+            echo
+            echo '```'
+            cat build/liblouis/verify.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The same check again with only the tables the app ships. A table whose
+      # include did not make it into that set fails here, not in a browser.
+      - name: Verify the shipped tables alone
+        run: >-
+          node scripts/verify-liblouis-wasm.mjs
+          --native build/liblouis/native/liblouis-*/tools/lou_translate
+          --tables public/liblouis/tables
+
+      - name: Record what was built
+        run: |
+          {
+            echo '## liblouis wasm'
+            echo
+            echo '```'
+            cat public/wasm/liblouis/README.txt
+            echo '```'
+            echo
+            echo '### The tables the app ships'
+            echo
+            echo '```'
+            cat public/liblouis/tables.json
+            echo '```'
+            echo
+            echo '### Checksums of the files to commit'
+            echo
+            echo '```'
+            {
+              find public/wasm/liblouis vendor/liblouis public/liblouis -type f
+              ls tests/fixtures/braille-reference/liblouis-*.json
+            } | sort | xargs sha256sum
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The shipped tables travel with the build, and so do the native tool,
+      # the release's tables and the reference file, so what the wasm was
+      # checked against can be looked at afterwards.
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: liblouis-wasm
+          path: |
+            public/wasm/liblouis/
+            vendor/liblouis/
+            public/liblouis/
+            build/liblouis/native/*/tools/lou_translate
+            build/liblouis/native/*/tables/
+            tests/fixtures/braille-reference/liblouis-*.json
+          retention-days: 30
+          if-no-files-found: error

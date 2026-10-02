@@ -153,7 +153,7 @@ Translation runs in a Web Worker on your device using liblouis compiled to WebAs
 
 ## Licensing and attribution
 
-- Braille translation is powered by [liblouis](https://liblouis.io/), the open-source braille translator (LGPL-2.1-or-later; its JavaScript bindings are GPL-3.0; individual translation tables carry their own headers). The engine and tables are copied from the `liblouis` npm packages at build time by `scripts/setup-liblouis.js`, which also writes a `NOTICE.txt` alongside the deployed assets.
+- Braille translation is powered by [liblouis](https://liblouis.io/), the open-source braille translator (LGPL-2.1-or-later, for the library and for every translation table shipped; each table's header names its authors). The app runs liblouis 3.39.0, compiled to WebAssembly from its release tarball by `scripts/build-liblouis-wasm.sh`. The license and the build's README sit beside the binary in `public/wasm/liblouis/`, and `public/liblouis/NOTICE.txt` covers the tables.
 - All three examples are adapted from Brennen Johnston's standalone desktop
   generators (© 2024–2026). Each was originally published under PolyForm
   Noncommercial 1.0.0 and **relicensed by the copyright holder to

@@ -14,3 +14,8 @@
 # records their checksums, so nothing may rewrite a byte of them.
 public/wasm/potrace/** -text
 vendor/potrace/** -text
+
+# Built by scripts/build-liblouis-wasm.sh, the tables included: the same rule.
+public/wasm/liblouis/** -text
+vendor/liblouis/** -text
+public/liblouis/** -text

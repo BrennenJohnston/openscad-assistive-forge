@@ -74,7 +74,10 @@ import {
   destroyBraillePanel,
   getBrailleDownloadName,
 } from '../../src/js/braille-panel.js';
-import { backTranslateText } from '../../src/js/braille-translator.js';
+import {
+  backTranslateText,
+  translateText,
+} from '../../src/js/braille-translator.js';
 import { announceImmediate } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 
@@ -582,6 +585,23 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
     expect(params().sign_text_1).toBe('Exit now');
   });
 
+  it('"Translate to text" moves the raised letters to the new text', async () => {
+    await typeText('Exit', () => {
+      expect(params().sign_text_1).toBe('Exit');
+    });
+    await typeBraille('\u281B', () => {
+      expect(params().Line_1).toBe('\u281B');
+    });
+
+    backTranslateText.mockResolvedValueOnce('go');
+    document.getElementById('brailleFieldToText').click();
+    await vi.waitFor(() => {
+      expect(params().sign_text_1).toBe('go');
+    });
+    // The plate keeps the editor's braille
+    expect(params().Line_1).toBe('\u281B');
+  });
+
   it('rejects non-braille characters with an error and blocks the write', async () => {
     await typeBraille('\u2813\u2811', () => {
       expect(params().Line_1).toBe('\u2813\u2811');
@@ -648,6 +668,42 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
         expect(params().Line_1).toBe(word('exit'));
       },
       { timeout: 3000, interval: 25 }
+    );
+  });
+});
+
+describe('braille panel — when the engine fails (D-209)', () => {
+  beforeEach(() => mountCardPanel());
+  afterEach(() => destroyBraillePanel());
+
+  it('shows no braille for text it could not translate', async () => {
+    const rows = () =>
+      document.querySelectorAll('#braillePreview .braille-preview-braille');
+    await typeText('hello', () => expect(rows()[0]?.textContent).toBe(word('hello')));
+
+    translateText.mockRejectedValueOnce(
+      new Error('liblouis could not translate this text with en-ueb-g1.ctb (test)')
+    );
+    await typeText('world', () =>
+      expect(document.getElementById('brailleErrors').textContent).toContain(
+        'Braille translation is unavailable'
+      )
+    );
+    // The previous text's braille must not stand in for this text's.
+    expect(rows()).toHaveLength(0);
+  });
+});
+
+describe('braille panel — characters with no braille (D-218)', () => {
+  beforeEach(() => mountCardPanel());
+  afterEach(() => destroyBraillePanel());
+
+  it('says the characters are left out of the braille', async () => {
+    const warnings = () => document.getElementById('brailleWarnings');
+    await typeText('ab \u2603', () => expect(warnings().hidden).toBe(false));
+    expect(warnings().textContent).toContain(
+      'Some characters could not be translated to braille (in: "\u2603"). ' +
+        'They are left out of the braille.'
     );
   });
 });

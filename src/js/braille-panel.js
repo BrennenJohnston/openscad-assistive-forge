@@ -596,6 +596,8 @@ class BraillePanel {
       'Text above updated from this braille. The braille stays in charge ' +
         'until you clear this editor.'
     );
+    // On a sign the raised letters come from the text box (D-219).
+    this.scheduleLayout(0);
   }
 
   buildTableSelect(section) {
@@ -1003,7 +1005,7 @@ class BraillePanel {
       select.innerHTML = '';
       const opt = document.createElement('option');
       opt.value = this.defaultTable;
-      opt.textContent = 'English (UEB) Grade 1 — uncontracted';
+      opt.textContent = 'English (UEB) Grade 1, uncontracted';
       select.appendChild(opt);
     }
   }
@@ -1153,13 +1155,17 @@ class BraillePanel {
     this.debounceTimer = setTimeout(() => {
       this.runLayout().catch((error) => {
         console.error('[BraillePanel] Layout failed:', error);
+        // Braille for the previous text must not stand in for text that
+        // could not be translated (D-209); the error says what happened.
+        this.refs.preview.replaceChildren();
+        if (this.refs.rowSummary) {
+          this.refs.rowSummary.textContent = '';
+          this.refs.rowSummary.hidden = true;
+        }
         this.renderMessages([
           {
             type: 'engine-error',
-            message:
-              'Braille translation is unavailable: ' +
-              error.message +
-              ' — try reloading the page.',
+            message: `Braille translation is unavailable: ${error.message}. Reload the page to try again.`,
           },
         ]);
       });
@@ -1223,8 +1229,7 @@ class BraillePanel {
         type: 'untranslatable',
         message:
           `Some characters could not be translated to braille ` +
-          `(in: "${sample}"). They may appear as blank or literal cells ` +
-          `on the model.`,
+          `(in: "${sample}"). They are left out of the braille.`,
       });
     }
     if (!preserveCaps && /\p{Lu}/u.test(text)) {
