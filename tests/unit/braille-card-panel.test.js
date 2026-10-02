@@ -676,3 +676,17 @@ describe('braille panel — when the engine fails (D-209)', () => {
     expect(rows()).toHaveLength(0);
   });
 });
+
+describe('braille panel — characters with no braille (D-218)', () => {
+  beforeEach(() => mountCardPanel());
+  afterEach(() => destroyBraillePanel());
+
+  it('says the characters are left out of the braille', async () => {
+    const warnings = () => document.getElementById('brailleWarnings');
+    await typeText('ab \u2603', () => expect(warnings().hidden).toBe(false));
+    expect(warnings().textContent).toContain(
+      'Some characters could not be translated to braille (in: "\u2603"). ' +
+        'They are left out of the braille.'
+    );
+  });
+});

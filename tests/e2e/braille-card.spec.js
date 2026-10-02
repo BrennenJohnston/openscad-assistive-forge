@@ -371,6 +371,24 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(page.locator('#brailleWarnings')).toBeHidden()
   })
 
+  test('with auto-wrap off, a no-break space is a word space', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+    await page.locator('.braille-panel-layout summary').click()
+    await page.locator('#brailleAutoWrap').uncheck()
+    await page.locator('#brailleTextInput').fill('Room\u00A0101')
+    // The cells of "Room 101": a blank cell, not the raw character, and
+    // nothing reported as untranslatable
+    await expect(
+      page.locator('#braillePreview .braille-preview-braille').first()
+    ).toHaveText(
+      '\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+    await expect(page.locator('#brailleWarnings')).toBeHidden()
+  })
+
   test('translated braille renders through the WASM pipeline', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
     test.setTimeout(180_000)
@@ -772,6 +790,38 @@ test.describe('Braille Sign workflow', () => {
       timeout: 20000,
     })
     await expect(page.locator('#brailleErrors')).toBeHidden()
+  })
+
+  test('sign leaves out a character its table does not define, and says so', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const caps = page.locator('#brailleCapsToggle')
+    if (!(await caps.isChecked())) await caps.check()
+
+    await page.locator('#brailleTextInput').fill('ROOM \u2603 101')
+    // Capital word ROOM, a blank cell either side of where the snowman
+    // stood, number 101: no escape cells, and none with dot 7
+    await expect(
+      page.locator('#braillePreview .braille-preview-braille').first()
+    ).toHaveText(
+      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u2800\u283C\u2801\u281A\u2801',
+      { timeout: 20000 }
+    )
+    await expect(page.locator('#brailleWarnings')).toContainText(
+      'Some characters could not be translated to braille (in: "\u2603"). They are left out of the braille.'
+    )
+  })
+
+  test('sign warns about an emoji typed on its own', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.locator('#brailleTextInput').fill('\u{1F600}')
+    await expect(page.locator('#brailleWarnings')).toContainText(
+      'They are left out of the braille.',
+      { timeout: 20000 }
+    )
   })
 
   test('braille editor reads one contracted cell back as its whole word', async ({ page }) => {

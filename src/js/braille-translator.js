@@ -12,8 +12,8 @@
 const WORKER_TIMEOUT_MS = 15000;
 const CACHE_MAX_ENTRIES = 2000;
 
-/** Matches any character outside the Unicode braille block. */
-const NON_BRAILLE_RE = /[^\u2800-\u28FF]/;
+/** Matches any character that is not a six-dot braille cell. */
+const NOT_SIX_DOT_RE = /[^\u2800-\u283F]/;
 
 let worker = null;
 let readyPromise = null;
@@ -108,6 +108,52 @@ export function stripUnsupportedChars(text) {
 }
 
 /**
+ * Make every whitespace character an ordinary space. liblouis hands a
+ * no-break space or a tab back as itself rather than as a blank cell; the
+ * word layout already splits on these same characters, so a line translated
+ * whole now agrees with it. The length does not change.
+ * @param {string} text
+ * @returns {string}
+ */
+export function normalizeSpaces(text) {
+  return text.replace(/\s/g, ' ');
+}
+
+/**
+ * Translate, leaving out every character liblouis cannot write as six-dot
+ * braille. liblouis spells a character the table does not define as an
+ * escape such as '\x2603': eight cells, one with dot 7, which a six-dot
+ * sign would print as a different cell. Every cell of the escape points back
+ * at its character, so that character is removed and the rest translated
+ * again. Each pass removes at least one character (the engine refuses a
+ * position outside the text), so the loop ends.
+ * @param {string} text
+ * @param {(text: string) => Promise<{ translation: string, inputPos: number[] }>} translate
+ * @returns {Promise<{ braille: string, inputPos: number[], leftOut: string[] }>}
+ *   `inputPos` indexes the text finally translated, which is `text` itself
+ *   only when `leftOut` is empty
+ */
+export async function translateLeavingOut(text, translate) {
+  const leftOut = [];
+  let rest = text;
+  while (rest !== '') {
+    const { translation, inputPos } = await translate(rest);
+    const found = new Set();
+    Array.from(translation).forEach((cell, i) => {
+      if (NOT_SIX_DOT_RE.test(cell)) {
+        found.add(String.fromCodePoint(rest.codePointAt(inputPos[i])));
+      }
+    });
+    if (found.size === 0) return { braille: translation, inputPos, leftOut };
+    leftOut.push(...found);
+    rest = Array.from(rest)
+      .filter((ch) => !found.has(ch))
+      .join('');
+  }
+  return { braille: '', inputPos: [], leftOut };
+}
+
+/**
  * Translate plain text to Unicode braille.
  *
  * @param {string} text - Plain text (word, line, or phrase)
@@ -121,9 +167,11 @@ export function stripUnsupportedChars(text) {
  *   inputPos: number[]|null,
  *   hadUntranslatable: boolean,
  *   strippedChars: string[],
- * }>} `inputPos` gives, for each cell, the index in `text` of the character
- *   it came from; it is null when stripping or lowercasing changed the
- *   text's length, because the positions would no longer line up
+ * }>} `hadUntranslatable` is true when a character with no braille in the
+ *   selected table was left out. `inputPos` gives, for each cell, the index
+ *   in `text` of the character it came from; it is null when stripping,
+ *   lowercasing or leaving a character out changed the text, because the
+ *   positions would no longer line up
  */
 export async function translateText(
   text,
@@ -133,13 +181,15 @@ export async function translateText(
   await ensureReady();
 
   const { text: safeText, stripped } = stripUnsupportedChars(text);
-  const input = preserveCaps ? safeText : safeText.toLowerCase();
+  const input = normalizeSpaces(
+    preserveCaps ? safeText : safeText.toLowerCase()
+  );
 
   if (input === '') {
     return {
       braille: '',
       inputPos: text === '' ? [] : null,
-      hadUntranslatable: false,
+      hadUntranslatable: stripped.length > 0,
       strippedChars: stripped,
     };
   }
@@ -147,26 +197,26 @@ export async function translateText(
   const cacheKey = `${table}\u0000${input}`;
   let cached = cache.get(cacheKey);
   if (cached === undefined) {
-    let result;
     try {
-      result = await sendMessage('translate', { text: input, table });
+      cached = await translateLeavingOut(input, (rest) =>
+        sendMessage('translate', { text: rest, table })
+      );
     } catch (error) {
       // An engine that failed once is not trusted with the next call.
       disposeTranslator();
       throw error;
     }
-    cached = { braille: result.translation, inputPos: result.inputPos };
     if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
     cache.set(cacheKey, cached);
   }
 
   return {
     braille: cached.braille,
-    inputPos: input.length === text.length ? cached.inputPos : null,
-    // Non-braille output means liblouis passed characters through
-    // untranslated (no definition in the selected table).
-    hadUntranslatable:
-      NON_BRAILLE_RE.test(cached.braille) || stripped.length > 0,
+    inputPos:
+      cached.leftOut.length === 0 && input.length === text.length
+        ? cached.inputPos
+        : null,
+    hadUntranslatable: stripped.length > 0 || cached.leftOut.length > 0,
     strippedChars: stripped,
   };
 }

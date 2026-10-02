@@ -1227,8 +1227,7 @@ class BraillePanel {
         type: 'untranslatable',
         message:
           `Some characters could not be translated to braille ` +
-          `(in: "${sample}"). They may appear as blank or literal cells ` +
-          `on the model.`,
+          `(in: "${sample}"). They are left out of the braille.`,
       });
     }
     if (!preserveCaps && /\p{Lu}/u.test(text)) {
