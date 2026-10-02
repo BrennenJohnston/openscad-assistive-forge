@@ -69,6 +69,14 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The same check again with only the tables the app ships. A table whose
+      # include did not make it into that set fails here, not in a browser.
+      - name: Verify the shipped tables alone
+        run: >-
+          node scripts/verify-liblouis-wasm.mjs
+          --native build/liblouis/native/liblouis-*/tools/lou_translate
+          --tables public/liblouis/tables
+
       - name: Record what was built
         run: |
           {
@@ -78,16 +86,22 @@ jobs:
             cat public/wasm/liblouis/README.txt
             echo '```'
             echo
+            echo '### The tables the app ships'
+            echo
+            echo '```'
+            cat public/liblouis/tables.json
+            echo '```'
+            echo
             echo '### Checksums of the files to commit'
             echo
             echo '```'
-            sha256sum public/wasm/liblouis/* vendor/liblouis/*
+            find public/wasm/liblouis vendor/liblouis public/liblouis tests/fixtures/braille-reference -type f | sort | xargs sha256sum
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      # The native tool, the release's tables and the reference file travel
-      # with the build, so what the wasm was checked against can be looked at
-      # afterwards.
+      # The shipped tables travel with the build, and so do the native tool,
+      # the release's tables and the reference file, so what the wasm was
+      # checked against can be looked at afterwards.
       - name: Upload the build
         uses: actions/upload-artifact@v4
         with:
@@ -95,6 +109,7 @@ jobs:
           path: |
             public/wasm/liblouis/
             vendor/liblouis/
+            public/liblouis/
             build/liblouis/native/*/tools/lou_translate
             build/liblouis/native/*/tables/
             tests/fixtures/braille-reference/liblouis-*.json

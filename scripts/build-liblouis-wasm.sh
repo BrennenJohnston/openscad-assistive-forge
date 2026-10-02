@@ -29,6 +29,8 @@
 #                                         for why it does not live in public/)
 #   public/wasm/liblouis/liblouis.wasm    the binary, at a stable unhashed URL,
 #   ...{README.txt,COPYING.LESSER.liblouis}  with the license and the recipe
+#   public/liblouis/                      the tables the app offers and every
+#                                         table they include, with a catalog
 #   build/liblouis/native/liblouis-<v>/   the native lou_translate and the
 #                                         release's tables, for the checks
 
@@ -201,7 +203,12 @@ if [ "${LOU_VERSION}" != "${LIBLOUIS_VERSION}" ] || [ "${LOU_CHARSIZE}" != "4" ]
   exit 1
 fi
 
-# ── 5. Measure and record ────────────────────────────────────────────────────
+# ── 5. The tables the app ships ──────────────────────────────────────────────
+# The tables the app offers, and every table they include, from this tarball.
+node "${ROOT}/scripts/setup-liblouis.js" --from "${NATIVE_SRC}/tables" \
+  --out "${ROOT}/public/liblouis" --liblouis "${LIBLOUIS_VERSION}"
+
+# ── 6. Measure and record ────────────────────────────────────────────────────
 size_of() { wc -c < "$1" | tr -d ' '; }
 gzip_size_of() { gzip -9 -c "$1" | wc -c | tr -d ' '; }
 
@@ -262,4 +269,5 @@ echo
 echo "Built:"
 echo "  ${OUT}/liblouis.wasm        ${WASM_RAW} bytes raw, ${WASM_GZ} gzipped"
 echo "  ${LOADER_OUT}/liblouis.mjs  ${JS_RAW} bytes raw, ${JS_GZ} gzipped"
+echo "  ${ROOT}/public/liblouis/  (the tables the app offers)"
 echo "  ${NATIVE_TOOL}  (reference, not shipped)"

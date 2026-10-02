@@ -15,6 +15,11 @@
  * Licensing: liblouis engine is LGPL-2.1+, the JS bindings (easy-api.js)
  * are GPL-3.0, and individual tables carry their own headers. A NOTICE
  * file with attribution is written alongside the copied assets.
+ *
+ * With `--from <tables> --liblouis <version> [--out <dir>]` it copies
+ * instead the Unified English Braille tables of a liblouis release, and
+ * every table they include, for the engine that
+ * scripts/build-liblouis-wasm.sh builds from the same release.
  */
 
 import fs from 'fs';
@@ -78,9 +83,10 @@ function parseIncludes(tablePath) {
 /**
  * Compute the transitive include closure of a set of table files.
  * @param {string[]} seeds - Table file names to start from
+ * @param {string} [sourceDir] - The folder the tables are read from
  * @returns {{ closure: string[], missing: string[] }}
  */
-function resolveTableClosure(seeds) {
+function resolveTableClosure(seeds, sourceDir = TABLES_SRC) {
   const visited = new Set();
   const missing = [];
   const queue = [...seeds];
@@ -89,7 +95,7 @@ function resolveTableClosure(seeds) {
     const name = queue.shift();
     if (visited.has(name)) continue;
 
-    const srcPath = path.join(TABLES_SRC, name);
+    const srcPath = path.join(sourceDir, name);
     if (!fs.existsSync(srcPath)) {
       missing.push(name);
       continue;
@@ -99,6 +105,85 @@ function resolveTableClosure(seeds) {
   }
 
   return { closure: [...visited].sort(), missing };
+}
+
+// Tables from a liblouis release, for the engine scripts/build-liblouis-wasm.sh
+// builds from the same tarball. Only Unified English Braille is offered: the
+// U.S. code from before 2016 (EBAE) is no longer accepted for braille signs.
+const RELEASE_TABLES = [
+  {
+    file: 'en-ueb-g1.ctb',
+    label: 'English (UEB) Grade 1, uncontracted',
+    default: true,
+  },
+  {
+    file: 'en-ueb-g2.ctb',
+    label: 'English (UEB) Grade 2, contracted',
+  },
+];
+
+function option(name) {
+  const i = process.argv.indexOf(name);
+  return i > 0 ? process.argv[i + 1] : undefined;
+}
+
+/**
+ * Copy the release's tables the app offers, and every table they include,
+ * into `out`. The catalog names the release and lists every file copied, so
+ * the worker can load the set without guessing. Nothing in it changes from
+ * one run to the next, so the files can be committed and checked by checksum.
+ */
+function setupFromRelease(from, out, version) {
+  console.log(`liblouis tables from ${from}`);
+  console.log('='.repeat(60));
+
+  const seeds = [...BASE_TABLES, ...RELEASE_TABLES.map((t) => t.file)];
+  const { closure, missing } = resolveTableClosure(seeds, from);
+  if (missing.length > 0) {
+    console.error(`✗ Tables missing from the release: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+
+  // Emptied first, so no table from an older engine survives beside these.
+  const tablesOut = path.join(out, 'tables');
+  fs.rmSync(tablesOut, { recursive: true, force: true });
+  fs.mkdirSync(tablesOut, { recursive: true });
+  for (const name of closure) {
+    fs.copyFileSync(path.join(from, name), path.join(tablesOut, name));
+  }
+  console.log(
+    `\u2713 ${closure.length} table files (offered tables + include closure)`
+  );
+
+  const catalog = {
+    liblouis: version,
+    defaultTable: RELEASE_TABLES.find((t) => t.default).file,
+    tables: RELEASE_TABLES.map(({ file, label }) => ({ file, label })),
+    closure,
+  };
+  fs.writeFileSync(
+    path.join(out, 'tables.json'),
+    `${JSON.stringify(catalog, null, 2)}\n`
+  );
+  console.log('\u2713 tables.json catalog');
+
+  const notice = [
+    'liblouis braille translation tables',
+    '',
+    `tables/ holds translation tables from liblouis ${version}, the release the`,
+    'braille engine in public/wasm/liblouis/ is built from, copied unmodified.',
+    'They are licensed under the GNU Lesser General Public License, version 2.1',
+    "or later; each table's own header names its authors and its license.",
+    '  https://liblouis.io/  https://github.com/liblouis/liblouis',
+    '',
+    'scripts/build-liblouis-wasm.sh builds the engine and copies these tables',
+    'with scripts/setup-liblouis.js.',
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(out, 'NOTICE.txt'), notice);
+  console.log('\u2713 NOTICE.txt attribution');
+  console.log('='.repeat(60));
+  console.log(`\u2713 liblouis tables ready in ${out}`);
 }
 
 function main() {
@@ -178,4 +263,20 @@ function main() {
   console.log(`\u2713 liblouis assets ready in ${path.relative(ROOT, DEST_DIR)}`);
 }
 
-main();
+const from = option('--from');
+if (from) {
+  const version = option('--liblouis');
+  if (!version) {
+    console.error(
+      '--from needs --liblouis <version>, the release the tables come from.'
+    );
+    process.exit(2);
+  }
+  setupFromRelease(
+    path.resolve(from),
+    path.resolve(option('--out') || DEST_DIR),
+    version
+  );
+} else {
+  main();
+}
