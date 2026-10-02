@@ -137,10 +137,15 @@ fi
 # The same settings as the Potrace build, for the same reasons (a module
 # worker imports it, the deployed CSP forbids eval, tests load the shipped
 # file in Node), except that liblouis reads its tables through a file system,
-# so the file system stays in.
+# so the file system stays in. liblouis also compiles a table with several
+# 8 KB character buffers on the stack, nesting a frame for every table it
+# includes, and Emscripten's default 64 KB stack faults on the English
+# tables; 5 MB is the stack Emscripten gave every module before it made the
+# default smaller.
 EMCC_FLAGS=(
   -O2
   --no-entry
+  -s STACK_SIZE=5242880
   -s MODULARIZE=1
   -s EXPORT_ES6=1
   -s EXPORT_NAME=createLiblouis
@@ -158,16 +163,41 @@ emcc "${LINK_INPUTS[@]}" "${EMCC_FLAGS[@]}" -o "${LOADER_OUT}/liblouis.mjs"
 mv "${LOADER_OUT}/liblouis.wasm" "${OUT}/liblouis.wasm"
 
 # ── 4. Smoke check: the shipped files, loaded the way a test would ──────────
+# Beyond the version, the module has to compile the two tables the app offers:
+# a build can report the right version and still fault on a real table.
 SMOKE_LINE="$(node --input-type=module -e "
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const { default: createLiblouis } = await import(pathToFileURL(process.argv[1]).href);
-const mod = await createLiblouis({ locateFile: () => process.argv[2] });
-console.log('SMOKE ' + mod.UTF8ToString(mod._lou_version()) + ' ' + mod._lou_charSize());
-" "${LOADER_OUT}/liblouis.mjs" "${OUT}/liblouis.wasm" | grep '^SMOKE ' || true)"
-read -r _ LOU_VERSION LOU_CHARSIZE <<< "${SMOKE_LINE:-SMOKE none none}"
-echo "Built module: lou_version ${LOU_VERSION}, lou_charSize ${LOU_CHARSIZE}"
-if [ "${LOU_VERSION}" != "${LIBLOUIS_VERSION}" ] || [ "${LOU_CHARSIZE}" != "4" ]; then
-  echo "The built module must report ${LIBLOUIS_VERSION} and a character size of 4." >&2
+const [loader, wasm, tables] = process.argv.slice(1);
+const { default: createLiblouis } = await import(pathToFileURL(loader).href);
+const mod = await createLiblouis({ locateFile: () => wasm });
+mod.FS.mkdir('/tables');
+for (const name of readdirSync(tables)) {
+  const file = path.join(tables, name);
+  if (statSync(file).isFile()) mod.FS.writeFile('/tables/' + name, readFileSync(file));
+}
+const compiles = (table) => {
+  const list = '/tables/unicode.dis,/tables/' + table;
+  const size = mod.lengthBytesUTF8(list) + 1;
+  const ptr = mod._malloc(size);
+  mod.stringToUTF8(list, ptr, size);
+  try {
+    return mod._lou_checkTable(ptr) === 1 ? 'yes' : 'no';
+  } catch (error) {
+    console.error(table + ': ' + error.message);
+    return 'fault';
+  } finally {
+    mod._free(ptr);
+  }
+};
+console.log('SMOKE ' + mod.UTF8ToString(mod._lou_version()) + ' ' + mod._lou_charSize() + ' ' + compiles('en-ueb-g1.ctb') + ' ' + compiles('en-ueb-g2.ctb'));
+" "${LOADER_OUT}/liblouis.mjs" "${OUT}/liblouis.wasm" "${WASM_SRC}/tables" | grep '^SMOKE ' || true)"
+read -r _ LOU_VERSION LOU_CHARSIZE G1_COMPILES G2_COMPILES <<< "${SMOKE_LINE:-SMOKE none none none none}"
+echo "Built module: lou_version ${LOU_VERSION}, lou_charSize ${LOU_CHARSIZE}, en-ueb-g1.ctb compiles: ${G1_COMPILES}, en-ueb-g2.ctb compiles: ${G2_COMPILES}"
+if [ "${LOU_VERSION}" != "${LIBLOUIS_VERSION}" ] || [ "${LOU_CHARSIZE}" != "4" ] ||
+  [ "${G1_COMPILES}" != "yes" ] || [ "${G2_COMPILES}" != "yes" ]; then
+  echo "The built module must report ${LIBLOUIS_VERSION} and a character size of 4, and compile both tables." >&2
   exit 1
 fi
 
@@ -214,6 +244,7 @@ Built with
 
 Checked when built
   lou_version() ${LOU_VERSION}, lou_charSize() ${LOU_CHARSIZE}
+  en-ueb-g1.ctb compiles: ${G1_COMPILES}, en-ueb-g2.ctb compiles: ${G2_COMPILES}
   The native build of the same tarball reports: ${NATIVE_VERSION}
 
 Size, as built
