@@ -12,8 +12,10 @@
  * @license GPL-3.0-or-later
  */
 
+import { readFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { parseSTL } from '../../scripts/parity/stl-stats.mjs'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -51,6 +53,43 @@ async function openBrailleExample(page, exampleKey) {
 }
 
 const openBrailleCard = (page) => openBrailleExample(page, 'braille-wedge-card')
+
+/** Set a parameter control by name: a list takes a value, a switch a boolean. */
+async function setParam(page, name, value) {
+  const control = page.locator(`.param-control[data-param-name="${name}"]`)
+  await control.waitFor({ state: 'attached', timeout: 15000 })
+  // The control may sit in a collapsed parameter group
+  await page.evaluate((n) => {
+    let group = document
+      .querySelector(`.param-control[data-param-name="${n}"]`)
+      ?.closest('details')
+    while (group) {
+      group.open = true
+      group = group.parentElement?.closest('details')
+    }
+  }, name)
+  if (typeof value === 'boolean') {
+    await control.locator('input[type="checkbox"]').setChecked(value)
+  } else {
+    await control.locator('select').selectOption(value)
+  }
+}
+
+/**
+ * Render the model at full quality and return the downloaded STL. Generate
+ * renders; the same button then reads "Download", and a second press saves.
+ */
+async function downloadStl(page) {
+  await page.locator('#outputFormat').selectOption('stl')
+  await page.locator('#primaryActionBtn').click()
+  await expect(page.locator('#primaryActionBtn')).toContainText('Download', {
+    timeout: 180_000,
+  })
+  const downloadPromise = page.waitForEvent('download', { timeout: 60_000 })
+  await page.locator('#primaryActionBtn').click()
+  const download = await downloadPromise
+  return parseSTL(readFileSync(await download.path()))
+}
 
 /** Run an axe scan of the braille panel and assert no violations. */
 async function expectPanelAxeClean(page) {
@@ -688,6 +727,48 @@ test.describe('Braille Charm workflow', () => {
 })
 
 test.describe('Braille Sign workflow', () => {
+  test('the letter height setting is the height of the capital I (ADA 703.2.5)', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    await page.locator('#brailleTextInput').fill('I')
+    await expect(
+      page.locator('.param-control[data-param-name="sign_text_1"] input')
+    ).toHaveValue('I', { timeout: 20000 })
+    await setParam(page, 'sign_part', 'Letter plate')
+    await setParam(page, 'add_border', false)
+    const charHeight = Number(
+      await page
+        .locator('.param-control[data-param-name="char_height_mm"] input[type="number"]')
+        .first()
+        .inputValue()
+    )
+
+    // The letter's top face is the highest level of the plate; its extent
+    // across the plate is the capital I's height
+    const { triangles, count } = await downloadStl(page)
+    let top = -Infinity
+    for (let i = 2; i < count * 9; i += 3) top = Math.max(top, triangles[i])
+    let minY = Infinity
+    let maxY = -Infinity
+    for (let i = 0; i < count * 9; i += 3) {
+      if (Math.abs(triangles[i + 2] - top) < 1e-4) {
+        minY = Math.min(minY, triangles[i + 1])
+        maxY = Math.max(maxY, triangles[i + 1])
+      }
+    }
+    const height = maxY - minY
+    expect(
+      Math.abs(height - charHeight),
+      `capital I ${height.toFixed(4)} mm at the setting ${charHeight}`
+    ).toBeLessThanOrEqual(0.05)
+  })
+
   test('sign panel writes raised-text and braille params', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

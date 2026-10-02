@@ -91,6 +91,24 @@ describe('braille_sign.scad parser integration', () => {
     expect(parsed.parameters.line_spacing_pct.default).toBe(135);
   });
 
+  it('makes the letter height setting the height of the capital I, with the panel in step', async () => {
+    // Liberation Sans's capital I is 0.9555 of OpenSCAD's text size
+    // (15.288 mm at size 16, measured from the exported model), so the
+    // model divides by it; the panel's width estimate must use the same.
+    const scad = readScad();
+    const factor = Number(scad.match(/^LETTER_CAP_FACTOR = ([\d.]+);/m)?.[1]);
+    expect(factor).toBe(0.9555);
+    expect(scad).toMatch(/size = char_height_mm \/ LETTER_CAP_FACTOR,/);
+    expect(scad).toMatch(/^CHAR_ADVANCE_FACTOR = 0\.94 \/ LETTER_CAP_FACTOR;/m);
+    const { SIGN_CHAR_ADVANCE_FACTOR } = await import(
+      '../../src/js/braille-panel.js'
+    );
+    expect(SIGN_CHAR_ADVANCE_FACTOR).toBeCloseTo(0.94 / factor, 10);
+    expect(extractParameters(scad).parameters.char_height_mm.description).toBe(
+      'Height of the capital I (mm). ADA 703.2.5 asks for 16 mm (5/8 in) to 51 mm (2 in).'
+    );
+  });
+
   it('keeps ADA-friendly rounded dot defaults (1.6 mm base, <= 0.9 mm tall)', () => {
     const parsed = extractParameters(readScad());
     expect(parsed.parameters.dot_shape.default).toBe('Rounded');

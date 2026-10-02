@@ -84,7 +84,7 @@ part_gap_mm = 8;              // [2:1:30]
 /* [Raised Lettering - ADA 703] */
 // Convert the raised text to uppercase (703.2.2 requires uppercase characters)
 force_uppercase = "Yes";      // [Yes, No]
-// Character height (mm). 703.2.5 minimum is 15.9 mm (5/8 in).
+// Height of the capital I (mm). ADA 703.2.5 asks for 16 mm (5/8 in) to 51 mm (2 in).
 char_height_mm = 16;          // [12:0.5:50]
 // How far the characters rise off the plate (mm). 703.2.1 minimum is 0.8 mm (1/32 in).
 letter_raise_mm = 0.8;        // [0.4:0.05:2]
@@ -216,13 +216,19 @@ braille_block_h = braille_rows  <= 1 ? 0 : (braille_rows - 1) * line_spacing;
 // row of letters, braille dots, and the plate heights always fit — the
 // Forge panel wraps long text onto extra rows, and the sign follows.
 // Manual mode keeps the exact size set above. Uppercase Liberation Sans
-// advances average ~0.94 x size per character (measured with textmetrics);
+// advances average ~0.94 x the font size per character (measured with
+// textmetrics), and the font size is char_height_mm / LETTER_CAP_FACTOR;
 // the Forge panel wraps using the same estimate.
 auto_fit_on = (auto_fit == "Yes");
 _plate_pad = (border_on ? border_width_mm : 0) + 4;
 _dot_base_d = (dot_shape == "Rounded")
     ? rounded_dot_base_diameter : cone_dot_base_diameter;
-CHAR_ADVANCE_FACTOR = 0.94;
+// The capital I of Liberation Sans is this fraction of OpenSCAD's text
+// size (15.288 mm at size 16, measured from the exported model); drawing
+// at char_height_mm / LETTER_CAP_FACTOR makes the setting the height of
+// the I, which is how ADA 703.2.5 measures characters.
+LETTER_CAP_FACTOR = 0.9555;
+CHAR_ADVANCE_FACTOR = 0.94 / LETTER_CAP_FACTOR;
 _est_text_w = text_rows == 0 ? 0
     : max([for (l = _text_lines) len(display_text(l))])
       * char_height_mm * CHAR_ADVANCE_FACTOR * letter_spacing;
@@ -381,7 +387,7 @@ module letter_plate() {
                     translate([0, y_line, plate_thickness_mm])
                         linear_extrude(height = letter_raise_mm)
                             text(display_text(_text_lines[i]),
-                                 size = char_height_mm,
+                                 size = char_height_mm / LETTER_CAP_FACTOR,
                                  font = "Liberation Sans",
                                  spacing = letter_spacing,
                                  halign = "center",

@@ -43,6 +43,14 @@ const DEBOUNCE_MS = 400;
 /** Card size at/above which we warn about common print-bed limits (mm). */
 const BED_WARN_MM = 250;
 
+/**
+ * Sign letters: the average advance of an uppercase Liberation Sans letter
+ * per mm of capital-I height. The SCAD's CHAR_ADVANCE_FACTOR is the same
+ * number: 0.94 of the font size, and the font size is the I's height
+ * divided by 0.9555.
+ */
+export const SIGN_CHAR_ADVANCE_FACTOR = 0.94 / 0.9555;
+
 const MARGIN_PRESETS = [
   { id: 'narrow', label: 'Narrow (6 mm)', value: 6 },
   { id: 'standard', label: 'Standard (12.7 mm / 0.5 in)', value: 12.7 },
@@ -1578,15 +1586,14 @@ class BraillePanel {
     const geometry = this.getGeometry();
 
     // Raised-letter row capacity: how many print characters fit across
-    // the plate. Liberation Sans uppercase advances average ~0.94 x size
-    // per character (measured with textmetrics; the SCAD's
-    // CHAR_ADVANCE_FACTOR matches). The sign auto-fits its size to the
-    // rows, so an unbreakable word wider than the set width is not an
-    // error — the wrap capacity stretches to the longest word and the
-    // sign widens with it.
+    // the plate, at SIGN_CHAR_ADVANCE_FACTOR x the capital I's height per
+    // character. The sign auto-fits its size to the rows, so an
+    // unbreakable word wider than the set width is not an error — the
+    // wrap capacity stretches to the longest word and the sign widens
+    // with it.
     const charHeightMm = this.readNumericParam('charHeight', 16);
     const letterSpacing = this.readNumericParam('letterSpacing', 1.1);
-    const advanceMm = charHeightMm * 0.94 * letterSpacing;
+    const advanceMm = charHeightMm * SIGN_CHAR_ADVANCE_FACTOR * letterSpacing;
     const usableWidthMm = geometry.cardWidthMm - 2 * geometry.marginMm;
     const fitChars = Math.max(1, Math.floor(usableWidthMm / advanceMm));
     let longestWord = '';
