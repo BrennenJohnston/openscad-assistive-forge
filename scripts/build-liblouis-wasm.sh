@@ -97,6 +97,9 @@ cp "${NATIVE_SRC}/COPYING.LESSER" "${OUT}/COPYING.LESSER.liblouis"
 # be split before liblouis sees it. --without-yaml leaves out a test-only
 # library that configure would otherwise add to every link when it finds one.
 CONFIGURE_FLAGS=(--enable-ucs4 --disable-shared --without-yaml)
+# Emscripten's programs run in a JavaScript engine, not on this machine, so
+# configure has to be told that the wasm build is a cross build.
+WASM_CONFIGURE_FLAGS=("${CONFIGURE_FLAGS[@]}" --host=wasm32-unknown-emscripten)
 
 # ── 2. Native reference ──────────────────────────────────────────────────────
 # lou_translate links the library, the tools' own gnulib and a small check
@@ -116,7 +119,7 @@ echo "Native reference: ${NATIVE_VERSION}"
 # ── 3. WebAssembly ───────────────────────────────────────────────────────────
 (
   cd "${WASM_SRC}"
-  emconfigure ./configure "${CONFIGURE_FLAGS[@]}"
+  emconfigure ./configure "${WASM_CONFIGURE_FLAGS[@]}"
   emmake make -C gnulib
   emmake make -C liblouis
 )
@@ -193,7 +196,7 @@ Source
   ${LIBLOUIS_URL}
   sha256 ${LIBLOUIS_SHA256}
   liblouis ${LIBLOUIS_VERSION}, compiled unmodified
-  Configured with: ${CONFIGURE_FLAGS[*]}
+  Configured with: ${WASM_CONFIGURE_FLAGS[*]}
   Linked from: ${LINK_RECORDED}
 
 Licence
