@@ -596,6 +596,8 @@ class BraillePanel {
       'Text above updated from this braille. The braille stays in charge ' +
         'until you clear this editor.'
     );
+    // On a sign the raised letters come from the text box (D-219).
+    this.scheduleLayout(0);
   }
 
   buildTableSelect(section) {

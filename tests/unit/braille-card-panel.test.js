@@ -585,6 +585,23 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
     expect(params().sign_text_1).toBe('Exit now');
   });
 
+  it('"Translate to text" moves the raised letters to the new text', async () => {
+    await typeText('Exit', () => {
+      expect(params().sign_text_1).toBe('Exit');
+    });
+    await typeBraille('\u281B', () => {
+      expect(params().Line_1).toBe('\u281B');
+    });
+
+    backTranslateText.mockResolvedValueOnce('go');
+    document.getElementById('brailleFieldToText').click();
+    await vi.waitFor(() => {
+      expect(params().sign_text_1).toBe('go');
+    });
+    // The plate keeps the editor's braille
+    expect(params().Line_1).toBe('\u281B');
+  });
+
   it('rejects non-braille characters with an error and blocks the write', async () => {
     await typeBraille('\u2813\u2811', () => {
       expect(params().Line_1).toBe('\u2813\u2811');

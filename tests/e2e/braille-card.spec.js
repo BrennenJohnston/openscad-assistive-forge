@@ -836,6 +836,31 @@ test.describe('Braille Sign workflow', () => {
     })
   })
 
+  test('"Translate to text" moves the raised letters to the new text', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.locator('#brailleTextInput').fill('See3D')
+    const text1 = page.locator(
+      '.param-control[data-param-name="sign_text_1"] input'
+    )
+    await expect(text1).toHaveValue('See3D', { timeout: 20000 })
+
+    await page.locator('#brailleFieldEditor summary').click()
+    // One cell, read back in Grade 2 as the word "go"
+    await page.locator('#brailleFieldInput').fill('\u281B')
+    const line1 = page.locator('.param-control[data-param-name="Line_1"] input')
+    // Let the editor's own layout finish first, so nothing pending can
+    // carry the new text to the raised letters
+    await expect(line1).toHaveValue('\u281B', { timeout: 10000 })
+    await page.locator('#brailleFieldToText').click()
+    await expect(page.locator('#brailleTextInput')).toHaveValue('go', {
+      timeout: 20000,
+    })
+    await expect(text1).toHaveValue('go', { timeout: 10000 })
+    await expect(line1).toHaveValue('\u281B')
+  })
+
   test('the table list offers Unified English Braille only', async ({ page }) => {
     await openBrailleExample(page, 'braille-sign')
     const options = page.locator('#brailleTableSelect option')
