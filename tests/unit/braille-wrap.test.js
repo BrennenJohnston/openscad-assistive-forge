@@ -22,16 +22,76 @@ import {
 
 /**
  * Stub translator: each character becomes one braille cell (⠿), capitals
- * add a leading indicator cell (⠠) like real UEB translation.
+ * add a leading indicator cell (⠠) like real UEB translation, and a
+ * space is a blank cell.
  */
 async function stubTranslate(text) {
   let out = '';
   for (const ch of text) {
-    if (/[A-Z]/.test(ch)) out += '\u2820\u283F';
+    if (ch === ' ') out += BRAILLE_SPACE;
+    else if (/[A-Z]/.test(ch)) out += '\u2820\u283F';
     else out += '\u283F';
   }
   return out;
 }
+
+/**
+ * A translation as the layout receives it: the braille, and for each cell
+ * the index of the character it came from. It is also the braille as a
+ * String, the form the layout took when it translated word by word, so the
+ * tests that use it run against both.
+ */
+function answer(braille, inputPos) {
+  return Object.assign(new String(braille), { braille, inputPos });
+}
+
+/**
+ * Treats capitals the way UEB does across words (8.4, 8.5): one cell per
+ * character; a word with letters and no lowercase letter gets the capital
+ * word sign, and three or more such words in a row become one capital
+ * passage, with the passage indicator before it and the terminator after.
+ */
+function uebStub(text) {
+  const CELL = '\u283F';
+  const CAPITAL = '\u2820';
+  const words = [];
+  let at = 0;
+  for (const w of text.split(' ')) {
+    words.push({ w, start: at, caps: /[A-Z]/.test(w) && !/[a-z]/.test(w) });
+    at += w.length + 1;
+  }
+  const passage = words.map(() => null);
+  for (let k = 0; k < words.length; ) {
+    let j = k;
+    while (j < words.length && words[j].caps) j++;
+    if (j - k >= 3) {
+      for (let m = k; m < j; m++) {
+        passage[m] = m === k ? 'first' : m === j - 1 ? 'last' : 'inside';
+      }
+    }
+    k = Math.max(j, k + 1);
+  }
+  let braille = '';
+  const inputPos = [];
+  const put = (cells, pos) => {
+    for (const cell of cells) {
+      braille += cell;
+      inputPos.push(pos);
+    }
+  };
+  words.forEach(({ w, start, caps }, k) => {
+    if (k > 0) put(BRAILLE_SPACE, start - 1);
+    if (passage[k] === 'first') put(CAPITAL.repeat(3), start);
+    else if (!passage[k] && caps) put(CAPITAL.repeat(2), start);
+    for (let c = 0; c < w.length; c++) put(CELL, start + c);
+    if (passage[k] === 'last') put(CAPITAL + '\u2804', start + w.length - 1);
+  });
+  return answer(braille, inputPos);
+}
+
+/** How many times `part` occurs in the rows' braille. */
+const occurrences = (rows, part) =>
+  rows.map((row) => String(row.braille)).join('').split(part).length - 1;
 
 describe('countCells', () => {
   it('counts braille characters', () => {
@@ -331,10 +391,19 @@ describe('layoutBrailleText', () => {
   it('divides an over-long email after punctuation', async () => {
     const { allLines, warnings } = await layoutBrailleText({
       ...baseOpts,
+      translate: uebStub,
       text: 'name@example.com',
     });
-    // 16 cells > 10 -> divided into name@ / example. / com
-    expect(allLines.length).toBeGreaterThan(1);
+    // 16 cells > 10 -> divided into name@ / example. / com, and the pieces
+    // put back together are the whole word's braille
+    expect(allLines.map((row) => row.source)).toEqual([
+      'name@',
+      'example.',
+      'com',
+    ]);
+    expect(allLines.map((row) => String(row.braille)).join('')).toBe(
+      uebStub('name@example.com').braille
+    );
     expect(warnings).toHaveLength(0);
   });
 
@@ -412,6 +481,52 @@ describe('layoutBrailleText', () => {
       text: 'Washington',
     });
     expect(warnings.some((w) => w.type === 'word-too-long')).toBe(true);
+  });
+
+  it('translates each typed line whole, so a run of capital words is one passage', async () => {
+    const { allLines } = await layoutBrailleText({
+      ...baseOpts,
+      translate: uebStub,
+      cellsPerLine: 9,
+      text: 'AAA BBB CCC DDD',
+    });
+    // One passage indicator and one terminator across the rows, where a
+    // word-by-word translation gives each word its own capital word sign
+    expect(occurrences(allLines, '\u2820\u2820\u2820')).toBe(1);
+    expect(occurrences(allLines, '\u2820\u2804')).toBe(1);
+    expect(allLines.length).toBeGreaterThan(1);
+  });
+
+  it('divides an over-long address in the braille itself, translating no piece again', async () => {
+    const text = 'NAME@EXAMPLE.COM';
+    const { allLines, warnings } = await layoutBrailleText({
+      ...baseOpts,
+      translate: uebStub,
+      text,
+    });
+    // One capital word sign for the whole address: the pieces, put back
+    // together, are the whole word's braille, cell for cell
+    expect(allLines.length).toBeGreaterThan(1);
+    expect(allLines.map((row) => String(row.braille)).join('')).toBe(
+      uebStub(text).braille
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('gives each row the typed words on it, in order', async () => {
+    const { allLines } = await layoutBrailleText({
+      ...baseOpts,
+      translate: uebStub,
+      cellsPerLine: 6,
+      text: 'the cat and the dog',
+    });
+    expect(allLines.map((row) => row.source)).toEqual([
+      'the',
+      'cat',
+      'and',
+      'the',
+      'dog',
+    ]);
   });
 
   it('all-caps text still wraps correctly (capitals cost extra cells)', async () => {

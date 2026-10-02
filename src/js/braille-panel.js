@@ -1178,12 +1178,24 @@ class BraillePanel {
     return this.runCardLayout();
   }
 
-  /** Shared translate wrapper that records untranslatable inputs. */
+  /**
+   * Shared translate wrapper. For the warning it records the typed words
+   * that held a character with no braille, so a whole translated line is
+   * not quoted back (the whole text when no word can be told apart).
+   */
   makeTranslator(table, preserveCaps, untranslatable) {
     return async (t) => {
       const result = await translateText(t, table, { preserveCaps });
-      if (result.hadUntranslatable) untranslatable.add(t);
-      return result.braille;
+      if (result.hadUntranslatable) {
+        const leftOut = result.leftOutChars ?? [];
+        const words = t
+          .split(/\s+/)
+          .filter((word) => [...word].some((ch) => leftOut.includes(ch)));
+        for (const word of words.length > 0 ? words : [t]) {
+          untranslatable.add(word);
+        }
+      }
+      return result;
     };
   }
 
@@ -1466,7 +1478,7 @@ class BraillePanel {
     const chars = [...text].filter((ch) => !/\s/u.test(ch));
     const charms = [];
     for (const ch of chars) {
-      charms.push({ braille: await translate(ch), source: ch });
+      charms.push({ braille: (await translate(ch)).braille, source: ch });
     }
 
     if (seq !== this.layoutSeq) return;

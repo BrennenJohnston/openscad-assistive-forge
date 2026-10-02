@@ -4,19 +4,22 @@
  *
  * All geometry inputs are millimeters and mirror the wedge-card SCAD
  * parameters. Translation itself is NOT done here: callers supply an async
- * `translate(text) => braille` function (see braille-translator.js), which
- * keeps every function in this module either pure or trivially testable
- * with a stub translator.
+ * `translate(text)` function (see braille-translator.js) that answers
+ * `{ braille, inputPos }`, where `inputPos` gives for each cell the index of
+ * the character it came from (or is null). A plain braille string is also
+ * accepted, read as braille with no positions. This keeps every function
+ * in this module either pure or testable with a stub translator.
  *
- * v1 wrapping rules (BANA fact sheet, simplified):
- * - Words are whitespace-separated and translated individually
- *   (contractions never span spaces, so per-word translation matches
- *   whole-line translation for standard tables).
- * - Lines break only at word boundaries; words are packed greedily.
- * - A single word longer than the line capacity is divided after
- *   punctuation (@ . - / :) — the BANA-recommended division points for
- *   emails and URLs. Dot-5 continuation indicators are a documented
- *   follow-up, not v1.
+ * Card wrapping rules (UEB and the BANA fact sheet):
+ * - A typed line is translated once, whole: capital passages and other
+ *   indicators span words (UEB 8.5.7), so translating word by word changes
+ *   the braille. A new typed line starts afresh (UEB 8.5.6).
+ * - The braille is cut into words at its blank cells and packed greedily;
+ *   lines break only between words, so wrapping never changes a cell.
+ * - A braille word longer than a line is divided in the braille itself,
+ *   after the cells for @ . - / : (the BANA division points for emails and
+ *   URLs); no piece is translated again. Dot-5 continuation indicators are
+ *   a documented follow-up.
  * - User newlines are hard breaks.
  *
  * @license GPL-3.0-or-later
@@ -183,15 +186,178 @@ export function chunkIntoCards(lines, rowsPerCard) {
 }
 
 /**
+ * A translator may answer with `{ braille, inputPos }` or with the braille
+ * alone; positions are used only when there is one for every cell.
+ * @param {string|{ braille: string, inputPos?: number[]|null }} answer
+ * @returns {{ braille: string, inputPos: number[]|null }}
+ */
+function asTranslation(answer) {
+  if (typeof answer === 'string') return { braille: answer, inputPos: null };
+  const braille = String(answer.braille);
+  const inputPos = Array.isArray(answer.inputPos) ? answer.inputPos : null;
+  return {
+    braille,
+    inputPos:
+      inputPos && inputPos.length === countCells(braille) ? inputPos : null,
+  };
+}
+
+/**
+ * The braille words of a translated line: [start, end) cell ranges between
+ * runs of blank cells.
+ * @param {string[]} cells
+ * @returns {Array<[number, number]>}
+ */
+function wordSpans(cells) {
+  const spans = [];
+  let start = -1;
+  cells.forEach((cell, i) => {
+    if (cell === BRAILLE_SPACE) {
+      if (start >= 0) spans.push([start, i]);
+      start = -1;
+    } else if (start < 0) {
+      start = i;
+    }
+  });
+  if (start >= 0) spans.push([start, cells.length]);
+  return spans;
+}
+
+/**
+ * Where each braille word's typed text lies in the line: from the character
+ * its first cell came from to the next word's (the first word from the
+ * line's start, the last to its end). Null without positions, or when they
+ * do not run forward from word to word.
+ * @param {string} line
+ * @param {Array<[number, number]>} spans
+ * @param {number[]|null} inputPos
+ * @returns {Array<[number, number]>|null}
+ */
+function wordRanges(line, spans, inputPos) {
+  if (!inputPos) return null;
+  const starts = spans.map(([start]) => inputPos[start]);
+  if (starts.some((p, k) => k > 0 && !(p > starts[k - 1]))) return null;
+  return starts.map((p, k) => [k === 0 ? 0 : p, starts[k + 1] ?? line.length]);
+}
+
+/**
+ * Cells of a braille word at which a new line may start: the first cell
+ * past each @ . - / : in the word's typed text.
+ * @param {string} line
+ * @param {number[]} inputPos
+ * @param {number} start - The word's first cell
+ * @param {number} end - Past the word's last cell
+ * @returns {number[]} Cell indexes, ascending, inside (start, end)
+ */
+function divisionPoints(line, inputPos, start, end) {
+  const points = new Set();
+  for (let i = start; i < end; i++) {
+    if (!BREAK_AFTER_CHARS.includes(line[inputPos[i]])) continue;
+    let j = i + 1;
+    while (j < end && inputPos[j] <= inputPos[i]) j++;
+    if (j < end) points.add(j);
+  }
+  return [...points].sort((a, b) => a - b);
+}
+
+/**
+ * Group a word's cells into pieces that each fill a line, cutting only at
+ * division points. A piece longer than a line is kept whole.
+ * @returns {Array<[number, number]>} [start, end) cell ranges
+ */
+function divideWord(start, end, points, cellsPerLine) {
+  const pieces = [];
+  let pieceStart = start;
+  let lastFit = start;
+  for (const cut of [...points, end]) {
+    if (cut - pieceStart <= cellsPerLine) {
+      lastFit = cut;
+      continue;
+    }
+    if (lastFit > pieceStart) {
+      pieces.push([pieceStart, lastFit]);
+      pieceStart = lastFit;
+    }
+    if (cut - pieceStart <= cellsPerLine) {
+      lastFit = cut;
+      continue;
+    }
+    pieces.push([pieceStart, cut]);
+    pieceStart = cut;
+    lastFit = cut;
+  }
+  if (lastFit > pieceStart) pieces.push([pieceStart, lastFit]);
+  return pieces;
+}
+
+/**
+ * Translate one typed line whole and cut its braille into words, each with
+ * the typed text it came from. Without usable positions, braille words
+ * take the typed words in order when the counts match, or else the first
+ * takes the whole line. A word longer than a line is divided in the braille
+ * itself (see divideWord); nothing is translated again, so every cell is
+ * the whole line's.
+ * @param {string} line - One typed line, words separated by single spaces
+ * @param {function} translate - See layoutBrailleText
+ * @param {number} cellsPerLine
+ * @returns {Promise<{
+ *   words: Array<{ braille: string, cells: number, source: string }>,
+ *   overlong: Array<{ source: string, cells: number, divided: boolean }>,
+ * }>} `overlong` lists the words that still overflow a line: whole when
+ *   they could not be divided, or a piece of them when they were
+ */
+async function translateLine(line, translate, cellsPerLine) {
+  const { braille, inputPos } = asTranslation(await translate(line));
+  const cells = Array.from(braille);
+  const spans = wordSpans(cells);
+  const ranges = wordRanges(line, spans, inputPos);
+  const typed = line.split(' ');
+  const sourceOf = (k) => {
+    if (ranges) return line.slice(...ranges[k]).trim();
+    if (typed.length === spans.length) return typed[k];
+    return k === 0 ? line : '';
+  };
+  const piece = (from, to, source) => ({
+    braille: cells.slice(from, to).join(''),
+    cells: to - from,
+    source,
+  });
+
+  const words = [];
+  const overlong = [];
+  spans.forEach(([start, end], k) => {
+    const source = sourceOf(k);
+    if (end - start <= cellsPerLine) {
+      words.push(piece(start, end, source));
+      return;
+    }
+    const points = ranges ? divisionPoints(line, inputPos, start, end) : [];
+    if (points.length === 0) {
+      words.push(piece(start, end, source));
+      overlong.push({ source, cells: end - start, divided: false });
+      return;
+    }
+    const [wordFrom, wordTo] = ranges[k];
+    let tooLong = false;
+    for (const [from, to] of divideWord(start, end, points, cellsPerLine)) {
+      const sourceFrom = from === start ? wordFrom : inputPos[from];
+      const sourceTo = to === end ? wordTo : inputPos[to];
+      words.push(piece(from, to, line.slice(sourceFrom, sourceTo).trim()));
+      if (to - from > cellsPerLine) tooLong = true;
+    }
+    if (tooLong) overlong.push({ source, cells: end - start, divided: true });
+  });
+  return { words, overlong };
+}
+
+/**
  * Full layout pipeline: translate, wrap, and split plain text into braille
  * cards.
  *
  * @param {Object} opts
  * @param {string} opts.text - Plain input text (user newlines are hard breaks)
- * @param {function(string): Promise<string>} opts.translate - Async word/line
- *   translator returning Unicode braille (untranslatable input may throw or
- *   return braille containing replacement output — both are surfaced as
- *   warnings, not exceptions)
+ * @param {function(string): Promise<{ braille: string, inputPos: (number[]|null) }|string>} opts.translate -
+ *   Async line translator (see the module notes)
  * @param {number} opts.cellsPerLine - Line capacity in cells
  * @param {number} opts.rowsPerCard - Max rows per card
  * @param {boolean} [opts.autoWrap=true] - Wrap at word boundaries; when
@@ -235,7 +401,7 @@ export async function layoutBrailleText({
     }
 
     if (!autoWrap) {
-      const braille = await translate(trimmed);
+      const { braille } = asTranslation(await translate(trimmed));
       if (countCells(braille) > cellsPerLine) {
         warnings.push({
           type: 'line-overflow',
@@ -249,61 +415,44 @@ export async function layoutBrailleText({
       continue;
     }
 
-    const words = [];
-    for (const sourceWord of trimmed.split(/\s+/)) {
-      const braille = await translate(sourceWord);
-      const cells = countCells(braille);
-      const sourceChars = [...sourceWord].length;
-
+    const line = trimmed.split(/\s+/).join(' ');
+    for (const typedWord of line.split(' ')) {
+      const sourceChars = [...typedWord].length;
       if (sourceChars > maxSourceChars) {
         warnings.push({
           type: 'word-too-long',
           message:
-            `"${truncateForMessage(sourceWord)}" is ${sourceChars} characters ` +
+            `"${truncateForMessage(typedWord)}" is ${sourceChars} characters ` +
             `but a row of raised letters only holds about ${maxSourceChars}. ` +
             `Shorten it or widen the sign.`,
         });
       }
-
-      if (cells <= cellsPerLine) {
-        words.push({ braille, cells, source: sourceWord });
-        continue;
-      }
-
-      // Over-long word: divide after BANA punctuation and translate the
-      // pieces individually.
-      const segments = splitWordAfterPunctuation(sourceWord);
-      if (segments.length === 1) {
-        warnings.push({
-          type: 'word-too-long',
-          message:
-            `"${truncateForMessage(sourceWord)}" needs ${cells} cells but a ` +
-            `line only holds ${cellsPerLine}. It cannot be divided ` +
-            `automatically — shorten it, reduce the margin, or widen the card.`,
-        });
-        words.push({ braille, cells, source: sourceWord });
-        continue;
-      }
-
-      let anySegmentTooLong = false;
-      for (const segment of segments) {
-        const segBraille = await translate(segment);
-        const segCells = countCells(segBraille);
-        if (segCells > cellsPerLine) anySegmentTooLong = true;
-        words.push({ braille: segBraille, cells: segCells, source: segment });
-      }
-      if (anySegmentTooLong) {
-        warnings.push({
-          type: 'word-too-long',
-          message:
-            `Part of "${truncateForMessage(sourceWord)}" is still longer ` +
-            `than one line even after dividing at punctuation. Shorten it, ` +
-            `reduce the margin, or widen the card.`,
-        });
-      }
     }
 
-    wrapped.push(...packWords(words, cellsPerLine, maxSourceChars));
+    const { words, overlong } = await translateLine(
+      line,
+      translate,
+      cellsPerLine
+    );
+    for (const { source, cells, divided } of overlong) {
+      warnings.push({
+        type: 'word-too-long',
+        message: divided
+          ? `Part of "${truncateForMessage(source)}" is still longer ` +
+            `than one line even after dividing at punctuation. Shorten it, ` +
+            `reduce the margin, or widen the card.`
+          : `"${truncateForMessage(source)}" needs ${cells} cells but a ` +
+            `line only holds ${cellsPerLine}. It cannot be divided ` +
+            `automatically. Shorten it, reduce the margin, or widen the card.`,
+      });
+    }
+
+    for (const row of packWords(words, cellsPerLine, maxSourceChars)) {
+      wrapped.push({
+        braille: row.braille,
+        source: row.source.split(' ').filter(Boolean).join(' '),
+      });
+    }
   }
 
   // Drop trailing blank lines (they carry no content).
@@ -363,8 +512,9 @@ export async function layoutBrailleText({
  *
  * @param {Object} opts
  * @param {string} opts.text - Plain input text
- * @param {function(string): Promise<string>} opts.translate - Async word
- *   translator returning Unicode braille
+ * @param {function(string): Promise<{ braille: string, inputPos: (number[]|null) }|string>} opts.translate -
+ *   Async translator (see layoutBrailleText); the sign still translates
+ *   word by word
  * @param {number} opts.maxSourceChars - Letter-row capacity in print
  *   characters
  * @param {number|function(number): number} opts.brailleCellsPerLine -
@@ -399,7 +549,9 @@ export async function layoutSignText({
   // Translate every distinct word once; both passes share the results.
   const cache = new Map();
   const translateCached = async (t) => {
-    if (!cache.has(t)) cache.set(t, await translate(t));
+    if (!cache.has(t)) {
+      cache.set(t, asTranslation(await translate(t)).braille);
+    }
     return cache.get(t);
   };
 

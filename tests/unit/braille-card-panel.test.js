@@ -29,6 +29,7 @@ vi.mock('../../src/js/braille-translator.js', () => {
     translateText: vi.fn(async (text, _table, { preserveCaps } = {}) => {
       let braille = '';
       let hadUntranslatable = false;
+      const leftOutChars = [];
       for (const ch of text) {
         if (/\s/u.test(ch)) {
           braille += '\u2800';
@@ -37,9 +38,10 @@ vi.mock('../../src/js/braille-translator.js', () => {
           braille += charCell(ch);
         } else {
           hadUntranslatable = true;
+          leftOutChars.push(ch);
         }
       }
-      return { braille, hadUntranslatable };
+      return { braille, hadUntranslatable, leftOutChars };
     }),
     backTranslateText: vi.fn(async () => 'hello back'),
     getTables: vi.fn(async () => ({
