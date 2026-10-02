@@ -108,6 +108,15 @@ const ERROR_TYPES = new Set([
 /** Matches one character of the Unicode braille block. */
 const BRAILLE_CHAR_RE = /^[\u2800-\u28FF]$/;
 
+/**
+ * The catalog's labels for the tables the app ships, for the single entry
+ * the table list falls back to when the catalog itself cannot load.
+ */
+const SHIPPED_TABLE_LABELS = {
+  'en-ueb-g1.ctb': 'English (UEB) Grade 1, uncontracted',
+  'en-ueb-g2.ctb': 'English (UEB) Grade 2, contracted',
+};
+
 /** Geometry params that should trigger a re-wrap when edited directly. */
 const CAPACITY_WATCH_KEYS = [
   'cardWidth',
@@ -1009,7 +1018,8 @@ class BraillePanel {
       select.innerHTML = '';
       const opt = document.createElement('option');
       opt.value = this.defaultTable;
-      opt.textContent = 'English (UEB) Grade 1, uncontracted';
+      opt.textContent =
+        SHIPPED_TABLE_LABELS[this.defaultTable] ?? this.defaultTable;
       select.appendChild(opt);
     }
   }

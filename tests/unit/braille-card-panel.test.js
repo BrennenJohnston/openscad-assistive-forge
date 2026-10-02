@@ -18,6 +18,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 vi.mock('../../src/js/braille-translator.js', () => {
   // Fake per-character translator: one braille cell per letter, plus a
@@ -78,6 +81,7 @@ import {
 } from '../../src/js/braille-panel.js';
 import {
   backTranslateText,
+  getTables,
   translateText,
 } from '../../src/js/braille-translator.js';
 import { announceImmediate } from '../../src/js/announcer.js';
@@ -132,7 +136,7 @@ async function typeBraille(text, expectSettled) {
   await vi.waitFor(expectSettled, { timeout: 3000, interval: 25 });
 }
 
-function mountCardPanel() {
+function mountCardPanel(extra = {}) {
   document.body.innerHTML =
     '<div id="app"><div id="parametersContainer"></div></div>';
   // Mirror the SCAD defaults the parameter UI would expose. With the
@@ -151,7 +155,7 @@ function mountCardPanel() {
     ...Object.fromEntries(LINE_PARAMS.map((name) => [name, ''])),
   };
   stateManager.setState({ parameters: { ...defaults }, defaults });
-  initBraillePanel(CARD_CONFIG);
+  initBraillePanel({ ...CARD_CONFIG, ...extra });
 }
 
 describe('braille panel card mode — braille editor (Unicode)', () => {
@@ -794,4 +798,29 @@ describe('braille panel sign mode — capitals off by default (D-208)', () => {
         'Uncontracted (Grade 1) spells every word letter by letter.'
     );
   });
+});
+
+describe('braille panel — the table list without its catalog (D-222)', () => {
+  const shippedCatalog = JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../public/liblouis/tables.json'
+      ),
+      'utf-8'
+    )
+  );
+
+  afterEach(() => destroyBraillePanel());
+
+  for (const { file, label } of shippedCatalog.tables) {
+    it(`names ${file} with its own label`, async () => {
+      getTables.mockRejectedValueOnce(new Error('Failed to fetch'));
+      mountCardPanel({ defaultTable: file });
+      const select = document.getElementById('brailleTableSelect');
+      await vi.waitFor(() => expect(select.value).toBe(file));
+      expect(select.options).toHaveLength(1);
+      expect(select.options[0].textContent).toBe(label);
+    });
+  }
 });
