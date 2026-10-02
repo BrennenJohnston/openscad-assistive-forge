@@ -92,16 +92,26 @@ test.describe('Braille toolset assets', () => {
   })
 
   test('liblouis engine and tables are served', async ({ page }) => {
-    for (const url of [
-      '/liblouis/build-no-tables-utf16.js',
-      '/liblouis/easy-api.js',
-      '/liblouis/tables.json',
-      '/liblouis/tables/unicode.dis',
-      '/liblouis/tables/en-ueb-g1.ctb',
-      '/liblouis/tables/en-ueb-g2.ctb',
-    ]) {
-      const response = await page.request.get(url)
-      expect(response.ok(), url).toBe(true)
+    // The dev server answers a file it does not have with the app's own page
+    // and a 200, so every check reads what came back, not just the status.
+    const wasm = await page.request.get('/wasm/liblouis/liblouis.wasm')
+    expect(wasm.ok()).toBe(true)
+    expect([...(await wasm.body()).subarray(0, 4)]).toEqual([0, 0x61, 0x73, 0x6d])
+
+    const license = await page.request.get(
+      '/wasm/liblouis/COPYING.LESSER.liblouis'
+    )
+    expect(await license.text()).toContain('GNU LESSER GENERAL PUBLIC LICENSE')
+
+    const catalog = await (
+      await page.request.get('/liblouis/tables.json')
+    ).json()
+    expect(catalog.liblouis).toBe('3.39.0')
+
+    for (const name of ['unicode.dis', 'en-ueb-g1.ctb', 'en-ueb-g2.ctb']) {
+      const table = await page.request.get(`/liblouis/tables/${name}`)
+      expect(table.ok(), name).toBe(true)
+      expect(await table.text(), name).not.toMatch(/^\s*<!doctype/i)
     }
   })
 })
@@ -745,6 +755,51 @@ test.describe('Braille Sign workflow', () => {
     await expect(page.locator('#brailleSignRowSummary')).toContainText(
       'Raised letters'
     )
+  })
+
+  test('sign translates a word that mixes letters and a number, with no engine error', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    const caps = page.locator('#brailleCapsToggle')
+    if (!(await caps.isChecked())) await caps.check()
+
+    await page.locator('#brailleTextInput').fill('Tee3D')
+    // Capital T, e, e, number sign, 3, capital D
+    await expect(
+      page.locator('#braillePreview .braille-preview-braille').first()
+    ).toHaveText('\u2820\u281E\u2811\u2811\u283C\u2809\u2820\u2819', {
+      timeout: 20000,
+    })
+    await expect(page.locator('#brailleErrors')).toBeHidden()
+  })
+
+  test('braille editor reads one contracted cell back as its whole word', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleFieldInput').fill('\u2805')
+    await page.locator('#brailleFieldToText').click()
+    await expect(page.locator('#brailleTextInput')).toHaveValue('knowledge', {
+      timeout: 20000,
+    })
+  })
+
+  test('the table list offers Unified English Braille only', async ({ page }) => {
+    await openBrailleExample(page, 'braille-sign')
+    const options = page.locator('#brailleTableSelect option')
+    await expect(options).toHaveCount(2, { timeout: 20000 })
+    expect(await options.evaluateAll((os) => os.map((o) => o.value))).toEqual([
+      'en-ueb-g1.ctb',
+      'en-ueb-g2.ctb',
+    ])
+    expect(
+      await options.evaluateAll((os) => os.map((o) => o.textContent))
+    ).toEqual([
+      'English (UEB) Grade 1, uncontracted',
+      'English (UEB) Grade 2, contracted',
+    ])
   })
 
   test('sign panel has no axe violations', async ({ page }) => {

@@ -1,0 +1,10 @@
+liblouis braille translation tables
+
+tables/ holds translation tables from liblouis 3.39.0, the release the
+braille engine in public/wasm/liblouis/ is built from, copied unmodified.
+They are licensed under the GNU Lesser General Public License, version 2.1
+or later; each table's own header names its authors and its license.
+  https://liblouis.io/  https://github.com/liblouis/liblouis
+
+scripts/build-liblouis-wasm.sh builds the engine and copies these tables
+with scripts/setup-liblouis.js.

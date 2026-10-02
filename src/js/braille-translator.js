@@ -1,7 +1,7 @@
 /**
  * Braille translator — lazy main-thread manager for the liblouis worker.
  *
- * The worker (and liblouis's ~1.7 MB engine) is only spawned when the
+ * The worker, and the liblouis engine it loads, is only spawned when the
  * Braille Card Customizer actually asks for a translation, so every other
  * session never pays for it. Results are memoized per (table, text) since
  * the wrap engine re-translates the same words on every keystroke.
@@ -23,9 +23,10 @@ const pending = new Map();
 const cache = new Map();
 
 function createWorker() {
-  // Classic worker (importScripts inside) — do NOT pass { type: 'module' }.
+  // A module worker: it imports the engine and the engine's WebAssembly loader.
   const w = new Worker(
-    new URL('../worker/liblouis-worker.js', import.meta.url)
+    new URL('../worker/liblouis-worker.js', import.meta.url),
+    { type: 'module' }
   );
 
   w.onmessage = (e) => {
@@ -87,8 +88,9 @@ export function ensureReady() {
 }
 
 /**
- * Remove characters the UTF-16 liblouis build cannot represent (astral
- * plane code points such as emoji abort the WASM instance outright).
+ * Remove characters outside the Basic Multilingual Plane, such as emoji. The
+ * braille tables define none of them, and liblouis would spell each one out
+ * as an escape sequence in braille cells.
  * @param {string} text
  * @returns {{ text: string, stripped: string[] }}
  */
@@ -116,9 +118,12 @@ export function stripUnsupportedChars(text) {
  *   per BANA space-saving guidance for cards and labels
  * @returns {Promise<{
  *   braille: string,
+ *   inputPos: number[]|null,
  *   hadUntranslatable: boolean,
  *   strippedChars: string[],
- * }>}
+ * }>} `inputPos` gives, for each cell, the index in `text` of the character
+ *   it came from; it is null when stripping or lowercasing changed the
+ *   text's length, because the positions would no longer line up
  */
 export async function translateText(
   text,
@@ -131,25 +136,37 @@ export async function translateText(
   const input = preserveCaps ? safeText : safeText.toLowerCase();
 
   if (input === '') {
-    return { braille: '', hadUntranslatable: false, strippedChars: stripped };
+    return {
+      braille: '',
+      inputPos: text === '' ? [] : null,
+      hadUntranslatable: false,
+      strippedChars: stripped,
+    };
   }
 
   const cacheKey = `${table}\u0000${input}`;
-  let braille = cache.get(cacheKey);
-  if (braille === undefined) {
-    const result = await sendMessage('translate', { text: input, table });
-    // liblouis emits ASCII spaces between words; the SCAD models expect
-    // the Unicode braille blank cell (U+2800) everywhere.
-    braille = result.translation.replace(/ /g, '\u2800');
+  let cached = cache.get(cacheKey);
+  if (cached === undefined) {
+    let result;
+    try {
+      result = await sendMessage('translate', { text: input, table });
+    } catch (error) {
+      // An engine that failed once is not trusted with the next call.
+      disposeTranslator();
+      throw error;
+    }
+    cached = { braille: result.translation, inputPos: result.inputPos };
     if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
-    cache.set(cacheKey, braille);
+    cache.set(cacheKey, cached);
   }
 
   return {
-    braille,
+    braille: cached.braille,
+    inputPos: input.length === text.length ? cached.inputPos : null,
     // Non-braille output means liblouis passed characters through
     // untranslated (no definition in the selected table).
-    hadUntranslatable: NON_BRAILLE_RE.test(braille) || stripped.length > 0,
+    hadUntranslatable:
+      NON_BRAILLE_RE.test(cached.braille) || stripped.length > 0,
     strippedChars: stripped,
   };
 }
@@ -179,10 +196,13 @@ export async function backTranslateText(braille, table) {
   const cacheKey = `bt\u0000${table}\u0000${input}`;
   let text = cache.get(cacheKey);
   if (text === undefined) {
-    const result = await sendMessage('backTranslate', {
-      braille: input,
-      table,
-    });
+    let result;
+    try {
+      result = await sendMessage('backTranslate', { braille: input, table });
+    } catch (error) {
+      disposeTranslator();
+      throw error;
+    }
     text = result.text;
     if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
     cache.set(cacheKey, text);

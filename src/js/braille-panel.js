@@ -1003,7 +1003,7 @@ class BraillePanel {
       select.innerHTML = '';
       const opt = document.createElement('option');
       opt.value = this.defaultTable;
-      opt.textContent = 'English (UEB) Grade 1 — uncontracted';
+      opt.textContent = 'English (UEB) Grade 1, uncontracted';
       select.appendChild(opt);
     }
   }
@@ -1156,10 +1156,7 @@ class BraillePanel {
         this.renderMessages([
           {
             type: 'engine-error',
-            message:
-              'Braille translation is unavailable: ' +
-              error.message +
-              ' — try reloading the page.',
+            message: `Braille translation is unavailable: ${error.message}. Reload the page to try again.`,
           },
         ]);
       });

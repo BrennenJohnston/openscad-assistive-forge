@@ -169,10 +169,13 @@ export function devWorkerModuleGraph(entry = 'src/worker/openscad-worker.js') {
  * that was forgotten. The render worker is D-31's; the trace worker is DP-34's
  * and would have hit the identical refusal on WebKit, since it imports
  * image-import.js and ink-extraction.js, which the main thread loads first.
+ * The braille worker became a module worker with the liblouis rebuild, and
+ * its test reads this list, so a worker left off it fails there.
  */
-const DEV_WORKER_ENTRIES = [
+export const DEV_WORKER_ENTRIES = [
   'src/worker/openscad-worker.js',
   'src/js/trace-worker.js',
+  'src/worker/liblouis-worker.js',
 ];
 
 function devWorkerNoStore() {
