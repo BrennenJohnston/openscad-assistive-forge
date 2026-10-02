@@ -49,6 +49,26 @@ jobs:
       - name: Build
         run: ./scripts/build-liblouis-wasm.sh
 
+      # A wasm that reports the right version can still translate differently
+      # from liblouis itself. This puts every phrase of the test corpus through
+      # both, the wasm and the native tool built from the same tarball, fails
+      # on any difference, and writes the native tool's answers as the
+      # reference the app's own tests compare against.
+      - name: Verify the wasm against native liblouis
+        run: |
+          set -o pipefail
+          node scripts/verify-liblouis-wasm.mjs \
+            --native build/liblouis/native/liblouis-*/tools/lou_translate \
+            --tables build/liblouis/native/liblouis-*/tables \
+            --write-reference 2>&1 | tee build/liblouis/verify.log
+          {
+            echo '## The wasm against native liblouis'
+            echo
+            echo '```'
+            cat build/liblouis/verify.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Record what was built
         run: |
           {
@@ -65,8 +85,9 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      # The native tool and the release's tables travel with the build, so the
-      # reference the wasm was checked against can be looked at afterwards.
+      # The native tool, the release's tables and the reference file travel
+      # with the build, so what the wasm was checked against can be looked at
+      # afterwards.
       - name: Upload the build
         uses: actions/upload-artifact@v4
         with:
@@ -76,5 +97,6 @@ jobs:
             vendor/liblouis/
             build/liblouis/native/*/tools/lou_translate
             build/liblouis/native/*/tables/
+            tests/fixtures/braille-reference/liblouis-*.json
           retention-days: 30
           if-no-files-found: error
