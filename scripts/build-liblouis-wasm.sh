@@ -28,7 +28,7 @@
 #                                         as a module (see build-potrace-wasm.sh
 #                                         for why it does not live in public/)
 #   public/wasm/liblouis/liblouis.wasm    the binary, at a stable unhashed URL,
-#   ...{README.txt,COPYING.LESSER.liblouis}  with the licence and the recipe
+#   ...{README.txt,COPYING.LESSER.liblouis}  with the license and the recipe
 #   build/liblouis/native/liblouis-<v>/   the native lou_translate and the
 #                                         release's tables, for the checks
 
@@ -90,7 +90,7 @@ mkdir -p "${WORK}/native" "${WORK}/wasm"
 tar -xzf "${WORK}/${LIBLOUIS_TARBALL}" -C "${WORK}/native"
 tar -xzf "${WORK}/${LIBLOUIS_TARBALL}" -C "${WORK}/wasm"
 
-# The upstream licence text travels with the wasm, unmodified.
+# The upstream license text travels with the wasm, unmodified.
 cp "${NATIVE_SRC}/COPYING.LESSER" "${OUT}/COPYING.LESSER.liblouis"
 
 # --enable-ucs4 makes a character 32 bits wide, so no Unicode character has to
@@ -230,7 +230,7 @@ Source
   Configured with: ${WASM_CONFIGURE_FLAGS[*]}
   Linked from: ${LINK_RECORDED}
 
-Licence
+License
   The liblouis library and its translation tables: GNU Lesser General Public
   License, version 2.1 or (at your option) any later version, as granted in
   the upstream README and in each table's header. The full text is beside this
