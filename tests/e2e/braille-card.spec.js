@@ -12,8 +12,10 @@
  * @license GPL-3.0-or-later
  */
 
+import { readFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { parseSTL } from '../../scripts/parity/stl-stats.mjs'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -51,6 +53,238 @@ async function openBrailleExample(page, exampleKey) {
 }
 
 const openBrailleCard = (page) => openBrailleExample(page, 'braille-wedge-card')
+
+/** Set a parameter control by name: a list takes a value, a switch a boolean. */
+async function setParam(page, name, value) {
+  const control = page.locator(`.param-control[data-param-name="${name}"]`)
+  await control.waitFor({ state: 'attached', timeout: 15000 })
+  // The control may sit in a collapsed parameter group
+  await page.evaluate((n) => {
+    let group = document
+      .querySelector(`.param-control[data-param-name="${n}"]`)
+      ?.closest('details')
+    while (group) {
+      group.open = true
+      group = group.parentElement?.closest('details')
+    }
+  }, name)
+  if (typeof value === 'boolean') {
+    await control.locator('input[type="checkbox"]').setChecked(value)
+  } else {
+    await control.locator('select').selectOption(value)
+  }
+}
+
+/**
+ * Render the model at full quality and return the downloaded STL. Generate
+ * renders; the same button then reads "Download", and a second press saves.
+ */
+async function downloadStl(page) {
+  await page.locator('#outputFormat').selectOption('stl')
+  await page.locator('#primaryActionBtn').click()
+  await expect(page.locator('#primaryActionBtn')).toContainText('Download', {
+    timeout: 180_000,
+  })
+  const downloadPromise = page.waitForEvent('download', { timeout: 60_000 })
+  await page.locator('#primaryActionBtn').click()
+  const download = await downloadPromise
+  return parseSTL(readFileSync(await download.path()))
+}
+
+/**
+ * The raised letters' outlines from an exported mesh, row by row from the
+ * top, each row left to right: the faces at the highest level, grouped into
+ * letters by shared corners; a letter's outline is the edges only one of
+ * its faces uses.
+ */
+function letterRows({ triangles, count }) {
+  let top = -Infinity
+  for (let i = 2; i < count * 9; i += 3) top = Math.max(top, triangles[i])
+  const faces = []
+  for (let b = 0; b < count * 9; b += 9) {
+    if ([2, 5, 8].every((k) => Math.abs(triangles[b + k] - top) < 1e-4)) {
+      faces.push([0, 3, 6].map((k) => [triangles[b + k], triangles[b + k + 1]]))
+    }
+  }
+  const key = (p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`
+  const parent = faces.map((_, i) => i)
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  const owner = new Map()
+  faces.forEach((face, i) => {
+    for (const p of face) {
+      const k = key(p)
+      if (owner.has(k)) parent[find(i)] = find(owner.get(k))
+      else owner.set(k, i)
+    }
+  })
+  const groups = new Map()
+  faces.forEach((face, i) => {
+    const root = find(i)
+    if (!groups.has(root)) groups.set(root, [])
+    groups.get(root).push(face)
+  })
+  const letters = [...groups.values()].map((group) => {
+    const uses = new Map()
+    for (const face of group) {
+      for (let i = 0; i < 3; i++) {
+        const a = face[i]
+        const b = face[(i + 1) % 3]
+        const k = [key(a), key(b)].sort().join('|')
+        uses.set(k, uses.has(k) ? null : [a, b])
+      }
+    }
+    const xs = group.flat().map((p) => p[0])
+    const ys = group.flat().map((p) => p[1])
+    return {
+      minX: Math.min(...xs),
+      midY: (Math.min(...ys) + Math.max(...ys)) / 2,
+      edges: [...uses.values()].filter(Boolean),
+    }
+  })
+  // Rows are a line pitch (over 20 mm) apart; a letter more than 5 mm
+  // below the previous one starts a new row
+  letters.sort((a, b) => b.midY - a.midY)
+  const rows = []
+  for (const letter of letters) {
+    const row = rows.at(-1)
+    if (row && row.at(-1).midY - letter.midY < 5) row.push(letter)
+    else rows.push([letter])
+  }
+  return rows.map((row) => row.sort((a, b) => a.minX - b.minX))
+}
+
+/** The smallest distance between two letters' outlines (mm). */
+function outlineGap(a, b) {
+  const toSegment = (p, [s, e]) => {
+    const dx = e[0] - s[0]
+    const dy = e[1] - s[1]
+    const len2 = dx * dx + dy * dy
+    const t = len2
+      ? Math.max(0, Math.min(1, ((p[0] - s[0]) * dx + (p[1] - s[1]) * dy) / len2))
+      : 0
+    return Math.hypot(s[0] + t * dx - p[0], s[1] + t * dy - p[1])
+  }
+  let best = Infinity
+  for (const u of a.edges) {
+    for (const v of b.edges) {
+      best = Math.min(
+        best,
+        toSegment(u[0], v),
+        toSegment(u[1], v),
+        toSegment(v[0], u),
+        toSegment(v[1], u)
+      )
+    }
+  }
+  return best
+}
+
+/** Groups of triangles joined at their corners: the connected shapes. */
+function connectedShapes(tris) {
+  const key = (p) => p.map((v) => v.toFixed(4)).join(',')
+  const parent = tris.map((_, i) => i)
+  const find = (i) => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]]
+      i = parent[i]
+    }
+    return i
+  }
+  const owner = new Map()
+  tris.forEach((tri, i) => {
+    for (const p of tri) {
+      const k = key(p)
+      if (owner.has(k)) parent[find(i)] = find(owner.get(k))
+      else owner.set(k, i)
+    }
+  })
+  const groups = new Map()
+  tris.forEach((tri, i) => {
+    const root = find(i)
+    if (!groups.has(root)) groups.set(root, [])
+    groups.get(root).push(tri)
+  })
+  return [...groups.values()]
+}
+
+const extent = (points, axis) =>
+  points.reduce(
+    ([lo, hi], p) => [Math.min(lo, p[axis]), Math.max(hi, p[axis])],
+    [Infinity, -Infinity]
+  )
+
+/**
+ * How near its raised border each plate's letters or dots come (mm), from
+ * an exported mesh of both plates laid flat. The border is the widest shape
+ * at a plate's highest level; the letter plate keeps its top and side
+ * rails, the braille plate its bottom and side rails.
+ */
+function borderClearances({ triangles, count }) {
+  const tris = []
+  for (let b = 0; b < count * 9; b += 9) {
+    tris.push(
+      [0, 3, 6].map((k) => [
+        triangles[b + k],
+        triangles[b + k + 1],
+        triangles[b + k + 2],
+      ])
+    )
+  }
+  const plates = connectedShapes(tris)
+  expect(plates, 'two plates').toHaveLength(2)
+  plates.sort((a, b) => extent(b.flat(), 1)[1] - extent(a.flat(), 1)[1])
+  const measure = (plate, rail) => {
+    const points = plate.flat()
+    const [, top] = extent(points, 2)
+    // The plate's face is the higher of its two largest flat levels
+    const area = new Map()
+    for (const [a, b, c] of plate) {
+      if (Math.abs(a[2] - b[2]) > 1e-4 || Math.abs(a[2] - c[2]) > 1e-4) continue
+      const z = a[2].toFixed(3)
+      const cross =
+        (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+      area.set(z, (area.get(z) ?? 0) + Math.abs(cross) / 2)
+    }
+    const [first, second] = [...area].sort((p, q) => q[1] - p[1])
+    const face = Math.max(Number(first[0]), Number(second[0]))
+    const highest = plate.filter((tri) =>
+      tri.every((p) => Math.abs(p[2] - top) < 1e-4)
+    )
+    const border = connectedShapes(highest)
+      .map((shape) => shape.flat())
+      .sort((p, q) => {
+        const [pl, ph] = extent(p, 0)
+        const [ql, qh] = extent(q, 0)
+        return qh - ql - (ph - pl)
+      })[0]
+    const [xl, xh] = extent(points, 0)
+    const [yl, yh] = extent(points, 1)
+    const cx = (xl + xh) / 2
+    const cy = (yl + yh) / 2
+    const inner = {
+      left: extent(border.filter((p) => p[0] < cx), 0)[1],
+      right: extent(border.filter((p) => p[0] > cx), 0)[0],
+      top: rail === 'top' ? extent(border.filter((p) => p[1] > cy), 1)[0] : yh,
+      bottom:
+        rail === 'bottom' ? extent(border.filter((p) => p[1] < cy), 1)[1] : yl,
+    }
+    const raised = points.filter(
+      (p) =>
+        p[2] > face + 0.01 &&
+        p[0] > inner.left + 1e-3 &&
+        p[0] < inner.right - 1e-3 &&
+        p[1] > inner.bottom + 1e-3 &&
+        p[1] < inner.top - 1e-3
+    )
+    const [rl, rh] = extent(raised, 0)
+    const [bl, bh] = extent(raised, 1)
+    const clearances = { left: rl - inner.left, right: inner.right - rh }
+    if (rail === 'top') clearances.top = inner.top - bh
+    else clearances.bottom = bl - inner.bottom
+    return clearances
+  }
+  return { letters: measure(plates[0], 'top'), braille: measure(plates[1], 'bottom') }
+}
 
 /** Run an axe scan of the braille panel and assert no violations. */
 async function expectPanelAxeClean(page) {
@@ -688,6 +922,180 @@ test.describe('Braille Charm workflow', () => {
 })
 
 test.describe('Braille Sign workflow', () => {
+  test('the letter height setting is the height of the capital I (ADA 703.2.5)', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    await page.locator('#brailleTextInput').fill('I')
+    await expect(
+      page.locator('.param-control[data-param-name="sign_text_1"] input')
+    ).toHaveValue('I', { timeout: 20000 })
+    await setParam(page, 'sign_part', 'Letter plate')
+    await setParam(page, 'add_border', false)
+    const charHeight = Number(
+      await page
+        .locator('.param-control[data-param-name="char_height_mm"] input[type="number"]')
+        .first()
+        .inputValue()
+    )
+
+    // The letter's top face is the highest level of the plate; its extent
+    // across the plate is the capital I's height
+    const { triangles, count } = await downloadStl(page)
+    let top = -Infinity
+    for (let i = 2; i < count * 9; i += 3) top = Math.max(top, triangles[i])
+    let minY = Infinity
+    let maxY = -Infinity
+    for (let i = 0; i < count * 9; i += 3) {
+      if (Math.abs(triangles[i + 2] - top) < 1e-4) {
+        minY = Math.min(minY, triangles[i + 1])
+        maxY = Math.max(maxY, triangles[i + 1])
+      }
+    }
+    const height = maxY - minY
+    expect(
+      Math.abs(height - charHeight),
+      `capital I ${height.toFixed(4)} mm at the setting ${charHeight}`
+    ).toBeLessThanOrEqual(0.05)
+  })
+
+  test('adjacent raised letters keep ADA 703.2.7 spacing', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    // A-A is the closest pair of capitals, then K-A and A-X; each word is its
+    // own row
+    await page.locator('#brailleTextInput').fill('KAYAK TAXI BAZAAR')
+    await expect(
+      page.locator('.param-control[data-param-name="sign_text_3"] input')
+    ).toHaveValue('BAZAAR', { timeout: 20000 })
+    await setParam(page, 'sign_part', 'Letter plate')
+    await setParam(page, 'add_border', false)
+
+    const rows = letterRows(await downloadStl(page))
+    expect(rows.map((row) => row.length)).toEqual([5, 4, 6])
+    // The stroke is the width of the I, the narrowest letter
+    const stroke = Math.min(
+      ...rows.flat().map((letter) => {
+        const xs = letter.edges.flat().map((p) => p[0])
+        return Math.max(...xs) - Math.min(...xs)
+      })
+    )
+    const gaps = rows.flatMap((row) =>
+      row.slice(1).map((letter, i) => outlineGap(row[i], letter))
+    )
+    const shown = gaps.map((g) => g.toFixed(2)).join(', ')
+    expect(Math.min(...gaps), `gaps ${shown} mm`).toBeGreaterThanOrEqual(3.2)
+    expect(Math.max(...gaps), `gaps ${shown} mm`).toBeLessThanOrEqual(4 * stroke)
+  })
+
+  for (const [label, text, rows] of [
+    ['the default text', null, ['Room 101']],
+    ['three rows', 'ROOM 101\nOFFICE\nEXIT', ['ROOM 101', 'OFFICE', 'EXIT']],
+    [
+      'six rows',
+      'ROOM 101\nOFFICE\nEXIT\nSTAIR A\nLOBBY\nWAY OUT',
+      ['ROOM 101', 'OFFICE', 'EXIT', 'STAIR A', 'LOBBY', 'WAY OUT'],
+    ],
+    ['a long word', 'CONFERENCE ROOM', ['CONFERENCE', 'ROOM']],
+    ['a full row of braille', 'ROOM 101 AND ROOM 102', ['ROOM 101', 'AND', 'ROOM 102']],
+  ]) {
+    test(`keeps letters and braille 3/8 in (9.525 mm) inside the border: ${label} (ADA 703.2.7, 703.3.2)`, async ({
+      page,
+    }) => {
+      test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+      test.setTimeout(300_000)
+
+      await openBrailleExample(page, 'braille-sign')
+      await page.waitForSelector('body[data-wasm-ready="true"]', {
+        state: 'attached',
+        timeout: 120_000,
+      })
+      if (text !== null) await page.locator('#brailleTextInput').fill(text)
+      for (const [i, row] of rows.entries()) {
+        await expect(
+          page.locator(`.param-control[data-param-name="sign_text_${i + 1}"] input`)
+        ).toHaveValue(row, { timeout: 20000 })
+      }
+      await setParam(page, 'print_orientation', 'Flat')
+
+      const { letters, braille } = borderClearances(await downloadStl(page))
+      const shown = (c) =>
+        Object.entries(c)
+          .map(([side, mm]) => `${side} ${mm.toFixed(3)}`)
+          .join(', ')
+      // The letter table carries six significant digits; a thousandth of a
+      // millimeter covers its rounding
+      expect(
+        Math.min(...Object.values(letters)),
+        `letters: ${shown(letters)} mm`
+      ).toBeGreaterThanOrEqual(9.525 - 0.001)
+      expect(
+        Math.min(...Object.values(braille)),
+        `braille: ${shown(braille)} mm`
+      ).toBeGreaterThanOrEqual(9.525 - 0.001)
+    })
+  }
+
+  test("a dot size outside ADA's range stops the model and says why (D-224)", async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    await expect(page.locator('#statusArea')).toHaveText(/Preview ready/, {
+      timeout: 120_000,
+    })
+    // Every announcement from here on, from both live regions
+    await page.evaluate(() => {
+      window.__announced = []
+      for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
+        const node = document.getElementById(id)
+        new MutationObserver(() => {
+          const text = node.textContent.trim()
+          if (text) window.__announced.push(`${id}: ${text}`)
+        }).observe(node, { childList: true, characterData: true, subtree: true })
+      }
+      let group = document
+        .querySelector('.param-control[data-param-name="rounded_dot_base_diameter"]')
+        ?.closest('details')
+      while (group) {
+        group.open = true
+        group = group.parentElement?.closest('details')
+      }
+    })
+    const box = page.locator(
+      '.param-control[data-param-name="rounded_dot_base_diameter"] input[type="number"]'
+    )
+    await box.fill('1.4')
+    await box.press('Enter')
+
+    const sentence =
+      'The model stopped: rounded_dot_base_diameter must be 1.5 to 1.6 mm (ADA 703.3.1).'
+    await expect(page.locator('#statusArea')).toHaveText(sentence, {
+      timeout: 120_000,
+    })
+    await expect(page.locator('#dependencyGuidanceModal')).toBeHidden()
+    const announced = await page.evaluate(() => window.__announced)
+    const shown = announced.join(' | ')
+    expect(announced, shown).toContain(`srAnnouncerAssertive: ${sentence}`)
+    expect(announced.filter((a) => a.endsWith(sentence)), shown).toHaveLength(1)
+    expect(shown).not.toContain('produces no geometry')
+  })
+
   test('sign panel writes raised-text and braille params', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

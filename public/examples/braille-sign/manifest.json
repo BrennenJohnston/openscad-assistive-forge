@@ -27,7 +27,9 @@
       "cellSpacing": "cell_spacing",
       "lineSpacing": "line_spacing",
       "charHeight": "char_height_mm",
-      "letterSpacing": "letter_spacing"
+      "letterSpacing": "letter_spacing",
+      "border": "add_border",
+      "borderWidth": "border_width_mm"
     }
   },
   "tags": [

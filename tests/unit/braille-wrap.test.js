@@ -570,6 +570,26 @@ describe('layoutSignText', () => {
     expect(receivedChars).toBe(11);
   });
 
+  it('packs letter rows by the given width measure', async () => {
+    // A sign measures rows by its letters' real widths; here a W is three
+    // units wide and every other character one
+    const width = (s) => [...s].reduce((sum, ch) => sum + (ch === 'w' ? 3 : 1), 0);
+    let receivedWidth = null;
+    const { textRows } = await layoutSignText({
+      ...baseOpts,
+      text: 'ww ii ii',
+      maxSourceChars: 7,
+      measureSource: width,
+      brailleCellsPerLine: (longestRow) => {
+        receivedWidth = longestRow;
+        return 30;
+      },
+    });
+    // By characters 'ww ii' (5) would fit; by width it is 9
+    expect(textRows.map((r) => r.source)).toEqual(['ww', 'ii ii']);
+    expect(receivedWidth).toBe(6);
+  });
+
   it('drops overflow letter rows and reflows braille from the survivors only', async () => {
     const { textRows, brailleRows, warnings } = await layoutSignText({
       ...baseOpts,

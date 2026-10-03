@@ -71,7 +71,7 @@ sign_part = "Both"; // [Both, Letter plate, Braille plate]
 // Grow the sign automatically so every row of letters and braille fits (Yes), or keep the exact size below (No)
 auto_fit = "Yes";             // [Yes, No]
 // Width of the sign / both plates (mm). With auto_fit on this is the minimum.
-sign_width_mm = 160;          // [60:1:300]
+sign_width_mm = 166;          // [60:1:300]
 // Height of the letter plate (mm). With auto_fit on this is the minimum.
 letter_plate_height_mm = 70;  // [30:1:200]
 // Height of the braille plate (mm). With auto_fit on this is the minimum.
@@ -84,17 +84,17 @@ part_gap_mm = 8;              // [2:1:30]
 /* [Raised Lettering - ADA 703] */
 // Convert the raised text to uppercase (703.2.2 requires uppercase characters)
 force_uppercase = "Yes";      // [Yes, No]
-// Character height (mm). 703.2.5 minimum is 15.9 mm (5/8 in).
-char_height_mm = 16;          // [12:0.5:50]
+// Height of the capital I (mm). ADA 703.2.5 asks for 16 mm (5/8 in) to 51 mm (2 in).
+char_height_mm = 16;          // [16:0.1:50.8]
 // How far the characters rise off the plate (mm). 703.2.1 minimum is 0.8 mm (1/32 in).
-letter_raise_mm = 0.8;        // [0.4:0.05:2]
-// Line spacing as a percentage of character height (703.2.8: 135%)
-line_spacing_pct = 135;       // [100:5:200]
-// Character spacing multiplier (>1 spreads characters; 703.2.8 needs clear space between)
-letter_spacing = 1.1;         // [0.8:0.05:2]
+letter_raise_mm = 0.8;        // [0.8:0.05:2]
+// Line spacing as a percentage of the capital I's height (ADA 703.2.8: 135 to 170 %).
+line_spacing_pct = 135;       // [135:5:170]
+// Letter spacing. At 1.21 every pair of adjacent capital letters, and every pair of adjacent digits, is 3.2 mm to four stroke widths apart (ADA 703.2.7).
+letter_spacing = 1.21;        // [1.21:0.01:1.22]
 
 /* [Border] */
-// Raised split border: top + sides on the letter plate, bottom + sides on the braille plate
+// Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.525 mm (3/8 in) inside it (ADA 703.2.7 and 703.3.2).
 add_border = "yes";           // [yes, no]
 // Border width (mm)
 border_width_mm = 2;          // [0.5:0.5:6]
@@ -134,33 +134,23 @@ brim_width_mm = 2.0;          // [0:0.25:25]
 brim_thickness_mm = 0.2;      // [0.1:0.05:3]
 
 /* [Braille Dot Shape] */
-// Shape of the raised braille dots. Rounded matches the ADA dome profile.
-dot_shape = "Rounded";        // [Rounded, Cone]
-// Horizontal spacing between cells (mm)
-cell_spacing = 7.0;           // [2:0.01:15]
-// Vertical spacing between braille lines (mm)
-line_spacing = 10.0;          // [5:0.01:25]
-// Spacing between dots within a cell (mm)
-dot_spacing = 2.5;            // [1:0.01:5]
+// Horizontal spacing between cells (mm). ADA 703.3.1: 0.241 to 0.300 in (6.1 to 7.6 mm printed); the sign allows 6.1214 to 7.6.
+cell_spacing = 7.0;           // [6.13:0.01:7.6]
+// Vertical spacing between braille lines (mm). ADA 703.3.1: 0.395 to 0.400 in (10 to 10.2 mm printed); the sign allows 10.033 to 10.16.
+line_spacing = 10.1;          // [10.04:0.01:10.16]
+// Spacing between dots within a cell (mm). ADA 703.3.1: 2.3 to 2.5.
+dot_spacing = 2.5;            // [2.3:0.01:2.5]
 
 /* [Braille Dot Shape - Rounded] */
 // Defaults stay ADA-legal: base_height + dome_height <= 0.9 mm, 1.6 mm base.
-// Rounded dot base diameter (mm)
-rounded_dot_base_diameter = 1.6; // [0.5:0.01:3]
+// Dot base diameter (mm). ADA 703.3.1: 1.5 to 1.6.
+rounded_dot_base_diameter = 1.6; // [1.5:0.01:1.6]
 // Rounded dot base height (mm)
 rounded_dot_base_height   = 0.35; // [0:0.01:2]
 // Rounded dome diameter (mm)
 rounded_dot_dome_diameter = 1.4; // [0.5:0.01:3]
 // Rounded dot dome height (mm)
 rounded_dot_dome_height   = 0.35; // [0.1:0.01:2]
-
-/* [Braille Dot Shape - Cone] */
-// Cone dot base diameter (mm)
-cone_dot_base_diameter = 1.5; // [0.5:0.01:3]
-// Cone dot height (mm)
-cone_dot_height        = 0.8; // [0.3:0.01:2]
-// Cone dot flat hat diameter (mm)
-cone_dot_flat_hat      = 0.4; // [0.1:0.01:2]
 
 /* [Rendering Quality] */
 // Sphere quality for rounded shapes
@@ -175,7 +165,6 @@ $fn = 32;
 // CALCULATED VALUES
 // =============================================================================
 
-use_rounded_dots = (dot_shape == "Rounded");
 angled_on = (print_orientation == "Angled");
 fins_on = angled_on && ((support_fins == "On") || (support_fins == true));
 border_on = (add_border == "yes");
@@ -202,9 +191,7 @@ braille_rows = len(_braille_nonempty) == 0 ? 0 : _braille_nonempty[len(_braille_
 text_line_pitch = char_height_mm * line_spacing_pct / 100;
 
 // Braille dot metrics
-dot_total_height = use_rounded_dots
-    ? (rounded_dot_base_height + rounded_dot_dome_height)
-    : cone_dot_height;
+dot_total_height = rounded_dot_base_height + rounded_dot_dome_height;
 DOT_FACE_EMBED = 0.02;
 
 // Braille block extent (centre-to-centre) on the braille plate
@@ -215,25 +202,34 @@ braille_block_h = braille_rows  <= 1 ? 0 : (braille_rows - 1) * line_spacing;
 // Effective sign size. In auto-fit mode (default) the plates grow so every
 // row of letters, braille dots, and the plate heights always fit — the
 // Forge panel wraps long text onto extra rows, and the sign follows.
-// Manual mode keeps the exact size set above. Uppercase Liberation Sans
-// advances average ~0.94 x size per character (measured with textmetrics);
-// the Forge panel wraps using the same estimate.
+// Manual mode keeps the exact size set above. Rows of raised letters are
+// sized from the font's measured letters (RAISED LETTER METRICS below), and
+// the Forge panel wraps with the same table.
 auto_fit_on = (auto_fit == "Yes");
-_plate_pad = (border_on ? border_width_mm : 0) + 4;
-_dot_base_d = (dot_shape == "Rounded")
-    ? rounded_dot_base_diameter : cone_dot_base_diameter;
-CHAR_ADVANCE_FACTOR = 0.94;
-_est_text_w = text_rows == 0 ? 0
-    : max([for (l = _text_lines) len(display_text(l))])
-      * char_height_mm * CHAR_ADVANCE_FACTOR * letter_spacing;
+// Clear space kept between the letters or braille and the border, or the
+// plate's edge when the border is off: ADA 703.2.7 (raised characters) and
+// 703.3.2 (braille) ask for 3/8 in from raised borders, printed as 9.5 mm;
+// the sign meets both figures.
+BORDER_CLEARANCE_MM = 9.525;
+_plate_pad = (border_on ? border_width_mm : 0) + BORDER_CLEARANCE_MM;
+_dot_base_d = rounded_dot_base_diameter;
+// The capital I of Liberation Sans is this fraction of OpenSCAD's text
+// size (15.288 mm at size 16, measured from the exported model); drawing
+// at char_height_mm / LETTER_CAP_FACTOR makes the setting the height of
+// the I, which is how ADA 703.2.5 measures characters.
+LETTER_CAP_FACTOR = 0.9555;
+_text_size = char_height_mm / LETTER_CAP_FACTOR;
+_text_w = text_rows == 0 ? 0
+    : max([for (l = _text_lines) row_width(display_text(l))]);
 _braille_block_total_w = braille_max_len == 0 ? 0
     : braille_block_w + dot_spacing + _dot_base_d;
 sign_w = auto_fit_on
-    ? max(sign_width_mm, _est_text_w + 2 * _plate_pad,
+    ? max(sign_width_mm, _text_w + 2 * _plate_pad,
           _braille_block_total_w + 2 * _plate_pad)
     : sign_width_mm;
 _letter_block_h = text_rows == 0 ? 0
-    : (text_rows - 1) * text_line_pitch + char_height_mm;
+    : (text_rows - 1) * text_line_pitch
+      + max([for (l = _text_lines) row_ink_height(display_text(l))]);
 letter_plate_h = (auto_fit_on && text_rows > 0)
     ? max(letter_plate_height_mm, _letter_block_h + 2 * _plate_pad)
     : letter_plate_height_mm;
@@ -286,41 +282,146 @@ dot_row_y_offsets = [+dot_spacing, 0, -dot_spacing];
 dot_positions     = [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]];
 
 // =============================================================================
+// RAISED LETTER METRICS
+// =============================================================================
+// Liberation Sans per unit of text size, measured with OpenSCAD 2026.01.03's
+// textmetrics(): [character, advance, ink left, ink right, ink bottom, ink
+// top]. The Forge panel wraps rows with the same table
+// (src/js/sign-letter-metrics.js); a unit test keeps the two equal.
+function sign_letter_metrics() = [
+    [" ", 0.38588, 0, 0, 0, 0],
+    ["!", 0.38588, 0.12544, 0.25984, 0, 0.95552],
+    ["\"", 0.49303, 0.05888, 0.43456, 0.65472, 0.95552],
+    ["#", 0.77243, 0.00576, 0.76608, 0, 0.9504],
+    ["&", 0.92638, 0.04864, 0.90496, -0.01408, 0.96128],
+    ["'", 0.26516, 0.0704, 0.19584, 0.65472, 0.95552],
+    ["(", 0.46251, 0.08576, 0.4544, -0.288, 1.00672],
+    [")", 0.46251, 0.00768, 0.37696, -0.288, 1.00672],
+    ["+", 0.81109, 0.0672, 0.74304, 0.1216, 0.80192],
+    [",", 0.38588, 0.12416, 0.26112, -0.17792, 0.14912],
+    ["-", 0.46251, 0.06144, 0.40128, 0.31424, 0.42368],
+    [".", 0.38588, 0.12672, 0.2592, 0, 0.14912],
+    ["/", 0.38588, 0, 0.38592, -0.01408, 1.00672],
+    ["0", 0.77243, 0.05376, 0.71872, -0.01408, 0.97024],
+    ["1", 0.77243, 0.1056, 0.70464, 0, 0.95552],
+    ["2", 0.77243, 0.06976, 0.70272, 0, 0.97024],
+    ["3", 0.77243, 0.05248, 0.71168, -0.01408, 0.97024],
+    ["4", 0.77243, 0.03136, 0.73216, 0, 0.95552],
+    ["5", 0.77243, 0.05504, 0.71424, -0.01408, 0.95552],
+    ["6", 0.77243, 0.0704, 0.71168, -0.01408, 0.97024],
+    ["7", 0.77243, 0.07104, 0.70272, 0, 0.95552],
+    ["8", 0.77243, 0.06016, 0.71232, -0.01408, 0.97024],
+    ["9", 0.77243, 0.06464, 0.7072, -0.01408, 0.97024],
+    [":", 0.38588, 0.12672, 0.2592, 0, 0.73408],
+    ["?", 0.77243, 0.05696, 0.72128, 0, 0.97024],
+    ["@", 1.40991, 0.1088, 1.29024, -0.192, 1.00672],
+    ["A", 0.92638, 0.00256, 0.92416, 0, 0.95552],
+    ["B", 0.92638, 0.11392, 0.85312, 0, 0.95552],
+    ["C", 1.00301, 0.0704, 0.9504, -0.01408, 0.97024],
+    ["D", 1.00301, 0.11392, 0.93696, 0, 0.95552],
+    ["E", 0.92638, 0.11392, 0.8672, 0, 0.95552],
+    ["F", 0.84839, 0.11392, 0.79296, 0, 0.95552],
+    ["G", 1.08032, 0.06976, 0.97664, -0.01408, 0.97024],
+    ["H", 1.00301, 0.11392, 0.89024, 0, 0.95552],
+    ["I", 0.38588, 0.128, 0.25792, 0, 0.95552],
+    ["J", 0.69445, 0.02112, 0.59136, -0.01408, 0.95552],
+    ["K", 0.92638, 0.11392, 0.91072, 0, 0.95552],
+    ["L", 0.77243, 0.11392, 0.7264, 0, 0.95552],
+    ["M", 1.15696, 0.11392, 1.0432, 0, 0.95552],
+    ["N", 1.00301, 0.11392, 0.89024, 0, 0.95552],
+    ["O", 1.08032, 0.06528, 1.0144, -0.01408, 0.97024],
+    ["P", 0.92638, 0.11392, 0.85312, 0, 0.95552],
+    ["Q", 1.08032, 0.06528, 1.0144, -0.26304, 0.97024],
+    ["R", 1.00301, 0.11392, 0.93888, 0, 0.95552],
+    ["S", 0.92638, 0.06272, 0.86272, -0.01408, 0.97024],
+    ["T", 0.84839, 0.03072, 0.81664, 0, 0.95552],
+    ["U", 1.00301, 0.10688, 0.896, -0.01408, 0.95552],
+    ["V", 0.92638, 0.00576, 0.92032, 0, 0.95552],
+    ["W", 1.3109, 0.00576, 1.30624, 0, 0.95552],
+    ["X", 0.92638, 0.03072, 0.89728, 0, 0.95552],
+    ["Y", 0.92638, 0.03008, 0.896, 0, 0.95552],
+    ["Z", 0.84839, 0.04352, 0.80512, 0, 0.95552],
+    ["a", 0.77243, 0.05888, 0.77248, -0.01408, 0.74752],
+    ["b", 0.77243, 0.08896, 0.71424, -0.01408, 1.00672],
+    ["c", 0.69445, 0.05888, 0.65792, -0.01408, 0.74752],
+    ["d", 0.77243, 0.05824, 0.68288, -0.01408, 1.00672],
+    ["e", 0.77243, 0.05888, 0.71104, -0.01408, 0.74752],
+    ["f", 0.38588, 0.0192, 0.38848, 0, 1.00544],
+    ["g", 0.77243, 0.05824, 0.68288, -0.28864, 0.7456],
+    ["h", 0.77243, 0.096, 0.68224, 0, 1.00672],
+    ["i", 0.30857, 0.0928, 0.21504, 0, 1.00672],
+    ["j", 0.30857, -0.03392, 0.21504, -0.28864, 1.00672],
+    ["k", 0.69445, 0.09344, 0.69696, 0, 1.00672],
+    ["l", 0.30857, 0.09344, 0.21568, 0, 1.00672],
+    ["m", 1.15696, 0.09216, 1.0656, 0, 0.74752],
+    ["n", 0.77243, 0.09216, 0.68224, 0, 0.74752],
+    ["o", 0.77243, 0.05824, 0.71424, -0.01408, 0.74752],
+    ["p", 0.77243, 0.08896, 0.71424, -0.28864, 0.74688],
+    ["q", 0.77243, 0.05824, 0.68416, -0.28864, 0.74752],
+    ["r", 0.46251, 0.09216, 0.43968, 0, 0.74752],
+    ["s", 0.69445, 0.0384, 0.64448, -0.01408, 0.7456],
+    ["t", 0.38588, 0.02048, 0.37568, -0.01088, 0.89792],
+    ["u", 0.77243, 0.0896, 0.68032, -0.01408, 0.73408],
+    ["v", 0.69445, 0.00448, 0.68992, 0, 0.73408],
+    ["w", 1.00301, -0.00256, 1.00672, 0, 0.73408],
+    ["x", 0.69445, 0.01536, 0.67968, 0, 0.73408],
+    ["y", 0.69445, 0.0032, 0.69184, -0.28864, 0.73408],
+    ["z", 0.69445, 0.05568, 0.62528, 0, 0.73408]
+];
+// Any other character counts as the widest, tallest and farthest-reaching
+// glyph the font draws in U+0020-U+04FF and U+2000-U+22FF, so it can only
+// make a plate larger.
+function sign_letter_unknown() = [1.85818, -0.28224, 2.12565, -0.2944, 1.35936];
+
+function letter_metrics(c) =
+    let(table = sign_letter_metrics(), i = search([c], table, 1, 0)[0])
+    is_num(i) ? [for (k = [1 : 5]) table[i][k]] : sign_letter_unknown();
+
+// Width a row of raised letters needs (mm): its advance at letter_spacing,
+// the box text() centers (kerning only shortens it), widened on both sides
+// by however far any letter's ink reaches past that box.
+function row_width(s) =
+    len(s) == 0 ? 0 :
+    let(m = [for (i = [0 : len(s) - 1]) letter_metrics(s[i])],
+        pos = [for (i = 0, x = 0; i < len(m); x = x + m[i][0] * letter_spacing, i = i + 1) x],
+        total = pos[len(m) - 1] + m[len(m) - 1][0] * letter_spacing,
+        ink = [for (i = [0 : len(m) - 1]) if (m[i][2] > m[i][1]) [pos[i] + m[i][1], pos[i] + m[i][2]]],
+        over = len(ink) == 0 ? 0
+             : max(0, -min([for (k = ink) k[0]]), max([for (k = ink) k[1]]) - total))
+    (total + 2 * over) * _text_size;
+
+// Height of a row's ink (mm); text() centers each row on its ink.
+function row_ink_height(s) =
+    len(s) == 0 ? 0 :
+    let(m = [for (i = [0 : len(s) - 1]) letter_metrics(s[i])])
+    (max([for (e = m) e[4]]) - min([for (e = m) e[3]])) * _text_size;
+
+// =============================================================================
 // DOT MODULE (shared geometry with the wedge card)
 // =============================================================================
 module braille_dot_centered() {
-    if (use_rounded_dots) {
-        _total_height = rounded_dot_base_height + rounded_dot_dome_height;
-        _dome_r = rounded_dot_dome_diameter / 2;
-        _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
-        _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
-        _fuse = 0.02;
-        translate([0, 0, -_total_height / 2]) {
-            union() {
-                translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
-                cylinder(
-                    h  = rounded_dot_base_height + _fuse,
-                    r1 = rounded_dot_base_diameter / 2,
-                    r2 = rounded_dot_dome_diameter / 2,
-                    center = true,
-                    $fn = cone_segments
-                );
-                intersection() {
-                    translate([0, 0, _center_z])
-                    sphere(r = _R_sphere, $fn = quality_fn);
-                    translate([0, 0, rounded_dot_base_height + _R_sphere])
-                    cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
-                }
+    _total_height = rounded_dot_base_height + rounded_dot_dome_height;
+    _dome_r = rounded_dot_dome_diameter / 2;
+    _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
+    _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
+    _fuse = 0.02;
+    translate([0, 0, -_total_height / 2]) {
+        union() {
+            translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
+            cylinder(
+                h  = rounded_dot_base_height + _fuse,
+                r1 = rounded_dot_base_diameter / 2,
+                r2 = rounded_dot_dome_diameter / 2,
+                center = true,
+                $fn = cone_segments
+            );
+            intersection() {
+                translate([0, 0, _center_z])
+                sphere(r = _R_sphere, $fn = quality_fn);
+                translate([0, 0, rounded_dot_base_height + _R_sphere])
+                cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
             }
         }
-    } else {
-        cylinder(
-            h  = cone_dot_height,
-            r1 = cone_dot_base_diameter / 2,
-            r2 = cone_dot_flat_hat / 2,
-            center = true,
-            $fn = cone_segments
-        );
     }
 }
 
@@ -381,7 +482,7 @@ module letter_plate() {
                     translate([0, y_line, plate_thickness_mm])
                         linear_extrude(height = letter_raise_mm)
                             text(display_text(_text_lines[i]),
-                                 size = char_height_mm,
+                                 size = char_height_mm / LETTER_CAP_FACTOR,
                                  font = "Liberation Sans",
                                  spacing = letter_spacing,
                                  halign = "center",
@@ -541,28 +642,61 @@ module braille_plate_angled() {
 }
 
 // =============================================================================
+// ADA RANGES
+// =============================================================================
+// Each range is the stricter of ADA 703's inch figure and its printed metric
+// figure (docs/guides/BRAILLE_STANDARDS.md). Outside one the model stops.
+ADA_CAP_HEIGHT_MM       = [16, 50.8];      // 5/8 to 2 in; printed 16 to 51 mm (703.2.5)
+ADA_LETTER_RAISE_MIN_MM = 0.8;             // 1/32 in; printed 0.8 mm (703.2.1)
+ADA_LINE_SPACING_PCT    = [135, 170];      // 703.2.8
+// Measured on every pair of capitals and of digits at the true letter
+// height: inside 1.21 to 1.22 each pair is 3.2 mm to four strokes apart
+SIGN_LETTER_SPACING     = [1.21, 1.22];    // 703.2.7
+ADA_DOT_BASE_MM         = [1.5, 1.6];      // 0.059 to 0.063 in; printed 1.5 to 1.6 mm
+ADA_DOT_SPACING_MM      = [2.3, 2.5];      // 0.090 to 0.100 in; printed 2.3 to 2.5 mm
+ADA_CELL_SPACING_MM     = [6.1214, 7.6];   // 0.241 to 0.300 in; printed 6.1 to 7.6 mm
+ADA_LINE_SPACING_MM     = [10.033, 10.16]; // 0.395 to 0.400 in; printed 10 to 10.2 mm
+ADA_DOT_HEIGHT_MM       = [0.635, 0.9];    // 0.025 to 0.037 in; printed 0.6 to 0.9 mm
+
+function in_range(v, r) = v >= r[0] && v <= r[1];
+
+assert(in_range(char_height_mm, ADA_CAP_HEIGHT_MM),
+       str("char_height_mm (the capital I) must be ", ADA_CAP_HEIGHT_MM[0], " to ", ADA_CAP_HEIGHT_MM[1], " mm (ADA 703.2.5, in inches and in millimeters)."));
+assert(letter_raise_mm >= ADA_LETTER_RAISE_MIN_MM,
+       str("letter_raise_mm must be at least ", ADA_LETTER_RAISE_MIN_MM, " mm (ADA 703.2.1)."));
+assert(in_range(line_spacing_pct, ADA_LINE_SPACING_PCT),
+       str("line_spacing_pct must be ", ADA_LINE_SPACING_PCT[0], " to ", ADA_LINE_SPACING_PCT[1], " (ADA 703.2.8)."));
+assert(in_range(letter_spacing, SIGN_LETTER_SPACING),
+       str("letter_spacing must be ", SIGN_LETTER_SPACING[0], " to ", SIGN_LETTER_SPACING[1], ": outside it some pairs of capital letters or of digits are closer than 3.2 mm or wider than four strokes (ADA 703.2.7)."));
+assert(in_range(rounded_dot_base_diameter, ADA_DOT_BASE_MM),
+       str("rounded_dot_base_diameter must be ", ADA_DOT_BASE_MM[0], " to ", ADA_DOT_BASE_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(dot_spacing, ADA_DOT_SPACING_MM),
+       str("dot_spacing must be ", ADA_DOT_SPACING_MM[0], " to ", ADA_DOT_SPACING_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(cell_spacing, ADA_CELL_SPACING_MM),
+       str("cell_spacing must be ", ADA_CELL_SPACING_MM[0], " to ", ADA_CELL_SPACING_MM[1], " mm (ADA 703.3.1, in inches and in millimeters)."));
+assert(in_range(line_spacing, ADA_LINE_SPACING_MM),
+       str("line_spacing must be ", ADA_LINE_SPACING_MM[0], " to ", ADA_LINE_SPACING_MM[1], " mm (ADA 703.3.1, in inches and in millimeters)."));
+assert(in_range(rounded_dot_base_height + rounded_dot_dome_height - DOT_FACE_EMBED, ADA_DOT_HEIGHT_MM),
+       str("The dots must rise ", ADA_DOT_HEIGHT_MM[0], " to ", ADA_DOT_HEIGHT_MM[1], " mm above the plate: rounded_dot_base_height plus rounded_dot_dome_height (ADA 703.3.1, in inches and in millimeters)."));
+
+// =============================================================================
 // CONSOLE DIAGNOSTICS
 // =============================================================================
 echo(str("Braille sign: ", text_rows, " text line(s), ", braille_rows,
          " braille line(s), ", sign_w, " mm wide, plates ",
          letter_plate_h, " + ", braille_plate_h, " mm tall"));
-if (text_rows > 0 && _letter_block_h
-        > letter_plate_h - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the raised text block is taller than the letter plate. Turn on auto_fit, raise letter_plate_height_mm, or remove a line.");
-if (braille_rows > 0 && _braille_block_total_h
-        > braille_plate_h - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the braille block is taller than the braille plate. Turn on auto_fit, raise braille_plate_height_mm, or remove a line.");
-if (braille_max_len > 0 && _braille_block_total_w
-        > sign_w - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the braille block is wider than the sign. Turn on auto_fit, widen the sign, or shorten the line.");
-if (_est_text_w > sign_w - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: a raised text line is probably wider than the sign. Turn on auto_fit, shorten the line, or widen the sign.");
+if (text_rows > 0 && _letter_block_h + 2 * _plate_pad > letter_plate_h)
+    echo(str("WARNING: the raised letters are less than ", BORDER_CLEARANCE_MM, " mm from the letter plate's border or edge. Turn on auto_fit, raise letter_plate_height_mm, or remove a line."));
+if (braille_rows > 0 && _braille_block_total_h + 2 * _plate_pad > braille_plate_h)
+    echo(str("WARNING: the braille is less than ", BORDER_CLEARANCE_MM, " mm from the braille plate's border or edge. Turn on auto_fit, raise braille_plate_height_mm, or remove a line."));
+if (braille_max_len > 0 && _braille_block_total_w + 2 * _plate_pad > sign_w)
+    echo(str("WARNING: the braille is less than ", BORDER_CLEARANCE_MM, " mm from the sign's side border or edge. Turn on auto_fit, widen the sign, or shorten the line."));
+if (_text_w + 2 * _plate_pad > sign_w)
+    echo(str("WARNING: a raised text line is less than ", BORDER_CLEARANCE_MM, " mm from the sign's side border or edge. Turn on auto_fit, shorten the line, or widen the sign."));
 for (i = [0:_line_count-1])
     if (has_invalid_chars(_braille_lines[i]))
         echo(str("WARNING: braille Line_", i + 1, " contains non-braille characters. Use Unicode braille (U+2800-U+28FF)."));
-if (char_height_mm < 15.9)
-    echo("NOTE: ADA 703.2.5 requires raised characters at least 15.9 mm (5/8 in) tall.");
-echo("NOTE: ADA defaults are recommendations only - this tool does not guarantee compliance. Mount the braille plate at least 9.5 mm (3/8 in) below the raised text.");
+echo(str("NOTE: ADA defaults are recommendations only - this tool does not guarantee compliance. Mount the braille plate at least ", BORDER_CLEARANCE_MM, " mm (3/8 in) below the raised text."));
 
 // =============================================================================
 // MAIN RENDERING

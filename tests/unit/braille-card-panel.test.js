@@ -89,6 +89,7 @@ import {
 } from '../../src/js/braille-translator.js';
 import { announceImmediate } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
+import { extractParameters } from '../../src/js/parser.js';
 
 const LINE_PARAMS = Array.from({ length: 20 }, (_, i) => `Line_${i + 1}`);
 
@@ -845,4 +846,65 @@ describe('braille panel — the table list without its catalog (D-222)', () => {
       expect(select.options[0].textContent).toBe(label);
     });
   }
+});
+
+describe('braille panel sign mode — rows by real letter widths', () => {
+  const SIGN_DIR = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../public/examples/braille-sign'
+  );
+  // Mounted as the app mounts it: the sign's manifest and the model's own
+  // defaults
+  const signConfig = JSON.parse(
+    readFileSync(join(SIGN_DIR, 'manifest.json'), 'utf-8')
+  ).brailleTranslation;
+  const signDefaults = Object.fromEntries(
+    Object.entries(
+      extractParameters(
+        readFileSync(join(SIGN_DIR, 'braille_sign.scad'), 'utf-8')
+      ).parameters
+    ).map(([name, param]) => [name, String(param.default)])
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    document.body.innerHTML =
+      '<div id="app"><div id="parametersContainer"></div></div>';
+    stateManager.setState({
+      parameters: { ...signDefaults },
+      defaults: { ...signDefaults },
+    });
+    initBraillePanel(signConfig);
+  });
+
+  afterEach(() => {
+    destroyBraillePanel();
+    document.body.innerHTML = '';
+  });
+
+  /** Lay out a text, from a different one so the layout has surely run. */
+  async function layOut(text) {
+    await typeText('EXIT', () => expect(params().sign_text_1).toBe('EXIT'));
+    await typeText(text, () => expect(params().sign_text_1).not.toBe('EXIT'));
+    return signConfig.textParams.map((name) => params()[name]).filter(Boolean);
+  }
+
+  it('keeps a fresh sign\'s "Room 101" on one row', async () => {
+    expect(await layOut('Room 101')).toEqual(['Room 101']);
+  });
+
+  it('fits a row of narrow letters that counting characters would break', async () => {
+    expect(await layOut('III III III III')).toEqual(['III III III III']);
+  });
+
+  it('breaks a row of wide letters that counting characters would keep', async () => {
+    expect(await layOut('WWW MMM')).toEqual(['WWW', 'MMM']);
+  });
+
+  it('puts "CONFERENCE ROOM" on two rows and gives the long word\'s real width', async () => {
+    expect(await layOut('CONFERENCE ROOM')).toEqual(['CONFERENCE', 'ROOM']);
+    expect(document.getElementById('brailleWarnings').textContent).toContain(
+      '"CONFERENCE" needs about 198 mm of raised letters'
+    );
+  });
 });
