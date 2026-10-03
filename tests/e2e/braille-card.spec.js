@@ -1047,6 +1047,55 @@ test.describe('Braille Sign workflow', () => {
     })
   }
 
+  test("a dot size outside ADA's range stops the model and says why (D-224)", async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    await expect(page.locator('#statusArea')).toHaveText(/Preview ready/, {
+      timeout: 120_000,
+    })
+    // Every announcement from here on, from both live regions
+    await page.evaluate(() => {
+      window.__announced = []
+      for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
+        const node = document.getElementById(id)
+        new MutationObserver(() => {
+          const text = node.textContent.trim()
+          if (text) window.__announced.push(`${id}: ${text}`)
+        }).observe(node, { childList: true, characterData: true, subtree: true })
+      }
+      let group = document
+        .querySelector('.param-control[data-param-name="rounded_dot_base_diameter"]')
+        ?.closest('details')
+      while (group) {
+        group.open = true
+        group = group.parentElement?.closest('details')
+      }
+    })
+    const box = page.locator(
+      '.param-control[data-param-name="rounded_dot_base_diameter"] input[type="number"]'
+    )
+    await box.fill('1.4')
+    await box.press('Enter')
+
+    const sentence =
+      'The model stopped: rounded_dot_base_diameter must be 1.5 to 1.6 mm (ADA 703.3.1).'
+    await expect(page.locator('#statusArea')).toHaveText(sentence, {
+      timeout: 120_000,
+    })
+    await expect(page.locator('#dependencyGuidanceModal')).toBeHidden()
+    const announced = await page.evaluate(() => window.__announced)
+    const shown = announced.join(' | ')
+    expect(announced, shown).toContain(`srAnnouncerAssertive: ${sentence}`)
+    expect(announced.filter((a) => a.endsWith(sentence)), shown).toHaveLength(1)
+    expect(shown).not.toContain('produces no geometry')
+  })
+
   test('sign panel writes raised-text and braille params', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

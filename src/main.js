@@ -113,6 +113,7 @@ import {
 } from './js/modal-manager.js';
 import {
   translateError,
+  findFailedCheck,
   findMissingLibrary,
   showErrorModal,
   showErrorToast,
@@ -6179,6 +6180,23 @@ async function initApp() {
       const friendly = translateError(detailsStr || msg);
       const sentence = `${friendly.explanation} ${friendly.suggestion}`;
       updateStatus(sentence, 'error');
+      _announceError(sentence);
+      return true;
+    }
+
+    // One of the model's own checks (an assert()) stopped it. Its message
+    // is the cause; the empty geometry handled below is only its
+    // consequence, whose guidance sent people looking for an option (D-224).
+    // Announced once, assertively, as an error.
+    const failedCheck = findFailedCheck(`${msg}\n${detailsStr}`);
+    if (failedCheck) {
+      if (previewManager) {
+        previewManager.clear();
+      }
+      const sentence = failedCheck.message
+        ? `The model stopped: ${failedCheck.message}`
+        : `The model stopped at one of its checks: ${failedCheck.condition}`;
+      updateStatus(sentence, 'error', { announce: false });
       _announceError(sentence);
       return true;
     }

@@ -38,6 +38,32 @@ export function findMissingLibrary(text) {
 }
 
 /**
+ * What OpenSCAD prints when one of a model's own checks, an assert(), stops
+ * it, with the check's message or without one:
+ *   ERROR: Assertion '(x > 0)' failed: "x must be 1 or more." in file ..., line 2
+ *   ERROR: Assertion '(x > 0)' failed in file ..., line 2
+ */
+const FAILED_CHECK_PATTERN =
+  /Assertion '(.+?)' failed(?::\s*"(.*?)")?(?=\s+in file\b|$)/m;
+
+/**
+ * The model's own words for the check that stopped it, or null.
+ *
+ * Exported for the render error handler, which otherwise reports the
+ * CONSEQUENCE (an empty top-level object) and sends people looking for an
+ * option that is not there (D-224).
+ *
+ * @param {string} text - Error message or raw OpenSCAD output
+ * @returns {{message: string}|{condition: string}|null} The check's message,
+ *   or its condition when it has no message
+ */
+export function findFailedCheck(text) {
+  const match = FAILED_CHECK_PATTERN.exec(String(text || ''));
+  if (!match) return null;
+  return match[2] ? { message: match[2] } : { condition: match[1] };
+}
+
+/**
  * Is this one of the bundles this build ships, and is it currently switched
  * off? Only then can we honestly tell someone to switch it back on.
  * @param {string} libraryId - The library id from the failing include path

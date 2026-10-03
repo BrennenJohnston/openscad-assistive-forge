@@ -7,6 +7,7 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   translateError,
   createFriendlyErrorDisplay,
+  findFailedCheck,
   showErrorModal,
   showErrorToast,
 } from '../../src/js/error-translator.js';
@@ -476,6 +477,44 @@ describe('Error Translator', () => {
       );
 
       expect(result.suggestion || '').not.toContain('Libraries panel');
+    });
+  });
+
+  /**
+   * D-224. When one of a model's own checks (OpenSCAD's assert()) stopped
+   * it, the render handler reported the consequence, empty geometry, and
+   * sent people looking for an option. The lines below are what OpenSCAD
+   * 2026.01.03 prints, the first from the Braille Sign with its dot base
+   * typed as 1.4 mm.
+   */
+  describe('a check that stops the model (D-224)', () => {
+    const SIGN_LINE =
+      "ERROR: Assertion 'in_range(rounded_dot_base_diameter, ADA_DOT_BASE_MM)' failed: " +
+      '"rounded_dot_base_diameter must be 1.5 to 1.6 mm (ADA 703.3.1)." in file /tmp/input.scad, line 671';
+
+    test("gives the check's own message", () => {
+      const output = [
+        'OpenSCAD compilation failed with exit code 1. Output:',
+        SIGN_LINE,
+        "TRACE: called by 'assert' in file /tmp/input.scad, line 671",
+        'Current top level object is empty.',
+      ].join('\n');
+
+      expect(findFailedCheck(output)).toEqual({
+        message: 'rounded_dot_base_diameter must be 1.5 to 1.6 mm (ADA 703.3.1).',
+      });
+    });
+
+    test('gives the condition when the check has no message', () => {
+      expect(
+        findFailedCheck("ERROR: Assertion '(x > 0)' failed in file /tmp/input.scad, line 2")
+      ).toEqual({ condition: '(x > 0)' });
+    });
+
+    test('finds nothing when no check failed', () => {
+      expect(findFailedCheck('Current top level object is empty.')).toBeNull();
+      expect(findFailedCheck('CGAL ERROR: assertion violation!')).toBeNull();
+      expect(findFailedCheck('')).toBeNull();
     });
   });
 });
