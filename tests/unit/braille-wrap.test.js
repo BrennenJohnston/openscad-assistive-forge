@@ -92,6 +92,25 @@ function uebStub(text) {
 const occurrences = (rows, part) =>
   rows.map((row) => String(row.braille)).join('').split(part).length - 1;
 
+/** The line continuation sign (dot 5). */
+const CONTINUATION = '\u2810';
+
+/** Whether each row ends with the line continuation sign. */
+const continued = (rows) =>
+  rows.map((row) => String(row.braille).endsWith(CONTINUATION));
+
+/** The rows' braille put back together, each row's final sign left off. */
+const rejoined = (rows) =>
+  rows.map((row) => String(row.braille).replace(/\u2810$/, '')).join('');
+
+/** The note a layout gives once for each word it divides with the sign. */
+const continuationNote = (word) => ({
+  type: 'line-continuation',
+  message:
+    `"${word}" is divided across rows. Each row but the last ends with ` +
+    `the line continuation sign (dot 5).`,
+});
+
 describe('countCells', () => {
   it('counts braille characters', () => {
     expect(countCells('\u2813\u2811\u2807\u2807\u2815')).toBe(5);
@@ -350,23 +369,24 @@ describe('layoutBrailleText', () => {
     expect(cards).toEqual([[]]);
   });
 
-  it('divides an over-long email after punctuation', async () => {
+  it('divides an over-long email after punctuation, each row but the last ending with the line continuation sign', async () => {
     const { allLines, warnings } = await layoutBrailleText({
       ...baseOpts,
       translate: uebStub,
       text: 'name@example.com',
     });
-    // 16 cells > 10 -> divided into name@ / example. / com, and the pieces
-    // put back together are the whole word's braille
+    // 16 cells > 10 -> divided into name@ / example. / com; the sign fits
+    // on each row it ends, and the pieces put back together without it are
+    // the whole word's braille
     expect(allLines.map((row) => row.source)).toEqual([
       'name@',
       'example.',
       'com',
     ]);
-    expect(allLines.map((row) => String(row.braille)).join('')).toBe(
-      uebStub('name@example.com').braille
-    );
-    expect(warnings).toHaveLength(0);
+    expect(continued(allLines)).toEqual([true, true, false]);
+    expect(allLines.map((row) => countCells(row.braille))).toEqual([6, 9, 3]);
+    expect(rejoined(allLines)).toBe(uebStub('name@example.com').braille);
+    expect(warnings).toEqual([continuationNote('name@example.com')]);
   });
 
   it('warns about an unbreakable over-long word', async () => {
@@ -467,12 +487,11 @@ describe('layoutBrailleText', () => {
       text,
     });
     // One capital word sign for the whole address: the pieces, put back
-    // together, are the whole word's braille, cell for cell
-    expect(allLines.length).toBeGreaterThan(1);
-    expect(allLines.map((row) => String(row.braille)).join('')).toBe(
-      uebStub(text).braille
-    );
-    expect(warnings).toHaveLength(0);
+    // together without their line continuation signs, are the whole word's
+    // braille, cell for cell; the word is named once for its three rows
+    expect(allLines).toHaveLength(3);
+    expect(rejoined(allLines)).toBe(uebStub(text).braille);
+    expect(warnings).toEqual([continuationNote(text)]);
   });
 
   it('gives each row the typed words on it, in order', async () => {
@@ -499,6 +518,83 @@ describe('layoutBrailleText', () => {
     // 5 capitals x 2 cells = 10 cells -> exactly one full line
     expect(allLines).toHaveLength(1);
     expect(countCells(allLines[0].braille)).toBe(10);
+  });
+});
+
+describe('the line continuation sign (BANA card guidelines, UEB 6.10)', () => {
+  const card = (text, cellsPerLine) =>
+    layoutBrailleText({
+      text,
+      translate: uebStub,
+      cellsPerLine,
+      rowsPerCard: 100,
+      maxTotalLines: 100,
+    });
+
+  it('counts toward the row, so an address divides at an earlier point', async () => {
+    // abc.efghi@ would fill a 10-cell row alone; with the sign it needs 11,
+    // so the first row ends after abc.
+    const { allLines } = await card('abc.efghi@jk.lm', 10);
+    expect(allLines.map((row) => row.source)).toEqual([
+      'abc.',
+      'efghi@jk.',
+      'lm',
+    ]);
+    expect(allLines.map((row) => countCells(row.braille))).toEqual([5, 10, 2]);
+    expect(continued(allLines)).toEqual([true, true, false]);
+  });
+
+  it('ends a row of a web address divided at its path', async () => {
+    const { allLines, warnings } = await card('example.org/visit', 12);
+    expect(allLines.map((row) => row.source)).toEqual([
+      'example.',
+      'org/visit',
+    ]);
+    expect(continued(allLines)).toEqual([true, false]);
+    expect(warnings).toEqual([continuationNote('example.org/visit')]);
+  });
+
+  it('divides a long number after a comma, with the sign, and never between digits', async () => {
+    const { allLines, warnings } = await card('1,000,000,000', 8);
+    expect(allLines.map((row) => row.source)).toEqual(['1,000,', '000,000']);
+    expect(continued(allLines)).toEqual([true, false]);
+    expect(rejoined(allLines)).toBe(uebStub('1,000,000,000').braille);
+    expect(warnings).toEqual([continuationNote('1,000,000,000')]);
+  });
+
+  it('adds nothing to a word divided at its own hyphen (UEB 10.13.2)', async () => {
+    const { allLines, warnings } = await card('self-made', 6);
+    expect(allLines.map((row) => row.source)).toEqual(['self-', 'made']);
+    expect(continued(allLines)).toEqual([false, false]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('adds nothing after a slash between ordinary words or in a date (UEB 7.4.1)', async () => {
+    for (const [text, cellsPerLine, sources] of [
+      ['schoolchildren/teachers', 16, ['schoolchildren/', 'teachers']],
+      ['10/31/2026', 6, ['10/31/', '2026']],
+    ]) {
+      const { allLines, warnings } = await card(text, cellsPerLine);
+      expect(allLines.map((row) => row.source)).toEqual(sources);
+      expect(continued(allLines).some(Boolean)).toBe(false);
+      expect(warnings).toEqual([]);
+    }
+  });
+
+  it('divides an address that cannot hold the sign as before, without it', async () => {
+    // abcdefghi@ fills a 10-cell row exactly and no earlier point exists:
+    // the sign is left out, the Braille Authority's last resort, rather
+    // than the address being refused
+    const { allLines, warnings } = await card('abcdefghi@jk.lm', 10);
+    expect(allLines.map((row) => row.source)).toEqual(['abcdefghi@', 'jk.lm']);
+    expect(continued(allLines)).toEqual([false, false]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('still refuses a word with no division point', async () => {
+    const { warnings } = await card('abcdefghijklmnopqrstuvwxyzabcd', 13);
+    expect(warnings.map((w) => w.type)).toEqual(['word-too-long']);
+    expect(warnings[0].message).toContain('It cannot be divided automatically.');
   });
 });
 
@@ -615,18 +711,18 @@ describe('layoutSignText', () => {
       brailleCellsPerLine: 10,
     });
     // Letters fit on one row; the 16-cell braille divides into
-    // name@ / example. / com and packs onto three rows, which put back
-    // together are the whole word's braille.
+    // name@ / example. / com and packs onto three rows, each but the last
+    // ending with the line continuation sign, which put back together
+    // without it are the whole word's braille.
     expect(textRows).toHaveLength(1);
     expect(brailleRows.map((row) => row.source)).toEqual([
       'name@',
       'example.',
       'com',
     ]);
-    expect(brailleRows.map((row) => String(row.braille)).join('')).toBe(
-      uebStub('name@example.com').braille
-    );
-    expect(warnings).toHaveLength(0);
+    expect(continued(brailleRows)).toEqual([true, true, false]);
+    expect(rejoined(brailleRows)).toBe(uebStub('name@example.com').braille);
+    expect(warnings).toEqual([continuationNote('name@example.com')]);
   });
 
   it('warns about an unbreakable word longer than a braille row', async () => {
