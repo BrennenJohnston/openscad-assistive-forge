@@ -23,24 +23,24 @@ All distances are measured center to center, as the table says.
 | Measure | ADA | The sign's default (measured) | How the tool keeps to it |
 |---|---|---|---|
 | Dot shape | domed or rounded | a rounded dome | Rounded is the default; a flat-topped Cone shape is also offered |
-| Dot base diameter | 1.5 to 1.6 mm (0.059 to 0.063 in) | 1.59 mm at the face of the plate | the slider allows 0.5 to 3 mm, and nothing stops a value outside the range |
-| Dot height | 0.6 to 0.9 mm (0.025 to 0.037 in) | 0.68 mm | the base height (0 to 2 mm) and the dome height (0.1 to 2 mm) have separate sliders, unchecked |
-| Between two dots in the same cell | 2.3 to 2.5 mm (0.090 to 0.100 in) | 2.5 mm | the slider allows 1 to 5 mm, unchecked |
-| Between corresponding dots in adjacent cells | 6.1 to 7.6 mm (0.241 to 0.300 in) | 7.0 mm | the slider allows 2 to 15 mm, unchecked |
-| Between corresponding dots one cell directly below | 10 to 10.2 mm (0.395 to 0.400 in) | 10.1 mm | the slider allows 5 to 25 mm, unchecked |
+| Dot base diameter | 1.5 to 1.6 mm (0.059 to 0.063 in) | 1.59 mm at the face of the plate | the slider allows 1.5 to 1.6 mm, and the model stops outside that range |
+| Dot height | 0.6 to 0.9 mm (0.025 to 0.037 in) | 0.68 mm | the base height and the dome height have separate sliders; the model stops when the dots would rise less than 0.635 mm (0.025 in) or more than 0.9 mm |
+| Between two dots in the same cell | 2.3 to 2.5 mm (0.090 to 0.100 in) | 2.5 mm | the slider allows 2.3 to 2.5 mm, and the model stops outside that range |
+| Between corresponding dots in adjacent cells | 6.1 to 7.6 mm (0.241 to 0.300 in) | 7.0 mm | the slider allows 6.13 to 7.6 mm; the model stops below 6.1214 mm (0.241 in) or above 7.6 mm |
+| Between corresponding dots one cell directly below | 10 to 10.2 mm (0.395 to 0.400 in) | 10.1 mm | the slider allows 10.04 to 10.16 mm; the model stops below 10.033 mm (0.395 in) or above 10.16 mm (0.400 in) |
 
 ## Raised letters on the sign (ADA 703.2)
 
 | Rule | ADA | The sign today (measured) |
 |---|---|---|
-| 703.2.1 Depth | 0.8 mm (1/32 in) minimum above the background | 0.8 mm |
+| 703.2.1 Depth | 0.8 mm (1/32 in) minimum above the background | 0.8 mm; the model stops below 0.8 mm |
 | 703.2.2 Case | uppercase | uppercase by default (`force_uppercase`) |
 | 703.2.3 Style | sans serif; not italic, oblique, script or highly decorative | Liberation Sans |
 | 703.2.4 Proportions | the "O" 55 to 110 % as wide as the "I" is tall | 99 % |
-| 703.2.5 Height | 16 mm (5/8 in) to 51 mm (2 in), measured on the uppercase "I"; 13 mm (1/2 in) is allowed where separate visual characters carry the same information | 16.00 mm at the default setting of 16: the setting is the height of the "I" |
+| 703.2.5 Height | 16 mm (5/8 in) to 51 mm (2 in), measured on the uppercase "I"; 13 mm (1/2 in) is allowed where separate visual characters carry the same information | 16.00 mm at the default setting of 16: the setting is the height of the "I". The slider allows 16 to 50.8 mm (2 in), and the model stops outside that range; the 13 mm case is not offered |
 | 703.2.6 Stroke | the "I" stroke 15 % maximum of its height | 13.6 % |
-| 703.2.7 Spacing | 3.2 mm (1/8 in) minimum between the closest points of adjacent letters in a word (the sign's letters have rectangular cross sections), and four times the stroke maximum (8.7 mm at the default size) | at the default spacing of 1.21, measured on every pair of capital letters and every pair of digits: all are 3.2 mm or more apart (the closest, A and A, 3.35 mm) and no more than four strokes apart (the widest, Y and J, 8.44 mm). A letter beside a digit can fall outside: 7A is 9.06 mm and Y4 9.53 mm apart, and no single spacing keeps every such pair in range |
-| 703.2.8 Line spacing | baseline to baseline, 135 to 170 % of the character height | 135 % |
+| 703.2.7 Spacing | 3.2 mm (1/8 in) minimum between the closest points of adjacent letters in a word (the sign's letters have rectangular cross sections), and four times the stroke maximum (8.7 mm at the default size) | at the default spacing of 1.21, measured on every pair of capital letters and every pair of digits: all are 3.2 mm or more apart (the closest, A and A, 3.35 mm) and no more than four strokes apart (the widest, Y and J, 8.44 mm). A letter beside a digit can fall outside: 7A is 9.06 mm and Y4 9.53 mm apart, and no single spacing keeps every such pair in range. The slider allows 1.21 to 1.22, and the model stops outside that range |
+| 703.2.8 Line spacing | baseline to baseline, 135 to 170 % of the character height | 135 %; the slider allows 135 to 170 %, and the model stops outside that range |
 
 ## Layout (ADA 703.2.7, 703.3.2)
 

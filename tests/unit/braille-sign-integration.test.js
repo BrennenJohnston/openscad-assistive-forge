@@ -157,6 +157,39 @@ describe('braille_sign.scad parser integration', () => {
     expect(line_spacing.default).toBe(10.1);
   });
 
+  it('keeps each ADA setting inside its range, the stricter of the inch and metric figures', () => {
+    const scad = readScad();
+    const params = extractParameters(scad).parameters;
+    // [slider, the range the model enforces], from the standards page
+    const ranges = {
+      char_height_mm: [[16, 50.8], 'ADA_CAP_HEIGHT_MM', [16, 50.8]],
+      line_spacing_pct: [[135, 170], 'ADA_LINE_SPACING_PCT', [135, 170]],
+      letter_spacing: [[1.21, 1.22], 'SIGN_LETTER_SPACING', [1.21, 1.22]],
+      rounded_dot_base_diameter: [[1.5, 1.6], 'ADA_DOT_BASE_MM', [1.5, 1.6]],
+      dot_spacing: [[2.3, 2.5], 'ADA_DOT_SPACING_MM', [2.3, 2.5]],
+      cell_spacing: [[6.13, 7.6], 'ADA_CELL_SPACING_MM', [6.1214, 7.6]],
+      line_spacing: [[10.04, 10.16], 'ADA_LINE_SPACING_MM', [10.033, 10.16]],
+    };
+    for (const [name, [slider, constant, enforced]] of Object.entries(ranges)) {
+      const p = params[name];
+      expect([p.minimum, p.maximum], `${name} slider`).toEqual(slider);
+      expect(p.default, `${name} default`).toBeGreaterThanOrEqual(slider[0]);
+      expect(p.default, `${name} default`).toBeLessThanOrEqual(slider[1]);
+      const declared = scad.match(new RegExp(`^${constant} += \\[([\\d.]+), ([\\d.]+)\\];`, 'm'));
+      expect(declared?.slice(1).map(Number), constant).toEqual(enforced);
+      expect(scad, `${name} is checked`).toMatch(
+        new RegExp(`^assert\\(in_range\\(${name}, ${constant}\\),`, 'm')
+      );
+    }
+    expect(params.letter_raise_mm.minimum).toBe(0.8);
+    expect(scad).toMatch(/^ADA_LETTER_RAISE_MIN_MM += 0\.8;/m);
+    expect(scad).toMatch(/^assert\(letter_raise_mm >= ADA_LETTER_RAISE_MIN_MM,/m);
+    expect(scad).toMatch(/^ADA_DOT_HEIGHT_MM += \[0\.635, 0\.9\];/m);
+    expect(scad).toMatch(
+      /^assert\(in_range\(rounded_dot_base_height \+ rounded_dot_dome_height - DOT_FACE_EMBED, ADA_DOT_HEIGHT_MM\),/m
+    );
+  });
+
   it('spaces its letters at 1.21, with the panel in step (ADA 703.2.7)', async () => {
     // At 1.21 every pair of capitals and every pair of digits is 3.2 mm to
     // four strokes apart at the letters' true height; at 1.2 A-A is 3.19 mm

@@ -85,13 +85,13 @@ part_gap_mm = 8;              // [2:1:30]
 // Convert the raised text to uppercase (703.2.2 requires uppercase characters)
 force_uppercase = "Yes";      // [Yes, No]
 // Height of the capital I (mm). ADA 703.2.5 asks for 16 mm (5/8 in) to 51 mm (2 in).
-char_height_mm = 16;          // [12:0.5:50]
+char_height_mm = 16;          // [16:0.1:50.8]
 // How far the characters rise off the plate (mm). 703.2.1 minimum is 0.8 mm (1/32 in).
-letter_raise_mm = 0.8;        // [0.4:0.05:2]
-// Line spacing as a percentage of character height (703.2.8: 135%)
-line_spacing_pct = 135;       // [100:5:200]
+letter_raise_mm = 0.8;        // [0.8:0.05:2]
+// Line spacing as a percentage of the capital I's height (ADA 703.2.8: 135 to 170 %).
+line_spacing_pct = 135;       // [135:5:170]
 // Letter spacing. At 1.21 every pair of adjacent capital letters, and every pair of adjacent digits, is 3.2 mm to four stroke widths apart (ADA 703.2.7).
-letter_spacing = 1.21;        // [0.8:0.01:2]
+letter_spacing = 1.21;        // [1.21:0.01:1.22]
 
 /* [Border] */
 // Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.525 mm (3/8 in) inside it (ADA 703.2.7 and 703.3.2).
@@ -136,17 +136,17 @@ brim_thickness_mm = 0.2;      // [0.1:0.05:3]
 /* [Braille Dot Shape] */
 // Shape of the raised braille dots. Rounded matches the ADA dome profile.
 dot_shape = "Rounded";        // [Rounded, Cone]
-// Horizontal spacing between cells (mm)
-cell_spacing = 7.0;           // [2:0.01:15]
-// Vertical spacing between braille lines (mm)
-line_spacing = 10.1;          // [5:0.01:25]
-// Spacing between dots within a cell (mm)
-dot_spacing = 2.5;            // [1:0.01:5]
+// Horizontal spacing between cells (mm). ADA 703.3.1: 0.241 to 0.300 in (6.1 to 7.6 mm printed); the sign allows 6.1214 to 7.6.
+cell_spacing = 7.0;           // [6.13:0.01:7.6]
+// Vertical spacing between braille lines (mm). ADA 703.3.1: 0.395 to 0.400 in (10 to 10.2 mm printed); the sign allows 10.033 to 10.16.
+line_spacing = 10.1;          // [10.04:0.01:10.16]
+// Spacing between dots within a cell (mm). ADA 703.3.1: 2.3 to 2.5.
+dot_spacing = 2.5;            // [2.3:0.01:2.5]
 
 /* [Braille Dot Shape - Rounded] */
 // Defaults stay ADA-legal: base_height + dome_height <= 0.9 mm, 1.6 mm base.
-// Rounded dot base diameter (mm)
-rounded_dot_base_diameter = 1.6; // [0.5:0.01:3]
+// Dot base diameter (mm). ADA 703.3.1: 1.5 to 1.6.
+rounded_dot_base_diameter = 1.6; // [1.5:0.01:1.6]
 // Rounded dot base height (mm)
 rounded_dot_base_height   = 0.35; // [0:0.01:2]
 // Rounded dome diameter (mm)
@@ -666,6 +666,44 @@ module braille_plate_angled() {
 }
 
 // =============================================================================
+// ADA RANGES
+// =============================================================================
+// Each range is the stricter of ADA 703's inch figure and its printed metric
+// figure (docs/guides/BRAILLE_STANDARDS.md). Outside one the model stops.
+ADA_CAP_HEIGHT_MM       = [16, 50.8];      // 5/8 to 2 in; printed 16 to 51 mm (703.2.5)
+ADA_LETTER_RAISE_MIN_MM = 0.8;             // 1/32 in; printed 0.8 mm (703.2.1)
+ADA_LINE_SPACING_PCT    = [135, 170];      // 703.2.8
+// Measured on every pair of capitals and of digits at the true letter
+// height: inside 1.21 to 1.22 each pair is 3.2 mm to four strokes apart
+SIGN_LETTER_SPACING     = [1.21, 1.22];    // 703.2.7
+ADA_DOT_BASE_MM         = [1.5, 1.6];      // 0.059 to 0.063 in; printed 1.5 to 1.6 mm
+ADA_DOT_SPACING_MM      = [2.3, 2.5];      // 0.090 to 0.100 in; printed 2.3 to 2.5 mm
+ADA_CELL_SPACING_MM     = [6.1214, 7.6];   // 0.241 to 0.300 in; printed 6.1 to 7.6 mm
+ADA_LINE_SPACING_MM     = [10.033, 10.16]; // 0.395 to 0.400 in; printed 10 to 10.2 mm
+ADA_DOT_HEIGHT_MM       = [0.635, 0.9];    // 0.025 to 0.037 in; printed 0.6 to 0.9 mm
+
+function in_range(v, r) = v >= r[0] && v <= r[1];
+
+assert(in_range(char_height_mm, ADA_CAP_HEIGHT_MM),
+       str("char_height_mm (the capital I) must be ", ADA_CAP_HEIGHT_MM[0], " to ", ADA_CAP_HEIGHT_MM[1], " mm (ADA 703.2.5, in inches and in millimeters)."));
+assert(letter_raise_mm >= ADA_LETTER_RAISE_MIN_MM,
+       str("letter_raise_mm must be at least ", ADA_LETTER_RAISE_MIN_MM, " mm (ADA 703.2.1)."));
+assert(in_range(line_spacing_pct, ADA_LINE_SPACING_PCT),
+       str("line_spacing_pct must be ", ADA_LINE_SPACING_PCT[0], " to ", ADA_LINE_SPACING_PCT[1], " (ADA 703.2.8)."));
+assert(in_range(letter_spacing, SIGN_LETTER_SPACING),
+       str("letter_spacing must be ", SIGN_LETTER_SPACING[0], " to ", SIGN_LETTER_SPACING[1], ": outside it some pairs of capital letters or of digits are closer than 3.2 mm or wider than four strokes (ADA 703.2.7)."));
+assert(in_range(rounded_dot_base_diameter, ADA_DOT_BASE_MM),
+       str("rounded_dot_base_diameter must be ", ADA_DOT_BASE_MM[0], " to ", ADA_DOT_BASE_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(dot_spacing, ADA_DOT_SPACING_MM),
+       str("dot_spacing must be ", ADA_DOT_SPACING_MM[0], " to ", ADA_DOT_SPACING_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(cell_spacing, ADA_CELL_SPACING_MM),
+       str("cell_spacing must be ", ADA_CELL_SPACING_MM[0], " to ", ADA_CELL_SPACING_MM[1], " mm (ADA 703.3.1, in inches and in millimeters)."));
+assert(in_range(line_spacing, ADA_LINE_SPACING_MM),
+       str("line_spacing must be ", ADA_LINE_SPACING_MM[0], " to ", ADA_LINE_SPACING_MM[1], " mm (ADA 703.3.1, in inches and in millimeters)."));
+assert(in_range(rounded_dot_base_height + rounded_dot_dome_height - DOT_FACE_EMBED, ADA_DOT_HEIGHT_MM),
+       str("The dots must rise ", ADA_DOT_HEIGHT_MM[0], " to ", ADA_DOT_HEIGHT_MM[1], " mm above the plate: rounded_dot_base_height plus rounded_dot_dome_height (ADA 703.3.1, in inches and in millimeters)."));
+
+// =============================================================================
 // CONSOLE DIAGNOSTICS
 // =============================================================================
 echo(str("Braille sign: ", text_rows, " text line(s), ", braille_rows,
@@ -682,8 +720,6 @@ if (_text_w + 2 * _plate_pad > sign_w)
 for (i = [0:_line_count-1])
     if (has_invalid_chars(_braille_lines[i]))
         echo(str("WARNING: braille Line_", i + 1, " contains non-braille characters. Use Unicode braille (U+2800-U+28FF)."));
-if (char_height_mm < 15.9)
-    echo("NOTE: ADA 703.2.5 requires raised characters at least 15.9 mm (5/8 in) tall.");
 echo(str("NOTE: ADA defaults are recommendations only - this tool does not guarantee compliance. Mount the braille plate at least ", BORDER_CLEARANCE_MM, " mm (3/8 in) below the raised text."));
 
 // =============================================================================
