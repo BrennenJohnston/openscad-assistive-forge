@@ -38,6 +38,7 @@ import {
   BRAILLE_SPACE,
 } from './braille-wrap.js';
 import { signRowWidthMm } from './sign-letter-metrics.js';
+import { asciiToCells } from './braille-ascii.js';
 
 const DEBOUNCE_MS = 400;
 
@@ -260,6 +261,9 @@ class BraillePanel {
     // cleared when the text changes; dirty means hand-edited (only the
     // "Translate to braille" button may overwrite it).
     this.fieldDirty = false;
+    // The character that stopped the last "Convert braille ASCII", shown in
+    // the error tier until the editor changes.
+    this.asciiInvalid = null;
     // Back-translated first word for download names when braille is the
     // only input (computed asynchronously, cached per first line).
     this.fieldDownloadWord = null;
@@ -407,20 +411,19 @@ class BraillePanel {
     help.id = 'brailleFieldHelp';
     help.className = 'braille-panel-help';
     help.textContent = isSign
-      ? 'Accepts braille characters only (U+2800–U+28FF), one line per ' +
-        'braille row on the sign. Press "Translate to braille" to fill ' +
-        'this editor from your text, then edit any cell you want to ' +
-        'change — or paste braille straight in and press "Translate to ' +
-        'text" to read it back. Whenever this editor has content the ' +
-        'braille plate uses it exactly as written, while the raised ' +
-        'letters still come from the text above; clear it to go back to ' +
-        'translating.'
-      : 'Accepts braille characters only (U+2800–U+28FF), one line per card ' +
-        'row. Press "Translate to braille" to fill this editor from your ' +
-        'text, then edit any cell you want to change — or paste braille ' +
-        'straight in and press "Translate to text" to read it back. ' +
-        'Whenever this editor has content the card uses it exactly as ' +
-        'written; clear it to go back to translating the text above.';
+      ? 'One line per braille row on the sign. Press "Translate to braille" ' +
+        'to fill this editor from your text, then change any cell. You can ' +
+        'also paste braille, or paste braille ASCII and press "Convert ' +
+        'braille ASCII". Press "Translate to text" to read the braille ' +
+        'back. Whenever this editor has content the braille plate uses it ' +
+        'exactly as written, and the raised letters still come from the ' +
+        'text above. Clear it to go back to translating.'
+      : 'One line per card row. Press "Translate to braille" to fill this ' +
+        'editor from your text, then change any cell. You can also paste ' +
+        'braille, or paste braille ASCII and press "Convert braille ASCII". ' +
+        'Press "Translate to text" to read the braille back. Whenever this ' +
+        'editor has content the card uses it exactly as written. Clear it ' +
+        'to go back to translating the text above.';
     details.appendChild(help);
 
     const toBrailleRow = document.createElement('div');
@@ -460,6 +463,7 @@ class BraillePanel {
     );
     field.addEventListener('input', () => {
       this.fieldDirty = field.value !== '';
+      this.asciiInvalid = null;
       this.setFieldStatus(
         field.value === ''
           ? 'Empty — the text above is translated instead.'
@@ -484,6 +488,14 @@ class BraillePanel {
       });
     });
     toTextRow.appendChild(toTextBtn);
+    // After the editor, like "Translate to text": both act on its content
+    const fromAsciiBtn = document.createElement('button');
+    fromAsciiBtn.type = 'button';
+    fromAsciiBtn.className = 'btn btn-secondary braille-translate-btn';
+    fromAsciiBtn.id = 'brailleFieldFromAscii';
+    fromAsciiBtn.textContent = 'Convert braille ASCII';
+    fromAsciiBtn.addEventListener('click', () => this.convertBrailleAscii());
+    toTextRow.appendChild(fromAsciiBtn);
     details.appendChild(toTextRow);
 
     // Visible status doubles as the live region, so screen readers hear
@@ -589,6 +601,7 @@ class BraillePanel {
 
     field.value = rows.map((line) => line.braille).join('\n');
     this.fieldDirty = false;
+    this.asciiInvalid = null;
     const n = rows.length;
     this.setFieldStatus(
       `Filled from your text — ${n} braille line${n === 1 ? '' : 's'}. ` +
@@ -622,6 +635,28 @@ class BraillePanel {
         'until you clear this editor.'
     );
     // On a sign the raised letters come from the text box (D-219).
+    this.scheduleLayout(0);
+  }
+
+  /**
+   * Convert braille ASCII in the braille editor to Unicode cells, in place;
+   * the result counts as hand-edited braille. A character that is neither
+   * leaves the editor as it was and is named in the error tier.
+   */
+  convertBrailleAscii() {
+    const field = this.refs.fieldInput;
+    if (!field) return;
+    const { text, invalid } = asciiToCells(field.value);
+    this.asciiInvalid = invalid;
+    if (!invalid) {
+      field.value = text;
+      this.fieldDirty = text !== '';
+      const n = text.split('\n').filter((line) => line !== '').length;
+      this.setFieldStatus(
+        `Converted ${n} line${n === 1 ? '' : 's'} of braille ASCII to ` +
+          'braille cells.'
+      );
+    }
     this.scheduleLayout(0);
   }
 
@@ -1802,7 +1837,8 @@ class BraillePanel {
    *
    * Only U+2800–U+28FF and ASCII spaces are accepted: anything else is
    * reported per line and character so the user knows exactly what to
-   * fix. Spaces become blank cells, trailing blanks are trimmed so they
+   * fix; a character that stopped "Convert braille ASCII" is named first.
+   * Spaces become blank cells, trailing blanks are trimmed so they
    * do not count against the capacity, and lines over `cellsPerLine` are
    * flagged (but still returned — the caller decides what to do).
    *
@@ -1814,6 +1850,13 @@ class BraillePanel {
    */
   parseBrailleField(cellsPerLine) {
     const warnings = [];
+    if (this.asciiInvalid) {
+      const { line, char } = this.asciiInvalid;
+      warnings.push({
+        type: 'braille-field-invalid',
+        message: `Line ${line} contains "${char}", which is not a braille ASCII character.`,
+      });
+    }
     const rawLines = this.refs.fieldInput.value
       .replace(/\r\n?/g, '\n')
       .split('\n');
@@ -1831,9 +1874,9 @@ class BraillePanel {
           type: 'braille-field-invalid',
           message:
             `Line ${i + 1} of the braille editor contains "${invalid}", ` +
-            `which is not a braille character. Only braille characters ` +
-            `(U+2800–U+28FF) and spaces are allowed — press "Translate ` +
-            `to braille" to convert text, or paste Unicode braille.`,
+            `which is not a braille character. Press "Translate to braille" ` +
+            `to convert text, or "Convert braille ASCII" if you pasted ` +
+            `braille typed as keyboard characters.`,
         });
       }
       const braille = rawLine

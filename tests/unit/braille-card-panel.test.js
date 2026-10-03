@@ -122,6 +122,9 @@ const cell = (ch) =>
 /** Braille of a whole lowercase word under the fake translator. */
 const word = (w) => [...w].map(cell).join('');
 
+/** h>ry@a" (braille ASCII from the Braille Authority's card guidelines) as cells. */
+const HARRY = '\u2813\u281C\u2817\u283D\u2808\u2801\u2810';
+
 const params = () => stateManager.getState().parameters || {};
 
 /** Type into the panel's text input and wait for the layout to settle. */
@@ -322,6 +325,86 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     expect(backTranslateText).toHaveBeenCalledWith(
       '\u2813\u2811',
       'en-ueb-g2.ctb'
+    );
+  });
+
+  it('"Convert braille ASCII" turns pasted braille ASCII into the cells the card uses', async () => {
+    // Typed as keyboard characters, it is not braille yet
+    await typeBraille('h>ry@a"', () => {
+      expect(document.getElementById('brailleErrors').textContent).toContain(
+        'not a braille character'
+      );
+    });
+    document.getElementById('brailleFieldFromAscii').click();
+    await vi.waitFor(() => {
+      expect(params().Line_1).toBe(HARRY);
+    });
+    expect(document.getElementById('brailleFieldInput').value).toBe(HARRY);
+    expect(document.getElementById('brailleFieldStatus').textContent).toBe(
+      'Converted 1 line of braille ASCII to braille cells.'
+    );
+    expect(document.getElementById('brailleErrors').hidden).toBe(true);
+  });
+
+  it('counts the lines it converts, and keeps them as hand-edited braille', async () => {
+    await typeBraille('h>ry@a"\nhogw>ts4$u', () => {
+      expect(document.getElementById('brailleErrors').hidden).toBe(false);
+    });
+    document.getElementById('brailleFieldFromAscii').click();
+    await vi.waitFor(() => {
+      expect(params().Line_1).toBe(HARRY);
+    });
+    expect(params().Line_2).not.toBe('');
+    expect(document.getElementById('brailleFieldStatus').textContent).toBe(
+      'Converted 2 lines of braille ASCII to braille cells.'
+    );
+    // A change to the text does not clear braille the person put there
+    await typeText('bye', () => {
+      expect(params().Line_1).toBe(HARRY);
+    });
+    expect(document.getElementById('brailleFieldInput').value).toContain(HARRY);
+  });
+
+  it('leaves the editor as it was and names a character that is not braille ASCII', async () => {
+    await typeBraille('ab{', () => {
+      expect(document.getElementById('brailleErrors').hidden).toBe(false);
+    });
+    document.getElementById('brailleFieldFromAscii').click();
+    await vi.waitFor(() => {
+      expect(document.getElementById('brailleErrors').textContent).toContain(
+        'Line 1 contains "{", which is not a braille ASCII character.'
+      );
+    });
+    expect(document.getElementById('brailleFieldInput').value).toBe('ab{');
+    expect(params().Line_1).toBe('');
+  });
+
+  it('names both buttons when the editor holds a character that is not braille', async () => {
+    await typeBraille('\u2813abc', () => {
+      expect(document.getElementById('brailleErrors').textContent).toContain(
+        'Line 1 of the braille editor contains "a", which is not a braille ' +
+          'character. Press "Translate to braille" to convert text, or ' +
+          '"Convert braille ASCII" if you pasted braille typed as keyboard ' +
+          'characters.'
+      );
+    });
+  });
+
+  it('places the button after the editor, whose content it converts, and explains it', () => {
+    const field = document.getElementById('brailleFieldInput');
+    const convert = document.getElementById('brailleFieldFromAscii');
+    expect(convert.tagName).toBe('BUTTON');
+    expect(convert.type).toBe('button');
+    expect(
+      field.compareDocumentPosition(convert) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(document.getElementById('brailleFieldHelp').textContent).toBe(
+      'One line per card row. Press "Translate to braille" to fill this ' +
+        'editor from your text, then change any cell. You can also paste ' +
+        'braille, or paste braille ASCII and press "Convert braille ASCII". ' +
+        'Press "Translate to text" to read the braille back. Whenever this ' +
+        'editor has content the card uses it exactly as written. Clear it ' +
+        'to go back to translating the text above.'
     );
   });
 });
@@ -678,6 +761,29 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
         expect(params().Line_1).toBe(word('exit'));
       },
       { timeout: 3000, interval: 25 }
+    );
+  });
+
+  it('"Convert braille ASCII" puts the cells on the braille plate only', async () => {
+    await typeText('Exit', () => {
+      expect(params().sign_text_1).toBe('Exit');
+    });
+    await typeBraille('h>ry@a"', () => {
+      expect(document.getElementById('brailleErrors').hidden).toBe(false);
+    });
+    document.getElementById('brailleFieldFromAscii').click();
+    await vi.waitFor(() => {
+      expect(params().Line_1).toBe(HARRY);
+    });
+    expect(params().sign_text_1).toBe('Exit');
+    expect(document.getElementById('brailleFieldHelp').textContent).toBe(
+      'One line per braille row on the sign. Press "Translate to braille" ' +
+        'to fill this editor from your text, then change any cell. You can ' +
+        'also paste braille, or paste braille ASCII and press "Convert ' +
+        'braille ASCII". Press "Translate to text" to read the braille ' +
+        'back. Whenever this editor has content the braille plate uses it ' +
+        'exactly as written, and the raised letters still come from the ' +
+        'text above. Clear it to go back to translating.'
     );
   });
 });

@@ -774,6 +774,36 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(errors).toContainText('not a braille character')
   })
 
+  test('braille editor converts pasted braille ASCII into braille cells', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+
+    await page.locator('#brailleFieldEditor summary').click()
+    const field = page.locator('#brailleFieldInput')
+    // h>ry@a" is braille ASCII from the Braille Authority's card guidelines
+    await field.fill('h>ry@a"')
+    await expect(page.locator('#brailleErrors')).toContainText(
+      'not a braille character',
+      { timeout: 20000 }
+    )
+
+    await page.locator('#brailleFieldFromAscii').click()
+    const cells = '\u2813\u281C\u2817\u283D\u2808\u2801\u2810'
+    await expect(field).toHaveValue(cells)
+    await expect(page.locator('#brailleFieldStatus')).toHaveText(
+      'Converted 1 line of braille ASCII to braille cells.'
+    )
+    await expect(page.locator('#braillePreview')).toContainText(cells, {
+      timeout: 20000,
+    })
+    await expect(
+      page.locator('.param-control[data-param-name="Line_1"] input')
+    ).toHaveValue(cells, { timeout: 10000 })
+    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expectPanelAxeClean(page)
+  })
+
   test('braille panel has no axe violations (normal + warning + error states)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
