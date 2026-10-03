@@ -804,6 +804,32 @@ test.describe('Braille translation workflow (card)', () => {
     await expectPanelAxeClean(page)
   })
 
+  test('six-key entry makes a cell from a chord, and Tab still leaves the editor', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleSixKeyToggle').check()
+    await expect(page.locator('#brailleFieldStatus')).toHaveText(
+      'Six-key entry is on.'
+    )
+    const field = page.locator('#brailleFieldInput')
+    await field.focus()
+    // Hold f, d and k together, then let go: dots 1, 2 and 5
+    for (const key of ['f', 'd', 'k']) await page.keyboard.down(key)
+    for (const key of ['f', 'd', 'k']) await page.keyboard.up(key)
+    await expect(field).toHaveValue('\u2813')
+    await expect(
+      page.locator('.param-control[data-param-name="Line_1"] input')
+    ).toHaveValue('\u2813', { timeout: 10000 })
+    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expectPanelAxeClean(page)
+
+    await page.keyboard.press('Tab')
+    await expect(page.locator('#brailleFieldToText')).toBeFocused()
+  })
+
   test('braille panel has no axe violations (normal + warning + error states)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

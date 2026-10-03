@@ -39,6 +39,7 @@ import {
 } from './braille-wrap.js';
 import { signRowWidthMm } from './sign-letter-metrics.js';
 import { asciiToCells } from './braille-ascii.js';
+import { createSixKeyEntry, describeCell } from './braille-six-key.js';
 
 const DEBOUNCE_MS = 400;
 
@@ -264,6 +265,8 @@ class BraillePanel {
     // The character that stopped the last "Convert braille ASCII", shown in
     // the error tier until the editor changes.
     this.asciiInvalid = null;
+    // The chord in progress while six-key entry is on; null when it is off.
+    this.sixKey = null;
     // Back-translated first word for download names when braille is the
     // only input (computed asynchronously, cached per first line).
     this.fieldDownloadWord = null;
@@ -413,17 +416,18 @@ class BraillePanel {
     help.textContent = isSign
       ? 'One line per braille row on the sign. Press "Translate to braille" ' +
         'to fill this editor from your text, then change any cell. You can ' +
-        'also paste braille, or paste braille ASCII and press "Convert ' +
-        'braille ASCII". Press "Translate to text" to read the braille ' +
-        'back. Whenever this editor has content the braille plate uses it ' +
-        'exactly as written, and the raised letters still come from the ' +
-        'text above. Clear it to go back to translating.'
+        'also paste braille, type it with six-key entry, or paste braille ' +
+        'ASCII and press "Convert braille ASCII". Press "Translate to text" ' +
+        'to read the braille back. Whenever this editor has content the ' +
+        'braille plate uses it exactly as written, and the raised letters ' +
+        'still come from the text above. Clear it to go back to translating.'
       : 'One line per card row. Press "Translate to braille" to fill this ' +
         'editor from your text, then change any cell. You can also paste ' +
-        'braille, or paste braille ASCII and press "Convert braille ASCII". ' +
-        'Press "Translate to text" to read the braille back. Whenever this ' +
-        'editor has content the card uses it exactly as written. Clear it ' +
-        'to go back to translating the text above.';
+        'braille, type it with six-key entry, or paste braille ASCII and ' +
+        'press "Convert braille ASCII". Press "Translate to text" to read ' +
+        'the braille back. Whenever this editor has content the card uses ' +
+        'it exactly as written. Clear it to go back to translating the ' +
+        'text above.';
     details.appendChild(help);
 
     const toBrailleRow = document.createElement('div');
@@ -441,6 +445,31 @@ class BraillePanel {
     });
     toBrailleRow.appendChild(toBrailleBtn);
     details.appendChild(toBrailleRow);
+
+    // Before the editor it changes, so it is met on the way in
+    const sixKeyRow = document.createElement('div');
+    sixKeyRow.className = 'braille-panel-toggle-row braille-six-key-row';
+    const sixKeyInput = document.createElement('input');
+    sixKeyInput.type = 'checkbox';
+    sixKeyInput.id = 'brailleSixKeyToggle';
+    sixKeyInput.addEventListener('change', () =>
+      this.setSixKeyEntry(sixKeyInput.checked)
+    );
+    sixKeyRow.appendChild(sixKeyInput);
+    const sixKeyLabel = document.createElement('label');
+    sixKeyLabel.setAttribute('for', 'brailleSixKeyToggle');
+    sixKeyLabel.textContent = 'Six-key entry';
+    sixKeyRow.appendChild(sixKeyLabel);
+    details.appendChild(sixKeyRow);
+
+    const sixKeyHelp = document.createElement('p');
+    sixKeyHelp.id = 'brailleSixKeyHelp';
+    sixKeyHelp.className = 'braille-panel-help';
+    sixKeyHelp.textContent =
+      'Type a cell by holding its keys together and letting go: f, d, s ' +
+      'are dots 1, 2, 3 and j, k, l are dots 4, 5, 6. Space makes a blank ' +
+      'cell. Every other key works as usual.';
+    details.appendChild(sixKeyHelp);
 
     const fieldLabel = document.createElement('label');
     fieldLabel.setAttribute('for', 'brailleFieldInput');
@@ -464,13 +493,25 @@ class BraillePanel {
     field.addEventListener('input', () => {
       this.fieldDirty = field.value !== '';
       this.asciiInvalid = null;
-      this.setFieldStatus(
+      const status =
         field.value === ''
           ? 'Empty — the text above is translated instead.'
-          : 'Edited by hand — this braille is used exactly as written.'
-      );
+          : 'Edited by hand — this braille is used exactly as written.';
+      // The status is a live region, which says a sentence again each time
+      // it is written; typing (or six-key entry) must not repeat it per key
+      if (this.refs.fieldStatus?.textContent !== status) {
+        this.setFieldStatus(status);
+      }
       this.scheduleLayout();
     });
+    field.addEventListener('keydown', (event) => {
+      if (this.sixKey?.keyDown(event)) event.preventDefault();
+    });
+    field.addEventListener('keyup', (event) => {
+      const cell = this.sixKey?.keyUp(event);
+      if (cell) this.insertSixKeyCell(cell);
+    });
+    field.addEventListener('blur', () => this.sixKey?.reset());
     details.appendChild(field);
     this.refs.fieldInput = field;
 
@@ -636,6 +677,27 @@ class BraillePanel {
     );
     // On a sign the raised letters come from the text box (D-219).
     this.scheduleLayout(0);
+  }
+
+  /**
+   * Turn six-key entry on or off, and say so in the editor's status line.
+   * @param {boolean} on
+   */
+  setSixKeyEntry(on) {
+    this.sixKey = on ? createSixKeyEntry() : null;
+    this.setFieldStatus(on ? 'Six-key entry is on.' : 'Six-key entry is off.');
+  }
+
+  /**
+   * Put a cell typed with six keys at the editor's caret, let the editor's
+   * own input handling run, and say the cell's dots.
+   * @param {string} cell
+   */
+  insertSixKeyCell(cell) {
+    const field = this.refs.fieldInput;
+    field.setRangeText(cell, field.selectionStart, field.selectionEnd, 'end');
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    stateManager.announceChange(describeCell(cell), true);
   }
 
   /**

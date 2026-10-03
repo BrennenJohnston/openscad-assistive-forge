@@ -87,7 +87,7 @@ import {
   getTables,
   translateText,
 } from '../../src/js/braille-translator.js';
-import { announceImmediate } from '../../src/js/announcer.js';
+import { announce, announceImmediate } from '../../src/js/announcer.js';
 import { stateManager } from '../../src/js/state.js';
 import { extractParameters } from '../../src/js/parser.js';
 
@@ -401,11 +401,109 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     expect(document.getElementById('brailleFieldHelp').textContent).toBe(
       'One line per card row. Press "Translate to braille" to fill this ' +
         'editor from your text, then change any cell. You can also paste ' +
-        'braille, or paste braille ASCII and press "Convert braille ASCII". ' +
-        'Press "Translate to text" to read the braille back. Whenever this ' +
-        'editor has content the card uses it exactly as written. Clear it ' +
-        'to go back to translating the text above.'
+        'braille, type it with six-key entry, or paste braille ASCII and ' +
+        'press "Convert braille ASCII". Press "Translate to text" to read ' +
+        'the braille back. Whenever this editor has content the card uses ' +
+        'it exactly as written. Clear it to go back to translating the ' +
+        'text above.'
     );
+  });
+
+  /** Press or release keys in the braille editor; the events dispatched. */
+  const keys = (type, codes, extra = {}) =>
+    codes.map((code) => {
+      const event = new KeyboardEvent(type, {
+        code,
+        bubbles: true,
+        cancelable: true,
+        ...extra,
+      });
+      document.getElementById('brailleFieldInput').dispatchEvent(event);
+      return event;
+    });
+
+  /** Hold the keys together, then let go. */
+  const chord = (codes) => {
+    keys('keydown', codes);
+    keys('keyup', codes);
+  };
+
+  it('offers six-key entry before the editor, off by default', () => {
+    const toggle = document.getElementById('brailleSixKeyToggle');
+    expect(toggle.type).toBe('checkbox');
+    expect(toggle.checked).toBe(false);
+    expect(
+      document.querySelector('label[for="brailleSixKeyToggle"]').textContent
+    ).toBe('Six-key entry');
+    const field = document.getElementById('brailleFieldInput');
+    expect(
+      toggle.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(document.getElementById('brailleSixKeyHelp').textContent).toBe(
+      'Type a cell by holding its keys together and letting go: f, d, s ' +
+        'are dots 1, 2, 3 and j, k, l are dots 4, 5, 6. Space makes a blank ' +
+        'cell. Every other key works as usual.'
+    );
+  });
+
+  it('says in the editor status when six-key entry turns on and off', () => {
+    const toggle = document.getElementById('brailleSixKeyToggle');
+    toggle.click();
+    expect(document.getElementById('brailleFieldStatus').textContent).toBe(
+      'Six-key entry is on.'
+    );
+    toggle.click();
+    expect(document.getElementById('brailleFieldStatus').textContent).toBe(
+      'Six-key entry is off.'
+    );
+  });
+
+  it('with six-key entry on, a chord of f, d and k puts one cell at the caret, says its dots, and the card uses it', async () => {
+    document.getElementById('brailleSixKeyToggle').click();
+    const field = document.getElementById('brailleFieldInput');
+    field.value = '\u2801\u2803';
+    field.setSelectionRange(1, 1);
+    const downs = keys('keydown', ['KeyF', 'KeyD', 'KeyK']);
+    expect(downs.every((event) => event.defaultPrevented)).toBe(true);
+    keys('keyup', ['KeyF', 'KeyD', 'KeyK']);
+    expect(field.value).toBe('\u2801\u2813\u2803');
+    expect(field.selectionStart).toBe(2);
+    expect(announce).toHaveBeenCalledWith('dots 1 2 5');
+    await vi.waitFor(() => {
+      expect(params().Line_1).toBe('\u2801\u2813\u2803');
+    });
+  });
+
+  it('with six-key entry on, leaves Tab and a key with Ctrl to the browser', () => {
+    document.getElementById('brailleSixKeyToggle').click();
+    const [tab] = keys('keydown', ['Tab'], { key: 'Tab' });
+    expect(tab.defaultPrevented).toBe(false);
+    const [find] = keys('keydown', ['KeyF'], { key: 'f', ctrlKey: true });
+    expect(find.defaultPrevented).toBe(false);
+  });
+
+  it('with six-key entry off, leaves the keys to type as usual', () => {
+    const [f] = keys('keydown', ['KeyF'], { key: 'f' });
+    expect(f.defaultPrevented).toBe(false);
+  });
+
+  it('writes the editor status once, not again for each cell', async () => {
+    document.getElementById('brailleSixKeyToggle').click();
+    chord(['KeyF']);
+    const status = document.getElementById('brailleFieldStatus');
+    const writes = [];
+    new MutationObserver((records) => writes.push(...records)).observe(status, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    chord(['KeyD']);
+    chord(['KeyK']);
+    await Promise.resolve();
+    expect(document.getElementById('brailleFieldInput').value).toBe(
+      '\u2801\u2802\u2810'
+    );
+    expect(writes).toHaveLength(0);
   });
 });
 
@@ -779,11 +877,11 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
     expect(document.getElementById('brailleFieldHelp').textContent).toBe(
       'One line per braille row on the sign. Press "Translate to braille" ' +
         'to fill this editor from your text, then change any cell. You can ' +
-        'also paste braille, or paste braille ASCII and press "Convert ' +
-        'braille ASCII". Press "Translate to text" to read the braille ' +
-        'back. Whenever this editor has content the braille plate uses it ' +
-        'exactly as written, and the raised letters still come from the ' +
-        'text above. Clear it to go back to translating.'
+        'also paste braille, type it with six-key entry, or paste braille ' +
+        'ASCII and press "Convert braille ASCII". Press "Translate to text" ' +
+        'to read the braille back. Whenever this editor has content the ' +
+        'braille plate uses it exactly as written, and the raised letters ' +
+        'still come from the text above. Clear it to go back to translating.'
     );
   });
 });
