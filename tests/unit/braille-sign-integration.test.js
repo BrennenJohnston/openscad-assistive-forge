@@ -130,10 +130,11 @@ describe('braille_sign.scad parser integration', () => {
     expect(panel.SIGN_CHAR_ADVANCE_FACTOR).toBeUndefined();
   });
 
-  it('keeps letters and braille 9.5 mm inside its border, with the panel in step (ADA 703.2.7, 703.3.2)', async () => {
+  it('keeps letters and braille 3/8 in (9.525 mm) inside its border, with the panel in step (ADA 703.2.7, 703.3.2)', async () => {
+    // ADA prints 3/8 inch as 9.5 mm; the sign meets both figures
     const scad = readScad();
     const clearance = Number(scad.match(/^BORDER_CLEARANCE_MM = ([\d.]+);/m)?.[1]);
-    expect(clearance).toBe(9.5);
+    expect(clearance).toBe(9.525);
     expect(scad).toMatch(
       /^_plate_pad = \(border_on \? border_width_mm : 0\) \+ BORDER_CLEARANCE_MM;/m
     );
@@ -143,11 +144,17 @@ describe('braille_sign.scad parser integration', () => {
     expect(SIGN_BORDER_CLEARANCE_MM).toBe(clearance);
     const { add_border, sign_width_mm } = extractParameters(scad).parameters;
     expect(add_border.description).toBe(
-      'Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.5 mm inside it (ADA 703.2.7 and 703.3.2).'
+      'Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.525 mm (3/8 in) inside it (ADA 703.2.7 and 703.3.2).'
     );
     // "ROOM 101" needs 142.3 mm of letters at the default spacing, plus the
     // clearance and the 2 mm border on each side
     expect(sign_width_mm.default).toBe(166);
+  });
+
+  it('spaces its braille lines inside ADA\'s range in inches and in millimeters (Table 703.3.1)', () => {
+    // 0.395 to 0.400 inch is 10.033 to 10.16 mm; ADA prints 10 to 10.2 mm
+    const { line_spacing } = extractParameters(readScad()).parameters;
+    expect(line_spacing.default).toBe(10.1);
   });
 
   it('spaces its letters at 1.21, with the panel in step (ADA 703.2.7)', async () => {

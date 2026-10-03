@@ -94,7 +94,7 @@ line_spacing_pct = 135;       // [100:5:200]
 letter_spacing = 1.21;        // [0.8:0.01:2]
 
 /* [Border] */
-// Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.5 mm inside it (ADA 703.2.7 and 703.3.2).
+// Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.525 mm (3/8 in) inside it (ADA 703.2.7 and 703.3.2).
 add_border = "yes";           // [yes, no]
 // Border width (mm)
 border_width_mm = 2;          // [0.5:0.5:6]
@@ -139,7 +139,7 @@ dot_shape = "Rounded";        // [Rounded, Cone]
 // Horizontal spacing between cells (mm)
 cell_spacing = 7.0;           // [2:0.01:15]
 // Vertical spacing between braille lines (mm)
-line_spacing = 10.0;          // [5:0.01:25]
+line_spacing = 10.1;          // [5:0.01:25]
 // Spacing between dots within a cell (mm)
 dot_spacing = 2.5;            // [1:0.01:5]
 
@@ -221,8 +221,9 @@ braille_block_h = braille_rows  <= 1 ? 0 : (braille_rows - 1) * line_spacing;
 auto_fit_on = (auto_fit == "Yes");
 // Clear space kept between the letters or braille and the border, or the
 // plate's edge when the border is off: ADA 703.2.7 (raised characters) and
-// 703.3.2 (braille) ask for 9.5 mm (3/8 in) from raised borders.
-BORDER_CLEARANCE_MM = 9.5;
+// 703.3.2 (braille) ask for 3/8 in from raised borders, printed as 9.5 mm;
+// the sign meets both figures.
+BORDER_CLEARANCE_MM = 9.525;
 _plate_pad = (border_on ? border_width_mm : 0) + BORDER_CLEARANCE_MM;
 _dot_base_d = (dot_shape == "Rounded")
     ? rounded_dot_base_diameter : cone_dot_base_diameter;
@@ -683,7 +684,7 @@ for (i = [0:_line_count-1])
         echo(str("WARNING: braille Line_", i + 1, " contains non-braille characters. Use Unicode braille (U+2800-U+28FF)."));
 if (char_height_mm < 15.9)
     echo("NOTE: ADA 703.2.5 requires raised characters at least 15.9 mm (5/8 in) tall.");
-echo("NOTE: ADA defaults are recommendations only - this tool does not guarantee compliance. Mount the braille plate at least 9.5 mm (3/8 in) below the raised text.");
+echo(str("NOTE: ADA defaults are recommendations only - this tool does not guarantee compliance. Mount the braille plate at least ", BORDER_CLEARANCE_MM, " mm (3/8 in) below the raised text."));
 
 // =============================================================================
 // MAIN RENDERING

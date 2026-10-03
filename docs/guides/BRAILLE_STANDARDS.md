@@ -5,6 +5,7 @@ This page says which rules the Braille Sign's raised letters and braille follow,
 ## What this page is, and is not
 
 - The sign follows section 703 (Signs) of the 2010 ADA Standards for Accessible Design and the Braille Authority of North America's (BANA) guidelines for braille signage. The figures below are theirs; the sign's own numbers are measured from the 3D model the app exports.
+- ADA states each figure in inches, with a rounded metric figure in parentheses, and the two do not always agree (3/8 in is 9.525 mm, printed 9.5 mm). Where they differ, the sign keeps to the stricter of the two, so it meets both.
 - The tool does not certify a sign. Where a sign is mounted, its finish and contrast, and anything else section 703 asks of an installed sign are outside what it can check (see "What the tool does not check" below).
 - BANA advises that braille for signs be proofread by qualified people who know braille codes, and that the final sizing and spacing be checked. Please do both before installing a sign.
 
@@ -26,7 +27,7 @@ All distances are measured center to center, as the table says.
 | Dot height | 0.6 to 0.9 mm (0.025 to 0.037 in) | 0.68 mm | the base height (0 to 2 mm) and the dome height (0.1 to 2 mm) have separate sliders, unchecked |
 | Between two dots in the same cell | 2.3 to 2.5 mm (0.090 to 0.100 in) | 2.5 mm | the slider allows 1 to 5 mm, unchecked |
 | Between corresponding dots in adjacent cells | 6.1 to 7.6 mm (0.241 to 0.300 in) | 7.0 mm | the slider allows 2 to 15 mm, unchecked |
-| Between corresponding dots one cell directly below | 10 to 10.2 mm (0.395 to 0.400 in) | 10.0 mm | the slider allows 5 to 25 mm, unchecked |
+| Between corresponding dots one cell directly below | 10 to 10.2 mm (0.395 to 0.400 in) | 10.1 mm | the slider allows 5 to 25 mm, unchecked |
 
 ## Raised letters on the sign (ADA 703.2)
 
@@ -43,8 +44,8 @@ All distances are measured center to center, as the table says.
 
 ## Layout (ADA 703.2.7, 703.3.2)
 
-- The braille sits below the entire text, on its own plate, as 703.3.2 asks; mount it with the braille at least 9.5 mm (3/8 in) below the lowest raised letters.
-- Letters and braille must be at least 9.5 mm (3/8 in) from raised borders. The sign's optional raised border is split between the two plates so that, mounted together, they form one frame. The sign keeps its letters and braille at least 9.5 mm inside that border (inside the plate's edge when the border is off), and sizes each row of letters from the measured widths of its characters: measured, the closest they come is 9.5 mm where rows fill a plate, and 10.7 mm beside a long word.
+- The braille sits below the entire text, on its own plate, as 703.3.2 asks; mount it with the braille at least 9.525 mm (3/8 in) below the lowest raised letters.
+- Letters and braille must be at least 9.5 mm (3/8 in) from raised borders. The sign's optional raised border is split between the two plates so that, mounted together, they form one frame. The sign keeps its letters and braille at least 9.525 mm (3/8 in) inside that border (inside the plate's edge when the border is off), and sizes each row of letters from the measured widths of its characters: measured, the closest they come is 9.53 mm where rows fill a plate, and 10.7 mm beside a long word.
 
 ## What the tool does not check
 
@@ -54,7 +55,7 @@ All distances are measured center to center, as the table says.
 
 ## Braille cards and charms
 
-Cards and charms are not signs, and section 703 does not govern them. Their dot defaults are the sign's (a 1.6 mm base, about 0.68 mm high, 2.5 mm between dots, 7.0 mm between cells, 10.0 mm between lines), which sit inside the sign ranges above. The card starts on contracted braille, as BANA's business card examples are; the charm starts on uncontracted braille (Grade 1), since each charm holds a single character.
+Cards and charms are not signs, and section 703 does not govern them. Their dot defaults are a 1.6 mm base, about 0.68 mm high, 2.5 mm between dots, 7.0 mm between cells and 10.0 mm between lines: the sign's, except that the sign spaces its lines 10.1 mm apart to meet ADA's range in inches as well as in millimeters. The card starts on contracted braille, as BANA's business card examples are; the charm starts on uncontracted braille (Grade 1), since each charm holds a single character.
 
 For comparison, braille embossed on paper in the United States and Canada follows the Library of Congress's Specification 800, which BANA quotes: dots 0.48 mm high with a 1.44 mm base, 2.340 mm between dots in a cell, 6.2 mm between cells and 10.0 mm between lines.
 

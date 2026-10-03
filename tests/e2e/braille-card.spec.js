@@ -1010,7 +1010,7 @@ test.describe('Braille Sign workflow', () => {
     ['a long word', 'CONFERENCE ROOM', ['CONFERENCE', 'ROOM']],
     ['a full row of braille', 'ROOM 101 AND ROOM 102', ['ROOM 101', 'AND', 'ROOM 102']],
   ]) {
-    test(`keeps letters and braille 9.5 mm inside the border: ${label} (ADA 703.2.7, 703.3.2)`, async ({
+    test(`keeps letters and braille 3/8 in (9.525 mm) inside the border: ${label} (ADA 703.2.7, 703.3.2)`, async ({
       page,
     }) => {
       test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
@@ -1039,11 +1039,11 @@ test.describe('Braille Sign workflow', () => {
       expect(
         Math.min(...Object.values(letters)),
         `letters: ${shown(letters)} mm`
-      ).toBeGreaterThanOrEqual(9.5 - 0.001)
+      ).toBeGreaterThanOrEqual(9.525 - 0.001)
       expect(
         Math.min(...Object.values(braille)),
         `braille: ${shown(braille)} mm`
-      ).toBeGreaterThanOrEqual(9.5 - 0.001)
+      ).toBeGreaterThanOrEqual(9.525 - 0.001)
     })
   }
 
