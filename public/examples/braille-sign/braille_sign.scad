@@ -90,8 +90,8 @@ char_height_mm = 16;          // [12:0.5:50]
 letter_raise_mm = 0.8;        // [0.4:0.05:2]
 // Line spacing as a percentage of character height (703.2.8: 135%)
 line_spacing_pct = 135;       // [100:5:200]
-// Character spacing multiplier (>1 spreads characters; 703.2.8 needs clear space between)
-letter_spacing = 1.1;         // [0.8:0.05:2]
+// Letter spacing. At 1.21 every pair of adjacent capital letters, and every pair of adjacent digits, is 3.2 mm to four stroke widths apart (ADA 703.2.7).
+letter_spacing = 1.21;        // [0.8:0.01:2]
 
 /* [Border] */
 // Raised split border: top + sides on the letter plate, bottom + sides on the braille plate

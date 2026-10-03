@@ -109,6 +109,22 @@ describe('braille_sign.scad parser integration', () => {
     );
   });
 
+  it('spaces its letters at 1.21, with the panel in step (ADA 703.2.7)', async () => {
+    // At 1.21 every pair of capitals and every pair of digits is 3.2 mm to
+    // four strokes apart at the letters' true height; at 1.2 A-A is 3.19 mm
+    const { letter_spacing } = extractParameters(readScad()).parameters;
+    expect(letter_spacing.default).toBe(1.21);
+    // A range slider snaps its value to the step, so the step must reach 1.21
+    expect(letter_spacing.step).toBe(0.01);
+    expect(letter_spacing.description).toBe(
+      'Letter spacing. At 1.21 every pair of adjacent capital letters, and every pair of adjacent digits, is 3.2 mm to four stroke widths apart (ADA 703.2.7).'
+    );
+    const { SIGN_DEFAULT_LETTER_SPACING } = await import(
+      '../../src/js/braille-panel.js'
+    );
+    expect(SIGN_DEFAULT_LETTER_SPACING).toBe(letter_spacing.default);
+  });
+
   it('keeps ADA-friendly rounded dot defaults (1.6 mm base, <= 0.9 mm tall)', () => {
     const parsed = extractParameters(readScad());
     expect(parsed.parameters.dot_shape.default).toBe('Rounded');

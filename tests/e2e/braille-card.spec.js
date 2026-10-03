@@ -91,6 +91,94 @@ async function downloadStl(page) {
   return parseSTL(readFileSync(await download.path()))
 }
 
+/**
+ * The raised letters' outlines from an exported mesh, row by row from the
+ * top, each row left to right: the faces at the highest level, grouped into
+ * letters by shared corners; a letter's outline is the edges only one of
+ * its faces uses.
+ */
+function letterRows({ triangles, count }) {
+  let top = -Infinity
+  for (let i = 2; i < count * 9; i += 3) top = Math.max(top, triangles[i])
+  const faces = []
+  for (let b = 0; b < count * 9; b += 9) {
+    if ([2, 5, 8].every((k) => Math.abs(triangles[b + k] - top) < 1e-4)) {
+      faces.push([0, 3, 6].map((k) => [triangles[b + k], triangles[b + k + 1]]))
+    }
+  }
+  const key = (p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`
+  const parent = faces.map((_, i) => i)
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  const owner = new Map()
+  faces.forEach((face, i) => {
+    for (const p of face) {
+      const k = key(p)
+      if (owner.has(k)) parent[find(i)] = find(owner.get(k))
+      else owner.set(k, i)
+    }
+  })
+  const groups = new Map()
+  faces.forEach((face, i) => {
+    const root = find(i)
+    if (!groups.has(root)) groups.set(root, [])
+    groups.get(root).push(face)
+  })
+  const letters = [...groups.values()].map((group) => {
+    const uses = new Map()
+    for (const face of group) {
+      for (let i = 0; i < 3; i++) {
+        const a = face[i]
+        const b = face[(i + 1) % 3]
+        const k = [key(a), key(b)].sort().join('|')
+        uses.set(k, uses.has(k) ? null : [a, b])
+      }
+    }
+    const xs = group.flat().map((p) => p[0])
+    const ys = group.flat().map((p) => p[1])
+    return {
+      minX: Math.min(...xs),
+      midY: (Math.min(...ys) + Math.max(...ys)) / 2,
+      edges: [...uses.values()].filter(Boolean),
+    }
+  })
+  // Rows are a line pitch (over 20 mm) apart; a letter more than 5 mm
+  // below the previous one starts a new row
+  letters.sort((a, b) => b.midY - a.midY)
+  const rows = []
+  for (const letter of letters) {
+    const row = rows.at(-1)
+    if (row && row.at(-1).midY - letter.midY < 5) row.push(letter)
+    else rows.push([letter])
+  }
+  return rows.map((row) => row.sort((a, b) => a.minX - b.minX))
+}
+
+/** The smallest distance between two letters' outlines (mm). */
+function outlineGap(a, b) {
+  const toSegment = (p, [s, e]) => {
+    const dx = e[0] - s[0]
+    const dy = e[1] - s[1]
+    const len2 = dx * dx + dy * dy
+    const t = len2
+      ? Math.max(0, Math.min(1, ((p[0] - s[0]) * dx + (p[1] - s[1]) * dy) / len2))
+      : 0
+    return Math.hypot(s[0] + t * dx - p[0], s[1] + t * dy - p[1])
+  }
+  let best = Infinity
+  for (const u of a.edges) {
+    for (const v of b.edges) {
+      best = Math.min(
+        best,
+        toSegment(u[0], v),
+        toSegment(u[1], v),
+        toSegment(v[0], u),
+        toSegment(v[1], u)
+      )
+    }
+  }
+  return best
+}
+
 /** Run an axe scan of the braille panel and assert no violations. */
 async function expectPanelAxeClean(page) {
   const results = await new AxeBuilder({ page })
@@ -767,6 +855,41 @@ test.describe('Braille Sign workflow', () => {
       Math.abs(height - charHeight),
       `capital I ${height.toFixed(4)} mm at the setting ${charHeight}`
     ).toBeLessThanOrEqual(0.05)
+  })
+
+  test('adjacent raised letters keep ADA 703.2.7 spacing', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleExample(page, 'braille-sign')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    // A-A is the closest pair of capitals, then K-A and A-X; each word is its
+    // own row
+    await page.locator('#brailleTextInput').fill('KAYAK TAXI BAZAAR')
+    await expect(
+      page.locator('.param-control[data-param-name="sign_text_3"] input')
+    ).toHaveValue('BAZAAR', { timeout: 20000 })
+    await setParam(page, 'sign_part', 'Letter plate')
+    await setParam(page, 'add_border', false)
+
+    const rows = letterRows(await downloadStl(page))
+    expect(rows.map((row) => row.length)).toEqual([5, 4, 6])
+    // The stroke is the width of the I, the narrowest letter
+    const stroke = Math.min(
+      ...rows.flat().map((letter) => {
+        const xs = letter.edges.flat().map((p) => p[0])
+        return Math.max(...xs) - Math.min(...xs)
+      })
+    )
+    const gaps = rows.flatMap((row) =>
+      row.slice(1).map((letter, i) => outlineGap(row[i], letter))
+    )
+    const shown = gaps.map((g) => g.toFixed(2)).join(', ')
+    expect(Math.min(...gaps), `gaps ${shown} mm`).toBeGreaterThanOrEqual(3.2)
+    expect(Math.max(...gaps), `gaps ${shown} mm`).toBeLessThanOrEqual(4 * stroke)
   })
 
   test('sign panel writes raised-text and braille params', async ({ page }) => {

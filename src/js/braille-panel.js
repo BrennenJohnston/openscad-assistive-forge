@@ -51,6 +51,9 @@ const BED_WARN_MM = 250;
  */
 export const SIGN_CHAR_ADVANCE_FACTOR = 0.94 / 0.9555;
 
+/** The sign's default letter spacing, the SCAD's `letter_spacing`. */
+export const SIGN_DEFAULT_LETTER_SPACING = 1.21;
+
 const MARGIN_PRESETS = [
   { id: 'narrow', label: 'Narrow (6 mm)', value: 6 },
   { id: 'standard', label: 'Standard (12.7 mm / 0.5 in)', value: 12.7 },
@@ -1592,7 +1595,10 @@ class BraillePanel {
     // wrap capacity stretches to the longest word and the sign widens
     // with it.
     const charHeightMm = this.readNumericParam('charHeight', 16);
-    const letterSpacing = this.readNumericParam('letterSpacing', 1.1);
+    const letterSpacing = this.readNumericParam(
+      'letterSpacing',
+      SIGN_DEFAULT_LETTER_SPACING
+    );
     const advanceMm = charHeightMm * SIGN_CHAR_ADVANCE_FACTOR * letterSpacing;
     const usableWidthMm = geometry.cardWidthMm - 2 * geometry.marginMm;
     const fitChars = Math.max(1, Math.floor(usableWidthMm / advanceMm));

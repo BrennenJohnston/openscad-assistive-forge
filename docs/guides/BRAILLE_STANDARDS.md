@@ -38,13 +38,13 @@ All distances are measured center to center, as the table says.
 | 703.2.4 Proportions | the "O" 55 to 110 % as wide as the "I" is tall | 99 % |
 | 703.2.5 Height | 16 mm (5/8 in) to 51 mm (2 in), measured on the uppercase "I"; 13 mm (1/2 in) is allowed where separate visual characters carry the same information | 16.00 mm at the default setting of 16: the setting is the height of the "I" |
 | 703.2.6 Stroke | the "I" stroke 15 % maximum of its height | 13.6 % |
-| 703.2.7 Spacing | 3.2 mm (1/8 in) minimum between the closest points of adjacent letters in a word (the sign's letters have rectangular cross sections), and four times the stroke maximum (8.7 mm at the default size) | at the default spacing of 1.1, eight letter pairs are closer than 3.2 mm; the closest is K and A, 1.86 mm |
+| 703.2.7 Spacing | 3.2 mm (1/8 in) minimum between the closest points of adjacent letters in a word (the sign's letters have rectangular cross sections), and four times the stroke maximum (8.7 mm at the default size) | at the default spacing of 1.21, measured on every pair of capital letters and every pair of digits: all are 3.2 mm or more apart (the closest, A and A, 3.35 mm) and no more than four strokes apart (the widest, Y and J, 8.44 mm). A letter beside a digit can fall outside: 7A is 9.06 mm and Y4 9.53 mm apart, and no single spacing keeps every such pair in range |
 | 703.2.8 Line spacing | baseline to baseline, 135 to 170 % of the character height | 135 % |
 
 ## Layout (ADA 703.2.7, 703.3.2)
 
 - The braille sits below the entire text, on its own plate, as 703.3.2 asks; mount it with the braille at least 9.5 mm (3/8 in) below the lowest raised letters.
-- Letters and braille must be at least 9.5 mm (3/8 in) from raised borders. The sign's optional raised border is split between the two plates so that, mounted together, they form one frame. Today the plates are padded by 4 mm inside that border: measured, letters and braille come within 3.8 to 4.7 mm of it whenever they fill a plate, and a long word of wide letters within 2.2 mm.
+- Letters and braille must be at least 9.5 mm (3/8 in) from raised borders. The sign's optional raised border is split between the two plates so that, mounted together, they form one frame. Today the plates are padded by 4 mm inside that border: measured, letters and braille come within 3.8 to 4.7 mm of it whenever they fill a plate, and a long word of wide letters within 1.9 mm.
 
 ## What the tool does not check
 
