@@ -16,10 +16,15 @@
  *   the braille. A new typed line starts afresh (UEB 8.5.6).
  * - The braille is cut into words at its blank cells and packed greedily;
  *   lines break only between words, so wrapping never changes a cell.
- * - A braille word longer than a line is divided in the braille itself,
- *   after the cells for @ . - / : (the BANA division points for emails and
- *   URLs); no piece is translated again. Dot-5 continuation indicators are
- *   a documented follow-up.
+ * - A braille word longer than a line is divided in the braille itself; no
+ *   piece is translated again. An email or web address divides after
+ *   @ . - / : _ and a number after a period or comma, never between digits,
+ *   and each of their rows but the last ends with the line continuation
+ *   sign, dot 5 (BANA's business card guidelines, UEB 6.10), which the row
+ *   must hold too. When a row cannot, the word is divided without the sign,
+ *   the guidelines' last resort. Any other word divides after . - / : and
+ *   gains nothing: a hyphen or a slash already ends its row (UEB 10.13.2,
+ *   7.4.1).
  * - User newlines are hard breaks.
  *
  * @license GPL-3.0-or-later
@@ -28,8 +33,15 @@
 /** Unicode braille blank cell (used instead of ASCII space in output). */
 export const BRAILLE_SPACE = '\u2800';
 
-/** Characters after which an over-long word may be divided (BANA fact sheet). */
-const BREAK_AFTER_CHARS = ['@', '.', '-', '/', ':'];
+/** The line continuation sign (dot 5). */
+const LINE_CONTINUATION = '\u2810';
+
+/** Characters after which an over-long word of each kind may be divided. */
+const DIVIDE_AFTER = {
+  address: ['@', '.', '-', '/', ':', '_'],
+  number: ['.', ','],
+  other: ['.', '-', '/', ':'],
+};
 
 /**
  * Count braille cells in a translated string. Braille patterns live in the
@@ -220,18 +232,35 @@ function wordRanges(line, spans, inputPos) {
 }
 
 /**
+ * The kind of a word's typed text, for dividing it. A slash alone does not
+ * make an address: words joined by a slash, and dates, divide after it with
+ * no sign (UEB 7.4.1); it counts after a domain name, as in example.org/visit.
+ * @param {string} source
+ * @returns {'address'|'number'|'other'}
+ */
+function wordKind(source) {
+  const core = source.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+  if (/@|:\/\/|^www\./i.test(core) || /^[^/]*\.\p{L}[^/]*\//u.test(core)) {
+    return 'address';
+  }
+  if (/^\d+(?:[.,]\d+)+$/.test(core)) return 'number';
+  return 'other';
+}
+
+/**
  * Cells of a braille word at which a new line may start: the first cell
- * past each @ . - / : in the word's typed text.
+ * past each of `divideAfter` in the word's typed text.
  * @param {string} line
  * @param {number[]} inputPos
  * @param {number} start - The word's first cell
  * @param {number} end - Past the word's last cell
+ * @param {string[]} divideAfter
  * @returns {number[]} Cell indexes, ascending, inside (start, end)
  */
-function divisionPoints(line, inputPos, start, end) {
+function divisionPoints(line, inputPos, start, end, divideAfter) {
   const points = new Set();
   for (let i = start; i < end; i++) {
-    if (!BREAK_AFTER_CHARS.includes(line[inputPos[i]])) continue;
+    if (!divideAfter.includes(line[inputPos[i]])) continue;
     let j = i + 1;
     while (j < end && inputPos[j] <= inputPos[i]) j++;
     if (j < end) points.add(j);
@@ -241,15 +270,19 @@ function divisionPoints(line, inputPos, start, end) {
 
 /**
  * Group a word's cells into pieces that each fill a line, cutting only at
- * division points. A piece longer than a line is kept whole.
+ * division points. Every piece but the last is followed by `signCells` more
+ * cells, which its line must hold too. A piece longer than a line is kept
+ * whole.
  * @returns {Array<[number, number]>} [start, end) cell ranges
  */
-function divideWord(start, end, points, cellsPerLine) {
+function divideWord(start, end, points, cellsPerLine, signCells = 0) {
   const pieces = [];
   let pieceStart = start;
   let lastFit = start;
+  const fits = (cut) =>
+    cut - pieceStart + (cut === end ? 0 : signCells) <= cellsPerLine;
   for (const cut of [...points, end]) {
-    if (cut - pieceStart <= cellsPerLine) {
+    if (fits(cut)) {
       lastFit = cut;
       continue;
     }
@@ -257,7 +290,7 @@ function divideWord(start, end, points, cellsPerLine) {
       pieces.push([pieceStart, lastFit]);
       pieceStart = lastFit;
     }
-    if (cut - pieceStart <= cellsPerLine) {
+    if (fits(cut)) {
       lastFit = cut;
       continue;
     }
@@ -282,8 +315,10 @@ function divideWord(start, end, points, cellsPerLine) {
  * @returns {Promise<{
  *   words: Array<{ braille: string, cells: number, source: string }>,
  *   overlong: Array<{ source: string, cells: number, divided: boolean }>,
+ *   continued: string[],
  * }>} `overlong` lists the words that still overflow a line: whole when
- *   they could not be divided, or a piece of them when they were
+ *   they could not be divided, or a piece of them when they were;
+ *   `continued` lists the words divided with the line continuation sign
  */
 async function translateLine(line, translate, cellsPerLine) {
   const { braille, inputPos } = asTranslation(await translate(line));
@@ -296,37 +331,71 @@ async function translateLine(line, translate, cellsPerLine) {
     if (typed.length === spans.length) return typed[k];
     return k === 0 ? line : '';
   };
-  const piece = (from, to, source) => ({
-    braille: cells.slice(from, to).join(''),
-    cells: to - from,
+  const piece = (from, to, source, sign = '') => ({
+    braille: cells.slice(from, to).join('') + sign,
+    cells: to - from + countCells(sign),
     source,
   });
 
   const words = [];
   const overlong = [];
+  const continued = [];
   spans.forEach(([start, end], k) => {
     const source = sourceOf(k);
     if (end - start <= cellsPerLine) {
       words.push(piece(start, end, source));
       return;
     }
-    const points = ranges ? divisionPoints(line, inputPos, start, end) : [];
+    const kind = wordKind(source);
+    const points = ranges
+      ? divisionPoints(line, inputPos, start, end, DIVIDE_AFTER[kind])
+      : [];
     if (points.length === 0) {
       words.push(piece(start, end, source));
       overlong.push({ source, cells: end - start, divided: false });
       return;
     }
     const [wordFrom, wordTo] = ranges[k];
-    let tooLong = false;
-    for (const [from, to] of divideWord(start, end, points, cellsPerLine)) {
+    const overflows = (pieces, signCells) =>
+      pieces.some(
+        ([from, to], i) =>
+          to - from + (i < pieces.length - 1 ? signCells : 0) > cellsPerLine
+      );
+    let sign = kind === 'other' ? '' : LINE_CONTINUATION;
+    let pieces = divideWord(start, end, points, cellsPerLine, countCells(sign));
+    if (sign && overflows(pieces, countCells(sign))) {
+      sign = '';
+      pieces = divideWord(start, end, points, cellsPerLine);
+    }
+    pieces.forEach(([from, to], i) => {
       const sourceFrom = from === start ? wordFrom : inputPos[from];
       const sourceTo = to === end ? wordTo : inputPos[to];
-      words.push(piece(from, to, line.slice(sourceFrom, sourceTo).trim()));
-      if (to - from > cellsPerLine) tooLong = true;
+      const text = line.slice(sourceFrom, sourceTo).trim();
+      words.push(piece(from, to, text, i < pieces.length - 1 ? sign : ''));
+    });
+    if (overflows(pieces, countCells(sign))) {
+      overlong.push({ source, cells: end - start, divided: true });
+    } else if (sign) {
+      continued.push(source);
     }
-    if (tooLong) overlong.push({ source, cells: end - start, divided: true });
   });
-  return { words, overlong };
+  return { words, overlong, continued };
+}
+
+/**
+ * Note once each word a layout divided with the line continuation sign.
+ * @param {Array<{ type: string, message: string }>} warnings
+ * @param {string[]} continued - The divided words' typed text
+ */
+function noteContinued(warnings, continued) {
+  for (const source of continued) {
+    const message =
+      `"${truncateForMessage(source)}" is divided across rows. Each row ` +
+      `but the last ends with the line continuation sign (dot 5).`;
+    if (!warnings.some((w) => w.message === message)) {
+      warnings.push({ type: 'line-continuation', message });
+    }
+  }
 }
 
 /**
@@ -423,7 +492,7 @@ export async function layoutBrailleText({
       }
     }
 
-    const { words, overlong } = await translateLine(
+    const { words, overlong, continued } = await translateLine(
       line,
       translate,
       cellsPerLine
@@ -440,6 +509,7 @@ export async function layoutBrailleText({
             `automatically. Shorten it, reduce the margin, or widen the card.`,
       });
     }
+    noteContinued(warnings, continued);
 
     wrapped.push(...packLine(words, cellsPerLine, maxSourceChars));
   }
@@ -661,7 +731,7 @@ export async function layoutSignText({
       continue;
     }
     const line = group.words.map((word) => word.source).join(' ');
-    const { words, overlong } = await translateLine(
+    const { words, overlong, continued } = await translateLine(
       line,
       translate,
       cellsPerLine
@@ -678,6 +748,7 @@ export async function layoutSignText({
             `automatically. Shorten it or widen the sign.`,
       });
     }
+    noteContinued(warnings, continued);
     brailleRows.push(...packLine(words, cellsPerLine));
   }
   if (brailleRows.length > maxRows) {
