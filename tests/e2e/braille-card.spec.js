@@ -179,6 +179,113 @@ function outlineGap(a, b) {
   return best
 }
 
+/** Groups of triangles joined at their corners: the connected shapes. */
+function connectedShapes(tris) {
+  const key = (p) => p.map((v) => v.toFixed(4)).join(',')
+  const parent = tris.map((_, i) => i)
+  const find = (i) => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]]
+      i = parent[i]
+    }
+    return i
+  }
+  const owner = new Map()
+  tris.forEach((tri, i) => {
+    for (const p of tri) {
+      const k = key(p)
+      if (owner.has(k)) parent[find(i)] = find(owner.get(k))
+      else owner.set(k, i)
+    }
+  })
+  const groups = new Map()
+  tris.forEach((tri, i) => {
+    const root = find(i)
+    if (!groups.has(root)) groups.set(root, [])
+    groups.get(root).push(tri)
+  })
+  return [...groups.values()]
+}
+
+const extent = (points, axis) =>
+  points.reduce(
+    ([lo, hi], p) => [Math.min(lo, p[axis]), Math.max(hi, p[axis])],
+    [Infinity, -Infinity]
+  )
+
+/**
+ * How near its raised border each plate's letters or dots come (mm), from
+ * an exported mesh of both plates laid flat. The border is the widest shape
+ * at a plate's highest level; the letter plate keeps its top and side
+ * rails, the braille plate its bottom and side rails.
+ */
+function borderClearances({ triangles, count }) {
+  const tris = []
+  for (let b = 0; b < count * 9; b += 9) {
+    tris.push(
+      [0, 3, 6].map((k) => [
+        triangles[b + k],
+        triangles[b + k + 1],
+        triangles[b + k + 2],
+      ])
+    )
+  }
+  const plates = connectedShapes(tris)
+  expect(plates, 'two plates').toHaveLength(2)
+  plates.sort((a, b) => extent(b.flat(), 1)[1] - extent(a.flat(), 1)[1])
+  const measure = (plate, rail) => {
+    const points = plate.flat()
+    const [, top] = extent(points, 2)
+    // The plate's face is the higher of its two largest flat levels
+    const area = new Map()
+    for (const [a, b, c] of plate) {
+      if (Math.abs(a[2] - b[2]) > 1e-4 || Math.abs(a[2] - c[2]) > 1e-4) continue
+      const z = a[2].toFixed(3)
+      const cross =
+        (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+      area.set(z, (area.get(z) ?? 0) + Math.abs(cross) / 2)
+    }
+    const [first, second] = [...area].sort((p, q) => q[1] - p[1])
+    const face = Math.max(Number(first[0]), Number(second[0]))
+    const highest = plate.filter((tri) =>
+      tri.every((p) => Math.abs(p[2] - top) < 1e-4)
+    )
+    const border = connectedShapes(highest)
+      .map((shape) => shape.flat())
+      .sort((p, q) => {
+        const [pl, ph] = extent(p, 0)
+        const [ql, qh] = extent(q, 0)
+        return qh - ql - (ph - pl)
+      })[0]
+    const [xl, xh] = extent(points, 0)
+    const [yl, yh] = extent(points, 1)
+    const cx = (xl + xh) / 2
+    const cy = (yl + yh) / 2
+    const inner = {
+      left: extent(border.filter((p) => p[0] < cx), 0)[1],
+      right: extent(border.filter((p) => p[0] > cx), 0)[0],
+      top: rail === 'top' ? extent(border.filter((p) => p[1] > cy), 1)[0] : yh,
+      bottom:
+        rail === 'bottom' ? extent(border.filter((p) => p[1] < cy), 1)[1] : yl,
+    }
+    const raised = points.filter(
+      (p) =>
+        p[2] > face + 0.01 &&
+        p[0] > inner.left + 1e-3 &&
+        p[0] < inner.right - 1e-3 &&
+        p[1] > inner.bottom + 1e-3 &&
+        p[1] < inner.top - 1e-3
+    )
+    const [rl, rh] = extent(raised, 0)
+    const [bl, bh] = extent(raised, 1)
+    const clearances = { left: rl - inner.left, right: inner.right - rh }
+    if (rail === 'top') clearances.top = inner.top - bh
+    else clearances.bottom = bl - inner.bottom
+    return clearances
+  }
+  return { letters: measure(plates[0], 'top'), braille: measure(plates[1], 'bottom') }
+}
+
 /** Run an axe scan of the braille panel and assert no violations. */
 async function expectPanelAxeClean(page) {
   const results = await new AxeBuilder({ page })
@@ -891,6 +998,54 @@ test.describe('Braille Sign workflow', () => {
     expect(Math.min(...gaps), `gaps ${shown} mm`).toBeGreaterThanOrEqual(3.2)
     expect(Math.max(...gaps), `gaps ${shown} mm`).toBeLessThanOrEqual(4 * stroke)
   })
+
+  for (const [label, text, rows] of [
+    ['the default text', null, ['Room 101']],
+    ['three rows', 'ROOM 101\nOFFICE\nEXIT', ['ROOM 101', 'OFFICE', 'EXIT']],
+    [
+      'six rows',
+      'ROOM 101\nOFFICE\nEXIT\nSTAIR A\nLOBBY\nWAY OUT',
+      ['ROOM 101', 'OFFICE', 'EXIT', 'STAIR A', 'LOBBY', 'WAY OUT'],
+    ],
+    ['a long word', 'CONFERENCE ROOM', ['CONFERENCE', 'ROOM']],
+    ['a full row of braille', 'ROOM 101 AND ROOM 102', ['ROOM 101', 'AND', 'ROOM 102']],
+  ]) {
+    test(`keeps letters and braille 9.5 mm inside the border: ${label} (ADA 703.2.7, 703.3.2)`, async ({
+      page,
+    }) => {
+      test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+      test.setTimeout(300_000)
+
+      await openBrailleExample(page, 'braille-sign')
+      await page.waitForSelector('body[data-wasm-ready="true"]', {
+        state: 'attached',
+        timeout: 120_000,
+      })
+      if (text !== null) await page.locator('#brailleTextInput').fill(text)
+      for (const [i, row] of rows.entries()) {
+        await expect(
+          page.locator(`.param-control[data-param-name="sign_text_${i + 1}"] input`)
+        ).toHaveValue(row, { timeout: 20000 })
+      }
+      await setParam(page, 'print_orientation', 'Flat')
+
+      const { letters, braille } = borderClearances(await downloadStl(page))
+      const shown = (c) =>
+        Object.entries(c)
+          .map(([side, mm]) => `${side} ${mm.toFixed(3)}`)
+          .join(', ')
+      // The letter table carries six significant digits; a thousandth of a
+      // millimeter covers its rounding
+      expect(
+        Math.min(...Object.values(letters)),
+        `letters: ${shown(letters)} mm`
+      ).toBeGreaterThanOrEqual(9.5 - 0.001)
+      expect(
+        Math.min(...Object.values(braille)),
+        `braille: ${shown(braille)} mm`
+      ).toBeGreaterThanOrEqual(9.5 - 0.001)
+    })
+  }
 
   test('sign panel writes raised-text and braille params', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')

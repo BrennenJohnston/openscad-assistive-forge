@@ -44,7 +44,7 @@ All distances are measured center to center, as the table says.
 ## Layout (ADA 703.2.7, 703.3.2)
 
 - The braille sits below the entire text, on its own plate, as 703.3.2 asks; mount it with the braille at least 9.5 mm (3/8 in) below the lowest raised letters.
-- Letters and braille must be at least 9.5 mm (3/8 in) from raised borders. The sign's optional raised border is split between the two plates so that, mounted together, they form one frame. Today the plates are padded by 4 mm inside that border: measured, letters and braille come within 3.8 to 4.7 mm of it whenever they fill a plate, and a long word of wide letters within 1.9 mm.
+- Letters and braille must be at least 9.5 mm (3/8 in) from raised borders. The sign's optional raised border is split between the two plates so that, mounted together, they form one frame. The sign keeps its letters and braille at least 9.5 mm inside that border (inside the plate's edge when the border is off), and sizes each row of letters from the measured widths of its characters: measured, the closest they come is 9.5 mm where rows fill a plate, and 10.7 mm beside a long word.
 
 ## What the tool does not check
 

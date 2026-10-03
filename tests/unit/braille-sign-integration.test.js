@@ -130,9 +130,10 @@ describe('braille_sign.scad parser integration', () => {
     expect(panel.SIGN_CHAR_ADVANCE_FACTOR).toBeUndefined();
   });
 
-  it('keeps the same clear space inside its border as the panel', async () => {
+  it('keeps letters and braille 9.5 mm inside its border, with the panel in step (ADA 703.2.7, 703.3.2)', async () => {
     const scad = readScad();
     const clearance = Number(scad.match(/^BORDER_CLEARANCE_MM = ([\d.]+);/m)?.[1]);
+    expect(clearance).toBe(9.5);
     expect(scad).toMatch(
       /^_plate_pad = \(border_on \? border_width_mm : 0\) \+ BORDER_CLEARANCE_MM;/m
     );
@@ -140,6 +141,13 @@ describe('braille_sign.scad parser integration', () => {
       '../../src/js/braille-panel.js'
     );
     expect(SIGN_BORDER_CLEARANCE_MM).toBe(clearance);
+    const { add_border, sign_width_mm } = extractParameters(scad).parameters;
+    expect(add_border.description).toBe(
+      'Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.5 mm inside it (ADA 703.2.7 and 703.3.2).'
+    );
+    // "ROOM 101" needs 142.3 mm of letters at the default spacing, plus the
+    // clearance and the 2 mm border on each side
+    expect(sign_width_mm.default).toBe(166);
   });
 
   it('spaces its letters at 1.21, with the panel in step (ADA 703.2.7)', async () => {

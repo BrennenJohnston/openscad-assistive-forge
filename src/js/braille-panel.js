@@ -46,9 +46,10 @@ const BED_WARN_MM = 250;
 
 /**
  * Clear space the sign keeps between its letters or braille and its border,
- * or the plate's edge without one: the SCAD's BORDER_CLEARANCE_MM.
+ * or the plate's edge without one: the SCAD's BORDER_CLEARANCE_MM. ADA
+ * 703.2.7 and 703.3.2 ask for 9.5 mm (3/8 in) from raised borders.
  */
-export const SIGN_BORDER_CLEARANCE_MM = 4;
+export const SIGN_BORDER_CLEARANCE_MM = 9.5;
 
 /** The sign's default letter spacing, the SCAD's `letter_spacing`. */
 export const SIGN_DEFAULT_LETTER_SPACING = 1.21;

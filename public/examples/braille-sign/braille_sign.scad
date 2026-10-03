@@ -71,7 +71,7 @@ sign_part = "Both"; // [Both, Letter plate, Braille plate]
 // Grow the sign automatically so every row of letters and braille fits (Yes), or keep the exact size below (No)
 auto_fit = "Yes";             // [Yes, No]
 // Width of the sign / both plates (mm). With auto_fit on this is the minimum.
-sign_width_mm = 160;          // [60:1:300]
+sign_width_mm = 166;          // [60:1:300]
 // Height of the letter plate (mm). With auto_fit on this is the minimum.
 letter_plate_height_mm = 70;  // [30:1:200]
 // Height of the braille plate (mm). With auto_fit on this is the minimum.
@@ -94,7 +94,7 @@ line_spacing_pct = 135;       // [100:5:200]
 letter_spacing = 1.21;        // [0.8:0.01:2]
 
 /* [Border] */
-// Raised split border: top + sides on the letter plate, bottom + sides on the braille plate
+// Raised split border: top and sides on the letter plate, bottom and sides on the braille plate. Letters and braille stay at least 9.5 mm inside it (ADA 703.2.7 and 703.3.2).
 add_border = "yes";           // [yes, no]
 // Border width (mm)
 border_width_mm = 2;          // [0.5:0.5:6]
@@ -220,8 +220,9 @@ braille_block_h = braille_rows  <= 1 ? 0 : (braille_rows - 1) * line_spacing;
 // the Forge panel wraps with the same table.
 auto_fit_on = (auto_fit == "Yes");
 // Clear space kept between the letters or braille and the border, or the
-// plate's edge when the border is off.
-BORDER_CLEARANCE_MM = 4;
+// plate's edge when the border is off: ADA 703.2.7 (raised characters) and
+// 703.3.2 (braille) ask for 9.5 mm (3/8 in) from raised borders.
+BORDER_CLEARANCE_MM = 9.5;
 _plate_pad = (border_on ? border_width_mm : 0) + BORDER_CLEARANCE_MM;
 _dot_base_d = (dot_shape == "Rounded")
     ? rounded_dot_base_diameter : cone_dot_base_diameter;
@@ -669,17 +670,14 @@ module braille_plate_angled() {
 echo(str("Braille sign: ", text_rows, " text line(s), ", braille_rows,
          " braille line(s), ", sign_w, " mm wide, plates ",
          letter_plate_h, " + ", braille_plate_h, " mm tall"));
-if (text_rows > 0 && _letter_block_h
-        > letter_plate_h - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the raised text block is taller than the letter plate. Turn on auto_fit, raise letter_plate_height_mm, or remove a line.");
-if (braille_rows > 0 && _braille_block_total_h
-        > braille_plate_h - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the braille block is taller than the braille plate. Turn on auto_fit, raise braille_plate_height_mm, or remove a line.");
-if (braille_max_len > 0 && _braille_block_total_w
-        > sign_w - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the braille block is wider than the sign. Turn on auto_fit, widen the sign, or shorten the line.");
-if (_text_w > sign_w - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: a raised text line is probably wider than the sign. Turn on auto_fit, shorten the line, or widen the sign.");
+if (text_rows > 0 && _letter_block_h + 2 * _plate_pad > letter_plate_h)
+    echo(str("WARNING: the raised letters are less than ", BORDER_CLEARANCE_MM, " mm from the letter plate's border or edge. Turn on auto_fit, raise letter_plate_height_mm, or remove a line."));
+if (braille_rows > 0 && _braille_block_total_h + 2 * _plate_pad > braille_plate_h)
+    echo(str("WARNING: the braille is less than ", BORDER_CLEARANCE_MM, " mm from the braille plate's border or edge. Turn on auto_fit, raise braille_plate_height_mm, or remove a line."));
+if (braille_max_len > 0 && _braille_block_total_w + 2 * _plate_pad > sign_w)
+    echo(str("WARNING: the braille is less than ", BORDER_CLEARANCE_MM, " mm from the sign's side border or edge. Turn on auto_fit, widen the sign, or shorten the line."));
+if (_text_w + 2 * _plate_pad > sign_w)
+    echo(str("WARNING: a raised text line is less than ", BORDER_CLEARANCE_MM, " mm from the sign's side border or edge. Turn on auto_fit, shorten the line, or widen the sign."));
 for (i = [0:_line_count-1])
     if (has_invalid_chars(_braille_lines[i]))
         echo(str("WARNING: braille Line_", i + 1, " contains non-braille characters. Use Unicode braille (U+2800-U+28FF)."));
