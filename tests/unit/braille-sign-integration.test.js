@@ -206,9 +206,24 @@ describe('braille_sign.scad parser integration', () => {
     expect(SIGN_DEFAULT_LETTER_SPACING).toBe(letter_spacing.default);
   });
 
+  it('offers only rounded dots on a sign (ADA 703.3.1: domed or rounded)', () => {
+    const scad = readScad();
+    const { parameters } = extractParameters(scad);
+    for (const name of [
+      'dot_shape',
+      'cone_dot_base_diameter',
+      'cone_dot_height',
+      'cone_dot_flat_hat',
+    ]) {
+      expect(parameters[name], name).toBeUndefined();
+    }
+    expect(scad).not.toMatch(/\bCone\b|cone_dot_/);
+    // The rounded dot's base still uses it
+    expect(parameters.cone_segments).toBeDefined();
+  });
+
   it('keeps ADA-friendly rounded dot defaults (1.6 mm base, <= 0.9 mm tall)', () => {
     const parsed = extractParameters(readScad());
-    expect(parsed.parameters.dot_shape.default).toBe('Rounded');
     expect(parsed.parameters.rounded_dot_base_diameter.default).toBe(1.6);
     const total =
       parsed.parameters.rounded_dot_base_height.default +

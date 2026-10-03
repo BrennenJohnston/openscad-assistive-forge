@@ -134,8 +134,6 @@ brim_width_mm = 2.0;          // [0:0.25:25]
 brim_thickness_mm = 0.2;      // [0.1:0.05:3]
 
 /* [Braille Dot Shape] */
-// Shape of the raised braille dots. Rounded matches the ADA dome profile.
-dot_shape = "Rounded";        // [Rounded, Cone]
 // Horizontal spacing between cells (mm). ADA 703.3.1: 0.241 to 0.300 in (6.1 to 7.6 mm printed); the sign allows 6.1214 to 7.6.
 cell_spacing = 7.0;           // [6.13:0.01:7.6]
 // Vertical spacing between braille lines (mm). ADA 703.3.1: 0.395 to 0.400 in (10 to 10.2 mm printed); the sign allows 10.033 to 10.16.
@@ -154,14 +152,6 @@ rounded_dot_dome_diameter = 1.4; // [0.5:0.01:3]
 // Rounded dot dome height (mm)
 rounded_dot_dome_height   = 0.35; // [0.1:0.01:2]
 
-/* [Braille Dot Shape - Cone] */
-// Cone dot base diameter (mm)
-cone_dot_base_diameter = 1.5; // [0.5:0.01:3]
-// Cone dot height (mm)
-cone_dot_height        = 0.8; // [0.3:0.01:2]
-// Cone dot flat hat diameter (mm)
-cone_dot_flat_hat      = 0.4; // [0.1:0.01:2]
-
 /* [Rendering Quality] */
 // Sphere quality for rounded shapes
 render_quality = "Medium";    // [Low, Medium, High]
@@ -175,7 +165,6 @@ $fn = 32;
 // CALCULATED VALUES
 // =============================================================================
 
-use_rounded_dots = (dot_shape == "Rounded");
 angled_on = (print_orientation == "Angled");
 fins_on = angled_on && ((support_fins == "On") || (support_fins == true));
 border_on = (add_border == "yes");
@@ -202,9 +191,7 @@ braille_rows = len(_braille_nonempty) == 0 ? 0 : _braille_nonempty[len(_braille_
 text_line_pitch = char_height_mm * line_spacing_pct / 100;
 
 // Braille dot metrics
-dot_total_height = use_rounded_dots
-    ? (rounded_dot_base_height + rounded_dot_dome_height)
-    : cone_dot_height;
+dot_total_height = rounded_dot_base_height + rounded_dot_dome_height;
 DOT_FACE_EMBED = 0.02;
 
 // Braille block extent (centre-to-centre) on the braille plate
@@ -225,8 +212,7 @@ auto_fit_on = (auto_fit == "Yes");
 // the sign meets both figures.
 BORDER_CLEARANCE_MM = 9.525;
 _plate_pad = (border_on ? border_width_mm : 0) + BORDER_CLEARANCE_MM;
-_dot_base_d = (dot_shape == "Rounded")
-    ? rounded_dot_base_diameter : cone_dot_base_diameter;
+_dot_base_d = rounded_dot_base_diameter;
 // The capital I of Liberation Sans is this fraction of OpenSCAD's text
 // size (15.288 mm at size 16, measured from the exported model); drawing
 // at char_height_mm / LETTER_CAP_FACTOR makes the setting the height of
@@ -414,38 +400,28 @@ function row_ink_height(s) =
 // DOT MODULE (shared geometry with the wedge card)
 // =============================================================================
 module braille_dot_centered() {
-    if (use_rounded_dots) {
-        _total_height = rounded_dot_base_height + rounded_dot_dome_height;
-        _dome_r = rounded_dot_dome_diameter / 2;
-        _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
-        _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
-        _fuse = 0.02;
-        translate([0, 0, -_total_height / 2]) {
-            union() {
-                translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
-                cylinder(
-                    h  = rounded_dot_base_height + _fuse,
-                    r1 = rounded_dot_base_diameter / 2,
-                    r2 = rounded_dot_dome_diameter / 2,
-                    center = true,
-                    $fn = cone_segments
-                );
-                intersection() {
-                    translate([0, 0, _center_z])
-                    sphere(r = _R_sphere, $fn = quality_fn);
-                    translate([0, 0, rounded_dot_base_height + _R_sphere])
-                    cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
-                }
+    _total_height = rounded_dot_base_height + rounded_dot_dome_height;
+    _dome_r = rounded_dot_dome_diameter / 2;
+    _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
+    _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
+    _fuse = 0.02;
+    translate([0, 0, -_total_height / 2]) {
+        union() {
+            translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
+            cylinder(
+                h  = rounded_dot_base_height + _fuse,
+                r1 = rounded_dot_base_diameter / 2,
+                r2 = rounded_dot_dome_diameter / 2,
+                center = true,
+                $fn = cone_segments
+            );
+            intersection() {
+                translate([0, 0, _center_z])
+                sphere(r = _R_sphere, $fn = quality_fn);
+                translate([0, 0, rounded_dot_base_height + _R_sphere])
+                cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
             }
         }
-    } else {
-        cylinder(
-            h  = cone_dot_height,
-            r1 = cone_dot_base_diameter / 2,
-            r2 = cone_dot_flat_hat / 2,
-            center = true,
-            $fn = cone_segments
-        );
     }
 }
 

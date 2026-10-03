@@ -22,7 +22,7 @@ All distances are measured center to center, as the table says.
 
 | Measure | ADA | The sign's default (measured) | How the tool keeps to it |
 |---|---|---|---|
-| Dot shape | domed or rounded | a rounded dome | Rounded is the default; a flat-topped Cone shape is also offered |
+| Dot shape | domed or rounded | a rounded dome | every dot on the sign is a rounded dome; the flat-topped Cone shape is offered only on cards and charms |
 | Dot base diameter | 1.5 to 1.6 mm (0.059 to 0.063 in) | 1.59 mm at the face of the plate | the slider allows 1.5 to 1.6 mm, and the model stops outside that range |
 | Dot height | 0.6 to 0.9 mm (0.025 to 0.037 in) | 0.68 mm | the base height and the dome height have separate sliders; the model stops when the dots would rise less than 0.635 mm (0.025 in) or more than 0.9 mm |
 | Between two dots in the same cell | 2.3 to 2.5 mm (0.090 to 0.100 in) | 2.5 mm | the slider allows 2.3 to 2.5 mm, and the model stops outside that range |
