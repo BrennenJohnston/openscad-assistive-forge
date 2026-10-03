@@ -830,6 +830,48 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(page.locator('#brailleFieldToText')).toBeFocused()
   })
 
+  test('six-key entry says every cell, even when chords come quickly', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleCard(page)
+    // The first render's own messages would otherwise arrive among the cells
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    await expect(page.locator('#statusArea')).toHaveText(/Preview ready/, {
+      timeout: 120_000,
+    })
+
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleSixKeyToggle').check()
+    // Every text the polite announcer is given, in order
+    await page.evaluate(() => {
+      window.__said = []
+      const region = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const text = region.textContent.trim()
+        if (text) window.__said.push(text)
+      }).observe(region, { childList: true, characterData: true, subtree: true })
+    })
+    await page.locator('#brailleFieldInput').focus()
+    // Three chords 0.15 s apart: dots 1 2 5, dots 1 3, dots 2 5
+    for (const keys of [['f', 'd', 'k'], ['f', 's'], ['d', 'k']]) {
+      for (const key of keys) await page.keyboard.down(key)
+      for (const key of keys) await page.keyboard.up(key)
+      await page.waitForTimeout(150)
+    }
+    await expect(page.locator('#brailleFieldInput')).toHaveValue(
+      '\u2813\u2805\u2812'
+    )
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__said.filter((text) => text.startsWith('dots')))
+      )
+      .toEqual(['dots 1 2 5', 'dots 1 3', 'dots 2 5'])
+  })
+
   test('braille panel has no axe violations (normal + warning + error states)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

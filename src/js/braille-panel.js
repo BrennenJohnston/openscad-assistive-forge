@@ -690,14 +690,16 @@ class BraillePanel {
 
   /**
    * Put a cell typed with six keys at the editor's caret, let the editor's
-   * own input handling run, and say the cell's dots.
+   * own input handling run, and say the cell's dots at once: a debounced
+   * announcement is canceled by the next cell or by a render's messages,
+   * and a cell nobody hears cannot be checked.
    * @param {string} cell
    */
   insertSixKeyCell(cell) {
     const field = this.refs.fieldInput;
     field.setRangeText(cell, field.selectionStart, field.selectionEnd, 'end');
     field.dispatchEvent(new Event('input', { bubbles: true }));
-    stateManager.announceChange(describeCell(cell), true);
+    stateManager.announceChange(describeCell(cell));
   }
 
   /**

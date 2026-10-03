@@ -468,7 +468,9 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     keys('keyup', ['KeyF', 'KeyD', 'KeyK']);
     expect(field.value).toBe('\u2801\u2813\u2803');
     expect(field.selectionStart).toBe(2);
-    expect(announce).toHaveBeenCalledWith('dots 1 2 5');
+    // At once, so neither the next cell nor a render message can cancel it
+    expect(announceImmediate).toHaveBeenCalledWith('dots 1 2 5');
+    expect(announce).not.toHaveBeenCalledWith('dots 1 2 5');
     await vi.waitFor(() => {
       expect(params().Line_1).toBe('\u2801\u2813\u2803');
     });
