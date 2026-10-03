@@ -37,6 +37,7 @@ import {
   countCells,
   BRAILLE_SPACE,
 } from './braille-wrap.js';
+import { signRowWidthMm } from './sign-letter-metrics.js';
 
 const DEBOUNCE_MS = 400;
 
@@ -44,12 +45,10 @@ const DEBOUNCE_MS = 400;
 const BED_WARN_MM = 250;
 
 /**
- * Sign letters: the average advance of an uppercase Liberation Sans letter
- * per mm of capital-I height. The SCAD's CHAR_ADVANCE_FACTOR is the same
- * number: 0.94 of the font size, and the font size is the I's height
- * divided by 0.9555.
+ * Clear space the sign keeps between its letters or braille and its border,
+ * or the plate's edge without one: the SCAD's BORDER_CLEARANCE_MM.
  */
-export const SIGN_CHAR_ADVANCE_FACTOR = 0.94 / 0.9555;
+export const SIGN_BORDER_CLEARANCE_MM = 4;
 
 /** The sign's default letter spacing, the SCAD's `letter_spacing`. */
 export const SIGN_DEFAULT_LETTER_SPACING = 1.21;
@@ -138,6 +137,8 @@ const CAPACITY_WATCH_KEYS = [
   'autoSize',
   'charHeight',
   'letterSpacing',
+  'border',
+  'borderWidth',
 ];
 
 let panel = null;
@@ -1587,27 +1588,39 @@ class BraillePanel {
     const translate = this.makeTranslator(table, preserveCaps, untranslatable);
 
     const geometry = this.getGeometry();
+    const paddingMm = this.readSignPaddingMm();
 
-    // Raised-letter row capacity: how many print characters fit across
-    // the plate, at SIGN_CHAR_ADVANCE_FACTOR x the capital I's height per
-    // character. The sign auto-fits its size to the rows, so an
-    // unbreakable word wider than the set width is not an error — the
-    // wrap capacity stretches to the longest word and the sign widens
-    // with it.
-    const charHeightMm = this.readNumericParam('charHeight', 16);
-    const letterSpacing = this.readNumericParam(
-      'letterSpacing',
-      SIGN_DEFAULT_LETTER_SPACING
-    );
-    const advanceMm = charHeightMm * SIGN_CHAR_ADVANCE_FACTOR * letterSpacing;
-    const usableWidthMm = geometry.cardWidthMm - 2 * geometry.marginMm;
-    const fitChars = Math.max(1, Math.floor(usableWidthMm / advanceMm));
+    // Raised-letter rows wrap by the letters' real widths, from the table
+    // the model sizes its plates with, across the plate less its padding.
+    // The sign auto-fits its size to the rows, so an unbreakable word
+    // wider than the set width is not an error: the wrap width stretches
+    // to the widest word and the sign widens with it.
+    const sizing = {
+      charHeightMm: this.readNumericParam('charHeight', 16),
+      letterSpacing: this.readNumericParam(
+        'letterSpacing',
+        SIGN_DEFAULT_LETTER_SPACING
+      ),
+    };
+    // The model raises a row in capitals or as typed; either must fit
+    const rowWidthMm = (row) =>
+      Math.max(
+        signRowWidthMm(row, sizing),
+        signRowWidthMm(
+          row.replace(/[a-z]/g, (ch) => ch.toUpperCase()),
+          sizing
+        )
+      );
+    const usableWidthMm = geometry.cardWidthMm - 2 * paddingMm;
     let longestWord = '';
+    let longestWordMm = 0;
     for (const word of text.split(/\s+/)) {
-      if ([...word].length > [...longestWord].length) longestWord = word;
+      const widthMm = rowWidthMm(word);
+      if (widthMm > longestWordMm) {
+        longestWord = word;
+        longestWordMm = widthMm;
+      }
     }
-    const longestWordChars = [...longestWord].length;
-    const maxSourceChars = Math.max(fitChars, longestWordChars);
 
     // Letter rows and braille rows wrap independently (ADA 703.3.2
     // places braille as one block below the entire text; braille line
@@ -1617,19 +1630,19 @@ class BraillePanel {
     const layout = await layoutSignText({
       text,
       translate,
-      maxSourceChars,
+      maxSourceChars: Math.max(usableWidthMm, longestWordMm),
+      measureSource: rowWidthMm,
       maxRows: maxLines,
-      brailleCellsPerLine: (longestRowChars) => {
-        const fitWidthMm = Math.max(
-          geometry.cardWidthMm,
-          longestRowChars * advanceMm + 2 * geometry.marginMm
-        );
-        return computeCapacity({
+      brailleCellsPerLine: (longestRowMm) =>
+        computeCapacity({
           ...geometry,
-          cardWidthMm: fitWidthMm,
+          cardWidthMm: Math.max(
+            geometry.cardWidthMm,
+            longestRowMm + 2 * paddingMm
+          ),
+          marginMm: paddingMm,
           maxRowsPerCard: maxLines,
-        }).cellsPerLine;
-      },
+        }).cellsPerLine,
       skipBrailleRows,
     });
 
@@ -1639,11 +1652,25 @@ class BraillePanel {
       preserveCaps,
       untranslatable,
       maxLines,
-      fitChars,
+      usableWidthMm,
       longestWord,
-      longestWordChars,
-      advanceMm,
+      longestWordMm,
     };
+  }
+
+  /**
+   * The sign's clear space from each plate edge to its letters and braille
+   * (mm), as the SCAD's _plate_pad: the border's width when the border is
+   * on, plus the clearance.
+   */
+  readSignPaddingMm() {
+    const borderParam = this.capacityParams.border;
+    const border = borderParam
+      ? (stateManager.getState().parameters?.[borderParam] ?? 'yes')
+      : 'yes';
+    const borderMm =
+      border === 'yes' ? this.readNumericParam('borderWidth', 2) : 0;
+    return borderMm + SIGN_BORDER_CLEARANCE_MM;
   }
 
   async runSignLayout() {
@@ -1658,21 +1685,20 @@ class BraillePanel {
       preserveCaps,
       untranslatable,
       maxLines,
-      fitChars,
+      usableWidthMm,
       longestWord,
-      longestWordChars,
-      advanceMm,
+      longestWordMm,
     } = await this.buildSignLayout();
 
     if (seq !== this.layoutSeq) return;
 
     const warnings = [...layout.warnings];
-    if (longestWordChars > fitChars) {
+    if (longestWordMm > usableWidthMm) {
       warnings.push({
         type: 'sign-widened',
         message:
           `"${longestWord}" needs about ` +
-          `${Math.ceil(longestWordChars * advanceMm)} mm of raised ` +
+          `${Math.ceil(longestWordMm)} mm of raised ` +
           `letters, more than the set sign width fits. With auto-fit on ` +
           `(the default) the sign widens to match; otherwise widen ` +
           `sign_width_mm or use a smaller character height.`,

@@ -94,19 +94,52 @@ describe('braille_sign.scad parser integration', () => {
   it('makes the letter height setting the height of the capital I, with the panel in step', async () => {
     // Liberation Sans's capital I is 0.9555 of OpenSCAD's text size
     // (15.288 mm at size 16, measured from the exported model), so the
-    // model divides by it; the panel's width estimate must use the same.
+    // model divides by it; the panel's letter widths must use the same.
     const scad = readScad();
     const factor = Number(scad.match(/^LETTER_CAP_FACTOR = ([\d.]+);/m)?.[1]);
     expect(factor).toBe(0.9555);
     expect(scad).toMatch(/size = char_height_mm \/ LETTER_CAP_FACTOR,/);
-    expect(scad).toMatch(/^CHAR_ADVANCE_FACTOR = 0\.94 \/ LETTER_CAP_FACTOR;/m);
-    const { SIGN_CHAR_ADVANCE_FACTOR } = await import(
-      '../../src/js/braille-panel.js'
+    const { SIGN_LETTER_CAP_FACTOR } = await import(
+      '../../src/js/sign-letter-metrics.js'
     );
-    expect(SIGN_CHAR_ADVANCE_FACTOR).toBeCloseTo(0.94 / factor, 10);
+    expect(SIGN_LETTER_CAP_FACTOR).toBe(factor);
     expect(extractParameters(scad).parameters.char_height_mm.description).toBe(
       'Height of the capital I (mm). ADA 703.2.5 asks for 16 mm (5/8 in) to 51 mm (2 in).'
     );
+  });
+
+  it('sizes its rows of raised letters from the same measured table as the panel', async () => {
+    // The panel wraps rows with the table the model sizes its plates from,
+    // so a row the panel lays out is a row the plate holds
+    const scad = readScad();
+    const body =
+      scad.match(/^function sign_letter_metrics\(\) = \[\n([\s\S]*?)\n\];/m)?.[1] ?? '';
+    const rows = [...body.matchAll(/^ {4}\["((?:\\.|[^"\\])*)", (.*)\],?$/gm)].map(
+      ([, ch, nums]) => [ch.replace(/\\(.)/g, '$1'), nums.split(', ').map(Number)]
+    );
+    const { SIGN_LETTER_METRICS, SIGN_LETTER_UNKNOWN } = await import(
+      '../../src/js/sign-letter-metrics.js'
+    );
+    expect(rows.length).toBe(78);
+    expect(Object.fromEntries(rows)).toEqual(SIGN_LETTER_METRICS);
+    const unknown = scad.match(/^function sign_letter_unknown\(\) = \[(.*)\];/m)?.[1];
+    expect(unknown?.split(', ').map(Number)).toEqual(SIGN_LETTER_UNKNOWN);
+    // The per-character estimate the table replaced is gone from both files
+    expect(scad).not.toMatch(/CHAR_ADVANCE_FACTOR/);
+    const panel = await import('../../src/js/braille-panel.js');
+    expect(panel.SIGN_CHAR_ADVANCE_FACTOR).toBeUndefined();
+  });
+
+  it('keeps the same clear space inside its border as the panel', async () => {
+    const scad = readScad();
+    const clearance = Number(scad.match(/^BORDER_CLEARANCE_MM = ([\d.]+);/m)?.[1]);
+    expect(scad).toMatch(
+      /^_plate_pad = \(border_on \? border_width_mm : 0\) \+ BORDER_CLEARANCE_MM;/m
+    );
+    const { SIGN_BORDER_CLEARANCE_MM } = await import(
+      '../../src/js/braille-panel.js'
+    );
+    expect(SIGN_BORDER_CLEARANCE_MM).toBe(clearance);
   });
 
   it('spaces its letters at 1.21, with the panel in step (ADA 703.2.7)', async () => {

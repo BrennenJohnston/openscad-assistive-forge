@@ -506,12 +506,16 @@ export async function layoutBrailleText({
  * @param {string} opts.text - Plain input text
  * @param {function(string): Promise<{ braille: string, inputPos: (number[]|null) }|string>} opts.translate -
  *   Async line translator (see the module notes)
- * @param {number} opts.maxSourceChars - Letter-row capacity in print
- *   characters
+ * @param {number} opts.maxSourceChars - Letter-row capacity, in print
+ *   characters or in the units of `measureSource`
+ * @param {function(string): number} [opts.measureSource] - Width of a row
+ *   of raised letters; defaults to its character count. The sign passes its
+ *   letters' real widths in mm. With a measure the caller keeps
+ *   `maxSourceChars` at least the widest word, as the sign's auto-fit does.
  * @param {number|function(number): number} opts.brailleCellsPerLine -
  *   Braille row capacity in cells, or a function of the longest packed
- *   letter row (in source characters) so the caller can derive the
- *   capacity from the final auto-fit sign width
+ *   letter row (measured as above) so the caller can derive the capacity
+ *   from the final auto-fit sign width
  * @param {number} opts.maxRows - Row ceiling for each plate (the SCAD's
  *   Line_N / sign_text_N parameter count)
  * @param {boolean} [opts.skipBrailleRows=false] - Lay out the raised
@@ -531,11 +535,13 @@ export async function layoutSignText({
   text,
   translate,
   maxSourceChars,
+  measureSource,
   brailleCellsPerLine,
   maxRows,
   skipBrailleRows = false,
 }) {
   const warnings = [];
+  const measure = measureSource ?? ((source) => [...source].length);
 
   // Hard user lines -> typed word lists (null marks an intentional blank
   // line).
@@ -547,9 +553,11 @@ export async function layoutSignText({
     );
   }
 
-  // Pass 1 — letter rows, packed on source characters only. Each row
-  // keeps its word objects and user-line index so the braille pass can
-  // reflow exactly the words that survive the row ceiling.
+  // Pass 1 — letter rows, packed on the source text only (characters, or
+  // the caller's measure). Each row keeps its word objects and user-line
+  // index so the braille pass can reflow exactly the words that survive
+  // the row ceiling.
+  const joinSources = (row) => row.map((w) => w.source).join(' ');
   const textRows = [];
   userLines.forEach((words, lineIdx) => {
     if (words === null) {
@@ -557,16 +565,15 @@ export async function layoutSignText({
       return;
     }
     let row = [];
-    let rowLen = 0;
     const pushRow = () =>
       textRows.push({
-        source: row.map((w) => w.source).join(' '),
+        source: joinSources(row),
         words: row,
         lineIdx,
       });
     for (const word of words) {
       const srcLen = [...word.source].length;
-      if (srcLen > maxSourceChars) {
+      if (!measureSource && srcLen > maxSourceChars) {
         warnings.push({
           type: 'word-too-long',
           message:
@@ -577,14 +584,11 @@ export async function layoutSignText({
       }
       if (row.length === 0) {
         row = [word];
-        rowLen = srcLen;
-      } else if (rowLen + 1 + srcLen <= maxSourceChars) {
+      } else if (measure(joinSources([...row, word])) <= maxSourceChars) {
         row.push(word);
-        rowLen += 1 + srcLen;
       } else {
         pushRow();
         row = [word];
-        rowLen = srcLen;
       }
     }
     if (row.length > 0) pushRow();
@@ -615,10 +619,14 @@ export async function layoutSignText({
     (max, row) => Math.max(max, [...row.source].length),
     0
   );
+  const longestRow = keptTextRows.reduce(
+    (max, row) => Math.max(max, measure(row.source)),
+    0
+  );
   const cellsPerLine = Math.max(
     1,
     typeof brailleCellsPerLine === 'function'
-      ? brailleCellsPerLine(longestRowChars)
+      ? brailleCellsPerLine(longestRow)
       : brailleCellsPerLine
   );
 

@@ -215,12 +215,14 @@ braille_block_h = braille_rows  <= 1 ? 0 : (braille_rows - 1) * line_spacing;
 // Effective sign size. In auto-fit mode (default) the plates grow so every
 // row of letters, braille dots, and the plate heights always fit — the
 // Forge panel wraps long text onto extra rows, and the sign follows.
-// Manual mode keeps the exact size set above. Uppercase Liberation Sans
-// advances average ~0.94 x the font size per character (measured with
-// textmetrics), and the font size is char_height_mm / LETTER_CAP_FACTOR;
-// the Forge panel wraps using the same estimate.
+// Manual mode keeps the exact size set above. Rows of raised letters are
+// sized from the font's measured letters (RAISED LETTER METRICS below), and
+// the Forge panel wraps with the same table.
 auto_fit_on = (auto_fit == "Yes");
-_plate_pad = (border_on ? border_width_mm : 0) + 4;
+// Clear space kept between the letters or braille and the border, or the
+// plate's edge when the border is off.
+BORDER_CLEARANCE_MM = 4;
+_plate_pad = (border_on ? border_width_mm : 0) + BORDER_CLEARANCE_MM;
 _dot_base_d = (dot_shape == "Rounded")
     ? rounded_dot_base_diameter : cone_dot_base_diameter;
 // The capital I of Liberation Sans is this fraction of OpenSCAD's text
@@ -228,18 +230,18 @@ _dot_base_d = (dot_shape == "Rounded")
 // at char_height_mm / LETTER_CAP_FACTOR makes the setting the height of
 // the I, which is how ADA 703.2.5 measures characters.
 LETTER_CAP_FACTOR = 0.9555;
-CHAR_ADVANCE_FACTOR = 0.94 / LETTER_CAP_FACTOR;
-_est_text_w = text_rows == 0 ? 0
-    : max([for (l = _text_lines) len(display_text(l))])
-      * char_height_mm * CHAR_ADVANCE_FACTOR * letter_spacing;
+_text_size = char_height_mm / LETTER_CAP_FACTOR;
+_text_w = text_rows == 0 ? 0
+    : max([for (l = _text_lines) row_width(display_text(l))]);
 _braille_block_total_w = braille_max_len == 0 ? 0
     : braille_block_w + dot_spacing + _dot_base_d;
 sign_w = auto_fit_on
-    ? max(sign_width_mm, _est_text_w + 2 * _plate_pad,
+    ? max(sign_width_mm, _text_w + 2 * _plate_pad,
           _braille_block_total_w + 2 * _plate_pad)
     : sign_width_mm;
 _letter_block_h = text_rows == 0 ? 0
-    : (text_rows - 1) * text_line_pitch + char_height_mm;
+    : (text_rows - 1) * text_line_pitch
+      + max([for (l = _text_lines) row_ink_height(display_text(l))]);
 letter_plate_h = (auto_fit_on && text_rows > 0)
     ? max(letter_plate_height_mm, _letter_block_h + 2 * _plate_pad)
     : letter_plate_height_mm;
@@ -290,6 +292,121 @@ function get_dot_pattern(char) =
 dot_col_x_offsets = [-dot_spacing / 2, +dot_spacing / 2];
 dot_row_y_offsets = [+dot_spacing, 0, -dot_spacing];
 dot_positions     = [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]];
+
+// =============================================================================
+// RAISED LETTER METRICS
+// =============================================================================
+// Liberation Sans per unit of text size, measured with OpenSCAD 2026.01.03's
+// textmetrics(): [character, advance, ink left, ink right, ink bottom, ink
+// top]. The Forge panel wraps rows with the same table
+// (src/js/sign-letter-metrics.js); a unit test keeps the two equal.
+function sign_letter_metrics() = [
+    [" ", 0.38588, 0, 0, 0, 0],
+    ["!", 0.38588, 0.12544, 0.25984, 0, 0.95552],
+    ["\"", 0.49303, 0.05888, 0.43456, 0.65472, 0.95552],
+    ["#", 0.77243, 0.00576, 0.76608, 0, 0.9504],
+    ["&", 0.92638, 0.04864, 0.90496, -0.01408, 0.96128],
+    ["'", 0.26516, 0.0704, 0.19584, 0.65472, 0.95552],
+    ["(", 0.46251, 0.08576, 0.4544, -0.288, 1.00672],
+    [")", 0.46251, 0.00768, 0.37696, -0.288, 1.00672],
+    ["+", 0.81109, 0.0672, 0.74304, 0.1216, 0.80192],
+    [",", 0.38588, 0.12416, 0.26112, -0.17792, 0.14912],
+    ["-", 0.46251, 0.06144, 0.40128, 0.31424, 0.42368],
+    [".", 0.38588, 0.12672, 0.2592, 0, 0.14912],
+    ["/", 0.38588, 0, 0.38592, -0.01408, 1.00672],
+    ["0", 0.77243, 0.05376, 0.71872, -0.01408, 0.97024],
+    ["1", 0.77243, 0.1056, 0.70464, 0, 0.95552],
+    ["2", 0.77243, 0.06976, 0.70272, 0, 0.97024],
+    ["3", 0.77243, 0.05248, 0.71168, -0.01408, 0.97024],
+    ["4", 0.77243, 0.03136, 0.73216, 0, 0.95552],
+    ["5", 0.77243, 0.05504, 0.71424, -0.01408, 0.95552],
+    ["6", 0.77243, 0.0704, 0.71168, -0.01408, 0.97024],
+    ["7", 0.77243, 0.07104, 0.70272, 0, 0.95552],
+    ["8", 0.77243, 0.06016, 0.71232, -0.01408, 0.97024],
+    ["9", 0.77243, 0.06464, 0.7072, -0.01408, 0.97024],
+    [":", 0.38588, 0.12672, 0.2592, 0, 0.73408],
+    ["?", 0.77243, 0.05696, 0.72128, 0, 0.97024],
+    ["@", 1.40991, 0.1088, 1.29024, -0.192, 1.00672],
+    ["A", 0.92638, 0.00256, 0.92416, 0, 0.95552],
+    ["B", 0.92638, 0.11392, 0.85312, 0, 0.95552],
+    ["C", 1.00301, 0.0704, 0.9504, -0.01408, 0.97024],
+    ["D", 1.00301, 0.11392, 0.93696, 0, 0.95552],
+    ["E", 0.92638, 0.11392, 0.8672, 0, 0.95552],
+    ["F", 0.84839, 0.11392, 0.79296, 0, 0.95552],
+    ["G", 1.08032, 0.06976, 0.97664, -0.01408, 0.97024],
+    ["H", 1.00301, 0.11392, 0.89024, 0, 0.95552],
+    ["I", 0.38588, 0.128, 0.25792, 0, 0.95552],
+    ["J", 0.69445, 0.02112, 0.59136, -0.01408, 0.95552],
+    ["K", 0.92638, 0.11392, 0.91072, 0, 0.95552],
+    ["L", 0.77243, 0.11392, 0.7264, 0, 0.95552],
+    ["M", 1.15696, 0.11392, 1.0432, 0, 0.95552],
+    ["N", 1.00301, 0.11392, 0.89024, 0, 0.95552],
+    ["O", 1.08032, 0.06528, 1.0144, -0.01408, 0.97024],
+    ["P", 0.92638, 0.11392, 0.85312, 0, 0.95552],
+    ["Q", 1.08032, 0.06528, 1.0144, -0.26304, 0.97024],
+    ["R", 1.00301, 0.11392, 0.93888, 0, 0.95552],
+    ["S", 0.92638, 0.06272, 0.86272, -0.01408, 0.97024],
+    ["T", 0.84839, 0.03072, 0.81664, 0, 0.95552],
+    ["U", 1.00301, 0.10688, 0.896, -0.01408, 0.95552],
+    ["V", 0.92638, 0.00576, 0.92032, 0, 0.95552],
+    ["W", 1.3109, 0.00576, 1.30624, 0, 0.95552],
+    ["X", 0.92638, 0.03072, 0.89728, 0, 0.95552],
+    ["Y", 0.92638, 0.03008, 0.896, 0, 0.95552],
+    ["Z", 0.84839, 0.04352, 0.80512, 0, 0.95552],
+    ["a", 0.77243, 0.05888, 0.77248, -0.01408, 0.74752],
+    ["b", 0.77243, 0.08896, 0.71424, -0.01408, 1.00672],
+    ["c", 0.69445, 0.05888, 0.65792, -0.01408, 0.74752],
+    ["d", 0.77243, 0.05824, 0.68288, -0.01408, 1.00672],
+    ["e", 0.77243, 0.05888, 0.71104, -0.01408, 0.74752],
+    ["f", 0.38588, 0.0192, 0.38848, 0, 1.00544],
+    ["g", 0.77243, 0.05824, 0.68288, -0.28864, 0.7456],
+    ["h", 0.77243, 0.096, 0.68224, 0, 1.00672],
+    ["i", 0.30857, 0.0928, 0.21504, 0, 1.00672],
+    ["j", 0.30857, -0.03392, 0.21504, -0.28864, 1.00672],
+    ["k", 0.69445, 0.09344, 0.69696, 0, 1.00672],
+    ["l", 0.30857, 0.09344, 0.21568, 0, 1.00672],
+    ["m", 1.15696, 0.09216, 1.0656, 0, 0.74752],
+    ["n", 0.77243, 0.09216, 0.68224, 0, 0.74752],
+    ["o", 0.77243, 0.05824, 0.71424, -0.01408, 0.74752],
+    ["p", 0.77243, 0.08896, 0.71424, -0.28864, 0.74688],
+    ["q", 0.77243, 0.05824, 0.68416, -0.28864, 0.74752],
+    ["r", 0.46251, 0.09216, 0.43968, 0, 0.74752],
+    ["s", 0.69445, 0.0384, 0.64448, -0.01408, 0.7456],
+    ["t", 0.38588, 0.02048, 0.37568, -0.01088, 0.89792],
+    ["u", 0.77243, 0.0896, 0.68032, -0.01408, 0.73408],
+    ["v", 0.69445, 0.00448, 0.68992, 0, 0.73408],
+    ["w", 1.00301, -0.00256, 1.00672, 0, 0.73408],
+    ["x", 0.69445, 0.01536, 0.67968, 0, 0.73408],
+    ["y", 0.69445, 0.0032, 0.69184, -0.28864, 0.73408],
+    ["z", 0.69445, 0.05568, 0.62528, 0, 0.73408]
+];
+// Any other character counts as the widest, tallest and farthest-reaching
+// glyph the font draws in U+0020-U+04FF and U+2000-U+22FF, so it can only
+// make a plate larger.
+function sign_letter_unknown() = [1.85818, -0.28224, 2.12565, -0.2944, 1.35936];
+
+function letter_metrics(c) =
+    let(table = sign_letter_metrics(), i = search([c], table, 1, 0)[0])
+    is_num(i) ? [for (k = [1 : 5]) table[i][k]] : sign_letter_unknown();
+
+// Width a row of raised letters needs (mm): its advance at letter_spacing,
+// the box text() centers (kerning only shortens it), widened on both sides
+// by however far any letter's ink reaches past that box.
+function row_width(s) =
+    len(s) == 0 ? 0 :
+    let(m = [for (i = [0 : len(s) - 1]) letter_metrics(s[i])],
+        pos = [for (i = 0, x = 0; i < len(m); x = x + m[i][0] * letter_spacing, i = i + 1) x],
+        total = pos[len(m) - 1] + m[len(m) - 1][0] * letter_spacing,
+        ink = [for (i = [0 : len(m) - 1]) if (m[i][2] > m[i][1]) [pos[i] + m[i][1], pos[i] + m[i][2]]],
+        over = len(ink) == 0 ? 0
+             : max(0, -min([for (k = ink) k[0]]), max([for (k = ink) k[1]]) - total))
+    (total + 2 * over) * _text_size;
+
+// Height of a row's ink (mm); text() centers each row on its ink.
+function row_ink_height(s) =
+    len(s) == 0 ? 0 :
+    let(m = [for (i = [0 : len(s) - 1]) letter_metrics(s[i])])
+    (max([for (e = m) e[4]]) - min([for (e = m) e[3]])) * _text_size;
 
 // =============================================================================
 // DOT MODULE (shared geometry with the wedge card)
@@ -561,7 +678,7 @@ if (braille_rows > 0 && _braille_block_total_h
 if (braille_max_len > 0 && _braille_block_total_w
         > sign_w - 2 * (border_on ? border_width_mm : 0))
     echo("WARNING: the braille block is wider than the sign. Turn on auto_fit, widen the sign, or shorten the line.");
-if (_est_text_w > sign_w - 2 * (border_on ? border_width_mm : 0))
+if (_text_w > sign_w - 2 * (border_on ? border_width_mm : 0))
     echo("WARNING: a raised text line is probably wider than the sign. Turn on auto_fit, shorten the line, or widen the sign.");
 for (i = [0:_line_count-1])
     if (has_invalid_chars(_braille_lines[i]))
