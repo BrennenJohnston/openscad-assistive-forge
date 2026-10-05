@@ -1079,18 +1079,19 @@ class BraillePanel {
     prevBtn.className = 'btn btn-secondary braille-pager-btn';
     prevBtn.id = 'braillePrevCard';
     prevBtn.textContent = isCharm ? 'Previous charm' : 'Previous card';
-    prevBtn.addEventListener('click', () =>
-      isCharm
-        ? this.showCharm(this.currentCharm - 1)
-        : this.showCard(this.currentCard - 1)
-    );
+    prevBtn.addEventListener('click', () => {
+      if (prevBtn.getAttribute('aria-disabled') === 'true') return;
+      if (isCharm) this.showCharm(this.currentCharm - 1);
+      else this.showCard(this.currentCard - 1);
+    });
     pager.appendChild(prevBtn);
     this.refs.prevBtn = prevBtn;
 
+    // Not a live region: showCard() and showCharm() announce each page once
+    // (D-231)
     const pagerStatus = document.createElement('span');
     pagerStatus.className = 'braille-pager-status';
     pagerStatus.id = 'braillePagerStatus';
-    pagerStatus.setAttribute('aria-live', 'polite');
     pager.appendChild(pagerStatus);
     this.refs.pagerStatus = pagerStatus;
 
@@ -1099,11 +1100,11 @@ class BraillePanel {
     nextBtn.className = 'btn btn-secondary braille-pager-btn';
     nextBtn.id = 'brailleNextCard';
     nextBtn.textContent = isCharm ? 'Next charm' : 'Next card';
-    nextBtn.addEventListener('click', () =>
-      isCharm
-        ? this.showCharm(this.currentCharm + 1)
-        : this.showCard(this.currentCard + 1)
-    );
+    nextBtn.addEventListener('click', () => {
+      if (nextBtn.getAttribute('aria-disabled') === 'true') return;
+      if (isCharm) this.showCharm(this.currentCharm + 1);
+      else this.showCard(this.currentCard + 1);
+    });
     pager.appendChild(nextBtn);
     this.refs.nextBtn = nextBtn;
 
@@ -2111,8 +2112,11 @@ class BraillePanel {
     this.refs.pager.hidden = !showPager;
     if (showPager) {
       this.refs.pagerStatus.textContent = `Card ${this.currentCard + 1} of ${this.cards.length}`;
-      this.refs.prevBtn.disabled = this.currentCard === 0;
-      this.refs.nextBtn.disabled = this.currentCard === this.cards.length - 1;
+      markUnavailable(this.refs.prevBtn, this.currentCard === 0);
+      markUnavailable(
+        this.refs.nextBtn,
+        this.currentCard === this.cards.length - 1
+      );
       this.refs.pagerHint.textContent =
         `Each card exports separately. Downloads are named ` +
         `${this.getCardDownloadName() ?? 'Braille Card'}.stl`;
@@ -2156,8 +2160,11 @@ class BraillePanel {
       this.refs.pagerStatus.textContent =
         `Charm ${this.currentCharm + 1} of ${this.charms.length}` +
         (charm?.source ? `: ${charm.source}` : '');
-      this.refs.prevBtn.disabled = this.currentCharm === 0;
-      this.refs.nextBtn.disabled = this.currentCharm === this.charms.length - 1;
+      markUnavailable(this.refs.prevBtn, this.currentCharm === 0);
+      markUnavailable(
+        this.refs.nextBtn,
+        this.currentCharm === this.charms.length - 1
+      );
       this.refs.pagerHint.textContent =
         `Each charm exports separately. Suggested file name: ` +
         `${this.getCharmDownloadName() ?? 'Braille Charm'}.stl`;
@@ -2441,6 +2448,18 @@ class BraillePanel {
     this.el = null;
     disposeTranslator();
   }
+}
+
+/**
+ * Mark a pager button unavailable at the end of the set without disabling
+ * it: a focused button that disables itself drops focus to the page, so the
+ * button stays focusable and reads as unavailable instead (D-228).
+ * @param {HTMLButtonElement} button
+ * @param {boolean} unavailable
+ */
+function markUnavailable(button, unavailable) {
+  if (unavailable) button.setAttribute('aria-disabled', 'true');
+  else button.removeAttribute('aria-disabled');
 }
 
 // ---------------------------------------------------------------------------

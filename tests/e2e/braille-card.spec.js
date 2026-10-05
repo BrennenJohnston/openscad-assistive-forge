@@ -547,13 +547,18 @@ test.describe('Braille translation workflow (card)', () => {
       'Braille Card 1 of 2 line.stl'
     )
 
-    // Pager is keyboard-operable: prev disabled on first card, next works
-    await expect(page.locator('#braillePrevCard')).toBeDisabled()
+    // Pager is keyboard-operable: prev unavailable on the first card, next
+    // works and keeps focus on the last (D-228)
+    await expect(page.locator('#braillePrevCard')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
     const nextBtn = page.locator('#brailleNextCard')
     await nextBtn.focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('#braillePagerStatus')).toHaveText('Card 2 of 2')
-    await expect(page.locator('#brailleNextCard')).toBeDisabled()
+    await expect(nextBtn).toHaveAttribute('aria-disabled', 'true')
+    await expect(nextBtn).toBeFocused()
   })
 
   test('render-all toggle writes every line and the All cards layout', async ({ page }) => {
@@ -1065,14 +1070,28 @@ test.describe('Braille Charm workflow', () => {
     )
     await expect(charInput).toHaveValue('\u2813', { timeout: 10000 }) // ⠓
 
-    // Pager is keyboard-operable: prev disabled on the first charm
-    await expect(page.locator('#braillePrevCard')).toBeDisabled()
-    await page.locator('#brailleNextCard').click()
+    // Pager is keyboard-operable. At either end its button stays focusable,
+    // marked unavailable rather than disabled, which dropped focus to the
+    // page (D-228)
+    await expect(page.locator('#braillePrevCard')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
+    const nextCharm = page.locator('#brailleNextCard')
+    await nextCharm.focus()
+    await page.keyboard.press('Enter')
     await expect(page.locator('#braillePagerStatus')).toHaveText(
       'Charm 2 of 2: i'
     )
     await expect(charInput).toHaveValue('\u280A', { timeout: 10000 }) // ⠊
-    await expect(page.locator('#brailleNextCard')).toBeDisabled()
+    await expect(nextCharm).toHaveAttribute('aria-disabled', 'true')
+    await expect(nextCharm).toBeFocused()
+    // Pressed again, the unavailable button changes nothing
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#braillePagerStatus')).toHaveText(
+      'Charm 2 of 2: i'
+    )
+    await expect(nextCharm).toBeFocused()
   })
 
   test('charm panel has no axe violations', async ({ page }) => {
