@@ -225,3 +225,31 @@ describe('ErrorLogPanel.parseLine: a warning that quotes an error (D-203)', () =
     expect(result.type).toBe(ERROR_LOG_TYPE.ERROR);
   });
 });
+
+// D-232: every sign render said "Error: Fontconfig error: Cannot load default
+// config file: No such file: (null)". It is Fontconfig noting that the browser
+// engine has no config file; text still renders, and the desktop console shows
+// the line as plain output, not as an error.
+describe('ErrorLogPanel.parseLine: the Fontconfig config-file line (D-232)', () => {
+  let panel;
+
+  beforeEach(() => {
+    resetErrorLogPanel();
+    panel = new ErrorLogPanel({ container: null, badge: null });
+  });
+
+  it('is not an error', () => {
+    expect(
+      panel.parseLine(
+        'Fontconfig error: Cannot load default config file: No such file: (null)'
+      )
+    ).toBeNull();
+  });
+
+  it('an OpenSCAD error that mentions Fontconfig is still an error', () => {
+    const result = panel.parseLine(
+      'ERROR: Fontconfig could not find the font "Liberation Sans"'
+    );
+    expect(result.type).toBe(ERROR_LOG_TYPE.ERROR);
+  });
+});
