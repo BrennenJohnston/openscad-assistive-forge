@@ -804,6 +804,38 @@ test.describe('Braille translation workflow (card)', () => {
     await expectPanelAxeClean(page)
   })
 
+  // D-230: the empty status line was display: none, so its first message
+  // arrived together with its reveal and NVDA did not say it ("Six-key entry
+  // is on.", "Filled from your text: ..."). Empty, it stays rendered and in
+  // the accessibility tree, only visually hidden.
+  test('the braille editor status line is in the accessibility tree while empty', async ({ page, browserName }) => {
+    await openBrailleCard(page)
+    await page.locator('#brailleFieldEditor summary').click()
+    const status = page.locator('#brailleFieldStatus')
+    await expect(status).toHaveText('')
+    expect(await status.evaluate((el) => getComputedStyle(el).display)).not.toBe(
+      'none'
+    )
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send('DOM.enable')
+      await cdp.send('Accessibility.enable')
+      const { result } = await cdp.send('Runtime.evaluate', {
+        expression: "document.getElementById('brailleFieldStatus')",
+      })
+      const { node } = await cdp.send('DOM.describeNode', {
+        objectId: result.objectId,
+      })
+      const { nodes } = await cdp.send('Accessibility.getPartialAXTree', {
+        backendNodeId: node.backendNodeId,
+        fetchRelatives: false,
+      })
+      const ax = nodes.find((n) => n.backendDOMNodeId === node.backendNodeId)
+      expect(ax?.ignored).toBe(false)
+      expect(ax?.role?.value).toBe('status')
+    }
+  })
+
   test('six-key entry makes a cell from a chord, and Tab still leaves the editor', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

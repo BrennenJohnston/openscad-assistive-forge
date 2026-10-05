@@ -17086,8 +17086,19 @@ body.tutorial-body-locked {
   flex-wrap: wrap;
 }
 
+/* D-230: an empty status line stays in the accessibility tree, hidden the way
+   .sr-only hides, because a live region revealed together with its first
+   message is not announced. */
 .braille-field-status:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 .braille-preview {
