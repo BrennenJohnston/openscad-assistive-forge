@@ -323,6 +323,48 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
       .count()
     expect(valueAttrCount).toBe(0)
   })
+
+  // D-227: the indicator is a polite live region, and NVDA said its tooltip,
+  // "0 MB allocated to the OpenSCAD engine", every ten seconds for as long as
+  // the app was open, because each poll rewrote the same text, classes and
+  // tooltip. A poll that finds the same value must write nothing.
+  test('memory indicator writes nothing when its value has not changed (D-227)', async ({ page }) => {
+    test.setTimeout(120_000)
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    })
+    await page.goto('/')
+    await waitForWasmReady(page)
+    const indicator = page.locator('#memoryIndicator')
+    await expect(indicator).not.toHaveClass(/\bhidden\b/, { timeout: 30_000 })
+
+    await page.evaluate(() => {
+      const box = document.getElementById('memoryIndicator')
+      const text = document.getElementById('memoryText')
+      const unchanged = { text: 0, title: 0, class: 0 }
+      window.__memoryUnchangedWrites = unchanged
+      new MutationObserver((records) => {
+        for (const r of records) {
+          if (r.oldValue === box.getAttribute(r.attributeName)) {
+            unchanged[r.attributeName] += 1
+          }
+        }
+      }).observe(box, {
+        attributes: true,
+        attributeOldValue: true,
+        attributeFilter: ['title', 'class'],
+      })
+      let last = text.textContent
+      new MutationObserver(() => {
+        if (text.textContent === last) unchanged.text += 1
+        last = text.textContent
+      }).observe(text, { childList: true, characterData: true, subtree: true })
+    })
+    // Two polls, ten seconds apart
+    await page.waitForTimeout(21_000)
+    const writes = await page.evaluate(() => window.__memoryUnchangedWrites)
+    expect(writes).toEqual({ text: 0, title: 0, class: 0 })
+  })
 })
 
 test.describe('New Accessibility Features (WCAG 2.2)', () => {
