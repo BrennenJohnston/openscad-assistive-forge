@@ -1368,37 +1368,51 @@ test.describe('Braille Sign workflow', () => {
     )
   })
 
-  test('sign braille carries no capital signs until the switch is turned on', async ({ page }) => {
+  test('sign braille follows the ADA sign rule until Exactly as typed is chosen (D-236)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-sign')
-    const caps = page.locator('#brailleCapsToggle')
-    await expect(caps).not.toBeChecked()
+    const group = page.getByRole('group', { name: 'Braille capitals' })
+    const ada = group.getByRole('radio', {
+      name: 'ADA sign rule: lowercase, except single letters (the B in 3B)',
+    })
+    const typed = group.getByRole('radio', {
+      name: 'Exactly as typed (UEB capital signs)',
+    })
+    await expect(ada).toBeChecked()
+    await expect(typed).not.toBeChecked()
+    await expect(page.locator('#brailleCapsToggle')).toHaveCount(0)
     const first = page.locator('#braillePreview .braille-preview-braille').first()
-    // The first layout of the default "Room 101": no capital sign
-    await expect(first).toHaveText(
-      '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
-      { timeout: 20000 }
-    )
+    // The default "Room 101" and an all-capitals ROOM 101: no capital sign
+    await expect(first).toHaveText('\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801', { timeout: 20000 })
     await page.locator('#brailleTextInput').fill('ROOM 101')
-    await expect(first).toHaveText(
-      '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
-      { timeout: 20000 }
-    )
+    await expect(first).toHaveText('\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801', { timeout: 20000 })
+    // A letter standing alone keeps its capital (the Braille Authority's
+    // staircase 3B): room, number 3, capital B
+    await page.locator('#brailleTextInput').fill('Room 3B')
+    await expect(first).toHaveText('\u2817\u2815\u2815\u280D\u2800\u283C\u2809\u2820\u2803', { timeout: 20000 })
     await expect(page.locator('#brailleWarnings')).toBeEmpty()
-    await caps.check()
-    await expect(first).toHaveText(
-      '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
-      { timeout: 20000 }
-    )
+    // The raised letters keep what was typed; the model raises it in capitals
+    await expect(
+      page.locator('.param-control[data-param-name="sign_text_1"] input')
+    ).toHaveValue('Room 3B')
+    await expectPanelAxeClean(page)
+
+    // An arrow key moves the choice, as in any radio group
+    await ada.focus()
+    await page.keyboard.press('ArrowDown')
+    await expect(typed).toBeChecked()
+    await expect(typed).toBeFocused()
+    await expect(first).toHaveText('\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2809\u2820\u2803', { timeout: 20000 })
   })
 
   test('sign translates a word that mixes letters and a number, with no engine error', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-sign')
-    const caps = page.locator('#brailleCapsToggle')
-    if (!(await caps.isChecked())) await caps.check()
+    await page
+      .getByRole('radio', { name: 'Exactly as typed (UEB capital signs)' })
+      .check()
 
     await page.locator('#brailleTextInput').fill('Tee3D')
     // Capital T, e, e, number sign, 3, capital D
@@ -1414,8 +1428,9 @@ test.describe('Braille Sign workflow', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-sign')
-    const caps = page.locator('#brailleCapsToggle')
-    if (!(await caps.isChecked())) await caps.check()
+    await page
+      .getByRole('radio', { name: 'Exactly as typed (UEB capital signs)' })
+      .check()
 
     await page.locator('#brailleTextInput').fill('ROOM \u2603 101')
     // Capital word ROOM, one blank cell, number 101: the snowman is left
@@ -1435,8 +1450,9 @@ test.describe('Braille Sign workflow', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-sign')
-    const caps = page.locator('#brailleCapsToggle')
-    if (!(await caps.isChecked())) await caps.check()
+    await page
+      .getByRole('radio', { name: 'Exactly as typed (UEB capital signs)' })
+      .check()
 
     await page.locator('#brailleTextInput').fill('ROOM ROOM ROOM ROOM')
     // One capital passage indicator, the four words, one terminator

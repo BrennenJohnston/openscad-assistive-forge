@@ -38,6 +38,7 @@ import {
   BRAILLE_SPACE,
 } from './braille-wrap.js';
 import { signRowWidthMm } from './sign-letter-metrics.js';
+import { adaSignCapitals } from './braille-capitals.js';
 import { asciiToCells } from './braille-ascii.js';
 import { createSixKeyEntry, describeCell } from './braille-six-key.js';
 
@@ -159,8 +160,9 @@ let panel = null;
  *   wrapped braille rows
  * @param {string} [config.tablesCatalog] - URL of tables.json
  * @param {string} [config.defaultTable] - Default liblouis table file
- * @param {string} [config.capitals] - "off" starts "Preserve capital
- *   letters" unchecked (signs, ADA 703.3.1); anything else starts it checked
+ * @param {string} [config.capitals] - "off" starts a card or charm with
+ *   "Preserve capital letters" unchecked, and a sign on the ADA sign rule
+ *   (ADA 703.3.1); anything else starts with the capitals as typed
  * @param {Object} [config.capacityParams] - SCAD param names for capacity math
  * @param {Object} [config.multiCardParams] - SCAD param names for the
  *   All-cards layout mode (cardLayout, rowsPerCard)
@@ -311,7 +313,11 @@ class BraillePanel {
 
     this.buildTextInput(section);
     this.buildTableSelect(section);
-    this.buildCapsToggle(section);
+    if (this.mode === 'sign') {
+      this.buildSignCapitals(section);
+    } else {
+      this.buildCapsToggle(section);
+    }
 
     // The braille editor applies wherever the model carries braille rows
     // the user might want to hand-correct. Charm mode is one cell per
@@ -617,14 +623,13 @@ class BraillePanel {
       rows = layout.brailleRows;
     } else {
       const table = this.refs.tableSelect.value || this.defaultTable;
-      const preserveCaps = this.refs.capsInput.checked;
       const geometry = this.getGeometry();
       const { cellsPerLine, rowsPerCard } = computeCapacity(geometry);
 
       const untranslatable = new Set();
       const translate = this.makeTranslator(
         table,
-        preserveCaps,
+        this.capitalsTreatment(),
         untranslatable
       );
       const layout = await layoutBrailleText({
@@ -778,10 +783,80 @@ class BraillePanel {
     capsHelp.id = 'brailleCapsHelp';
     capsHelp.className = 'braille-panel-help';
     capsHelp.textContent =
-      this.mode === 'sign' && !capsInput.checked
-        ? 'Off by default on a sign. The raised letters are always uppercase, and ADA 703.3.1 uses a braille capital sign only for the first word of a sentence, names, single letters, initials and acronyms. Turn this on to keep the capitals you type.'
-        : 'On by default so the braille matches your text exactly. Each capital letter adds an indicator cell; turn this off to convert text to lowercase and save about one cell per capital (common for space-limited cards and labels).';
+      'On by default so the braille matches your text exactly. Each capital letter adds an indicator cell; turn this off to convert text to lowercase and save about one cell per capital (common for space-limited cards and labels).';
     section.appendChild(capsHelp);
+  }
+
+  /**
+   * The sign's capitals choice (D-236). ADA 703.3.1 keeps capitals in sign
+   * braille for names, single letters, initials, acronyms and a sentence's
+   * first word; only the person typing knows which words those are, so the
+   * rule is the default and "Exactly as typed" keeps what they type.
+   */
+  buildSignCapitals(section) {
+    const group = document.createElement('fieldset');
+    group.id = 'brailleCapsChoice';
+    group.className = 'braille-panel-choice';
+    // A fieldset has no native description; only the help's first sentence
+    // is wired, under SCREEN_READER_LESSONS.md's 25-word ceiling.
+    group.setAttribute('aria-describedby', 'brailleCapsHelpLead');
+
+    const legend = document.createElement('legend');
+    legend.textContent = 'Braille capitals';
+    group.appendChild(legend);
+
+    const addChoice = (id, text) => {
+      const row = document.createElement('div');
+      row.className = 'braille-panel-toggle-row';
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'brailleCapitals';
+      input.id = id;
+      input.addEventListener('change', () => this.scheduleLayout(0));
+      row.appendChild(input);
+      const label = document.createElement('label');
+      label.setAttribute('for', id);
+      label.textContent = text;
+      row.appendChild(label);
+      group.appendChild(row);
+      return input;
+    };
+    const ada = addChoice(
+      'brailleCapsAda',
+      'ADA sign rule: lowercase, except single letters (the B in 3B)'
+    );
+    const typed = addChoice(
+      'brailleCapsTyped',
+      'Exactly as typed (UEB capital signs)'
+    );
+    (this.config.capitals === 'off' ? ada : typed).checked = true;
+    this.refs.capsTypedInput = typed;
+
+    const help = document.createElement('p');
+    help.id = 'brailleCapsHelp';
+    help.className = 'braille-panel-help';
+    const lead = document.createElement('span');
+    lead.id = 'brailleCapsHelpLead';
+    lead.textContent =
+      'For a name, an acronym or a sentence, choose Exactly as typed and type capitals only on those words.';
+    help.append(
+      lead,
+      " The raised letters are always uppercase. In braille, ADA 703.3.1 gives capitals only to names, single letters, initials, acronyms and a sentence's first word."
+    );
+    group.appendChild(help);
+    section.appendChild(group);
+  }
+
+  /**
+   * How the text's capitals reach liblouis: 'as-typed', 'lowercase' (a card
+   * or charm with "Preserve capital letters" off) or 'ada-sign'.
+   * @returns {'as-typed'|'lowercase'|'ada-sign'}
+   */
+  capitalsTreatment() {
+    if (this.mode === 'sign') {
+      return this.refs.capsTypedInput.checked ? 'as-typed' : 'ada-sign';
+    }
+    return this.refs.capsInput.checked ? 'as-typed' : 'lowercase';
   }
 
   buildSizePreset(section) {
@@ -1317,9 +1392,13 @@ class BraillePanel {
    * that held a character with no braille, so a whole translated line is
    * not quoted back (the whole text when no word can be told apart).
    */
-  makeTranslator(table, preserveCaps, untranslatable) {
+  makeTranslator(table, capitals, untranslatable) {
     return async (t) => {
-      const result = await translateText(t, table, { preserveCaps });
+      const result = await translateText(
+        capitals === 'ada-sign' ? adaSignCapitals(t) : t,
+        table,
+        { preserveCaps: capitals !== 'lowercase' }
+      );
       if (result.hadUntranslatable) {
         const leftOut = result.leftOutChars ?? [];
         const words = t
@@ -1400,13 +1479,14 @@ class BraillePanel {
     const seq = ++this.layoutSeq;
     const text = this.refs.textarea.value;
     const table = this.refs.tableSelect.value || this.defaultTable;
-    const preserveCaps = this.refs.capsInput.checked;
+    const capitals = this.capitalsTreatment();
+    const preserveCaps = capitals === 'as-typed';
     const geometry = this.getGeometry();
 
     const { cellsPerLine, rowsPerCard } = computeCapacity(geometry);
 
     const untranslatable = new Set();
-    const translate = this.makeTranslator(table, preserveCaps, untranslatable);
+    const translate = this.makeTranslator(table, capitals, untranslatable);
 
     const layout = await layoutBrailleText({
       text,
@@ -1602,10 +1682,11 @@ class BraillePanel {
     const seq = ++this.layoutSeq;
     const text = this.refs.textarea.value.trim();
     const table = this.refs.tableSelect.value || this.defaultTable;
-    const preserveCaps = this.refs.capsInput.checked;
+    const capitals = this.capitalsTreatment();
+    const preserveCaps = capitals === 'as-typed';
 
     const untranslatable = new Set();
-    const translate = this.makeTranslator(table, preserveCaps, untranslatable);
+    const translate = this.makeTranslator(table, capitals, untranslatable);
 
     // Each non-whitespace character becomes its own charm, translated
     // individually (so "B" = capital indicator + b = 2 cells, within the
@@ -1683,11 +1764,12 @@ class BraillePanel {
   async buildSignLayout({ skipBrailleRows = false } = {}) {
     const text = this.refs.textarea.value;
     const table = this.refs.tableSelect.value || this.defaultTable;
-    const preserveCaps = this.refs.capsInput.checked;
+    const capitals = this.capitalsTreatment();
+    const preserveCaps = capitals === 'as-typed';
     const maxLines = this.lineParams.length;
 
     const untranslatable = new Set();
-    const translate = this.makeTranslator(table, preserveCaps, untranslatable);
+    const translate = this.makeTranslator(table, capitals, untranslatable);
 
     const geometry = this.getGeometry();
     const paddingMm = this.readSignPaddingMm();
