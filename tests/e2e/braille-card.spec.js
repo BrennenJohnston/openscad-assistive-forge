@@ -986,7 +986,7 @@ test.describe('Braille Charm workflow', () => {
     const pager = page.locator('#brailleCardPager')
     await expect(pager).toBeVisible()
     await expect(page.locator('#braillePagerStatus')).toHaveText(
-      'Charm 1 of 2 — h'
+      'Charm 1 of 2: h'
     )
     const layoutSelect = page.locator(
       '.param-control[data-param-name="charm_layout"] select'
@@ -1001,7 +1001,7 @@ test.describe('Braille Charm workflow', () => {
     await expect(page.locator('#braillePrevCard')).toBeDisabled()
     await page.locator('#brailleNextCard').click()
     await expect(page.locator('#braillePagerStatus')).toHaveText(
-      'Charm 2 of 2 — i'
+      'Charm 2 of 2: i'
     )
     await expect(charInput).toHaveValue('\u280A', { timeout: 10000 }) // ⠊
     await expect(page.locator('#brailleNextCard')).toBeDisabled()

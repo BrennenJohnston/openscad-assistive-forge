@@ -349,7 +349,7 @@ class BraillePanel {
     if (this.mode === 'charm') {
       textHelp.textContent =
         `Translation runs on your device. Each character becomes its own ` +
-        `charm — type a word to get one charm per letter. A charm face ` +
+        `charm: type a word to get one charm per letter. A charm face ` +
         `fits ${this.maxCells} braille cells; a capital letter's ` +
         `indicator cell shares its charm.`;
     } else if (this.mode === 'sign') {
@@ -475,8 +475,8 @@ class BraillePanel {
     fieldLabel.setAttribute('for', 'brailleFieldInput');
     fieldLabel.className = 'braille-panel-label';
     fieldLabel.textContent = isSign
-      ? 'Braille (Unicode) — one line per braille row'
-      : 'Braille (Unicode) — one line per row';
+      ? 'Braille (Unicode), one line per braille row'
+      : 'Braille (Unicode), one line per row';
     details.appendChild(fieldLabel);
 
     const field = document.createElement('textarea');
@@ -495,8 +495,8 @@ class BraillePanel {
       this.asciiInvalid = null;
       const status =
         field.value === ''
-          ? 'Empty — the text above is translated instead.'
-          : 'Edited by hand — this braille is used exactly as written.';
+          ? 'Empty. The text above is translated instead.'
+          : 'Edited by hand. This braille is used exactly as written.';
       // The status is a live region, which says a sentence again each time
       // it is written; typing (or six-key entry) must not repeat it per key
       if (this.refs.fieldStatus?.textContent !== status) {
@@ -553,7 +553,7 @@ class BraillePanel {
     numberNote.className = 'braille-panel-help';
     numberNote.textContent =
       'UEB number signs: a hyphen or parenthesis ends numeric mode, so ' +
-      '206-543-4779 correctly needs three number signs — that is correct ' +
+      '206-543-4779 needs three number signs. That is correct ' +
       'UEB output, not a bug. The BANA form 206.543.4779 keeps numeric ' +
       'mode through the periods and needs only one. To adjust individual ' +
       'cells by hand, use this editor.';
@@ -590,7 +590,7 @@ class BraillePanel {
     if (!field || field.value === '' || this.fieldDirty) return;
     field.value = '';
     this.setFieldStatus(
-      'Braille editor cleared because the text changed — press ' +
+      'Braille editor cleared because the text changed. Press ' +
         '"Translate to braille" to refresh it.'
     );
   }
@@ -645,7 +645,7 @@ class BraillePanel {
     this.asciiInvalid = null;
     const n = rows.length;
     this.setFieldStatus(
-      `Filled from your text — ${n} braille line${n === 1 ? '' : 's'}. ` +
+      `Filled from your text: ${n} braille line${n === 1 ? '' : 's'}. ` +
         'Edits here are used exactly as written.'
     );
     this.scheduleLayout(0);
@@ -1060,7 +1060,7 @@ class BraillePanel {
     renderAllHelp.className = 'braille-panel-help';
     renderAllHelp.textContent = isCharm
       ? 'Lays every charm out side by side in one model, separated by the charm_gap_mm parameter. Turn off to render and download one charm at a time.'
-      : 'Lays every card out on the bed in a single model, separated by the card_gap_mm parameter. Large sets may exceed your print bed — check the total depth before printing.';
+      : 'Lays every card out on the bed in a single model, separated by the card_gap_mm parameter. Large sets may exceed your print bed. Check the total depth before printing.';
     notice.appendChild(renderAllHelp);
 
     section.appendChild(notice);
@@ -1506,7 +1506,7 @@ class BraillePanel {
         message:
           `The braille editor has ${allLines.length} lines but only ` +
           `${this.lineParams.length} are available. The extra lines were ` +
-          `dropped — shorten the braille or split it across files.`,
+          `dropped. Shorten the braille or split it across files.`,
       });
       allLines = allLines.slice(0, this.lineParams.length);
     }
@@ -1809,8 +1809,8 @@ class BraillePanel {
     if (tooManyLines) {
       tooManyLines.message =
         `The sign holds ${maxLines} lines but the text needs ` +
-        `${tooManyLines.needed ?? 'more'}. The extra lines were dropped — ` +
-        `shorten the text or split it across multiple signs.`;
+        `${tooManyLines.needed ?? 'more'}. The extra lines were dropped. ` +
+        `Shorten the text or split it across multiple signs.`;
     }
     this.collectCommonWarnings(warnings, {
       untranslatable,
@@ -1864,7 +1864,7 @@ class BraillePanel {
         available: maxLines,
         message:
           `The braille editor has ${brailleRows.length} lines but the sign ` +
-          `holds ${maxLines}. The extra lines were dropped — shorten the ` +
+          `holds ${maxLines}. The extra lines were dropped. Shorten the ` +
           `braille or split it across multiple signs.`,
       });
       brailleRows = brailleRows.slice(0, maxLines);
@@ -2007,7 +2007,7 @@ class BraillePanel {
     if (announce) {
       stateManager.announceChange(
         `Charm ${this.currentCharm + 1} of ${this.charms.length}` +
-          (charm?.source ? ` — ${charm.source}` : '')
+          (charm?.source ? `: ${charm.source}` : '')
       );
     }
   }
@@ -2049,8 +2049,8 @@ class BraillePanel {
         'braille-preview-count' + (overflow ? ' braille-preview-overflow' : '');
       countSpan.textContent =
         this.mode === 'charm'
-          ? ` — ${cells} / ${this.cellsPerLine} cells`
-          : ` — line ${i + 1}: ${cells} / ${this.cellsPerLine} cells`;
+          ? ` (${cells} / ${this.cellsPerLine} cells)`
+          : ` (line ${i + 1}: ${cells} / ${this.cellsPerLine} cells)`;
       item.appendChild(countSpan);
 
       if (source !== '') {
@@ -2091,7 +2091,7 @@ class BraillePanel {
     if (multi) {
       this.refs.noticeText.textContent =
         `Your text spans ${this.cards.length} cards. Each card must be ` +
-        `rendered and downloaded separately to complete the full text — ` +
+        `rendered and downloaded separately to complete the full text, ` +
         `or render all ${this.cards.length} cards at once with the toggle below.`;
       if (this.cards.length !== this.lastAnnouncedCards) {
         stateManager.announceChange(
@@ -2136,9 +2136,9 @@ class BraillePanel {
     this.refs.notice.hidden = !multi;
     if (multi) {
       this.refs.noticeText.textContent = this.generateAll
-        ? `Your text makes ${this.charms.length} charms — one per ` +
+        ? `Your text makes ${this.charms.length} charms, one per ` +
           `character. All of them render side by side in one model.`
-        : `Your text makes ${this.charms.length} charms — one per ` +
+        : `Your text makes ${this.charms.length} charms, one per ` +
           `character. Use the pager below to render and download each ` +
           `charm separately.`;
       if (this.charms.length !== this.lastAnnouncedCards) {
@@ -2155,7 +2155,7 @@ class BraillePanel {
       const charm = this.charms[this.currentCharm];
       this.refs.pagerStatus.textContent =
         `Charm ${this.currentCharm + 1} of ${this.charms.length}` +
-        (charm?.source ? ` — ${charm.source}` : '');
+        (charm?.source ? `: ${charm.source}` : '');
       this.refs.prevBtn.disabled = this.currentCharm === 0;
       this.refs.nextBtn.disabled = this.currentCharm === this.charms.length - 1;
       this.refs.pagerHint.textContent =
@@ -2422,8 +2422,8 @@ class BraillePanel {
     }
     el.hidden = false;
     el.textContent =
-      `Raised letters: ${textRows} row${textRows === 1 ? '' : 's'} — ` +
-      `braille: ${brailleRows} row${brailleRows === 1 ? '' : 's'}. ` +
+      `Raised letters: ${textRows} row${textRows === 1 ? '' : 's'}. ` +
+      `Braille: ${brailleRows} row${brailleRows === 1 ? '' : 's'}. ` +
       `Braille rows fill the sign width independently of the letter rows ` +
       `(ADA 703.3.2 places braille in one block below the text).`;
   }

@@ -189,14 +189,14 @@ describe('braille panel charm mode (multi-charm)', () => {
     const pager = document.getElementById('brailleCardPager');
     expect(pager.hidden).toBe(false);
     expect(document.getElementById('braillePagerStatus').textContent).toBe(
-      'Charm 1 of 2 — h'
+      'Charm 1 of 2: h'
     );
     expect(document.getElementById('braillePrevCard').disabled).toBe(true);
 
     document.getElementById('brailleNextCard').click();
     expect(params().braille_chars).toBe(cell('i'));
     expect(document.getElementById('braillePagerStatus').textContent).toBe(
-      'Charm 2 of 2 — i'
+      'Charm 2 of 2: i'
     );
     expect(document.getElementById('brailleNextCard').disabled).toBe(true);
   });
