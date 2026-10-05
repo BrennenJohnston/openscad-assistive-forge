@@ -774,6 +774,104 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(errors).toContainText('not a braille character')
   })
 
+  test('braille editor converts pasted braille ASCII into braille cells', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+
+    await page.locator('#brailleFieldEditor summary').click()
+    const field = page.locator('#brailleFieldInput')
+    // h>ry@a" is braille ASCII from the Braille Authority's card guidelines
+    await field.fill('h>ry@a"')
+    await expect(page.locator('#brailleErrors')).toContainText(
+      'not a braille character',
+      { timeout: 20000 }
+    )
+
+    await page.locator('#brailleFieldFromAscii').click()
+    const cells = '\u2813\u281C\u2817\u283D\u2808\u2801\u2810'
+    await expect(field).toHaveValue(cells)
+    await expect(page.locator('#brailleFieldStatus')).toHaveText(
+      'Converted 1 line of braille ASCII to braille cells.'
+    )
+    await expect(page.locator('#braillePreview')).toContainText(cells, {
+      timeout: 20000,
+    })
+    await expect(
+      page.locator('.param-control[data-param-name="Line_1"] input')
+    ).toHaveValue(cells, { timeout: 10000 })
+    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expectPanelAxeClean(page)
+  })
+
+  test('six-key entry makes a cell from a chord, and Tab still leaves the editor', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleSixKeyToggle').check()
+    await expect(page.locator('#brailleFieldStatus')).toHaveText(
+      'Six-key entry is on.'
+    )
+    const field = page.locator('#brailleFieldInput')
+    await field.focus()
+    // Hold f, d and k together, then let go: dots 1, 2 and 5
+    for (const key of ['f', 'd', 'k']) await page.keyboard.down(key)
+    for (const key of ['f', 'd', 'k']) await page.keyboard.up(key)
+    await expect(field).toHaveValue('\u2813')
+    await expect(
+      page.locator('.param-control[data-param-name="Line_1"] input')
+    ).toHaveValue('\u2813', { timeout: 10000 })
+    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expectPanelAxeClean(page)
+
+    await page.keyboard.press('Tab')
+    await expect(page.locator('#brailleFieldToText')).toBeFocused()
+  })
+
+  test('six-key entry says every cell, even when chords come quickly', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
+    test.setTimeout(300_000)
+
+    await openBrailleCard(page)
+    // The first render's own messages would otherwise arrive among the cells
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    await expect(page.locator('#statusArea')).toHaveText(/Preview ready/, {
+      timeout: 120_000,
+    })
+
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleSixKeyToggle').check()
+    // Every text the polite announcer is given, in order
+    await page.evaluate(() => {
+      window.__said = []
+      const region = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const text = region.textContent.trim()
+        if (text) window.__said.push(text)
+      }).observe(region, { childList: true, characterData: true, subtree: true })
+    })
+    await page.locator('#brailleFieldInput').focus()
+    // Three chords 0.15 s apart: dots 1 2 5, dots 1 3, dots 2 5
+    for (const keys of [['f', 'd', 'k'], ['f', 's'], ['d', 'k']]) {
+      for (const key of keys) await page.keyboard.down(key)
+      for (const key of keys) await page.keyboard.up(key)
+      await page.waitForTimeout(150)
+    }
+    await expect(page.locator('#brailleFieldInput')).toHaveValue(
+      '\u2813\u2805\u2812'
+    )
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__said.filter((text) => text.startsWith('dots')))
+      )
+      .toEqual(['dots 1 2 5', 'dots 1 3', 'dots 2 5'])
+  })
+
   test('braille panel has no axe violations (normal + warning + error states)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
