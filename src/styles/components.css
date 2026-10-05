@@ -17027,6 +17027,49 @@ body.tutorial-body-locked {
   align-items: center;
 }
 
+/* D-236: the sign's capitals choice, two radios in a fieldset. As with
+   six-key entry, each row is the touch target (the label checks its radio) */
+.braille-panel-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.braille-panel-choice legend {
+  padding: 0;
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-panel-choice .braille-panel-toggle-row {
+  min-height: var(--size-touch-target);
+}
+
+.braille-panel-choice input[type='radio'] {
+  flex-shrink: 0;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin: 0;
+}
+
+.braille-panel-choice input[type='radio']:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset, 2px);
+}
+
+.braille-panel-choice .braille-panel-toggle-row label {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
 .braille-panel-field-row {
   display: flex;
   align-items: center;

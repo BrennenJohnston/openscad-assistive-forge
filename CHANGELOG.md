@@ -35,8 +35,10 @@ page that says which rule governs each figure.
 
 ### The Braille Sign
 
-- Sign braille has no capital signs by default, as ADA 703.3.1 asks; turn
-  on "Preserve capital letters" to keep the capitals you type.
+- Sign braille follows ADA 703.3.1's rule for capitals by default: it is
+  lowercase except a capital letter standing alone, such as the B in 3B.
+  Choose "Exactly as typed" under Braille capitals to keep the capitals you
+  type, for a name, an acronym or a sentence.
 - The letter height setting is the height of the capital I, as ADA
   703.2.5 measures it, so the default letters are 16 mm tall (they were
   15.3 mm).

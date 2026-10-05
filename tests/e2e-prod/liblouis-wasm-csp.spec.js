@@ -63,8 +63,9 @@ test.describe('the liblouis wasm on the built site', () => {
     expect(result.bytes).toBe(164567);
 
     // The worker loads the engine and the shipped tables, then translates.
-    const caps = page.locator('#brailleCapsToggle');
-    if (!(await caps.isChecked())) await caps.check();
+    await page
+      .getByRole('radio', { name: 'Exactly as typed (UEB capital signs)' })
+      .check();
     await page.locator('#brailleTextInput').fill('Tee3D');
     await expect(
       page.locator('#braillePreview .braille-preview-braille').first()

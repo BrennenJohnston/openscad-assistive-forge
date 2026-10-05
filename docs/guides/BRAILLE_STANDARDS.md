@@ -13,7 +13,7 @@ This page says which rules the Braille Sign's raised letters and braille follow,
 
 - The braille is translated on your device by liblouis 3.39.0, in Unified English Braille (UEB).
 - A sign uses contracted braille (Grade 2), as ADA 703.3 requires. English Braille American Edition (EBAE), the code used in the United States before UEB, is not offered: BANA says it "is no longer an accepted standard for braille signage."
-- Capital signs: ADA 703.3.1 allows them only before the first word of a sentence, proper nouns and names, single letters, initials and acronyms, and BANA recommends the same where space permits. So on a sign "Preserve capital letters" starts off and the braille carries no capital signs. Turn it on to keep the capitals you type; liblouis then capitalizes as UEB does.
+- Capital signs: ADA 703.3.1 allows them only before the first word of a sentence, proper nouns and names, single letters, initials and acronyms, and BANA recommends the same where space permits. The Access Board's guide adds that nothing else is capitalized in sign braille, whatever the print shows. So a sign's Braille capitals choice starts on the ADA sign rule: the braille is lowercase except a capital letter standing alone, as in BANA's own examples (Room 420 with no capital sign; staircase 3B and section 4R with one on the letter). The tool cannot tell a name or an acronym from an ordinary word, so for those choose Exactly as typed and type capitals only on those words; liblouis then capitalizes as UEB does.
 - Each line you type is translated as one unit and then divided into rows at its blank cells, so rules that span words (a capital passage, a divided address) come out the way UEB writes them.
 
 ## Braille dots on the sign (ADA 703.3.1, Table 703.3.1)
@@ -61,9 +61,10 @@ For comparison, braille embossed on paper in the United States and Canada follow
 
 ## Sources
 
-Read on 2026-10-01 and 2026-10-02.
+Read on 2026-10-01, 2026-10-02 and 2026-10-05.
 
 - U.S. Access Board, [2010 ADA Standards for Accessible Design, section 703 Signs](https://www.access-board.gov/ada/#ada-703)
+- U.S. Access Board, [Guide to the ADA Accessibility Standards, Chapter 7: Signs](https://www.access-board.gov/ada/guides/chapter-7-signs/), including its answer to which content on braille signs is capitalized
 - Braille Authority of North America, [Guidelines for the Creation of Braille Signage](https://www.brailleauthority.org/sites/default/files/2024-01/BANA%20Guidelines%20for%20the%20Creation%20of%20Braille%20Signage%20Approved%2010-2023.pdf) (approved October 2023)
 - Braille Authority of North America, [Size and Spacing of Braille Characters](https://www.brailleauthority.org/size-and-spacing-braille-characters), which quotes Specification 800
 - International Council on English Braille, [The Rules of Unified English Braille](https://iceb.org/ueb.html)

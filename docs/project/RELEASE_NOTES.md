@@ -8,8 +8,8 @@ Braille only, so a capital passage and every other rule that spans words
 comes out as liblouis writes it. The Braille Sign is built to the figures
 of ADA 703: letters measured on the capital I, letter spacing that keeps
 capitals and digits 3.2 mm to four strokes apart, letters and braille at
-least 9.525 mm inside the border, no capital signs by default, and every
-range held; a standards page says which rule governs each figure. The
+least 9.525 mm inside the border, capital signs only where ADA 703.3.1
+allows them, and every range held; a standards page says which rule governs each figure. The
 braille editor takes braille ASCII and six-key entry, a divided address or
 long number carries the line continuation sign, and a screen reader hears
 the braille tools' messages once, in words.

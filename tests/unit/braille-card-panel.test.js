@@ -924,7 +924,11 @@ describe('braille panel — characters with no braille (D-218)', () => {
   });
 });
 
-describe('braille panel sign mode — capitals off by default (D-208)', () => {
+describe('braille panel sign mode — the ADA capitals rule by default (D-208, D-236)', () => {
+  const CAP = String.fromCodePoint(0x2820);
+  const BLANK = String.fromCodePoint(0x2800);
+  const signRows = () =>
+    document.querySelectorAll('#braillePreview .braille-preview-braille');
   const SIGN_LINES = Array.from({ length: 6 }, (_, i) => `Line_${i + 1}`);
   const SIGN_TEXTS = Array.from({ length: 6 }, (_, i) => `sign_text_${i + 1}`);
 
@@ -966,36 +970,92 @@ describe('braille panel sign mode — capitals off by default (D-208)', () => {
     document.body.innerHTML = '';
   });
 
-  it('starts with capitals off when the sign asks for it, and says nothing about them', async () => {
+  it('starts on the ADA sign rule when the sign asks for it, and says nothing about capitals', async () => {
     mountSign({ capitals: 'off' });
-    expect(document.getElementById('brailleCapsToggle').checked).toBe(false);
+    expect(document.getElementById('brailleCapsAda').checked).toBe(true);
+    expect(document.getElementById('brailleCapsTyped').checked).toBe(false);
     await typeText('Exit now', () => {
       expect(params().sign_text_1).toBe('Exit now');
     });
-    expect(translateText).toHaveBeenCalledWith(
-      expect.any(String),
-      'en-ueb-g2.ctb',
-      { preserveCaps: false }
-    );
+    expect(translateText).toHaveBeenCalledWith('exit now', 'en-ueb-g2.ctb', {
+      preserveCaps: true,
+    });
     expect(document.getElementById('brailleWarnings').textContent).toBe('');
   });
 
-  it('keeps capitals on when the configuration does not turn them off', () => {
+  it('offers the two capitals choices as one named group, with no checkbox (D-236)', () => {
+    mountSign({ capitals: 'off' });
+    expect(document.getElementById('brailleCapsToggle')).toBeNull();
+    const group = document.getElementById('brailleCapsChoice');
+    expect(group.tagName).toBe('FIELDSET');
+    expect(group.querySelector('legend').textContent).toBe('Braille capitals');
+    const radios = [...group.querySelectorAll('input[type="radio"]')];
+    expect(radios.map((radio) => radio.id)).toEqual([
+      'brailleCapsAda',
+      'brailleCapsTyped',
+    ]);
+    expect(new Set(radios.map((radio) => radio.name)).size).toBe(1);
+    expect(
+      radios.map(
+        (radio) =>
+          document.querySelector(`label[for="${radio.id}"]`).textContent
+      )
+    ).toEqual([
+      'ADA sign rule: lowercase, except single letters (the B in 3B)',
+      'Exactly as typed (UEB capital signs)',
+    ]);
+  });
+
+  it('on the ADA sign rule, only a letter standing alone keeps its capital (D-236)', async () => {
+    mountSign({ capitals: 'off' });
+    await typeText('Wing C', () =>
+      expect(signRows()[0]?.textContent).toBe(
+        word('wing') + BLANK + CAP + cell('c')
+      )
+    );
+    expect(params().sign_text_1).toBe('Wing C');
+  });
+
+  it('exactly as typed keeps every capital you type', async () => {
+    mountSign({ capitals: 'off' });
+    const typed = document.getElementById('brailleCapsTyped');
+    typed.click();
+    expect(typed.checked).toBe(true);
+    expect(document.getElementById('brailleCapsAda').checked).toBe(false);
+    await typeText('Wing C', () =>
+      expect(signRows()[0]?.textContent).toBe(
+        CAP + word('wing') + BLANK + CAP + cell('c')
+      )
+    );
+  });
+
+  it('starts exactly as typed when the configuration does not ask for the rule; cards keep their checkbox', () => {
     mountSign();
-    expect(document.getElementById('brailleCapsToggle').checked).toBe(true);
+    expect(document.getElementById('brailleCapsTyped').checked).toBe(true);
+    expect(document.getElementById('brailleCapsAda').checked).toBe(false);
     destroyBraillePanel();
     mountCardPanel();
     expect(document.getElementById('brailleCapsToggle').checked).toBe(true);
+    expect(document.getElementById('brailleCapsChoice')).toBeNull();
   });
 
-  it('explains the sign defaults under the switch, the text box and the table list', () => {
+  it('explains the sign defaults under the capitals choice, the text box and the table list', () => {
     mountSign({ capitals: 'off' });
     expect(document.getElementById('brailleCapsHelp').textContent).toBe(
-      'Off by default on a sign. The raised letters are always uppercase, ' +
-        'and ADA 703.3.1 uses a braille capital sign only for the first ' +
-        'word of a sentence, names, single letters, initials and acronyms. ' +
-        'Turn this on to keep the capitals you type.'
+      'For a name, an acronym or a sentence, choose Exactly as typed and ' +
+        'type capitals only on those words. The raised letters are always ' +
+        'uppercase. In braille, ADA 703.3.1 gives capitals only to names, ' +
+        "single letters, initials, acronyms and a sentence's first word."
     );
+    // Only the first sentence is the group's description (15-word target,
+    // 25-word ceiling; SCREEN_READER_LESSONS.md rule 1)
+    const lead = document.getElementById('brailleCapsHelpLead');
+    expect(
+      document
+        .getElementById('brailleCapsChoice')
+        .getAttribute('aria-describedby')
+    ).toBe('brailleCapsHelpLead');
+    expect(lead.textContent.trim().split(/\s+/)).toHaveLength(19);
     expect(document.getElementById('brailleTextHelp').textContent).toBe(
       'Translation runs on your device. Each line you type is translated ' +
         'on its own. Long lines wrap onto new rows of raised letters, and ' +
