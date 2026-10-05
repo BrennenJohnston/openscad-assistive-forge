@@ -308,7 +308,9 @@ describe('braille-sign manifest', () => {
   });
 
   it('description carries the not-a-compliance-guarantee disclaimer', () => {
-    expect(readManifest().description).toMatch(/recommendations only/i);
+    expect(readManifest().description).toMatch(
+      /does not guarantee compliance\. Check the standard before installing\.$/
+    );
   });
 });
 
