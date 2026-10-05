@@ -47,8 +47,14 @@ jobs:
       - name: Generate coverage report
         run: npm run test:coverage
       
+      # Codecov's servers have refused this upload since at least 2026-10-05
+      # (an expired certificate on their side, D-235), and the failed upload
+      # turned this required job red although every test passed. Until
+      # uploads work again, a failed upload does not fail the job. Remove
+      # continue-on-error once they do.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
+        continue-on-error: true
         with:
           files: ./coverage/lcov.info
           flags: unittests
