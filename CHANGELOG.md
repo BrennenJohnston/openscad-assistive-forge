@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-10-05
+
 The braille tools now translate the way liblouis does, on a current
 liblouis, and the Braille Sign is built to the figures of ADA 703, with a
 page that says which rule governs each figure.

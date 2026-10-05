@@ -1,6 +1,6 @@
 # Release Notes
 
-## Unreleased
+## v5.2.0 (2026-10-05)
 
 The braille tools translate the way liblouis does: each typed line whole,
 on liblouis 3.39.0 built from its release source, in Unified English
