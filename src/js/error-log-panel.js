@@ -118,6 +118,14 @@ export class ErrorLogPanel {
     let lineNum = null;
     const message = trimmed;
 
+    // D-232: on every render that draws text, Fontconfig notes that the
+    // browser engine has no config file. The text still renders, and the
+    // desktop console shows the line as plain output, so it is not an error;
+    // the ERROR: test below matched its lowercase "error:".
+    if (/^Fontconfig error: Cannot load default config file\b/i.test(trimmed)) {
+      return null;
+    }
+
     // D-203: a line OpenSCAD labels a warning is one, whatever its text
     // quotes. "WARNING: [manifold] Minkowski failed with error, falling back
     // to Nef operation: CGAL ERROR: assertion violation!" matched the ERROR:

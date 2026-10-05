@@ -196,7 +196,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     expect(params().Line_2).toBe('');
     // The panel flags that the editor is the authority.
     const warnings = document.getElementById('brailleWarnings');
-    expect(warnings.hidden).toBe(false);
+    expect(warnings.textContent).not.toBe('');
     expect(warnings.textContent).toContain('exactly as written');
     // The editor opens so the active authority stays visible.
     expect(document.getElementById('brailleFieldEditor').open).toBe(true);
@@ -211,7 +211,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
   it('rejects non-braille characters with an error and blocks the write', async () => {
     await typeBraille('\u2813abc', () => {
       const errors = document.getElementById('brailleErrors');
-      expect(errors.hidden).toBe(false);
+      expect(errors.textContent).not.toBe('');
     });
     const errors = document.getElementById('brailleErrors');
     expect(errors.textContent).toContain('"a"');
@@ -224,7 +224,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     // 30 cells > 26-cell capacity of the default 200 mm card
     await typeBraille('\u2813'.repeat(30), () => {
       const errors = document.getElementById('brailleErrors');
-      expect(errors.hidden).toBe(false);
+      expect(errors.textContent).not.toBe('');
     });
     expect(document.getElementById('brailleErrors').textContent).toContain(
       '30 cells'
@@ -343,12 +343,12 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     expect(document.getElementById('brailleFieldStatus').textContent).toBe(
       'Converted 1 line of braille ASCII to braille cells.'
     );
-    expect(document.getElementById('brailleErrors').hidden).toBe(true);
+    expect(document.getElementById('brailleErrors').textContent).toBe('');
   });
 
   it('counts the lines it converts, and keeps them as hand-edited braille', async () => {
     await typeBraille('h>ry@a"\nhogw>ts4$u', () => {
-      expect(document.getElementById('brailleErrors').hidden).toBe(false);
+      expect(document.getElementById('brailleErrors').textContent).not.toBe('');
     });
     document.getElementById('brailleFieldFromAscii').click();
     await vi.waitFor(() => {
@@ -367,7 +367,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
 
   it('leaves the editor as it was and names a character that is not braille ASCII', async () => {
     await typeBraille('ab{', () => {
-      expect(document.getElementById('brailleErrors').hidden).toBe(false);
+      expect(document.getElementById('brailleErrors').textContent).not.toBe('');
     });
     document.getElementById('brailleFieldFromAscii').click();
     await vi.waitFor(() => {
@@ -555,7 +555,7 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
 
     // Warning tier (role=status), not a silent reset
     const warnings = document.getElementById('brailleWarnings');
-    expect(warnings.hidden).toBe(false);
+    expect(warnings.textContent).not.toBe('');
     expect(warnings.textContent).toContain('only');
     expect(warnings.textContent).toContain('fits 3 rows');
 
@@ -762,7 +762,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
     });
     expect(params().Line_2).toBe('');
     const warnings = document.getElementById('brailleWarnings');
-    expect(warnings.hidden).toBe(false);
+    expect(warnings.textContent).not.toBe('');
     expect(warnings.textContent).toContain('exactly as written');
     expect(document.getElementById('brailleFieldEditor').open).toBe(true);
   });
@@ -869,7 +869,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
       expect(params().sign_text_1).toBe('Exit');
     });
     await typeBraille('h>ry@a"', () => {
-      expect(document.getElementById('brailleErrors').hidden).toBe(false);
+      expect(document.getElementById('brailleErrors').textContent).not.toBe('');
     });
     document.getElementById('brailleFieldFromAscii').click();
     await vi.waitFor(() => {
@@ -916,7 +916,7 @@ describe('braille panel — characters with no braille (D-218)', () => {
 
   it('says the characters are left out of the braille', async () => {
     const warnings = () => document.getElementById('brailleWarnings');
-    await typeText('ab \u2603', () => expect(warnings().hidden).toBe(false));
+    await typeText('ab \u2603', () => expect(warnings().textContent).not.toBe(''));
     expect(warnings().textContent).toContain(
       'Some characters could not be translated to braille (in: "\u2603"). ' +
         'They are left out of the braille.'
@@ -977,7 +977,7 @@ describe('braille panel sign mode — capitals off by default (D-208)', () => {
       'en-ueb-g2.ctb',
       { preserveCaps: false }
     );
-    expect(document.getElementById('brailleWarnings').hidden).toBe(true);
+    expect(document.getElementById('brailleWarnings').textContent).toBe('');
   });
 
   it('keeps capitals on when the configuration does not turn them off', () => {
@@ -1112,5 +1112,48 @@ describe('braille panel sign mode — rows by real letter widths', () => {
     expect(document.getElementById('brailleWarnings').textContent).toContain(
       '"CONFERENCE" needs about 198 mm of raised letters'
     );
+  });
+});
+
+describe('braille panel — the message boxes (D-229, D-234)', () => {
+  beforeEach(() => mountCardPanel());
+  afterEach(() => destroyBraillePanel());
+
+  // D-229: a box revealed together with its first message is not announced
+  // (NVDA said only "alert"), so an empty box is never hidden; CSS keeps it
+  // out of sight while it stays in the accessibility tree.
+  it('never hides an empty message box', async () => {
+    const errors = document.getElementById('brailleErrors');
+    const warnings = document.getElementById('brailleWarnings');
+    expect(errors.hidden).toBe(false);
+    expect(warnings.hidden).toBe(false);
+    await typeBraille('ab{', () =>
+      expect(errors.textContent).toContain('not a braille character')
+    );
+    await typeBraille('', () => expect(errors.textContent).toBe(''));
+    expect(errors.hidden).toBe(false);
+  });
+
+  // D-234: a live region says its whole text again whenever it is rewritten,
+  // and the unchanged editor warning was said again after every layout.
+  it('leaves a message box alone while its messages stay the same', async () => {
+    const warnings = document.getElementById('brailleWarnings');
+    await typeBraille(cell('a'), () =>
+      expect(warnings.textContent).toContain('The braille editor has content')
+    );
+    const writes = [];
+    const observer = new MutationObserver((records) => writes.push(...records));
+    observer.observe(warnings, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+    });
+    await typeBraille(cell('a') + cell('b'), () =>
+      expect(params().Line_1).toBe(cell('a') + cell('b'))
+    );
+    writes.push(...observer.takeRecords());
+    observer.disconnect();
+    expect(writes).toHaveLength(0);
   });
 });

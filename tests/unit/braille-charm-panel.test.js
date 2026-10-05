@@ -187,18 +187,33 @@ describe('braille panel charm mode (multi-charm)', () => {
     expect(params().Charm_1).toBe('');
 
     const pager = document.getElementById('brailleCardPager');
+    const status = document.getElementById('braillePagerStatus');
+    const prev = document.getElementById('braillePrevCard');
+    const next = document.getElementById('brailleNextCard');
     expect(pager.hidden).toBe(false);
-    expect(document.getElementById('braillePagerStatus').textContent).toBe(
-      'Charm 1 of 2 — h'
-    );
-    expect(document.getElementById('braillePrevCard').disabled).toBe(true);
+    expect(status.textContent).toBe('Charm 1 of 2: h');
+    // D-231: the line is shown, not spoken; the announcer says each page once
+    expect(status.hasAttribute('aria-live')).toBe(false);
+    // D-228: an end button keeps focus and is marked unavailable instead of
+    // disabled, which dropped focus to the page
+    expect(prev.getAttribute('aria-disabled')).toBe('true');
+    expect(prev.disabled).toBe(false);
 
-    document.getElementById('brailleNextCard').click();
+    const announce = vi.spyOn(stateManager, 'announceChange');
+    next.click();
     expect(params().braille_chars).toBe(cell('i'));
-    expect(document.getElementById('braillePagerStatus').textContent).toBe(
-      'Charm 2 of 2 — i'
-    );
-    expect(document.getElementById('brailleNextCard').disabled).toBe(true);
+    expect(status.textContent).toBe('Charm 2 of 2: i');
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith('Charm 2 of 2: i');
+    expect(next.getAttribute('aria-disabled')).toBe('true');
+    expect(next.disabled).toBe(false);
+    expect(prev.hasAttribute('aria-disabled')).toBe(false);
+
+    // Pressing an unavailable button changes nothing and says nothing
+    next.click();
+    expect(params().braille_chars).toBe(cell('i'));
+    expect(announce).toHaveBeenCalledTimes(1);
+    announce.mockRestore();
   });
 
   it('warns when more characters than Charm_N slots are entered', async () => {
@@ -208,7 +223,7 @@ describe('braille panel charm mode (multi-charm)', () => {
     // 14 characters, 12 slots: the last slot holds the 12th character
     expect(params().Charm_12).toBe(cell('l'));
     const warnings = document.getElementById('brailleWarnings');
-    expect(warnings.hidden).toBe(false);
+    expect(warnings.textContent).not.toBe('');
     expect(warnings.textContent).toContain('first 12 charms');
   });
 

@@ -6060,23 +6060,25 @@ async function initApp() {
 
     if (!indicator || !memoryInfo) return;
 
-    indicator.classList.remove('hidden');
+    // D-227: the indicator is a polite live region and NVDA says its tooltip
+    // whenever it is written, so a poll that finds the same value must leave
+    // the text, the classes and the tooltip untouched.
+    if (indicator.classList.contains('hidden')) {
+      indicator.classList.remove('hidden');
+    }
 
     const usedMB = memoryInfo.usedMB || 0;
-    if (text) {
-      text.textContent = `${usedMB} MB`;
+    const label = `${usedMB} MB`;
+    if (text && text.textContent !== label) {
+      text.textContent = label;
     }
 
     // BR-4: no fictional percent. Warning state is driven by an absolute-MB
     // threshold so the indicator turns "warning" only when the WASM heap
     // buffer is genuinely large. The MemoryMonitor decides the badge
     // separately via memoryInfo.usedMB.
-    indicator.classList.remove('warning', 'critical');
-    if (usedMB >= 950) {
-      indicator.classList.add('critical');
-    } else if (usedMB >= 819) {
-      indicator.classList.add('warning');
-    }
+    indicator.classList.toggle('critical', usedMB >= 950);
+    indicator.classList.toggle('warning', usedMB >= 819 && usedMB < 950);
 
     const tips = [`${usedMB} MB allocated to the OpenSCAD engine`];
     if (usedMB >= 950) {
@@ -6084,7 +6086,10 @@ async function initApp() {
     } else if (usedMB >= 819) {
       tips.unshift('Memory usage elevated');
     }
-    indicator.title = tips.join('\n');
+    const tip = tips.join('\n');
+    if (indicator.title !== tip) {
+      indicator.title = tip;
+    }
   }
 
   // memoryPollInterval is now declared at the top of initApp() to avoid TDZ

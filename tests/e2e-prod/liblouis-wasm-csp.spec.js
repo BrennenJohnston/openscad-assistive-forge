@@ -71,7 +71,7 @@ test.describe('the liblouis wasm on the built site', () => {
     ).toHaveText('\u2820\u281E\u2811\u2811\u283C\u2809\u2820\u2819', {
       timeout: 60_000,
     });
-    await expect(page.locator('#brailleErrors')).toBeHidden();
+    await expect(page.locator('#brailleErrors')).toBeEmpty();
 
     expect(await page.evaluate(() => window.__cspViolations)).toEqual([]);
 

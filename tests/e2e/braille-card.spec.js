@@ -305,6 +305,25 @@ async function expectPanelAxeClean(page) {
   expect(results.violations).toEqual([])
 }
 
+/** Chromium's accessibility node for an element: what a screen reader is given. */
+async function axNodeOf(page, id) {
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('DOM.enable')
+  await cdp.send('Accessibility.enable')
+  const { result } = await cdp.send('Runtime.evaluate', {
+    expression: `document.getElementById(${JSON.stringify(id)})`,
+  })
+  const { node } = await cdp.send('DOM.describeNode', {
+    objectId: result.objectId,
+  })
+  const { nodes } = await cdp.send('Accessibility.getPartialAXTree', {
+    backendNodeId: node.backendNodeId,
+    fetchRelatives: false,
+  })
+  await cdp.detach()
+  return nodes.find((n) => n.backendDOMNodeId === node.backendNodeId)
+}
+
 test.describe('Braille toolset assets', () => {
   test('example scads and manifests exist for all three variants', async ({ page }) => {
     for (const [dir, scad] of [
@@ -497,7 +516,7 @@ test.describe('Braille translation workflow (card)', () => {
     await page.locator('#brailleTextInput').fill(lines.join('\n'))
 
     const errors = page.locator('#brailleErrors')
-    await expect(errors).toBeVisible({ timeout: 20000 })
+    await expect(errors).not.toBeEmpty({ timeout: 20000 })
     await expect(errors).toContainText('Error:')
     await expect(errors).toContainText(/fit on\s+this card/)
 
@@ -528,13 +547,18 @@ test.describe('Braille translation workflow (card)', () => {
       'Braille Card 1 of 2 line.stl'
     )
 
-    // Pager is keyboard-operable: prev disabled on first card, next works
-    await expect(page.locator('#braillePrevCard')).toBeDisabled()
+    // Pager is keyboard-operable: prev unavailable on the first card, next
+    // works and keeps focus on the last (D-228)
+    await expect(page.locator('#braillePrevCard')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
     const nextBtn = page.locator('#brailleNextCard')
     await nextBtn.focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('#braillePagerStatus')).toHaveText('Card 2 of 2')
-    await expect(page.locator('#brailleNextCard')).toBeDisabled()
+    await expect(nextBtn).toHaveAttribute('aria-disabled', 'true')
+    await expect(nextBtn).toBeFocused()
   })
 
   test('render-all toggle writes every line and the All cards layout', async ({ page }) => {
@@ -582,7 +606,7 @@ test.describe('Braille translation workflow (card)', () => {
     await page.locator('#brailleTextInput').fill('Hello')
 
     const warnings = page.locator('#brailleWarnings')
-    await expect(warnings).toBeVisible({ timeout: 20000 })
+    await expect(warnings).not.toBeEmpty({ timeout: 20000 })
     await expect(warnings).toContainText('Warning:')
     await expect(warnings).toContainText('lowercase')
 
@@ -602,7 +626,7 @@ test.describe('Braille translation workflow (card)', () => {
       '\u2820\u2813\u2811\u2807\u2807\u2815',
       { timeout: 20000 }
     )
-    await expect(page.locator('#brailleWarnings')).toBeHidden()
+    await expect(page.locator('#brailleWarnings')).toBeEmpty()
   })
 
   test('with auto-wrap off, a no-break space is a word space', async ({ page }) => {
@@ -620,7 +644,7 @@ test.describe('Braille translation workflow (card)', () => {
       '\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
       { timeout: 20000 }
     )
-    await expect(page.locator('#brailleWarnings')).toBeHidden()
+    await expect(page.locator('#brailleWarnings')).toBeEmpty()
   })
 
   test('translated braille renders through the WASM pipeline', async ({ page }) => {
@@ -672,7 +696,7 @@ test.describe('Braille translation workflow (card)', () => {
     await page.locator('#brailleTextInput').fill('hello')
 
     const warnings = page.locator('#brailleWarnings')
-    await expect(warnings).toBeVisible({ timeout: 20000 })
+    await expect(warnings).not.toBeEmpty({ timeout: 20000 })
     await expect(warnings).toContainText('fits 3 rows')
 
     // grid_rows carries the clamped value...
@@ -770,7 +794,7 @@ test.describe('Braille translation workflow (card)', () => {
     await page.locator('#brailleFieldInput').fill('\u2813hello')
 
     const errors = page.locator('#brailleErrors')
-    await expect(errors).toBeVisible({ timeout: 20000 })
+    await expect(errors).not.toBeEmpty({ timeout: 20000 })
     await expect(errors).toContainText('not a braille character')
   })
 
@@ -800,8 +824,57 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(
       page.locator('.param-control[data-param-name="Line_1"] input')
     ).toHaveValue(cells, { timeout: 10000 })
-    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expect(page.locator('#brailleErrors')).toBeEmpty()
     await expectPanelAxeClean(page)
+  })
+
+  // D-230: the empty status line was display: none, so its first message
+  // arrived together with its reveal and NVDA did not say it ("Six-key entry
+  // is on.", "Filled from your text: ..."). Empty, it stays rendered and in
+  // the accessibility tree, only visually hidden.
+  test('the braille editor status line is in the accessibility tree while empty', async ({ page, browserName }) => {
+    await openBrailleCard(page)
+    await page.locator('#brailleFieldEditor summary').click()
+    const status = page.locator('#brailleFieldStatus')
+    await expect(status).toHaveText('')
+    expect(await status.evaluate((el) => getComputedStyle(el).display)).not.toBe(
+      'none'
+    )
+    if (browserName === 'chromium') {
+      const ax = await axNodeOf(page, 'brailleFieldStatus')
+      expect(ax?.ignored).toBe(false)
+      expect(ax?.role?.value).toBe('status')
+    }
+  })
+
+  // D-229: an empty message box was hidden, so the first error arrived with
+  // the box itself and NVDA said only "alert". Empty, each box stays rendered
+  // and in the accessibility tree, taking no room on the page.
+  test('the empty message boxes stay in the accessibility tree and take no room', async ({ page, browserName }) => {
+    await openBrailleCard(page)
+    for (const [id, role] of [
+      ['brailleErrors', 'alert'],
+      ['brailleWarnings', 'status'],
+    ]) {
+      const box = page.locator(`#${id}`)
+      await expect(box).toBeEmpty()
+      const shape = await box.evaluate((el) => {
+        const r = el.getBoundingClientRect()
+        return {
+          display: getComputedStyle(el).display,
+          position: getComputedStyle(el).position,
+          area: r.width * r.height,
+        }
+      })
+      expect(shape.display).not.toBe('none')
+      expect(shape.position).toBe('absolute')
+      expect(shape.area).toBeLessThanOrEqual(1)
+      if (browserName === 'chromium') {
+        const ax = await axNodeOf(page, id)
+        expect(ax?.ignored).toBe(false)
+        expect(ax?.role?.value).toBe(role)
+      }
+    }
   })
 
   test('six-key entry makes a cell from a chord, and Tab still leaves the editor', async ({ page }) => {
@@ -823,7 +896,7 @@ test.describe('Braille translation workflow (card)', () => {
     await expect(
       page.locator('.param-control[data-param-name="Line_1"] input')
     ).toHaveValue('\u2813', { timeout: 10000 })
-    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expect(page.locator('#brailleErrors')).toBeEmpty()
     await expectPanelAxeClean(page)
 
     await page.keyboard.press('Tab')
@@ -886,7 +959,7 @@ test.describe('Braille translation workflow (card)', () => {
     // Braille editor open with content (verbatim mode + status live region)
     await page.locator('#brailleFieldEditor summary').click()
     await page.locator('#brailleFieldInput').fill('\u2813\u2811')
-    await expect(page.locator('#brailleWarnings')).toBeVisible({
+    await expect(page.locator('#brailleWarnings')).not.toBeEmpty({
       timeout: 20000,
     })
     await expectPanelAxeClean(page)
@@ -895,7 +968,7 @@ test.describe('Braille translation workflow (card)', () => {
     // Warning tier visible (caps dropped)
     await page.locator('#brailleCapsToggle').uncheck()
     await page.locator('#brailleTextInput').fill('Hello there')
-    await expect(page.locator('#brailleWarnings')).toBeVisible({
+    await expect(page.locator('#brailleWarnings')).not.toBeEmpty({
       timeout: 20000,
     })
     await expectPanelAxeClean(page)
@@ -986,7 +1059,7 @@ test.describe('Braille Charm workflow', () => {
     const pager = page.locator('#brailleCardPager')
     await expect(pager).toBeVisible()
     await expect(page.locator('#braillePagerStatus')).toHaveText(
-      'Charm 1 of 2 — h'
+      'Charm 1 of 2: h'
     )
     const layoutSelect = page.locator(
       '.param-control[data-param-name="charm_layout"] select'
@@ -997,14 +1070,28 @@ test.describe('Braille Charm workflow', () => {
     )
     await expect(charInput).toHaveValue('\u2813', { timeout: 10000 }) // ⠓
 
-    // Pager is keyboard-operable: prev disabled on the first charm
-    await expect(page.locator('#braillePrevCard')).toBeDisabled()
-    await page.locator('#brailleNextCard').click()
+    // Pager is keyboard-operable. At either end its button stays focusable,
+    // marked unavailable rather than disabled, which dropped focus to the
+    // page (D-228)
+    await expect(page.locator('#braillePrevCard')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
+    const nextCharm = page.locator('#brailleNextCard')
+    await nextCharm.focus()
+    await page.keyboard.press('Enter')
     await expect(page.locator('#braillePagerStatus')).toHaveText(
-      'Charm 2 of 2 — i'
+      'Charm 2 of 2: i'
     )
     await expect(charInput).toHaveValue('\u280A', { timeout: 10000 }) // ⠊
-    await expect(page.locator('#brailleNextCard')).toBeDisabled()
+    await expect(nextCharm).toHaveAttribute('aria-disabled', 'true')
+    await expect(nextCharm).toBeFocused()
+    // Pressed again, the unavailable button changes nothing
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#braillePagerStatus')).toHaveText(
+      'Charm 2 of 2: i'
+    )
+    await expect(nextCharm).toBeFocused()
   })
 
   test('charm panel has no axe violations', async ({ page }) => {
@@ -1237,7 +1324,7 @@ test.describe('Braille Sign workflow', () => {
       .fill('one\ntwo\nthree\nfour\nfive\nsix\nseven')
 
     const errors = page.locator('#brailleErrors')
-    await expect(errors).toBeVisible({ timeout: 20000 })
+    await expect(errors).not.toBeEmpty({ timeout: 20000 })
     await expect(errors).toContainText('holds 6 lines')
   })
 
@@ -1298,7 +1385,7 @@ test.describe('Braille Sign workflow', () => {
       '\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
       { timeout: 20000 }
     )
-    await expect(page.locator('#brailleWarnings')).toBeHidden()
+    await expect(page.locator('#brailleWarnings')).toBeEmpty()
     await caps.check()
     await expect(first).toHaveText(
       '\u2820\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801',
@@ -1320,7 +1407,7 @@ test.describe('Braille Sign workflow', () => {
     ).toHaveText('\u2820\u281E\u2811\u2811\u283C\u2809\u2820\u2819', {
       timeout: 20000,
     })
-    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expect(page.locator('#brailleErrors')).toBeEmpty()
   })
 
   test('sign leaves out a character its table does not define, and says so', async ({ page }) => {
@@ -1441,7 +1528,7 @@ test.describe('Braille Sign workflow', () => {
       '\u283C\u2803\u281A\u280B\u2832\u2811\u2811\u2811\u2832\u281A\u2801\u2819\u281B',
       { timeout: 20000 }
     )
-    await expect(page.locator('#brailleErrors')).toBeHidden()
+    await expect(page.locator('#brailleErrors')).toBeEmpty()
   })
 
   test('the table list offers Unified English Braille only', async ({ page }) => {
