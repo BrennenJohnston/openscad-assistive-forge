@@ -14,6 +14,14 @@ braille editor takes braille ASCII and six-key entry, a divided address or
 long number carries the line continuation sign, and a screen reader hears
 the braille tools' messages once, in words.
 
+Models that use `minkowski()` no longer fall back to a much slower method
+in the browser: my two-sided Plug Puller, with its old `minkowski()`
+edges, took about 65 s to preview and takes about 10 s now. A shared link renders its first preview once, with
+its preset, says in a notice when the preset it names is missing, and goes
+by its main file's name; a directive inside a comment no longer brings a
+missing-file warning, and a warning from the engine is announced as a
+warning.
+
 ## v5.1.1 (2026-09-23)
 
 Shared project links open for the person who receives them. A first visit
