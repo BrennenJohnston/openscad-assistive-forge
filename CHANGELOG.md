@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-10-05
+
 The braille tools now translate the way liblouis does, on a current
 liblouis, and the Braille Sign is built to the figures of ADA 703, with a
-page that says which rule governs each figure.
+page that says which rule governs each figure. Models that use
+`minkowski()` preview in the browser without falling back to a much
+slower method, and a shared link renders its first preview once, with its
+preset.
 
 ### Translation
 
@@ -67,6 +72,33 @@ page that says which rule governs each figure.
 - Six-key entry types braille in the editor with F, D, S and J, K, L, the
   way a Perkins brailler does, and a screen reader hears each cell's dots.
 
+### Previews, shared links and uploads
+
+- The OpenSCAD engine is OpenSCAD's own 2026.04.03 source built with one
+  definition added, `CGAL_ALWAYS_ROUND_TO_NEAREST`. In the browser,
+  `minkowski()` had failed a CGAL check and fallen back to a much slower
+  method: my two-sided Plug Puller, as it was with `minkowski()` edges,
+  took about 65 s to preview and takes about 10 s now, and the volumes
+  match desktop OpenSCAD's. A `minkowski()` that never failed can take up
+  to about 0.9 s longer. A script in this repository builds the engine;
+  built without that one definition, it gives the official snapshot back
+  byte for byte.
+- A shared link renders its first preview once. A manifest with
+  automatic preview rendered it twice, and a link that names a preset
+  rendered the design's own values first and then threw that picture
+  away.
+- A shared link that names a preset the project does not have says so in
+  a notice that stays until you dismiss it. When a link has more than one
+  thing to say, each notice has its own Dismiss button.
+- A project opened from a manifest goes by its main file's name instead
+  of `example.scad`: in the file box, the status line, recent files and
+  its saved interface settings.
+- An `include`, `use` or `import` inside a comment no longer brings a
+  missing-file warning when the model renders, or a "Missing companion
+  files" message and dialog when it is uploaded.
+- The sharing guide's Git LFS section describes GitHub's metered billing;
+  GitHub no longer sells data packs.
+
 ### Accessibility
 
 - The braille tools' labels, status lines and messages end with a full
@@ -78,6 +110,19 @@ page that says which rule governs each figure.
 - The memory indicator no longer says "0 MB allocated to the OpenSCAD
   engine" every ten seconds, and Fontconfig's note that it has no config
   file is no longer called an error on every render that draws text.
+- After a shared link applies a preset, the status line says the same
+  sentence the screen reader hears, "{project} loaded with preset
+  {name}".
+- A warning from the engine is announced as a warning, politely, and no
+  longer as an error that interrupts the screen reader.
+- The many-parts notice no longer says a model will be slow before its
+  first preview: "This model has many parts. If previews are slow, switch
+  Preview quality to "Performance (auto)"."
+
+### Development
+
+- `brace-expansion` is 5.0.12, which clears a high-severity audit finding
+  in a development tool; the app that ships does not include it.
 
 ## [5.1.1] - 2026-09-23
 
