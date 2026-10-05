@@ -973,12 +973,13 @@ class BraillePanel {
 
   buildMessageBoxes(section) {
     // Error tier: content will not fit / was truncated. role=alert so
-    // screen readers announce immediately.
+    // screen readers announce immediately. Neither box is ever hidden: an
+    // empty box is out of sight by CSS but stays in the accessibility tree,
+    // so its first message is announced (D-229).
     const errorsBox = document.createElement('div');
     errorsBox.className = 'braille-messages braille-errors';
     errorsBox.id = 'brailleErrors';
     errorsBox.setAttribute('role', 'alert');
-    errorsBox.hidden = true;
     section.appendChild(errorsBox);
     this.refs.errors = errorsBox;
 
@@ -988,7 +989,6 @@ class BraillePanel {
     warningsBox.className = 'braille-messages braille-warnings';
     warningsBox.id = 'brailleWarnings';
     warningsBox.setAttribute('role', 'status');
-    warningsBox.hidden = true;
     section.appendChild(warningsBox);
     this.refs.warnings = warningsBox;
   }
@@ -2447,6 +2447,9 @@ class BraillePanel {
 // Message tier rendering (module-level helpers)
 // ---------------------------------------------------------------------------
 
+/** The messages each tier box shows now (keyed by the box). */
+const shownTierMessages = new WeakMap();
+
 /**
  * Render one severity tier into its container box.
  * Severity is conveyed by a text prefix AND an icon (never color alone).
@@ -2456,11 +2459,14 @@ class BraillePanel {
  */
 function renderMessageTier(box, items, severity) {
   if (!box) return;
+  // Each box is a live region, which says its whole text again whenever it
+  // is rewritten, so a layout that leaves the messages as they were writes
+  // nothing (D-234).
+  const shown = JSON.stringify((items || []).map((item) => item.message));
+  if (shownTierMessages.get(box) === shown) return;
+  shownTierMessages.set(box, shown);
   box.innerHTML = '';
-  if (!items || items.length === 0) {
-    box.hidden = true;
-    return;
-  }
+  if (!items || items.length === 0) return;
   const list = document.createElement('ul');
   list.className = 'braille-messages-list';
   for (const item of items) {
@@ -2480,7 +2486,6 @@ function renderMessageTier(box, items, severity) {
     list.appendChild(li);
   }
   box.appendChild(list);
-  box.hidden = false;
 }
 
 /**

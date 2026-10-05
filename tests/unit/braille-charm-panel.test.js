@@ -208,7 +208,7 @@ describe('braille panel charm mode (multi-charm)', () => {
     // 14 characters, 12 slots: the last slot holds the 12th character
     expect(params().Charm_12).toBe(cell('l'));
     const warnings = document.getElementById('brailleWarnings');
-    expect(warnings.hidden).toBe(false);
+    expect(warnings.textContent).not.toBe('');
     expect(warnings.textContent).toContain('first 12 charms');
   });
 

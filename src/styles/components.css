@@ -17086,21 +17086,6 @@ body.tutorial-body-locked {
   flex-wrap: wrap;
 }
 
-/* D-230: an empty status line stays in the accessibility tree, hidden the way
-   .sr-only hides, because a live region revealed together with its first
-   message is not announced. */
-.braille-field-status:empty {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-
 .braille-preview {
   padding: var(--space-sm);
   background: var(--color-bg-primary);
@@ -17161,6 +17146,23 @@ body.tutorial-body-locked {
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning);
   color: var(--color-warning-text);
+}
+
+/* D-230, D-229: an empty status line or message box stays in the
+   accessibility tree, hidden the way .sr-only hides, because a live region
+   revealed together with its first message is not announced. After the box
+   styles above, so their borders and padding give way while it is empty. */
+.braille-field-status:empty,
+.braille-messages:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 .braille-messages-list {
