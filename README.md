@@ -35,7 +35,8 @@ The welcome screen ships with ready-to-use customizers -- no `.scad` file needed
   takes hand corrections, braille ASCII and six-key entry. Three variants: a
   card that prints leaning back at 75° with break-away supports, a small
   charm/pendant/zipper pull, and a two-part tactile sign with raised letters
-  and braille, built to the figures of ADA 703. See
+  and braille, built to the figures of ADA 703, whose braille dot ranges the
+  card and the charm keep too. See
   `docs/guides/BRAILLE_CARD_GUIDE.md` and `docs/guides/BRAILLE_STANDARDS.md`.
 - **Charm Designer** -- design wearable charms, pendants, and logo plates
   with engraved or raised icons, including C-clip charms that snap onto
