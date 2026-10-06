@@ -5,8 +5,9 @@ name: Build liblouis wasm
 # set of flags. The same run also builds a native lou_translate from the same
 # tarball, which is what the wasm is checked against.
 #
-# It runs on request, and on pull requests that touch the recipe or the code
-# that loads what it builds. The output is an artifact; a session downloads it,
+# It runs on request, and on pull requests that touch the recipe, the code
+# that loads what it builds, or the phrases and reference it is checked
+# against. The output is an artifact; a session downloads it,
 # checks the numbers against the run log, and commits it with the recipe.
 
 on:
@@ -17,6 +18,8 @@ on:
       - 'scripts/verify-liblouis-wasm.mjs'
       - 'scripts/setup-liblouis.js'
       - 'src/js/liblouis-engine.js'
+      - 'tests/fixtures/braille-reference/corpus.json'
+      - 'tests/fixtures/braille-reference/liblouis-3.39.0.json'
       - '.github/workflows/build-liblouis-wasm.yml'
 
 permissions:

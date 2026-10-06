@@ -33,6 +33,7 @@ import {
   computeCapacity,
   layoutBrailleText,
   layoutSignText,
+  layoutCharmText,
   chunkIntoCards,
   countCells,
   BRAILLE_SPACE,
@@ -1688,14 +1689,7 @@ class BraillePanel {
     const untranslatable = new Set();
     const translate = this.makeTranslator(table, capitals, untranslatable);
 
-    // Each non-whitespace character becomes its own charm, translated
-    // individually (so "B" = capital indicator + b = 2 cells, within the
-    // per-charm cell budget).
-    const chars = [...text].filter((ch) => !/\s/u.test(ch));
-    const charms = [];
-    for (const ch of chars) {
-      charms.push({ braille: (await translate(ch)).braille, source: ch });
-    }
+    const charms = await layoutCharmText({ text, translate });
 
     if (seq !== this.layoutSeq) return;
 

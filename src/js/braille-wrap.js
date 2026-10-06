@@ -773,6 +773,25 @@ export async function layoutSignText({
 }
 
 /**
+ * Layout for the Braille Charm: every character but a space becomes its own
+ * charm and is translated alone. A charm is read on its own, so each one
+ * carries its own capital or number sign ("B" is the capital sign and b).
+ * @param {Object} opts
+ * @param {string} opts.text - The characters typed
+ * @param {function} opts.translate - See layoutBrailleText
+ * @returns {Promise<Array<{ braille: string, source: string }>>} One per charm
+ */
+export async function layoutCharmText({ text, translate }) {
+  const charms = [];
+  for (const ch of text) {
+    if (/\s/u.test(ch)) continue;
+    const { braille } = asTranslation(await translate(ch));
+    charms.push({ braille, source: ch });
+  }
+  return charms;
+}
+
+/**
  * Shorten long user strings for warning messages.
  * @param {string} str
  * @returns {string}
