@@ -137,19 +137,6 @@ preset.
   first preview: "This model has many parts. If previews are slow, switch
   Preview quality to "Performance (auto)"."
 
-### Development
-
-- `source-map-js` is 1.2.2, which clears a high-severity audit finding
-  in development tools; the app that ships does not include it.
-- `brace-expansion` is 5.0.12, which clears a high-severity audit finding
-  in a development tool; the app that ships does not include it.
-- The braille parity test checks the Braille Charm too, character by
-  character, against native liblouis and a second liblouis-based
-  generator, and the liblouis build check runs whenever its test phrases
-  change.
-- [Releasing](docs/project/RELEASING.md) lists the braille checks every
-  release that touches braille translation has to pass first.
-
 ## [5.1.1] - 2026-09-23
 
 My own example links stopped opening: a person who followed one saw the
@@ -218,14 +205,6 @@ and of making the example branch that an author copies true again.
   and `defaults.skipWelcome` are described as what they are: accepted,
   and not used.
 
-### Engineering
-
-- Microsoft Edge 153 closes its whole browser when a page reads a stored
-  folder handle back from the browser's database, which every
-  linked-folder test does, so those tests skip on Edge and keep running on
-  Chromium. A drawing test that needs a quick machine skips on CI, where
-  the runner never is, and keeps running on local boards.
-
 ## [5.1.0] - 2026-09-21
 
 A photograph of a printed communication symbol is a third kind of picture,
@@ -278,7 +257,7 @@ and saves SVG and DXF, one-link sharing with provenance records, braille
 editing on every braille tool, and a long accessibility pass. The last work
 before release rebuilt the picture-to-charm editor as one product and walked
 it with my own logo until it held. `docs/updates/WHATS_NEW_v5.md` is the
-illustrated version; the git history holds the full engineering record.
+illustrated version.
 
 ### The interfaces and the welcome screen
 
@@ -411,19 +390,6 @@ illustrated version; the git history holds the full engineering record.
   focus back after the tour closes; the preview works on Safari in the
   dev server.
 
-### Engineering
-
-- One toolchain, npm; the CI shard planner accounts for what CI skips;
-  twelve tests only a full local board could see are current again; three
-  red lanes on develop fixed without loosening an assertion; a
-  high-severity transitive advisory patched.
-- The root and the docs folder are sorted by purpose, every link rewritten
-  and checked; the AI-coding files are out of the public repository and
-  stay local; `docs/deploying/SITE_FACTS.md` states what the deployed site
-  is made of and what it does with your data; a quick start shows a tool
-  how to point a link at Forge; `npm run check-mermaid` parses every
-  diagram the way GitHub does.
-
 ### Alt View
 
 - The alternate view's walk gained four cities built from map data, with
@@ -448,1112 +414,127 @@ illustrated version; the git history holds the full engineering record.
 
 ## [4.5.0] - 2026-07-12
 
-### Braille Toolset, SVG Pipeline Overhaul & Alt View Rework
+The braille tools arrived, the SVG import was rebuilt, and the preview works
+again in browsers without WebGL 2.
 
-Feature release introducing the Braille Card Customizer tool family (card, charm, and sign with on-device liblouis translation), a rebuilt SVG import/preparation pipeline, a faster and simpler Alt View engine, a WebGL 1 fallback fix for the 3D preview, and watertight STL exports for the charm generators.
-
-### Added
-
-- **Braille Card Customizer** — a new welcome-screen tool family: type plain text and get 3D-printable braille, with translation to Unicode braille running entirely on-device (liblouis compiled to WebAssembly in a Web Worker — text never leaves the browser). The **Braille translation** panel offers English UEB/US Grade 1 and Grade 2 tables, a preserve-capitals toggle (on by default), card-size and margin presets, BANA-style word wrapping with multi-card overflow splitting, a live braille preview with per-line cell counts and severity-tiered errors/warnings (alert vs status live regions), a keyboard card pager, and a render-all-cards mode; `scripts/setup-liblouis.js` (wired into `prebuild` and `pixi run setup`) copies the engine and curated tables with their full include closure into `public/liblouis/`. See `docs/guides/BRAILLE_CARD_GUIDE.md`
-- **Braille Card** (`?example=braille-wedge-card`) — a card that prints leaning back at 75° (the CHI 2024 research angle) with break-away support fins, adapted from the Braille Wedge Card STL Generator (relicensed GPL-3.0-or-later by the copyright holder for the Forge); defaults to a manual 200 × 100 mm face with ADA-friendly dot geometry and BANA-standard spacing
-- **Braille Charm** (`?example=braille-charm`) — a small pendant, keychain charm, or zipper pull carrying one or two braille cells, combining the Charm Customizer base with the wedge card's dot system (see the bracelet clip entries below)
-- **Braille Sign** (`?example=braille-sign`) — a two-part tactile sign with 2010 ADA section-703-style defaults: raised uppercase Liberation Sans letters on one plate and the same text in Grade 2 braille on a second, a split raised border that joins into one frame when mounted, up to 6 rows per script wrapped independently (permitted by ADA 703.3.2), and auto-fit sizing that grows the plates to their content
-
-- **Braille Charm bracelet clip shape (new default)** — `charm_shape = bracelet_clip` adds the Charm Customizer's C-clip bracelet charm (q_charm lineage, AAC prior art by Duy Do / UW WOOF3D) to the Braille Charm as its default shape; it always exports standing vertically (the C profile lies on the bed, braille on the vertical outer wall) so the dots print crisply with no support fin. The braille is rotated 90° on the face (selectable ±90) to read along the band when worn, centered by default with left/right and up/down offset nudges. Fit parameters (channel length, clip height, profile depth, wall thickness, gap width/offset) and the full q-charm rounding set (outer/inner corner radii, edge radius, rounded top rim — bottom rim stays flat for bed adhesion) live under a Bracelet Clip group shown only when the shape is selected (`@depends`)
-- **Braille Charm Large/Small Charm presets** — `presets/large-charm.json` and `presets/small-charm.json` mirror the original Bracelet Clip Charm's preset sizes, mapped onto the braille charm's clip parameters and auto-imported when the example loads
-- **Braille Charm `bed_contact_mm` parameter** — the Angled-mode bed sink (previously hardcoded at 0.6 mm) is now exposed and defaults to 2.0 mm, trimming the leaning charm's bottom edge into a flat first-layer contact strip with real surface area instead of a knife edge
-
-- **Alt View on-demand rendering** — the ASCII conversion now runs only when the camera moves, auto-rotate is active, or a setting changes (dirty-flag + `invalidate()` API with a 1 Hz self-healing fallback tick), dropping idle Alt View cost from a continuous ~30 fps conversion loop to near zero
-- **Alt View glyph atlas** — glyphs are pre-rendered once into a phosphor-tinted atlas (from `--color-accent`) and painted with `drawImage` blits at device-pixel resolution; shape vectors are computed from the same atlas bitmap so glyphs align with their vectors, descenders no longer overflow rows, and output is crisp on HiDPI displays
-- **Alt View Afterglow slider** — a third slider (0–100%) joins Contrast and Font Size in the camera panel and mobile drawer; hidden under `prefers-reduced-motion`
-- **Alt View unlock announcement** — unlocking the easter egg now announces itself to screen-reader users via the live region
-- **CRT power-on animation** — a one-shot ~300 ms scale-in/brightness flash plays when Alt View is enabled (skipped under `prefers-reduced-motion`)
-
-- **SVG transform baking** — `transform` attributes (including nested `<g>` chains) are composed via the new `transformation-matrix` dependency and baked into path data during parsing, so rotated/translated/scaled shapes keep their position through preparation instead of collapsing to the origin; unparseable transforms produce a per-element warning and route to the editor
-- **Unicode-safe SVG encoding** — new `svg-text-encoding.js` (`svgToDataUrl`/`dataUrlToText`) replaces raw `btoa`/`atob` at every SVG encode/decode site, so SVGs with accented characters, CJK text, or emoji no longer throw `InvalidCharacterError`
-- **SVG editor role color-coding** — a translucent tint layer color-codes every shape by its assigned role (printed / cut-out / ignored), with a header toggle, a three-chip legend, and "Original" / "Will print as" pane captions
-- **SVG editor compound-path mode** — subpaths of a single compound `<path>` get Include/Exclude radios and "Subpath N" labels instead of the meaningless Foreground/Hole/Ignore triad
-- **Unit test coverage for the SVG pipeline** — 12-design charm library sweep, transform-baking geometry checks, style/inherited-fill resolution, flatten fallback behavior, unicode round-trips, overlay highlighting, and compound-mode editor tests
-
-- **`aria-keyshortcuts` on shortcut-bearing controls** — new `keyboard-shortcuts-binder.js` annotates the render/download button, camera views, theme/expert-mode toggles, and more with WAI-ARIA shortcut syntax so screen-reader users can discover F6/F7/Control+E etc.; re-applies when shortcuts are re-mapped
-- **Safe localStorage helpers** — `safeGetItem`/`safeSetItem`/`safeRemoveItem` in `storage-keys.js` (with quota/security-error tests) replace ad-hoc try/catch across main.js, preview, camera, overlay, and settings controllers
-- **Storage-key snapshot test** — every exported `STORAGE_KEY_*` string is frozen by a unit test so user data cannot be orphaned by accidental key renames
-- **Error-translation parity corpus** — 19-entry raw-stderr corpus freezes worker and main-thread classifications (BR-5 safety net)
-- **CI: css-variable-audit** — the semantic-tokens/mono-variant audit now runs in the unit-tests job
-
-### Changed
-
-- **Braille Sign is the default tool on the welcome screen** — the Braille Card Customizer card's Tool dropdown now preselects Braille Sign (Open button target updated to match); Braille Card and Braille Charm remain one pick away
-- **Braille Charm defaults to Angled printing** — `print_orientation` now defaults to Angled (75° lean, the CHI 2024 sweet spot) for the pendant shapes, so every exported STL is already oriented for optimal braille printing; the support fin is slimmed for the charm's small volume (fin thickness 1.2 → 0.8 mm, brim 2.0 → 1.5 mm) with a minimum of 3 break-away bridges that auto-scale up (~one per 10 mm of fin height) for taller charms
-- **Alt View engine follows the researched pipeline** — the 1.77M-entry precomputed lookup table (`_hfm-lut.js`, ~250 ms rebuild on every font-metric change) is replaced by a lazily-filled cache (`_hfm-lookup.js`); the directional-contrast neighborhood now maps each internal sample to a small local set of external samples (crisper edges); sampling drops from 34 to 16 taps per cell using bilinear-downscale area averaging; per-cell brightness colors are removed in favor of a single phosphor color per theme (glyph density carries the lightness signal) with an optional CSS bloom on the overlay canvas
-- **Alt View controller simplified** — device auto-calibration and browser-zoom compensation (~300 lines of overlapping adaptive systems) are removed; first-enable defaults are plain (contrast 100%, size 100%, glow 0%) with saved values honored; setting writes to localStorage are debounced; the Contrast/Font Size sliders now actually appear while Alt View is enabled (their `setEnabled` previously ignored its argument); status bar text tightened to `[ALT VIEW] EDGE 100% · SIZE 100% · GLOW 0%`
-- **Relocated non-theme exports out of `hfm-controller.js`** — `sanitizeUrlParams` → `file-param-resolver.js`, `exportFormatFromMenu` → `file-actions-controller.js`, `applyToolbarModeVisibility` → `toolbar-menu-controller.js`
-- **Mono scanline overlay layering** — the CRT scanline pseudo-element drops from z-index 9999 to 900 so modals and toasts render above it, and no longer pins a permanent GPU layer via `will-change`
-- **Simple SVGs bypass flattening (lossless by default)** — when every element is dark/foreground with no transforms-gone-wrong, gradients, or clip-paths, the original file is used as-is (OpenSCAD unions overlapping shapes natively); multi-shape designs like Paw, Sun, and Music note no longer lose parts to a destructive union
-- **"Needs review" no longer swaps in a prepared file silently** — when the analyzer recommends the editor, the original SVG is used until the user explicitly clicks Apply; closing the editor (Escape or ×) now counts as "Keep original"
-- **SVG prep metadata no longer persists the analysis object** — live DOM references made restored `prepAnalysis` objects crash the editor; the raw SVG is re-analyzed on project restore instead
-- **SVG status card copy** — pass-through reads "Using original (N shapes) — OpenSCAD merges these automatically", auto-prepare reads "Simplified N shapes for 3D printing", and flatten fallback warnings are surfaced on the card
-- **Error translation honors worker codes (BR-5)** — the main thread resolves worker-classified errors by `code` via `TRANSLATIONS_BY_CODE` instead of re-matching prose, so errors like `UNKNOWN_MODULE` or `OUT_OF_MEMORY` show specific guidance instead of "Something Went Wrong"
-- **WASM init progress is honestly indeterminate** — hardcoded 5→95% milestones replaced with an indeterminate bar plus stage messages; render-time estimates are labeled "estimated" and suppressed entirely at low confidence
-- **Focus trap consolidation** — the error modal uses the shared `createFocusTrap` (selector now includes `summary`); guided-tour stub and permanently disabled View-menu toggles removed
-- **Mirror tests eliminated** — cli-manifest, svg-validation, dxf-postprocess, missing-file-warnings, image-companion-mounting, saved-projects-load, color-contrast, and resolve-2d-export tests now import the real implementations (new shared modules under `src/worker/`) instead of "keep in sync" copies
-- **Storage keys centralized** — `STORAGE_KEY_*` constants, `PRESET_SORT_KEY`, WASM crash flags, and the KI-012 debug-toggle keys live in `storage-keys.js`; KI-012 checks go through `isDebugPrefEnabled()`
-- **Helper dedup** — shared `perf-metrics.js` replaces the copy-pasted metrics append blocks; `RENDER_QUALITY` DRAFT/MEDIUM/HIGH derive from `QUALITY_TIERS`; intentionally-different sanitizers/formatters are documented in place
-- **q_charm.scad parameter naming** — renamed positional parameters to plain-language labels for Customizer clarity: `design_x`/`design_y` → `design_left_right`/`design_up_down`, `text_x`/`text_y` → `text_left_right`/`text_up_down`, `design_x_2`/`design_y_2` → `design_2_left_right`/`design_2_up_down`, `design_z_2` → `design_2_thickness`
-- **q_charm.scad Fit parameter rename** — `charm_length` → `charm_width` (Y-axis dimension along bracelet), `bracelet_width` → `charm_length` (inner channel width); labels now match physical meaning
-- **q_charm.scad Rounding parameter rename** — `all_edges_radius` → `side_edge_radius` with new default 2.5 (was 0); description clarified to "rounds the edges along the side profile"
-- **q_charm.scad edge rounding algorithm** — replaced `minkowski()` sphere/cylinder rounding with stepped `linear_extrude` + `offset()` approach via new `edge_rounded_profile()` module for significantly faster renders
-- **q_charm.scad section order** — reordered Customizer tabs to Design → Design Layer 2 → Text → Fit → Rounding → Attachment → Quality, placing creative controls before fit adjustments
-- **q_charm.scad default values** — updated Fit defaults to better match standard silicone bracelets (`charm_width` 22, `charm_height` 8.65, `charm_thickness` 2.75, `charm_length` 15, `gap_offset` 2, `gap_width` 3); raised design scale max from 95 → 150
-- **Preset JSONs** — updated `large-charm.json` and `small-charm.json` to match renamed parameters and new `side_edge_radius` default
-- **q-charm SVG library** — trimmed manifest to only reference SVG files that exist on disk (removed 6 placeholder entries)
-- **SVG offset quality** — adaptive sample count (256–2048 based on path length) replaces fixed 128-point default; Chaikin corner-cutting smoothing applied to offset output for smoother curves; uses `ClipperOffset` API directly
-
-### Fixed
-
-- **Charm border exported non-watertight STLs** (Braille Charm 1.2.1 and Charm Customizer) — the raised border was extruded as a separate ring stacked on the charm body, leaving two coincident outer walls; on curved outlines (circle, oval, hexagon, rounded rect) the border's re-tessellated boundary exported as T-junction open edges. The body and border are now carved from one extrusion, and the Charm Customizer's raised design is embedded 0.02 mm into the body so it fuses instead of exporting a touching shell; every shape/orientation/attachment combination now exports a watertight single-body STL
-- **3D preview blank in browsers without WebGL 2** — the three.js upgrade from r160 to r182 (Jan 2026 dependency bump) silently dropped WebGL 1 support (removed upstream in r163), so Firefox profiles with WebGL 2 unavailable (hardware blocklist, `webgl.enable-webgl2=false`, privacy hardening) got an empty preview pane while everything else worked; three is now pinned to `^0.162.0`, the last release that falls back to a WebGL 1 context. If WebGL is entirely unavailable, the preview pane now shows an accessible explanatory notice instead of failing silently with only a console warning
-- **Theme switch while Alt View is enabled** — the theme listener passed the raw light/dark theme to the preview instead of the mono-aware key, flipping the WebGL scene to a bright background and muddying the ASCII output; it now uses `detectTheme()` and re-tints the glyph atlas on theme change
-- **Emoji-swap button accessible names** — controls whose emoji labels are swapped for bracketed text in the mono variant now carry explicit `aria-label`s (unlock-limits toggle, features-guide example buttons, accessibility-guide link), so screen readers hear one stable name instead of emoji + bracket concatenation
-- **Charm Customizer default design import** — `nasif_charm_maker.scad` referenced `svg-library/heart.svg`, a path that never matched the mounted basename, so first render always warned "Can't open file"; the SCAD default and manifest gallery options now use basenames, `design_2d()` guards against an empty `design_file`, and the gallery pre-selects the default design
-- **SVG editor area highlight rebuilt** — hovering an object row now draws the shape's actual path into an SVG overlay (replacing a dead CSS attribute-selector approach that never rendered), so highlights work for all shapes including individual subpaths of compound paths
-- **`style="fill:…"` and inherited paints respected** — fill/stroke are resolved from the inline `style` attribute and ancestor elements per SVG precedence, so Inkscape/Illustrator exports classify correctly instead of every shape defaulting to "black"
-- **SVG flattening crash-hardened** — each boolean union/difference is individually guarded; shapes that fail to merge are appended verbatim with a warning instead of crashing the pipeline or silently dropping geometry
-- **SVG uploads detected by `.svg` extension** — files served with a generic MIME type (common on Windows) are now recognized as SVGs
-- **SVG editor QoL** — Apply is disabled (with a hint) when no shapes are included; preview failures show an inline "original will be kept" message instead of a blank pane; viewBox is derived from `width`/`height` when missing so zoom controls work; result-pane zoom survives preview re-renders; the editor auto-expands to fullscreen on narrow screens; selecting a new design dismisses a stale editor without firing its callbacks
-- **Recovery mode CodeMirror disable was a no-op** — it wrote a localStorage key the flag system never read; now uses `setUserPreference('codemirror_editor', false)`
-- **`escapeHtml` attribute injection** — the shared helper now escapes quotes (all five significant characters); console-panel filenames interpolated into `data-file="…"` can no longer break out of the attribute; duplicate escape implementations removed
-- **Stale version strings** — startup log derives from `__APP_VERSION__` (was hardcoded v4.1.0); sw.js drops its stale version comment
-- **A11Y quick wins** — features-note contrast token (AA in dark mode), zero Nu HTML validator errors in index.html, `prefers-reduced-transparency` now covers all modal/drawer/tooltip surfaces, stale `aria-valuenow` removed from the overlay opacity slider
-- **Dead code removed** — 16 unused symbols, the orphaned `animation-controller.js` and `schema-generator.js` modules, and the dead `tutorialProgress` localStorage migration
-- **Test-runner hygiene** — storage mocks install at setup module scope, eliminating the `--localstorage-file` warnings and `localStorage.getItem is not a function` stderr leaks; e2e fake-pass `expect(true)` assertions replaced with real assertions or honest skips
-- **SVG editor fullscreen portaling** — fullscreen mode now reparents root and backdrop to `document.body` to escape ancestor `transform`/`will-change` containing blocks (e.g. drawer panels)
-- **SVG editor fullscreen preview sizing** — preview panes use `dvh` units with fallback, `min-height`, and `object-fit: contain` for consistent sizing across viewports
-- **SVG editor header overflow** — narrow viewports (≤540px) wrap header controls and truncate the title with ellipsis, in both fullscreen and inline modes
-- **Example loader UX** — features guide modal now closes before the confirm dialog appears, preventing modal overlap when loading examples over existing files
-- **Prebuild step** — `setup-libraries` added to `prebuild` script so library bundles are fetched automatically during `npm run build`
-
----
+- **Braille Card Customizer**: a new tool family on the welcome screen. Type
+  plain text and get 3D-printable braille, translated on your device by
+  liblouis; the text never leaves the browser. Three tools: the Braille Card,
+  which prints leaning back at 75 degrees with break-away support fins; the
+  Braille Charm, a small pendant, keychain charm, zipper pull or bracelet
+  clip carrying one or two cells; and the Braille Sign, a two-part tactile
+  sign with raised letters and Grade 2 braille on ADA 703 style defaults.
+- **SVG import**: transforms are kept through preparation; files with
+  accented characters, CJK text or emoji open; fills set in a `style`
+  attribute or inherited from a parent are respected; simple files are used
+  as they are instead of being flattened; and the editor color-codes each
+  shape by its role. A file that needs review is no longer swapped for a
+  prepared one until you press Apply.
+- **Preview**: three.js is pinned to the last release that falls back to
+  WebGL 1, so browsers without WebGL 2 show the model again, and a browser
+  with no WebGL at all gets a notice instead of a blank pane.
+- **Charms**: the Charm Customizer's parameters have plain-language names,
+  edge rounding renders much faster, and charm borders export as one
+  watertight body.
+- **Errors and progress**: errors show specific guidance instead of
+  "Something Went Wrong", and the engine's loading bar no longer invents
+  percentages.
+- **Accessibility**: controls with keyboard shortcuts announce them,
+  emoji-labeled buttons have one stable name, and reduced transparency
+  covers every modal, drawer and tooltip.
+- **Alt View**: converts only when something changes, draws from a glyph
+  atlas, and gained an Afterglow slider.
 
 ## [4.4.0] - 2026-04-06
 
-### SVG Offset, Companion Hardening & Preset Improvements
-
-Feature release adding SVG path offset support, hardened companion file resolution, project-native preset separation, developer diagnostic controls, numeric-aware preset sorting, and an updated OpenSCAD WASM binary.
-
-### Added
-
-- **SVG path offset** — new `svg-offset.js` bridge to clipper2-js enables inward/outward offset of SVG paths in the preparation workspace
-- **Project-native presets** — presets bundled in sidecar JSON files are separated from user-saved presets (behind `project_presets` feature flag)
-- **SCAD parameter formatter** — new `scad-param-formatter.js` module for type-aware parameter formatting
-- **Developer diagnostic controls** — console-only toggles for CSG bypass, desktop quality, geometry comparison, and ground-truth rendering (`window.__forgeDebug`)
-- **Numeric-aware preset sorting** — presets with numeric prefixes sort naturally (e.g., "2 Small" before "10 Large")
-- **E2E test suites** — `lwfl-parity-reproduction.spec.js`, `preset-audit-sweep.spec.js` for regression testing
-- **Unit test suite** — `svg-offset.test.js` for offset geometry validation
-
-### Changed
-
-- **Companion file resolution hardened** — hierarchy fallback, brand filtering, sibling disambiguation for multi-file projects
-- **OpenSCAD WASM updated** to 2026.04.03 build with `callMain --help` first-init fix
-- **Worker refactored** — `openscad-worker.js` major cleanup (+66/−265 lines), improved error translation, defense-in-depth guards
-- **Split preset dropdown** — project-native vs user-saved presets displayed in separate groups
-- **Feature flags** — added `project_presets` and `svg_path_offset` flags
-
-### Fixed
-
-- **KI-012**: Parameter dropout on re-render resolved via worker restart fix
-- **innerHTML XSS** in `dialogs.js` and `file-handler.js` — user content now escaped via `escapeHtml()`
-- **Blocking `confirm()`** in example loader replaced with accessible `showConfirmDialog`
-
-### Security
-
-- **innerHTML hardening** — `showConfirmDialog` title/message/labels and `_promptScadSelection` file paths now escaped to prevent XSS via crafted filenames
-
----
+- SVG paths can be offset inward or outward in the preparation workspace.
+- Presets that come with a project are listed apart from the ones you save,
+  and presets with numbers in their names sort naturally ("2 Small" before
+  "10 Large").
+- Companion file resolution is hardened for multi-file projects, and the
+  parameter dropout on re-render (KI-012) is fixed.
+- The OpenSCAD engine is the 2026.04.03 build.
+- File names and dialog text are escaped before display, closing a
+  cross-site scripting path through crafted file names, and the example
+  loader's blocking confirm box is an accessible dialog.
 
 ## [4.3.0] - 2026-03-20
 
-### Architecture, Security & Accessibility Release
-
-Major release completing the main.js decomposition (~6,300 lines extracted into 5 modules), enforcing Content-Security-Policy, replacing all `alert()` calls with accessible error dialogs, migrating the toolbar to WAI-ARIA menubar, and stabilizing cross-browser CI.
-
-### Added
-
-- **CodeMirror 6 editor** replacing dead Monaco Editor module
-  - CSP-compatible (uses constructable stylesheets, no `unsafe-inline` required)
-  - OpenSCAD language support with syntax highlighting
-  - Integrated into Expert Mode with editor-state-manager and mode-manager
-- **Accessible error dialogs** (`showFriendlyError`) replacing all 56 `alert()` calls
-  - Modal with `role="alertdialog"` for critical errors (WASM init, file corruption)
-  - Toast with `role="alert"` for informational messages (save success, format unsupported)
-  - Auto-focused close button with focus trap
-- **WAI-ARIA menubar** for toolbar navigation
-  - `role="menubar"` container with `role="menuitem"` triggers
-  - Arrow-key roving across 6 menus and within menu items
-  - Enter/Space activates, Escape closes, Home/End jump
-- **Accessibility role-path cards** on welcome screen
-  - 5 cards re-enabled: Keyboard-Only, Low Vision, Voice Input, Screen Reader, Advanced Makers
-  - Content updated with accurate feature references and documentation links
-- **Expert Mode mobile layout** for viewports below 768px
-  - Collapsible panel with max 40vh height
-  - Touch-friendly resize handle
-- **Forced-colors support** for camera D-pad buttons and code editor borders
-- **Mono high-contrast preview colors** (`mono-hc`, `mono-light-hc`) for differentiated 3D preview
-- **Automated benchmark runner** recording render times for 4 benchmark models
-- **CSS variable audit** verifying all semantic tokens have mono variant overrides
-- **Platform-specific visual regression baselines** (win32 + Linux directory structure)
-
-### Changed
-
-- **main.js decomposed** into 5 extracted modules (~6,300 lines removed):
-  - `overlay-grid-controller.js` — grid/overlay settings and SVG color management
-  - `saved-projects-ui.js` — project save/load/rename/delete UI
-  - `companion-files-controller.js` — include/use file detection and management
-  - `hfm-controller.js` — HFM/Alt View controller, confirm dialogs, URL sanitization
-  - `file-handler.js` — drag-drop, file input, URL load, and folder import handling
-- **Cache-clearing consolidated** into single `_clearBrowserCaches()` helper in storage-manager
-- **Content-Security-Policy enforced** (upgraded from Report-Only)
-  - Removed `unsafe-inline` from `style-src` directive
-  - Updated csp-reporter from report-only to enforcing mode
-- **Three.js granular imports** for tree-shaking (replaced `import('three')` with named imports)
-- **JSZip converted to dynamic import** for on-demand code splitting
-
-### Security
-
-- **CSP enforcement**: `Content-Security-Policy` header active (no longer Report-Only)
-- **`unsafe-inline` removed** from `style-src` — all styles via external CSS or constructable stylesheets
-- **SVG sanitizer hardened**: strips `<foreignObject>`, `<iframe>`, `<embed>`, `<object>`; blocks external `<use>` references and `data:` protocol in `href`/`xlink:href`
-
-### Fixed
-
-- Firefox/WebKit CI stabilized with parallel workers and WASM binary caching
-- Saved-projects and basic-workflow E2E tests un-skipped (modal timing and file upload fixes)
-- Expert Mode responsive layout prevents full-screen takeover on mobile
-
-### Removed
-
-- Orphaned `sw-manager.js` and `version.js` modules
-- Dead Monaco Editor module (`monaco-editor.js`, 730 lines)
-- ~1,600 lines of confirmed dead CSS rules
-- ~85 debug `console.log` calls gated behind `import.meta.env.DEV` flag
-
-### Technical
-
-- E2E: Firefox and WebKit CI jobs pass without `continue-on-error`
-- Visual regression: platform-specific baselines (win32 + Linux)
-- Benchmark runner outputs JSON for CI artifact collection
-- CSS variable audit enforces mono variant completeness
-
----
+- The Content-Security-Policy is enforced, with `unsafe-inline` removed from
+  `style-src`, and the SVG sanitizer strips embedded objects and external
+  references.
+- Expert Mode has a CodeMirror 6 editor with OpenSCAD syntax highlighting.
+- Every `alert()` is replaced by an accessible error dialog or toast.
+- The toolbar is a WAI-ARIA menubar: arrow keys move across and within
+  menus, Enter or Space activates, Escape closes.
+- Five accessibility role cards on the welcome screen: Keyboard-Only, Low
+  Vision, Voice Input, Screen Reader and Advanced Makers.
+- Expert Mode has a phone layout, and forced-colors mode covers the camera
+  pad and the code editor.
 
 ## [4.2.0] - 2026-03-16
 
-### Accessibility, Security & Expert Mode Release
-
-Major release adding Expert Mode code editing, vector parameter support, intelligent memory management, desktop parity remediations, visual theme overhaul (Alt View mono variant), and security hardening. Targets WCAG 2.2 AA / Section 508 conformance.
-
-### Added
-
-- **Expert Mode** - Edit OpenSCAD code directly in the browser with real-time preview
-  - Monaco Editor with OpenSCAD syntax highlighting
-  - Accessible textarea fallback for full AT compatibility
-  - State preservation (cursor, scroll, selection) across mode switches
-  - Keyboard shortcut: `Ctrl+E` to toggle
-- **Vector parameter editor** - Visual editor for `[x,y,z]`-style parameters
-  - Individual controls per element with smart parsing
-  - Keyboard navigation between elements
-  - Screen reader support ("X coordinate, 1 of 3")
-- **Memory management** - Intelligent monitoring with graceful degradation
-  - Real-time usage tracking at 400MB / 800MB / 1200MB thresholds
-  - Auto-preview disabled at critical levels; safe recovery mode
-- **Desktop parity remediation** - 14 of 16 parity scenarios resolved
-  - COFF per-face color rendering via `--enable=render-colors` flag
-  - `#debug` modifier geometry overlay (pink THREE.Group)
-  - Console and Error Log unified panel with Log/Structured views
-  - File > Export As SVG/DXF with guidance animation
-  - Grid opacity slider with localStorage persistence
-  - Rendering toast indicator and pulsing badge
-  - Missing-file synthetic warnings in desktop console format
-- **Alt View mono variant** - Retro terminal aesthetic (green/amber phosphor, CRT effects)
-  - Scanlines, vignette, glow pulse effects (respects `prefers-reduced-motion`)
-  - High-contrast passthrough for forced-colors mode
-  - Custom cursor SVGs per variant
-- **Manifest sharing** - External manifest loading with URL stability contract
-  - Rewritten sharing guide with non-technical instructions
-  - `MANIFEST_STABILITY_CONTRACT.md` documenting URL parameter stability
-  - 20-case E2E test suite for manifest loading
-- **Lighting, color, and printer presets** - Desktop-parity camera and render presets
-- **Color passthrough** - Full render color passthrough via OFF format when active
-- **VPAT document** - Section 508 conformance documentation (59 criteria)
-- **Documentation suite** - Getting Started, Standard Mode, Expert Mode, Troubleshooting, Security Admin, Browser Support, and Known Issues guides
-- **Desktop-parity toolbar menus** - File, Edit, Design, View, Window, Help menus matching OpenSCAD desktop layout
-  - Full keyboard navigation with arrow keys and mnemonic shortcuts
-  - Design tools (flush caches, display AST, geometry info)
-  - Edit actions (copy camera values, error navigation, font size controls)
-- **UI Mode system** - Progressive complexity disclosure (Beginner / Advanced)
-  - Feature-flag gated UIModeController
-  - Advanced-only features hidden in Beginner mode
-- **Feature flags** - Runtime feature configuration (`expert_mode`, `vector_parameters`, `csp_reporting`, `searchable_presets`, `alt_view`)
-- **Folder import** - Direct project folder upload via `webkitdirectory` input
-- **Auto-rotate camera** - Animated 3D preview rotation with theme-aware controls
-- **Image measurement tool** - Reference overlay measurement with tab-unit inference
-- **Custom grid presets** - Save, name, and recall grid size configurations
-- **Customizer detail modes** - Adjustable parameter display density
-
-### Changed
-
-- **Renamed example directories** - `volkswitch-keyguard` → `keyguard-demo` / `keyguard-minimal`
-- **Generalized code comments** - Stakeholder-specific references replaced across 27 files
-- **Updated deep-link URLs** - `?example=keyguard-demo` and `?load=keyguard` aliases
-
-### Security
-
-- **Content Security Policy** - CSP headers in Report-Only mode with violation logging (`csp-reporter.js`)
-- **Supply chain security** - SBOM generation (CycloneDX), npm audit in CI, lockfile integrity checks
-- **Security Admin Guide** - Deployment hardening documentation with CSP policy details
-- **Privacy notice** - Documents IP exposure for externally-hosted manifest loading
-- **SW message validation** - Service worker isolation verified; no cross-origin cache
-- **escapeHtml hardening** - Extended to all remaining `innerHTML` insertion points
-
-### Fixed
-
-- Always set `data-theme` to resolved value even in auto mode
-- Toggle switch off-state contrast meets 3:1 in all themes
-- Alt View panel remediation (HC passthrough, amber detection, mono toggle)
-- Camera button icon visibility on hover
-- HC toggle knob geometry overflow
-- Edge E2E timeout and Firefox COFF probe failures
-- Sequential render overlap via `_callMainInvoked` guard
-- Heading hierarchy: 4 heading-level skips corrected for screen reader navigation
-- Added `type="button"` to ~75 buttons preventing unintended form submission
-- ARIA cleanup: removed redundant `aria-hidden`, added missing form labels
-- Mono variant: ~20 missing semantic token overrides causing color bleedthrough
-- Focus ring in mono variant uses theme accent color instead of default blue
-- Screen reader error announcements wired to render errors, WASM init, and memory emergencies
-- Non-functional Window menu panel toggles resolved
-- Unhandled promise rejections caught in fire-and-forget chains
-- Ctrl+E shortcut guarded against Expert Mode activation in Beginner mode
-- Nested-array URL parameters no longer silently dropped
-- WASM render cancel latency reduced from 5 s to 200 ms
-- SVG/DXF 3D-model conflict uses accessible guidance modal instead of `alert()`
-- Storage quota errors surfaced via status bar and screen reader announcement
-- Global `window.onerror` and `unhandledrejection` handlers for uncaught errors
-
-### Technical
-
-- 2093 unit tests passing (100%) — up 51% from v4.1.0 baseline (1383)
-- Coverage: 52% statements, 51% branches, 53% functions, 53% lines
-- E2E: 341 tests across 25 test files (Chromium, Edge, Firefox, WebKit)
-- Lighthouse: Performance 100, Accessibility 96, Best Practices 100, SEO 100
-- Bundle: Core 231.8KB/500KB gzipped, CSS 46.5KB/150KB, total 600.2KB/1MB
-- Build: 211 modules, 4.62s production build
-- Visual regression: 13 baselines (10 committed + 3 new)
-
----
+- **Expert Mode**: edit OpenSCAD code in the browser with a live preview
+  (`Ctrl+E`).
+- **Vector parameters**: an editor with one control per element for
+  `[x,y,z]` values.
+- **Memory management**: usage is watched at three thresholds, auto-preview
+  turns off at critical levels, and there is a safe recovery mode.
+- **Desktop parity**: 14 of 16 audited differences from desktop OpenSCAD
+  resolved, including per-face colors, the `#` debug modifier, a combined
+  console and error log, SVG and DXF export, and missing-file warnings in
+  the desktop's format. The toolbar menus follow the desktop layout (File,
+  Edit, Design, View, Window, Help).
+- **One-link sharing**: a project can be loaded from an external manifest,
+  with a contract for which link parameters stay stable.
+- **Also new**: folder import, auto-rotate, an image measurement tool,
+  custom grid presets, lighting, color and printer presets, and an
+  alternate retro terminal theme.
+- **Security**: Content-Security-Policy headers in report-only mode, a
+  software bill of materials and `npm audit` in CI, and escaping at every
+  remaining HTML insertion point.
+- **Accessibility**: a VPAT for Section 508, corrected heading levels,
+  toggle contrast of 3:1 in every theme, and errors announced to screen
+  readers.
+- **Guides**: Getting Started, Standard Mode, Expert Mode, Troubleshooting,
+  Security Admin, Browser Support and Known Issues.
 
 ## [4.1.0] - 2026-01-27
 
-### Security & Features Release
-
-Security hardening, saved projects, documentation overhaul, and accessibility improvements.
-
-### Added
-
-- **Saved Projects** - Save, load, and export complete projects (SCAD + parameters) to browser storage
-  - IndexedDB storage with localStorage fallback
-  - Export projects as ZIP files
-  - Import projects from ZIP
-  - Project metadata (name, notes, timestamps)
-  - Full unit test coverage (26 tests)
-- **Gamepad support** - Full gamepad controller for 3D navigation and parameter adjustment
-- **Keyboard configuration** - Configurable keyboard shortcuts with persistent storage
-- **Service worker manager** - Better update detection and user notifications
-- **Version module** - Build info (version, commit SHA, timestamp) injected at build time
-- **Schema generator** - Convert parameters to standard JSON Schema format
-- **Shared utility modules** - `html-utils.js` and `color-utils.js` for consolidated functionality
-- **Modal helper** - `createModal()` function for consistent modal creation
-
-### Security
-
-- **Fixed XSS vulnerability** in ZIP file tree display - file paths now properly escaped
-- **Added Service Worker message validation** with allowlists at all 3 message handlers
-- **Added path traversal protection** for ZIP extraction (rejects `..`, leading `/` or `\`)
-
-### Documentation
-
-- **Added `docs/developing/ARCHITECTURE.md`** - Complete system architecture with 10 Mermaid diagrams
-  - Module map, render pipeline, saved projects flow, validation pipeline
-  - Service worker caching, tutorial sandbox, comparison mode, CLI structure
-- **Added `docs/guides/SECURITY_TESTING.md`** - Security audit procedures
-- **Added `docs/developing/DEV_QUICK_START.md`** - Developer onboarding guide
-- **Documentation style audit** - Rewrote docs to single-maintainer voice
-  - Removed boilerplate patterns and excessive emoji
-  - Consolidated docs into predictable `docs/` structure
-  - Moved specs to `docs/specs/` (UI_STANDARDS, CAMERA_CONTROLS_ACCESSIBILITY)
-
-### Changed
-
-- Service worker cache versioning uses commit SHA (CI) or build timestamp (local)
-- Consolidated duplicate code: hex color validation, file size formatting (~80-130 lines removed)
-- UI generator refactored for better maintainability
-
-### Fixed
-
-- **Saved Projects**: Fixed loading issue where single-file projects weren't loading correctly
-
-### Technical
-
-- 1383 unit tests passing (100%)
-- 0 linter errors
-- Production build: 125KB gzipped (main), 187KB gzipped (Three.js)
-
----
+- **Saved Projects**: save, load and export whole projects (the model and
+  its parameters) in the browser, with ZIP import and export.
+- Gamepad support for the 3D view and the parameters, and configurable
+  keyboard shortcuts.
+- Security: file paths in the ZIP file tree are escaped (a cross-site
+  scripting fix), service worker messages are validated, and ZIP extraction
+  rejects path traversal.
+- An architecture document with diagrams, a developer quick start, and a
+  security testing guide.
 
 ## [4.0.0] - 2026-01-22
 
-### Major Stable Release
-
-This is the **first major stable release** of OpenSCAD Assistive Forge, marking the project as ready for general use.
-
-**Highlights:**
-- Documentation overhaul for accessibility and onboarding
-- Enhanced README with detailed project intent and accessibility features
-- Package metadata improvements for npm discoverability
-- Open source conventions fully implemented
-
-### Changed
-
-- **README.md**: Completely rewritten with clear project intent, accessibility features documentation, user role guide, and improved organization
-- **package.json**: Added author, repository, homepage, and bugs fields; expanded keywords for better discoverability
-- **Version**: Bumped to 4.0.0 to signify stable release milestone
-
-### Documentation
-
-- Enhanced accessibility documentation with standards compliance tables
-- Added detailed keyboard shortcut reference
-- Documented screen reader support and tested configurations
-- Added user role guide (screen reader users, clinicians, low vision users, etc.)
-- Improved CLI documentation with command tables
-- Better organized feature sections
-
-### Open Source
-
-- Complete open source convention compliance
-- Enhanced CONTRIBUTING.md with UI consistency rules
-- Full THIRD_PARTY_NOTICES.md
-- Clear licensing information throughout
-
-### Dependencies
-
-- **commander**: Updated from ^11.1.0 to ^14.0.2 (CLI argument parsing)
-- **three**: Updated from ^0.160.0 to ^0.182.0 (3D rendering engine)
-
-### Fixed
-
-- Guard against null worker in `render-controller` cancel flow after terminate
-- Dispose Three.js `GridHelper` geometry/material on theme changes to prevent leaks
-- Add null checks in parameter extraction to prevent crashes on unexpected inputs
-- Improve state cloning error handling for non-serializable values
-- Add XSS protection for file names displayed in info area
-- Fix mobile drawer collapse button positioning with fixed position
-
-### Accessibility
-
-- Ensure `.btn-role-try` touch targets meet 44×44px minimum sizing
-
----
-
-## [3.1.0] - 2026-01-20
-
-### Enhanced UI & Accessibility Release
-
-**Highlights:**
-- Color system overhaul with Radix Colors for WCAG compliance
-- Responsive drawer UI with mobile-first design
-- Camera panel controller for keyboard-accessible 3D navigation
-- Preview settings drawer with improved UX
-- Enhanced accessibility documentation and testing
-
-### Added
-
-- **Radix Colors Integration**: New semantic color system with automatic light/dark/high-contrast support
-- **Camera Panel Controller**: Keyboard-accessible camera controls for 3D preview navigation
-- **Preview Settings Drawer**: Collapsible overlay drawer for preview settings with resize capability
-- **Color Contrast Testing**: Automated WCAG 2.x and APCA contrast verification
-- **UI Standards Guide**: Full documentation for theme-consistent UI development
-- **Color System Guide**: Complete guide for using the new semantic token system
-- **Color Migration Guide**: Instructions for updating existing components
-
-### Improved
-
-- **Mobile Off-Canvas Drawer**: Bootstrap-inspired off-canvas pattern for parameters panel
-- **Forced Colors Support**: Full compatibility with Windows High Contrast and OS color schemes
-- **Focus Management**: Enhanced scroll-margin and scroll-padding for WCAG 2.4.11/2.4.13 compliance
-- **Touch Targets**: 44x44px minimum touch targets throughout the UI
-- **Accessibility Guide**: Updated with new color system and contrast information
-- **Status Bar**: Compact floating status overlay on preview canvas
-
-### Technical
-
-- New CSS files: `color-scales.css`, `semantic-tokens.css`
-- New test file: `color-contrast.test.js`
-- New guides: `COLOR_SYSTEM_GUIDE.md`, `COLOR_MIGRATION_GUIDE.md`, `UI_STANDARDS.md`
-- Radix UI Colors dependency for professional color palette
-- Improved high contrast mode with 7:1 AAA contrast ratios
-
----
-
-## [3.0.0] - 2026-01-19
-
-### Major Milestone - Cloudflare Stable Deployment
-
-This is the first **major stable release** for production deployment on Cloudflare Pages.
-
-**Highlights:**
-- Stable deployment on Cloudflare Pages (unlimited bandwidth)
-- All ESLint errors resolved for clean CI builds
-- Documentation cleanup and organization
-- Complete feature set across 25+ releases now stable
-
-**Infrastructure:**
-- Primary hosting: Cloudflare Pages (https://openscad-assistive-forge.pages.dev/)
-- COOP/COEP headers pre-configured for WASM threading compatibility
-- Global CDN for fast worldwide delivery
-- Automatic deployments from Git
-
-**Documentation:**
-- Updated all references from Vercel to Cloudflare as primary platform
-- Marked all completed build plans as done
-- Cleaned up PROJECT_STATUS.md with accurate metrics
-- Updated README with Cloudflare deployment badge and links
-
-### Fixed
-
-- Resolved `openFeaturesGuide` scope error that caused lint failures
-- Fixed unused variable warnings (`formatPresetDescription`, `index`, `fileContent`)
-- Prevented generate actions from canceling in-progress previews
-- Improved internal render retry detection for numeric OpenSCAD error codes
-
----
-
-## [2.10.1] - 2026-01-18
-
-### Fixed
-
-- Prevented generate actions from canceling in-progress previews, which could leave the UI stuck when generating before preview completion.
-- Improved internal render retry detection for numeric OpenSCAD error codes to recover cleanly without user intervention.
-
----
-
-## [2.10.0] - 2026-01-17
-
-### Added - Enhanced Accessibility & Layout
-
-- **Collapsible Parameter Panel**: Desktop-only collapse/expand with smooth animations
-  - Persistent state saved to localStorage
-  - Full keyboard accessibility with `aria-expanded` and focus management
-  - Automatic expansion on mobile viewports
-  
-- **Resizable Split Panels**: Drag-to-resize with Split.js integration
-  - 8px gutter with visual grip indicator
-  - Keyboard navigation (Arrow keys, Home/End)
-  - Persistent sizing saved to localStorage
-  - Minimum sizes: 280px (params), 300px (preview)
-  
-- **Focus Mode**: Maximize preview by hiding parameter panel
-  - New focus button in preview header
-  - Keyboard shortcut: `F` key
-  - `aria-pressed` state management
-  
-- **Compact Header**: Auto-compact mode after file load
-  - Reduces vertical space usage
-  - Smooth transition animations
-  
-- **Collapsible UI Sections**: Better space efficiency
-  - Preset controls now use `<details>` element
-  - Preview settings moved to collapsible disclosure
-  - Reduces initial visual complexity
-  
-- **Actions Dropdown Menu**: Secondary actions in "More" menu
-  - Contains: Add to Queue, View Queue, Share Link, Export Params
-  - Native `<details>` element for accessibility
-  
-- **Auto-Hide Status Bar**: Status bar hides when idle ("Ready" state)
-
-### Improved
-
-- **File Info Display**: Collapsible file tree for multi-file projects
-- **Output Format Selector**: Moved to parameter panel for better grouping
-- **Compact Actions Bar**: Reduced padding and spacing for efficiency
-- **Keyboard Navigation**: Enhanced focus management throughout
-- **Screen Reader Support**: Full ARIA attributes on all interactive elements
-- **Responsive Design**: Desktop features properly disabled on mobile
-- **Performance**: RequestAnimationFrame for smooth drag operations
-
-### Technical
-
-- New dependency: split.js (v1.6.5)
-- Modified files: main.js (+459), layout.css (+325), components.css (+210), index.html (+158)
-- Bundle impact: +~10KB gzipped
-- WCAG 2.1 AA compliance maintained
-- Full keyboard support with new shortcuts
-- Respects `prefers-reduced-motion`
-
----
-
-## [2.9.0] - 2026-01-16
-
-### Added - WASM Progress & Mobile Enhancements
-
-- **WASM Loading Progress UI**: Full-screen progress indicator during WASM initialization
-  - Progress bar with percentage display
-  - Stage-based progress messages (downloading, initializing, loading fonts)
-  - Indeterminate progress animation for rendering stages
-  - Fade-out animation on completion
-  - Accessible with ARIA live regions
-
-- **Mobile Viewport E2E Tests**: Multi-device mobile testing suite
-  - Tests on Pixel 5, iPhone 12, iPhone SE devices
-  - Landscape orientation tests
-  - Small screen (320px) compatibility tests
-  - Touch target size verification (WCAG 2.1 compliant)
-  - Horizontal overflow detection
-  - Font size readability checks
-
-- **Bundle Size Optimization**: Code splitting and lazy loading
-  - Three.js split into separate chunk (172KB gzipped)
-  - STLLoader and OrbitControls loaded on-demand
-  - Main bundle reduced to 67KB gzipped
-  - AJV validation library isolated
-
-### Improved
-
-- **Memory Warning System**: Enhanced user notifications
-  - Non-intrusive toast notification for high memory usage
-  - Auto-dismiss after 15 seconds
-  - Manual dismiss option
-  - Mobile-responsive design
-
-### Fixed
-
-- **Worker bundling in preview/production**: Kept the worker constructor inline so Vite
-  bundles `openscad-wasm-prebuilt` into the worker chunk, preventing OpenSCAD WASM
-  initialization failures during preview or Vercel deployments.
-
-### Technical
-
-- Total tests: 602 unit + 42 E2E
-- Build time: 4.48s
-- Bundle sizes:
-  - Main: 231KB (67KB gzipped)
-  - Three.js: 667KB (172KB gzipped)
-  - CSS: 69KB (10KB gzipped)
-- Full mobile viewport E2E coverage
-
----
-
-## [2.8.0] - 2026-01-16
-
-### Added - Performance & Test Coverage
-
-- **Three.js Lazy Loading**: Already implemented - Three.js modules are loaded on-demand to reduce initial bundle size
-  - Parallel loading of three, OrbitControls, and STLLoader
-  - Loading indicator shown during module fetch
-  - Code splitting via Vite's dynamic imports
-
-- **Memory Usage Monitoring**: Already implemented - WASM memory tracking with user warnings
-  - `getMemoryUsage()` method in RenderController
-  - Memory warning callback when usage exceeds 80%
-  - Real-time memory stats (used, limit, percent)
-
-- **Font Support for text()**: Already implemented - Liberation fonts mounted in WASM virtual filesystem
-  - LiberationSans-Regular, Bold, Italic
-  - LiberationMono-Regular
-  - Automatic font mounting on WASM initialization
-
-### Improved
-
-- **Unit Test Coverage**: Increased from 72.38% to 80.31%
-  - library-manager.js: 57.95% → 60.24% (41 tests)
-  - comparison-view.js: 44.14% → 45.85% (61 tests)
-  - render-controller.js: 62.85% → 64.21% (37 tests)
-  - preset-manager.js: 66.44% → 70.37% (41 tests)
-  - preview.js: 45.75% → 45.05% (54 tests)
-  - Added 95 new unit tests (507 → 602 total)
-
-- **Test Infrastructure**
-  - Added LibraryManager tests (autoEnable, getMountPaths, getStats)
-  - Added ComparisonView event handling tests
-  - Added RenderController memory monitoring tests
-  - Added PresetManager listener and statistics tests
-  - Added PreviewManager theme detection and LOD tests
-
-### Technical
-
-- Total tests: 602 unit + 42 E2E
-- Test coverage: 80.31% statements, 74.85% branches, 82.42% functions
-- Build time: 4.33s
-- Bundle size: 67.44KB gzipped (main), 172.28KB gzipped (Three.js)
-
----
-
-## [2.7.1] - 2026-01-16
-
-### Fixed - Audit Gap Resolutions
-
-- **Gap 2**: Validate command is now template-aware
-  - Auto-detects React, Vue, Svelte, Angular, Preact projects
-  - Uses template-specific file checks instead of hardcoded paths
-  - Shows detected template in validation output
-  
-- **Gap 4**: Scaffold `--theme` option now fully functional
-  - Generates theme CSS using selected preset
-  - Automatically links theme CSS in index.html
-  - Available themes: blue (default), purple, green, orange, slate, dark
-  
-- **Gap 7**: Sync auto-fix uses correct npm package names
-  - Fixed `three.js` → `three` package name mapping
-  - Uses stored `packageName` field instead of parsing message
-  
-- **Gap 8**: Scaffolded apps auto-load embedded models
-  - Apps with embedded `param-schema` and `scad-source` tags now boot immediately
-  - No upload required for scaffolded standalone apps
-  - Graceful fallback to upload UI if embedded data is invalid
-  
-- **Gap 9**: Validate JSON output includes `passed` flag
-  - JSON format now includes top-level `passed: boolean` for CI integration
-  - Added `summary` object with schema/UI/test pass counts
-  - Added `metadata` with timestamp and webapp path
-
-### Added - New Example Models
-
-- **Phone Stand**: Customizable stand with angle adjustment and charging cable support
-- **Honeycomb Grid**: Parametric hexagonal grid pattern for organizers
-- **Cable Organizer**: Desk cable management with multiple slot styles
-- **Wall Hook**: Mountable hook with multiple curve styles and mounting options
-
-### Technical
-
-- Exported `THEME_PRESETS` and `generateThemeCSS` from theme.js for scaffold integration
-- Added `loadEmbeddedModel()` function in main.js for scaffolded app initialization
-- Template detection logic in validate.js supports all framework templates
-- Total example models: 10 (4 new)
-
----
-
-## [2.7.0] - 2026-01-16
-
-### Added - Advanced Menu (P1 Features)
-
-- **View SCAD Source**: Read-only view of uploaded OpenSCAD source code
-  - Modal viewer with monospace font and line count
-  - Copy to clipboard functionality
-  - File statistics (lines, characters)
-  
-- **Override Parameter Limits**: Unlock toggle for numeric parameters
-  - Allow values outside parsed min/max ranges
-  - Visual indicators for unlocked parameters
-  - Warning styling for out-of-range values
-  - Limits automatically restored when toggle is disabled
-  
-- **Enhanced Reset Tools**: Multiple reset options
-  - Reset All: Reset all parameters to defaults
-  - Reset Group: Reset parameters in a specific group
-  - Individual Reset: Per-parameter reset buttons (appear on hover)
-  - Reset buttons show "modified" state when value differs from default
-  
-- **View Params JSON**: View current parameters as formatted JSON
-  - Modal viewer with copy functionality
-  - Useful for debugging and sharing configurations
-
-### Technical
-
-- New exports from `ui-generator.js`: `setLimitsUnlocked`, `getAllDefaults`, `resetParameter`
-- Advanced Menu UI in collapsible `<details>` element
-- ~400 lines of new CSS for Advanced Menu styling
-- ~200 lines of new JavaScript for Advanced Menu functionality
-- Full accessibility support (keyboard navigation, ARIA labels, focus management)
-- High contrast mode support for all new components
-
-## [2.4.0] - 2026-01-15
-
-### Added - Testing Infrastructure & Performance
-
-- **Unit Testing Suite**: Vitest-based unit tests for core modules
-  - 119+ unit tests covering parser, state, presets, theme, and ZIP handling
-  - 88.82% coverage on parser module, 70%+ on preset and theme managers
-  - Test fixtures for OpenSCAD file validation
-  - Mock-based testing for localStorage and DOM interactions
-  
-- **E2E Testing Framework**: Playwright integration for end-to-end testing
-  - Basic workflow tests (upload → customize → download)
-  - Accessibility compliance tests with axe-core
-  - Keyboard navigation validation
-  - Multi-browser testing (Chromium, Firefox, WebKit)
-  
-- **GitHub Actions CI**: Automated testing on every push and PR
-  - Unit test execution with coverage reporting
-  - E2E test execution with artifact upload
-  - Build verification and bundle size monitoring
-  - Markdown linting
-  
-- **Documentation**: Testing and performance guides
-  - TESTING.md - Complete guide for unit and E2E testing
-  - PERFORMANCE.md - Performance optimization strategies and targets
-  - Coverage targets and best practices
-  - Troubleshooting and debugging tips
-
-### Fixed
-
-- **Theme Manager API**: Updated `addListener()` to return unsubscribe function for consistency with StateManager pattern
-
-### Improved
-
-- **State Management Tests**: Extended coverage for URL synchronization and localStorage persistence
-- **Test Infrastructure**: Added setup files and fixtures for better test organization
-- **CI/CD Pipeline**: Complete automated testing workflow for continuous quality assurance
-
-### Technical
-
-- Dependencies: @playwright/test, @axe-core/playwright, vitest, @vitest/ui, @vitest/coverage-v8
-- Test count: 119 unit tests + 8 E2E tests
-- Coverage: 21%+ overall, 80%+ on core modules
-- New files: 10+ test files, 2 documentation files, 3 config files
-- GitHub Actions: 4 workflow jobs (unit, E2E, build, lint)
-
-## [2.3.0] - 2026-01-15
-
-### Fixed - Audit & Polish Release
-
-- **Debug Code Removal**: Removed debug fetch call from `auto-preview-controller.js`
-- **Version Alignment**: Synchronized version strings across `main.js`, `sw.js`, and `package.json`
-
-### Audited
-
-- Core runtime modules reviewed for correctness: parser, preview, library-manager, render-queue, openscad-worker
-- All modules verified clean with no correctness issues
-
-### Technical
-- No new features (polish release)
-- Service Worker cache auto-invalidates with version bump
-
-## [2.2.0] - 2026-01-15
-
-### Added - Additional Templates & Enhanced Tooling
-
-- **Vue 3 Template**: Full Vue Composition API template for scaffold command
-- **Svelte Template**: Modern Svelte template with reactive programming
-- **Enhanced Auto-Fix**: 15+ checks for dependencies, scripts, files, and code quality
-- **Golden Fixtures**: Fixture system for regression testing
-- **Template Comparison**: 4 framework options (vanilla, React, Vue, Svelte)
-- **Better CLI Reporting**: Enhanced error messages and diff output
-
-### Technical
-- Vue template (~13 files, 1,400 lines) with Composition API
-- Svelte template (~13 files, 1,300 lines) with reactive stores
-- Enhanced sync command (+100 lines) with 6 new checks
-- Enhanced validate command (+150 lines) with golden fixtures
-- Updated scaffold command to support Vue and Svelte
-- Template dependencies: Vue 3.4+, Svelte 4.2+
-- Total new code: ~2,800 lines
-
-## [2.1.0] - 2026-01-15
-
-### Added - Enhanced CLI
-
-- **React Templates**: Full React template support for scaffold command with component architecture
-- **Theme Generator**: Custom color theme generation with 6 presets (blue, purple, green, orange, slate, dark)
-- **CI/CD Helpers**: Configuration generators for 6 platforms (GitHub, GitLab, Vercel, Netlify, Docker, Validation)
-- **React Components**: Pre-built components (App, Header, ParametersPanel, PreviewPanel, ParameterControl)
-- **Theme Presets**: Professional color palettes with accessibility support
-- **CI/CD Templates**: Tested workflows and configurations
-
-### Technical
-- New `theme` command (~420 lines) with 6 presets and custom color support
-- New `ci` command (~570 lines) with 6 provider templates
-- React template (~10 files, 600+ lines)
-- Updated scaffold command with `--template react` option
-- Version bumped to 2.1.0
-- Total new code: ~2,400 lines
-
-## [2.0.0] - 2026-01-15
-
-### Added - Developer Toolchain
-
-- **CLI Interface**: `openscad-forge` command-line tool for automation
-- **Extract Command**: Extract parameters from .scad files to JSON Schema
-- **Scaffold Command**: Generate standalone web apps from schema + .scad file
-- **Validate Command**: Test schema compliance and accessibility
-- **Sync Command**: Auto-fix common project issues
-- **NPM Package**: Global installation support via npm
-
-### Technical
-- New CLI entry point `bin/openscad-forge.js`
-- 4 command modules (~1,265 lines total)
-- Commander.js for command parsing
-- Chalk for colorized output
-- Dependencies: commander@^11.1.0, chalk@^5.3.0
-
-## [1.10.0] - 2026-01-14
-
-### Added - OpenSCAD Library Bundles
-- **Library Support System**: Integration with popular OpenSCAD libraries (MCAD, BOSL2, NopSCADlib, dotSCAD)
-- **Auto-Detection**: Parser automatically detects library usage from include/use statements
-- **Library Manager UI**: Collapsible panel with checkboxes, icons, and badges
-- **Auto-Enable**: Required libraries automatically enabled on file load
-- **Virtual Filesystem**: Libraries mounted in OpenSCAD WASM worker
-- **Setup Script**: `npm run setup-libraries` command to download all libraries
-- **State Persistence**: Library selections saved to localStorage
-- **Test Example**: Created library-test example demonstrating MCAD usage
-
-### Fixed
-- **URL Param Clamping**: Out-of-range URL parameters are clamped to schema limits to prevent invalid renders
-- **Comparison Mode Libraries**: Variant renders now mount enabled libraries (fixes MCAD comparison errors)
-
-### Technical
-- New `library-manager.js` module (303 lines)
-- New `setup-libraries.js` script (320 lines)
-- Modified 7 core files for library integration
-- Added 250+ lines of CSS for library UI
-- Total: ~1,352 lines added
-
-## [1.9.0] - 2026-01-14
-
-### Added - Comparison View
-
-Multi-variant comparison system for side-by-side parameter testing.
-
-- **Multi-Variant Comparison**: Compare up to 4 parameter variants side-by-side
-- **Independent 3D Previews**: Each variant has its own interactive preview
-- **Batch Rendering**: Render all variants sequentially with progress tracking
-- **Variant Management**: Add, rename, edit, and delete variants
-- **Export/Import**: Share comparison sets as JSON files
-- **State Tracking**: Visual indicators for pending, rendering, complete, error states
-- **Responsive Layout**: Grid adapts from 4 → 2 → 1 columns based on screen size
-
-### Technical
-- New `ComparisonController` class (273 lines) for variant state management
-- New `ComparisonView` class (557 lines) for UI rendering
-- State integration with `comparisonMode` and `activeVariantId` properties
-- Theme-aware styling (light/dark/high-contrast)
-- WCAG 2.1 AA compliant accessibility
-- Build time: 3.15s
-- Bundle size: +14.4KB gzipped
-
-## [1.8.0] - 2026-01-14
-
-### Added - STL Measurements
-- **Dimension Measurements**: Real-time bounding box visualization with X, Y, Z dimensions
-- **Dimensions Panel**: Dedicated UI panel showing width, depth, height, and volume
-- **Measurements Toggle**: "Show measurements" checkbox in preview settings
-- **Visual Overlays**: Red wireframe bounding box with dimension lines and text labels
-- **Theme-Aware Colors**: Measurement colors adapt to light/dark/high-contrast themes
-- **Persistent Preference**: Saves measurement state to localStorage
-- **High Contrast Support**: Thicker lines (3px) and larger text (48px) in HC mode
-
-### Technical
-- Enhanced `PreviewManager` with measurement methods (+250 lines)
-- New dimension calculation and visualization system
-- Canvas-based text sprites for dimension labels
-- Three.js BoxHelper for bounding box visualization
-- +4.2KB gzipped bundle size impact
-- Build time: 3.55s
-
-## [1.7.0] - 2026-01-13
-
-### Added - Parameter Presets System
-- **Save Presets**: Save current parameter configurations with names and descriptions
-- **Load Presets**: Quick dropdown selector and management modal for instant loading
-- **Manage Presets**: Full modal to view, load, export, and delete presets
-- **Import/Export**: Share presets as JSON files (single or collection)
-- **Smart Merging**: Duplicate preset names update existing presets
-- **Persistence**: LocalStorage per-model preset storage
-- **Accessibility**: Full keyboard navigation, ARIA labels, focus management
-- **Responsive Design**: Mobile-optimized layout with stacked controls
-
-### Technical
-- New `PresetManager` class (374 lines) for CRUD operations
-- 272 lines of CSS for preset UI components
-- Integration with state management system
-- Import validation with error handling
-- +4.1KB gzipped bundle size impact
-- Build time: 3.83s
-
-## [1.6.0] - 2026-01-13
-
-### Added - Multiple Output Formats
-- Support for 5 output formats: STL, OBJ, OFF, AMF, 3MF
-- Format selector dropdown in UI
-- Format-specific file downloads with correct extensions
-- Format-aware rendering in OpenSCAD worker
-- Triangle counting for all mesh formats
-
-### Technical
-- Multi-format render logic in worker
-- Format detection and conversion
-- +0.73KB gzipped bundle size impact
-- Build time: 2.39s
-
-## [1.5.0] - 2026-01-13
-
-### Added - High Contrast Mode
-- Independent high contrast modifier (works with any theme)
-- WCAG AAA (7:1) color contrast ratios
-- Pure black/white color scheme
-- 12-17% larger text sizes
-- 2-3px thicker borders
-- 4px focus rings
-- Enhanced shadows and grid lines
-- HC toggle button in header
-- Persistent preferences via localStorage
-
-### Technical
-- Enhanced `ThemeManager` with high contrast support
-- `PreviewManager` HC color palettes
-- +0.89KB gzipped bundle size impact
-- Build time: 2.53s
-
-## [1.4.0] - 2026-01-13
-
-### Added - Dark Mode
-- Three-mode theme system: Auto, Light, Dark
-- Theme toggle button in header (☀️/🌙 icons)
-- System preference detection (`prefers-color-scheme`)
-- Persistent theme preferences via localStorage
-- Theme-aware 3D preview with adaptive colors
-- 36 theme-aware CSS custom properties
-
-### Technical
-- New `ThemeManager` class (195 lines)
-- Theme integration in `PreviewManager`
-- +3KB (+0.8KB gzipped) bundle size impact
-- Build time: 2.71s
-
-## [1.3.0] - 2026-01-13
-
-### Added - ZIP Upload & Multi-File Projects
-- ZIP file upload and extraction (JSZip library)
-- Automatic main file detection (5 strategies)
-- Virtual filesystem mounting in OpenSCAD worker
-- File tree visualization with main file badge
-- Support for include/use statements
-- Multi-file example project (Multi-File Box)
-- 20MB ZIP file size limit
-- Nested directory support
-
-### Technical
-- Virtual filesystem operations in worker
-- `mountFiles()` and `clearMountedFiles()` functions
-- Directory creation and file mounting
-- ~500 lines of new code
-- ~10KB bundle size impact (JSZip)
-- Build time: 2.72s
-
-## [1.2.0] - 2026-01-13
-
-### Added - Auto-Preview & Progressive Enhancement
-- Automatic preview rendering with 1.5s debounce
-- Progressive quality rendering (preview $fn ≤ 24)
-- Intelligent render caching (max 10 cache entries)
-- Visual preview state indicators (6 states)
-- Rendering overlay with spinner
-- Smart download button logic
-- Quality tiers: PREVIEW (fast) vs FULL (final)
-
-### Technical
-- New `AutoPreviewController` class (375 lines)
-- Render caching by parameter hash with LRU eviction
-- 5-10x faster parameter iteration
-- Preview renders: 2-8s vs Full: 10-60s
-
-## [1.1.0] - 2026-01-12
-
-### Added - Enhanced Usability
-- URL parameter persistence for sharing
-- Keyboard shortcuts (Ctrl+Enter, R, D)
-- Auto-save drafts with localStorage (2s debounce, 7-day expiration)
-- Copy Share Link button with clipboard API
-- Export Parameters as JSON button
-- Simple Box example model
-- Parametric Cylinder example model
-- Welcome screen with 3 example buttons
-
-### Technical
-- URL serialization with non-default values only
-- LocalStorage persistence with housekeeping
-- Clipboard API with fallback
-
-## [1.0.0] - 2026-01-12
-
-### Added - MVP Release
-- Drag-and-drop file upload with validation
-- OpenSCAD Customizer parameter extraction
-- Auto-generated parameter UI (sliders, dropdowns, toggles)
-- Parameter grouping and collapsible sections
-- Client-side STL generation (OpenSCAD WASM)
-- 3D preview with Three.js
-- Orbit controls (rotate, zoom, pan)
-- Smart filename downloads (model-hash-date.stl)
-- WCAG 2.1 AA accessibility compliance
-- Full keyboard navigation
-- Screen reader support
-- Dark mode support (system preference)
-- Universal Cuff example model
-
-### Technical
-- Vite build system
-- Vanilla JavaScript (no framework)
-- Web Worker for WASM isolation
-- State management with pub/sub pattern
-- CSS custom properties for theming
-- Mobile-responsive design
-
-## [0.2.0] - 2026-01-12
-
-### Changed
-- Major rescope: v1 changed from CLI tool to web application
-- Original CLI scope moved to v2 (developer toolchain)
-
-### Added
-- Detailed user journey and UI specifications
-- Phased implementation plan with deliverables
-- Success metrics and acceptance criteria
-- Reference implementation analysis
-- Browser requirements and compatibility matrix
-- Security considerations and threat model
-- Performance optimization guidelines
-- CSS architecture and design system
-
-## [0.1.0] - 2026-01-11
-
-### Added
-- Initial build plan with CLI-focused approach
-- Parameter schema specification
-- Validation framework design
-
----
-
-## Release Cadence
-
-- **v1.0.0** (2026-01-12): Initial MVP release
-- **v1.1.0 - v1.7.0** (2026-01-13): Rapid feature releases
-- **v1.8.0 - v1.10.0** (2026-01-14): Advanced features
-- **v2.0.0** (2026-01-15): Developer toolchain
-- **v2.1.0 - v2.10.1** (2026-01-15 to 2026-01-18): CLI enhancements, templates, testing
-- **v3.0.0 - v3.1.0** (2026-01-19 to 2026-01-20): Cloudflare deployment, UI/accessibility enhancements
-- **v4.0.0** (2026-01-22): Major stable release with full documentation
-- **v4.1.0** (2026-01-27): Security hardening, saved projects, documentation overhaul
-- **v4.2.0** (2026-03-16): Expert Mode, vector parameters, memory management, desktop parity, Alt View
-- **v4.3.0** (2026-03-20): Architecture decomposition, CSP enforcement, accessible errors, menubar, CI stabilization
-- **v4.4.0** (2026-04-06): SVG offset, companion hardening, project-native presets, KI-012 resolution, WASM update
-- **v4.5.0** (2026-07-12): Braille toolset (card/charm/sign), SVG pipeline overhaul, Alt View rework, WebGL 1 fallback fix
-
-## Version Scheme
-
-We follow [Semantic Versioning](https://semver.org/):
-- **Major** (X.0.0): Breaking changes, major features
-- **Minor** (1.X.0): New features, backwards compatible
-- **Patch** (1.0.X): Bug fixes, minor improvements
+The first release I called stable. The documentation was rewritten around
+accessibility and getting started, and the open source housekeeping (the
+contributing guide, third-party notices, licensing) was completed.
+
+- Fixed: a crash when canceling after the worker had stopped, a leak on
+  theme changes, crashes on unexpected input during parameter extraction,
+  and unescaped file names in the info area.
+- The role cards' buttons meet the 44 x 44 px touch target minimum.
+
+## Earlier versions (0.1.0 to 3.1.0)
+
+Released in the project's first ten days, 11 to 20 January 2026.
+
+- **1.0 to 1.10** (January 12 to 14): the first working version, then
+  auto-preview, ZIP upload for multi-file projects, dark and high contrast
+  modes, more output formats, parameter presets, STL measurements, a
+  comparison view and bundled OpenSCAD libraries.
+- **2.0 to 2.10** (January 15 to 18): a command-line toolchain and
+  templates (later removed), a test suite, an advanced menu, engine loading
+  progress, and mobile, accessibility and layout improvements.
+- **3.0 and 3.1** (January 19 and 20): deployment on Cloudflare Pages, and
+  interface and accessibility improvements.
 
 ## Links
 
