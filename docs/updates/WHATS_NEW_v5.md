@@ -196,7 +196,7 @@ the tool does not check.
 
 ![The Braille Card with the text ROOM ROOM ROOM ROOM. The Braille preview box in the panel shows one braille line of 24 cells out of 26: three capital passage cells, the word room four times, and a two-cell terminator, with the typed text beneath it. The preview shows a long, narrow card leaning back with the same dots across its face](images/braille-capital-passage.png)
 
-**Each line is translated whole.** "ROOM ROOM ROOM ROOM" has one capital
+**One capital passage, not four.** "ROOM ROOM ROOM ROOM" has one capital
 passage sign and one terminator, as Unified English Braille writes it. The
 table list offers UEB Grade 1 and Grade 2, the Braille Card starts on Grade
 2, and a divided e-mail address, web address or long number ends each row but

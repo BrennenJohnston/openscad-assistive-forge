@@ -6,12 +6,7 @@ This is a one-person project, so I try to keep things easy to understand and har
 
 ## Local setup
 
-```bash
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`.
+Clone and run the app as the [README](../README.md#develop-locally) describes.
 
 ## What helps most
 
@@ -32,9 +27,8 @@ Open `http://localhost:5173`.
 3. The checks have to pass. I squash-merge, so the pull request title becomes
    the one commit on `develop`.
 
-`main` is the released version. It only moves forward to a commit that has
-already passed the checks on `develop`. [Releasing](../docs/project/RELEASING.md)
-has the steps.
+`main` is the released version. [Releasing](../docs/project/RELEASING.md) says
+how it moves.
 
 ### Pull request titles
 
@@ -76,7 +70,7 @@ Please sanity-check:
 - [ ] Screen reader: controls have names/labels; status changes are announced when needed
 - [ ] Reduced motion: no animation is required to understand/operate
 - [ ] High contrast: still readable and usable
-- [ ] Touch targets: still reasonable on small screens
+- [ ] Touch targets: at least 44 x 44 px, and never smaller than before
 
 If you're adding a new interactive pattern, prefer semantic HTML (`button`, `details/summary`, `fieldset/legend`, etc.) before adding ARIA.
 
@@ -94,9 +88,8 @@ looks like the problem, open an issue and I will look at the code that calls it.
 
 ## AI tools
 
-I use AI coding assistants on this project; [how](../docs/project/AI_USE.md)
-is written down. You may use them too. Say so in the pull request, and make
-sure you understand and have tested what you submit.
+[How I use AI tools](../docs/project/AI_USE.md) covers my own use and what I
+ask of contributors who use them.
 
 ## License
 
