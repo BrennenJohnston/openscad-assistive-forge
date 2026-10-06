@@ -228,7 +228,7 @@ export const FIELD_MAX_SIZE = 64;
 const VERTEX_SHADER = /* glsl */ `
   varying float vUp;
   varying float vViewDepth;
-  // CW-86: the surface's own coordinate. Every mesh this pass dresses that
+  // The surface's own coordinate. Every mesh this pass dresses that
   // has a glyph field also has a uv attribute - it was checked before the
   // field was built - and three.js declares the uv attribute for us either way, so a
   // mesh without one simply carries zeroes into a shader that ignores them.
@@ -240,12 +240,12 @@ const VERTEX_SHADER = /* glsl */ `
     // points in the world, and no matrix belongs in this line. normalMatrix is
     // built from modelViewMatrix, so multiplying by it would ask which way the
     // face points relative to the CAMERA, and the roof test below would then
-    // fire on whatever the walker happens to be looking straight at (D-73).
+    // fire on whatever the walker happens to be looking straight at.
     vUp = normalize(normal).z;
     vUv = uv;
     vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
-    // CW-85: LINEAR view depth, in meters, interpolated across the face. The
-    // depth BUFFER this target already carries is the non-linear one the GPU
+    // Linear view depth, in meters, interpolated across the face. The
+    // depth buffer this target already carries is the non-linear one the GPU
     // needs for occlusion; a tint that faded on that curve would fall off a
     // cliff in the first few meters and then barely move for two hundred.
     vViewDepth = -viewPos.z;
@@ -258,7 +258,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uRoofId;
   uniform float uRoofNormalZ;
   uniform float uDepthFar;
-  // CW-86: the glyph field. uHasField is 0 for every mesh without one,
+  // The glyph field. uHasField is 0 for every mesh without one,
   // which is what makes this one shader rather than two.
   uniform float uHasField;
   uniform sampler2D uField;
@@ -272,7 +272,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     // uRoofId is 0 for every mesh that has no separate top surface, and 0 is
     // the sky class, which no geometry can be.
     if (uRoofId > 0.0 && vUp >= uRoofNormalZ) id = uRoofId;
-    // CW-86: G is the GLYPH FIELD - the surface's own tone at this cell,
+    // G is the glyph field - the surface's own tone at this cell,
     // quantised to a ladder step and stored as step + 1 so that 0 keeps
     // meaning "no field, use the screen pick". The field texture is one this
     // pass built and owns: NEAREST, no mipmaps, so the value a cell reads is
@@ -285,8 +285,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     if (uHasField > 0.5) {
       field = texture2D(uField, vUv * uFieldRepeat + uFieldOffset).r;
     }
-    // R is the class, as it has been since CW-23 and as the GPU glyph path
-    // reads it. B is CW-85's linear depth: nothing samples it but the backing.
+    // R is the class, as the GPU glyph path reads it. B is the linear depth:
+    // nothing samples it but the backing.
     gl_FragColor = vec4(
       id / 255.0,
       field,

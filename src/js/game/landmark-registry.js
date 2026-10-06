@@ -58,7 +58,7 @@ export const LANDMARK_REGISTRY = {
       {
         name: 'Seattle Central Library',
         wayId: 37056442,
-        cite: "OMA / LMN, 2004; Seattle Public Library's own architecture pages; dressed under CW-Q56",
+        cite: "OMA / LMN, 2004; Seattle Public Library's own architecture pages",
         reason: 'The downtown building people visit for its architecture.',
       },
       {

@@ -95,26 +95,23 @@ uniform vec3 uPalette[16];
 uniform float uReverseAt;
 uniform float uSpaceIndex;
 uniform float uSparsestNonSpace;
-// CW-91: anchored glyphs, on the GPU at last. uLadder is one row per class and
-// one texel per field step, holding glyph id + 1 so that 0 can keep meaning
-// "this class has no ladder". The field step itself is NOT a new upload: the
-// class pass has always written it into the GREEN channel of the very texture
-// bound as uClass (city-class-pass.js's fragment shader, gl_FragColor.g), and
-// this pass simply never read it. CW-86 believed the byte could only reach the
-// CPU and forced the CPU path for anchoring, which halved the frame rate and is
-// the only reason anchoring shipped off.
+// Anchored glyphs on the GPU. uLadder is one row per class and one texel
+// per field step, holding glyph id + 1 so that 0 can keep meaning "this
+// class has no ladder". The field step itself is not a new upload: the
+// class pass writes it into the green channel of the very texture bound
+// as uClass (city-class-pass.js's fragment shader, gl_FragColor.g).
 uniform sampler2D uLadder;
 uniform float uAnchored;
 uniform float uFieldLevels;
-// CW-92: the authored palette family per surface class, -1 where a class has
+// The authored palette family per surface class, -1 where a class has
 // none. The city is achromatic - every material white or neutral gray, both
-// lights white, the fog black - so there is no surface color to read and the
-// per-frame nearest-palette match was manufacturing a hue out of the last
-// digit or two of a gray image. That is what flipped a whole face between two
-// entries as the camera moved. See hc-palettes.js CITY_INK_FAMILY.
+// lights white, the fog black - so there is no surface color to read, and a
+// per-frame nearest-palette match manufactures a hue out of the last digit
+// or two of a gray image, which flips a whole face between two entries as
+// the camera moves. See hc-palettes.js CITY_INK_FAMILY.
 uniform float uInkFamily[16];
 uniform float uHasInkFamily;
-// CW-68 temporal hysteresis. uPrev is the PREVIOUS conversion's own output
+// Temporal hysteresis. uPrev is the previous conversion's own output
 // target, bound as a texture (the two targets ping-pong), so the memory costs
 // no upload and no readback of its own: R the glyph, G the class or palette
 // index, B the cell luminance, A the hold counter and the reverse flag packed
@@ -122,7 +119,7 @@ uniform float uHasInkFamily;
 // frame after a reallocation, make every expression below the stateless one.
 // The rules are src/js/_hfm-hysteresis.js; this is the same arithmetic in GLSL
 // and the two must be changed together.
-// CW-71 the palette-mode ink budget: an absolute-luminance floor below which
+// The palette-mode ink budget: an absolute-luminance floor below which
 // the cell draws nothing, and a gate on the white entry. uWhiteIndex is -1
 // when the palette has no white. The rules are src/js/_hfm-paint.js.
 uniform float uInkFloor;
@@ -179,8 +176,8 @@ vec3 encodeOutput(vec3 c) {
  * scale clamps - the whole range the small-character work is about.
  *
  * Reading it this way rather than rendering at sample size is deliberate:
- * CW-31 measured that rendering smaller saves nothing here, and it costs the
- * antialiasing the downscale was quietly providing.
+ * rendering smaller saves nothing here, and it costs the antialiasing the
+ * downscale quietly provides.
  *
  * Internal taps clamp to the edge of the sample grid, external taps read as
  * zero outside it - the same asymmetry the CPU has.
@@ -215,7 +212,7 @@ vec3 tapAt(vec2 posTopDown, bool clampInside, out bool inside) {
   } else {
     // Any other ratio: one linearly filtered sample at the block's center.
     // Close, not exact, and only reached at character sizes far above the
-    // floor where CW-31 measured the sampling difference to be invisible.
+    // floor, where the sampling difference is invisible.
     vec2 srcTopDown = (c + 0.5) / uScale;
     vec2 uv = vec2(
       srcTopDown.x / uSourceSize.x,
@@ -282,7 +279,7 @@ void main() {
     }
   }
 
-  // CW-68: what this cell decided last time. Read before anything depends on
+  // What this cell decided last time. Read before anything depends on
   // it so that the reverse flag, the vocabulary and the glyph all see one
   // consistent history.
   bool hasPrev = uHasPrev > 0.5;
@@ -309,7 +306,7 @@ void main() {
   }
 
   // Which vocabulary this cell may draw from - and, whether or not there are
-  // vocabularies, which SURFACE it is, because CW-68's memory is dropped the
+  // vocabularies, which surface it is, because the memory is dropped the
   // moment that changes.
   float classId = 0.0;
   int spanIndex = 0;
@@ -326,13 +323,13 @@ void main() {
   float start = span.x;
   float count = span.y;
 
-  // ★★★ CW-91: THE GLYPH COMES FROM THE SURFACE, THE LIGHT STILL COMES FROM
-  // THE SCREEN. The same contract the CPU path carries (_hfm.js, the anchored
+  // The glyph comes from the surface, the light still comes from the
+  // screen. The same contract the CPU path carries (_hfm.js, the anchored
   // branch), in the same order: everything decided from the lit cell above this
   // line - the reverse flag, the palette color, the cell's luminance - stands
-  // untouched, and all that changes is WHICH character carries it.
+  // untouched, and all that changes is which character carries it.
   //
-  // A REVERSED CELL IS NEVER ANCHORED, exactly as on the CPU, where the reverse
+  // A reversed cell is never anchored, exactly as on the CPU, where the reverse
   // branch returns before the anchored one is reached: a reverse cell is matched
   // against an inverted vector over the whole atlas, and a ladder step chosen
   // from the surface's own tone means nothing there.
@@ -392,26 +389,26 @@ void main() {
   // blank, which would leave a hole exactly where the cell should be solid.
   if (reversed && best == int(uSpaceIndex)) best = int(uSparsestNonSpace);
 
-  // CW-68: keep the previous glyph unless the new one is closer to this
+  // Keep the previous glyph unless the new one is closer to this
   // frame's cell vector by more than the dead band. The memory is dropped
   // whenever the surface under the cell changed - its class moved, or its
   // reverse-video state flipped - because both of those also change which
   // glyphs the cell is allowed to draw, so a held glyph could be illegal as
-  // well as wrong. That reset is the answer to CW-52's smearing objection.
+  // well as wrong.
   float hold = 0.0;
   float prevClassId = uUsePalette > 0.5
     ? floor(prevSecond / 16.0)
     : prevSecond;
-  // CW-89 (D-125): and BLANK IS NEVER HELD, NOR DOES IT BLOCK INK. The CPU
+  // Blank is never held, nor does it block ink. The CPU
   // rule is glyphWithMemory() in _hfm-hysteresis.js and this must stay the
   // same rule - if the two disagree, a cell is painted with one path's glyph
-  // and the other's drive. The memory chooses between CHARACTERS; whether a
+  // and the other's drive. The memory chooses between characters; whether a
   // cell has content at all was decided before it, by the blank floor.
-  // ★ AND AN ANCHORED CELL IS NEVER HELD (CW-86's contract, CW-91 on the GPU).
-  // The memory exists to hide a re-roll; an anchored cell has nothing to hide,
-  // and holding its glyph past the moment its surface slid to the next lattice
-  // square is exactly the trail CW-84 cut. The CPU path expresses this by
-  // skipping _remember entirely and writing hold 0; this is the same rule.
+  // An anchored cell is never held. The memory exists to hide a re-roll; an
+  // anchored cell has nothing to hide, and holding its glyph past the moment
+  // its surface slid to the next lattice square would be a trail. The CPU
+  // path expresses this by skipping _remember entirely and writing hold 0;
+  // this is the same rule.
   bool keepable =
     hasPrev &&
     anchored < 0.0 &&
@@ -437,7 +434,7 @@ void main() {
     }
   }
 
-  // Palette mode (CW-6) picks each cell's color from its mean tint, in
+  // Palette mode picks each cell's color from its mean tint, in
   // chroma-normalised space. Ported from pickPaletteIndex; the index rides
   // in the green channel, which otherwise only carries a debug class byte.
   float second = classId;
@@ -446,7 +443,7 @@ void main() {
     float mx = max(mean.r, max(mean.g, mean.b));
     vec3 n = mx < 1e-6 ? vec3(0.0) : mean / mx;
     if (abs(uChromaBoost - 1.0) > 1e-6) n = pow(max(n, vec3(0.0)), vec3(uChromaBoost));
-    // CW-71: how far from gray this cell is, in the same max-normalised
+    // How far from gray this cell is, in the same max-normalised
     // space the match works in. n's largest component is 1, so the smallest
     // one IS the distance from gray.
     float chroma = 1.0 - min(n.r, min(n.g, n.b));
@@ -465,9 +462,9 @@ void main() {
         bestColour = i;
       }
     }
-    // ★★★ CW-92: THE FAMILY IS THE SURFACE'S, THE LIGHT IS THE SCREEN'S. The
+    // The family is the surface's, the light is the screen's. The
     // ink budget and the white gate above are decided from the lit cell and
-    // are untouched; all that changes is which entry a CLASSIFIED cell takes.
+    // are untouched; all that changes is which entry a classified cell takes.
     // An unclassified cell - the sky, or anything the class pass could not
     // name - keeps the per-frame match, because it has no surface to belong
     // to. The same rule as the CPU path, which reads inkFamilies there.
@@ -478,13 +475,13 @@ void main() {
     // Both in one byte: the palette index in the low nibble (at most 16
     // entries) and the surface class in the high one (at most 15). Without
     // this the memory would have no way to know a palette cell's class had
-    // changed, and color mode would smear where mono does not - measured
-    // before it was fixed: 44 % of class changes kept their glyph with the
-    // memory off, 87 % with it on.
+    // changed, and color mode would smear where mono does not: without it,
+    // 44 % of class changes keep their glyph with the memory off, 87 % with
+    // it on.
     second = float(bestColour) + classId * 16.0;
   }
 
-  // CW-71: below the floor the cell draws nothing at all, the way a mono cell
+  // Below the floor the cell draws nothing at all, the way a mono cell
   // below the ladder's blank level does. Applied after the glyph search so the
   // memory and the class byte are still written from the real decision.
   if (uInkFloor > 0.0 && cellLum < uInkFloor) best = int(uSpaceIndex);
