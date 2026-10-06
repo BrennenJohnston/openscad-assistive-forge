@@ -48,7 +48,7 @@ jobs:
       # The example-manifest commit that holds the Plug Puller 0.13.0 with
       # its minkowski() edges. Later copies round their edges another way
       # and would pass on any engine.
-      PLUG_PULLER_COMMIT: 175f2f22dce8ff1ed815f82c04aa303879fbbb68
+      PLUG_PULLER_COMMIT: 82ddd6200e5f99cb86b53dedcab7f15d04394d27
 
     steps:
       - name: Checkout code
