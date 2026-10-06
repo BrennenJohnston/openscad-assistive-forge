@@ -19,9 +19,9 @@
  * What it deliberately does NOT read, because DP-Q49 leaves them alone:
  * identifiers, CSS class names, file names and settings keys (`colourCount`,
  * `wallColour`, `colour-separation.js`, `.drawing-editor-colour-select`), the
- * City Walk's OpenStreetMap data, the 1:1 conversion of the third-party
- * OpenSCAD language reference, the tool output under `docs/accessibility/vpat/evidence/`,
- * and the dated audit records under `docs/archive/audit/`.
+ * City Walk's OpenStreetMap data, the tool output under
+ * `docs/accessibility/vpat/evidence/`, and the dated audit records under
+ * `docs/archive/audit/`.
  *
  * A word inside a string or comment counts only when it stands alone in
  * prose: a character of `-_/\#$` on either side means it is part of a name,
@@ -118,7 +118,6 @@ const DIR_SKIP = new Set([
 ])
 
 const PATH_SKIP = [
-  join('docs', 'reference', 'OPENSCAD_LANGUAGE_REFERENCE.md'),
   join('docs', 'accessibility', 'vpat', 'evidence'),
   join('docs', 'archive', 'audit'),
   join('public', 'examples', 'ascii-city'),

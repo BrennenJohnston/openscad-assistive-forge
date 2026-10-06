@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-12
 **Build Plan:** `parity_remediation_path_c_4a2893fa.plan.md`
-**Auditor:** Cursor Agent (full automated audit + targeted code inspection)
+**Auditor:** AI-assisted (full automated audit + targeted code inspection)
 
 ---
 

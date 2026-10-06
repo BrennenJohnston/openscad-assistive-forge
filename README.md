@@ -8,7 +8,6 @@ A browser based OpenSCAD "Customizer" that tries to be usable with keyboards, sc
 
 - **Live demo**: `https://openscad-assistive-forge.pages.dev/`
 - **Docs index**: `docs/README.md`
-- **Project status**: `docs/project/PROJECT_STATUS.md`
 
 ## Why this exists
 

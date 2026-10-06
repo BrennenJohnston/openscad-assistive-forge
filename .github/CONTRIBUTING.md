@@ -1,10 +1,10 @@
 # Contributing
 
-Hey — thanks for taking a look.
+Thanks for taking a look.
 
-This is a one-person project, so I’m mostly trying to keep things easy to understand and hard to break. Accessibility improvements are always welcome.
+This is a one-person project, so I try to keep things easy to understand and hard to break. Accessibility improvements are always welcome.
 
-## Local dev
+## Local setup
 
 ```bash
 npm install
@@ -13,7 +13,7 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-## What’s helpful
+## What helps most
 
 - Fixes for accessibility issues (keyboard traps, focus order, labeling, contrast, motion)
 - Better error messages for common OpenSCAD / CGAL failures
@@ -24,20 +24,45 @@ Open `http://localhost:5173`.
 - Docs that help real people use the app
 - Tests for bug fixes and new behavior
 
-## Workflow
+## How a change gets in
 
-There’s a longer writeup in `docs/developing/DEVELOPMENT_WORKFLOW.md`. The short version:
+1. Branch from `develop` (`fix/short-name`, `feat/short-name`, `docs/short-name`).
+2. Open a pull request into `develop`. Keep it to one change a user would
+   notice, or one coherent piece of housekeeping.
+3. The checks have to pass. I squash-merge, so the pull request title becomes
+   the one commit on `develop`.
 
-- Work from `develop`
-- Keep PRs small when possible
-- Include a quick test plan in the PR description (what you ran / clicked)
+`main` is the released version. It only moves forward to a commit that has
+already passed the checks on `develop`. [Releasing](../docs/project/RELEASING.md)
+has the steps.
 
-## Code quality
+### Pull request titles
+
+The title is the commit message, so write it like one:
+
+- `type(scope): what changed`, for example
+  `fix(braille): keep the charm's dots inside the ADA ranges`
+- Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `ci`, `chore`
+- 72 characters or fewer
+- Plain words. No ticket codes or private shorthand.
+
+### Pull request descriptions
+
+Short is fine: what changed, and how you checked it (what you ran or clicked).
+If you changed text that people read or hear (labels, alt text, error
+messages, screen reader announcements), list it so I can review the wording.
+
+### Changelog
+
+If a user would notice the change, add one line under "Unreleased" in
+`CHANGELOG.md`.
+
+## Checks
 
 - Format: `npm run format`
 - Lint: `npm run lint`
 - Unit tests: `npm run test:run`
-- E2E tests: `npm run test:e2e`
+- Browser tests: `npm run test:e2e`
 - Example models: `npm run validate:example public/examples/<your-folder>`
 
 On Windows, see `docs/developing/TROUBLESHOOTING.md#playwright-terminal-hangs-windows` if Playwright gets stuck.
@@ -53,15 +78,20 @@ Please sanity-check:
 - [ ] High contrast: still readable and usable
 - [ ] Touch targets: still reasonable on small screens
 
-If you’re adding a new interactive pattern, prefer semantic HTML (`button`, `details/summary`, `fieldset/legend`, etc.) before adding ARIA.
+If you're adding a new interactive pattern, prefer semantic HTML (`button`, `details/summary`, `fieldset/legend`, etc.) before adding ARIA.
 
-## UI consistency (so the themes don’t explode)
+## UI consistency (so the themes don't explode)
 
 - Use the existing tokens in `src/styles/variables.css` and `src/styles/semantic-tokens.css`
 - Avoid hardcoded colors when a token exists
 - Test light/dark/high-contrast (and forced-colors if you can)
 
+## Files I ask you not to edit
+
+The vendored engines and data: `public/wasm/`, `public/liblouis/`,
+`public/libraries/`, `public/fonts/`, `vendor/`, and `LICENSE`. If one of them
+looks like the problem, open an issue and I will look at the code that calls it.
+
 ## License
 
 By contributing, you agree your contributions are licensed under GPL-3.0-or-later (see `LICENSE`).
-

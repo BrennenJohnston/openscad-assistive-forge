@@ -14,7 +14,6 @@
  * URL that opens Forge with everything pre-loaded.
  *
  * @license GPL-3.0-or-later
- * @see docs/research/PROJECT_SHARING_REFERENCES.md
  */
 
 import { extractZipFiles } from './zip-handler.js';

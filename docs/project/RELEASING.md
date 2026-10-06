@@ -2,18 +2,24 @@
 
 How I do releases for this project.
 
+`develop` is where the work lands. `main` is the released version, and the
+live site is built from it. A release moves `main` forward to a commit on
+`develop` that has already passed its checks, and tags it. There is no release
+pull request and nothing to merge back.
+
 ## Before releasing
 
-Run the checks:
+1. Everything for the release is merged into `develop`.
+2. One last pull request sets the version and closes the changelog:
 
-```bash
-npm run test:run && npm run test:e2e
-npm run lint
-npm run format:check
-npm run build
-```
+   ```bash
+   npm version X.Y.Z --no-git-tag-version
+   ```
 
-Update `CHANGELOG.md` with what changed.
+   In `CHANGELOG.md`, rename "Unreleased" to the version and the date. Keep the
+   section to what a user would notice: one line per change, about 40 lines at
+   most.
+3. Wait for the checks to pass on `develop` after that pull request merges.
 
 ### Braille tools
 
@@ -34,48 +40,30 @@ present and pass, on all three tools:
 - a screen reader check (NVDA) when an announcement or a control's name
   changed.
 
-I write the results into the release pull request. A check that cannot run
+I write the results into the version pull request. A check that cannot run
 holds the release until it has run.
 
 ## Doing the release
 
-`main` is what deploys to production, and `develop` is where the work lands, so
-a release is a promotion of one to the other.
-
 ```bash
-# On develop, with everything merged and green
-git checkout develop
-git pull
+git fetch origin
 
-# Bump version in package.json
-npm version X.Y.Z --no-git-tag-version
+# Move main forward to develop. No merge commit, no squash.
+git push origin origin/develop:main
 
-git add -A
-git commit -m "chore: release vX.Y.Z"
-git push origin develop
-```
-
-Then open a pull request from `develop` into `main` and let it go green. Both
-branches are guarded by rulesets and both need an approving review; `main` also
-requires signed commits and linear history. See
-[`.github/BRANCH_PROTECTION.md`](../../.github/BRANCH_PROTECTION.md) for the exact
-required checks on each.
-
-If a pull request into `main` ever sits waiting on a check that never arrives
-rather than going red, the cause is almost certainly a required check name that
-no longer matches a job name. That exact fault was found and fixed on
-2026-08-16; the branch-protection document explains how to spot and repair it.
-
-Once it is merged:
-
-```bash
-git checkout main
-git pull
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
+# Tag it and publish.
+git tag -a vX.Y.Z origin/develop -m "Release X.Y.Z"
 git push origin vX.Y.Z
+gh release create vX.Y.Z --verify-tag --title "vX.Y.Z: a few words" --notes-file notes.md
 ```
 
-Then go to GitHub → Releases → Draft a new release, pick the tag, paste the CHANGELOG section.
+The release text is the changelog section for the version.
+
+If the push to `main` is refused, the checks on that `develop` commit have not
+all passed yet. Wait for them, or re-run the one that failed.
+
+A change that does not alter the app (documentation, comments) goes to `main`
+the same way, with no new version number and no tag.
 
 ## Service worker cache
 
@@ -87,19 +75,12 @@ Old caches get cleaned up automatically.
 
 ## If something breaks in production
 
-```bash
-# Hotfix branch from the last good tag
-git checkout -b hotfix/X.Y.Z vX.Y.Z
+The fastest way back to a working site is a Cloudflare Pages rollback, which
+changes no code. The steps are in the
+[Rollback Runbook](../deploying/ROLLBACK_RUNBOOK.md).
 
-# Fix it, test it
-npm run test:all
-
-# Merge back
-git checkout develop
-git merge hotfix/X.Y.Z
-git tag -a vX.Y.Z -m "Hotfix vX.Y.Z"
-git push origin develop vX.Y.Z
-```
+Then fix it the ordinary way: a pull request into `develop`, the checks, and a
+patch release.
 
 ## Version scheme
 
