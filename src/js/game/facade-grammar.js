@@ -1,38 +1,32 @@
 /**
- * FACADE GRAMMAR (CW-73): what a building's TYPE says about its windows, and
- * how many rows and bays actually FIT on it.
+ * Facade grammar: what a building's type says about its windows, and how
+ * many rows and bays actually fit on it.
  *
- * Before this module a facade was a texture chosen by `hash % 9` (a mapped
- * `building:material` narrowing the choice where one existed), laid onto the
- * wall in world meters. Two things followed from that, and both of them are
- * what this module exists to remove:
+ * A facade texture chosen by hash alone, laid onto the wall in world meters,
+ * has two faults this module removes:
  *
- *   1. A block of flats and an office tower had the same chance of every
- *      glazing kind, so the ASCII could not tell them apart. The map data
+ *   1. A block of flats and an office tower have the same chance of every
+ *      glazing kind, so the ASCII cannot tell them apart. The map data
  *      says which is which - `building=apartments` on 605 buildings across
- *      the four extracts, `commercial` on 266, `office` on 91 - and nothing
- *      read it.
+ *      the four extracts, `commercial` on 266, `office` on 91.
  *   2. UVs in world meters mean the tile starts wherever the building happens
- *      to stand, so a wall of arbitrary width carries a FRACTIONAL BAY at its
+ *      to stand, so a wall of arbitrary width carries a fractional bay at its
  *      corner and a building of arbitrary height a fractional row at its top.
- *      CW-34 and CW-46 fixed the PHASE (the per-building shift moves in whole
- *      bays); the WIDTH and the HEIGHT were never fitted.
  *
  * Everything here is pure arithmetic and a table. The mesh side of it - which
  * vertices get which u and v - lives in city-scene.js, because that is where
  * the geometry is.
  *
- * ★ THE DEFAULT FAMILY IS ALL NINE ARCHETYPES, NOT ONE. `building=yes` is the
+ * The default family is all nine archetypes, not one. `building=yes` is the
  * commonest value in three of the four cities (1,168 of 2,793 buildings; 511
- * of Albuquerque's 640), so a default that named a single family would trade
- * this release's gain for a monoculture across most of the city - the exact
- * fault CW-34 was written to remove. No data means no claim.
+ * of Albuquerque's 640), so a default that named a single family would make
+ * a monoculture across most of the city. No data means no claim.
  */
 
 /**
- * THE CENSUS the table is built over, re-measured at HEAD on 2026-08-29 from
- * the four shipped extracts (`public/examples/ascii-city/*.json`), counting
- * elements carrying a `building` tag:
+ * The census the table is built over, from the four shipped extracts
+ * (`public/examples/ascii-city/*.json`), counting elements carrying a
+ * `building` tag:
  *
  *   Seattle      1,387 buildings, 766 with levels, 127 with material
  *   Denver         330 buildings, 271 with levels,  47 with material
@@ -52,24 +46,23 @@ export const FACADE_LEVEL_M_DEFAULT = 3.2;
  * A wall narrower than this fraction of its family's bay carries NO window at
  * all rather than a squeezed one. Stretching one bay across a 1.2 m return
  * gives a window wider than the wall it sits on; a dark wall is the honest
- * picture, and the count of them goes in the release record.
+ * picture.
  */
 export const BLANK_WALL_MIN_BAY_FRACTION = 0.6;
 
 /**
- * ★★ A WALL LOWER THAN THIS IS NOT A STORY - AND THE RULE THAT WOULD BLANK IT
- * WAS MEASURED AND REFUSED. `tooShort` is reported, and COUNTED in the scene
- * statistics, but nothing acts on it.
+ * A wall lower than this is not a story. `tooShort` is reported, and counted
+ * in the scene statistics, but nothing acts on it.
  *
- * The symmetric rule looked obviously right: a wall too NARROW for one bay
- * carries no window, so a wall too SHORT for one row should carry none either.
- * The Space Needle's thirteen parts include 0.9 m and 1.2 m bands between
- * volumes, and each is given a whole row of windows squashed into it.
+ * The symmetric rule looks obviously right: a wall too narrow for one bay
+ * carries no window, so a wall too short for one row should carry none
+ * either. The Space Needle's thirteen parts include 0.9 m and 1.2 m bands
+ * between volumes, and each is given a whole row of windows squashed into it.
  *
- * Then it was measured on all four cities, and the cure is worse:
+ * Measured on all four cities, the cure is worse:
  *
  *   threshold        Denver blank walls        Seattle
- *   none (shipped)   2.10 % of wall meters     2.14 %
+ *   none             2.10 % of wall meters     2.14 %
  *   1.0 m           12.90 % (232 volumes)      2.69 % (16)
  *   1.3 m           18.24 % (343)              3.10 % (31)
  *   1.8 m           20.49 % (380)              4.61 % (68)
@@ -77,11 +70,10 @@ export const BLANK_WALL_MIN_BAY_FRACTION = 0.6;
  *
  * Denver's 330 buildings carry 3,013 `building:part` prisms, stacked slabs
  * with long perimeters and sub-metre heights, and blanking them takes an
- * eighth to a quarter of the whole city's facade away at EVERY threshold that
+ * eighth to a quarter of the whole city's facade away at every threshold that
  * catches the artifact. A squashed strip of window on a 0.9 m band is a few
  * pixels seen from the street; a fifth of Denver going dark is not. The
- * measurement is kept here and in `stats.shortWalls` so that CW-74, which owns
- * the ground-floor band, inherits the number rather than the surprise.
+ * count is kept in `stats.shortWalls`.
  */
 export const BLANK_WALL_MIN_ROW_M = 1.8;
 
@@ -149,8 +141,8 @@ export const FACADE_FAMILIES = Object.freeze({
     archetypes: Object.freeze(['band', 'stripes']),
     levelM: 3,
   }),
-  // THE DEFAULT. All nine, the hash choosing, exactly as the city has always
-  // looked. See the note at the top of this file for why it is not one.
+  // The default. All nine, the hash choosing. See the note at the top of
+  // this file for why it is not one.
   mixed: Object.freeze({
     archetypes: Object.freeze([
       'plain',
@@ -172,7 +164,7 @@ export const FACADE_FAMILY_DEFAULT = 'mixed';
 
 /**
  * `building=*` to family. Exhaustive over the census above; the values left
- * out of it (`yes`, `roof`, `no`) are left out ON PURPOSE and take the
+ * out of it (`yes`, `roof`, `no`) are left out on purpose and take the
  * default.
  */
 export const FACADE_FAMILY_BY_TYPE = new Map([
@@ -253,9 +245,9 @@ export function facadeFamilyFor(buildingType) {
 }
 
 /**
- * Which archetypes a building may wear, TYPE first and MATERIAL second.
+ * Which archetypes a building may wear, type first and material second.
  *
- * ★ WHERE THE TWO DISAGREE, THE MATERIAL WINS. A type is what a building is
+ * Where the two disagree, the material wins. A type is what a building is
  * USED for; `building:material` is what its wall is actually MADE of, and a
  * glass-walled block of flats has a curtain wall whatever the flats inside it
  * are for. So the intersection is preferred, and where it is empty the
@@ -284,11 +276,11 @@ export function facadeCandidates(family, materialNames) {
  * the family's story height divides the wall and the remainder is spread
  * back over the rows, which is what makes the top row full instead of cut.
  *
- * ★ THE GROUND FLOOR IS RESERVED, NOT COUNTED. Pass `baseM` and the grid
+ * The ground floor is reserved, not counted. Pass `baseM` and the grid
  * starts above it; a tagged level count then loses one story to it, because
- * the ground floor is one of the levels the mapper counted. CW-74 owns what
- * is drawn in that reserved band; this release only keeps the window grid out
- * of it.
+ * the ground floor is one of the levels the mapper counted. The ground-floor
+ * band is drawn elsewhere; this function only keeps the window grid out of
+ * it.
  *
  * @param {{heightM:number, baseM?:number, levels?:number|null, levelM?:number}} spec
  * @returns {{rows:number, rowHeightM:number, baseM:number, usableM:number,
@@ -325,12 +317,11 @@ export function fitRows({
 /**
  * How many bays fit across one wall, and how wide each one is.
  *
- * ★ THE EDGE RULE IS TO STRETCH, NOT TO CENTER. The bay count is the nearest
+ * The edge rule is to stretch, not to center. The bay count is the nearest
  * whole number of the family's pitch, and the bays then share the wall
  * exactly, so there is no leftover to center and no bay cut at a corner. A
  * 17.3 m wall at a 4 m pitch is four bays of 4.325 m; the alternative - four
- * 4 m bays and a 1.3 m gap - puts the very fraction at the corner that this
- * release exists to remove.
+ * 4 m bays and a 1.3 m gap - puts a fraction at the corner.
  *
  * @param {{widthM:number, pitchM:number}} spec
  * @returns {{bays:number, bayWidthM:number}} bays 0 means a BLANK wall

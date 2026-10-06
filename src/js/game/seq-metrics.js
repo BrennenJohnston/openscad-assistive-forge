@@ -1,34 +1,34 @@
 /**
  * @license GPL-3.0-or-later
  */
-// Per-cell FRAME-SEQUENCE metrics for the ASCII City Walk (CW-67).
+// Per-cell frame-sequence metrics for the ASCII City Walk.
 //
 // `scripts/seq-city-walk.mjs` photographs MOTION: N consecutive converted
 // frames under a scripted pose, scored cell by cell on the converter's own
 // grid. This module is the scoring, and nothing else - no DOM, no page, no
-// Playwright - so the arithmetic that every Round 8 verdict is read off can
+// Playwright - so the arithmetic every verdict is read off can
 // be unit-tested against sequences with known answers.
 //
 // It lives in `src/js/game/` rather than in `scripts/` for two reasons: the
 // instrument imports it through the dev server's own module graph, so the
 // code the tests cover is byte-for-byte the code that runs; and the class
 // labels come from `city-class-pass.js` rather than a second copy that can
-// drift from the wire format (CW-33 appended two ids and a duplicated table
-// would have given every surface the voice of its neighbor).
+// drift from the wire format (with a duplicated table, an appended id
+// would give every surface the voice of its neighbor).
 //
-// WHAT THE COLUMNS MEAN, and why each is here:
+// What the columns mean, and why each is here:
 //
 //   * CHANGE is the plain per-frame churn: the share of (cell, frame pair)
 //     slots where the glyph is not what it was. A walking picture should
-//     change; the question this round asks is how much, and where.
+//     change; the question is how much, and where.
 //   * FLIP (A-B-A) is the fracture signature: a cell that comes back to what
 //     it was two frames ago while its neighbors slide on is flashing, not
 //     moving. A flip rate means nothing without the change rate beside it,
 //     so both are always reported.
 //   * PERSISTENCE is the mean length in frames of a cell's runs of one
 //     glyph. Two scenes with the same change rate feel completely different
-//     at 3 frames and at 15, and this is the number CW-68's dead band moves.
-//   * CHURN CELLS is the share of cells that changed in MORE THAN HALF the
+//     at 3 frames and at 15, and this is the number the converter's dead band moves.
+//   * CHURN CELLS is the share of cells that changed in more than half the
 //     frame pairs - the population that is boiling rather than sliding.
 //   * DRIVE is the converter's own decision, not a painted pixel: the
 //     intensity level in mono, the palette index in color. Reverse video
@@ -37,13 +37,13 @@
 //   * The EDGE row holds every cell whose CLASS moved during the sequence.
 //     It swept across a geometry edge, so its flicker is real motion; it is
 //     excluded from every class row and counted on its own. `ghostPct` on
-//     the summary asks the opposite question for CW-68: of the moments a
+//     the summary asks the opposite question: of the moments a
 //     cell's class changed AND the cell carried ink, how often did its glyph
 //     NOT follow within the same frame pair? A hysteresis that holds those is
 //     a ghost. The ink condition is not fussiness: two blank cells of
 //     different classes draw the same nothing, and counting those would bury
 //     the guard under a baseline it can never move.
-//   * ★ MISMATCH (CW-93) is the one column here that has a RIGHT ANSWER. Every
+//   * MISMATCH is the one column here that has a right answer. Every
 //     other number is a description; this one is a defect count. See the block
 //     above `createMismatch` for what it means and what it deliberately does
 //     not count.
@@ -100,35 +100,34 @@ export function glyphChar(glyph) {
 }
 
 /**
- * ★★★ CW-93 (D-128): THE VOCABULARY-MISMATCH COUNTER, and what it means.
+ * The vocabulary-mismatch counter, and what it means.
  *
- * The owner photographed a building's window pattern drawn onto the underside
- * of a street tree. Every other column in this file describes a picture; this
- * one asks a question with a right answer: **is this cell drawing a character
- * its own surface is not allowed to draw?** A wall glyph on a TREE cell is
- * exactly the reported artifact, and nothing legitimate produces one - the
+ * Every other column in this file describes a picture; this one asks a
+ * question with a right answer: **is this cell drawing a character its own
+ * surface is not allowed to draw?** A wall glyph on a TREE cell - a
+ * building's window pattern drawn onto the underside of a street tree - is
+ * the artifact it exists to catch, and nothing legitimate produces one - the
  * class pass says TREE, `glyph-vocabularies.js` says a TREE cell may only be
  * one of ` .,^*oO&%@8wvV`, and both converter paths search that list and
- * nothing else. So a non-zero count is a defect, not a description, and the
- * release's bar is zero.
+ * nothing else. So a non-zero count is a defect, not a description.
  *
- * WHAT IT DELIBERATELY DOES NOT COUNT, because each is the code working:
+ * What it deliberately does not count, because each is the code working:
  *
- *   * A REVERSE-VIDEO cell (mono only). A cell above the reverse threshold is
+ *   * A reverse-video cell (mono only). A cell above the reverse threshold is
  *     painted as solid phosphor with its glyph knocked out, and BOTH paths
  *     match it against the INVERTED shape and the FULL 95-glyph vocabulary on
  *     purpose (`_hfm.js` `if (cellReversed)`, `_hfm-gpu.js` `spanIndex` is
  *     left at 0 when `reversed`). Counting those would report the picture's
  *     brightest cells as a defect forever. The exempted count is reported
  *     beside the mismatch rather than hidden, so the exemption can be seen.
- *   * A CELL WHOSE CLASS HAS NO VOCABULARY - SKY, and anything the class pass
+ *   * A cell whose class has no vocabulary - SKY, and anything the class pass
  *     could not name. Those fall back to the full vocabulary by design, so
  *     there is no rule for them to break.
  *
  * The space character is in every vocabulary (`_buildClassLookups` adds it),
  * so a blank cell never counts either, and it needs no special case here.
  *
- * THE TABLE IS BUILT FROM THE CONVERTER'S OWN LADDERS, handed in by the
+ * The table is built from the converter's own ladders, handed in by the
  * caller, not re-derived from `glyph-vocabularies.js`. A second copy of the
  * ladder would answer questions about itself: this one answers questions about
  * the list the converter actually searched.
@@ -185,7 +184,7 @@ function createMismatch(vocabularies, cells) {
  * @property {number} whiteIndex the palette index of white (color only; -1
  *   when the palette has no white)
  * @property {number} litLumMin the converter's blank/ink cliff, used for the
- *   mono lit share (an option because CW-70/CW-71 move it)
+ *   mono lit share (an option because the luminance layer and the ink budget move it)
  * @property {number} frames frames folded so far
  * @property {boolean} finished set by `finishFold`; a finished fold is closed
  * @property {Int16Array|null} prevGlyphs frame f-1's glyph indices
@@ -220,7 +219,7 @@ function createMismatch(vocabularies, cells) {
  *   in the new frame - the ones a person could see a glyph decision in
  * @property {number} classMoveGlyphHeld of the lit ones, where the glyph did
  *   not change with the class
- * @property {ReturnType<createMismatch>} mismatch CW-93's counter, or null
+ * @property {ReturnType<createMismatch>} mismatch the counter, or null
  *   when the caller handed in no vocabularies
  */
 
@@ -288,7 +287,7 @@ export function createFold(cols, rows, options = {}) {
     classMoveLitEvents: 0,
     classMoveGlyphHeld: 0,
     mismatch: createMismatch(options.vocabularies ?? null, cells),
-    // CW-92 (D-127): the face flip. `faceHeld` counts (cell, frame pair) slots
+    // The face flip. `faceHeld` counts (cell, frame pair) slots
     // where the class did NOT move; `faceFlip` counts how many of those took a
     // different color index anyway. `prevClass2` is a second copy of the last
     // frame's classes because `prevClass` is overwritten before this runs.
@@ -392,21 +391,20 @@ export function foldFrame(fold, frame) {
   fold.whiteShare.push(white / n);
   fold.reverseShare.push(reverse / n);
 
-  // ★★★ CW-92: THE FACE FLIP, which is the owner's D-127 made a number. Per
-  // class, the share of cells whose COLOR INDEX changed in a frame pair whose
-  // CLASS did not. A cell that swept onto a different surface is allowed to
-  // change color; a cell still looking at the same wall is not, and a whole
-  // face crossing a palette boundary together is what the owner photographed.
+  // The face flip. Per class, the share of cells whose color index changed
+  // in a frame pair whose class did not. A cell that swept onto a different
+  // surface is allowed to change color; a cell still looking at the same wall
+  // is not, and a whole face crossing a palette boundary together is the
+  // defect this counts.
   //
   // Mono has no color index, so this row exists only for a palette fold.
   if (!fold.mono && fold.prevDrive && fold.prevClass2) {
     for (let i = 0; i < n; i++) {
       if (cls[i] !== fold.prevClass2[i]) continue;
-      // ★ A BLANK CELL HAS NO COLOR TO FLIP, and counting a cell lighting up
-      // or going dark as a face flip would bury the row under transitions it
-      // was never asking about. The same distinction CW-89 drew for the glyph
-      // memory: whether a cell has content is a different question from which
-      // color that content is.
+      // A blank cell has no color to flip, and counting a cell lighting up or
+      // going dark as a face flip would bury the row under transitions it was
+      // never asking about: whether a cell has content is a different question
+      // from which color that content is.
       if (drive[i] < 0 || fold.prevDrive[i] < 0) continue;
       fold.faceHeld[i]++;
       if (drive[i] !== fold.prevDrive[i]) fold.faceFlip[i]++;
@@ -494,10 +492,10 @@ export function foldFrame(fold, frame) {
  * @property {number} churnCellsPct share of cells that changed in more than
  *   half the frame pairs
  * @property {number} mismatch (cell, frame) slots where the drawn glyph was
- *   not in the cell's own class vocabulary (CW-93). Zero in a healthy picture,
+ *   not in the cell's own class vocabulary. Zero in a healthy picture,
  *   and zero when the fold was given no vocabularies.
  * @property {number} faceFlipPct of the cell-frames where the class stayed put,
- *   the share that changed COLOR INDEX anyway (CW-92, D-127). Color only.
+ *   the share that changed color index anyway. Color only.
  * @property {number} faceHeld the denominator of the row above
  * @property {number} meanGlyphPersistenceFrames mean run length in frames
  */
@@ -664,8 +662,8 @@ function summariseRow(row, pairs, triples) {
     // "small" at 0.004 %, and the whole point of this column is that any
     // number above zero is a cell drawing a character it is not allowed.
     mismatch: row.mismatch,
-    // CW-92: of the cell-frames where this class STAYED under the cell, the
-    // share that changed color anyway. The owner's face flip, as a number.
+    // Of the cell-frames where this class stayed under the cell, the share
+    // that changed color anyway: the face flip, as a number.
     faceFlipPct: pct(row.faceFlip, row.faceHeld),
     faceHeld: row.faceHeld,
     meanGlyphPersistenceFrames: round2(row.runSum / Math.max(1, row.runCount)),
@@ -673,15 +671,15 @@ function summariseRow(row, pairs, triples) {
 }
 
 /**
- * CW-93: the mismatch counter, closed and named.
+ * The mismatch counter, closed and named.
  *
  * `kinds` is the row that names the artifact in words: which class was under
- * the cell, which character it drew, and WHICH classes' vocabularies that
- * character does belong to. "a `|` drawn on a tree cell, and `|` is a wall
- * character" is the owner's report turned into a line of a table.
+ * the cell, which character it drew, and which classes' vocabularies that
+ * character does belong to: "a `|` drawn on a tree cell, and `|` is a wall
+ * character".
  *
- * `worstCells` is the cell list the release brief asks for: grid coordinates,
- * so a mismatch can be found in the flip map and in the contact sheet.
+ * `worstCells` is a cell list in grid coordinates, so a mismatch can be
+ * found in the flip map and in the contact sheet.
  *
  * @param {SeqFold} fold a fold that has just been closed
  * @param {number} top how many rows of each list to keep
@@ -762,16 +760,15 @@ function round4(v) {
 }
 
 /**
- * CW-86: COHERENCE - of the cells that changed, how many took the glyph their
+ * Coherence - of the cells that changed, how many took the glyph their
  * neighbor along the motion had a frame ago.
  *
- * ★★ THIS EXISTS BECAUSE A GLYPH-CHANGE RATE CANNOT TELL A SLIDE FROM A
- * RE-ROLL, AND THE DIFFERENCE IS THE WHOLE SUBJECT OF ROUND 8. A surface whose
+ * A glyph-change rate cannot tell a slide from a re-roll. A surface whose
  * characters belong to it and are sliding past the eye changes a lot of cells
  * per frame - every cell takes the character its neighbor had - and that is
- * MOTION, which is what a walk is supposed to look like. A surface whose
+ * motion, which is what a walk is supposed to look like. A surface whose
  * characters are re-rolled from screen luminance also changes a lot of cells,
- * and that is CHURN. Both score the same on the glyph-change row. They score
+ * and that is churn. Both score the same on the glyph-change row. They score
  * nothing alike here: a slide is near 100 %, a re-roll is at the vocabulary's
  * chance level.
  *
@@ -801,13 +798,13 @@ export function coherence(prev, next, cols, rows, dx, dy) {
       // Where this cell's content was a frame ago.
       const sx = x - dx;
       const sy = y - dy;
-      // ★ A CELL WHOSE SOURCE IS OFF THE GRID IS NOT EVIDENCE EITHER WAY, so
-      // it is left out of BOTH halves rather than counted as incoherent. Its
+      // A cell whose source is off the grid is not evidence either way, so it
+      // is left out of both halves rather than counted as incoherent. Its
       // content came from outside the picture and there is nothing to compare
-      // it against. Counting it against coherence made a PURE SLIDE score
-      // 87.5 % on an eight-cell row - the whole leading edge - and a metric
-      // whose best possible answer depends on the grid's width cannot be read
-      // beside another column.
+      // it against. Counted against coherence, a pure slide would score 87.5 %
+      // on an eight-cell row - the whole leading edge - and a metric whose
+      // best possible answer depends on the grid's width cannot be read beside
+      // another column.
       if (sx < 0 || sy < 0 || sx >= cols || sy >= rows) continue;
       changed++;
       if (prev[sy * cols + sx] === next[i]) coherent++;

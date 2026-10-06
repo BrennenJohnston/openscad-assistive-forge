@@ -1,13 +1,12 @@
 /**
- * Parameterized static figures for the ASCII City Walk (CW-45, CW-Q45).
+ * Parameterized static figures for the ASCII City Walk.
  *
- * The Round-4 figure was one fixed 1.72 m person; CW-Q45 signs the variety:
- * per-figure height and build from documented human ranges, jointed static
+ * Per-figure height and build from documented human ranges, jointed static
  * poses, palette-seeded clothing tones. Everything here is pure geometry and
- * pose arithmetic - no placement, no palette CHOICE (city-scene owns both),
+ * pose arithmetic - no placement, no palette choice (city-scene owns both),
  * no DOM - so every range and joint is unit-testable.
  *
- * THE RANGES (owner-signed, CW-Q45): height 1.50-1.95 m per figure -
+ * The ranges: height 1.50-1.95 m per figure -
  * approximately the adult 1st-99th percentile stature span across sexes in
  * the CDC/NHANES anthropometric reference (Anthropometric Reference Data
  * for Children and Adults: United States, Vital and Health Statistics
@@ -15,8 +14,8 @@
  * shoulder/torso widths. Accessibility rule: dimensions describing PEOPLE
  * are parameters with documented ranges, never one hardcoded body.
  *
- * THE FROZEN WORLD stands (the owner's directive: "all fixed position and
- * not moving at this time") - every pose is a static table of bend angles.
+ * Nothing in this world moves, so every pose is a static table of bend
+ * angles.
  *
  * @license GPL-3.0-or-later
  */
@@ -28,13 +27,12 @@ export const FIGURE_HEIGHT_MAX_M = 1.95;
 export const FIGURE_BUILD_MIN = 0.85;
 export const FIGURE_BUILD_MAX = 1.15;
 
-/** The four static poses CW-Q45 signs. Sitting only ever goes on a real
+/** The four static poses. Sitting only ever goes on a real
  * bench - the placement code enforces that; this module just bends knees. */
 export const FIGURE_POSES = ['standing', 'walking', 'jogging', 'sitting'];
 
 // Proportions as fractions of stature, from the same anthropometric
-// tradition (leg ~47%, head ~11.6% - the Round-4 figure's own ratios, now
-// scaled instead of fixed).
+// tradition (leg ~47%, head ~11.6%).
 const THIGH_FRACTION = 0.26;
 const SHIN_FRACTION = 0.21;
 const TORSO_FRACTION = 0.3;
@@ -118,11 +116,11 @@ export function makeFigureSpec(rng, pose, options = {}) {
 }
 
 /**
- * CW-65 (CW-Q60): the blind traveler's drawn dimensions.
+ * The blind traveler's drawn dimensions.
  *
- * ★★ THESE ARE DRAWN SIZES, NOT REAL ONES, AND THE DIFFERENCE IS THE WHOLE
- * POINT. A real long cane is about 25 mm across. The game viewport is 756 px
- * over a 60 degree vertical field, so px/m = 756 / (2 d tan 30):
+ * These are drawn sizes, not real ones. A real long cane is about 25 mm
+ * across. The game viewport is 756 px over a 60 degree vertical field, so
+ * px/m = 756 / (2 d tan 30):
  *
  *   distance   px/m    a real 0.03 m cane   a whole 1.72 m person (w x h cells)
  *     10 m     65.5        2.0 px                   7.5 x 12.5
@@ -131,36 +129,31 @@ export function makeFigureSpec(rng, pose, options = {}) {
  *     30 m     21.8        0.7 px                   2.5 x  4.2
  *     50 m     13.1        0.4 px                   1.5 x  2.5
  *
- * The character cell is 4 px wide by 9 px TALL. A real cane cannot change a
- * single cell at any distance a player would search from, so it is drawn - the
- * same decision CW-63 had to make for the Library's published 0.4 m diagrid
- * members, which photographed as nothing and had to be drawn at 1.2 m.
+ * The character cell is 4 px wide by 9 px tall. A real cane cannot change a
+ * single cell at any distance a player would search from, so it is drawn
+ * thicker, as the Library's 0.4 m diagrid members are drawn at 1.2 m.
  *
- * ★★ AND THE FIGURE RUNS OUT BEFORE THE CANE DOES. At 30 m a whole person is
- * 2.5 x 4.2 cells, and CW-61 refused a map marker at 3.9 cells tall on exactly
- * this ground ("a standing figure needs five rows"). No cane thickness rescues
- * that. **The traveler cannot be identified past about 15-20 m, so finding
- * them is not a spot-the-silhouette task** - which is why CW-Q60's signed
- * design carries the warmer/colder clause on X, and why that clause is the
- * PRIMARY search instrument for every player rather than only the non-visual
- * path.
- *
- * Every value here is one line reversible and each was settled by photograph.
+ * The figure runs out before the cane does. At 30 m a whole person is
+ * 2.5 x 4.2 cells, and a standing figure needs five rows. No cane thickness
+ * rescues that. The traveler cannot be identified past about 15-20 m, so
+ * finding them is not a spot-the-silhouette task - which is why the
+ * warmer/colder clause on X is the primary search instrument for every
+ * player rather than only the non-visual path.
  */
 export const TRAVELER_CANE_THICK_M = 0.18;
 /** How far ahead of the wrist the tip lands; the cane's length follows. */
 export const TRAVELER_CANE_REACH_M = 1;
 
 /**
- * The traveler is ONE MORE FIGURE SPEC, not an exception to the figure system.
- * Height and build come from the same owner-signed NHANES ranges every other
- * person in the city is drawn from (CW-Q45), from a stream the caller seeds -
- * so the traveler has a body rather than a hardcoded one.
+ * The traveler is one more figure spec, not an exception to the figure
+ * system. Height and build come from the same NHANES ranges every other
+ * person in the city is drawn from, from a stream the caller seeds - so the
+ * traveler has a body rather than a hardcoded one.
  *
- * ★ The caller passes a stream of its OWN, never a road's. The prop streams
+ * The caller passes a stream of its own, never a road's. The prop streams
  * run the length of a road and a single extra draw shifts the pose and build
- * of every figure planted after it (the CW-45/46 seed law). The traveler is
- * built standalone for other reasons too, but this one alone would decide it.
+ * of every figure planted after it. The traveler is built standalone for
+ * other reasons too, but this one alone would decide it.
  *
  * @param {() => number} rng
  * @param {{caneSide?: -1|1}} [options]
@@ -225,10 +218,10 @@ function jointEnd(f0, z0, len, swingRad) {
  * `figure` (head + shoulders) each take their own tone from the city's
  * color scheme, so a street of people carries the scheme's whole range.
  *
- * CW-65 adds two MORE zones, `cane` and `glasses`, and they are EMPTY unless
- * the spec asks for them. Every ordinary figure in every city must come back
- * byte-identical in the original three - that is the property the unit test
- * pins, because a change here would move 3,029 figures in Seattle alone.
+ * Two more zones, `cane` and `glasses`, are empty unless the spec asks for
+ * them. Every ordinary figure in every city must come back byte-identical
+ * in the other three - that is the property the unit test pins, because a
+ * change here would move 3,029 figures in Seattle alone.
  *
  * @param {number} x
  * @param {number} y
@@ -260,7 +253,7 @@ export function makeFigureGeoms(x, y, facingRad, spec) {
   const legs = [];
   const torso = [];
   const figure = [];
-  // CW-65: empty for every figure that does not ask.
+  // Empty for every figure that does not ask.
   const cane = [];
   const glasses = [];
 
@@ -355,7 +348,7 @@ export function makeFigureGeoms(x, y, facingRad, spec) {
     );
   }
 
-  // --- CW-65: the traveler's two features. Both hang off joints the loop
+  // --- The traveler's two features. Both hang off joints the loop
   // above already computed, so nothing about an ordinary figure moves.
   if (spec.cane || spec.glasses) {
     const side = spec.caneSide ?? 1;
@@ -371,19 +364,15 @@ export function makeFigureGeoms(x, y, facingRad, spec) {
 
     if (spec.cane) {
       /**
-       * ★★ THE CANE IS A DIAGRAM, AND THE ARITHMETIC SAYS SO BEFORE THE
-       * PHOTOGRAPH DOES. The game viewport is 756 px over a 60 degree vertical
-       * field, so px/m = 756 / (2 d tan 30) - about 22 px/m at 30 m. A real
-       * 25-30 mm cane is 0.65 of a PIXEL there, and the character cell is
-       * 4 px wide by 9 px tall. It could not change a single cell.
+       * The cane is a diagram. The game viewport is 756 px over a 60 degree
+       * vertical field, so px/m = 756 / (2 d tan 30) - about 22 px/m at 30 m.
+       * A real 25-30 mm cane is 0.65 of a pixel there, and the character cell
+       * is 4 px wide by 9 px tall. It could not change a single cell, so the
+       * thickness is a drawn width.
        *
-       * So the thickness is a drawn width chosen by photograph, exactly as
-       * CW-63 had to draw the Library's real 0.4 m diagrid members at 1.2 m.
-       * The record says so plainly rather than implying a cane is a cane.
-       *
-       * ★ The angle is the cheap direction on purpose: the cell is 2.25x
+       * The angle is the cheap direction on purpose: the cell is 2.25x
        * coarser vertically than horizontally, so a diagonal running mostly
-       * FORWARD is sampled by the generous axis.
+       * forward is sampled by the generous axis.
        */
       const thick = spec.cane.thickM;
       const reach = spec.cane.reachM;
@@ -400,17 +389,16 @@ export function makeFigureGeoms(x, y, facingRad, spec) {
 
     if (spec.glasses) {
       /**
-       * ★★ EXACT BLACK, WRAPPED IN A BRIGHT HEAD - CW-40's law used
-       * deliberately rather than worked around. These palettes carry NO dark
-       * neutral (CW-58 measured every bird landing white), so a "dark band"
-       * drawn dark would land on a color that is not dark. Exact black is the
-       * one value the converter renders as an EMPTY CELL (CW-5), and the head
-       * is already the brightest zone a figure has at tier 0.82.
+       * Exact black, wrapped in a bright head. These palettes carry no dark
+       * neutral, so a "dark band" drawn dark would land on a color that is
+       * not dark. Exact black is the one value the converter renders as an
+       * empty cell, and the head is already the brightest zone a figure has
+       * at tier 0.82.
        *
-       * ★ IT IS ALSO SUB-CELL AT ANY SEARCHING DISTANCE, AND THAT IS STATED
-       * RATHER THAN HOPED: a 0.055 m band is 1.2 px at 15 m, about an eighth
-       * of a cell. It reads when you are beside them, not when you are looking
-       * for them. The jacket and the cane are what carry distance.
+       * It is also sub-cell at any searching distance: a 0.055 m band is
+       * 1.2 px at 15 m, about an eighth of a cell. It reads when you are
+       * beside them, not when you are looking for them. The jacket and the
+       * cane are what carry distance.
        */
       const bandH = headS * 0.28;
       const bandZ = headZ + headS * 0.12;

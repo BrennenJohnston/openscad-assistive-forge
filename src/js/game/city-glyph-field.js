@@ -1,106 +1,74 @@
 /**
  * @license GPL-3.0-or-later
  */
-// CW-86 - the glyph field: pick the character from the SURFACE, not the screen.
+// The glyph field: pick the character from the surface, not the screen.
 //
-// THE ONE DIFFERENCE THIS ANSWERS (plan §10.1). The reference this project
-// works from chooses a cell's character by looking up the texture of whatever
-// the ray hit, in the surface's own coordinates. A wall's characters therefore
-// belong to the wall: walk past and they travel with it. Ours are chosen by
-// matching the SCREEN's luminance in that cell against every glyph's shape, so
-// a step of 0.16 m re-rolls 8.13 % of facade cells every frame (§1.3, measured
-// again at this HEAD). CW-68's memory hides that by holding the old pick, and
-// the hold is the trail the owner saw (CW-84). This module is the other
-// answer: give each surface a value that does not move when the camera does,
-// and let the cell read it.
+// The reference this project works from chooses a cell's character by
+// looking up the texture of whatever the ray hit, in the surface's own
+// coordinates. A wall's characters therefore belong to the wall: walk past
+// and they travel with it. Ours are chosen by matching the screen's luminance
+// in that cell against every glyph's shape, so a step of 0.16 m re-rolls
+// 8.13 % of facade cells every frame. This module is the other answer: give
+// each surface a value that does not move when the camera does, and let the
+// cell read it.
 //
-// WHAT IS PURE HERE AND WHY. Everything below is arithmetic on numbers and
+// What is pure here and why. Everything below is arithmetic on numbers and
 // typed arrays - no DOM, no three.js, no canvas. The class pass and the
 // converter call it; the unit tests pin it. The one impure step, reading a
 // CanvasTexture's pixels, lives in city-class-pass.js where the texture is.
 //
-// ★★ THE FIELD IS DELIBERATELY COARSE, AND THAT IS THE WHOLE MECHANISM. A
+// The field is deliberately coarse, and that is the whole mechanism. A
 // field at the source texture's own resolution would not be stable: a cell
 // 40 m away covers hundreds of texels, so the smallest camera move would slide
-// it onto a different one and the glyph would re-roll exactly as before. What
-// makes a character belong to a wall is that a patch of wall roughly the size
-// of a cell shares ONE field value. So the field is box-downsampled to a
-// lattice near the cell's own footprint and sampled with NEAREST. The far
-// column is where this stops working - a cell out there covers many lattice
-// squares whatever we choose - and the instrument reports it separately rather
-// than pretending otherwise.
+// it onto a different one and the glyph would re-roll. What makes a character
+// belong to a wall is that a patch of wall roughly the size of a cell shares
+// one field value. So the field is box-downsampled to a lattice near the
+// cell's own footprint and sampled with NEAREST. The far column is where this
+// stops working - a cell out there covers many lattice squares whatever we
+// choose.
 
 /**
  * The classes whose glyph comes from the surface rather than from the screen.
  *
- * ★★★ THIS SET IS THE RELEASE'S ANSWER, AND IT WAS MEASURED, NOT CHOSEN. The
- * prompt named {wall, roof, storefront, road, curb, sidewalk, ground, green}.
- * Two things cut it down, both from the table in the CW-86 record.
+ * Road and curb are absent because the scene cannot serve them: `roads`,
+ * `curbs` and `road-lines` carry neither a uv attribute nor a map, so there
+ * is no surface coordinate to look anything up in. They are also already
+ * steady (4.44 % and 4.11 % glyph change per frame walking).
  *
- * FIRST, the scene cannot serve road or curb at all: `roads`, `curbs` and
- * `road-lines` carry NEITHER a uv attribute NOR a map, so there is no surface
- * coordinate to look anything up in. They are also the classes §1.3 measured
- * as already steady (4.44 % and 4.11 % walking, over 224 and 186 cells), so
- * the loss is small and known.
- *
- * SECOND, and this is the finding: THE FACADE CANNOT HAVE BOTH. A wall's
- * glyph only stops re-rolling once a lattice square is bigger than a cell's
- * footprint, and the facade's WINDOWS live at about that same scale - so the
- * lattice that holds a wall still is the lattice that erases its windows.
- * Measured over a 24-frame walk, glyph change per frame:
+ * The facade cannot have both steadiness and windows. A wall's glyph only
+ * stops re-rolling once a lattice square is bigger than a cell's footprint,
+ * and the facade's windows live at about that same scale - so the lattice
+ * that holds a wall still is the lattice that erases its windows. Glyph
+ * change per frame over a 24-frame walk:
  *
  *   lattice   wall     storefront   ground   sidewalk
- *   screen    6.52 %   2.57 %       3.12 %   0.49 %   <- as shipped
+ *   screen    6.52 %   2.57 %       3.12 %   0.49 %
  *   64        7.28 %   4.25 %       0.27 %   0.01 %
  *   16        4.77 %   0.01 %       0.00 %   0.01 %
  *   8         0.90 %   0.01 %       0.00 %   0.01 %
  *
- * At 8 the wall is seven times steadier than the memory manages and the
- * facade has become smooth diagonal bands with no windows in it at all; at 64
- * the windows read better than anything this game has drawn and the wall is no
- * steadier than before. That is not a tuning failure, it is the reference's
- * own cell size: theirs is about six times the area of ours (T54), so a window
- * spans several of their cells and only a fraction of one of ours.
+ * At 8 the wall is steady and the facade has become smooth diagonal bands
+ * with no windows in it at all; at 64 the windows read well and the wall is
+ * no steadier than on the screen pick. The facade is anchored at 64 for the
+ * look of its windows, not for steadiness. Do not coarsen the lattice to win
+ * the churn number back.
  *
- * So the facade keeps its screen pick and its memory, and the surfaces whose
- * texture is a DITHER rather than a structure - ground, paving, greenspace -
- * take theirs from the world, where there is nothing to lose and everything
- * to gain: the ground was the worst churn in the game at 23.52 %/frame
- * stateless, and CW-69 spent a whole release failing to reach it.
+ * The surfaces whose texture is a dither rather than a structure - ground,
+ * paving, greenspace - have nothing to lose and everything to gain: the
+ * ground is the worst churn in the game at 23.52 %/frame stateless.
  *
- * ★ THE IDS ARE LITERALS, AND THAT IS DELIBERATE. Importing SURFACE_CLASS
- * here would close a cycle - city-class-pass.js has to import this module to
- * build its fields - and a cycle in this direction is not harmless: the
- * browser tolerated it by hoisting, and vitest did not, so the whole
- * seq-metrics suite failed to import with SURFACE_CLASS undefined. The same
- * choice, for the same reason, as CITY_BACKING_EXEMPT_CLASS_IDS in
- * hc-palettes.js. A unit case asserts every number below IS the class it
- * claims to be, which is where drift would be caught.
- */
-/**
- * ★★★ CW-91 ADDS THE FACADE, AND IT IS THE OWNER'S CALL, NOT A NEW MEASUREMENT.
- *
- * Everything in the block above still holds: at lattice 64 a wall is no
- * steadier anchored than it is on the screen pick (7.28 % against 6.52 %), and
- * the lattice that would steady it - 8 - erases its windows. CW-86 therefore
- * shipped the facade on the screen pick and put the table to the owner.
- *
- * They answered (CW-Q90) by picking **lattice 64 for the facade knowing it does
- * not steady a wall**, because at 64 "the windows read better than anything
- * this game has drawn". That is a LOOK decision taken on a photograph, and it
- * outranks the churn column - which is why this list is longer than the
- * measurement alone would make it. Do not coarsen the lattice to win the churn
- * number back: that trade is the one the owner looked at and refused.
- *
- * Road and curb are still absent, and for the reason that has nothing to do
- * with taste: `roads`, `curbs` and `road-lines` carry neither a uv attribute
- * nor a map, so there is no surface coordinate to look anything up in.
+ * The ids are literals on purpose. Importing SURFACE_CLASS here would close
+ * a cycle - city-class-pass.js has to import this module to build its
+ * fields - and vitest does not tolerate it: the seq-metrics suite fails to
+ * import with SURFACE_CLASS undefined. The same choice, for the same reason,
+ * as CITY_BACKING_EXEMPT_CLASS_IDS in hc-palettes.js. A unit case asserts
+ * every number below is the class it claims to be.
  */
 export const ANCHORED_CLASSES = Object.freeze([
   1, // SURFACE_CLASS.GROUND
-  4, // SURFACE_CLASS.BUILDING_WALL   (CW-91, CW-Q90)
-  5, // SURFACE_CLASS.BUILDING_ROOF   (CW-91, CW-Q90)
-  6, // SURFACE_CLASS.STOREFRONT      (CW-91, CW-Q90)
+  4, // SURFACE_CLASS.BUILDING_WALL
+  5, // SURFACE_CLASS.BUILDING_ROOF
+  6, // SURFACE_CLASS.STOREFRONT
   13, // SURFACE_CLASS.SIDEWALK
   14, // SURFACE_CLASS.GREEN
 ]);
@@ -117,8 +85,7 @@ export function isAnchoredClass(classId) {
  * The field byte written into the class pass's G channel is `level + 1`, so 0
  * can keep meaning "no field here, use the screen pick" - which is what every
  * unclassified mesh, every non-anchored class and the sky all write. That caps
- * the ladder at 254; 8 is where this starts, and P2 moves it only if the table
- * says to.
+ * the ladder at 254; 8 is the value in use.
  */
 export const FIELD_LEVELS = 8;
 
@@ -212,7 +179,7 @@ export function glyphCoverage(vector) {
 /**
  * One class's ladder: for each field step, the glyph to draw.
  *
- * ★ MATCHED BY COVERAGE, NOT BY POSITION IN THE ROW. Stepping through the
+ * Matched by coverage, not by position in the row. Stepping through the
  * vocabulary in index order would hand equal screen area to every character
  * whatever its weight, and the facade row runs from a space to '@' - the
  * picture would come out flat and far too dark. Each step asks instead for the

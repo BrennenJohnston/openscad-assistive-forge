@@ -1,19 +1,16 @@
 /**
- * What a player has found in a city, remembered between sessions (CW-62,
- * CW-Q56).
+ * What a player has found in a city, remembered between sessions.
  *
- * Until now the landmark ticks lived in a per-session `Set` and a boolean, so
- * closing the game forgot everything: a player who found eleven of twelve
- * landmarks came back to twelve unfound. That is a poor reward and it is also
- * the ground CW-64's fireworks and CW-65's traveler are both meant to stand
- * on, so it is worth building once and properly.
+ * Without this, closing the game would forget everything: a player who found
+ * eleven of twelve landmarks would come back to twelve unfound. The fireworks
+ * and the traveler both stand on this record.
  *
- * ★ THE VALUE IS AN OBJECT, AND UNKNOWN FIELDS SURVIVE A WRITE. CW-64 will
- * add its own flag here rather than mint a sibling key, and an older build
- * loading a newer one's progress must not silently eat it. That costs one
- * spread and buys forward compatibility for free.
+ * The value is an object, and unknown fields survive a write. A later feature
+ * adds its own flag here rather than minting a sibling key, and an older
+ * build loading a newer one's progress must not silently eat it. That costs
+ * one spread and buys forward compatibility for free.
  *
- * ★ EVERY FAILURE IS A CLEAN SLATE, NEVER A CRASH. Storage can be off,
+ * Every failure is a clean slate, never a crash. Storage can be off,
  * full, or hold something another program wrote; none of that may stop a
  * player from walking around a city. What it must not do is fail SILENTLY in
  * the sense of hiding a bug, so a malformed value is treated as absent rather

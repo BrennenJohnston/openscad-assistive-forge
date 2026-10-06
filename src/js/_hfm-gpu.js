@@ -1,7 +1,7 @@
 /**
  * @license GPL-3.0-or-later
  */
-// GPU glyph pick for the alternate ASCII view (CW-32).
+// GPU glyph pick for the alternate ASCII view.
 //
 // The converter's cost is not the picture, it is the arithmetic: sixteen
 // luminance taps, two contrast curves and a nearest-glyph search, per cell,
@@ -17,13 +17,13 @@
 // reads back one small image and paints it with the existing composite path,
 // unchanged.
 //
-// WHAT IS DELIBERATELY LEFT ON THE CPU
+// What is deliberately left on the CPU
 //   Intensity and reverse video are per-cell SELECTORS that read the cell's
 //   pre-contrast brightness, so the shader writes that brightness into the
 //   blue channel and the CPU keeps choosing atlases exactly as it did. The
 //   paint path never learns that anything changed.
 //
-// EVERY FAILURE FALLS BACK, PERMANENTLY
+// Every failure falls back, permanently
 //   No WebGL2, a missing float texture, a shader that will not compile, a
 //   readback that throws: any of them disables this pass for the rest of the
 //   session and the CPU path carries on. The CPU path is not a legacy branch
@@ -511,13 +511,13 @@ void main() {
 export const MAX_CLASS_SPANS = 16;
 
 /**
- * CW-91: the anchored ladders, flattened into one row per class id.
+ * The anchored ladders, flattened into one row per class id.
  *
  * Exported and pure for the same reason `buildVocabSpans` is: the shader
  * cannot run in the test environment, and this is the arithmetic that decides
  * which character an anchored cell draws.
  *
- * ★ EACH ENTRY IS `glyph id + 1`, so that 0 can mean "this class has no
+ * Each entry is `glyph id + 1`, so that 0 can mean "this class has no
  * ladder". A class that HAS one is perfectly entitled to a step whose answer is
  * the space, and the space is glyph 0 - storing the id raw would make those two
  * cases the same byte and every ground cell at the darkest step would fall back
@@ -548,20 +548,18 @@ export function buildLadderTable(ladders, levels, rows = MAX_CLASS_SPANS) {
  *
  * Exported so the rule below can be unit-tested: the shader cannot run in the
  * test environment, and this is the arithmetic that decides which characters a
- * surface is allowed - the very thing CW-93 found the GPU path getting wrong.
+ * surface is allowed.
  *
- * ★ A CLASS WITH NO VOCABULARY OF ITS OWN FALLS BACK TO THE FULL ATLAS. That
+ * A class with no vocabulary of its own falls back to the full atlas. That
  * is what the CPU path does (`st.classLookups.get(cls) ?? st.lookup`) and what
- * city-class-pass.js promises in as many words: "an unclassified cell falls
- * back to the full glyph vocabulary it has always used". Without the fallback
- * such a cell reads a span of LENGTH ZERO, the shader's search loop never
- * runs, and the cell keeps the loop's initial answer - glyph 0, the space. It
- * draws nothing at all.
+ * city-class-pass.js promises: an unclassified cell falls back to the full
+ * glyph vocabulary. Without the fallback such a cell reads a span of length
+ * zero, the shader's search loop never runs, and the cell keeps the loop's
+ * initial answer - glyph 0, the space. It draws nothing at all.
  *
- * Only SKY is in that position today (the vocabulary table starts at GROUND),
- * and a night sky is black, which is why it sat unseen. It stops being
- * invisible the moment the vocabularies reach palette mode, where far more of
- * the picture carries ink.
+ * Only SKY is in that position (the vocabulary table starts at GROUND), and
+ * a night sky is black, so the fault would be invisible in mono; in palette
+ * mode far more of the picture carries ink.
  *
  * @param {Array<{spanIndex: number, ids: ArrayLike<number>}>} vocabLists span
  *   0 first, carrying the full atlas; then one entry per class
@@ -612,7 +610,7 @@ export function createGpuGlyphPass(renderer) {
     };
   }
   let sceneTarget = null;
-  // CW-68: two pick targets, used alternately, so that the shader can read the
+  // Two pick targets, used alternately, so that the shader can read the
   // previous conversion's answers while it writes this one's. `historyValid`
   // is false until one full frame has been written into the pair, and is reset
   // by any reallocation - a stale target of the wrong size would be read as
@@ -706,7 +704,7 @@ export function createGpuGlyphPass(renderer) {
       depthBuffer: true,
       stencilBuffer: false,
     });
-    // MEASURED: asking three to write this target in the canvas's color
+    // Measured: asking three to write this target in the canvas's color
     // space does NOT encode it - the output transform is applied to the
     // default framebuffer only. The target holds linear light whatever this
     // says, so the shader encodes when it reads (encodeOutput). Left explicit
@@ -811,7 +809,7 @@ export function createGpuGlyphPass(renderer) {
   };
 
   /**
-   * CW-91: the anchored ladders, as one tiny texture the shader can index.
+   * The anchored ladders, as one tiny texture the shader can index.
    *
    * One ROW per class id, one TEXEL per field step, holding `glyph id + 1` so
    * that 0 stays free for "this class has no ladder" - a class with a ladder is
@@ -859,7 +857,7 @@ export function createGpuGlyphPass(renderer) {
      * answer back.
      *
      * @returns {{indices: Uint8Array, lum: Uint8Array, colors: Uint8Array,
-     *   flags: Uint8Array}|null} `flags` is the packed CW-68 byte, hold * 2
+     *   flags: Uint8Array}|null} `flags` is the packed memory byte, hold * 2
      *   plus the reverse-video bit. null means this pass has given up and the
      *   caller must use the CPU.
      */
@@ -949,13 +947,13 @@ export function createGpuGlyphPass(renderer) {
         u.uSpaceIndex.value = spaceIndex ?? 0;
         u.uSparsestNonSpace.value = sparsestNonSpace ?? 0;
         u.uVocabSpan.value = vocabSpans;
-        // CW-91: anchoring needs BOTH the ladder table and a class frame to
+        // Anchoring needs both the ladder table and a class frame to
         // read the field byte out of, so it asks for both rather than for the
         // caller's flag alone. A run that turned it on without a class texture
         // would silently measure the screen pick and report it as anchored.
         u.uLadder.value = ladderTexture;
         u.uAnchored.value = anchored && classTexture && ladders ? 1 : 0;
-        // CW-92: like anchoring, this needs a class frame as well as a table -
+        // Like anchoring, this needs a class frame as well as a table -
         // a run with the table but no classes would silently measure the
         // screen pick and report it as authored.
         if (inkFamilies && classTexture) {
@@ -967,7 +965,7 @@ export function createGpuGlyphPass(renderer) {
         } else {
           u.uHasInkFamily.value = 0;
         }
-        // CW-68. uPrev is bound to whichever target was written last; when
+        // uPrev is bound to whichever target was written last; when
         // there is nothing to read yet, any texture will do because uHasPrev
         // is zero and the shader never samples it - a null sampler would
         // still have to be bound to a unit.
@@ -1016,7 +1014,7 @@ export function createGpuGlyphPass(renderer) {
     },
 
     /**
-     * CW-68: drop the frame-to-frame memory.
+     * Drop the frame-to-frame memory.
      *
      * Called when the atlas is rebuilt or the bands move - the glyph indices
      * in the previous target were chosen under rules, or against vectors,
@@ -1026,7 +1024,7 @@ export function createGpuGlyphPass(renderer) {
       historyValid = false;
     },
 
-    /** Why the pass gave up, for the record and the DEV readout. */
+    /** Why the pass gave up, for the DEV readout. */
     get failure() {
       return failure;
     },

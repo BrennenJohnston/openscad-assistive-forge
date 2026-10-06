@@ -1,9 +1,9 @@
 /**
  * @license GPL-3.0-or-later
  */
-// Per-surface glyph vocabularies for the ASCII City Walk (CW-23).
+// Per-surface glyph vocabularies for the ASCII City Walk.
 //
-// THIS FILE IS THE ART DIRECTION. It is data, not machinery: every row says
+// This file is the art direction. It is data, not machinery: every row says
 // which characters a given surface is allowed to be drawn with, and changing a
 // row changes how that surface reads without touching any code.
 //
@@ -11,12 +11,12 @@
 // against the shape of each character, using brightness alone. That is why a
 // stretch of pavement and the side of a tower can come out looking like the
 // same material — nothing in the pipeline knew they were different things.
-// city-class-pass.js now renders a second, tiny frame that says what each cell
+// city-class-pass.js renders a second, tiny frame that says what each cell
 // is looking at, and this table turns that into a voice: the road gets
 // characters that lie down, walls get characters that stand up, foliage gets
 // characters that clump.
 //
-// RULES FOR EDITING A ROW — both are correctness, not taste:
+// Rules for editing a row — both are correctness, not taste:
 //
 //   1. **Every vocabulary must contain the space character.** A cell that is
 //      genuinely dark has to be allowed to stay empty. Drop the space and the
@@ -28,11 +28,11 @@
 //      loses the detail it is supposed to be gaining.
 //
 // Anything not listed here — and anything the class pass could not identify —
-// falls back to all 95 printable characters, exactly as before CW-23.
+// falls back to all 95 printable characters.
 //
-// ASCII ONLY: these are subsets of the printable range 32-126. Block and
+// ASCII only: these are subsets of the printable range 32-126. Block and
 // shade characters would solve several of these rows in one stroke and are
-// permanently out of scope (the stakeholder directive at _hfm-paint.js:13).
+// permanently out of scope (see the top of _hfm-paint.js).
 
 import { SURFACE_CLASS } from './city-class-pass.js';
 
@@ -72,7 +72,7 @@ export const GLYPH_VOCABULARIES = {
   [SURFACE_CLASS.STOREFRONT]: ' .:oO0Qq8DGB#%@$',
 
   // Sign faces are the brightest things on the street and mostly resolve to
-  // reverse video (CW-21); what is left wants weight.
+  // reverse video; what is left wants weight.
   [SURFACE_CLASS.SIGN]: ' .:=+*#%8&$@MW',
 
   // Masts and antennas are one or two cells wide: thin uprights only.
@@ -92,7 +92,7 @@ export const GLYPH_VOCABULARIES = {
   // needs to be able to reach.
   [SURFACE_CLASS.LAMP]: " .'!|iltT1oO0",
 
-  // The pavement (CW-33). It has to read as a DIFFERENT floor from the
+  // The pavement. It has to read as a different floor from the
   // roadway beside it, not a lighter one: the road's row is characters that
   // lie down, so this one is fine even stipple, which is what a concrete
   // slab looks like at a glance.
@@ -103,7 +103,7 @@ export const GLYPH_VOCABULARIES = {
   // E, F, H and T out of the wall row.
   [SURFACE_CLASS.SIDEWALK]: ' .:\',;"^*oc',
 
-  // Greenspace (CW-33). Foliage seen from above or across: clumps and
+  // Greenspace. Foliage seen from above or across: clumps and
   // tufts, nothing that draws a line, so a park reads as texture rather than
   // as more paving. Shares its instincts with the TREE row above, which is
   // the same material at a different distance.

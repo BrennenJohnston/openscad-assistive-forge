@@ -1,7 +1,7 @@
 /**
  * @license GPL-3.0-or-later
  */
-// Surface-class pass for the ASCII City Walk (CW-23).
+// Surface-class pass for the ASCII City Walk.
 //
 // The converter picks a glyph from LUMINANCE alone: it sees how bright a cell
 // is and nothing else, so pavement and a tower face that happen to sample the
@@ -59,7 +59,7 @@ export const SURFACE_CLASS = {
   CAR: 10,
   LAMP: 11,
   PERSON: 12,
-  // CW-33. APPENDED, never renumbered: these ids are the wire format between
+  // Appended, never renumbered: these ids are the wire format between
   // this pass and the glyph vocabularies, and a shifted id would silently
   // give every surface the voice of its neighbor.
   SIDEWALK: 13,
@@ -69,7 +69,7 @@ export const SURFACE_CLASS = {
 /**
  * Which class each named mesh belongs to.
  *
- * The scene has been partitioned by name since CW-18 (`buildCityGroup` and
+ * The scene is partitioned by name (`buildCityGroup` and
  * `buildStreetProps` name every merged mesh), so this pass needs no new
  * geometry and no changes to how the city is built — it only has to know the
  * names. A mesh whose name is missing here is left out of the pass entirely
@@ -77,27 +77,25 @@ export const SURFACE_CLASS = {
  * back to the full glyph vocabulary it has always used.
  */
 /**
- * Exported so a test can ask the QUESTION THIS MAP KEEPS FAILING: does every
- * mesh the city actually builds have a class here?
+ * Exported so a test can ask whether every mesh the city actually builds has
+ * a class here.
  *
  * A name missing from this map is not an error anywhere - the pass simply
- * leaves that mesh out and it reads as SKY. That is a safe default for a mesh
- * nobody added, and a silent, invisible defect for one somebody just did.
- * CW-56 added a ground mesh that would have been dressed as sky and nothing
- * would have said so; the guard in city-class-pass.test.js asks the builders
- * themselves now.
+ * leaves that mesh out and it reads as sky. That is a safe default for a mesh
+ * nobody added, and a silent, invisible defect for one somebody just did, so
+ * the guard in city-class-pass.test.js asks the builders themselves.
  */
 export const CLASS_BY_MESH_NAME = new Map([
   ['ground', SURFACE_CLASS.GROUND],
   ['roads', SURFACE_CLASS.ROAD],
   ['curbs', SURFACE_CLASS.CURB],
-  // CW-51: painted lines borrow the curb's voice rather than minting an id -
+  // Painted lines borrow the curb's voice rather than minting an id -
   // the span table is exactly full, and a curb is already the thin ribbon
   // that reads as dashes near and sub-samples away, which is what paint wants.
   ['road-lines', SURFACE_CLASS.CURB],
   // buildings splits into wall and roof by normal; see ROOF_SPLIT below.
   ['buildings', SURFACE_CLASS.BUILDING_WALL],
-  // CW-82: the far skyline is the same volumes through a cheaper material -
+  // The far skyline is the same volumes through a cheaper material -
   // the same surfaces, so the same voice (and the same roof split).
   ['buildings-far', SURFACE_CLASS.BUILDING_WALL],
   ['storefronts', SURFACE_CLASS.STOREFRONT],
@@ -106,7 +104,7 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['antennas', SURFACE_CLASS.MAST],
   ['tree-trunks', SURFACE_CLASS.TREE],
   ['tree-canopies', SURFACE_CLASS.TREE],
-  // CW-94: the ring-branch system's two kinds. TREE, exactly like the trunk
+  // The ring-branch system's two kinds. TREE, exactly like the trunk
   // and the crown they replace - a branch and its leaf run are the tree's
   // own voice, not a new id (the span table stays full at 16).
   ['tree-branches', SURFACE_CLASS.TREE],
@@ -116,85 +114,72 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['people', SURFACE_CLASS.PERSON],
   ['lamp-poles', SURFACE_CLASS.LAMP],
   ['lamp-heads', SURFACE_CLASS.LAMP],
-  // CW-19: a signal is a post with lit heads, so it borrows both voices — the
+  // A signal is a post with lit heads, so it borrows both voices — the
   // post reads like a lamp post because it is one, and the heads read like
   // the other small bright things on the street.
   ['light-poles', SURFACE_CLASS.LAMP],
   ['light-heads', SURFACE_CLASS.SIGN],
-  // CW-33: the ground you walk on, and the ground you walk past.
+  // The ground you walk on, and the ground you walk past.
   ['sidewalks', SURFACE_CLASS.SIDEWALK],
-  // CW-57 plantings, borrowed rather than minted - the span table is full.
+  // Plantings, borrowed rather than minted - the span table is full.
   // A planter is a knee-high box on the kerb, which is what a bench is, so it
-  // takes the same voice CW-43 gave the benches. Its FLOWERS are small and
-  // bright, which is what a sign face is. A picnic table is a low frame with a
-  // flat top, again a bench. A flowerbed is a patch of ground and takes the
-  // ground it lies on.
+  // takes the benches' voice. Its flowers are small and bright, which is what
+  // a sign face is. A picnic table is a low frame with a flat top, again a
+  // bench. A flowerbed is a patch of ground and takes the ground it lies on.
   ['planters', SURFACE_CLASS.CAR],
   ['planter-flowers', SURFACE_CLASS.SIGN],
   ['picnic-tables', SURFACE_CLASS.CAR],
   ['flowerbeds', SURFACE_CLASS.GREEN],
-  // CW-58: birds, PHOTOGRAPH-DECIDED against the three other candidates at one
-  // pose, one goose, 30%. The span table is FULL at 16, so this is a borrow
-  // and not a new id - CW-43's law.
+  // Birds. The span table is full at 16, so this is a borrow and not a new
+  // id.
   //
-  // SIGN turned the bird into a solid slab: most mass, least shape. CAR banded
-  // it horizontally so the body read as a block with a neck stuck on. LAMP and
-  // PERSON both kept the head, neck and body separate; PERSON's striations run
-  // with the bird's own form, and it is also what the vocabulary is FOR - a
-  // small living thing standing on a surface, which is what CW-45 built it to
-  // draw. For a bird the silhouette is the whole picture, so the voice that
-  // preserves silhouette wins.
+  // SIGN turns the bird into a solid slab: most mass, least shape. CAR bands
+  // it horizontally so the body reads as a block with a neck stuck on. LAMP
+  // and PERSON both keep the head, neck and body separate; PERSON's
+  // striations run with the bird's own form, and it is also what the
+  // vocabulary is for - a small living thing standing on a surface. For a
+  // bird the silhouette is the whole picture, so the voice that preserves
+  // silhouette wins.
   ['birds', SURFACE_CLASS.PERSON],
   ['greens', SURFACE_CLASS.GREEN],
-  // CW-43 street furniture: dressed in the EXISTING voices of the things
-  // they physically resemble — the span table (_gpuVocabLists,
+  // Street furniture: dressed in the existing voices of the things they
+  // physically resemble — the span table (_gpuVocabLists,
   // MAX_CLASS_SPANS = 16) is exactly full, and at the sizes this game is
   // played a hydrant is a few cells tall: a distinct vocabulary could not
-  // show. Zero new ids; the choice is checked by photograph in the CW-43
-  // record, and its reversal is the converter-shared span surgery.
+  // show.
   ['bus-stop-poles', SURFACE_CLASS.MAST],
   ['bus-stop-shelters', SURFACE_CLASS.BUILDING_WALL],
   ['benches', SURFACE_CLASS.CAR],
   ['waste-baskets', SURFACE_CLASS.CAR],
   ['bike-racks', SURFACE_CLASS.CAR],
   ['hydrants', SURFACE_CLASS.LAMP],
-  // CW-64: a firework star. The span table is FULL at 16, so this is a borrow
-  // and not a new id (CW-43's law), and it is a DELIBERATE one - CW-56's
-  // builders guard cannot see this mesh at all, because it enumerates
-  // buildStreetProps and a firework is built beside the rain.
+  // A firework star. The span table is full at 16, so this is a borrow and
+  // not a new id. The mesh is built standalone, beside the rain, not by
+  // buildStreetProps.
   //
-  // ★★ AND THE FIRST VERSION OF THIS COMMENT WAS WRONG, WHICH IS WHY IT SAYS
-  // SO. It claimed an unmapped mesh "draws nothing" and blamed the sky's voice
-  // for a show that photographed empty. `_hfm.js` settles it in one line -
-  // `classMap ? (st.classLookups.get(classMap[idx]) ?? st.lookup) : st.lookup`
-  // - so an unclassed cell falls through to the DEFAULT vocabulary and still
-  // gets a glyph from its own luminance. A class decides WHICH glyph, never
-  // WHETHER. The empty frames were a clock mismatch in the builder, and the
-  // measurement that seemed to blame the class was an instrument drawing its
-  // stars a fifth of the size it thought.
-  //
-  // What the mapping is actually for: without it a burst would wear the same
-  // voice as the sky behind it. SIGN is small and bright, which is what a star
-  // is, and that is a LOOK decision - the right one, but not a visibility one.
+  // An unmapped mesh would still draw: an unclassed cell falls through to
+  // the default vocabulary and gets a glyph from its own luminance. A class
+  // decides which glyph, never whether. What the mapping is for: without it
+  // a burst would wear the same voice as the sky behind it. SIGN is small
+  // and bright, which is what a star is.
   ['fireworks', SURFACE_CLASS.SIGN],
-  // CW-65: the blind traveler. Not a borrow so much as the right voice - PERSON
-  // is literally the vocabulary CW-45 built to draw a small standing person,
-  // and this is one. Zero new class ids, so CW-43's law is not even tested.
+  // The blind traveler. Not a borrow so much as the right voice - PERSON is
+  // literally the vocabulary for drawing a small standing person, and this
+  // is one.
   //
-  // ★ Like `fireworks`, this mesh is built STANDALONE and CW-56's builders
-  // guard could not see it: that guard enumerates buildStreetProps. It asks the
-  // standalone builders too now, so the next one cannot slip through.
+  // Like `fireworks`, this mesh is built standalone, so the builders guard
+  // asks the standalone builders too.
   ['traveler', SURFACE_CLASS.PERSON],
-  // CW-78: the node-keyed landmark bodies (the Great Wheel; the Needle's
+  // The node-keyed landmark bodies (the Great Wheel; the Needle's
   // saucer stack and flare). MAST, stated deliberately: these are open
   // steel structures read against the sky, which is what the mast voice
   // draws, and MAST is a non-anchored class - a rim and a spoke must not be
-  // snapped to a facade's lattice. A borrow, not a new id (CW-43's law; the
-  // span table is full at 16).
+  // snapped to a facade's lattice. A borrow, not a new id (the span table
+  // is full at 16).
   ['landmark-masts', SURFACE_CLASS.MAST],
-  // CW-78: the waypoint marks. SIGN - a small bright plate on a post is
+  // The waypoint marks. SIGN - a small bright plate on a post is
   // exactly what the sign voice draws, and like the fireworks this is a
-  // LOOK decision: the mark's readability comes from its bright ring around
+  // look decision: the mark's readability comes from its bright ring around
   // an exact-black core, not from its vocabulary. Standalone builder, so
   // the builders guard must ask it by name.
   ['waypoints', SURFACE_CLASS.SIGN],
@@ -217,7 +202,7 @@ const ROOF_SPLIT = new Map([
 const ROOF_NORMAL_Z = 0.9;
 
 /**
- * CW-85: how far the B channel's 255 steps reach, in meters.
+ * How far the B channel's 255 steps reach, in meters.
  *
  * The backing fades out at the fog's own far plane (`Fog(0x000000, 40, 260)`,
  * city-scene.js), so a byte that ran to a different distance would make the
@@ -228,16 +213,15 @@ const ROOF_NORMAL_Z = 0.9;
 export const CLASS_DEPTH_FAR_M = 260;
 
 /**
- * CW-86: the longest side a glyph field may have, in lattice squares.
+ * The longest side a glyph field may have, in lattice squares.
  *
- * ★ THE FIELD IS COARSE ON PURPOSE. At the source texture's own resolution
+ * The field is coarse on purpose. At the source texture's own resolution
  * a facade texel is about 8 mm of wall, so a cell 40 m away covers hundreds
  * of them and the smallest camera move slides it onto a different one - the
- * glyph would re-roll exactly as it does today and the release would have
- * built nothing. What makes a character belong to a wall is that a patch of
- * wall about the size of a cell shares ONE value. 64 puts a 512x576 facade
- * on a 64x72 lattice, roughly 6 cm of wall per square. It is the first
- * number P2 is allowed to move, and only on the table.
+ * glyph would re-roll on every move. What makes a character belong to a
+ * wall is that a patch of wall about the size of a cell shares one value.
+ * 64 puts a 512x576 facade on a 64x72 lattice, roughly 6 cm of wall per
+ * square.
  */
 export const FIELD_MAX_SIZE = 64;
 
@@ -333,37 +317,33 @@ export function createClassPass(renderer, root) {
   let depthMap = null;
   let fieldMap = null;
   let disposed = false;
-  // CW-86: source texture uuid -> the field texture built from it, or null
+  // Source texture uuid -> the field texture built from it, or null
   // if that texture cannot serve one. Cached because building a field reads
   // every pixel of a canvas, which is a one-time cost per texture and would
   // be an unthinkable one per frame.
   const fields = new Map();
   let fieldEnabled = false;
-  // CW-86 P2: the lattice a field is reduced to, tunable so the sweep that
+  // The lattice a field is reduced to, tunable so the sweep that
   // chooses it is a measurement rather than an opinion.
   let fieldMaxSize = FIELD_MAX_SIZE;
-  // CW-86 P2: which classes get a field at all. null means "every class that
-  // has a readable texture", which is where the prototype starts; the sweep
-  // narrows it if the table says a class is better off with the screen pick.
+  // Which classes get a field at all. null means "every class that has a
+  // readable texture"; a sweep can narrow it where a class is better off
+  // with the screen pick.
   let fieldClasses = new Set(ANCHORED_CLASSES);
 
   /**
-   * D-110: the class material must carry the mesh's own POLYGON OFFSET.
+   * The class material must carry the mesh's own polygon offset.
    *
    * Several of this city's surfaces are deliberately coplanar with the one
    * behind them - a storefront strip on its wall, paint on its roadway, a
    * pavement on the ground - and each is pulled forward by a polygon offset
    * rather than by a gap, because a gap would show. Dressing a mesh in a
-   * material that drops that offset makes it coplanar again HERE, in the id
+   * material that drops that offset makes it coplanar again here, in the id
    * buffer, where which surface wins is then decided by floating-point luck
-   * per pixel and re-rolled by any view change.
-   *
-   * MEASURED before the fix, over a 20-frame 0.05 degree turn at the Seattle
-   * spawn: 104,180 class transitions, 101,263 of them the storefront/wall
-   * pair, with 18,131 cells of 67,158 changing class MORE THAN ONCE. The
-   * class id chooses the cell's glyph vocabulary, so better than a quarter of
-   * the frame was re-rolling its character set frame after frame - which is
-   * the fractured flashing the owner reported.
+   * per pixel and re-rolled by any view change. The class id chooses the
+   * cell's glyph vocabulary, so the frame would re-roll its character set
+   * frame after frame and flash: over a 20-frame 0.05 degree turn at the
+   * Seattle spawn, 18,131 cells of 67,158 changed class more than once.
    *
    * The offset is part of the cache key: two meshes of the same class with
    * different offsets are different materials, and only the combinations that
@@ -372,7 +352,7 @@ export function createClassPass(renderer, root) {
   /**
    * The field texture for a mesh's own map, built once and kept.
    *
-   * ★ IT IS OUR TEXTURE, NOT THEIRS, AND THAT IS THE POINT. The city's own
+   * It is our texture, not theirs, and that is the point. The city's own
    * CanvasTextures are mipmapped and linearly filtered because that is what
    * makes the 3D picture look right, and they are SHARED with the visible
    * render - changing a filter here would change the game. So the field is a
@@ -432,14 +412,14 @@ export function createClassPass(renderer, root) {
     } catch {
       // A tainted or unreadable canvas is a field this pass does not get to
       // have. It is not an error: the cells over that surface keep the
-      // screen pick, which is what every surface did before CW-86.
+      // screen pick.
       built = null;
     }
     fields.set(key, built);
     return built;
   };
   const materialFor = (id, roofId, offsetFactor, offsetUnits, field, map) => {
-    // CW-86: the field is part of the identity of the material, because two
+    // The field is part of the identity of the material, because two
     // walls with different facade canvases need different samplers. Ten
     // building meshes each carry their own CanvasTexture, so this is ten
     // materials rather than one - which is exactly what the cache is for.
@@ -499,10 +479,9 @@ export function createClassPass(renderer, root) {
     target.texture.generateMipmaps = false;
     pixels = new Uint8Array(cols * rows * 4);
     classMap = new Uint8Array(cols * rows);
-    // CW-85: the readback has always moved four bytes per cell and used one.
-    // The depth map costs the same transfer and one more pass over a buffer
-    // that is already in cache. CW-86 takes the third byte the same way, so
-    // all four are now spoken for and the readback still costs what it did.
+    // The readback moves four bytes per cell whether or not they are used, so
+    // the depth map and the glyph field cost the same transfer and one more
+    // pass each over a buffer that is already in cache.
     depthMap = new Uint8Array(cols * rows);
     fieldMap = new Uint8Array(cols * rows);
   };
@@ -524,11 +503,9 @@ export function createClassPass(renderer, root) {
       const id = CLASS_BY_MESH_NAME.get(obj.name) ?? SURFACE_CLASS.SKY;
       const [factor, units] = offsetOf(obj.material);
       originals.set(obj, obj.material);
-      // CW-86: a mesh earns a field only if it has BOTH a readable map and a
-      // uv to read it with. Asked at this HEAD, `roads`, `curbs` and
-      // `road-lines` have neither, so they keep the screen pick - and they
-      // are the classes §1.3 measured as already steady, which is why the
-      // set is worth having anyway.
+      // A mesh earns a field only if it has both a readable map and a uv to
+      // read it with. `roads`, `curbs` and `road-lines` have neither, so they
+      // keep the screen pick - and those classes are already steady.
       let field = null;
       let map = null;
       if (
@@ -599,10 +576,10 @@ export function createClassPass(renderer, root) {
 
     /**
      * The linear view depth of the LAST `read()`, one byte per cell, in the
-     * same row order as the class map (CW-85).
+     * same row order as the class map.
      *
      * It is a separate accessor rather than a second return value because
-     * `read()`'s contract is the classMap and every caller since CW-23 uses
+     * `read()`'s contract is the classMap and every caller uses
      * it that way; the backing is the only thing that wants this, and only
      * while Day is on.
      *
@@ -618,7 +595,7 @@ export function createClassPass(renderer, root) {
     },
 
     /**
-     * The GLYPH FIELD of the last `read()`, one byte per cell (CW-86).
+     * The glyph field of the last `read()`, one byte per cell.
      *
      * Byte 0 means "this cell has no field" - the sky, an unclassified mesh,
      * or a surface with no readable texture - and the converter keeps its
@@ -631,7 +608,7 @@ export function createClassPass(renderer, root) {
     },
 
     /**
-     * Turn the glyph field on or off (CW-86).
+     * Turn the glyph field on or off.
      *
      * Off by default and off costs nothing: no field texture is built, the
      * materials carry uHasField 0, and the shader's branch is not taken. The
@@ -654,7 +631,7 @@ export function createClassPass(renderer, root) {
     },
 
     /**
-     * CW-86 P2: how coarse the field lattice is, in squares along its longest
+     * How coarse the field lattice is, in squares along its longest
      * side. Smaller is COARSER: a bigger patch of surface shares one value, so
      * a cell keeps reading the same value further into a walk.
      *
@@ -677,7 +654,7 @@ export function createClassPass(renderer, root) {
     },
 
     /**
-     * CW-86 P2: restrict the field to these class ids, or null for all.
+     * Restrict the field to these class ids, or null for all.
      *
      * @param {number[]|null} ids
      */
@@ -693,7 +670,7 @@ export function createClassPass(renderer, root) {
     },
 
     /**
-     * The same class frame, left on the GPU (CW-32).
+     * The same class frame, left on the GPU.
      *
      * When the glyph pick runs in a shader there is no reason to bring these
      * bytes to the CPU at all: the shader samples this texture directly, and
