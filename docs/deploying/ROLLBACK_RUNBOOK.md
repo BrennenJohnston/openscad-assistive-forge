@@ -1,7 +1,7 @@
 # Rollback Runbook
 
-**App version**: 4.5.0  
-**Last reviewed**: 2026-08-16
+**App version**: 5.2.0  
+**Last reviewed**: 2026-10-06
 
 This runbook provides step-by-step procedures for rolling back OpenSCAD Assistive Forge in production.
 
@@ -11,10 +11,16 @@ This runbook provides step-by-step procedures for rolling back OpenSCAD Assistiv
 
 | Scenario | Method | Time | Command/Action |
 |----------|--------|------|----------------|
-| Feature bug | Feature flag | ~3 min | Disable flag in code, push |
+| Feature bug | Feature flag | ~15 min | Disable the flag on `develop`, move `main` forward |
 | Bad deployment | Cloudflare rollback | ~1 min | Dashboard → Rollback |
-| Code regression | Git revert | ~5 min | `git revert`, push |
-| Critical security | Emergency deploy | ~10 min | Hotfix branch, expedited deploy |
+| Code regression | Git revert | ~15 min | `git revert` on `develop`, move `main` forward |
+| Critical security | Emergency deploy | ~20 min | Hotfix pull request on `develop`, move `main` forward |
+
+Every code change reaches production the same way, rollbacks included: a
+pull request into `develop`, the checks, a squash-merge, then `main` moved
+forward to it. `main` accepts only a fast-forward of a commit that already
+passed the checks on `develop`; it refuses any other push, so there is no
+shortcut to skip. Procedure 2 needs no commit at all.
 
 ---
 
@@ -33,7 +39,7 @@ Before any rollback, complete this checklist:
 ## Procedure 1: Feature Flag Disable (Fastest for Flagged Features)
 
 **Use when**: A feature behind a feature flag is causing issues  
-**Time**: ~3 minutes  
+**Time**: ~15 minutes, most of it the checks  
 **Risk**: Low
 
 ### Steps
@@ -41,12 +47,7 @@ Before any rollback, complete this checklist:
 1. **Identify the flag**
    ```
    Feature flags are in: src/js/feature-flags.js
-   
-   Current flags:
-   - expert_mode: Expert Mode editing
-   - monaco_editor: Monaco vs textarea
-   - memory_monitoring: Memory tracking
-   - csp_reporting: CSP violation logging
+   The file lists the current flags and what each one gates.
    ```
 
 2. **Edit the flag configuration**
@@ -56,15 +57,22 @@ Before any rollback, complete this checklist:
    killSwitch: true   // Emergency disable
    ```
 
-3. **Commit and push**
+3. **Commit on a branch and open the pull request**
    ```bash
+   git switch -c fix/disable-[flag_name] origin/develop
    git add src/js/feature-flags.js
-   git commit -m "fix: disable [flag_name] due to [issue]"
-   git push origin main
+   git commit -m "fix: disable [flag_name]"
+   git push -u origin fix/disable-[flag_name]
+   gh pr create --base develop --fill
    ```
+   Squash-merge it when the checks pass.
 
-4. **Monitor deployment**
-   - Cloudflare Pages auto-deploys on push
+4. **Move main forward and watch the deployment**
+   ```bash
+   git fetch origin
+   git push origin origin/develop:main
+   ```
+   - Cloudflare Pages deploys `main` on push
    - Check deployment status in Cloudflare Dashboard
    - Verify fix in production (clear cache, test)
 
@@ -114,7 +122,7 @@ Before any rollback, complete this checklist:
 ## Procedure 3: Git Revert (For Code Issues)
 
 **Use when**: A specific commit introduced a bug  
-**Time**: ~5 minutes  
+**Time**: ~15 minutes, most of it the checks  
 **Risk**: Medium (creates new commit)
 
 ### Steps
@@ -131,16 +139,20 @@ Before any rollback, complete this checklist:
    # Confirm this is the problematic change
    ```
 
-3. **Revert the commit**
+3. **Revert the commit on a branch**
    ```bash
+   git switch -c fix/revert-<short-name> origin/develop
    git revert <commit-hash>
-   # This creates a new commit that undoes the changes
-   # Editor opens for commit message - keep default or add context
+   git push -u origin fix/revert-<short-name>
+   gh pr create --base develop --fill
    ```
+   The pull request title becomes the public commit: plain words, no
+   account of how the bug was found. Squash-merge when the checks pass.
 
-4. **Push the revert**
+4. **Move main forward**
    ```bash
-   git push origin main
+   git fetch origin
+   git push origin origin/develop:main
    ```
 
 5. **Monitor deployment**
@@ -158,16 +170,15 @@ Before any rollback, complete this checklist:
 ## Procedure 4: Emergency Security Deployment
 
 **Use when**: Critical security vulnerability discovered  
-**Time**: ~10-15 minutes  
+**Time**: ~20 minutes, most of it the checks  
 **Risk**: Medium (expedited process)
 
 ### Steps
 
 1. **Create hotfix branch**
    ```bash
-   git checkout main
-   git pull origin main
-   git checkout -b hotfix/security-YYYY-MM-DD
+   git fetch origin
+   git switch -c hotfix/security-YYYY-MM-DD origin/develop
    ```
 
 2. **Apply minimal fix**
@@ -182,10 +193,14 @@ Before any rollback, complete this checklist:
 
 4. **Deploy**
    ```bash
-   git checkout main
-   git merge hotfix/security-YYYY-MM-DD
-   git push origin main
+   git push -u origin hotfix/security-YYYY-MM-DD
+   gh pr create --base develop --fill
+   # squash-merge when the checks pass, then
+   git fetch origin
+   git push origin origin/develop:main
    ```
+   The checks are not skipped for a security fix: `main` refuses anything
+   that has not passed them on `develop`.
 
 5. **Verify deployment**
    - Check Cloudflare deployment status
