@@ -74,7 +74,7 @@ The copies at the time of writing:
 - `docs/deploying/SECURITY_ADMIN_GUIDE.md`
 - `docs/deploying/SITE_FACTS.md`
 - `docs/specs/MANIFEST_STABILITY_CONTRACT.md`
-- `docs/project/RELEASE_NOTES.md`
+- `CHANGELOG.md`
 
 Re-check that list before relying on it; documents move.
 

@@ -1,11 +1,8 @@
-# Notes (dev log / scratchpad)
+# Notes
 
-This folder is where I put the “paper trail” stuff that’s useful while building:
+Working notes that are still in use: the screen reader lessons, the NVDA
+listening pack, the color pass-through, the dependency status, and the Alt View
+notes.
 
-- one-off implementation summaries
-- test runs and checklists
-- migration notes (WASM, libraries, etc.)
-- assorted “what I changed and why” writeups
-
-It’s not polished documentation — think of it as my working notebook.
-
+They are not polished documentation. Each says what was true when it was
+written.

@@ -380,6 +380,6 @@ over all of it.
 
 - `.github/CONTRIBUTING.md` - the general contribution notes
 - `docs/guides/GETTING_STARTED.md` - using the app itself
-- `docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md` - the language
+- [OpenSCAD User Manual](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual) - the language
 - `public/examples/_template/template_tile.scad` - the template, commented line
   by line

@@ -455,8 +455,7 @@ During Phase 0 execution, browser automation initially stalled on the save-proje
 ## COFF Upstream Investigation — Root Cause Analysis
 
 **Date:** 2026-03-11
-**Investigator:** AI-assisted (Cursor)
-**Plan:** `.cursor/plans/coff_upstream_investigation_5f4b8fa9.plan.md`
+**Investigator:** AI-assisted
 
 ### Root Cause: Two-Layer Defect
 

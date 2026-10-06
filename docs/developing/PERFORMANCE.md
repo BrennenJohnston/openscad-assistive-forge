@@ -159,7 +159,7 @@ It is single-threaded and does not use `SharedArrayBuffer` for threading.
 COOP/COEP headers are still served for cross-origin isolation, which costs
 nothing and keeps the door open if a threaded build ever lands.
 
-> The threading analysis in `docs/research/WASM_THREADING_ANALYSIS.md` was
+> My earlier threading analysis was
 > carried out against the **old** package. Its conclusion is believed to hold
 > for the current binary but has not been re-tested against it.
 

@@ -2,7 +2,7 @@
 
 > **Protocol:** [desktop-comparison-protocol.md](desktop-comparison-protocol.md)
 > **Date executed:** 2026-04-05
-> **Executed by:** Automated via `run-all-desktop-tests.ps1` (Cursor agent)
+> **Executed by:** Automated via `run-all-desktop-tests.ps1` (AI-assisted)
 
 ---
 

@@ -1052,9 +1052,8 @@ jobs:
   # and no continue-on-error: when it is red, it is honestly red (Q-55).
   #
   # SCOPE, declared: the LIVING documentation - README, docs top level and
-  # docs/guides. The records trees (docs/audit, docs/research, docs/vpat
-  # evidence) are point-in-time documents, and OPENSCAD_LANGUAGE_REFERENCE.md
-  # mirrors upstream, whose link rot is not ours to chase. 403 is accepted
+  # docs/guides. The records trees (docs/archive, docs/vpat evidence) are
+  # point-in-time documents. 403 is accepted
   # because every one the first sweep found was a bot-wall on a LIVE site
   # (w3.org's WCAG page included); three hosts that reject CI outright are
   # excluded by name. The third is the OSM Foundation's operations site, which
@@ -1086,7 +1085,6 @@ jobs:
             --exclude '^https://www\.sovol\.tech'
             --exclude '^https://operations\.osmfoundation\.org'
             --exclude '^https://www\.ski\.org'
-            --exclude-path docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md
             'README.md'
             'docs/README.md'
             'docs/guides/**/*.md'

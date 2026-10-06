@@ -32,11 +32,10 @@ If you just want to customize models, start here:
 
 ## The project
 
-- [Project status](./project/PROJECT_STATUS.md) -- where it is at, what is next
-- [Release notes](./project/RELEASE_NOTES.md) -- every release, newest first
+- [Changelog](../CHANGELOG.md) -- every release, newest first
+- [Contributing](../.github/CONTRIBUTING.md) -- branches, pull requests, checks
 - [Releasing](./project/RELEASING.md) -- how a release is cut
-- [Maintainers](./project/MAINTAINERS.md) and [authors](./project/AUTHORS.md)
-- [Contributing](../.github/CONTRIBUTING.md), the [security policy](../.github/SECURITY.md) and the [code of conduct](../.github/CODE_OF_CONDUCT.md)
+- The [security policy](../.github/SECURITY.md) and the [code of conduct](../.github/CODE_OF_CONDUCT.md)
 
 ---
 
@@ -47,7 +46,6 @@ If you're setting up the project for development or thinking about forking:
 - [Dev Quick Start](./developing/DEV_QUICK_START.md) -- clone, install, run
 - [Quick reference](./developing/QUICK_REFERENCE.md) -- the commands for a change
 - [Architecture](./developing/ARCHITECTURE.md) -- how the pieces fit together, with flowcharts and a "for forkers" debugging guide
-- [Development Workflow](./developing/DEVELOPMENT_WORKFLOW.md) -- branches, commits, PRs
 - [Testing](./developing/TESTING.md) -- running unit and E2E tests
 - [Troubleshooting (dev)](./developing/TROUBLESHOOTING.md) -- Playwright, builds, Windows quirks
 - [Performance](./developing/PERFORMANCE.md) -- bundle budget, caching, worker architecture
@@ -89,16 +87,15 @@ If you're setting up the project for development or thinking about forking:
 - [Parameter Schema Spec](./specs/PARAMETER_SCHEMA_SPEC.md) -- Customizer annotation JSON format
 - [UI Standards](./specs/UI_STANDARDS.md) -- design tokens, component and styling contracts
 - [Color System](./guides/COLOR_SYSTEM_GUIDE.md) -- the token palette and its contrast targets
-- [OpenSCAD language reference](./reference/OPENSCAD_LANGUAGE_REFERENCE.md)
-- [Open source projects used](./reference/OPEN_SOURCE_PROJECTS.md) and [open source guides](./reference/OPEN_SOURCE_GUIDES.md)
+- [OpenSCAD User Manual](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual) (Wikibooks) -- the language itself
+- [Open source projects used](./reference/OPEN_SOURCE_PROJECTS.md)
 
 ---
 
-## Notes, research and the archive
+## Notes and records
 
 - `notes/` -- working notes: the NVDA listening pack, the screen reader lessons, the color pass-through, the dependency status
-- `research/` -- background reading
-- `archive/` -- retired documents and dated records: old audits, investigations, plans. Each says what was true on the day it was written and is not maintained afterwards.
+- `archive/` -- dated records that current documents and tests still cite: the KI-012 investigation, the desktop parity audit, the offline measurements. Each says what was true on the day it was written and is not maintained afterwards.
 
 ---
 
@@ -108,13 +105,12 @@ If you're setting up the project for development or thinking about forking:
 docs/
   guides/         User and workflow guides
   updates/        What's new, with pictures
-  project/        Status, release notes, releasing, maintainers, authors
-  developing/     Architecture, workflow, testing, performance
+  project/        Releasing
+  developing/     Architecture, testing, performance
   deploying/      Deployment, security, site facts, rollback
   accessibility/  Conformance, the VPAT, browser support, known issues
   specs/          The contracts and the parameter schema
-  reference/      The OpenSCAD language reference and open-source references
+  reference/      The open source projects this one uses
   notes/          Working notes (dated records, not maintained)
-  research/       Background research (dated records)
-  archive/        Retired documents and old audits
+  archive/        Dated records that are still cited
 ```

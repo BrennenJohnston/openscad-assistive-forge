@@ -11,7 +11,6 @@
     "**/public/wasm/**",
     "**/public/fonts/**",
     "TEST_REPORT.md",
-    "docs/reference/OPENSCAD_LANGUAGE_REFERENCE.md",
     "**/.volkswitch/**",
     "**/.audit-scratch/**"
   ]
