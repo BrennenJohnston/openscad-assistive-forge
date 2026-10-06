@@ -690,7 +690,7 @@ test.describe('Braille translation workflow (card)', () => {
 
     await openBrailleCard(page)
 
-    // Business card height (51 mm) fits 3 rows at the default 10 mm line
+    // Business card height (51 mm) fits 3 rows at the default 10.1 mm line
     // spacing and 6 mm margin; the default Max rows per card is 8.
     await page.locator('#brailleSizePreset').selectOption('business')
     await page.locator('#brailleTextInput').fill('hello')
@@ -1092,6 +1092,59 @@ test.describe('Braille Charm workflow', () => {
       'Charm 2 of 2: i'
     )
     await expect(nextCharm).toBeFocused()
+  })
+
+  test('charm braille editor: one line per charm, used exactly as written', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-charm')
+
+    await page.locator('#brailleTextInput').fill('hi')
+    await expect(page.locator('#brailleMultiCardNotice')).toBeVisible({
+      timeout: 20000,
+    })
+
+    // Filled from the characters: one line per charm
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleFieldFromText').click()
+    const field = page.locator('#brailleFieldInput')
+    await expect(field).toHaveValue('\u2813\n\u280A', { timeout: 20000 })
+
+    // A hand-written line is its own charm, its cells exactly as written
+    await field.fill('\u2813\n\u2820\u2801')
+    await expect(
+      page.locator('.param-control[data-param-name="Charm_2"] input')
+    ).toHaveValue('\u2820\u2801', { timeout: 10000 })
+    await expect(page.locator('#brailleMultiCardNotice')).toContainText(
+      'The braille editor makes 2 charms, one per line.'
+    )
+    await expect(page.locator('#brailleWarnings')).toContainText(
+      'the charms use that braille exactly as written'
+    )
+
+    // Braille ASCII converts in place: a is dot 1, b dots 1 and 2
+    await field.fill('a\nb')
+    await page.locator('#brailleFieldFromAscii').click()
+    await expect(field).toHaveValue('\u2801\n\u2803')
+    await expect(
+      page.locator('.param-control[data-param-name="Charm_1"] input')
+    ).toHaveValue('\u2801', { timeout: 10000 })
+
+    // A line longer than a charm is named
+    await field.fill('\u2801\u2803\u2809')
+    await expect(page.locator('#brailleErrors')).toContainText(
+      'Line 1 of the braille editor is 3 cells, but a charm fits 2.',
+      { timeout: 20000 }
+    )
+
+    // The braille reads back into the characters box
+    await field.fill('\u2813\u280A')
+    await page.locator('#brailleFieldToText').click()
+    await expect(page.locator('#brailleTextInput')).toHaveValue('hi', {
+      timeout: 20000,
+    })
+
+    await expectPanelAxeClean(page)
   })
 
   test('charm panel has no axe violations', async ({ page }) => {

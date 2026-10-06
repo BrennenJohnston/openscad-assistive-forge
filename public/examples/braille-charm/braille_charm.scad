@@ -10,10 +10,12 @@
 // Nasif's Charm Maker (concept by Nasif Zaman, CC0); the bracelet_clip shape
 // is adapted from the Forge's Bracelet Clip Charm (q_charm.scad, CC0; AAC
 // bracelet charm prior art by Duy Do, UW WOOF3D,
-// thingiverse.com/thing:7153594); the braille dot system (ADA-friendly
-// rounded/cone dots, Unicode braille decoding) is adapted from the Braille
-// Wedge Card STL Generator by Brennen Johnston
-// (https://github.com/BrennenJohnston/braille-wedge-card-openscad).
+// thingiverse.com/thing:7153594); the braille dot system (rounded dots,
+// Unicode braille decoding) is adapted from the Braille Wedge Card STL
+// Generator by Brennen Johnston
+// (https://github.com/BrennenJohnston/braille-wedge-card-openscad). The
+// dots keep to the ranges of ADA 703.3.1, as the Braille Sign's do: each
+// slider covers only its range, and the model stops on a value outside it.
 //
 // Upstream: the standalone desktop version of this generator is
 // Braille Charm STL Generator
@@ -193,31 +195,21 @@ brim_width_mm = 1.5; // [0:0.25:25]
 brim_thickness_mm = 0.2; // [0.1:0.05:3]
 
 /* [Braille Dot Shape] */
-// Shape of the raised braille dots
-dot_shape = "Rounded"; // [Rounded, Cone]
-// Spacing between dots within a cell (mm)
-dot_spacing = 2.5; // [1:0.01:5]
-// Horizontal spacing between cells (mm)
-cell_spacing = 7.0; // [2:0.01:15]
+// Spacing between dots within a cell (mm). ADA 703.3.1: 2.3 to 2.5.
+dot_spacing = 2.5; // [2.3:0.01:2.5]
+// Horizontal spacing between cells (mm). ADA 703.3.1: 0.241 to 0.300 in (6.1 to 7.6 mm printed); the charm allows 6.1214 to 7.6.
+cell_spacing = 7.0; // [6.13:0.01:7.6]
 
 /* [Braille Dot Shape - Rounded] */
-// Defaults chosen to stay ADA-legal: base_height + dome_height <= 0.9 mm.
-// Rounded dot base diameter (mm)
-rounded_dot_base_diameter = 1.6; // [0.5:0.01:3]
+// Defaults stay ADA-legal: base_height + dome_height <= 0.9 mm, 1.6 mm base.
+// Dot base diameter (mm). ADA 703.3.1: 1.5 to 1.6.
+rounded_dot_base_diameter = 1.6; // [1.5:0.01:1.6]
 // Rounded dot base height (mm)
 rounded_dot_base_height   = 0.35; // [0:0.01:2]
 // Rounded dome diameter (mm)
 rounded_dot_dome_diameter = 1.4; // [0.5:0.01:3]
 // Rounded dot dome height (mm)
 rounded_dot_dome_height   = 0.35; // [0.1:0.01:2]
-
-/* [Braille Dot Shape - Cone] */
-// Cone dot base diameter (mm)
-cone_dot_base_diameter = 1.5; // [0.5:0.01:3]
-// Cone dot height (mm)
-cone_dot_height        = 0.8; // [0.3:0.01:2]
-// Cone dot flat hat diameter (mm)
-cone_dot_flat_hat      = 0.4; // [0.1:0.01:2]
 
 /* [Rendering Quality] */
 // Sphere quality for rounded shapes
@@ -232,7 +224,6 @@ $fn = 64;
 // CALCULATED VALUES
 // =============================================================================
 
-use_rounded_dots = (dot_shape == "Rounded");
 // The bracelet clip always prints standing vertically (C profile on the bed,
 // braille on a vertical wall) — it needs no lean and no support fin.
 clip_on = (charm_shape == "bracelet_clip");
@@ -256,9 +247,7 @@ shape_h = (charm_shape == "hexagon")
     : effective_height;
 
 // Dot metrics
-dot_total_height = use_rounded_dots
-    ? (rounded_dot_base_height + rounded_dot_dome_height)
-    : cone_dot_height;
+dot_total_height = rounded_dot_base_height + rounded_dot_dome_height;
 DOT_FACE_EMBED = 0.02;
 
 // Leaning geometry (Angled mode). The charm is built flat, then rotated 180
@@ -355,38 +344,28 @@ dot_positions     = [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]];
 // DOT MODULE (shared geometry with the wedge card)
 // =============================================================================
 module braille_dot_centered() {
-    if (use_rounded_dots) {
-        _total_height = rounded_dot_base_height + rounded_dot_dome_height;
-        _dome_r = rounded_dot_dome_diameter / 2;
-        _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
-        _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
-        _fuse = 0.02;
-        translate([0, 0, -_total_height / 2]) {
-            union() {
-                translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
-                cylinder(
-                    h  = rounded_dot_base_height + _fuse,
-                    r1 = rounded_dot_base_diameter / 2,
-                    r2 = rounded_dot_dome_diameter / 2,
-                    center = true,
-                    $fn = cone_segments
-                );
-                intersection() {
-                    translate([0, 0, _center_z])
-                    sphere(r = _R_sphere, $fn = quality_fn);
-                    translate([0, 0, rounded_dot_base_height + _R_sphere])
-                    cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
-                }
+    _total_height = rounded_dot_base_height + rounded_dot_dome_height;
+    _dome_r = rounded_dot_dome_diameter / 2;
+    _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
+    _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
+    _fuse = 0.02;
+    translate([0, 0, -_total_height / 2]) {
+        union() {
+            translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
+            cylinder(
+                h  = rounded_dot_base_height + _fuse,
+                r1 = rounded_dot_base_diameter / 2,
+                r2 = rounded_dot_dome_diameter / 2,
+                center = true,
+                $fn = cone_segments
+            );
+            intersection() {
+                translate([0, 0, _center_z])
+                sphere(r = _R_sphere, $fn = quality_fn);
+                translate([0, 0, rounded_dot_base_height + _R_sphere])
+                cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
             }
         }
-    } else {
-        cylinder(
-            h  = cone_dot_height,
-            r1 = cone_dot_base_diameter / 2,
-            r2 = cone_dot_flat_hat / 2,
-            center = true,
-            $fn = cone_segments
-        );
     }
 }
 
@@ -680,6 +659,28 @@ module support_structure() {
     fin_brim();
     fin_bridges();
 }
+
+// =============================================================================
+// ADA RANGES
+// =============================================================================
+// The charm keeps the braille dot ranges the Braille Sign keeps. Each is the
+// stricter of ADA 703.3.1's inch figure and its printed metric figure
+// (docs/guides/BRAILLE_STANDARDS.md). Outside one the model stops.
+ADA_DOT_BASE_MM         = [1.5, 1.6];      // 0.059 to 0.063 in; printed 1.5 to 1.6 mm
+ADA_DOT_SPACING_MM      = [2.3, 2.5];      // 0.090 to 0.100 in; printed 2.3 to 2.5 mm
+ADA_CELL_SPACING_MM     = [6.1214, 7.6];   // 0.241 to 0.300 in; printed 6.1 to 7.6 mm
+ADA_DOT_HEIGHT_MM       = [0.635, 0.9];    // 0.025 to 0.037 in; printed 0.6 to 0.9 mm
+
+function in_range(v, r) = v >= r[0] && v <= r[1];
+
+assert(in_range(rounded_dot_base_diameter, ADA_DOT_BASE_MM),
+       str("rounded_dot_base_diameter must be ", ADA_DOT_BASE_MM[0], " to ", ADA_DOT_BASE_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(dot_spacing, ADA_DOT_SPACING_MM),
+       str("dot_spacing must be ", ADA_DOT_SPACING_MM[0], " to ", ADA_DOT_SPACING_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(cell_spacing, ADA_CELL_SPACING_MM),
+       str("cell_spacing must be ", ADA_CELL_SPACING_MM[0], " to ", ADA_CELL_SPACING_MM[1], " mm (ADA 703.3.1, in inches and in millimeters)."));
+assert(in_range(rounded_dot_base_height + rounded_dot_dome_height - DOT_FACE_EMBED, ADA_DOT_HEIGHT_MM),
+       str("The dots must rise ", ADA_DOT_HEIGHT_MM[0], " to ", ADA_DOT_HEIGHT_MM[1], " mm above the charm: rounded_dot_base_height plus rounded_dot_dome_height (ADA 703.3.1, in inches and in millimeters)."));
 
 // =============================================================================
 // CONSOLE DIAGNOSTICS

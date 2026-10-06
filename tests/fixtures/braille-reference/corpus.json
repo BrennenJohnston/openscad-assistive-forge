@@ -313,5 +313,415 @@
     "id": "l04",
     "text": "CONFERENCE\nROOM B",
     "class": "wrapping"
+  },
+  {
+    "id": "h01",
+    "text": "a",
+    "class": "characters"
+  },
+  {
+    "id": "h02",
+    "text": "b",
+    "class": "characters"
+  },
+  {
+    "id": "h03",
+    "text": "c",
+    "class": "characters"
+  },
+  {
+    "id": "h04",
+    "text": "d",
+    "class": "characters"
+  },
+  {
+    "id": "h05",
+    "text": "e",
+    "class": "characters"
+  },
+  {
+    "id": "h06",
+    "text": "f",
+    "class": "characters"
+  },
+  {
+    "id": "h07",
+    "text": "g",
+    "class": "characters"
+  },
+  {
+    "id": "h08",
+    "text": "h",
+    "class": "characters"
+  },
+  {
+    "id": "h09",
+    "text": "i",
+    "class": "characters"
+  },
+  {
+    "id": "h10",
+    "text": "j",
+    "class": "characters"
+  },
+  {
+    "id": "h11",
+    "text": "k",
+    "class": "characters"
+  },
+  {
+    "id": "h12",
+    "text": "l",
+    "class": "characters"
+  },
+  {
+    "id": "h13",
+    "text": "m",
+    "class": "characters"
+  },
+  {
+    "id": "h14",
+    "text": "n",
+    "class": "characters"
+  },
+  {
+    "id": "h15",
+    "text": "o",
+    "class": "characters"
+  },
+  {
+    "id": "h16",
+    "text": "p",
+    "class": "characters"
+  },
+  {
+    "id": "h17",
+    "text": "q",
+    "class": "characters"
+  },
+  {
+    "id": "h18",
+    "text": "r",
+    "class": "characters"
+  },
+  {
+    "id": "h19",
+    "text": "s",
+    "class": "characters"
+  },
+  {
+    "id": "h20",
+    "text": "t",
+    "class": "characters"
+  },
+  {
+    "id": "h21",
+    "text": "u",
+    "class": "characters"
+  },
+  {
+    "id": "h22",
+    "text": "v",
+    "class": "characters"
+  },
+  {
+    "id": "h23",
+    "text": "w",
+    "class": "characters"
+  },
+  {
+    "id": "h24",
+    "text": "x",
+    "class": "characters"
+  },
+  {
+    "id": "h25",
+    "text": "y",
+    "class": "characters"
+  },
+  {
+    "id": "h26",
+    "text": "z",
+    "class": "characters"
+  },
+  {
+    "id": "h27",
+    "text": "A",
+    "class": "characters"
+  },
+  {
+    "id": "h28",
+    "text": "B",
+    "class": "characters"
+  },
+  {
+    "id": "h29",
+    "text": "C",
+    "class": "characters"
+  },
+  {
+    "id": "h30",
+    "text": "D",
+    "class": "characters"
+  },
+  {
+    "id": "h31",
+    "text": "E",
+    "class": "characters"
+  },
+  {
+    "id": "h32",
+    "text": "F",
+    "class": "characters"
+  },
+  {
+    "id": "h33",
+    "text": "G",
+    "class": "characters"
+  },
+  {
+    "id": "h34",
+    "text": "H",
+    "class": "characters"
+  },
+  {
+    "id": "h35",
+    "text": "I",
+    "class": "characters"
+  },
+  {
+    "id": "h36",
+    "text": "J",
+    "class": "characters"
+  },
+  {
+    "id": "h37",
+    "text": "K",
+    "class": "characters"
+  },
+  {
+    "id": "h38",
+    "text": "L",
+    "class": "characters"
+  },
+  {
+    "id": "h39",
+    "text": "M",
+    "class": "characters"
+  },
+  {
+    "id": "h40",
+    "text": "N",
+    "class": "characters"
+  },
+  {
+    "id": "h41",
+    "text": "O",
+    "class": "characters"
+  },
+  {
+    "id": "h42",
+    "text": "P",
+    "class": "characters"
+  },
+  {
+    "id": "h43",
+    "text": "Q",
+    "class": "characters"
+  },
+  {
+    "id": "h44",
+    "text": "R",
+    "class": "characters"
+  },
+  {
+    "id": "h45",
+    "text": "S",
+    "class": "characters"
+  },
+  {
+    "id": "h46",
+    "text": "T",
+    "class": "characters"
+  },
+  {
+    "id": "h47",
+    "text": "U",
+    "class": "characters"
+  },
+  {
+    "id": "h48",
+    "text": "V",
+    "class": "characters"
+  },
+  {
+    "id": "h49",
+    "text": "W",
+    "class": "characters"
+  },
+  {
+    "id": "h50",
+    "text": "X",
+    "class": "characters"
+  },
+  {
+    "id": "h51",
+    "text": "Y",
+    "class": "characters"
+  },
+  {
+    "id": "h52",
+    "text": "Z",
+    "class": "characters"
+  },
+  {
+    "id": "h53",
+    "text": "0",
+    "class": "characters"
+  },
+  {
+    "id": "h54",
+    "text": "1",
+    "class": "characters"
+  },
+  {
+    "id": "h55",
+    "text": "2",
+    "class": "characters"
+  },
+  {
+    "id": "h56",
+    "text": "3",
+    "class": "characters"
+  },
+  {
+    "id": "h57",
+    "text": "4",
+    "class": "characters"
+  },
+  {
+    "id": "h58",
+    "text": "5",
+    "class": "characters"
+  },
+  {
+    "id": "h59",
+    "text": "6",
+    "class": "characters"
+  },
+  {
+    "id": "h60",
+    "text": "7",
+    "class": "characters"
+  },
+  {
+    "id": "h61",
+    "text": "8",
+    "class": "characters"
+  },
+  {
+    "id": "h62",
+    "text": "9",
+    "class": "characters"
+  },
+  {
+    "id": "h63",
+    "text": "!",
+    "class": "characters"
+  },
+  {
+    "id": "h64",
+    "text": "\"",
+    "class": "characters"
+  },
+  {
+    "id": "h65",
+    "text": "$",
+    "class": "characters"
+  },
+  {
+    "id": "h66",
+    "text": "%",
+    "class": "characters"
+  },
+  {
+    "id": "h67",
+    "text": "&",
+    "class": "characters"
+  },
+  {
+    "id": "h68",
+    "text": "'",
+    "class": "characters"
+  },
+  {
+    "id": "h69",
+    "text": "(",
+    "class": "characters"
+  },
+  {
+    "id": "h70",
+    "text": ")",
+    "class": "characters"
+  },
+  {
+    "id": "h71",
+    "text": ",",
+    "class": "characters"
+  },
+  {
+    "id": "h72",
+    "text": "-",
+    "class": "characters"
+  },
+  {
+    "id": "h73",
+    "text": ".",
+    "class": "characters"
+  },
+  {
+    "id": "h74",
+    "text": "/",
+    "class": "characters"
+  },
+  {
+    "id": "h75",
+    "text": ":",
+    "class": "characters"
+  },
+  {
+    "id": "h76",
+    "text": "@",
+    "class": "characters"
+  },
+  {
+    "id": "h77",
+    "text": "_",
+    "class": "characters"
+  },
+  {
+    "id": "h78",
+    "text": "?",
+    "class": "characters"
+  },
+  {
+    "id": "h79",
+    "text": "#",
+    "class": "characters"
+  },
+  {
+    "id": "h80",
+    "text": "*",
+    "class": "characters"
+  },
+  {
+    "id": "h81",
+    "text": "+",
+    "class": "characters"
+  },
+  {
+    "id": "h82",
+    "text": "=",
+    "class": "characters"
   }
 ]

@@ -22,7 +22,7 @@ All distances are measured center to center, as the table says.
 
 | Measure | ADA | The sign's default (measured) | How the tool keeps to it |
 |---|---|---|---|
-| Dot shape | domed or rounded | a rounded dome | every dot on the sign is a rounded dome; the flat-topped Cone shape is offered only on cards and charms |
+| Dot shape | domed or rounded | a rounded dome | every dot on the sign is a rounded dome, as on cards and charms; no flat-topped dot is offered |
 | Dot base diameter | 1.5 to 1.6 mm (0.059 to 0.063 in) | 1.59 mm at the face of the plate | the slider allows 1.5 to 1.6 mm, and the model stops outside that range |
 | Dot height | 0.6 to 0.9 mm (0.025 to 0.037 in) | 0.68 mm | the base height and the dome height have separate sliders; the model stops when the dots would rise less than 0.635 mm (0.025 in) or more than 0.9 mm |
 | Between two dots in the same cell | 2.3 to 2.5 mm (0.090 to 0.100 in) | 2.5 mm | the slider allows 2.3 to 2.5 mm, and the model stops outside that range |
@@ -55,9 +55,11 @@ All distances are measured center to center, as the table says.
 
 ## Braille cards and charms
 
-Cards and charms are not signs, and section 703 does not govern them. Their dot defaults are a 1.6 mm base, about 0.68 mm high, 2.5 mm between dots, 7.0 mm between cells and 10.0 mm between lines: the sign's, except that the sign spaces its lines 10.1 mm apart to meet ADA's range in inches as well as in millimeters. The card starts on contracted braille, as BANA's business card examples are; the charm starts on uncontracted braille (Grade 1), since each charm holds a single character.
+Cards and charms are not signs, and section 703 does not govern them. I build their braille to the sign's dot figures anyway, and the tools keep them there the same way: each dot setting's slider covers only the sign's range, the model stops on a value outside it, and every dot is a rounded dome. That is dots 1.5 to 1.6 mm across and 0.635 to 0.9 mm high, 2.3 to 2.5 mm apart in a cell, cells 6.1214 to 7.6 mm apart, and on a card lines 10.033 to 10.16 mm apart (a charm holds one row). Their defaults are the sign's: a 1.6 mm base, about 0.68 mm high, 2.5 mm between dots, 7.0 mm between cells and, on a card, 10.1 mm between lines.
 
-For comparison, braille embossed on paper in the United States and Canada follows the Library of Congress's Specification 800, which BANA quotes: dots 0.48 mm high with a 1.44 mm base, 2.340 mm between dots in a cell, 6.2 mm between cells and 10.0 mm between lines.
+The card starts on contracted braille, as BANA's business card examples are. The charm starts on uncontracted braille (Grade 1), since each charm holds a single character: in contracted braille a letter standing alone takes the grade 1 indicator first, so most capital letters need three cells, more than a charm's two.
+
+For comparison, braille embossed on paper in the United States and Canada follows the Library of Congress's Specification 800, which BANA quotes: dots 0.48 mm high with a 1.44 mm base, 2.340 mm between dots in a cell, 6.2 mm between cells and 10.0 mm between lines. Those dots are lower and narrower than the ranges above allow. Whether a card should use paper spacing is a choice I have left for later, to make with printed samples.
 
 ## Sources
 

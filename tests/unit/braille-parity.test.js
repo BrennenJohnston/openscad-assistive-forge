@@ -1,8 +1,8 @@
 // @vitest-environment node
 /**
- * Parity: the app's whole translation path (the engine, then the card's and
- * the sign's layouts) against two other programs' braille for every corpus
- * phrase, capitals kept, in both tables:
+ * Parity: the app's whole translation path (the engine, then the card's, the
+ * sign's and the charm's layouts) against two other programs' braille for
+ * every corpus row, capitals kept, in both tables:
  *
  * - native liblouis 3.39.0 (`liblouis-3.39.0.json`, written by the build's
  *   own check), cell for cell;
@@ -14,6 +14,10 @@
  * the reference cells. At 12 cells per row the rows still carry the same
  * cells: wrapping and dividing never change one, and dividing an address or
  * a number only adds the line continuation sign at the end of a row.
+ *
+ * A charm is read on its own, so the charm translates each character alone;
+ * its references are the corpus's single-character rows, which cover every
+ * character the other rows use.
  *
  * @license GPL-3.0-or-later
  */
@@ -29,7 +33,11 @@ import {
   resetLiblouis,
   translate,
 } from '../../src/js/liblouis-engine.js'
-import { layoutBrailleText, layoutSignText } from '../../src/js/braille-wrap.js'
+import {
+  layoutBrailleText,
+  layoutSignText,
+  layoutCharmText,
+} from '../../src/js/braille-wrap.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const BUILT = path.join(ROOT, 'vendor', 'liblouis', 'liblouis.mjs')
@@ -93,6 +101,18 @@ const signRows = async (table, text, cellsPerLine) =>
     })
   ).brailleRows.map((row) => String(row.braille))
 
+const charms = async (table, text) =>
+  (await layoutCharmText({ text, translate: engine(table) })).map(
+    ({ source, braille }) => ({ source, braille: String(braille) })
+  )
+
+/** The corpus row holding each single character, the charm's reference. */
+const characterRow = new Map(
+  corpus
+    .filter((row) => row.class === 'characters')
+    .map((row) => [row.text, row.id])
+)
+
 /** The cells, without blank cells or line breaks, which wrapping may move. */
 const cellsOf = (rows) => rows.join('').replace(/[\u2800\n]/g, '')
 
@@ -137,6 +157,20 @@ for (const table of Object.keys(native.tables)) {
       expect(cellsOf((await signRows(table, text, 12)).map(unmarked))).toBe(
         reference
       )
+    })
+  })
+
+  describe(`${table}: the charm against native liblouis`, () => {
+    it.each(rows)('%s, one charm per character, each translated alone', async (id, text) => {
+      const laidOut = await charms(table, text)
+      expect(laidOut.map((charm) => charm.source)).toEqual(
+        [...text].filter((ch) => !/\s/u.test(ch))
+      )
+      for (const { source, braille } of laidOut) {
+        const row = characterRow.get(source)
+        expect(row, `a character row for ${JSON.stringify(source)}`).toBeDefined()
+        expect(braille, JSON.stringify(source)).toBe(native.tables[table][row])
+      }
     })
   })
 

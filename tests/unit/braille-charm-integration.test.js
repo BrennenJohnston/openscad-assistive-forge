@@ -125,11 +125,54 @@ describe('braille_charm.scad parser integration', () => {
 
   it('keeps ADA-friendly rounded dot defaults (total height <= 0.9 mm)', () => {
     const parsed = extractParameters(readScad());
-    expect(parsed.parameters.dot_shape.default).toBe('Rounded');
     const total =
       parsed.parameters.rounded_dot_base_height.default +
       parsed.parameters.rounded_dot_dome_height.default;
     expect(total).toBeLessThanOrEqual(0.9);
+  });
+
+  it('offers only rounded dots, as the sign does', () => {
+    const scad = readScad();
+    const { parameters } = extractParameters(scad);
+    for (const name of [
+      'dot_shape',
+      'cone_dot_base_diameter',
+      'cone_dot_height',
+      'cone_dot_flat_hat',
+    ]) {
+      expect(parameters[name], name).toBeUndefined();
+    }
+    expect(scad).not.toMatch(/\bCone\b|cone_dot_/);
+    // The rounded dot's base still uses it
+    expect(parameters.cone_segments).toBeDefined();
+  });
+
+  it('keeps each dot setting inside the ADA range the sign keeps (ADA 703.3.1)', () => {
+    const scad = readScad();
+    const params = extractParameters(scad).parameters;
+    // [slider, the range the model enforces], from the standards page
+    const ranges = {
+      rounded_dot_base_diameter: [[1.5, 1.6], 'ADA_DOT_BASE_MM', [1.5, 1.6]],
+      dot_spacing: [[2.3, 2.5], 'ADA_DOT_SPACING_MM', [2.3, 2.5]],
+      cell_spacing: [[6.13, 7.6], 'ADA_CELL_SPACING_MM', [6.1214, 7.6]],
+    };
+    for (const [name, [slider, constant, enforced]] of Object.entries(ranges)) {
+      const p = params[name];
+      expect([p.minimum, p.maximum], `${name} slider`).toEqual(slider);
+      expect(p.default, `${name} default`).toBeGreaterThanOrEqual(slider[0]);
+      expect(p.default, `${name} default`).toBeLessThanOrEqual(slider[1]);
+      const declared = scad.match(
+        new RegExp(`^${constant} += \\[([\\d.]+), ([\\d.]+)\\];`, 'm')
+      );
+      expect(declared?.slice(1).map(Number), constant).toEqual(enforced);
+      expect(scad, `${name} is checked`).toMatch(
+        new RegExp(`^assert\\(in_range\\(${name}, ${constant}\\),`, 'm')
+      );
+    }
+    expect(scad).toMatch(/^ADA_DOT_HEIGHT_MM += \[0\.635, 0\.9\];/m);
+    expect(scad).toMatch(
+      /^assert\(in_range\(rounded_dot_base_height \+ rounded_dot_dome_height - DOT_FACE_EMBED, ADA_DOT_HEIGHT_MM\),/m
+    );
   });
 
   it('carries a GPL-3.0-or-later header with attributions', () => {

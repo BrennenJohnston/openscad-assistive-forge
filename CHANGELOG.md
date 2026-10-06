@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The braille tools now translate the way liblouis does, on a current
 liblouis, and the Braille Sign is built to the figures of ADA 703, with a
-page that says which rule governs each figure. Models that use
+page that says which rule governs each figure; the Braille Card and the
+Braille Charm keep their dots to the same figures. Models that use
 `minkowski()` preview in the browser without falling back to a much
 slower method, and a shared link renders its first preview once, with its
 preset.
@@ -63,6 +64,21 @@ preset.
   rule governs each figure, the sign's measured value, and what the tool
   does not check.
 
+### The Braille Card and the Braille Charm
+
+- Their dots keep to the same ADA 703.3.1 ranges as the sign's: the
+  sliders stop at each range, and a value outside it stops the model with
+  a message that names the rule. Both offer rounded dots only; an old link
+  that asks for the Cone dot gets rounded dots.
+- The card's braille lines are 10.1 mm apart by default, as on the sign.
+  At the default "Max rows per card" every size preset holds as many rows
+  as before.
+- The charm has the braille editor too: one line per charm, used exactly
+  as written, with braille ASCII, six-key entry and "Translate to text".
+- The charm's table help says what contracted braille costs a charm: a
+  letter standing alone takes an extra cell, so most capital letters no
+  longer fit.
+
 ### Transcriber tools
 
 - A divided e-mail address, web address or long number ends each row but
@@ -107,6 +123,8 @@ preset.
   error in words, each warning once rather than after every layout, and
   each pager page once. The pager's end buttons keep focus and are
   announced as unavailable.
+- A message that repeats within a second and a half is spoken again. With
+  six-key entry, a cell typed right after the same cell had been silent.
 - The memory indicator no longer says "0 MB allocated to the OpenSCAD
   engine" every ten seconds, and Fontconfig's note that it has no config
   file is no longer called an error on every render that draws text.
@@ -125,6 +143,12 @@ preset.
   in development tools; the app that ships does not include it.
 - `brace-expansion` is 5.0.12, which clears a high-severity audit finding
   in a development tool; the app that ships does not include it.
+- The braille parity test checks the Braille Charm too, character by
+  character, against native liblouis and a second liblouis-based
+  generator, and the liblouis build check runs whenever its test phrases
+  change.
+- [Releasing](docs/project/RELEASING.md) lists the braille checks every
+  release that touches braille translation has to pass first.
 
 ## [5.1.1] - 2026-09-23
 

@@ -33,6 +33,7 @@ import {
   computeCapacity,
   layoutBrailleText,
   layoutSignText,
+  layoutCharmText,
   chunkIntoCards,
   countCells,
   BRAILLE_SPACE,
@@ -57,6 +58,9 @@ export const SIGN_BORDER_CLEARANCE_MM = 9.525;
 
 /** The sign's default letter spacing, the SCAD's `letter_spacing`. */
 export const SIGN_DEFAULT_LETTER_SPACING = 1.21;
+
+/** The card's default line spacing (mm), the SCAD's `line_spacing`. */
+export const CARD_DEFAULT_LINE_SPACING = 10.1;
 
 const MARGIN_PRESETS = [
   { id: 'narrow', label: 'Narrow (6 mm)', value: 6 },
@@ -260,7 +264,7 @@ class BraillePanel {
     this.lastGridRowsParam = null;
     this.lastAnnouncedCards = 1;
     this.lastRowClampAnnounced = null;
-    // Braille editor (card mode): pristine mirrors a translation and is
+    // Braille editor (every mode): pristine mirrors a translation and is
     // cleared when the text changes; dirty means hand-edited (only the
     // "Translate to braille" button may overwrite it).
     this.fieldDirty = false;
@@ -319,12 +323,9 @@ class BraillePanel {
       this.buildCapsToggle(section);
     }
 
-    // The braille editor applies wherever the model carries braille rows
-    // the user might want to hand-correct. Charm mode is one cell per
-    // character with no rows to edit, so it stays out.
-    if (this.mode === 'card' || this.mode === 'sign') {
-      this.buildBrailleField(section);
-    }
+    // Every tool carries braille someone may want to hand-correct: a card's
+    // or a sign's rows, or a charm's cells, one charm per line.
+    this.buildBrailleField(section);
     if (this.mode === 'card') {
       this.buildSizePreset(section);
       this.buildLayoutOptions(section);
@@ -393,20 +394,21 @@ class BraillePanel {
   }
 
   /**
-   * Build the braille editor (card and sign modes): an editable Unicode
-   * braille textarea with a dirty-state lock. Whenever it has content
-   * the model uses those cells exactly as written; "Translate to
-   * braille" fills it from the text above, "Translate to text"
-   * back-translates it so a braille reader can verify pasted braille.
-   * (Ported from the braille-cylinder project's Braille (Unicode) field.)
+   * Build the braille editor (every mode): an editable Unicode braille
+   * textarea with a dirty-state lock. Whenever it has content the model
+   * uses those cells exactly as written; "Translate to braille" fills it
+   * from the text above, "Translate to text" back-translates it so a
+   * braille reader can verify pasted braille. (Ported from the
+   * braille-cylinder project's Braille (Unicode) field.)
    *
    * On a sign this drives the braille plate only — the raised letters
    * keep coming from the text box, since ADA 703 treats the two as
    * separate plates and a hand-corrected contraction should not silently
-   * rewrite the printed word above it.
+   * rewrite the printed word above it. On a charm each line is one charm.
    */
   buildBrailleField(section) {
     const isSign = this.mode === 'sign';
+    const isCharm = this.mode === 'charm';
     const details = document.createElement('details');
     details.className = 'braille-panel-field-editor forge-disclosure';
     details.id = 'brailleFieldEditor';
@@ -419,21 +421,34 @@ class BraillePanel {
     const help = document.createElement('p');
     help.id = 'brailleFieldHelp';
     help.className = 'braille-panel-help';
-    help.textContent = isSign
-      ? 'One line per braille row on the sign. Press "Translate to braille" ' +
+    if (isSign) {
+      help.textContent =
+        'One line per braille row on the sign. Press "Translate to braille" ' +
         'to fill this editor from your text, then change any cell. You can ' +
         'also paste braille, type it with six-key entry, or paste braille ' +
         'ASCII and press "Convert braille ASCII". Press "Translate to text" ' +
         'to read the braille back. Whenever this editor has content the ' +
         'braille plate uses it exactly as written, and the raised letters ' +
-        'still come from the text above. Clear it to go back to translating.'
-      : 'One line per card row. Press "Translate to braille" to fill this ' +
+        'still come from the text above. Clear it to go back to translating.';
+    } else if (isCharm) {
+      help.textContent =
+        'One line per charm. Press "Translate to braille" to fill this ' +
+        'editor from your characters, then change any cell. You can also ' +
+        'paste braille, type it with six-key entry, or paste braille ASCII ' +
+        'and press "Convert braille ASCII". Press "Translate to text" to ' +
+        'read the braille back. Whenever this editor has content each line ' +
+        `makes one charm of up to ${this.maxCells} cells, used exactly as ` +
+        'written. Clear it to go back to translating the characters above.';
+    } else {
+      help.textContent =
+        'One line per card row. Press "Translate to braille" to fill this ' +
         'editor from your text, then change any cell. You can also paste ' +
         'braille, type it with six-key entry, or paste braille ASCII and ' +
         'press "Convert braille ASCII". Press "Translate to text" to read ' +
         'the braille back. Whenever this editor has content the card uses ' +
         'it exactly as written. Clear it to go back to translating the ' +
         'text above.';
+    }
     details.appendChild(help);
 
     const toBrailleRow = document.createElement('div');
@@ -480,9 +495,13 @@ class BraillePanel {
     const fieldLabel = document.createElement('label');
     fieldLabel.setAttribute('for', 'brailleFieldInput');
     fieldLabel.className = 'braille-panel-label';
-    fieldLabel.textContent = isSign
-      ? 'Braille (Unicode), one line per braille row'
-      : 'Braille (Unicode), one line per row';
+    if (isSign) {
+      fieldLabel.textContent = 'Braille (Unicode), one line per braille row';
+    } else if (isCharm) {
+      fieldLabel.textContent = 'Braille (Unicode), one line per charm';
+    } else {
+      fieldLabel.textContent = 'Braille (Unicode), one line per row';
+    }
     details.appendChild(fieldLabel);
 
     const field = document.createElement('textarea');
@@ -554,30 +573,30 @@ class BraillePanel {
     details.appendChild(status);
     this.refs.fieldStatus = status;
 
-    const numberNote = document.createElement('p');
-    numberNote.id = 'brailleNumberSignHelp';
-    numberNote.className = 'braille-panel-help';
-    numberNote.textContent =
-      'UEB number signs: a hyphen or parenthesis ends numeric mode, so ' +
-      '206-543-4779 needs three number signs. That is correct ' +
-      'UEB output, not a bug. The BANA form 206.543.4779 keeps numeric ' +
-      'mode through the periods and needs only one. To adjust individual ' +
-      'cells by hand, use this editor.';
-    details.appendChild(numberNote);
+    // Numeric mode spans the characters of a typed line; a charm holds one
+    if (!isCharm) {
+      const numberNote = document.createElement('p');
+      numberNote.id = 'brailleNumberSignHelp';
+      numberNote.className = 'braille-panel-help';
+      numberNote.textContent =
+        'UEB number signs: a hyphen or parenthesis ends numeric mode, so ' +
+        '206-543-4779 needs three number signs. That is correct ' +
+        'UEB output, not a bug. The BANA form 206.543.4779 keeps numeric ' +
+        'mode through the periods and needs only one. To adjust individual ' +
+        'cells by hand, use this editor.';
+      details.appendChild(numberNote);
+    }
 
     section.appendChild(details);
     this.refs.fieldEditor = details;
   }
 
   /**
-   * @returns {boolean} Whether the braille editor exists for this mode and
-   *   holds content, in which case it overrides translation
+   * @returns {boolean} Whether the braille editor holds content, in which
+   *   case it overrides translation
    */
   isBrailleFieldActive() {
-    return (
-      (this.mode === 'card' || this.mode === 'sign') &&
-      (this.refs.fieldInput?.value ?? '').trim() !== ''
-    );
+    return (this.refs.fieldInput?.value ?? '').trim() !== '';
   }
 
   /** Update the braille editor's visible status line (a live region). */
@@ -621,6 +640,18 @@ class BraillePanel {
       const { layout } = await this.buildSignLayout();
       if (seq !== this.layoutSeq) return;
       rows = layout.brailleRows;
+    } else if (this.mode === 'charm') {
+      const table = this.refs.tableSelect.value || this.defaultTable;
+      const translate = this.makeTranslator(
+        table,
+        this.capitalsTreatment(),
+        new Set()
+      );
+      rows = await layoutCharmText({
+        text: this.refs.textarea.value,
+        translate,
+      });
+      if (seq !== this.layoutSeq) return;
     } else {
       const table = this.refs.tableSelect.value || this.defaultTable;
       const geometry = this.getGeometry();
@@ -675,7 +706,8 @@ class BraillePanel {
     }
     while (texts.length > 0 && texts[texts.length - 1] === '') texts.pop();
 
-    this.refs.textarea.value = texts.join('\n');
+    // A charm's characters share one line, one character per charm
+    this.refs.textarea.value = texts.join(this.mode === 'charm' ? '' : '\n');
     this.setFieldStatus(
       'Text above updated from this braille. The braille stays in charge ' +
         'until you clear this editor.'
@@ -755,7 +787,7 @@ class BraillePanel {
         'Contracted (Grade 2) fits more on a card; the Braille Authority of North America uses it in its business card examples. Uncontracted (Grade 1) spells every word letter by letter.';
     } else {
       tableHelp.textContent =
-        'Uncontracted (Grade 1) is recommended for names, emails, and short contact details. Use contracted (Grade 2) only when space is limited.';
+        'Uncontracted (Grade 1) gives each letter one cell, and a capital letter two. In contracted (Grade 2) most letters standing alone need an extra cell, so most capital letters no longer fit on a charm.';
     }
     section.appendChild(tableHelp);
   }
@@ -1237,7 +1269,10 @@ class BraillePanel {
       cardWidthMm: this.readNumericParam('cardWidth', 200),
       cardHeightMm: this.readNumericParam('cardHeight', 100),
       cellSpacingMm: this.readNumericParam('cellSpacing', 7),
-      lineSpacingMm: this.readNumericParam('lineSpacing', 10),
+      lineSpacingMm: this.readNumericParam(
+        'lineSpacing',
+        CARD_DEFAULT_LINE_SPACING
+      ),
       marginMm: Number(this.refs.marginInput?.value) || 6,
       maxRowsPerCard:
         Number(this.refs.rowsInput?.value) || this.lineParams.length || 8,
@@ -1679,6 +1714,10 @@ class BraillePanel {
   }
 
   async runCharmLayout() {
+    // The braille editor wins whenever it has content: its lines are the
+    // charms, exactly as written, with no liblouis pass.
+    if (this.isBrailleFieldActive()) return this.runCharmBrailleFieldLayout();
+
     const seq = ++this.layoutSeq;
     const text = this.refs.textarea.value.trim();
     const table = this.refs.tableSelect.value || this.defaultTable;
@@ -1688,14 +1727,7 @@ class BraillePanel {
     const untranslatable = new Set();
     const translate = this.makeTranslator(table, capitals, untranslatable);
 
-    // Each non-whitespace character becomes its own charm, translated
-    // individually (so "B" = capital indicator + b = 2 cells, within the
-    // per-charm cell budget).
-    const chars = [...text].filter((ch) => !/\s/u.test(ch));
-    const charms = [];
-    for (const ch of chars) {
-      charms.push({ braille: (await translate(ch)).braille, source: ch });
-    }
+    const charms = await layoutCharmText({ text, translate });
 
     if (seq !== this.layoutSeq) return;
 
@@ -1725,6 +1757,54 @@ class BraillePanel {
             : '.'),
       });
     }
+    this.finishCharmLayout(charms, warnings);
+  }
+
+  /**
+   * Charm layout from the braille editor: each line holding cells is one
+   * charm, used exactly as written. A character that is not braille keeps
+   * the charms as they were; a line longer than a charm holds is named.
+   */
+  runCharmBrailleFieldLayout() {
+    ++this.layoutSeq;
+    const { lines, warnings } = this.parseBrailleField(Infinity);
+    // Keep the editor visible while it drives the model
+    this.refs.fieldEditor.open = true;
+    if (warnings.some((w) => w.type === 'braille-field-invalid')) {
+      this.renderMessages(warnings);
+      return;
+    }
+    lines.forEach(({ braille }, i) => {
+      const cells = countCells(braille);
+      if (cells > this.maxCells) {
+        warnings.push({
+          type: 'charm-overflow',
+          message:
+            `Line ${i + 1} of the braille editor is ${cells} cells, but a ` +
+            `charm fits ${this.maxCells}. Move a cell to a line of its own.`,
+        });
+      }
+    });
+    warnings.push({
+      type: 'braille-field-active',
+      message:
+        'The braille editor has content, so the charms use that braille ' +
+        'exactly as written (the characters above are ignored until the ' +
+        'editor is cleared).',
+    });
+    const charms = lines
+      .filter(({ braille }) => braille !== '')
+      .map(({ braille }) => ({ braille, source: '' }));
+    this.finishCharmLayout(charms, warnings);
+  }
+
+  /**
+   * The end both charm layouts share: the slot limit, the panel's state,
+   * the messages and the model.
+   * @param {Array<{ braille: string, source: string }>} charms
+   * @param {Array<{ type: string, message: string }>} warnings
+   */
+  finishCharmLayout(charms, warnings) {
     if (
       charms.length > this.charmParams.length &&
       this.charmParams.length > 0
@@ -2221,15 +2301,20 @@ class BraillePanel {
 
     this.refs.notice.hidden = !multi;
     if (multi) {
+      const n = this.charms.length;
+      const fromEditor = this.isBrailleFieldActive();
+      const makes = fromEditor
+        ? `The braille editor makes ${n} charms, one per line.`
+        : `Your text makes ${n} charms, one per character.`;
       this.refs.noticeText.textContent = this.generateAll
-        ? `Your text makes ${this.charms.length} charms, one per ` +
-          `character. All of them render side by side in one model.`
-        : `Your text makes ${this.charms.length} charms, one per ` +
-          `character. Use the pager below to render and download each ` +
+        ? `${makes} All of them render side by side in one model.`
+        : `${makes} Use the pager below to render and download each ` +
           `charm separately.`;
-      if (this.charms.length !== this.lastAnnouncedCards) {
+      if (n !== this.lastAnnouncedCards) {
         stateManager.announceChange(
-          `Your text now makes ${this.charms.length} charms.`
+          fromEditor
+            ? `The braille editor now makes ${n} charms.`
+            : `Your text now makes ${n} charms.`
         );
       }
     }
@@ -2414,7 +2499,11 @@ class BraillePanel {
     const charms = this.charms;
     if (!charms || charms.length === 0) return null;
     if (charms.length > 1 && this.generateAll) {
-      const word = this.refs.textarea?.value.trim() ?? '';
+      // While the braille editor drives the charms, the characters box
+      // no longer names them
+      const word = this.isBrailleFieldActive()
+        ? ''
+        : (this.refs.textarea?.value.trim() ?? '');
       return word ? `Braille Charms ${word}` : 'Braille Charms';
     }
     const source =

@@ -34,6 +34,12 @@ let clearTimeoutAssertive = null;
 const DEFAULT_DEBOUNCE_MS = 350;
 const DEFAULT_CLEAR_DELAY_MS = 1500;
 
+// When the same words are still in the region, emptying it and writing them
+// again one frame later is too quick for the accessibility tree to see a
+// change, and the screen reader says nothing (D-239: a six-key cell repeating
+// the one before it went unsaid). A repeat waits this long after the clear.
+const REPEAT_GAP_MS = 100;
+
 // Politeness levels
 export const POLITENESS = {
   POLITE: 'polite',
@@ -112,13 +118,13 @@ export function announce(message, options = {}) {
   }
 
   const performAnnouncement = () => {
+    const repeat = srAnnouncer.textContent === message;
+
     // Clear first so repeated strings are re-announced reliably
     // (ARIA live regions may not re-announce identical content)
     srAnnouncer.textContent = '';
 
-    // Use requestAnimationFrame to ensure the clear is processed
-    // before setting the new content
-    requestAnimationFrame(() => {
+    const write = () => {
       srAnnouncer.textContent = message;
 
       // Schedule clearing the live region
@@ -130,15 +136,29 @@ export function announce(message, options = {}) {
         timers.setClearTimeout(null);
       }, clearDelayMs);
       timers.setClearTimeout(clearId);
-    });
+    };
+
+    if (repeat) {
+      // Held in the debounce slot, so a newer announcement cancels the wait
+      const repeatId = window.setTimeout(() => {
+        timers.setTimeout(null);
+        write();
+      }, REPEAT_GAP_MS);
+      timers.setTimeout(repeatId);
+    } else {
+      // Use requestAnimationFrame to ensure the clear is processed
+      // before setting the new content
+      requestAnimationFrame(write);
+    }
   };
 
   if (immediate || debounceMs === 0) {
     performAnnouncement();
   } else {
     const timeoutId = window.setTimeout(() => {
-      performAnnouncement();
+      // Freed first: a repeat may take the slot for its own wait
       timers.setTimeout(null);
+      performAnnouncement();
     }, debounceMs);
     timers.setTimeout(timeoutId);
   }
