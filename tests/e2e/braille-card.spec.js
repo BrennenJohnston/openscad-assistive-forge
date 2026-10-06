@@ -690,7 +690,7 @@ test.describe('Braille translation workflow (card)', () => {
 
     await openBrailleCard(page)
 
-    // Business card height (51 mm) fits 3 rows at the default 10 mm line
+    // Business card height (51 mm) fits 3 rows at the default 10.1 mm line
     // spacing and 6 mm margin; the default Max rows per card is 8.
     await page.locator('#brailleSizePreset').selectOption('business')
     await page.locator('#brailleTextInput').fill('hello')

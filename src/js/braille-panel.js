@@ -59,6 +59,9 @@ export const SIGN_BORDER_CLEARANCE_MM = 9.525;
 /** The sign's default letter spacing, the SCAD's `letter_spacing`. */
 export const SIGN_DEFAULT_LETTER_SPACING = 1.21;
 
+/** The card's default line spacing (mm), the SCAD's `line_spacing`. */
+export const CARD_DEFAULT_LINE_SPACING = 10.1;
+
 const MARGIN_PRESETS = [
   { id: 'narrow', label: 'Narrow (6 mm)', value: 6 },
   { id: 'standard', label: 'Standard (12.7 mm / 0.5 in)', value: 12.7 },
@@ -1238,7 +1241,10 @@ class BraillePanel {
       cardWidthMm: this.readNumericParam('cardWidth', 200),
       cardHeightMm: this.readNumericParam('cardHeight', 100),
       cellSpacingMm: this.readNumericParam('cellSpacing', 7),
-      lineSpacingMm: this.readNumericParam('lineSpacing', 10),
+      lineSpacingMm: this.readNumericParam(
+        'lineSpacing',
+        CARD_DEFAULT_LINE_SPACING
+      ),
       marginMm: Number(this.refs.marginInput?.value) || 6,
       maxRowsPerCard:
         Number(this.refs.rowsInput?.value) || this.lineParams.length || 8,
