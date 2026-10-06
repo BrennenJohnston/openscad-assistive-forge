@@ -1,6 +1,6 @@
 /**
- * Movement, collision, and camera-pose math for the ASCII City Walk game
- * (CW-3). Deliberately three.js-free and DOM-free: the controller applies
+ * Movement, collision, and camera-pose math for the ASCII City Walk game.
+ * Deliberately three.js-free and DOM-free: the controller applies
  * the resulting pose to its cameras, and vitest exercises everything
  * headlessly.
  *
@@ -13,7 +13,7 @@
 
 export const EYE_HEIGHT_M = 1.7;
 
-// CW-48: the announced percent is a LABEL on a two-slope curve, not a
+// The announced percent is a label on a two-slope curve, not a
 // multiplier of anything. Two anchors fix the curve: label 100 is the
 // default brisk city walk and label 300 is the top of the range. Below the
 // default the slope is three times as steep, so the 50-point span down to
@@ -27,13 +27,13 @@ const SPEED_AT_MAX_LABEL_MPS = 8.0;
 const SPEED_AT_MIN_LABEL_MPS = 2.4;
 
 // Shift outruns the CURRENT walk at every label rather than racing a fixed
-// floor, which is what let a fast walk overtake sprinting before CW-48.
+// floor, which would let a fast walk overtake sprinting.
 export const SPRINT_MULTIPLIER = 1.6;
 export const SPRINT_MAX_MPS = 9.6;
 
 export const TURN_SPEED_RADPS = (90 * Math.PI) / 180;
 export const PITCH_SPEED_RADPS = (45 * Math.PI) / 180;
-// Gaze limit (CW-13). lookAt() with a fixed world up degenerates when the
+// Gaze limit. lookAt() with a fixed world up degenerates when the
 // gaze becomes parallel to that up vector; +/-60 degrees keeps a wide margin
 // from the +/-90 singularity while still reaching the top of a tower from the
 // pavement below it.
@@ -43,23 +43,20 @@ export const PLAYER_RADIUS_M = 0.3;
 // Integration clamp: a background tab must not teleport the player.
 const MAX_STEP_DT_S = 0.1;
 
-// Collision is tested at the ENDS of a move, so a move longer than the thing
-// it crosses can step over it. Before CW-48 that resolution silently depended
-// on how fast you walked - 0.16 m per clamped frame at the default, 0.48 m
-// for anyone who had turned the speed up - and tripling the default would
-// have made the loose case the normal one. Measured on a lone street prop
-// (one blocked cell): clean at 0.80 m of travel, thirty pass-throughs at
-// 0.96 m, which the top of the new range reaches.
+// Collision is tested at the ends of a move, so a move longer than the thing
+// it crosses can step over it. If the move length depended on walking speed,
+// so would collision: measured on a lone street prop (one blocked cell), a
+// move is clean at 0.80 m of travel and passes through thirty times at
+// 0.96 m, which the top of the speed range reaches.
 //
 // So each move is split into hops of a fixed length instead, and collision
-// resolution stops depending on speed at all. Half the player's own radius is
-// short enough that no hop can skip a cell the body probe would have caught,
-// and it happens to match the resolution the game shipped at its old default.
+// resolution does not depend on speed at all. Half the player's own radius is
+// short enough that no hop can skip a cell the body probe would have caught.
 // Measured cost of the split on the real Seattle grid: stepWalk runs once per
 // frame at 0.10-0.14 us, and each extra hop adds about 0.03 us, against a
 // 33 ms frame budget.
 const MAX_SUBSTEP_M = PLAYER_RADIUS_M / 2;
-// Below this a hop component is float dust, not movement (CW-81): a micron
+// Below this a hop component is float dust, not movement: a micron
 // per hop even at 30 fps is 30 um/s, four orders under anything visible.
 const MIN_HOP_M = 1e-6;
 
@@ -82,9 +79,9 @@ export function normalizeHeading(h) {
 }
 
 /**
- * Pitch never wraps: it is a bounded gaze angle, not a bearing. States
- * written before CW-13 (and the test fixtures that build them by hand) carry
- * no pitchRad at all, which reads as level.
+ * Pitch never wraps: it is a bounded gaze angle, not a bearing. Some states
+ * (the test fixtures that build them by hand) carry no pitchRad at all,
+ * which reads as level.
  */
 export function clampPitch(p) {
   if (!Number.isFinite(p)) return 0;
@@ -106,7 +103,7 @@ export function clampSpeedLabel(label) {
 }
 
 /**
- * Meters per second for an announced speed label (CW-48).
+ * Meters per second for an announced speed label.
  *
  * @param {number} label
  * @returns {number}
@@ -123,9 +120,9 @@ export function speedForLabel(label) {
 }
 
 /**
- * Read a stored walking-speed preference as a label, migrating the value the
- * pre-CW-48 game wrote under the same key (UF-14: the key NAME never moves,
- * the values do). That key held a 0.5–3.0 multiplier of a slower walk; it now
+ * Read a stored walking-speed preference as a label, migrating the value
+ * older builds wrote under the same key (the key name never moves, the
+ * values do). That key held a 0.5–3.0 multiplier of a slower walk; it now
  * holds a 50–300 label. The two ranges do not overlap, so the stored number
  * itself says which vocabulary wrote it. An old multiplier m announced itself
  * as m*100 percent, and the old 300 percent is this scale's 100.
@@ -147,8 +144,8 @@ export function speedLabelFromStored(raw) {
  * @param {{forward?: number, strafe?: number, turn?: number, pitch?: number, fast?: boolean, speedLabel?: number}} input
  *   forward: +1 forward / -1 back; strafe: +1 right / -1 left;
  *   turn: +1 clockwise (right) / -1 counter-clockwise;
- *   pitch: +1 look up / -1 look down (CW-13); speedLabel: the announced
- *   CW-48 speed label (50–300, default 100) — Shift sprint multiplies
+ *   pitch: +1 look up / -1 look down; speedLabel: the announced
+ *   speed label (50–300, default 100) — Shift sprint multiplies
  *   whatever that label is currently worth
  * @param {number} dtS - seconds since last frame
  * @param {{isBlocked: (x: number, y: number) => boolean}} [collision]
@@ -185,9 +182,9 @@ export function stepWalk(state, input, dtS, collision) {
   if (forward === 0 && strafe === 0) return { moved: false, turned, pitched };
 
   const walkSpeed = speedForLabel(input.speedLabel);
-  // CW-81: the acceleration ramp. `speedScale` (0..1) lets a caller ease the
+  // The acceleration ramp. `speedScale` (0..1) lets a caller ease the
   // walker up to speed and back down instead of starting every step at the
-  // full 4.8 m/s from rest; absent, everything behaves exactly as before.
+  // full 4.8 m/s from rest; absent, there is no ramp.
   const speedScale = Number.isFinite(input.speedScale)
     ? Math.min(1, Math.max(0, input.speedScale))
     : 1;
@@ -240,13 +237,13 @@ export function stepWalk(state, input, dtS, collision) {
   return { moved, turned, pitched };
 }
 
-/** Level for anything built before CW-13 or by a fixture that omits it. */
+/** Level for any state that carries no pitch, such as a fixture's. */
 function currentPitch(state) {
   return Number.isFinite(state.pitchRad) ? state.pitchRad : 0;
 }
 
 /**
- * Curb height (CW-50). The common US barrier curb is 6 inches; municipal
+ * Curb height. The common US barrier curb is 6 inches; municipal
  * standard details put it at 0.15 m, which is the number used here.
  *
  * The city is modelled the way it is built: the PAVEMENT is the ground, and
@@ -262,12 +259,12 @@ export const CURB_HEIGHT_M = 0.15;
  * How much ground the walker covers while the eye climbs a curb. Short enough
  * to feel like a step up rather than a ramp, long enough that it is not a
  * jolt. Distance rather than time, so the feel does not change with walking
- * speed - the same reasoning that fixed the collision hop in CW-48.
+ * speed - the same reasoning as the fixed-length collision hop.
  */
 export const CURB_EASE_M = 0.5;
 
 /**
- * CW-79: the ground's real height, from the extract's terrain block.
+ * The ground's real height, from the extract's terrain block.
  *
  * Bilinear over the bake's 30 m DEM grid, expressed RELATIVE to the city's
  * lowest sampled ground (the datum), so z = 0 stays "the lowest street" and
@@ -352,7 +349,7 @@ export function buildTerrain(elevation) {
 }
 
 /**
- * CW-80: the grade under the walker's next stride, as a signed percent -
+ * The grade under the walker's next stride, as a signed percent -
  * positive uphill, negative downhill, null where the city has no terrain.
  * Measured over probeM along the heading on the TERRAIN, never on the
  * surface grid: the kerb cut is a step, not a slope, and a sentence that
@@ -459,9 +456,8 @@ export function buildSurfaceGrid(model, options = {}) {
     stampAlong(road.points ?? [], road.widthM / 2, 0);
   }
 
-  // CW-79: the kerb cut rides ON the terrain. With no terrain block (a v1
-  // extract, every hand-built fixture) the city stays flat and this returns
-  // exactly what it always has.
+  // The kerb cut rides on the terrain. With no terrain block (a v1 extract,
+  // every hand-built fixture) the city stays flat.
   const terrain =
     options.terrain !== undefined
       ? options.terrain
@@ -473,10 +469,8 @@ export function buildSurfaceGrid(model, options = {}) {
     cellM,
     terrain,
     /**
-     * CW-79: whether (x, y) is PAVEMENT - the question heightAt used to
-     * answer with a bare zero before the ground had height. Every reader
-     * that asked 'heightAt === 0' meant THIS, and the terrain term would
-     * have silently broken each one.
+     * Whether (x, y) is pavement. Readers must ask this rather than test
+     * `heightAt === 0`: with terrain, pavement is not at height zero.
      */
     isPavement(x, y) {
       const cx = Math.floor((x - originX) / cellM);
@@ -499,7 +493,7 @@ export function buildSurfaceGrid(model, options = {}) {
 }
 
 /**
- * How wide the pavement apron beside a roadway is drawn (CW-50). The same
+ * How wide the pavement apron beside a roadway is drawn. The same
  * number a separately-mapped pavement uses, so a street with a mapped
  * pavement and one without read alike.
  */
@@ -515,21 +509,20 @@ const UNPAVED_FOR_SURFACE = new Set([
 ]);
 
 /**
- * CW-95 (CW-Q82): ways that are WALKED, never driven - a transit platform,
- * an indoor corridor, a road closed for rebuilding. Each used to fall
- * through the width table into a five-metre ROADWAY ribbon, which put a
- * carriageway on a light-rail platform and parked the bench-sitter law's
- * "will not invent a person sitting on the tarmac" refusal on top of the
- * platform benches. They are pavement-family now: walkable open ground.
+ * Ways that are walked, never driven - a transit platform, an indoor
+ * corridor, a road closed for rebuilding. Through the width table each
+ * would become a five-metre roadway ribbon, which puts a carriageway on a
+ * light-rail platform and refuses the benches on it a sitter (nobody sits
+ * on the tarmac). They are pavement-family: walkable open ground.
  */
 const WALKED_NOT_DRIVEN = new Set(['platform', 'corridor', 'construction']);
 
 /**
- * Whether a way IS pavement rather than a roadway with pavement beside it
- * (CW-50, CW-Q64). A separately-mapped pavement obviously is one; so is a
- * pedestrianised street, which is pavement end to end - cutting a roadway
- * down the middle of one would invent a road that is not there. CW-95 adds
- * the walked-never-driven kinds above.
+ * Whether a way is pavement rather than a roadway with pavement beside it.
+ * A separately-mapped pavement obviously is one; so is a pedestrianised
+ * street, which is pavement end to end - cutting a roadway down the middle
+ * of one would invent a road that is not there. So are the
+ * walked-never-driven kinds above.
  *
  * The scene and this grid both read it, so the two cannot drift apart about
  * where the ground is: cross-file disagreement about a shared value is this
@@ -548,7 +541,7 @@ export function isPavementWay(road) {
 
 /**
  * Whether a way is drawn as a ROADWAY - the ribbon a car drives on and a
- * lamp post must not stand in (CW-75).
+ * lamp post must not stand in.
  *
  * It is the same test the surface grid above makes and the same one
  * `city-scene.js` makes when it lays the road ribbons down, said once so the
@@ -580,7 +573,7 @@ function rectCorners(rect) {
 }
 
 /**
- * Whether two rotated rectangles overlap - separating axis, exact (CW-75).
+ * Whether two rotated rectangles overlap - separating axis, exact.
  *
  * Touching is NOT overlapping: two cars parked nose to tail with their
  * bumpers on the same line are legal, and the test says so, because the
@@ -629,15 +622,14 @@ export function rectsOverlap(a, b) {
 const ROADWAY_SLACK_M = 2;
 
 /**
- * ★ THE ROAD-RIBBON INDEX (CW-75).
+ * The road-ribbon index.
  *
- * Every placement stream in `buildStreetProps` used to know about exactly one
- * road: its own. Infill trees are planted 1.2 m outside THEIR kerb and never
- * asked whether that spot is in the middle of the street they are crossing,
- * which is how 735 tree trunks came to stand inside Seattle roadways - a side
- * street planting into the ribbon of the street it meets. Lamps ride the same
- * law. A prop cannot be tested against every road by scanning every road, so
- * the roads are bucketed once and every stream asks the same index.
+ * A placement stream in `buildStreetProps` knows about exactly one road: its
+ * own. An infill tree planted 1.2 m outside its own kerb may be in the middle
+ * of the street that road crosses - a side street planting into the ribbon
+ * of the street it meets - and lamps ride the same rule. A prop cannot be
+ * tested against every road by scanning every road, so the roads are
+ * bucketed once and every stream asks the same index.
  *
  * The index is pure geometry: no meshes, no model, no random stream. That is
  * what lets `scripts/census-city-walk.mjs` audit placement with the code's own
@@ -767,7 +759,7 @@ export function buildRoadwayIndex(roads, options = {}) {
 
 /**
  * Move the walker's ground height toward what is underfoot, at a rate fixed
- * per METER traveled rather than per second (CW-50). Standing still on a
+ * per meter traveled rather than per second. Standing still on a
  * changed surface - a teleport, a spawn - snaps, because there is no step to
  * smooth out.
  *
@@ -792,7 +784,7 @@ export function easeGroundZ(state, surface, travelledM) {
 
 /**
  * Rotate the gaze by absolute angles rather than by a held-key rate: the
- * drag-look path (CW-13) converts pointer travel straight into radians.
+ * drag-look path converts pointer travel straight into radians.
  * Clamping lives here so the controller never re-implements the limit.
  *
  * @param {{headingRad:number, pitchRad?:number}} state - mutated in place
@@ -821,7 +813,7 @@ export function applyLookDelta(state, yawDeltaRad, pitchDeltaRad) {
 }
 
 /**
- * Return the gaze to the horizon (CW-13).
+ * Return the gaze to the horizon.
  *
  * @param {{pitchRad?: number}} state - mutated in place
  * @returns {boolean} whether anything actually moved
@@ -866,9 +858,8 @@ export function firstPersonPose(state) {
   const cosP = Math.cos(pitch);
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
-  // CW-50: the eye rides whatever is underfoot. A state that carries no
-  // ground height - a fixture, anything built before the curb existed - reads
-  // as level ground, which is what it was.
+  // The eye rides whatever is underfoot. A state that carries no ground
+  // height - a fixture, for one - reads as level ground.
   const eyeZ =
     EYE_HEIGHT_M + (Number.isFinite(state.groundZ) ? state.groundZ : 0);
   return {
@@ -957,7 +948,7 @@ export function buildCollisionGrid(model, options = {}) {
     cols,
     rows,
     cellM,
-    // CW-87: the tour's A* needs cell centers in world meters, which needs
+    // The tour's A* needs cell centers in world meters, which needs
     // the grid's origin - isBlocked alone cannot be inverted.
     originX,
     originY,
@@ -968,7 +959,7 @@ export function buildCollisionGrid(model, options = {}) {
       return cells[cy * cols + cx] === 1;
     },
     /**
-     * Block the cells a rotated rectangle covers (CW-16 street props).
+     * Block the cells a rotated rectangle covers (street props).
      * Returns how many cells this call newly blocked.
      *
      * @param {{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad?:number}} rect
@@ -1016,7 +1007,7 @@ export function buildCollisionGrid(model, options = {}) {
 }
 
 /**
- * Stamp street props into an existing collision grid (CW-16). Cars and tree
+ * Stamp street props into an existing collision grid. Cars and tree
  * trunks block; canopies are overhead and never reach this list.
  *
  * Order matters at the call site: the grid must exist before the props are
@@ -1095,15 +1086,14 @@ export function pointInRing(x, y, ring) {
  * Choose a spawn point: the road vertex nearest the extract center that is
  * not inside a building, falling back to a spiral probe around the center.
  *
- * CW-78: an optional anchor moves the search - the spawn becomes the clear
+ * An optional anchor moves the search - the spawn becomes the clear
  * road vertex nearest the anchor among those within `withinM` of it (the
  * registry's first row, so a city starts in sight of its icon). `minM`
  * keeps a viewing distance: Seattle's nearest clear vertex to the Great
- * Wheel is 18 m away ON the pier, where a 53 m wheel is legs filling the
+ * Wheel is 18 m away on the pier, where a 53 m wheel is legs filling the
  * frame rather than a wheel - vertices nearer than minM are passed over
  * while anything in the ring remains. If nothing within the ring is clear,
- * the center rule stands and the caller's record says so; a silent bad
- * spawn is worse than an honest central one.
+ * the center rule stands.
  *
  * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
  * @param {{isBlocked: (x:number, y:number) => boolean}} collision
@@ -1169,11 +1159,9 @@ export function findSpawn(model, collision, anchor) {
 /**
  * The heading a spawned walker should face: the direction with the longest
  * clear, walkable run, measured with the same collision test the walker
- * uses (CW-44). The old fixed "face north" stood the CW-44 Seattle player
- * 2.5 m from a storefront; CI found it before a person did, because
- * software-rendered frames ride the dt clamp and cover more ground per
- * frame than a live GPU's do. Deterministic: eight compass directions,
- * ties keep the northmost-first order.
+ * uses. A fixed "face north" can stand a player 2.5 m from a storefront.
+ * Deterministic: eight compass directions, ties keep the northmost-first
+ * order.
  *
  * @param {{isBlocked: (x:number, y:number) => boolean}} collision
  * @param {number} x
@@ -1205,7 +1193,7 @@ export function findClearHeading(collision, x, y, options = {}) {
 }
 
 /**
- * CW-87 street-following: where auto-walk should steer when the way ahead
+ * Street-following: where auto-walk should steer when the way ahead
  * closes. Probes a fan of bearings within 90 degrees either side of the
  * current one for clear run (body circle, sampled every stepM out to
  * lookM); the longest run wins, with a small straightness bias so the walk
@@ -1279,7 +1267,7 @@ export function segmentClear(collision, x0, y0, x1, y1) {
 }
 
 /**
- * CW-87: a walkable route from one point to another over the collision
+ * A walkable route from one point to another over the collision
  * grid - A* on cell centers with the walker's own body probe deciding
  * walkability, diagonals allowed only when both flanking orthogonal cells
  * are walkable (a disc cannot cut a corner stepWalk would refuse), then
@@ -1437,7 +1425,7 @@ export function findRoute(collision, from, to, options = {}) {
 /**
  * How far from a picked point the landing may look for a street before it
  * gives up on streets, and how far it may then look for any open ground.
- * Both are owner-reversible in one place (CW-36).
+ * Both are set in this one place.
  */
 export const LANDING_SNAP_M = 25;
 export const LANDING_SEARCH_M = 200;
@@ -1454,7 +1442,7 @@ function projectOnSegment(x, y, ax, ay, bx, by) {
 }
 
 /**
- * Where a player dropped at (targetX, targetY) should actually land (CW-36).
+ * Where a player dropped at (targetX, targetY) should actually land.
  *
  * Generalizes findSpawn from "nearest road to the origin" to "nearest road to
  * a point the player picked", with the same isCircleBlocked oracle and the
@@ -1574,7 +1562,7 @@ export function fitOrthoToBounds(boundsM, aspect, marginM = 20) {
 }
 
 // ---------------------------------------------------------------------------
-// Map camera (CW-9): pan / zoom / follow state for the overhead view
+// Map camera: pan / zoom / follow state for the overhead view
 // ---------------------------------------------------------------------------
 
 export const MAP_ZOOM_MIN = 0.4;
@@ -1682,9 +1670,9 @@ export function mapCameraFrustum(cam, boundsM, aspect) {
 }
 
 // ---------------------------------------------------------------------------
-// Character size (CW-12): the in-game ASCII glyph scale
+// Character size: the in-game ASCII glyph scale
 // ---------------------------------------------------------------------------
-// The floor is MEASURED, not guessed (CW-Q10). At a 1920x993 game viewport the
+// The floor is measured, not guessed. At a 1920x993 game viewport the
 // converter's auto base font is 21 px, so 10% lands on the renderer's own 3 px
 // font floor - the smallest size that still changes anything. 5% and 15% both
 // render identically to 10%, which is why the range stops here.
@@ -1699,13 +1687,11 @@ export const CHAR_SCALE_STEP = 0.1;
 export const CHAR_SCALE_DEFAULT = 0.5;
 
 /**
- * CW-72 (CW-Q75, signed by the owner at G1): THE ONE DEFAULT CHARACTER SIZE.
+ * The one default character size.
  *
- * CW-42 landed every machine on its own calibrated size, so two players saw
- * two different games and no picture either of them described was the picture
- * the other had. This is the size everyone starts at, chosen from the bench
- * rather than from a preference: 45-second scripted walks in heavy rain on an
- * Intel Iris Xe, the owner's signed hardware target.
+ * Everyone starts at the same size, so two players see the same game. It is
+ * chosen from the bench rather than from a preference: 45-second scripted
+ * walks in heavy rain on an Intel Iris Xe, the hardware target.
  *
  *   size   full speed   four times slow (Seattle / Denver)
  *   10%      59.3 fps       29.8  -           fails the bar
@@ -1713,9 +1699,9 @@ export const CHAR_SCALE_DEFAULT = 0.5;
  *   40%      -              -    / 43.5       holds
  *   50%      59.9           41.6 / -          holds
  *
- * 10% and 20% are the SAME 2x4 pixel cell (the three-pixel font floor), so the
+ * 10% and 20% are the same 2x4 pixel cell (the three-pixel font floor), so the
  * ladder is really 10 / 30 / 40 / 50, and 30 is the smallest rung that clears
- * thirty frames a second on a slow machine in BOTH the light city and the
+ * thirty frames a second on a slow machine in both the light city and the
  * heavy one.
  */
 export const CITY_DEFAULT_CHAR_SCALE = 0.3;
@@ -1728,9 +1714,9 @@ export const CITY_DEFAULT_CHAR_SCALE = 0.3;
  * 0.05-step slider, so 0.85 would otherwise start a ladder of 85/95/100 that
  * never lines up with the steps the help text promises.
  *
- * CW-42 (CW-Q39): the range's bottom can be raised per machine — the
+ * The range's bottom can be raised per machine — the
  * calibrated floor arrives as an argument so this module stays pure. Only
- * ADJUSTMENTS pass it: a stored manual choice below today's floor is
+ * adjustments pass it: a stored manual choice below today's floor is
  * grandfathered on seed, never clamped up (auto must not fight it).
  *
  * @param {number} scale
@@ -1750,31 +1736,18 @@ export function clampCharScale(scale, floorScale = null) {
 }
 
 /**
- * Decide the character scale a session opens at (CW-Q10, amended CW-Q39,
- * rewritten CW-72 for CW-Q75).
+ * Decide the character scale a session opens at.
  *
- * ONE DEFAULT FOR EVERYONE. CW-42 seeded from the machine's own calibrated
- * landing and, failing that, from the main app's Alt View slider - so two
- * players, and even one player on two machines, opened two different games.
- * There are now two inputs and one of them is a floor:
+ * One default for everyone. There are two inputs and one of them is a
+ * floor:
  *
- *   1. The player's own saved size. Their choice, and it sticks.
- *   2. The floor this machine measured for itself, which SEEDS a player who
+ *   1. The player's own saved size. Their choice, and it sticks, down to
+ *      10 per cent.
+ *   2. The floor this machine measured for itself, which seeds a player who
  *      has never chosen. It does not clamp one who has.
  *
- * The shared Alt View preference no longer seeds the game at all: a slider in
- * the main app deciding how coarse the city looks is exactly the second size
- * this release exists to remove.
- *
- * CW-88 (CW-Q87): the floor used to raise a saved size up to itself, and the
- * owner reversed that half of CW-Q68 - keep 30 per cent as the default, and
- * let a player who wants to adjust go as small as 10 again. Three comments in
- * this codebase already described the behavior restored here, including
- * `clampCharScale`'s own docblock above ("a stored manual choice below
- * today's floor is grandfathered on seed, never clamped up") and two in the
- * controller; CW-72's `Math.max` is what diverged from them. The DEFAULT half
- * of CW-Q68 stands: 30 per cent for anybody with no saved choice, raised by
- * the calibration.
+ * The shared Alt View preference does not seed the game: a slider in the
+ * main app must not decide how coarse the city looks.
  *
  * @param {string|null|undefined} savedGame - the game's own persisted value
  * @param {number|null} [floorScale] - the decoded stored floor, if any

@@ -1,18 +1,17 @@
 /**
- * Map view styles (CW-60, CW-Q57).
+ * Map view styles.
  *
  * Four ways of drawing the same overhead map, informed by tactile-map
  * practice: one layer per finger-load, drastic simplification, landmarks
- * kept. Sources in plan section 3e - the Cartographic Journal guidelines
+ * kept. Sources: the Cartographic Journal guidelines
  * review (Wabinski/Moscicka/Touya 2022), BANA's Guidelines and Standards for
  * Tactile Graphics (2010), and the Swedish MTM production guidelines (2003).
  *
- * ★★ WHAT HIDES IS THE POINT, NOT WHAT REMAINS. A style that only recoloured
+ * What hides is the point, not what remains. A style that only recoloured
  * things would be a palette swap wearing a tactile-map argument. Every row
- * below removes something, and the release record says what each one costs
- * you as well as what it buys.
+ * below removes something.
  *
- * These are TONES AND VISIBILITY ONLY. No geometry is rebuilt when the style
+ * These are tones and visibility only. No geometry is rebuilt when the style
  * changes, so switching is free and nothing can drift out of step with the
  * street view - which is untouched by all of this.
  *
@@ -23,16 +22,15 @@
  * `tone` is a hex color or null to leave the map default alone.
  * `show` false hides the layer outright.
  *
- * `wayfinding` is the only layer that is OFF by default: CW-43 parsed it and
- * nothing has ever drawn it, and drawing five thousand marks over a whole
- * city is exactly the sort of thing that turns into a carpet. It earns its
- * place in one style, where it is the subject.
+ * `wayfinding` is the only layer that is off by default: drawing five
+ * thousand marks over a whole city is exactly the sort of thing that turns
+ * into a carpet. It earns its place in one style, where it is the subject.
  */
 export const MAP_STYLES = [
   {
     id: 'standard',
     name: 'Standard',
-    /** What a reader loses by choosing this one, for the record and the help. */
+    /** What a reader loses by choosing this one. */
     hides: 'nothing',
     detail: 'The whole map, with streets, buildings and parks.',
     roads: { show: true, tone: null },
@@ -74,13 +72,11 @@ export const MAP_STYLES = [
     name: 'Wayfinding',
     hides: 'building detail, and dims the network',
     // 'curbs', not 'kerbs': the OSM tag and this file's own data are British
-    // and the game's UI text is US English (the toolbar's 'Center on you'
-    // settled that already). Flagged in the text pack all the same.
+    // and the game's UI text is US English, like the toolbar's 'Center on you'.
     detail: 'Crossings, tactile paving and curbs are marked over a dimmed map.',
-    // ★ THE MISSION STYLE. CW-43's crossings, kerbs and tactile paving have
-    // been in the model since it was parsed and have never been drawn. Here
-    // they are the subject, and everything else is dimmed to be the ground
-    // they sit on rather than competition for them.
+    // The mission style. Crossings, kerbs and tactile paving are in the model
+    // and drawn nowhere else. Here they are the subject, and everything else
+    // is dimmed to be the ground they sit on rather than competition for them.
     roads: { show: true, tone: 0x2a2a2a },
     sidewalks: { show: true, tone: 0x3a3a3a },
     buildings: { show: true, tone: 0x181818 },
@@ -93,12 +89,12 @@ export const MAP_STYLES = [
 export const DEFAULT_MAP_STYLE = 'standard';
 
 /**
- * ACCESSIBILITY-CRITICAL STRING (D-35), flagged DOUBLY in CW-R7-TEXT-PACK.md.
+ * Accessibility-critical string.
  *
  * A style change is a change to the whole picture, and the picture is the one
  * thing a screen-reader user cannot check for themselves. So the sentence
- * names the style AND says what it did, which is the same pair the style
- * table already carries for the record.
+ * names the style and says what it did, the same pair the style table
+ * carries.
  */
 export function mapStyleAnnouncement(styleId) {
   const style = mapStyleById(styleId);
@@ -122,26 +118,22 @@ export function cycleMapStyle(id, delta) {
 }
 
 /**
- * Wayfinding marks (CW-60), and the whole difficulty is SIZE.
+ * Wayfinding marks, and the whole difficulty is size.
  *
- * ★★ A MARK MUST BE A SCREEN SIZE, NOT A NUMBER OF METERS. Seattle has 5,355
+ * A mark must be a screen size, not a number of meters. Seattle has 5,355
  * wayfinding points. At the map's widest the entire city is a few hundred
  * character cells, so marks drawn at a fixed number of meters are either
  * invisible zoomed out or the size of a block zoomed in. Either way the layer
- * stops being a layer.
- *
- * ★ THE FIRST ATTEMPT GOT THIS WRONG IN A WAY WORTH KEEPING. It used a fixed
- * 2.6 m divided by the zoom, which at zoom 1 is 2.6 m - and at zoom 1 the
- * whole city is in frame, so one pixel is about four meters. The marks were
- * SUB-PIXEL and the style photographed as an empty dimmed map. The fix is the
- * family the player marker already uses: a fraction of the CITY'S OWN SPAN,
- * scaled by the zoom, so it works for a small extract and a large one alike.
+ * stops being a layer. (A fixed 2.6 m divided by the zoom is sub-pixel at
+ * zoom 1, where one pixel is about four meters.) So the size is the family
+ * the player marker uses: a fraction of the city's own span, scaled by the
+ * zoom, so it works for a small extract and a large one alike.
  *
  * The marker uses `spanM * 0.025` and `2.2 / zoom`. A wayfinding mark is far
  * smaller because there are thousands of them rather than one.
  */
 export const WAYFIND_MARK_SPAN_FRACTION = 0.0035;
-/** The same clamp family the player marker uses (CW-40). */
+/** The same clamp family the player marker uses. */
 export const WAYFIND_ZOOM_MIN = 0.6;
 export const WAYFIND_ZOOM_MAX = 3.5;
 

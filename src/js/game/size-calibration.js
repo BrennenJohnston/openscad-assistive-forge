@@ -1,22 +1,19 @@
 /**
  * @license GPL-3.0-or-later
  */
-// CW-42 (CW-Q39): the floor knows this machine.
+// The floor knows this machine.
 //
-// The owner: "Lower character size should be set automatically to a range
-// of 10% to 30% depending on the user's browser performance range, allowing
-// for 30 fps." The signed design is BOTH: the smallest size in [10%, 30%]
-// that holds 30 fps becomes the range's FLOOR and the landing DEFAULT for
-// players who never chose a size themselves. A manual choice sticks.
+// Everybody gets one default character size. On a machine that cannot hold
+// 30 fps at it, the size floor rises to the smallest rung of a ladder that
+// does. A manual choice sticks.
 //
 // This module is the pure half: given measured convert-time readings, which
 // size wins. It owns no timers, no DOM and no storage, so every branch is
 // unit-testable, and the controller's probe loop stays a thin driver.
 //
-// WHY THE CANDIDATES ARE 10 AND 30, NOT 10/20/30 (measured, CW-41): the
-// converter's 3px font floor maps 10% and 20% to the SAME rendered size
-// (fontSizePx 3, cell 2x4), so the range holds exactly two distinct costs.
-// Probing 20 would measure nothing 10 does not.
+// The legacy candidates are 10 and 30, not 10/20/30, because the
+// converter's 3px font floor maps 10% and 20% to the same rendered size
+// (fontSizePx 3, cell 2x4).
 //
 // "Holds 30 fps" operationally: convert average <= the converter's own
 // 30-conversions-per-second governor ceiling (_MIN_INTERVAL_MS = 33). A
@@ -26,14 +23,14 @@
 /** The 30 fps bar, in convert milliseconds (the governor's own ceiling). */
 export const CALIBRATION_BAR_MS = 33;
 
-// CW-72's one default lives with the other size constants, in walk-controls,
+// The one default lives with the other size constants, in walk-controls,
 // and is re-exported here because every caller of this module wants it.
 import { CITY_DEFAULT_CHAR_SCALE } from './walk-controls.js';
 export { CITY_DEFAULT_CHAR_SCALE };
 
 /**
  * The sizes the floor may RAISE to, in order, on a machine that cannot hold
- * the default. It never goes below: calibration is a floor now, not a landing.
+ * the default. It never goes below: calibration is a floor, not a landing.
  * A slower machine gets a coarser picture of the same game.
  */
 export const CALIBRATION_FLOOR_LADDER = [0.3, 0.4, 0.5];
@@ -41,18 +38,18 @@ export const CALIBRATION_FLOOR_LADDER = [0.3, 0.4, 0.5];
 /**
  * How many consecutive slow passes it takes to raise the floor.
  *
- * One slow pass is a busy afternoon; two is a machine. The ledger's
- * floor-flapping item (R6, CW-42) is why: a floor that moved on every entry
- * gave a player a different size each time they opened the game. Nothing
- * lowers the floor automatically - only the player does, by choosing a size.
+ * One slow pass is a busy afternoon; two is a machine. A floor that moves on
+ * every entry gives a player a different size each time they open the game.
+ * Nothing lowers the floor automatically - only the player does, by choosing
+ * a size.
  */
 export const CALIBRATION_RAISE_PASSES = 2;
 
-/** CW-42's candidates, kept ONLY so a stored value of its shape is recognized. */
+/** The legacy candidates, kept only so a stored value of that shape is
+ * recognized. */
 export const CALIBRATION_LEGACY_CANDIDATES = [0.1, 0.3];
 
-/** None of the range holds: the floor parks here and the default stays. */
-/** @deprecated CW-72 - the floor never parks below CITY_DEFAULT_CHAR_SCALE. */
+/** @deprecated The floor never parks below CITY_DEFAULT_CHAR_SCALE. */
 export const CALIBRATION_FALLBACK_FLOOR = CITY_DEFAULT_CHAR_SCALE;
 
 /** How many conversions make one honest probe reading. */
@@ -157,7 +154,7 @@ export function nextProbeScale(
 /**
  * The decision: the smallest rung of the ladder this machine can hold.
  *
- * CW-72 turned this from a LANDING into a FLOOR. It answers "how coarse does
+ * This is a floor, not a landing. It answers "how coarse does
  * this machine need the picture to be", never "which size should this player
  * get" - the answer to that is CITY_DEFAULT_CHAR_SCALE for everybody, unless
  * the floor is above it.
@@ -184,13 +181,12 @@ export function chooseCalibratedSize(readings, barMs = CALIBRATION_BAR_MS) {
 }
 
 /**
- * CW-72: the floor only moves UP, and only after two passes agree.
+ * The floor only moves up, and only after two passes agree.
  *
- * A floor that moved on a single reading gave a player a different size every
- * time they opened the game on a machine that was sometimes busy (the R6
- * ledger's floor-flapping item). A raise now needs
- * CALIBRATION_RAISE_PASSES consecutive passes that all want it, and one pass
- * that is happy at the current floor clears the count.
+ * A floor that moves on a single reading gives a player a different size
+ * every time they open the game on a machine that is sometimes busy. A raise
+ * needs CALIBRATION_RAISE_PASSES consecutive passes that all want it, and
+ * one pass that is happy at the current floor clears the count.
  *
  * Nothing here ever lowers a floor. A player who wants a finer picture sets
  * the size themselves, and their choice is remembered.
@@ -224,17 +220,13 @@ export function raiseFloor(
  * comfortable manual size holds proves nothing about the range — storing or
  * announcing a fallback from it would brand a fast machine as slow.
  *
- * ★★ CW-88: "at any LARGER size" is what this always meant and it is now what
- * it does. The direction test was missing, and until CW-88 nothing could
- * reach the case: a manual size below the ladder's bottom was impossible,
- * because the seed clamped every saved size up to the floor. CW-Q87 unlocked
- * 10 %, and a manual entry there is measured where it stands - so without
- * this test a failure at 10 % was read as a verdict on 30 %, the pass
- * concluded from it, and `chooseCalibratedSize` fell through to the TOP rung
- * and stored a 50 % floor. Cost RISES as the cells get smaller, so a size
- * below the ladder failing says nothing whatever about the ladder. An
- * inconclusive pass stores nothing and announces nothing, which is right:
- * yesterday's floor stands until something actually measures the range.
+ * "At any larger size" matters. A manual size below the ladder's bottom
+ * (10 %) is measured where it stands, and cost rises as the cells get
+ * smaller, so a size below the ladder failing says nothing whatever about
+ * the ladder: without the direction test a failure at 10 % would be read as
+ * a verdict on 30 % and the pass would store a 50 % floor. An inconclusive
+ * pass stores nothing and announces nothing, which is right: the stored
+ * floor stands until something actually measures the range.
  *
  * @param {Array<{scale: number, avgMs: number, samples: number}>} readings
  * @param {number} [barMs]
@@ -320,7 +312,7 @@ export function stepProbePhase(phase, totals, nowMs) {
   return { status: 'sampling' };
 }
 
-/** CW-42's spelling of "no candidate held". Read, never written, since CW-72. */
+/** The legacy spelling of "no candidate held". Read, never written. */
 export const CALIBRATION_FALLBACK_TOKEN = 'fallback';
 
 /**
@@ -340,14 +332,14 @@ export function encodeCalibration(result) {
 }
 
 /**
- * Read a stored floor back, MIGRATING anything CW-42 left behind.
+ * Read a stored floor back, migrating legacy values.
  *
- * CW-42 stored a landing, and the landing could be BELOW the one default -
- * 10% was one of its two candidates. A stored 10% must not survive as a
- * floor, or the machine that wrote it would keep its own private game after
- * this release. So: a stored value at or above the default is honored as a
- * floor; anything below it, and CW-42's `fallback` token, migrate to the
- * default. Junk still reads as null - no trusted floor, use the default.
+ * Older builds stored a landing, and the landing could be below the one
+ * default - 10% was one of the two candidates. A stored 10% must not survive
+ * as a floor, or the machine that wrote it would keep its own private game.
+ * So: a stored value at or above the default is honored as a floor; anything
+ * below it, and the legacy `fallback` token, migrate to the default. Junk
+ * still reads as null - no trusted floor, use the default.
  *
  * @param {string|null|undefined} raw straight from localStorage
  * @returns {{floorScale: number, pending: number, migrated: boolean}|null}
@@ -382,7 +374,7 @@ export function decodeCalibration(raw) {
 }
 
 /**
- * The CW-37 two-point solve, for the RECORD rather than the pick: split a
+ * The two-point solve, for reporting rather than the pick: split a
  * pair of readings into fixed cost and per-cell cost. Returns null when the
  * pair cannot support the split (same cell count, or missing cells).
  *

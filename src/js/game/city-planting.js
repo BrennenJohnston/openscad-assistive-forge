@@ -1,12 +1,11 @@
 /**
- * Planters, flowerbeds and picnic tables (CW-57, CW-Q55).
+ * Planters, flowerbeds and picnic tables.
  *
- * CW-55's rebake carried the seeds; this is what renders them. Everything here
- * is pure geometry and table lookup - no placement, no palette CHOICE, no DOM -
- * so every size and hue is unit-testable.
+ * The city data carries the seeds; this is what renders them. Everything here
+ * is pure geometry and table lookup - no placement, no palette choice, no
+ * DOM - so every size and hue is unit-testable.
  *
- * THE FLOWER TABLES ARE CITED DESIGN DATA and the owner's to veto row by row.
- * Sources in plan section 3c:
+ * The flower tables are cited design data:
  *
  * - Seattle: dahlia (the city's official flower), rhododendron (the state
  *   flower), rose (Woodland Park Rose Garden), tulip, fuchsia.
@@ -17,18 +16,18 @@
  * - Burnaby: rhododendron, rose (the Burnaby Mountain rose garden), dahlia,
  *   hydrangea, tulip.
  *
- * ★ ALBUQUERQUE'S SET IS THE POINT, again. Three of its five land YELLOW where
+ * Albuquerque's set is the point. Three of its five land yellow where
  * Seattle's land magenta and red - so the desert city's flowers read as desert
  * flowers rather than as Seattle's in a different place.
  *
- * ★ AND THE ANSI SET HAS NO BLUE. Its six entries are green, cyan, yellow,
+ * The ANSI set has no blue. Its six entries are green, cyan, yellow,
  * magenta, red and white. Colorado's columbine is blue-violet and British
  * Columbia's hydrangeas are blue; both land on their nearest available
  * neighbor there, and on the neon set's violet, which is right. The hues below
  * are the FLOWERS' - the landing is the palette's, and it is written down
  * rather than tuned away.
  *
- * At the sizes this game is played a flower is sub-cell, BY DESIGN: the planter
+ * At the sizes this game is played a flower is sub-cell, by design: the planter
  * box is the readable object and the flowers are color on top of it. That is
  * the hydrant lesson - shape and position carry identity, color decorates.
  *
@@ -89,7 +88,7 @@ export function pickFlower(table, draw) {
  * point - knee-high is high enough to read as an object against the pavement
  * and low enough that it never blocks a view. Its lid is a separate thin band
  * so the flowers can be a different color from the box without the box
- * changing brightness: MONO SEES ONE SHAPE either way.
+ * changing brightness: mono sees one shape either way.
  */
 export const PLANTER_L_M = 1.2;
 export const PLANTER_W_M = 0.5;
@@ -149,7 +148,7 @@ export function planterBoxes(x, y, angle, bodyTint, flowerTint) {
       x: lx,
       y: ly,
       // Overlaps the body a hair rather than sitting exactly on it: two
-      // exactly-touching faces are the coplanar fight D-110 is about.
+      // exactly-touching faces fight over the same plane.
       z: bodyH - 0.01 + PLANTER_LID_H_M / 2,
       angle,
       tint: flowerTint,
@@ -175,13 +174,11 @@ export function picnicTableBoxes(x, y, angle, tint) {
   );
   // Two benches, one either side.
   //
-  // ★ THE PARENTHESES ARE THE WHOLE POINT, and the unit guard is what found
-  // it: written as `side * TABLE_W_M / 2 - TABLE_BENCH_W_M / 2` the offset is
-  // 0.61 on one side and 0.89 on the other, and the far bench hangs OUTSIDE
-  // the rectangle collision stamps. That is CW-54's wheel again - a prop wider
-  // than its own footprint is a prop you can walk through - and a photograph
-  // could not have caught it, because a lopsided picnic table still looks like
-  // a picnic table.
+  // The parentheses matter: written as
+  // `side * TABLE_W_M / 2 - TABLE_BENCH_W_M / 2` the offset is 0.61 on one
+  // side and 0.89 on the other, and the far bench hangs outside the rectangle
+  // collision stamps - a prop wider than its own footprint is a prop you can
+  // walk through.
   for (const side of [1, -1]) {
     push(
       TABLE_L_M,
@@ -209,22 +206,15 @@ export function picnicTableBoxes(x, y, angle, tint) {
 
 /**
  * A flowerbed, as flat patches on the ground at the way's centroid, sized from
- * the way's OWN area.
+ * the way's own area.
  *
- * ★ THIS IS THE ONE FLAT THING IN CW-57, AND CW-56 IS THE REASON TO BE WARY OF
- * IT. Fallen leaves were dropped there because a flat patch on this game's
- * ground could not read: the ground is already near-black, so anything quiet
- * enough for the carpet law was invisible and anything visible broke it.
- *
- * What is different here is NUMBER. The carpet law is about a SURFACE - "any
- * visible surface tone carpets the lower half of the street view, because
+ * A flat patch on this game's ground is risky: the ground is near-black, and
+ * "any visible surface tone carpets the lower half of the street view, because
  * perspective stacks every meter of road between here and the horizon into a
- * few cell rows". Leaves sat under every deciduous tree, 4,593 of them in
- * Seattle, which is near-continuous along every street. A flowerbed sits at 56
- * mapped places in Seattle and 17 in Burnaby. That is not a surface.
- *
- * So a flowerbed is allowed to be brighter than a leaf could be - and that
- * claim is MEASURED in the release record rather than assumed.
+ * few cell rows". That rules out anything near-continuous along a street,
+ * such as leaves under each of Seattle's 4,593 deciduous trees. A flowerbed
+ * sits at 56 mapped places in Seattle and 17 in Burnaby. That is not a
+ * surface, so a flowerbed is allowed to be bright.
  *
  * A bed's own area decides how many patches it gets, so a 4 m2 bed and a 60 m2
  * bed are different objects rather than the same stamp twice.
@@ -232,7 +222,7 @@ export function picnicTableBoxes(x, y, angle, tint) {
 const BED_PATCH_M = 0.9;
 const BED_M2_PER_PATCH = 4;
 const BED_MAX_PATCHES = 14;
-/** Off the ground, with the material's own polygonOffset behind it (D-110). */
+/** Off the ground, with the material's own polygonOffset behind it. */
 const BED_LIFT_M = 0.03;
 
 export function flowerbedPositions(x, y, areaM2, seed) {

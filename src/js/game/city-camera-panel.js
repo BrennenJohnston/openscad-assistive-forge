@@ -1,7 +1,7 @@
 /**
  * @license GPL-3.0-or-later
  */
-// The Camera panel, inside the City Walk (CW-35, CW-Q32).
+// The Camera panel, inside the City Walk.
 //
 // The Assistive Forge's 3D preview has a Camera panel down its right-hand
 // side: Rotate, Pan, Zoom, Standard Views, Reset. Anyone who has used the
@@ -12,11 +12,10 @@
 // So the panel comes into the game. Same markup pattern, same classes, so it
 // is the same panel to look at and the existing stylesheet dresses it with no
 // new CSS. The buttons do NOT reimplement anything: each one drives an action
-// the game already had, through the press-and-hold machinery the bottom
-// toolbar proved. The owner's instruction was exactly that - "tune those
-// buttons to deliver the correct keyboard keys that are already wired".
+// the game already had, through the press-and-hold machinery of the bottom
+// toolbar.
 //
-// WHY THE SAME BUTTON DOES TWO THINGS. The game has two views and the panel
+// Why the same button does two things. The game has two views and the panel
 // serves both. In the street the D-pads walk and look; over the map they pan.
 // That is not a special case bolted on here: the game's frame loop already
 // reads the same held actions differently per view (`forward` walks in the
@@ -31,9 +30,8 @@
 import { headingLabel } from './walk-controls.js';
 
 /**
- * ACCESSIBILITY-CRITICAL STRINGS (D-35) — flagged for owner review, recorded
- * in CW-R5-TEXT-PACK.md. Every one of these is spoken to a screen reader and
- * nothing else says it.
+ * Accessibility-critical strings. Every one of these is spoken to a screen
+ * reader and nothing else says it.
  */
 const FACING_MESSAGE = (word) => `Facing ${word}.`;
 const TOWER_GAZE_MESSAGE = 'Looking up at the towers.';
@@ -52,7 +50,7 @@ const HEADINGS = [
   { id: 'left', text: 'West', label: 'Face west', rad: -Math.PI / 2 },
 ];
 
-/** How far up the Diagonal view tilts. Chosen on the photograph (CW-35 P5). */
+/** How far up the Diagonal view tilts. */
 export const TOWER_GAZE_PITCH_RAD = (30 * Math.PI) / 180;
 
 const svg = (paths, size = 18) =>
@@ -105,7 +103,7 @@ function el(tag, className, attrs = {}) {
  * @param {() => void} actions.levelView
  * @param {() => void} actions.recenterMap
  * @param {(delta: number) => void} actions.adjustCharacterSize
- * @param {(delta: number) => void} actions.cycleMapStyle - CW-60, map only
+ * @param {(delta: number) => void} actions.cycleMapStyle - map only
  * @param {(rad: number, word: string) => void} actions.setHeading
  * @param {(rad: number) => void} actions.setPitch
  * @param {(text: string) => void} actions.announce
@@ -191,15 +189,11 @@ export function buildCityCameraPanel(actions) {
     // Keyboard: Enter and Space fire click, which has no press and release,
     // so a key press is one step of movement rather than a hold.
     //
-    // ★★ D-113 (CW-60): AND A POINTER CLICK MUST NOT ARRIVE HERE TWICE. A
-    // mouse press fires pointerdown, pointerup AND a click, so this handler
-    // used to run `start()` a second time for a press pointerdown had already
-    // served. On the hold path that only stretched the step and nobody
-    // noticed; on the PRESS path it did the job twice. Measured before the
-    // fix: one click on this panel's Zoom in moved the character size 0.5 to
-    // 0.7 where Enter on the same button moved it 0.5 to 0.6. The toolbar's
-    // own buttons have carried this exact guard since CW-15; the panel never
-    // did, and CW-60's style cycling would have skipped a style per click.
+    // A pointer click must not arrive here twice. A mouse press fires
+    // pointerdown, pointerup and a click, so a click that follows a pointer
+    // press is one that pointerdown already served: on the hold path a second
+    // `start()` would only stretch the step, on the press path it would do
+    // the job twice.
     btn.addEventListener('click', (event) => {
       if (event.detail !== 0) return;
       start();
@@ -237,7 +231,7 @@ export function buildCityCameraPanel(actions) {
 
   /**
    * `ariaLabel` may be a string, or a function of the view when the pad does
-   * a different job in each one (CW-60's style pad). A group whose buttons
+   * a different job in each one (the style pad). A group whose buttons
    * change meaning has to change its own name with them, or the name is a
    * label for controls that are no longer there.
    */
@@ -255,12 +249,10 @@ export function buildCityCameraPanel(actions) {
   };
 
   /**
-   * CW-38: the owner read "Rotate View" and "Pan View" as camera jargon,
-   * because they are - the Forge preview's words, not the game's. The titles
-   * now speak game verbs and follow the view the way the buttons under them
-   * already do. Over the map BOTH pads used to pan and both said so, which
-   * was honest and also a waste of four buttons; CW-60 gives the second pad
-   * the map styles, and the titles part company there.
+   * "Rotate View" and "Pan View" are camera jargon - the Forge preview's
+   * words, not the game's. The titles speak game verbs and follow the view the
+   * way the buttons under them do. Over the map the second pad carries the
+   * map styles, and the titles part company there.
    */
   const viewTitle = (wrap, street, map) => {
     const h3 = wrap.querySelector('.camera-control-section-title');
@@ -278,7 +270,7 @@ export function buildCityCameraPanel(actions) {
     dpad(
       // Over the map this pad pans, so calling it the rotation controls
       // names a job it is not doing - conspicuously so now that the pad
-      // below it renames itself. The visible title already swapped (CW-38).
+      // below it renames itself. The visible title swaps too.
       (isMap) => (isMap ? 'Pan controls' : 'Rotation controls'),
       [
         holdButton({
@@ -316,17 +308,11 @@ export function buildCityCameraPanel(actions) {
 
   // --- Pan / Map style ------------------------------------------------------
   /**
-   * ★★ CW-60: THIS PAD HAD NOTHING OF ITS OWN TO DO OVER THE MAP. Both pads
-   * sent the same four pan actions there, so the panel offered eight buttons
-   * for four jobs. MEASURED at this head, one 700 ms hold each, in meters of
-   * map moved: Rotate up +1147 / down -1168 / left -1147 / right +1147, and
-   * this pad +1127 / -1127 / -1188 / +1168. The same axes, the same signs -
-   * a genuine duplicate rather than two controls that merely look alike.
+   * Over the map this pad has nothing of its own to do: both pads would send
+   * the same four pan actions there, eight buttons for four jobs. So over the
+   * map it becomes the style pad, and the Rotate pad above stays the panner.
    *
-   * So over the map it becomes the style pad, and the Rotate pad above stays
-   * the panner - which it already was, and which is why nothing is lost.
-   *
-   * Up and left step BACK through the styles, down and right step FORWARD:
+   * Up and left step back through the styles, down and right step forward:
    * the list conventions of both axes at once, so neither reading is wrong.
    * Two buttons sharing a name is the honest arrangement here rather than a
    * smell - they do the identical job, and WCAG's Consistent Identification
@@ -453,7 +439,7 @@ export function buildCityCameraPanel(actions) {
   // Front/Back/Left/Right turn the walker to a compass bearing. In the map
   // view there is no walker to turn, and panning to an edge is what the
   // arrows already do, so they are hidden rather than given a second meaning
-  // nobody asked for. Recorded reversible.
+  // nobody asked for.
   for (const { id, text, label, rad } of HEADINGS) {
     const btn = pressButton({
       id: `cityWalkCamView${id[0].toUpperCase()}${id.slice(1)}`,
@@ -485,24 +471,17 @@ export function buildCityCameraPanel(actions) {
   views.appendChild(viewGrid);
   body.appendChild(views);
 
-  // CW-85 HAS NO SECTION HERE, AND THAT IS A MEASUREMENT RATHER THAN AN
-  // OVERSIGHT. Day and the empty city were built as a 'Scene' section right
-  // here, and the CW-38 guard caught it at once: in high contrast at
-  // 1600x900 the body held 775 px of content in a 683 px box, an overflow of
-  // 92 px, which puts Reset View back below the fold behind a scrollbar -
-  // the exact defect CW-38 exists to have fixed.
-  //
-  // There was no room to find. CW-38 already spent every spacing token it
-  // could ('the buttons never shrink - a target is a target'), and measured
-  // section by section the panel was EXACTLY full: 158 + 158 + 66 + 204 + 66
-  // with 2 px gaps. Even the compact form - both buttons side by side in one
-  // row like Zoom, 66 px rather than 112 - still overflowed by 46 px.
+  // Day and the empty city have no section here. This panel is exactly full:
+  // in high contrast at 1600x900 a 'Scene' section overflows the body by
+  // 92 px (46 px even as one compact row), which puts Reset View below the
+  // fold behind a scrollbar, and the buttons never shrink - a target is a
+  // target.
   //
   // So the two toggles live in the toolbar's own Scene group and on keys B
-  // and U, which already keeps CW-60's promise that every key has a button.
-  // It is also the better home on its own merits: this panel is the CAMERA -
-  // where you look, where you walk, how far you zoom, the standard views -
-  // and neither of those toggles moves the camera.
+  // and U, which keeps the promise that every key has a button. It is also
+  // the better home on its own merits: this panel is the camera - where you
+  // look, where you walk, how far you zoom, the standard views - and neither
+  // of those toggles moves the camera.
   // --- Reset ----------------------------------------------------------------
   const resetSection = section('Reset');
   const resetBtn = pressButton({

@@ -1,9 +1,9 @@
 /**
  * @license GPL-3.0-or-later
  */
-// Temporal hysteresis for the converter's per-cell decisions (CW-68).
+// Temporal hysteresis for the converter's per-cell decisions.
 //
-// THE PROBLEM, measured. The pick is stateless: every converted frame chooses
+// The problem, measured. The pick is stateless: every converted frame chooses
 // each cell's glyph, drive level and reverse-video flag from that frame alone.
 // A texel scrolling one pixel therefore re-rolls the glyph, and the two
 // threshold cliffs - reverse video at a luminance of 0.80, the drive split at
@@ -11,7 +11,7 @@
 // Walking a Seattle street at 4.8 m/s re-rolls 9 to 11 per cent of facade
 // glyphs EVERY frame, and mean glyph persistence is 6 to 8 frames.
 //
-// THE RULE. A cell keeps what it had unless the new answer is better by more
+// The rule. A cell keeps what it had unless the new answer is better by more
 // than a dead band. Three decisions, three bands, one shape:
 //
 //   glyph    keep the previous glyph unless the new candidate is closer to the
@@ -29,26 +29,24 @@
 // question about the look of the game rather than about steadiness, so it is
 // kept separate and left at the narrow value here.
 //
-// WHY IT IS SAFE TO HOLD. CW-52 measured a threshold-only version of this and
-// dropped it: 400 changes prevented, but 2,788 cell-frames left showing the
-// wrong thing, because a cell that swept across a geometry edge kept the
-// glyph of the surface it had left. Two guards answer that, and they are the
-// reason this is worth building at all:
+// Why it is safe to hold. A threshold-only version prevents 400 changes
+// but leaves 2,788 cell-frames showing the wrong thing, because a cell that
+// sweeps across a geometry edge keeps the glyph of the surface it has left.
+// These guards answer that:
 //
-//   * RESET ON CHANGE OF SURFACE. When the cell's surface class changes, or
+//   * Reset on change of surface. When the cell's surface class changes, or
 //     its reverse-video state flips, the memory is dropped and the new answer
 //     is taken immediately. Those are exactly the moments the content under
 //     the cell became a different thing, and they are also the moments the
 //     glyph VOCABULARY changes, so a held glyph might not even be legal.
-//   * A HOLD EXPIRES. No cell may keep one answer for more than `holdFrames`
+//   * A hold expires. No cell may keep one answer for more than `holdFrames`
 //     conversions. A dead band alone can hold a slowly drifting cell forever;
 //     an expiry bounds the smear at a number somebody chose.
-//   * ★ BLANK IS NEVER HELD, AND NEVER BLOCKS INK (CW-89, D-125). A cell
-//     whose stateless answer is the empty glyph draws nothing, at once, and a
-//     cell that was empty takes its new character at once. This is the guard
-//     the owner asked for after seeing ink left behind on a wall they had
-//     walked past. It is deliberately NOT a fourth dead band: there is no
-//     such thing as being slightly blank.
+//   * Blank is never held, and never blocks ink. A cell whose stateless
+//     answer is the empty glyph draws nothing, at once, and a cell that was
+//     empty takes its new character at once, so no ink is left behind on a
+//     wall the walker has passed. It is deliberately not a fourth dead band:
+//     there is no such thing as being slightly blank.
 //
 // Every rule here is a pure function of the numbers handed to it, because the
 // GPU path evaluates the same rules in a shader and the CPU path evaluates
@@ -130,7 +128,7 @@ export function normalizeHysteresis(options) {
  *   candidate whatever the distances say
  *
  * A candidate or a previous glyph of SPACE_GLYPH also takes the candidate
- * immediately (CW-89): the memory picks between characters and never decides
+ * immediately: the memory picks between characters and never decides
  * whether a cell has content.
  * @returns {{glyph: number, hold: number}}
  */
@@ -144,32 +142,23 @@ export function glyphWithMemory({
   holdFrames,
   reset,
 }) {
-  // `hold` counts the consecutive frames the memory has OVERRIDDEN the
+  // `hold` counts the consecutive frames the memory has overridden the
   // stateless pick, not how long a glyph has been on screen: a cell the pick
   // agrees with is not being held, so its counter goes back to zero and it can
   // never expire while it is stable.
-  // ★★★ CW-89 (D-125): BLANK IS NEVER HELD, AND BLANK NEVER BLOCKS INK.
   //
-  // The memory exists to choose between CHARACTERS. Whether a cell has any
-  // content at all is a different question, decided before this one by the
-  // blank floor, and a dead band has no business overruling it. Letting it
-  // do so is what the owner saw as a trail: a cell whose reason for being
-  // lit had gone kept its character for up to `holdFrames` more conversions,
-  // so ink stayed on the screen after the thing that put it there had left.
+  // Blank is never held, and blank never blocks ink. The memory exists to
+  // choose between characters. Whether a cell has any content at all is a
+  // different question, decided before this one by the blank floor, and a
+  // dead band has no business overruling it: a held blank-or-ink decision
+  // leaves a trail, ink staying on the screen for up to `holdFrames`
+  // conversions after the thing that put it there has left.
   //
-  // MEASURED before the fix, walking 24 frames at 30 % (build\cw89-trail.mjs):
-  // 230 cells on the first frame rising to ~500 by the last were drawing a
-  // character where the stateless answer was SPACE - 0.34 % climbing to
-  // 0.78 % of the grid, and the count GROWS along the walk, which is what
-  // makes it read as something being dragged along rather than as noise.
-  // 323 of them held the full five frames.
-  //
-  // ★ AND THE FIX THIS ROUND HAD WRITTEN DOWN WOULD NOT HAVE WORKED. CW-84's
-  // note proposed "a third reset when the cell's GEOMETRY moves". Measured on
-  // the same walk: of 128,606 cells drawn differently from their stateless
-  // answer, 100.0 % had an UNCHANGED surface class and only 0.1 % had moved
-  // in depth by more than max(2.5 m, 15 %). The trail is not cells looking at
-  // new geometry. It is cells looking at the SAME wall whose light changed.
+  // Resetting on geometry change would not fix that trail. On a 24-frame
+  // walk, of 128,606 cells drawn differently from their stateless answer,
+  // 100.0 % had an unchanged surface class and only 0.1 % had moved in depth
+  // by more than max(2.5 m, 15 %). The trail is cells looking at the same
+  // wall whose light changed.
   const blankNow = candidate === SPACE_GLYPH;
   const blankBefore = prevGlyph === SPACE_GLYPH;
   if (
@@ -196,7 +185,7 @@ export function glyphWithMemory({
  *
  * @param {number} lum cell luminance
  * @param {boolean} wasReversed last frame's answer
- * @param {number} reverseAt the shipped threshold (0.80 in the game)
+ * @param {number} reverseAt the threshold (0.80 in the game)
  * @param {number} band half-width; 0.02 gives the 0.82 / 0.78 pair
  * @returns {boolean}
  */

@@ -1,29 +1,28 @@
 /**
- * The curated landmark registry (CW-78, CW-Q70).
+ * The curated landmark registry.
  *
- * ★★ THE LEGEND STOPS BEING TAG ARITHMETIC. The scorer in city-data.js ranks
- * what the tags happen to reward - Seattle's read eleven hotels and put the
- * Space Needle eleventh of twelve - so each city here carries a SEVEN-ROW
+ * The legend is not tag arithmetic. The scorer in city-data.js ranks what
+ * the tags happen to reward - Seattle's read eleven hotels and put the
+ * Space Needle eleventh of twelve - so each city here carries a seven-row
  * table drafted from its own landmark register, cited row by row, and the
- * legend lists those seven in table order. Every row is owner-vetoable at a
- * gate; deleting a row is the whole removal.
+ * legend lists those seven in table order. Deleting a row is the whole
+ * removal.
  *
- * ★ EVERY ROW IS VALIDATED AGAINST THE EXTRACT, LOUDLY. A row is keyed by OSM
- * way or node id, never by name (CW-62: names are edited upstream), and a row
- * that matches nothing in the shipped extract THROWS - a test failure and a
- * refused city, never a silent drop. The pinned-id law CW-63 wrote for two
- * dressings now covers every registry row, so a rebake that retires an id
- * fails the board instead of quietly shrinking a legend.
+ * Every row is validated against the extract, loudly. A row is keyed by OSM
+ * way or node id, never by name (names are edited upstream), and a row that
+ * matches nothing in the shipped extract throws - a test failure and a
+ * refused city, never a silent drop. So a rebake that retires an id fails
+ * the tests instead of quietly shrinking a legend.
  *
- * Rows the registers name that the extracts CANNOT key are recorded here
+ * Rows the registers name that the extracts cannot key are recorded here
  * rather than silently absent: Denver's Union Station (1701-1777 Wynkoop,
  * listed 2004) lies outside the extract circle; Burnaby's Swangard Stadium,
  * Central Park Gate, Metropolis at Metrotown and the Sovereign tower are not
  * mapped as named elements inside its circle - Central Park's own row carries
  * the first two, which stand inside it.
  *
- * A city with NO table (a synthetic fixture, a future extract) falls back to
- * the scorer, with `wikidata` presence as the generic tiebreaker (CW-Q70).
+ * A city with no table (a synthetic fixture, a future extract) falls back to
+ * the scorer, with `wikidata` presence as the generic tiebreaker.
  *
  * @license GPL-3.0-or-later
  */
@@ -34,11 +33,11 @@ import { isDrawnRoadway, isPavementWay } from './walk-controls.js';
 /**
  * One row: `name` is the display name the legend and the progress store use;
  * `wayId` or `nodeId` keys the extract element; `cite` names the register or
- * published record the row stands on; `reason` is the one-line case for the
- * owner's veto read.
+ * published record the row stands on; `reason` is the one-line case for
+ * the row.
  *
- * `spawnFacesFirstRow`: Seattle spawns facing its first row (the Great Wheel,
- * CW-78's spawn rule); the other cities keep the clear-heading spawn facing.
+ * `spawnFacesFirstRow`: Seattle spawns facing its first row (the Great
+ * Wheel); the other cities keep the clear-heading spawn facing.
  */
 export const LANDMARK_REGISTRY = {
   seattle: {
@@ -250,11 +249,11 @@ function ringCentre(ring) {
 /**
  * Resolve one table against a parsed extract. Table order is legend order.
  *
- * ★ A ROW THAT MATCHES NOTHING THROWS. The shipped tables are pinned against
+ * A row that matches nothing throws. The shipped tables are pinned against
  * the shipped extracts by tests/unit/game/landmark-registry.test.js, so this
  * firing at runtime means the data moved under the table - which is exactly
  * the moment to fail loudly rather than draw a shorter legend and say
- * nothing (CW-63's rebake lesson, extended to every row).
+ * nothing.
  *
  * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
  * @param {Array<Object>} rows
@@ -315,7 +314,7 @@ export function resolveRegistryRows(model, rows) {
 
 /**
  * The landmarks a city walks with: its curated table in table order, or the
- * scorer (wikidata-tiebroken, CW-Q70) where no table exists.
+ * scorer (wikidata-tiebroken) where no table exists.
  */
 export function cityLandmarks(model, citySlug) {
   const entry = registryFor(citySlug);
@@ -324,21 +323,20 @@ export function cityLandmarks(model, citySlug) {
 }
 
 // ---------------------------------------------------------------------------
-// The waypoint (CW-78, CW-Q71)
+// The waypoint
 // ---------------------------------------------------------------------------
 
 /**
  * The drawn mark: the app's man-in-circle on a tall plinth - a bright ring
- * around an EXACT-BLACK core with the bright figure inside it, which is
- * CW-40's law (a bright outline around exact black is the one footprint no
- * building in any palette has) applied at street level.
+ * around an exact-black core with the bright figure inside it. A bright
+ * outline around exact black is the one footprint no building in any palette
+ * has.
  *
- * SIZES ARE SET BY THE CHARACTER GRID, NOT BY TASTE (CW-Q71: at least five
- * character rows at 40 m at the default size). At 40 m the game viewport
+ * Sizes are set by the character grid, not by taste: at least five
+ * character rows at 40 m at the default size. At 40 m the game viewport
  * (756 px over a 60 degree field) gives 16.4 px/m and the 30% cell is
  * 3 x 6 px, so the 2.0 m figure spans 5.5 rows and the 3.2 m ring about
- * nine - above the CW-61 floor that killed the map-marker man ("a standing
- * figure needs five rows").
+ * nine - a standing figure needs five rows.
  */
 export const WAYPOINT_MARK = Object.freeze({
   /** Outer radius of the bright ring, in meters. */
@@ -366,7 +364,7 @@ export const WAYPOINT_TOUCH_M = 1.6;
 export const WAYPOINT_LEAVE_M = 3.0;
 
 /** How far past the street face the pavement search may wander before the
- * crossing fallback fires (the CW-78 blocker's own number). */
+ * crossing fallback fires. */
 const PAVEMENT_SEARCH_PAST_M = 40;
 const SEARCH_STEP_M = 0.5;
 
@@ -406,9 +404,9 @@ function nearestOnSegment(px, py, ax, ay, bx, by) {
  * mapped pavement; open ground and roadway both read below it), so this
  * cannot disagree with what the scene draws underfoot.
  *
- * BLOCKER (named in the release): no clear pavement along the whole face
- * line plus 40 m -> the nearest mapped crossing, and the fallback is COUNTED
- * in the returned spot rather than silent.
+ * Fallback: no clear pavement along the whole face line plus 40 m -> the
+ * nearest mapped crossing, and the fallback is counted in the returned spot
+ * rather than silent.
  *
  * @returns {{x: number, y: number, facingRad: number, name: string,
  *   placement: 'pavement'|'crossing'|'none'}|null}
@@ -504,8 +502,8 @@ export function findWaypointSpot(model, collision, surface, landmark) {
     for (let t = 0; t <= total; t += SEARCH_STEP_M) {
       const x = faceX + ux * t;
       const y = faceY + uy * t;
-      // CW-79: ask the pavement question BY NAME - heightAt carries the
-      // terrain now, and a bare zero-test would refuse every hill.
+      // Ask the pavement question by name - heightAt carries the
+      // terrain, and a bare zero-test would refuse every hill.
       if (!surface.isPavement(x, y)) continue;
       if (!spotClear(collision, x, y)) continue;
       return {

@@ -1,14 +1,14 @@
 /**
  * @license GPL-3.0-or-later
  */
-// CW-85 - the backing behind the characters ("Day").
+// The backing behind the characters ("Day").
 //
 // The pure half: given the frame's surface classes and its linear depth, what
 // color goes behind each cell. No DOM, no three.js, no canvas - the
 // controller hands this the two byte arrays the class pass already produced
 // and hands the result to the converter, which paints it under the glyphs.
 //
-// WHY IT IS A LAYER AND NOT A DECISION. Everything else the converter does to
+// Why it is a layer and not a decision. Everything else the converter does to
 // a cell is a CHOICE about that cell - which glyph, which palette entry,
 // solid or characters. This is not: it is paint that goes down before the
 // glyph and is overwritten by it. It is computed after the glyphs are chosen
@@ -16,10 +16,10 @@
 // no glyph" is a fact about the shape of the code and not a promise anybody
 // has to keep.
 //
-// WHY THE DEPTH IS LINEAR. The class pass already carried a depth BUFFER for
+// Why the depth is linear. The class pass already carries a depth buffer for
 // occlusion, but that one is the GPU's non-linear curve; a tint faded on it
 // would collapse in the first few meters and then barely move for two
-// hundred. CW-85 writes meters into the pass's free B channel instead.
+// hundred. So the pass writes meters into its free B channel instead.
 
 import { driveColor } from '../_hfm-paint.js';
 import { CLASS_DEPTH_FAR_M } from './city-class-pass.js';
@@ -71,8 +71,8 @@ function hexBytes(hex) {
  *
  * The frame buffer is a Uint32Array over an ImageData's bytes, so on a
  * little-endian machine one cell is 0xAABBGGRR. Every platform this ships to
- * is little-endian; the converter's own atlas cache has read pixels this way
- * since CW-22.
+ * is little-endian; the converter's own atlas cache reads pixels the same
+ * way.
  *
  * @param {number} r 0..255
  * @param {number} g
@@ -114,13 +114,12 @@ export function backingTable({ mono, palette, phosphor }) {
 }
 
 /**
- * CW-85's SECOND tint source, measured against the class table before either
- * shipped: the cell's OWN color, driven down to a fixed low luminance.
+ * A second tint source: the cell's own color, driven down to a fixed low
+ * luminance.
  *
  * Where the table says "a road is slate", this says "whatever this cell came
  * out, but dark". It needs no table and can never miss a class, which sounds
- * like the better idea until you look at it - see the record for what the
- * pictures said.
+ * like the better idea until you look at it.
  *
  * @param {string[]} palette the entries the converter is drawing with
  * @param {number} drive
@@ -146,7 +145,7 @@ export const SAMPLED_BACKING_DRIVE = 0.1;
  * @param {Uint8Array} args.depthMap the same cells' linear depth bytes
  * @param {Uint32Array} args.table from backingTable()
  * @param {Uint32Array} [args.sampled] from sampledTable(), to use the cell's
- *   own color instead of its class - the CW-85 experiment, off by default
+ *   own color instead of its class - an experiment, off by default
  * @param {Uint8Array} [args.colorIndices] the cells' palette entries
  * @param {Uint32Array} [args.out] reused between frames
  * @returns {Uint32Array}

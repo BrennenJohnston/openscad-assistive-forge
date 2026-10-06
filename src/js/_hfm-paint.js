@@ -10,7 +10,7 @@
 // painted, so glyphs always align with the shapes they were matched
 // against.
 
-/** Printable ASCII 32-126 (95 glyphs) — stakeholder directive: ASCII only. */
+/** Printable ASCII 32-126 (95 glyphs). ASCII only, by design. */
 export const GLYPH_COUNT = 95;
 export const FIRST_CHAR_CODE = 32;
 /** Atlas index of the space character (blank cell — skipped when painting). */
@@ -79,7 +79,7 @@ export function buildGlyphAtlas({
   ctx.font = `${fontSizePx * dpr}px ${fontFamily}`;
 
   if (bloom > 0 && !reverse) {
-    // CW-21 P4: a halo around each glyph, the way an overdriven CRT spread
+    // A halo around each glyph, the way an overdriven CRT spread
     // light past the beam. Built into the ATLAS so it costs nothing per
     // frame — every cell that uses this atlas is already bloomed.
     ctx.shadowColor = color;
@@ -87,7 +87,7 @@ export function buildGlyphAtlas({
   }
 
   if (reverse) {
-    // Reverse video (CW-21): the cell is solid phosphor and the glyph is
+    // Reverse video: the cell is solid phosphor and the glyph is
     // knocked OUT of it, which is the only way past the ASCII coverage
     // ceiling — the densest printable glyph inks 43-58% of a cell, so no
     // character can make a cell brighter than about half full. Punching a
@@ -114,25 +114,25 @@ export function buildGlyphAtlas({
 }
 
 /**
- * Give a tiny atlas back the brightness the rasterizer took from it (CW-12).
+ * Give a tiny atlas back the brightness the rasterizer took from it.
  *
- * A glyph drawn into a 2x4 pixel cell is almost entirely antialiasing: MEASURED
- * on the owner's machine, the strongest pixel in a 3 px atlas reaches alpha 164
- * of 255, and 188 at 4 px, against a solid 255 at 12 px and above. Everything
- * the converter paints at the smallest character sizes was therefore being
- * multiplied by roughly 0.64 — the city dimmed as the characters shrank, and
- * in amber the brightest pixel of a whole frame measured 4.08:1 on black,
- * under the 4.5:1 this project holds itself to elsewhere. Scaling each atlas so
- * its strongest pixel is fully opaque restores the intended mapping (amber's
- * floor measures 8.99:1 after, high-contrast dark 19.43:1).
+ * A glyph drawn into a 2x4 pixel cell is almost entirely antialiasing: the
+ * strongest pixel in a 3 px atlas reaches alpha 164 of 255, and 188 at 4 px,
+ * against a solid 255 at 12 px and above. Everything the converter paints at
+ * the smallest character sizes would therefore be multiplied by roughly
+ * 0.64 — the city dims as the characters shrink, and in amber the brightest
+ * pixel of a whole frame measures 4.08:1 on black, under the 4.5:1 this
+ * project holds itself to elsewhere. Scaling each atlas so its strongest
+ * pixel is fully opaque restores the intended mapping (amber's floor
+ * measures 8.99:1 after, high-contrast dark 19.43:1).
  *
- * Scope: the CALLER must opt in (the City Walk does; the preview's Alt View
- * does not), AND the cell must be at most _TINY_BRIGHTNESS_MAX_CSS_PX wide. The
- * opt-in is what makes this game-only, and it is not decoration: Iosevka Term
- * advances at about half its size, so the preview slider's own 0.5 minimum
- * lands on a 7 px font and a 4 px cell — inside the width threshold. A width
- * test alone would have brightened the main app's Alt View by about 11% at its
- * smallest setting, which this release promised not to touch.
+ * Scope: the caller must opt in (the City Walk does; the preview's Alt View
+ * does not), and the cell must be at most _TINY_BRIGHTNESS_MAX_CSS_PX wide.
+ * The opt-in is what makes this game-only, and it is not decoration: Iosevka
+ * Term advances at about half its size, so the preview slider's own 0.5
+ * minimum lands on a 7 px font and a 4 px cell — inside the width threshold.
+ * A width test alone would brighten the main app's Alt View by about 11% at
+ * its smallest setting.
  *
  * @param {CanvasRenderingContext2D} ctx - the atlas context, already drawn
  * @param {HTMLCanvasElement} canvas
@@ -236,42 +236,38 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
 }
 
 // ---------------------------------------------------------------------------
-// The composite paint path (CW-12, generalized in CW-22)
+// The composite paint path
 // ---------------------------------------------------------------------------
-// The per-cell ctx.drawImage() call dominates the ASCII conversion — MEASURED
+// The per-cell ctx.drawImage() call dominates the ASCII conversion — measured
 // at 271 ms of a 433 ms frame (63%) with 238k cells, because the cost is per
-// CALL, not per pixel. Composing every glyph into one reusable buffer and
+// call, not per pixel. Composing every glyph into one reusable buffer and
 // handing the canvas a single putImageData replaces those calls with typed-
 // array writes.
 //
-// CW-12 shipped this for cells up to 4 CSS px wide, where the win was largest.
-// CW-22 measured the rest of the range with in-code stage timers and removed
-// the size gate altogether, because the blit path lost EVERYWHERE (Seattle,
-// same session, Intel Iris Xe, before -> after convert ms / rAF fps):
+// There is no size gate, because the blit path loses at every size (Seattle,
+// same session, Intel Iris Xe, blit -> composite convert ms / rAF fps):
 //
-//     50% (charW 5, the shipped default)  40.7 -> 17.5   42.3 -> 59.5   2.33x
+//     50% (charW 5)                       40.7 -> 17.5   42.3 -> 59.5   2.33x
 //     60% (charW 6)                       48.7 -> 15.6   37.6 -> 59.5   3.11x
 //     80% (charW 7)                       25.9 -> 13.0   51.8 -> 59.6   1.99x
 //    100% (charW 9)                       25.0 -> 12.9   51.3 -> 59.6   1.93x
 //
-// Cell COUNT is not what costs: 60% has fewer cells than 50% and was the
-// slowest size in the game, purely because it fell off this path. Above charW
-// ~12 the two paths converge to within noise, so there is no size worth gating
-// back to the blit path for. The blit path stays as the afterglow path (fade >
-// 0 composites the previous frame on top, which this one buffer cannot do) and
-// as the reference implementation the parity test measures against.
+// Above charW ~12 the two paths converge to within noise, so there is no size
+// worth gating back to the blit path for. The blit path stays as the
+// afterglow path for callers that hand in a persistence canvas, and as the
+// reference implementation the parity test measures against.
 //
 // The paths are pixel-identical, which is the only reason this is allowed to
 // reach the preview's Alt View as well: 40 of 40 full-frame comparisons across
 // two cities, mono and palette, charW 2 through 12, differed in 0 of ~1.6M
 // pixels on every channel (tests/e2e/ascii-city-walk.spec.js keeps this true).
-// The brightness treatment, which IS visible, is gated separately — it keeps
-// CW-12's 4 px scope, because widening it would brighten the game at its own
-// default size and, since the shape vectors are read from the brightened
-// atlas, change which glyph each cell picks. That is an art change, not a
-// paint optimization; see _restoreTinyGlyphBrightness.
+// The brightness treatment, which is visible, is gated separately — it keeps
+// a 4 px scope, because widening it would brighten the game at larger sizes
+// and, since the shape vectors are read from the brightened atlas, change
+// which glyph each cell picks. That is an art change, not a paint
+// optimization; see _restoreTinyGlyphBrightness.
 
-/** Brightness gate (CW-12 scope, deliberately NOT the paint gate). */
+/** Brightness gate (deliberately not a paint gate). */
 const _TINY_BRIGHTNESS_MAX_CSS_PX = 4;
 
 /** One reusable frame buffer per overlay context, resized with the canvas. */
@@ -286,7 +282,7 @@ function _frameBuffer(ctx, w, h) {
 }
 
 /**
- * The previous composited frame, per overlay context, for afterglow (CW-21).
+ * The previous composited frame, per overlay context, for afterglow.
  *
  * Kept as its own Uint8ClampedArray rather than a canvas: the composite path
  * never touches a canvas until its single putImageData, and reading one back
@@ -301,7 +297,7 @@ const _glowBuffers = new WeakMap();
  * the next picture is a continuation of the last. When the picture is CUT -
  * the City Walk's map and street views share nothing at all - that memory
  * paints the old view over the new one for as long as it takes to decay,
- * which reads as a double exposure rather than as an afterglow (D-81).
+ * which reads as a double exposure rather than as an afterglow.
  *
  * @param {CanvasRenderingContext2D} ctx - the overlay context to forget
  */
@@ -368,29 +364,26 @@ function _paintComposited(
       if (dx0 >= w) continue;
       const runW = Math.min(cellW, w - dx0);
 
-      // CW-85: the backing goes down FIRST, under everything, and it goes
-      // down for a blank cell too - filling the black gaps is the whole
-      // point of it. Glyph pixels overwrite it below, so no decision changes
-      // and no blending is needed: the caller has already folded the
-      // distance fade into an opaque color, because the page behind this
-      // canvas is black and fading toward black is the same arithmetic.
+      // The backing goes down first, under everything, and it goes down for
+      // a blank cell too - filling the black gaps is the whole point of it.
+      // Glyph pixels overwrite it below, so no decision changes and no
+      // blending is needed: the caller has already folded the distance fade
+      // into an opaque color, because the page behind this canvas is black
+      // and fading toward black is the same arithmetic.
       //
-      // ★★ THIS LOOP IS THE WHOLE COST OF DAY, AND IT CANNOT BE WRITTEN
-      // CHEAPER. About 1.1 million pixel writes per conversion at 30 %.
-      // Measured on the Iris Xe, A-B-B-A, Seattle, 30 %, color, heavy rain,
-      // 45 s, against 24.9-25.4 ms at Night:
+      // This loop is the whole cost of Day: about 1.1 million pixel writes
+      // per conversion at 30 %. Measured on an Iris Xe, Seattle, 30 %, color,
+      // heavy rain, against 24.9-25.4 ms without it:
       //
       //   this loop, as written      +4.2 ms
-      //   dst.fill() per row run     +18 to +25 ms - fill() is a CALL, and a
+      //   dst.fill() per row run     +18 to +25 ms - fill() is a call, and a
       //                              3 px run costs far more to ask for than
       //                              to write by hand (~400,000 calls/frame)
       //   a scanline sweep with the  +4.15 ms - no change worth the name
       //   column geometry hoisted
       //
-      // So the cost is the memory traffic itself, not the shape of the loop,
-      // and no third rewrite is going to find it. That is why Day is a
-      // toggle that ships OFF: see the CW-85 record for what it buys and
-      // what it costs.
+      // So the cost is the memory traffic itself, not the shape of the loop.
+      // That is why Day is a toggle that is off by default.
       const back = backing === null ? 0 : backing[cell];
       if (back !== 0) {
         for (let y = 0; y < runH; y++) {
@@ -435,7 +428,7 @@ function _paintComposited(
 }
 
 /**
- * Scanlines (CW-21 P4): every other device-pixel row loses some of its alpha,
+ * Scanlines: every other device-pixel row loses some of its alpha,
  * the way the gaps between a CRT's lines darkened the picture.
  *
  * Applied to the finished frame rather than to the atlas, because the gap
@@ -458,7 +451,7 @@ function _applyScanlines(img, w, dim) {
 }
 
 /**
- * Phosphor afterglow on the composite path (CW-21).
+ * Phosphor afterglow on the composite path.
  *
  * A real phosphor keeps EMITTING as it decays, so what the tube shows is the
  * new frame plus whatever the previous one is still giving off. That is a
@@ -466,7 +459,7 @@ function _applyScanlines(img, w, dim) {
  * source-over blend — and it is also the cheap arithmetic, a comparison and a
  * copy per pixel with no division, which is what lets afterglow ride the
  * composite path instead of dropping the whole frame back onto the per-cell
- * blit path CW-22 measured at 2-3x slower.
+ * blit path, which is 2-3x slower.
  *
  * @param {CanvasRenderingContext2D} ctx - the key for this overlay's history
  * @param {ImageData} img - the frame just composited; updated in place
@@ -503,9 +496,9 @@ function _applyAfterglow(ctx, img, fade) {
  * combined result is copied back for the next frame. Degrades gracefully to
  * hard-clear when the persistence canvas is unavailable.
  *
- * Palette mode (CW-6): pass `colorLayers` and each cell blits from the atlas
+ * Palette mode: pass `colorLayers` and each cell blits from the atlas
  * of its palette color instead of the single-atlas argument. Callers without
- * it get the exact single-color behavior they always had.
+ * it get the single-color behavior.
  *
  * @param {CanvasRenderingContext2D} ctx - overlay 2D context (DPR-sized)
  * @param {Int16Array|number[]} glyphIndices - flat [row * cols + col] atlas indices
@@ -520,7 +513,7 @@ function _applyAfterglow(ctx, img, fade) {
  * @param {{ indices: Int8Array|number[], atlases: Array<{canvas: HTMLCanvasElement}> }} [colorLayers]
  *   per-cell palette indices + one atlas per palette color (all atlases share
  *   the base atlas's cell metrics)
- * @param {boolean} [glowInComposite=false] - CW-21: carry the trail inside the
+ * @param {boolean} [glowInComposite=false] - carry the trail inside the
  *   composite path (a decaying per-channel maximum) instead of dropping to the
  *   per-cell blit path for it. Needs no persistence canvas; the caller opts in
  *   because it changes how a trail LOOKS, not just how fast it paints.
@@ -539,7 +532,7 @@ export function paintFrame(
   colorLayers,
   glowInComposite = false,
   scanlineDim = 0,
-  // CW-85: one opaque color per cell, or 0 for "leave this cell alone", or
+  // One opaque color per cell, or 0 for "leave this cell alone", or
   // null for a caller that has no backing at all - which is every caller but
   // the game's own instance, and the game itself while Night is on.
   backing = null
@@ -556,11 +549,10 @@ export function paintFrame(
   const colorIndices = colorLayers?.indices ?? null;
   const colorAtlases = colorLayers?.atlases ?? null;
 
-  // The composite path carries afterglow itself (CW-21), so switching a trail
-  // on no longer costs the frame the CW-22 paint speed-up. The per-cell blit
-  // path below stays for callers that hand in a persistence CANVAS pair and
-  // expect the source-over trail it has always produced — the main app's Alt
-  // View slider is one.
+  // The composite path carries afterglow itself, so switching a trail on
+  // does not cost the frame the composite speed-up. The per-cell blit path
+  // below stays for callers that hand in a persistence canvas pair and
+  // expect its source-over trail — the main app's Alt View slider is one.
   if (fade === 0 || glowInComposite) {
     _paintComposited(
       ctx,
@@ -618,7 +610,7 @@ export function paintFrame(
 }
 
 // ---------------------------------------------------------------------------
-// Phosphor drive levels (CW-21) — pure math, unit-tested directly
+// Phosphor drive levels — pure math, unit-tested directly
 // ---------------------------------------------------------------------------
 
 /**
@@ -630,7 +622,7 @@ export function paintFrame(
  * phosphor a new color — it saturates and blooms toward white, and that is
  * what the extra energy looks like. So drive > 1 blends toward white rather
  * than multiplying, and green (already near maximum) gains very little from
- * it: MEASURED, #00ff00 is 15.30:1 on black while drive 1.5 reaches only
+ * it: measured, #00ff00 is 15.30:1 on black while drive 1.5 reaches only
  * 16.53:1. The DOWNWARD range is the useful one — 6.45:1 at drive 0.65, a
  * 2.4x luminance span.
  *
@@ -679,28 +671,26 @@ export function pickIntensityIndex(lum, levelCount) {
 }
 
 /**
- * CW-70: how far to lift the reverse-video threshold, to hold the share of
- * solid cells under a cap.
+ * How far to lift the reverse-video threshold, to hold the share of solid
+ * cells under a cap.
  *
  * A hard per-frame cap is not available: the reverse decision has to be made
- * BEFORE the glyph is picked (a reverse cell is matched against an inverted
+ * before the glyph is picked (a reverse cell is matched against an inverted
  * shape vector), and on the GPU path that happens per fragment, where no cell
  * can know the frame's total. So the cap is a controller instead: the previous
  * conversion's share raises or relaxes the threshold for the next one. It is
- * one frame behind by construction, and the instrument's per-frame share is
- * where that overshoot is read, not argued about.
+ * one frame behind by construction.
  *
- * ★ THE RELEASE IS FAR SLOWER THAN THE RISE, AND IT WAS MEASURED BEFORE IT WAS
- * BELIEVED. A first version relaxed at three quarters of the cap by half a
- * step, and a STANDING pose in front of a row of lit shopfronts - where the
- * natural share is four times the cap - produced fourteen thousand
- * reverse-video crossings over twenty-four frames where the uncapped picture
- * produced NONE. The threshold was hunting: one step up put the share under
- * three quarters of the cap, so the next frame relaxed, so the frame after
- * that was over again. A cap that makes a still picture flicker is worse than
- * no cap. The band is now half the cap and the release an eighth of a step, so
- * a scene whose share settles anywhere between half the cap and the cap holds
- * still, and the layer walks back only when the thing that lit it has gone.
+ * The release is far slower than the rise. Relaxing at three quarters of the
+ * cap by half a step makes the threshold hunt: standing in front of a row of
+ * lit shopfronts, where the natural share is four times the cap, one step up
+ * puts the share under three quarters of the cap, so the next frame relaxes,
+ * so the frame after that is over again - fourteen thousand reverse-video
+ * crossings over twenty-four frames where the uncapped picture has none. A
+ * cap that makes a still picture flicker is worse than no cap. So the band
+ * is half the cap and the release an eighth of a step: a scene whose share
+ * settles anywhere between half the cap and the cap holds still, and the
+ * layer walks back only when the thing that lit it has gone.
  *
  * @param {number} share the share of cells painted solid last conversion
  * @param {number|null} cap the share allowed, or null for no cap
@@ -723,7 +713,7 @@ export function nextReverseLift(share, cap, lift, options = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Palette mode helpers (CW-6) — pure math, unit-tested directly
+// Palette mode helpers — pure math, unit-tested directly
 // ---------------------------------------------------------------------------
 
 /**
@@ -769,7 +759,7 @@ export function normalizeChroma([r, g, b]) {
  * @returns {number} palette index
  */
 /**
- * CW-71 - the INK BUDGET for palette mode.
+ * The ink budget for palette mode.
  *
  * Monochrome has an intensity ladder, so a dim cell is drawn dim. Palette mode
  * has none: the cell contrast curve normalizes every cell to full scale before
@@ -864,7 +854,7 @@ export function pickPaletteIndex(
   let best = 0;
   let bestDist = Infinity;
   for (let i = 0; i < normalizedPalette.length; i++) {
-    // CW-71: an entry the ink budget has ruled out for this cell.
+    // An entry the ink budget has ruled out for this cell.
     if (i === skipIndex) continue;
     const [pr, pg, pb] = normalizedPalette[i];
     const dr = nr - pr;

@@ -1,21 +1,20 @@
 /**
- * Naming the corner you are about to travel to (CW-61, CW-Q58).
+ * Naming the corner you are about to travel to.
  *
  * The teleport dialog has to say where you would land, and for a blind
  * traveler that sentence IS the map. So it has to be true at a corner, true
  * in the middle of a block, and true where there is no street at all - and it
  * must never invent a second street to make itself sound more precise.
  *
- * ★★ THE RULES HERE WERE MEASURED, NOT REASONED. The street index was asked
+ * The rules here were measured, not reasoned. The street index was asked
  * what it says at 1,661 real crossings in Seattle and at a lattice of
  * mid-block points, and the two rules below are what the answers required.
- * The numbers are in the CW-61 release record.
  *
  * @license GPL-3.0-or-later
  */
 
 /**
- * ★ RULE ONE: A SECOND STREET HAS TO BE CLOSE ENOUGH TO BE A CORNER.
+ * Rule one: a second street has to be close enough to be a corner.
  *
  * Measured by walking away from 120 real junctions along one of their own
  * streets and asking the index what the runner-up name was:
@@ -33,8 +32,8 @@
  * and it lands squarely inside that cliff. The caller passes it rather than
  * this file owning a second copy.
  *
- * ★ RULE TWO: THE SECOND NAME MUST BE A DIFFERENT STREET, NOT THE SAME ONE
- * WEARING A SUFFIX. The road graph carries "4th Avenue" and "4th Avenue
+ * Rule two: the second name must be a different street, not the same one
+ * wearing a suffix. The road graph carries "4th Avenue" and "4th Avenue
  * Cycletrack" as separate named ways a meter apart, and "Alaskan Way" and
  * "Alaskan Way South" where the naming changes. "Near 4th Avenue and 4th
  * Avenue Cycletrack" is not a corner, it is a street next to itself.
@@ -49,7 +48,7 @@ const norm = (name) =>
 /**
  * Whether two street names are the same street.
  *
- * ★ TOKENS, NOT SUBSTRINGS, and the difference is not cosmetic. A substring
+ * Tokens, not substrings, and the difference is not cosmetic. A substring
  * test calls "1st Avenue" part of "21st Avenue", because it is one - so a
  * genuine corner would lose its second street to a spelling accident. One
  * name is the same street as the other when the shorter one's WORDS are a
