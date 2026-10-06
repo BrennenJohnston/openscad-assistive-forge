@@ -39,15 +39,18 @@ The camera controls are the desktop ones.
 
 ## Braille
 
-![The Braille Card Designer: a wedge shaped card with braille dots reading hello world in the preview, and a translation panel with the text box and a language and grade selector](images/braille-card.png)
+![The Braille Card Designer: a wedge shaped card leaning back in the preview with braille dots reading hello world on two lines, and a translation panel with the text box holding hello and world and the language and grade selector set to English (UEB) Grade 2, contracted](images/braille-card.png)
 
 Translation runs on your device. The text never leaves your browser.
 
-New in version 5 is the braille editor: a Unicode braille field on the Card
-and the Sign, where you can check and correct the translation cell by cell
-before printing. Cards size themselves to their content by default, one print
-can carry several charms, and downloads are named after their content, such
-as `braille-card-hello-world.stl`.
+New in version 5 is the braille editor: a Unicode braille field where you
+can check and correct the translation cell by cell before printing. Cards
+size themselves to their content by default, one print can carry several
+charms, and downloads are named after their content, such as
+`braille-card-hello-world.stl`.
+
+Version 5.2 rebuilt the translation underneath these tools and measured the
+sign against the standard. That story is [further down](#version-52-braille-the-way-liblouis-writes-it).
 
 ## A charm from a drawing
 
@@ -167,6 +170,62 @@ and on the charm's own Offset slider.
 reset; the Design width box says the charm set it; the bulk bar says its
 sizes are the box around each shape; the thin-line advisory names the dial
 it means and no longer measures the specks.
+
+## Version 5.2: braille the way liblouis writes it
+
+![The Braille Sign in the app. On the left, the Braille translation panel: the text box reads Room 101, Language and grade is English (UEB) Grade 2, contracted, and under Braille capitals the choice "ADA sign rule: lowercase, except single letters (the B in 3B)" is selected above "Exactly as typed (UEB capital signs)". On the right, the preview shows the sign from above as two plates: a letter plate with ROOM 101 in raised capitals inside a raised border, and below it a narrower braille plate with the same text in braille dots. The status reads Preview ready](images/braille-sign.png)
+
+The braille tools had translated one word at a time, on liblouis packages
+from 2017. A capital passage came out as a capital sign on every word, other
+rules that span words were lost, and some short words that mix letters and
+digits crashed the translation. Version 5.2 translates each line you type
+whole, on liblouis 3.39.0 built from its release source and checked against
+native liblouis on every test phrase.
+
+**The Braille Sign is built to the figures of ADA 703.** The raised letters
+are 16 mm tall measured on the capital I, spaced so that every pair of
+capitals and every pair of digits is 3.2 mm to four stroke widths apart, and
+kept at least 9.525 mm (3/8 in) inside the raised border. Sign braille is
+lowercase except a capital letter standing alone, such as the B in 3B, as
+ADA 703.3.1 has it. **Exactly as typed** keeps the capitals you type, for a
+name, an acronym or a sentence. Every setting that ADA gives a range is held
+to it, and a value outside the range stops the model with a message that
+names the rule. [Braille sign standards](../guides/BRAILLE_STANDARDS.md)
+lists each figure, the rule behind it, the sign's measured value, and what
+the tool does not check.
+
+![The Braille Card with the text ROOM ROOM ROOM ROOM. The Braille preview box in the panel shows one braille line of 24 cells out of 26: three capital passage cells, the word room four times, and a two-cell terminator, with the typed text beneath it. The preview shows a long, narrow card leaning back with the same dots across its face](images/braille-capital-passage.png)
+
+**Each line is translated whole.** "ROOM ROOM ROOM ROOM" has one capital
+passage sign and one terminator, as Unified English Braille writes it. The
+table list offers UEB Grade 1 and Grade 2, the Braille Card starts on Grade
+2, and a divided e-mail address, web address or long number ends each row but
+its last with the line continuation sign (dot 5). The card's and the charm's
+dots keep to the same ADA ranges as the sign's, with rounded dots only.
+
+![The braille editor open on the Braille Card: a Translate to braille button, the Six-key entry checkbox ticked above its help line (f, d, s are dots 1, 2, 3 and j, k, l are dots 4, 5, 6), a braille field holding Room 101 in braille, the buttons Translate to text and Convert braille ASCII, and the status line "Six-key entry is on." The card in the preview carries the same braille](images/braille-editor-six-key.png)
+
+**The braille editor takes braille three ways.** Press **Translate to
+braille** and change any cell. Paste braille ASCII from a BRF file and press
+**Convert braille ASCII**. Or turn on **Six-key entry** and type with F, D, S
+and J, K, L, the way a Perkins brailler does; a screen reader hears each
+cell's dots as it is made.
+
+![The Braille Charm with its braille editor open: the field holds a capital A as two braille cells, the status reads "Filled from your text: 1 braille line. Edits here are used exactly as written.", the Braille preview shows 2 of 2 cells, and a warning says the charms use the editor's braille exactly as written. The preview shows a bracelet clip charm with two raised dots on its face](images/braille-charm.png)
+
+**The charm has the editor too**, one line per charm, used exactly as
+written.
+
+**A screen reader hears the tools once, in words.** The braille panel's
+first status, first error and first warning are spoken, each once. The
+pager's end buttons keep focus and are announced as unavailable, and the
+memory indicator no longer speaks every ten seconds.
+
+**A faster preview for `minkowski()`.** Models that use `minkowski()` no
+longer fall back to a much slower method in the browser: my two-sided Plug
+Puller, with its old `minkowski()` edges, took about 65 s to preview and
+takes about 10 s now. A shared link renders its first preview once, with its
+preset.
 
 ## Share it with one link
 

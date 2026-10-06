@@ -35,6 +35,7 @@ If you just want to customize models, start here:
 - [Changelog](../CHANGELOG.md) -- every release, newest first
 - [Contributing](../.github/CONTRIBUTING.md) -- branches, pull requests, checks
 - [Releasing](./project/RELEASING.md) -- how a release is cut
+- [How I use AI tools](./project/AI_USE.md) -- what the assistants do, and what I decide
 - The [security policy](../.github/SECURITY.md) and the [code of conduct](../.github/CODE_OF_CONDUCT.md)
 
 ---
@@ -105,7 +106,7 @@ If you're setting up the project for development or thinking about forking:
 docs/
   guides/         User and workflow guides
   updates/        What's new, with pictures
-  project/        Releasing
+  project/        Releasing, and how I use AI tools
   developing/     Architecture, testing, performance
   deploying/      Deployment, security, site facts, rollback
   accessibility/  Conformance, the VPAT, browser support, known issues

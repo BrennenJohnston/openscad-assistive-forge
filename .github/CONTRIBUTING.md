@@ -92,6 +92,12 @@ The vendored engines and data: `public/wasm/`, `public/liblouis/`,
 `public/libraries/`, `public/fonts/`, `vendor/`, and `LICENSE`. If one of them
 looks like the problem, open an issue and I will look at the code that calls it.
 
+## AI tools
+
+I use AI coding assistants on this project; [how](../docs/project/AI_USE.md)
+is written down. You may use them too. Say so in the pull request, and make
+sure you understand and have tested what you submit.
+
 ## License
 
 By contributing, you agree your contributions are licensed under GPL-3.0-or-later (see `LICENSE`).

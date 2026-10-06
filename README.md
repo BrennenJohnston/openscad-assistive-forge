@@ -4,10 +4,17 @@
 
 # OpenSCAD Assistive Forge
 
+[![Tests](https://github.com/BrennenJohnston/openscad-assistive-forge/actions/workflows/test.yml/badge.svg?branch=develop)](https://github.com/BrennenJohnston/openscad-assistive-forge/actions/workflows/test.yml)
+[![Latest release](https://img.shields.io/github/v/release/BrennenJohnston/openscad-assistive-forge)](https://github.com/BrennenJohnston/openscad-assistive-forge/releases/latest)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+
 A browser based OpenSCAD "Customizer" that tries to be usable with keyboards, screen readers, high contrast, and small screens.
 
-- **Live demo**: `https://openscad-assistive-forge.pages.dev/`
-- **Docs index**: `docs/README.md`
+- **Live demo**: <https://openscad-assistive-forge.pages.dev/>
+- **Docs index**: [docs/README.md](docs/README.md)
+- **What's new**: [version 5, with pictures](docs/updates/WHATS_NEW_v5.md)
+
+![The Simplified interface: a Customizer panel with presets and three parameter groups on the left, and a 3D preview of an open box with its lid on the right](docs/updates/images/forge-model-open.png)
 
 ## Why this exists
 
@@ -35,12 +42,15 @@ The welcome screen ships with ready-to-use customizers -- no `.scad` file needed
   card that prints leaning back at 75° with break-away supports, a small
   charm/pendant/zipper pull, and a two-part tactile sign with raised letters
   and braille, built to the figures of ADA 703, whose braille dot ranges the
-  card and the charm keep too. See
-  `docs/guides/BRAILLE_CARD_GUIDE.md` and `docs/guides/BRAILLE_STANDARDS.md`.
+  card and the charm keep too. See the
+  [Braille Card guide](docs/guides/BRAILLE_CARD_GUIDE.md) and the
+  [Braille sign standards](docs/guides/BRAILLE_STANDARDS.md).
 - **Charm Designer** -- design wearable charms, pendants, and logo plates
   with engraved or raised icons, including C-clip charms that snap onto
   silicone bracelets. Import your own SVG, DXF or photo, or pick from the
   built-in library.
+
+![The Braille Sign in the app: the text box reads Room 101, and the preview shows a letter plate with ROOM 101 in raised capitals above a braille plate with the same text in braille dots](docs/updates/images/braille-sign.png)
 
 ## Two interfaces
 
@@ -56,8 +66,8 @@ switch at any time from the button in the top right:
   desktop program or are following a tutorial written for it. Desktop widths
   only, and it keeps the desktop's light appearance.
 
-Both open the same files and produce the same geometry. See
-`docs/guides/CLASSIC_UI_GUIDE.md`.
+Both open the same files and produce the same geometry. See the
+[Classic interface guide](docs/guides/CLASSIC_UI_GUIDE.md).
 
 ## Accessibility notes (the short version)
 
@@ -68,7 +78,7 @@ I treat accessibility bugs as "real bugs". A few highlights:
 - Light / dark / high-contrast modes (and Windows forced-colors support)
 - Respects reduced motion
 
-More detail lives in `docs/guides/ACCESSIBILITY_GUIDE.md`.
+More detail lives in the [accessibility guide](docs/guides/ACCESSIBILITY_GUIDE.md).
 
 ## Install as a desktop app (offline use)
 
@@ -78,15 +88,27 @@ Chrome or Edge), and you have a desktop app that lives in your Start menu /
 Applications folder and works fully offline -- it's just a website your
 browser remembers.
 
-See `docs/guides/RUN_OFFLINE_GUIDE.md` for full instructions, including a
-"before you travel" workshop checklist.
+See the [offline guide](docs/guides/RUN_OFFLINE_GUIDE.md) for full
+instructions, including a "before you travel" workshop checklist.
 
 ## Curious how it handles safety and privacy?
 
-`docs/deploying/SITE_FACTS.md` lays it out: the Content Security Policy verbatim,
+[Site Facts](docs/deploying/SITE_FACTS.md) lays it out: the Content Security Policy verbatim,
 the (very short) data-handling story, exactly what the site connects to,
 the supply-chain controls, and the accessibility conformance work. All of
 it is verifiable against the files it cites.
+
+## Status
+
+Version 5.2 is the current release. I maintain the project alone, so two
+things to know before you rely on it:
+
+- Very complex models can be slow. That is mostly OpenSCAD running in a browser.
+- Phones work, but I consider them supported, not optimized.
+
+[What's new in version 5](docs/updates/WHATS_NEW_v5.md) is a photo journal of
+everything since version 4.5.0, and the [changelog](CHANGELOG.md) has every
+release.
 
 ## Develop locally
 
@@ -99,39 +121,38 @@ npm run dev
 
 Then open `http://localhost:5173`.
 
-## What changed lately?
-
-`docs/updates/WHATS_NEW_v5.md` is a photo journal of everything since
-version 4.5.0 -- the short, illustrated version of the CHANGELOG.
-
 ## Docs (where to start)
 
-- `docs/README.md` (index)
-- `docs/deploying/DEPLOYMENT.md`
-- `docs/developing/TESTING.md`
-- `docs/developing/TROUBLESHOOTING.md`
-- `docs/specs/PARAMETER_SCHEMA_SPEC.md`
+- [Docs index](docs/README.md)
+- [Deployment](docs/deploying/DEPLOYMENT.md)
+- [Testing](docs/developing/TESTING.md)
+- [Troubleshooting](docs/developing/TROUBLESHOOTING.md)
+- [Parameter schema](docs/specs/PARAMETER_SCHEMA_SPEC.md)
 
 ## Contributing
 
 If you found a bug, confusing UI, or a missing accessibility affordance: please open an issue. PRs are welcome too -- small and focused is easiest for me to review.
 
-`.github/CONTRIBUTING.md` has the details.
+The [contributing guide](.github/CONTRIBUTING.md) has the details.
+
+## How this is built
+
+I build this with the help of AI coding assistants, under my direction and
+review. [How I use AI tools](docs/project/AI_USE.md) says what that means.
 
 ## License
 
-GPL-3.0-or-later. See `LICENSE`.
+GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 ## Credits
 
 This project stands on a lot of good work:
 
-- OpenSCAD (`https://openscad.org/`)
-- OpenSCAD WASM builds (`https://github.com/openscad/openscad-wasm`)
-- OpenSCAD Playground (helpful reference UI) (`https://github.com/openscad/openscad-playground`)
-- Three.js (`https://threejs.org/`)
-- liblouis braille translator (`https://liblouis.io/`)
-- Tony Fast (`https://github.com/tonyfast`) -- expert accessibility feedback
+- [OpenSCAD](https://openscad.org/)
+- [OpenSCAD WASM builds](https://github.com/openscad/openscad-wasm)
+- [OpenSCAD Playground](https://github.com/openscad/openscad-playground) (helpful reference UI)
+- [Three.js](https://threejs.org/)
+- [liblouis](https://liblouis.io/) braille translator
+- [Tony Fast](https://github.com/tonyfast) -- expert accessibility feedback
 
-See `CREDITS.md` and `THIRD_PARTY_NOTICES.md` for the full list.
-
+See [CREDITS.md](CREDITS.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full list.
