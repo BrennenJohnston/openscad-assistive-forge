@@ -19,6 +19,11 @@ pull request and nothing to merge back.
    In `CHANGELOG.md`, rename "Unreleased" to the version and the date, and trim
    the section to about 40 lines.
 3. Wait for the checks to pass on `develop` after that pull request merges.
+   A pull request runs the Test Suite workflow. The version change in
+   `package.json` also starts the Release Checks workflow on `develop`
+   (Edge, Firefox, Safari, the visual comparison and the Lighthouse audit),
+   which otherwise runs nightly; `main` requires its Edge and Lighthouse
+   checks as well.
 
 ### Braille tools
 
@@ -62,7 +67,12 @@ If the push to `main` is refused, the checks on that `develop` commit have not
 all passed yet. Wait for them, or re-run the one that failed.
 
 A change that does not alter the app (documentation, comments) goes to `main`
-the same way, with no new version number and no tag.
+the same way, with no new version number and no tag. Such a commit has not
+run the Release Checks, so start them first and wait:
+
+```bash
+gh workflow run release-checks.yml --ref develop
+```
 
 ## Service worker cache
 
