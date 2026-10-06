@@ -247,7 +247,7 @@ function compareAll({ profile, ciOnly }) {
 function blessGolden({ ciOnly }) {
   const fixtures = loadFixtures(ciOnly);
   const wasmDir = path.join(artifactsDir, 'wasm');
-  const out = { engineVersion: 'OpenSCAD-2026.04.03 WASM (Manifold)', fixtures: {} };
+  const out = { engineVersion: 'OpenSCAD-2026.04.03+forge.1 WASM (Manifold)', fixtures: {} };
   for (const fixture of fixtures) {
     const stats = readStats(wasmDir, fixture.id);
     if (!stats) {

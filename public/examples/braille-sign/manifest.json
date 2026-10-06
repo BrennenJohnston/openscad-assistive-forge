@@ -1,6 +1,6 @@
 {
   "name": "Braille Sign",
-  "description": "A two-part tactile sign: a letter plate with raised uppercase characters (ADA 703 defaults: 16 mm sans-serif, raised 0.8 mm) and a braille plate with the same text in braille below. The split raised border joins into one continuous frame when the plates are mounted together. ADA defaults are recommendations only — verify compliance before installing.",
+  "description": "A two-part tactile sign: a letter plate with raised uppercase sans-serif letters, 16 mm tall on the capital I and raised 0.8 mm, and a braille plate below with the same text in contracted (Grade 2) braille. The split raised border joins into one frame when the plates are mounted together. These defaults follow ADA 703, but this tool does not guarantee compliance. Check the standard before installing.",
   "version": "1.2.0",
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "GPL-3.0-or-later",
@@ -9,6 +9,7 @@
   "program": "braille-card-customizer",
   "brailleTranslation": {
     "mode": "sign",
+    "capitals": "off",
     "lineParams": ["Line_1", "Line_2", "Line_3", "Line_4", "Line_5", "Line_6"],
     "textParams": [
       "sign_text_1",
@@ -26,7 +27,9 @@
       "cellSpacing": "cell_spacing",
       "lineSpacing": "line_spacing",
       "charHeight": "char_height_mm",
-      "letterSpacing": "letter_spacing"
+      "letterSpacing": "letter_spacing",
+      "border": "add_border",
+      "borderWidth": "border_width_mm"
     }
   },
   "tags": [

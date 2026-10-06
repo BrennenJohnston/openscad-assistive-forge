@@ -118,8 +118,29 @@ export class ErrorLogPanel {
     let lineNum = null;
     const message = trimmed;
 
-    // ERROR: patterns
-    if (/\bERROR:/i.test(trimmed)) {
+    // D-232: on every render that draws text, Fontconfig notes that the
+    // browser engine has no config file. The text still renders, and the
+    // desktop console shows the line as plain output, so it is not an error;
+    // the ERROR: test below matched its lowercase "error:".
+    if (/^Fontconfig error: Cannot load default config file\b/i.test(trimmed)) {
+      return null;
+    }
+
+    // D-203: a line OpenSCAD labels a warning is one, whatever its text
+    // quotes. "WARNING: [manifold] Minkowski failed with error, falling back
+    // to Nef operation: CGAL ERROR: assertion violation!" matched the ERROR:
+    // test below on the words after the colon, and a preview that had worked
+    // was announced as an error.
+    if (/^WARNING:/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.WARNING;
+      group = 'Compile';
+    } else if (/^CGAL error: \w+ violation!/i.test(trimmed)) {
+      // CGAL prints this itself, before OpenSCAD decides what it means.
+      // OpenSCAD's next line says: "ERROR: CGAL error in ..." when the render
+      // fails, "WARNING: ..., falling back ..." when it recovers.
+      type = ERROR_LOG_TYPE.WARNING;
+      group = 'Geometry';
+    } else if (/\bERROR:/i.test(trimmed)) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Compile';
     } else if (/\bWARNING:/i.test(trimmed)) {

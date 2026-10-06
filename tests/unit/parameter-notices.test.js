@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   adjustmentSentence,
   describeAdjustments,
+  describeMissingPreset,
   createParameterNotices,
 } from '../../src/js/parameter-notices.js'
 
@@ -80,6 +81,20 @@ describe('describeAdjustments', () => {
   })
 })
 
+describe('describeMissingPreset (D-195)', () => {
+  it('names the preset, says none was applied, and says where to choose one', () => {
+    const notice = describeMissingPreset('No Such Preset')
+    expect(notice.title).toBe(
+      'This link asks for a preset this project does not have'
+    )
+    expect(notice.lines).toEqual([
+      'There is no preset named "No Such Preset". No preset was applied. You can choose one under Presets.',
+    ])
+    expect(notice.dismissLabel).toBe('Dismiss the notice about the preset')
+    expect(notice.kind).toBe('missing-preset')
+  })
+})
+
 describe('createParameterNotices', () => {
   function harness() {
     const container = document.createElement('div')
@@ -154,6 +169,66 @@ describe('createParameterNotices', () => {
   it('survives having no container at all', () => {
     const notices = createParameterNotices(null, { announce: vi.fn() })
     expect(() => notices.show(sample)).not.toThrow()
+    expect(() => notices.add(sample)).not.toThrow()
     expect(() => notices.clear()).not.toThrow()
+  })
+
+  // D-195: a link can have two things to say. A missing preset is found after
+  // a changed value or an unknown starter setting was reported, and saying it
+  // must not erase them.
+  const missing = describeMissingPreset('No Such Preset')
+
+  it('adds a notice beside the one showing, and announces only the new one', () => {
+    const { container, notices, announced } = harness()
+    notices.show(sample)
+    notices.add(missing)
+    const titles = Array.from(
+      container.querySelectorAll('.parameter-notice-title')
+    ).map((el) => el.textContent)
+    expect(titles).toEqual([sample.title, missing.title])
+    expect(announced).toHaveLength(2)
+    expect(announced[1]).toBe([missing.title, ...missing.lines].join(' '))
+  })
+
+  it('adds as the only notice when nothing is showing', () => {
+    const { container, notices } = harness()
+    notices.add(missing)
+    expect(container.hidden).toBe(false)
+    expect(container.querySelectorAll('.parameter-notice')).toHaveLength(1)
+  })
+
+  it('gives each notice its own Dismiss label and kind', () => {
+    const { container, notices } = harness()
+    notices.show(sample)
+    notices.add(missing)
+    const [first, second] = container.querySelectorAll('.parameter-notice')
+    expect(first.getAttribute('data-notice')).toBe('url-adjustments')
+    expect(
+      first.querySelector('.parameter-notice-dismiss').getAttribute('aria-label')
+    ).toBe('Dismiss the notice about changed values')
+    expect(second.getAttribute('data-notice')).toBe('missing-preset')
+    expect(
+      second.querySelector('.parameter-notice-dismiss').getAttribute('aria-label')
+    ).toBe('Dismiss the notice about the preset')
+  })
+
+  it('dismisses only its own notice, and the focus goes to the one still showing', () => {
+    const { container, notices, announced } = harness()
+    notices.show(sample)
+    notices.add(missing)
+    const [first, second] = container.querySelectorAll('.parameter-notice')
+    second.querySelector('.parameter-notice-dismiss').click()
+    expect(Array.from(container.querySelectorAll('.parameter-notice'))).toEqual([
+      first,
+    ])
+    expect(container.hidden).toBe(false)
+    expect(document.activeElement).toBe(
+      first.querySelector('.parameter-notice-dismiss')
+    )
+    expect(announced.at(-1)).toBe('Notice dismissed.')
+
+    first.querySelector('.parameter-notice-dismiss').click()
+    expect(container.hidden).toBe(true)
+    expect(container.querySelectorAll('.parameter-notice')).toHaveLength(0)
   })
 })

@@ -15,6 +15,28 @@ npm run build
 
 Update `CHANGELOG.md` with what changed.
 
+### Braille tools
+
+Before any release that changes how braille is translated (the liblouis
+engine or its tables, `src/js/liblouis-engine.js`,
+`src/worker/liblouis-worker.js`, any `src/js/braille-*.js` file, or the
+braille sign, card and charm models), the whole braille suite must be
+present and pass, on all three tools:
+
+- the "Build liblouis wasm" workflow, whose check compares the built
+  engine with native liblouis on every test phrase in both tables;
+- `tests/unit/braille-parity.test.js` and the other braille unit tests;
+- `tests/e2e/braille-card.spec.js`, and
+  `tests/e2e-prod/liblouis-wasm-csp.spec.js` on a build;
+- each braille model's OpenSCAD check, with its range checks in place;
+- on the release's preview, `ROOM ROOM ROOM ROOM`, `See3D`, both phone
+  number forms, the card and the charm, each as native liblouis writes it;
+- a screen reader check (NVDA) when an announcement or a control's name
+  changed.
+
+I write the results into the release pull request. A check that cannot run
+holds the release until it has run.
+
 ## Doing the release
 
 `main` is what deploys to production, and `develop` is where the work lands, so

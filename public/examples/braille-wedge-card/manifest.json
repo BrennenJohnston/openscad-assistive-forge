@@ -32,7 +32,7 @@
       "Line_20"
     ],
     "tablesCatalog": "/liblouis/tables.json",
-    "defaultTable": "en-ueb-g1.ctb",
+    "defaultTable": "en-ueb-g2.ctb",
     "capacityParams": {
       "cardWidth": "card_face_width_mm",
       "cardHeight": "card_face_height_mm",

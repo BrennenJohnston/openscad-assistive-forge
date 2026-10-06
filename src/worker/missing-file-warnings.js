@@ -8,6 +8,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { withoutComments } from '../js/scad-comments.js';
+
 /**
  * Scan SCAD source for include/use directives and return desktop-format
  * warnings for any referenced files that cannot be found.
@@ -26,9 +28,10 @@ export function generateMissingFileWarnings(scadContent, fileExistsFn) {
   const warnings = [];
   const seen = new Set();
   const directiveRegex = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
+  const source = withoutComments(scadContent);
   let match;
 
-  while ((match = directiveRegex.exec(scadContent)) !== null) {
+  while ((match = directiveRegex.exec(source)) !== null) {
     const refFile = (match[1] || match[2]).trim();
     if (!refFile || seen.has(refFile)) continue;
     seen.add(refFile);

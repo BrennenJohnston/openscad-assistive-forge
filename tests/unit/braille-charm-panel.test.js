@@ -67,6 +67,7 @@ import {
   sanitizeFilename,
 } from '../../src/js/download.js';
 import { stateManager } from '../../src/js/state.js';
+import { backTranslateText } from '../../src/js/braille-translator.js';
 
 const CHARM_PARAMS = Array.from({ length: 12 }, (_, i) => `Charm_${i + 1}`);
 
@@ -136,6 +137,134 @@ describe('braille panel charm mode (multi-charm)', () => {
     expect(document.getElementById('brailleCardPager').hidden).toBe(true);
   });
 
+  it('keeps its own table help: what contracted braille costs a charm', () => {
+    // Measured with native liblouis 3.39.0: in Grade 2 a letter standing
+    // alone takes the grade 1 indicator, so B is three cells
+    expect(document.getElementById('brailleTableHelp').textContent).toBe(
+      'Uncontracted (Grade 1) gives each letter one cell, and a capital ' +
+        'letter two. In contracted (Grade 2) most letters standing alone ' +
+        'need an extra cell, so most capital letters no longer fit on a charm.'
+    );
+  });
+
+  describe('braille editor', () => {
+    const field = () => document.getElementById('brailleFieldInput');
+
+    /** Put braille in the editor and wait for the layout to settle. */
+    async function editField(value, expectSettled) {
+      field().value = value;
+      field().dispatchEvent(new Event('input'));
+      await vi.waitFor(expectSettled, { timeout: 3000, interval: 25 });
+    }
+
+    it('is offered on a charm, one line per charm, with its tools', () => {
+      expect(
+        document.querySelector('label[for="brailleFieldInput"]').textContent
+      ).toBe('Braille (Unicode), one line per charm');
+      expect(document.getElementById('brailleFieldHelp').textContent).toBe(
+        'One line per charm. Press "Translate to braille" to fill this ' +
+          'editor from your characters, then change any cell. You can also ' +
+          'paste braille, type it with six-key entry, or paste braille ASCII ' +
+          'and press "Convert braille ASCII". Press "Translate to text" to ' +
+          'read the braille back. Whenever this editor has content each ' +
+          'line makes one charm of up to 2 cells, used exactly as written. ' +
+          'Clear it to go back to translating the characters above.'
+      );
+      expect(document.getElementById('brailleSixKeyToggle')).not.toBeNull();
+      expect(document.getElementById('brailleFieldFromAscii')).not.toBeNull();
+      expect(document.getElementById('brailleFieldToText')).not.toBeNull();
+      // The phone number note serves rows of text, not single characters
+      expect(document.getElementById('brailleNumberSignHelp')).toBeNull();
+    });
+
+    it('"Translate to braille" writes one line per character', async () => {
+      await typeText('Hi', () => {
+        expect(params().charm_layout).toBe('All charms');
+      });
+      document.getElementById('brailleFieldFromText').click();
+      await vi.waitFor(
+        () => {
+          expect(field().value).toBe('\u2820' + cell('h') + '\n' + cell('i'));
+        },
+        { timeout: 3000, interval: 25 }
+      );
+      expect(document.getElementById('brailleFieldStatus').textContent).toBe(
+        'Filled from your text: 2 braille lines. Edits here are used exactly as written.'
+      );
+    });
+
+    it('makes one charm of each line, exactly as written, skipping blank lines', async () => {
+      const announce = vi.spyOn(stateManager, 'announceChange');
+      try {
+        await editField('\u2801\n\n\u2803\u2809', () => {
+          expect(params().Charm_2).toBe('\u2803\u2809');
+        });
+        expect(params().Charm_1).toBe('\u2801');
+        expect(params().Charm_3).toBe('');
+        expect(params().charm_layout).toBe('All charms');
+        expect(
+          document.getElementById('brailleMultiCardNotice').textContent
+        ).toContain('The braille editor makes 2 charms, one per line.');
+        expect(announce).toHaveBeenCalledWith(
+          'The braille editor now makes 2 charms.'
+        );
+        expect(
+          document.getElementById('brailleWarnings').textContent
+        ).toContain(
+          'The braille editor has content, so the charms use that braille ' +
+            'exactly as written (the characters above are ignored until the ' +
+            'editor is cleared).'
+        );
+        // The characters box no longer names what the editor makes
+        expect(getBrailleDownloadName()).toBe('Braille Charms');
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
+    it('names a line that holds more cells than a charm fits', async () => {
+      await editField('\u2801\u2803\u2809', () => {
+        expect(document.getElementById('brailleErrors').textContent).toContain(
+          'Line 1 of the braille editor is 3 cells, but a charm fits 2. ' +
+            'Move a cell to a line of its own.'
+        );
+      });
+    });
+
+    it('leaves the charms as they were when a line is not braille', async () => {
+      const before = params().braille_chars;
+      await editField('x', () => {
+        expect(document.getElementById('brailleErrors').textContent).toContain(
+          'not a braille character'
+        );
+      });
+      expect(params().braille_chars).toBe(before);
+    });
+
+    it('"Translate to text" puts the characters back in the box', async () => {
+      backTranslateText
+        .mockImplementationOnce(async () => 'A')
+        .mockImplementationOnce(async () => 'b');
+      try {
+        await editField('\u2820\u2801\n\u2803', () => {
+          expect(params().Charm_2).toBe('\u2803');
+        });
+        document.getElementById('brailleFieldToText').click();
+        await vi.waitFor(
+          () => {
+            expect(document.getElementById('brailleTextInput').value).toBe(
+              'Ab'
+            );
+          },
+          { timeout: 3000, interval: 25 }
+        );
+      } finally {
+        backTranslateText.mockReset();
+        backTranslateText.mockImplementation(async () => '');
+      }
+    });
+  });
+
   it('skips whitespace when splitting characters', async () => {
     await typeText('a b', () => {
       expect(params().charm_layout).toBe('All charms');
@@ -180,18 +309,33 @@ describe('braille panel charm mode (multi-charm)', () => {
     expect(params().Charm_1).toBe('');
 
     const pager = document.getElementById('brailleCardPager');
+    const status = document.getElementById('braillePagerStatus');
+    const prev = document.getElementById('braillePrevCard');
+    const next = document.getElementById('brailleNextCard');
     expect(pager.hidden).toBe(false);
-    expect(document.getElementById('braillePagerStatus').textContent).toBe(
-      'Charm 1 of 2 — h'
-    );
-    expect(document.getElementById('braillePrevCard').disabled).toBe(true);
+    expect(status.textContent).toBe('Charm 1 of 2: h');
+    // D-231: the line is shown, not spoken; the announcer says each page once
+    expect(status.hasAttribute('aria-live')).toBe(false);
+    // D-228: an end button keeps focus and is marked unavailable instead of
+    // disabled, which dropped focus to the page
+    expect(prev.getAttribute('aria-disabled')).toBe('true');
+    expect(prev.disabled).toBe(false);
 
-    document.getElementById('brailleNextCard').click();
+    const announce = vi.spyOn(stateManager, 'announceChange');
+    next.click();
     expect(params().braille_chars).toBe(cell('i'));
-    expect(document.getElementById('braillePagerStatus').textContent).toBe(
-      'Charm 2 of 2 — i'
-    );
-    expect(document.getElementById('brailleNextCard').disabled).toBe(true);
+    expect(status.textContent).toBe('Charm 2 of 2: i');
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith('Charm 2 of 2: i');
+    expect(next.getAttribute('aria-disabled')).toBe('true');
+    expect(next.disabled).toBe(false);
+    expect(prev.hasAttribute('aria-disabled')).toBe(false);
+
+    // Pressing an unavailable button changes nothing and says nothing
+    next.click();
+    expect(params().braille_chars).toBe(cell('i'));
+    expect(announce).toHaveBeenCalledTimes(1);
+    announce.mockRestore();
   });
 
   it('warns when more characters than Charm_N slots are entered', async () => {
@@ -201,7 +345,7 @@ describe('braille panel charm mode (multi-charm)', () => {
     // 14 characters, 12 slots: the last slot holds the 12th character
     expect(params().Charm_12).toBe(cell('l'));
     const warnings = document.getElementById('brailleWarnings');
-    expect(warnings.hidden).toBe(false);
+    expect(warnings.textContent).not.toBe('');
     expect(warnings.textContent).toContain('first 12 charms');
   });
 

@@ -30,11 +30,14 @@ So this is my attempt at removing a few of those barriers and hopefully opening 
 The welcome screen ships with ready-to-use customizers -- no `.scad` file needed:
 
 - **Braille Card Designer** -- type plain text and get 3D-printable braille;
-  translation (Grade 1 / Grade 2) runs entirely on-device via liblouis compiled
-  to WebAssembly. Three variants: a card that prints leaning back at 75° with
-  break-away supports, a small charm/pendant/zipper pull, and a two-part
-  tactile sign with raised letters and braille (ADA-style defaults). See
-  `docs/guides/BRAILLE_CARD_GUIDE.md`.
+  translation (Unified English Braille, Grade 1 / Grade 2) runs entirely
+  on-device via liblouis 3.39.0 compiled to WebAssembly, and a braille editor
+  takes hand corrections, braille ASCII and six-key entry. Three variants: a
+  card that prints leaning back at 75° with break-away supports, a small
+  charm/pendant/zipper pull, and a two-part tactile sign with raised letters
+  and braille, built to the figures of ADA 703, whose braille dot ranges the
+  card and the charm keep too. See
+  `docs/guides/BRAILLE_CARD_GUIDE.md` and `docs/guides/BRAILLE_STANDARDS.md`.
 - **Charm Designer** -- design wearable charms, pendants, and logo plates
   with engraved or raised icons, including C-clip charms that snap onto
   silicone bracelets. Import your own SVG, DXF or photo, or pick from the

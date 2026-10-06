@@ -113,6 +113,7 @@ import {
 } from './js/modal-manager.js';
 import {
   translateError,
+  findFailedCheck,
   findMissingLibrary,
   showErrorModal,
   showErrorToast,
@@ -6059,23 +6060,25 @@ async function initApp() {
 
     if (!indicator || !memoryInfo) return;
 
-    indicator.classList.remove('hidden');
+    // D-227: the indicator is a polite live region and NVDA says its tooltip
+    // whenever it is written, so a poll that finds the same value must leave
+    // the text, the classes and the tooltip untouched.
+    if (indicator.classList.contains('hidden')) {
+      indicator.classList.remove('hidden');
+    }
 
     const usedMB = memoryInfo.usedMB || 0;
-    if (text) {
-      text.textContent = `${usedMB} MB`;
+    const label = `${usedMB} MB`;
+    if (text && text.textContent !== label) {
+      text.textContent = label;
     }
 
     // BR-4: no fictional percent. Warning state is driven by an absolute-MB
     // threshold so the indicator turns "warning" only when the WASM heap
     // buffer is genuinely large. The MemoryMonitor decides the badge
     // separately via memoryInfo.usedMB.
-    indicator.classList.remove('warning', 'critical');
-    if (usedMB >= 950) {
-      indicator.classList.add('critical');
-    } else if (usedMB >= 819) {
-      indicator.classList.add('warning');
-    }
+    indicator.classList.toggle('critical', usedMB >= 950);
+    indicator.classList.toggle('warning', usedMB >= 819 && usedMB < 950);
 
     const tips = [`${usedMB} MB allocated to the OpenSCAD engine`];
     if (usedMB >= 950) {
@@ -6083,7 +6086,10 @@ async function initApp() {
     } else if (usedMB >= 819) {
       tips.unshift('Memory usage elevated');
     }
-    indicator.title = tips.join('\n');
+    const tip = tips.join('\n');
+    if (indicator.title !== tip) {
+      indicator.title = tip;
+    }
   }
 
   // memoryPollInterval is now declared at the top of initApp() to avoid TDZ
@@ -6179,6 +6185,23 @@ async function initApp() {
       const friendly = translateError(detailsStr || msg);
       const sentence = `${friendly.explanation} ${friendly.suggestion}`;
       updateStatus(sentence, 'error');
+      _announceError(sentence);
+      return true;
+    }
+
+    // One of the model's own checks (an assert()) stopped it. Its message
+    // is the cause; the empty geometry handled below is only its
+    // consequence, whose guidance sent people looking for an option (D-224).
+    // Announced once, assertively, as an error.
+    const failedCheck = findFailedCheck(`${msg}\n${detailsStr}`);
+    if (failedCheck) {
+      if (previewManager) {
+        previewManager.clear();
+      }
+      const sentence = failedCheck.message
+        ? `The model stopped: ${failedCheck.message}`
+        : `The model stopped at one of its checks: ${failedCheck.condition}`;
+      updateStatus(sentence, 'error', { announce: false });
       _announceError(sentence);
       return true;
     }
@@ -6697,9 +6720,11 @@ async function initApp() {
       (state.complexityAnalysis?.warnings?.length ?? 0) > 0;
     if (!isComplex) return;
     lastComplexityAdvisedFile = fileName;
+    // D-202: the advisory fires before the first preview, so it cannot know
+    // the preview will be slow, and it said so of a model that draws in 2 s.
     const advisoryMsg =
-      'This model is complex — Desktop-quality previews may be slow. ' +
-      'Switch Preview quality to "Performance (auto)" for faster previews.';
+      'This model has many parts. If previews are slow, switch Preview ' +
+      'quality to "Performance (auto)".';
     // updateStatus announces on its own; a second call here said the whole
     // advisory twice.
     updateStatus(advisoryMsg, 'info');
@@ -9073,6 +9098,11 @@ if (rounded) {
         // then take most of them away again, which is worse than either state.
         setStarterParameters(defaults?.starterParameters);
 
+        // ?preset=<name> or manifest defaults.preset. D-200: with one, the
+        // first preview waits until the preset is applied below, so the
+        // design's own values are not rendered and thrown away first.
+        const presetName = initUrlParams.get('preset') || defaults?.preset;
+
         // Step 4 — PROCESS: parse and load the project into the editor
         await fileHandler.handleFile(
           null,
@@ -9080,7 +9110,8 @@ if (rounded) {
           projectFiles,
           mainFile,
           'manifest',
-          projectName
+          projectName,
+          { deferInitialPreview: Boolean(presetName) }
         );
 
         // A name in that list this design does not have is worth saying out
@@ -9140,7 +9171,6 @@ if (rounded) {
         }
 
         // --- ?preset=<name> or manifest defaults.preset -----------------
-        const presetName = initUrlParams.get('preset') || defaults?.preset;
         if (presetName) {
           // After handleFile, presets have been auto-imported from JSON files.
           // Find the matching preset by name and programmatically select it.
@@ -9191,7 +9221,9 @@ if (rounded) {
               }
               updatePrimaryActionButton();
 
-              updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
+              // D-194: the sentence the announcement below says, so what is
+              // seen and heard match, and no em dash in the status line.
+              updateStatus(`${projectName} loaded with preset ${match.name}`);
               announceImmediate(
                 `${projectName} loaded with preset ${match.name}`
               );
@@ -9200,15 +9232,31 @@ if (rounded) {
                 `[DeepLink] Preset not found: "${presetName}". Available:`,
                 presets.map((p) => p.name)
               );
-              updateStatus(
-                `Loaded: ${projectName} (preset "${presetName}" not found)`
-              );
-              announceImmediate(`${projectName} loaded from manifest`);
+              // D-195: a notice, not the status line. The status line stood
+              // about 300 ms before the render replaced it, and the announcer
+              // replaced it at once, so nobody learned no preset was applied.
+              // add(), not show(): what else this link reported stays.
+              updateStatus(`${projectName} loaded from manifest`);
+              const { createParameterNotices, describeMissingPreset } =
+                await import('./js/parameter-notices.js');
+              createParameterNotices(
+                document.getElementById('parameterNotices'),
+                { announce: (text) => announceImmediate(text) }
+              ).add(describeMissingPreset(presetName));
             }
           }
         } else {
-          updateStatus(`Loaded: ${projectName}`);
+          updateStatus(`${projectName} loaded from manifest`);
           announceImmediate(`${projectName} loaded from manifest`);
+        }
+
+        // D-200: the first preview handleFile left to this handler, with the
+        // preset's values, or the design's own when the preset was not found.
+        // It joins the debounced request above rather than adding a render.
+        if (presetName && autoPreviewController) {
+          autoPreviewController.onParameterChange(
+            stateManager.getState().parameters
+          );
         }
 
         // Auto-preview if manifest requests it

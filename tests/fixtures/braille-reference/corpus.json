@@ -1,0 +1,727 @@
+[
+  {
+    "id": "c01",
+    "text": "EXIT",
+    "class": "capitals"
+  },
+  {
+    "id": "c02",
+    "text": "MAIN OFFICE",
+    "class": "capitals"
+  },
+  {
+    "id": "c03",
+    "text": "ROOM ROOM ROOM",
+    "class": "capitals"
+  },
+  {
+    "id": "c04",
+    "text": "ROOM ROOM ROOM ROOM",
+    "class": "capitals"
+  },
+  {
+    "id": "c05",
+    "text": "CONFERENCE ROOM B",
+    "class": "capitals"
+  },
+  {
+    "id": "c06",
+    "text": "CITY SCHOOL FOR THE ARTS",
+    "class": "capitals"
+  },
+  {
+    "id": "c07",
+    "text": "Please KEEP THE DOOR CLOSED at night.",
+    "class": "capitals"
+  },
+  {
+    "id": "c08",
+    "text": "WET FLOOR: USE THE OTHER DOOR!",
+    "class": "capitals"
+  },
+  {
+    "id": "c09",
+    "text": "Tee3D",
+    "class": "capitals"
+  },
+  {
+    "id": "c10",
+    "text": "DVDs",
+    "class": "capitals"
+  },
+  {
+    "id": "c11",
+    "text": "McADAMS HALL",
+    "class": "capitals"
+  },
+  {
+    "id": "c12",
+    "text": "STAFF-ONLY AREA",
+    "class": "capitals"
+  },
+  {
+    "id": "c13",
+    "text": "Room B",
+    "class": "capitals"
+  },
+  {
+    "id": "c14",
+    "text": "ROOM 101",
+    "class": "capitals"
+  },
+  {
+    "id": "c15",
+    "text": "Room 101",
+    "class": "capitals"
+  },
+  {
+    "id": "c16",
+    "text": "room 101",
+    "class": "capitals"
+  },
+  {
+    "id": "c17",
+    "text": "HR Office",
+    "class": "capitals"
+  },
+  {
+    "id": "c18",
+    "text": "O'NEIL ROOM",
+    "class": "capitals"
+  },
+  {
+    "id": "n01",
+    "text": "206-555-0147",
+    "class": "numbers"
+  },
+  {
+    "id": "n02",
+    "text": "206.555.0147",
+    "class": "numbers"
+  },
+  {
+    "id": "n03",
+    "text": "(206) 555-0147",
+    "class": "numbers"
+  },
+  {
+    "id": "n04",
+    "text": "Room 12B",
+    "class": "numbers"
+  },
+  {
+    "id": "n05",
+    "text": "staircase 3b",
+    "class": "numbers"
+  },
+  {
+    "id": "n06",
+    "text": "staircase 3B",
+    "class": "numbers"
+  },
+  {
+    "id": "n07",
+    "text": "section 4R",
+    "class": "numbers"
+  },
+  {
+    "id": "n08",
+    "text": "building 3 100",
+    "class": "numbers"
+  },
+  {
+    "id": "n09",
+    "text": "4th floor",
+    "class": "numbers"
+  },
+  {
+    "id": "n10",
+    "text": "7:30 a.m.",
+    "class": "numbers"
+  },
+  {
+    "id": "n11",
+    "text": "10/31/2026",
+    "class": "numbers"
+  },
+  {
+    "id": "n12",
+    "text": "$8.75",
+    "class": "numbers"
+  },
+  {
+    "id": "n13",
+    "text": "1,500",
+    "class": "numbers"
+  },
+  {
+    "id": "n14",
+    "text": "3-D",
+    "class": "numbers"
+  },
+  {
+    "id": "n15",
+    "text": "Suite 200-A",
+    "class": "numbers"
+  },
+  {
+    "id": "n16",
+    "text": "2nd",
+    "class": "numbers"
+  },
+  {
+    "id": "n17",
+    "text": "2d",
+    "class": "numbers"
+  },
+  {
+    "id": "w01",
+    "text": "info@example.org",
+    "class": "addresses"
+  },
+  {
+    "id": "w02",
+    "text": "first.last@example.com",
+    "class": "addresses"
+  },
+  {
+    "id": "w03",
+    "text": "www.example.org/visit",
+    "class": "addresses"
+  },
+  {
+    "id": "w04",
+    "text": "https://example.org",
+    "class": "addresses"
+  },
+  {
+    "id": "w05",
+    "text": "name_2026@example.net",
+    "class": "addresses"
+  },
+  {
+    "id": "w06",
+    "text": "front-desk@example.org",
+    "class": "addresses"
+  },
+  {
+    "id": "k01",
+    "text": "the cat and the dog",
+    "class": "contractions"
+  },
+  {
+    "id": "k02",
+    "text": "go to the store by the road",
+    "class": "contractions"
+  },
+  {
+    "id": "k03",
+    "text": "children in the library",
+    "class": "contractions"
+  },
+  {
+    "id": "k04",
+    "text": "knowledge for people",
+    "class": "contractions"
+  },
+  {
+    "id": "k05",
+    "text": "restroom",
+    "class": "contractions"
+  },
+  {
+    "id": "k06",
+    "text": "stairs",
+    "class": "contractions"
+  },
+  {
+    "id": "k07",
+    "text": "women",
+    "class": "contractions"
+  },
+  {
+    "id": "k08",
+    "text": "men",
+    "class": "contractions"
+  },
+  {
+    "id": "k09",
+    "text": "elevator",
+    "class": "contractions"
+  },
+  {
+    "id": "k10",
+    "text": "conference",
+    "class": "contractions"
+  },
+  {
+    "id": "k11",
+    "text": "in",
+    "class": "contractions"
+  },
+  {
+    "id": "k12",
+    "text": "b",
+    "class": "contractions"
+  },
+  {
+    "id": "k13",
+    "text": "enough was said",
+    "class": "contractions"
+  },
+  {
+    "id": "p01",
+    "text": "He said \"stop\" and left.",
+    "class": "punctuation"
+  },
+  {
+    "id": "p02",
+    "text": "don't",
+    "class": "punctuation"
+  },
+  {
+    "id": "p03",
+    "text": "(staff only)",
+    "class": "punctuation"
+  },
+  {
+    "id": "p04",
+    "text": "A & B",
+    "class": "punctuation"
+  },
+  {
+    "id": "p05",
+    "text": "50% off",
+    "class": "punctuation"
+  },
+  {
+    "id": "l01",
+    "text": "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG NEAR THE OLD STONE BRIDGE",
+    "class": "wrapping"
+  },
+  {
+    "id": "l02",
+    "text": "Welcome to the main library. Please ask at the front desk for help.",
+    "class": "wrapping"
+  },
+  {
+    "id": "l03",
+    "text": "ROOM ROOM ROOM\nROOM ROOM ROOM",
+    "class": "wrapping"
+  },
+  {
+    "id": "l04",
+    "text": "CONFERENCE\nROOM B",
+    "class": "wrapping"
+  },
+  {
+    "id": "h01",
+    "text": "a",
+    "class": "characters"
+  },
+  {
+    "id": "h02",
+    "text": "b",
+    "class": "characters"
+  },
+  {
+    "id": "h03",
+    "text": "c",
+    "class": "characters"
+  },
+  {
+    "id": "h04",
+    "text": "d",
+    "class": "characters"
+  },
+  {
+    "id": "h05",
+    "text": "e",
+    "class": "characters"
+  },
+  {
+    "id": "h06",
+    "text": "f",
+    "class": "characters"
+  },
+  {
+    "id": "h07",
+    "text": "g",
+    "class": "characters"
+  },
+  {
+    "id": "h08",
+    "text": "h",
+    "class": "characters"
+  },
+  {
+    "id": "h09",
+    "text": "i",
+    "class": "characters"
+  },
+  {
+    "id": "h10",
+    "text": "j",
+    "class": "characters"
+  },
+  {
+    "id": "h11",
+    "text": "k",
+    "class": "characters"
+  },
+  {
+    "id": "h12",
+    "text": "l",
+    "class": "characters"
+  },
+  {
+    "id": "h13",
+    "text": "m",
+    "class": "characters"
+  },
+  {
+    "id": "h14",
+    "text": "n",
+    "class": "characters"
+  },
+  {
+    "id": "h15",
+    "text": "o",
+    "class": "characters"
+  },
+  {
+    "id": "h16",
+    "text": "p",
+    "class": "characters"
+  },
+  {
+    "id": "h17",
+    "text": "q",
+    "class": "characters"
+  },
+  {
+    "id": "h18",
+    "text": "r",
+    "class": "characters"
+  },
+  {
+    "id": "h19",
+    "text": "s",
+    "class": "characters"
+  },
+  {
+    "id": "h20",
+    "text": "t",
+    "class": "characters"
+  },
+  {
+    "id": "h21",
+    "text": "u",
+    "class": "characters"
+  },
+  {
+    "id": "h22",
+    "text": "v",
+    "class": "characters"
+  },
+  {
+    "id": "h23",
+    "text": "w",
+    "class": "characters"
+  },
+  {
+    "id": "h24",
+    "text": "x",
+    "class": "characters"
+  },
+  {
+    "id": "h25",
+    "text": "y",
+    "class": "characters"
+  },
+  {
+    "id": "h26",
+    "text": "z",
+    "class": "characters"
+  },
+  {
+    "id": "h27",
+    "text": "A",
+    "class": "characters"
+  },
+  {
+    "id": "h28",
+    "text": "B",
+    "class": "characters"
+  },
+  {
+    "id": "h29",
+    "text": "C",
+    "class": "characters"
+  },
+  {
+    "id": "h30",
+    "text": "D",
+    "class": "characters"
+  },
+  {
+    "id": "h31",
+    "text": "E",
+    "class": "characters"
+  },
+  {
+    "id": "h32",
+    "text": "F",
+    "class": "characters"
+  },
+  {
+    "id": "h33",
+    "text": "G",
+    "class": "characters"
+  },
+  {
+    "id": "h34",
+    "text": "H",
+    "class": "characters"
+  },
+  {
+    "id": "h35",
+    "text": "I",
+    "class": "characters"
+  },
+  {
+    "id": "h36",
+    "text": "J",
+    "class": "characters"
+  },
+  {
+    "id": "h37",
+    "text": "K",
+    "class": "characters"
+  },
+  {
+    "id": "h38",
+    "text": "L",
+    "class": "characters"
+  },
+  {
+    "id": "h39",
+    "text": "M",
+    "class": "characters"
+  },
+  {
+    "id": "h40",
+    "text": "N",
+    "class": "characters"
+  },
+  {
+    "id": "h41",
+    "text": "O",
+    "class": "characters"
+  },
+  {
+    "id": "h42",
+    "text": "P",
+    "class": "characters"
+  },
+  {
+    "id": "h43",
+    "text": "Q",
+    "class": "characters"
+  },
+  {
+    "id": "h44",
+    "text": "R",
+    "class": "characters"
+  },
+  {
+    "id": "h45",
+    "text": "S",
+    "class": "characters"
+  },
+  {
+    "id": "h46",
+    "text": "T",
+    "class": "characters"
+  },
+  {
+    "id": "h47",
+    "text": "U",
+    "class": "characters"
+  },
+  {
+    "id": "h48",
+    "text": "V",
+    "class": "characters"
+  },
+  {
+    "id": "h49",
+    "text": "W",
+    "class": "characters"
+  },
+  {
+    "id": "h50",
+    "text": "X",
+    "class": "characters"
+  },
+  {
+    "id": "h51",
+    "text": "Y",
+    "class": "characters"
+  },
+  {
+    "id": "h52",
+    "text": "Z",
+    "class": "characters"
+  },
+  {
+    "id": "h53",
+    "text": "0",
+    "class": "characters"
+  },
+  {
+    "id": "h54",
+    "text": "1",
+    "class": "characters"
+  },
+  {
+    "id": "h55",
+    "text": "2",
+    "class": "characters"
+  },
+  {
+    "id": "h56",
+    "text": "3",
+    "class": "characters"
+  },
+  {
+    "id": "h57",
+    "text": "4",
+    "class": "characters"
+  },
+  {
+    "id": "h58",
+    "text": "5",
+    "class": "characters"
+  },
+  {
+    "id": "h59",
+    "text": "6",
+    "class": "characters"
+  },
+  {
+    "id": "h60",
+    "text": "7",
+    "class": "characters"
+  },
+  {
+    "id": "h61",
+    "text": "8",
+    "class": "characters"
+  },
+  {
+    "id": "h62",
+    "text": "9",
+    "class": "characters"
+  },
+  {
+    "id": "h63",
+    "text": "!",
+    "class": "characters"
+  },
+  {
+    "id": "h64",
+    "text": "\"",
+    "class": "characters"
+  },
+  {
+    "id": "h65",
+    "text": "$",
+    "class": "characters"
+  },
+  {
+    "id": "h66",
+    "text": "%",
+    "class": "characters"
+  },
+  {
+    "id": "h67",
+    "text": "&",
+    "class": "characters"
+  },
+  {
+    "id": "h68",
+    "text": "'",
+    "class": "characters"
+  },
+  {
+    "id": "h69",
+    "text": "(",
+    "class": "characters"
+  },
+  {
+    "id": "h70",
+    "text": ")",
+    "class": "characters"
+  },
+  {
+    "id": "h71",
+    "text": ",",
+    "class": "characters"
+  },
+  {
+    "id": "h72",
+    "text": "-",
+    "class": "characters"
+  },
+  {
+    "id": "h73",
+    "text": ".",
+    "class": "characters"
+  },
+  {
+    "id": "h74",
+    "text": "/",
+    "class": "characters"
+  },
+  {
+    "id": "h75",
+    "text": ":",
+    "class": "characters"
+  },
+  {
+    "id": "h76",
+    "text": "@",
+    "class": "characters"
+  },
+  {
+    "id": "h77",
+    "text": "_",
+    "class": "characters"
+  },
+  {
+    "id": "h78",
+    "text": "?",
+    "class": "characters"
+  },
+  {
+    "id": "h79",
+    "text": "#",
+    "class": "characters"
+  },
+  {
+    "id": "h80",
+    "text": "*",
+    "class": "characters"
+  },
+  {
+    "id": "h81",
+    "text": "+",
+    "class": "characters"
+  },
+  {
+    "id": "h82",
+    "text": "=",
+    "class": "characters"
+  }
+]

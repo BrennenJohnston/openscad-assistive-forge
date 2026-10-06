@@ -512,6 +512,112 @@ describe('AutoPreviewController', () => {
     })
   })
 
+  // D-196: a manifest with autoPreview asked for the preview its own file
+  // load had just started. The second request landed while the worker was
+  // restarting, when isBusy() is false, so the same values rendered twice:
+  // 22 s became 45 s for the Plug Puller's first picture.
+  describe('One render per set of values (D-196)', () => {
+    let underway
+    const finishRender = () =>
+      underway
+        .splice(0)
+        .forEach((resolve) =>
+          resolve({ stl: new ArrayBuffer(8), stats: { triangles: 12 } })
+        )
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      underway = []
+      renderController.renderPreview.mockImplementation(
+        () => new Promise((resolve) => underway.push(resolve))
+      )
+    })
+
+    it('does not render the same values again while their render is underway', async () => {
+      const params = { width: 20 }
+      const first = controller.forcePreview(params)
+
+      controller.onParameterChange({ ...params })
+      await vi.advanceTimersByTimeAsync(50)
+      finishRender()
+      await first
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.CURRENT)
+    })
+
+    it('does not queue the same values behind their own render when the worker is busy', async () => {
+      const params = { width: 20 }
+      const first = controller.forcePreview(params)
+
+      renderController.isBusy.mockReturnValue(true)
+      controller.onParameterChange({ ...params })
+      renderController.isBusy.mockReturnValue(false)
+      finishRender()
+      await first
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.CURRENT)
+    })
+
+    it('drops values asked for in between once the values underway are wanted again', async () => {
+      const params = { width: 20 }
+      const first = controller.forcePreview(params)
+
+      controller.onParameterChange({ width: 30 })
+      controller.onParameterChange({ ...params })
+      await vi.advanceTimersByTimeAsync(50)
+      finishRender()
+      await first
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.CURRENT)
+    })
+
+    it('still renders different values asked for during a render', async () => {
+      const first = controller.forcePreview({ width: 20 })
+
+      controller.onParameterChange({ width: 30 })
+      await vi.advanceTimersByTimeAsync(50)
+      finishRender()
+      await first
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(2)
+      expect(renderController.renderPreview.mock.calls[1][1]).toEqual({ width: 30 })
+    })
+
+    it('renders the same values again when the render inputs changed mid-render', async () => {
+      const params = { width: 20 }
+      const first = controller.forcePreview(params)
+
+      controller.onLibrariesChange({ ...params })
+      await vi.advanceTimersByTimeAsync(50)
+      finishRender()
+      await first
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(2)
+    })
+
+    it('renders the same values again after the preview cache is cleared mid-render', async () => {
+      const params = { width: 20 }
+      const first = controller.forcePreview(params)
+
+      controller.clearPreviewCache()
+      controller.onParameterChange({ ...params })
+      await vi.advanceTimersByTimeAsync(50)
+      finishRender()
+      await first
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('Libraries', () => {
     it('sets enabled libraries', () => {
       const libraries = [{ id: 'BOSL2', path: '/libraries/BOSL2' }]

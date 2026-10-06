@@ -80,6 +80,10 @@ export class AutoPreviewController {
     this.pendingParamHash = null;
     this.pendingPreviewKey = null;
 
+    // The preview render underway ({ cacheKey }), so asking again for the
+    // values it is rendering waits for it instead of rendering them twice.
+    this.renderingPreview = null;
+
     // Enabled libraries for rendering
     this.enabledLibraries = [];
 
@@ -213,6 +217,7 @@ export class AutoPreviewController {
     if (!this.currentScadContent) return;
 
     this.previewCache.clear();
+    this.renderingPreview = null;
 
     // With auto-preview off nothing will be scheduled; the shown preview
     // is simply stale now (mirrors onParameterChange's disabled handling).
@@ -437,6 +442,24 @@ export class AutoPreviewController {
     // Check cache first
     if (this.previewCache.has(cacheKey)) {
       this.loadCachedPreview(paramHash, cacheKey, qualityKey);
+      return;
+    }
+
+    // D-196: the render underway is for these very values, so its result
+    // is the answer. isBusy() is false while the worker restarts before a
+    // render, which is how a manifest's autoPreview request used to start
+    // a second, identical render of a slow model.
+    if (this.renderingPreview?.cacheKey === cacheKey) {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      this.pendingParameters = null;
+      this.pendingParamHash = null;
+      this.pendingPreviewKey = null;
+      if (this.state !== PREVIEW_STATE.RENDERING) {
+        this.setState(PREVIEW_STATE.RENDERING);
+      }
       return;
     }
 
@@ -1022,6 +1045,8 @@ export class AutoPreviewController {
     }
 
     let renderFailed = false;
+    const rendering = { cacheKey };
+    this.renderingPreview = rendering;
     try {
       const startTime = Date.now();
       const previewRenderOpts = {
@@ -1206,6 +1231,9 @@ export class AutoPreviewController {
       this.setState(PREVIEW_STATE.ERROR, { error: error.message });
       this.onError(error, 'preview');
     } finally {
+      if (this.renderingPreview === rendering) {
+        this.renderingPreview = null;
+      }
       // If the file changed mid-render, skip pending render scheduling.
       if (localScadVersion !== this.scadVersion) {
         // Do nothing - stale render result ignored
@@ -1266,6 +1294,7 @@ export class AutoPreviewController {
     this.previewCache.clear();
     this.previewParamHash = null;
     this.previewCacheKey = null;
+    this.renderingPreview = null;
     this.fullRenderParamHash = null;
     this.fullQualitySTL = null;
     this.fullQualityFormat = null;
@@ -1281,6 +1310,8 @@ export class AutoPreviewController {
     this.previewCache.clear();
     this.previewParamHash = null;
     this.previewCacheKey = null;
+    // A render already underway was given the inputs that just changed.
+    this.renderingPreview = null;
   }
 
   /**

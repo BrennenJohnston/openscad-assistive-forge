@@ -14,6 +14,9 @@
 //    text in JS before it ever reaches this file, and the 3D warning text
 //    relies on font support that the WASM build loads lazily.
 //  - render_quality defaults to Medium for faster in-browser preview.
+//  - The braille dots keep to the ranges of ADA 703.3.1, as the Braille Sign
+//    does: each slider covers only its range, the model stops on a value
+//    outside it, and only the rounded dot is offered.
 //  - Geometry, parameters, and layout logic are otherwise unchanged.
 //
 // A directly readable 3D-printed braille card. The card prints leaning back
@@ -46,8 +49,8 @@
 //  2. Paste pre-translated braille into Line_1..Line_20 in the Customizer.
 //     Lines 1-8 are in the [Text Input] group; lines 9-20 are under
 //     [More Braille Lines (Advanced)].
-//  3. Pick dot_shape (Rounded is the ADA-friendly default; Cone is easier to
-//     print on some machines).
+//  3. The dots are rounded and stay inside the ranges ADA 703.3.1 gives for
+//     braille on signs; a value outside a range stops the model with a message.
 //  4. The card face auto-sizes to fit your text plus a margin by default
 //     (auto_size_card = On) — the effective size is reported in the console
 //     (the Customizer sliders can't show computed values). Set
@@ -112,7 +115,7 @@
 // First line of braille text
 Line_1 = "⠓⠑⠇⠇⠕";
 // Second line of braille text
-Line_2 = "⠺⠕⠗⠇⠙";
+Line_2 = "⠸⠺";
 // Third line of braille text
 Line_3 = "";
 // Fourth line of braille text
@@ -214,10 +217,6 @@ brim_width_mm = 2.0;         // [0:0.25:25]
 // Brim layer thickness (mm, ~1-2 layers).
 brim_thickness_mm = 0.2;     // [0.1:0.05:3]
 
-/* [Expert Mode - Shape Selection] */
-// Shape of the raised braille dots
-dot_shape = "Rounded"; // [Rounded, Cone]
-
 /* [Expert Mode - Card Shape] */
 // Face angle from horizontal bed (deg). 75 = 15 deg lean back from vertical =
 // CHI sweet spot. The base footprint is derived from this angle + height.
@@ -231,12 +230,12 @@ card_thickness_mm = 1;       // [1:0.1:5]
 grid_columns = 26;           // [1:1:40]
 // Number of lines of braille (ignored when auto_size_card = On)
 grid_rows = 8;               // [1:1:20]
-// Horizontal spacing between cells (mm)
-cell_spacing = 7.0;          // [2:0.01:15]
-// Vertical spacing between lines (mm)
-line_spacing = 10.0;         // [5:0.01:25]
-// Spacing between dots within a cell (mm)
-dot_spacing = 2.5;           // [1:0.01:5]
+// Horizontal spacing between cells (mm). ADA 703.3.1: 0.241 to 0.300 in (6.1 to 7.6 mm printed); the card allows 6.1214 to 7.6.
+cell_spacing = 7.0;          // [6.13:0.01:7.6]
+// Vertical spacing between lines (mm). ADA 703.3.1: 0.395 to 0.400 in (10 to 10.2 mm printed); the card allows 10.033 to 10.16.
+line_spacing = 10.1;         // [10.04:0.01:10.16]
+// Spacing between dots within a cell (mm). ADA 703.3.1: 2.3 to 2.5.
+dot_spacing = 2.5;           // [2.3:0.01:2.5]
 
 // --- Braille Positioning ---
 // Braille is centered on the face by default; these are additive nudges.
@@ -246,23 +245,15 @@ braille_x_adjust = 0.0;      // [-20:0.01:20]
 braille_y_adjust = 0.0;      // [-20:0.01:20]
 
 /* [Braille Dot Shape - Rounded] */
-// Defaults chosen to stay ADA-legal: base_height + dome_height <= 0.9 mm.
-// Rounded dot base diameter / cone base (mm)
-rounded_dot_base_diameter = 1.6; // [0.5:0.01:3]
-// Rounded dot base height / cone height (mm)
+// Defaults stay ADA-legal: base_height + dome_height <= 0.9 mm, 1.6 mm base.
+// Dot base diameter (mm). ADA 703.3.1: 1.5 to 1.6.
+rounded_dot_base_diameter = 1.6; // [1.5:0.01:1.6]
+// Rounded dot base height (mm)
 rounded_dot_base_height   = 0.35; // [0:0.01:2]
-// Rounded dome diameter, linked to cone flat top (mm)
+// Rounded dome diameter (mm)
 rounded_dot_dome_diameter = 1.4; // [0.5:0.01:3]
 // Rounded dot dome height (mm)
 rounded_dot_dome_height   = 0.35; // [0.1:0.01:2]
-
-/* [Braille Dot Shape - Cone] */
-// Cone dot base diameter (mm)
-cone_dot_base_diameter = 1.5; // [0.5:0.01:3]
-// Cone dot height (mm)
-cone_dot_height        = 0.8; // [0.3:0.01:2]
-// Cone dot flat hat diameter (mm)
-cone_dot_flat_hat      = 0.4; // [0.1:0.01:2]
 
 /* [Rendering Quality] */
 // Sphere quality for rounded shapes
@@ -278,9 +269,7 @@ $fn = 32;
 // =============================================================================
 
 // Normalize dropdown selections to internal values
-use_rounded_dots = (dot_shape == "Rounded");
-
-fins_on = (support_fins == "On") || (support_fins == true);
+fins_on =(support_fins == "On") || (support_fins == true);
 
 warnings_on = (show_warnings == "On") || (show_warnings == true);
 
@@ -327,9 +316,7 @@ effective_grid_rows    = multi_card_on ? rows_per_card
                        : grid_rows;
 
 // Total dot height above the face (used for seating dots on the face surface).
-dot_total_height = use_rounded_dots
-    ? (rounded_dot_base_height + rounded_dot_dome_height)
-    : cone_dot_height;
+dot_total_height = rounded_dot_base_height + rounded_dot_dome_height;
 
 // How deep each dot is buried into the face (mm). A dot seated EXACTLY on the
 // face plane only touches it (zero overlap), which can leave the dot as a
@@ -400,8 +387,8 @@ dot_positions     = [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]];
 // extent + dot overhang + margins) when auto_size_card = On, otherwise the
 // manual sliders. The Customizer can't write computed values back into the
 // sliders, so the effective size is reported via echo() instead.
-// Outermost dot extent beyond cell centers: half a dot column/row pitch + largest dot radius
-_max_dot_dia = max([rounded_dot_base_diameter, cone_dot_base_diameter]);
+// Outermost dot extent beyond cell centers: half a dot column/row pitch + the dot radius
+_max_dot_dia = rounded_dot_base_diameter;
 _block_w = content_width  + active_dot_spacing     + _max_dot_dia; // dot columns at +/- dot_spacing/2
 _block_h = content_height + 2 * active_dot_spacing + _max_dot_dia; // dot rows at +/- dot_spacing
 
@@ -463,43 +450,33 @@ function get_dot_pattern(char) =
 // axis on +Z and total height centered at z = 0. To sit on a surface, the
 // caller translates by +totalHeight/2.
 module braille_dot_centered() {
-    if (use_rounded_dots) {
-        _total_height = rounded_dot_base_height + rounded_dot_dome_height;
-        _dome_r = rounded_dot_dome_diameter / 2;
-        _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
-        _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
-        // The base cylinder is extended a hair up INTO the dome. The dome's
-        // bottom plane coincides exactly with the base top; with zero overlap
-        // the two tessellations only touch and can export as two separate
-        // shells. The overlap makes the union genuinely fuse; the resulting
-        // silhouette change is a few microns.
-        _fuse = 0.02;
-        translate([0, 0, -_total_height / 2]) {
-            union() {
-                translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
-                cylinder(
-                    h  = rounded_dot_base_height + _fuse,
-                    r1 = rounded_dot_base_diameter / 2,
-                    r2 = rounded_dot_dome_diameter / 2,
-                    center = true,
-                    $fn = cone_segments
-                );
-                intersection() {
-                    translate([0, 0, _center_z])
-                    sphere(r = _R_sphere, $fn = quality_fn);
-                    translate([0, 0, rounded_dot_base_height + _R_sphere])
-                    cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
-                }
+    _total_height = rounded_dot_base_height + rounded_dot_dome_height;
+    _dome_r = rounded_dot_dome_diameter / 2;
+    _R_sphere = (_dome_r * _dome_r + rounded_dot_dome_height * rounded_dot_dome_height) / (2 * rounded_dot_dome_height);
+    _center_z = rounded_dot_base_height + rounded_dot_dome_height - _R_sphere;
+    // The base cylinder is extended a hair up INTO the dome. The dome's
+    // bottom plane coincides exactly with the base top; with zero overlap
+    // the two tessellations only touch and can export as two separate
+    // shells. The overlap makes the union genuinely fuse; the resulting
+    // silhouette change is a few microns.
+    _fuse = 0.02;
+    translate([0, 0, -_total_height / 2]) {
+        union() {
+            translate([0, 0, (rounded_dot_base_height + _fuse) / 2])
+            cylinder(
+                h  = rounded_dot_base_height + _fuse,
+                r1 = rounded_dot_base_diameter / 2,
+                r2 = rounded_dot_dome_diameter / 2,
+                center = true,
+                $fn = cone_segments
+            );
+            intersection() {
+                translate([0, 0, _center_z])
+                sphere(r = _R_sphere, $fn = quality_fn);
+                translate([0, 0, rounded_dot_base_height + _R_sphere])
+                cube([_R_sphere * 4, _R_sphere * 4, _R_sphere * 2], center = true);
             }
         }
-    } else {
-        cylinder(
-            h  = cone_dot_height,
-            r1 = cone_dot_base_diameter / 2,
-            r2 = cone_dot_flat_hat / 2,
-            center = true,
-            $fn = cone_segments
-        );
     }
 }
 
@@ -769,6 +746,31 @@ module braille_card(lines) {
                 place_face_dots_for_lines(lines);
     }
 }
+
+// =============================================================================
+// ADA RANGES
+// =============================================================================
+// The card keeps the braille dot ranges the Braille Sign keeps. Each is the
+// stricter of ADA 703.3.1's inch figure and its printed metric figure
+// (docs/guides/BRAILLE_STANDARDS.md). Outside one the model stops.
+ADA_DOT_BASE_MM         = [1.5, 1.6];      // 0.059 to 0.063 in; printed 1.5 to 1.6 mm
+ADA_DOT_SPACING_MM      = [2.3, 2.5];      // 0.090 to 0.100 in; printed 2.3 to 2.5 mm
+ADA_CELL_SPACING_MM     = [6.1214, 7.6];   // 0.241 to 0.300 in; printed 6.1 to 7.6 mm
+ADA_LINE_SPACING_MM     = [10.033, 10.16]; // 0.395 to 0.400 in; printed 10 to 10.2 mm
+ADA_DOT_HEIGHT_MM       = [0.635, 0.9];    // 0.025 to 0.037 in; printed 0.6 to 0.9 mm
+
+function in_range(v, r) = v >= r[0] && v <= r[1];
+
+assert(in_range(rounded_dot_base_diameter, ADA_DOT_BASE_MM),
+       str("rounded_dot_base_diameter must be ", ADA_DOT_BASE_MM[0], " to ", ADA_DOT_BASE_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(dot_spacing, ADA_DOT_SPACING_MM),
+       str("dot_spacing must be ", ADA_DOT_SPACING_MM[0], " to ", ADA_DOT_SPACING_MM[1], " mm (ADA 703.3.1)."));
+assert(in_range(cell_spacing, ADA_CELL_SPACING_MM),
+       str("cell_spacing must be ", ADA_CELL_SPACING_MM[0], " to ", ADA_CELL_SPACING_MM[1], " mm (ADA 703.3.1, in inches and in millimeters)."));
+assert(in_range(line_spacing, ADA_LINE_SPACING_MM),
+       str("line_spacing must be ", ADA_LINE_SPACING_MM[0], " to ", ADA_LINE_SPACING_MM[1], " mm (ADA 703.3.1, in inches and in millimeters)."));
+assert(in_range(rounded_dot_base_height + rounded_dot_dome_height - DOT_FACE_EMBED, ADA_DOT_HEIGHT_MM),
+       str("The dots must rise ", ADA_DOT_HEIGHT_MM[0], " to ", ADA_DOT_HEIGHT_MM[1], " mm above the card: rounded_dot_base_height plus rounded_dot_dome_height (ADA 703.3.1, in inches and in millimeters)."));
 
 // =============================================================================
 // CONSOLE DIAGNOSTICS  (always printed; independent of the 3D warning toggle)

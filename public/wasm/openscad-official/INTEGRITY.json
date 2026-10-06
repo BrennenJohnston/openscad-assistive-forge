@@ -1,17 +1,17 @@
 {
   "version": "1.0",
-  "generated": "2026-04-03T00:00:00Z",
-  "build": "OpenSCAD-2026.04.03",
-  "source": "https://files.openscad.org/snapshots/",
-  "archive": "OpenSCAD-2026.04.03-WebAssembly-web.zip",
+  "generated": "2026-10-01T00:00:00Z",
+  "build": "OpenSCAD-2026.04.03+forge.1 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST)",
+  "source": "scripts/build-openscad-wasm.sh, round-to-nearest variant, from https://github.com/openscad/openscad at commit 98d891340e6007524e69f399162016f9b22584ff (GitHub Actions run 36799890264)",
+  "archive": "openscad-official.zip",
   "files": {
     "openscad.js": {
-      "sha256": "266d025d4ee056356bc4f152c6e3f72fefc40fc6355a828ab0be6af31b8859a4",
+      "sha256": "7eafd0290148572ddd57b3c9b5bdb8118fb70f4e59386242045bd6d81cf6af4c",
       "size": 100183
     },
     "openscad.wasm": {
-      "sha256": "96ed844bb397f91b3c139aced445fa0558881595bff46e965177c4e37b01e59d",
-      "size": 10712276
+      "sha256": "f71f40d457a9cb9710aa76a053881663ec267291381f5709f4809f98c3c6eff5",
+      "size": 10715350
     }
   },
   "engines": {
@@ -20,8 +20,8 @@
     "fastCsg": true
   },
   "previousBuild": {
-    "build": "OpenSCAD-2025.03.25.wasm24456",
-    "reason": "Geometry discrepancy: browser produced 10,348 triangles vs desktop Nightly 12,016 (-13.9%). Updated to incorporate 12+ months of upstream Manifold/CGAL fixes."
+    "build": "OpenSCAD-2026.04.03",
+    "reason": "WebAssembly can only round to nearest, and the official build lets CGAL assume it can switch rounding modes. minkowski() hulls failed a CGAL assertion and fell back to a method that took about a minute on some models, and minkowski() meshes differed slightly from desktop OpenSCAD's. This build adds CGAL_ALWAYS_ROUND_TO_NEAREST and changes nothing else."
   },
   "knownIssues": [
     "projection() triggers CGAL assertion failure (openscad-wasm#6, CGAL#7560)",
@@ -29,5 +29,5 @@
     "Performance 6x slower than native CLI (openscad-wasm#19)",
     "lazy-union may produce incorrect geometry (disabled by default)"
   ],
-  "nextUpdate": "Re-evaluate geometry parity after Phase 5 regression tests"
+  "nextUpdate": "When OpenSCAD's own build sets CGAL_ALWAYS_ROUND_TO_NEAREST for Emscripten, compare its snapshot with this build and move back to the official one"
 }

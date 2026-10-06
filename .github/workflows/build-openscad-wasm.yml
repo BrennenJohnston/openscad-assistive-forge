@@ -1,0 +1,161 @@
+name: Build OpenSCAD wasm
+
+# OpenSCAD's WebAssembly engine is built here from one pinned upstream commit,
+# so the app can say exactly what went into the engine it ships and anybody
+# can reproduce it by running this workflow. The recipe is
+# scripts/build-openscad-wasm.sh; its header says what the round-to-nearest
+# variant changes and why.
+#
+# It runs on request, and on a pull request that touches the recipe or the
+# engine Forge ships. The output is an artifact; a session downloads it,
+# checks the numbers against the run log, and commits it with the recipe.
+# Nothing here writes to public/wasm/.
+#
+# The web build is compared with public/wasm/openscad-official/: the variant
+# Forge ships has to come out of this recipe byte for byte, so a change to
+# either side that the other does not follow fails here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: round-to-nearest (the fix) or baseline (upstream unchanged)
+        required: true
+        default: round-to-nearest
+        type: choice
+        options: [round-to-nearest, baseline]
+  pull_request:
+    paths:
+      - 'scripts/build-openscad-wasm.sh'
+      - '.github/workflows/build-openscad-wasm.yml'
+      - 'public/wasm/openscad-official/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ inputs.variant || 'round-to-nearest' }} (${{ matrix.wasm_type }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        wasm_type: [web, node]
+    env:
+      VARIANT: ${{ inputs.variant || 'round-to-nearest' }}
+      WASM_TYPE: ${{ matrix.wasm_type }}
+      # The example-manifest commit that holds the Plug Puller 0.13.0 with
+      # its minkowski() edges. Later copies round their edges another way
+      # and would pass on any engine.
+      PLUG_PULLER_COMMIT: 175f2f22dce8ff1ed815f82c04aa303879fbbb68
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: ./scripts/build-openscad-wasm.sh
+
+      - name: Setup Node.js
+        if: matrix.wasm_type == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The model that showed the problem. Its rounded edges were minkowski()
+      # with a sphere; with the baseline engine the two-sided file prints
+      # "Minkowski failed" and takes about a minute, and the one-sided file
+      # does so some of the time. The round-to-nearest build must render both
+      # without falling back, and the baseline build must still fall back on
+      # the two-sided file, or this check has stopped testing anything.
+      - name: Render the Plug Puller 0.13.0 with Forge's flags
+        if: matrix.wasm_type == 'node'
+        run: |
+          git fetch --quiet --depth=1 origin "$PLUG_PULLER_COMMIT"
+          out="build/openscad-wasm/${VARIANT}-node"
+          summary="$out/plug-puller.md"
+          echo "| File | Time | Fallback warnings | Result |" > "$summary"
+          echo "|---|---|---|---|" >> "$summary"
+          failed=0
+          # The node build is CommonJS, and this repo's package.json says
+          # "type": "module", so Node would load openscad.js as a module.
+          engine="$RUNNER_TEMP/openscad.cjs"
+          cp "$out/openscad.js" "$engine"
+          for f in Plug_Puller_SingleFile Plug_Puller_Two_Sided_SingleFile; do
+            git show "$PLUG_PULLER_COMMIT:plug-puller/$f.scad" > "$out/$f.scad"
+            status=0
+            node "$engine" --backend=Manifold -D '$fa=12' -D '$fs=2' \
+              --export-format=off -o "$out/$f.off" "$out/$f.scad" > "$out/$f.log" 2>&1 || status=$?
+            fallback=$(grep -c 'Minkowski failed' "$out/$f.log" || true)
+            time=$( (grep -h 'Total rendering time' "$out/$f.log" || true) | tail -1 | sed 's/.*time: //')
+            result=$( (grep -h 'Facets:' "$out/$f.log" || true) | tail -1 | tr -s ' ')
+            echo "| $f | $time | $fallback | exit $status,$result |" >> "$summary"
+            if [ "$status" != "0" ]; then
+              failed=1
+              echo "::group::$f: the engine's last output"
+              grep -v '^ECHO:' "$out/$f.log" | tail -40
+              echo "::endgroup::"
+            fi
+            if [ "$VARIANT" = "round-to-nearest" ] && [ "$fallback" != "0" ]; then failed=1; fi
+            if [ "$VARIANT" = "baseline" ] && [ "$f" = "Plug_Puller_Two_Sided_SingleFile" ] && [ "$fallback" = "0" ]; then
+              echo "::error::The baseline engine no longer falls back on $f, so this check proves nothing."
+              failed=1
+            fi
+          done
+          cat "$summary"
+          exit $failed
+
+      # INTEGRITY.json names the build Forge ships; a name that carries the
+      # macro is the round-to-nearest variant, any other is upstream's own.
+      - name: Compare with the engine Forge ships
+        if: matrix.wasm_type == 'web'
+        run: |
+          out="build/openscad-wasm/${VARIANT}-web"
+          integrity=public/wasm/openscad-official/INTEGRITY.json
+          if jq -r '.build' "$integrity" | grep -q 'CGAL_ALWAYS_ROUND_TO_NEAREST'; then
+            shipped=round-to-nearest
+          else
+            shipped=baseline
+          fi
+          same=yes
+          for f in openscad.js openscad.wasm; do
+            want=$(jq -r --arg f "$f" '.files[$f].sha256' "$integrity")
+            got=$(sha256sum "$out/$f" | cut -d' ' -f1)
+            if [ "$want" != "$got" ]; then same=no; fi
+          done
+          echo "Same bytes as public/wasm/openscad-official (a $shipped build): $same" | tee "$out/shipped.txt"
+          if [ "$VARIANT" = "$shipped" ] && [ "$same" != "yes" ]; then
+            echo "::error::The $VARIANT build is not the engine Forge ships. The recipe and public/wasm/openscad-official/ have to change together."
+            exit 1
+          fi
+
+      - name: Record what was built
+        if: always()
+        run: |
+          out="build/openscad-wasm/${VARIANT}-${WASM_TYPE}"
+          {
+            echo "## OpenSCAD wasm, ${VARIANT} (${WASM_TYPE})"
+            echo
+            echo '```'
+            cat "$out/BUILD-INFO.txt" 2>/dev/null || echo "no BUILD-INFO.txt: the build did not finish"
+            echo '```'
+            if [ -f "$out/plug-puller.md" ]; then
+              echo
+              cat "$out/plug-puller.md"
+            fi
+            if [ -f "$out/shipped.txt" ]; then
+              echo
+              cat "$out/shipped.txt"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openscad-wasm-${{ env.VARIANT }}-${{ matrix.wasm_type }}
+          path: |
+            build/openscad-wasm/${{ env.VARIANT }}-${{ matrix.wasm_type }}/
+          retention-days: 30
+          if-no-files-found: error

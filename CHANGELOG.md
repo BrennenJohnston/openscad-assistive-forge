@@ -7,6 +7,149 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-10-05
+
+The braille tools now translate the way liblouis does, on a current
+liblouis, and the Braille Sign is built to the figures of ADA 703, with a
+page that says which rule governs each figure; the Braille Card and the
+Braille Charm keep their dots to the same figures. Models that use
+`minkowski()` preview in the browser without falling back to a much
+slower method, and a shared link renders its first preview once, with its
+preset.
+
+### Translation
+
+- Each line you type is translated whole and divided into rows
+  afterward. The tools had translated one word at a time, so a capital
+  passage came out as a capital sign on every word and other rules that
+  span words were lost; "ROOM ROOM ROOM ROOM" now has one capital passage
+  sign and one terminator, as Unified English Braille (UEB) writes it.
+- The braille engine is liblouis 3.39.0, built from its release source by
+  a script in this repository and checked against native liblouis on
+  every test phrase. The liblouis packages from 2017 are gone, and with
+  them a fault that crashed some short words mixing letters and digits.
+- The table list offers UEB Grade 1 and Grade 2. The English Braille
+  American Edition tables, the code the United States used before 2016,
+  are gone: the Braille Authority of North America (BANA) no longer
+  accepts it for signage.
+- A character the table has no braille for is left out, with a warning
+  that names it, and a no-break space or a tab is a word space.
+- The Braille Card starts on contracted braille (Grade 2), as BANA's
+  business card examples are.
+- "Translate to text" lays the sign out again, so its raised letters
+  follow the text it writes.
+
+### The Braille Sign
+
+- Sign braille follows ADA 703.3.1's rule for capitals by default: it is
+  lowercase except a capital letter standing alone, such as the B in 3B.
+  Choose "Exactly as typed" under Braille capitals to keep the capitals you
+  type, for a name, an acronym or a sentence.
+- The letter height setting is the height of the capital I, as ADA
+  703.2.5 measures it, so the default letters are 16 mm tall (they were
+  15.3 mm).
+- At letter spacing 1.21 every pair of capitals and every pair of digits
+  is 3.2 mm to four stroke widths apart (ADA 703.2.7). A new sign is
+  166 mm wide, so "Room 101" stays on one row.
+- Letters and braille stay at least 9.525 mm (3/8 in) inside the raised
+  border, sized from the real widths of the letters, and braille lines
+  are 10.1 mm apart.
+- Every setting that ADA gives a range is held to it: the sliders stop at
+  the range, and a value outside it stops the model with a message that
+  names the rule. The sign offers rounded dots only.
+- When one of a model's own checks stops it, the status line says what
+  the check says. It had said the selection produced no geometry, in a
+  dialog.
+- [Braille sign standards](docs/guides/BRAILLE_STANDARDS.md) says which
+  rule governs each figure, the sign's measured value, and what the tool
+  does not check.
+
+### The Braille Card and the Braille Charm
+
+- Their dots keep to the same ADA 703.3.1 ranges as the sign's: the
+  sliders stop at each range, and a value outside it stops the model with
+  a message that names the rule. Both offer rounded dots only; an old link
+  that asks for the Cone dot gets rounded dots.
+- The card's braille lines are 10.1 mm apart by default, as on the sign.
+  At the default "Max rows per card" every size preset holds as many rows
+  as before.
+- The charm has the braille editor too: one line per charm, used exactly
+  as written, with braille ASCII, six-key entry and "Translate to text".
+- The charm's table help says what contracted braille costs a charm: a
+  letter standing alone takes an extra cell, so most capital letters no
+  longer fit.
+
+### Transcriber tools
+
+- A divided e-mail address, web address or long number ends each row but
+  its last with the line continuation sign (dot 5).
+- The braille editor converts braille ASCII (from a BRF file, or braille
+  typed as keyboard characters) with "Convert braille ASCII".
+- Six-key entry types braille in the editor with F, D, S and J, K, L, the
+  way a Perkins brailler does, and a screen reader hears each cell's dots.
+
+### Previews, shared links and uploads
+
+- The OpenSCAD engine is OpenSCAD's own 2026.04.03 source built with one
+  definition added, `CGAL_ALWAYS_ROUND_TO_NEAREST`. In the browser,
+  `minkowski()` had failed a CGAL check and fallen back to a much slower
+  method: my two-sided Plug Puller, as it was with `minkowski()` edges,
+  took about 65 s to preview and takes about 10 s now, and the volumes
+  match desktop OpenSCAD's. A `minkowski()` that never failed can take up
+  to about 0.9 s longer. A script in this repository builds the engine;
+  built without that one definition, it gives the official snapshot back
+  byte for byte.
+- A shared link renders its first preview once. A manifest with
+  automatic preview rendered it twice, and a link that names a preset
+  rendered the design's own values first and then threw that picture
+  away.
+- A shared link that names a preset the project does not have says so in
+  a notice that stays until you dismiss it. When a link has more than one
+  thing to say, each notice has its own Dismiss button.
+- A project opened from a manifest goes by its main file's name instead
+  of `example.scad`: in the file box, the status line, recent files and
+  its saved interface settings.
+- An `include`, `use` or `import` inside a comment no longer brings a
+  missing-file warning when the model renders, or a "Missing companion
+  files" message and dialog when it is uploaded.
+- The sharing guide's Git LFS section describes GitHub's metered billing;
+  GitHub no longer sells data packs.
+
+### Accessibility
+
+- The braille tools' labels, status lines and messages end with a full
+  stop or a colon where they had an em dash.
+- A screen reader hears the braille editor's first status and its first
+  error in words, each warning once rather than after every layout, and
+  each pager page once. The pager's end buttons keep focus and are
+  announced as unavailable.
+- A message that repeats within a second and a half is spoken again. With
+  six-key entry, a cell typed right after the same cell had been silent.
+- The memory indicator no longer says "0 MB allocated to the OpenSCAD
+  engine" every ten seconds, and Fontconfig's note that it has no config
+  file is no longer called an error on every render that draws text.
+- After a shared link applies a preset, the status line says the same
+  sentence the screen reader hears, "{project} loaded with preset
+  {name}".
+- A warning from the engine is announced as a warning, politely, and no
+  longer as an error that interrupts the screen reader.
+- The many-parts notice no longer says a model will be slow before its
+  first preview: "This model has many parts. If previews are slow, switch
+  Preview quality to "Performance (auto)"."
+
+### Development
+
+- `source-map-js` is 1.2.2, which clears a high-severity audit finding
+  in development tools; the app that ships does not include it.
+- `brace-expansion` is 5.0.12, which clears a high-severity audit finding
+  in a development tool; the app that ships does not include it.
+- The braille parity test checks the Braille Charm too, character by
+  character, against native liblouis and a second liblouis-based
+  generator, and the liblouis build check runs whenever its test phrases
+  change.
+- [Releasing](docs/project/RELEASING.md) lists the braille checks every
+  release that touches braille translation has to pass first.
+
 ## [5.1.1] - 2026-09-23
 
 My own example links stopped opening: a person who followed one saw the

@@ -557,7 +557,8 @@ export function initFileHandler({
     extractedFiles = null,
     mainFilePathArg = null,
     source = 'user',
-    originalFileNameArg = null
+    originalFileNameArg = null,
+    { deferInitialPreview = false } = {}
   ) {
     if (!file && !content) return;
 
@@ -570,7 +571,9 @@ export function initFileHandler({
       typeof file?.name === 'string' && file.name.trim().length > 0
         ? file.name
         : '';
-    let fileName = rawFileName || 'example.scad';
+    // D-199: a manifest link or Reload passes content with no file object,
+    // but it does name the main file, which is what a ZIP goes by as well.
+    let fileName = rawFileName || mainFilePathArg || 'example.scad';
     let fileContent = content;
     let projectFiles = extractedFiles;
     let mainFilePath = mainFilePathArg;
@@ -1388,7 +1391,9 @@ export function initFileHandler({
         }
       }
 
-      if (autoPreviewController) {
+      // D-200: a link that applies a preset next asks for the first preview
+      // itself; one started here would render values it is about to replace.
+      if (autoPreviewController && !deferInitialPreview) {
         if (getAutoPreviewEnabled()) {
           autoPreviewController
             .forcePreview(stateManager.getState().parameters)

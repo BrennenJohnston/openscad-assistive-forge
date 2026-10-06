@@ -1,0 +1,26 @@
+{
+  "liblouis": "3.39.0",
+  "defaultTable": "en-ueb-g1.ctb",
+  "tables": [
+    {
+      "file": "en-ueb-g1.ctb",
+      "label": "English (UEB) Grade 1, uncontracted"
+    },
+    {
+      "file": "en-ueb-g2.ctb",
+      "label": "English (UEB) Grade 2, contracted"
+    }
+  ],
+  "closure": [
+    "braille-patterns.cti",
+    "en-ueb-chardefs.uti",
+    "en-ueb-g1.ctb",
+    "en-ueb-g2.ctb",
+    "en-ueb-math.ctb",
+    "latinLetterDef6Dots.uti",
+    "latinUppercaseComp6.uti",
+    "spaces.uti",
+    "text_nabcc.dis",
+    "unicode.dis"
+  ]
+}

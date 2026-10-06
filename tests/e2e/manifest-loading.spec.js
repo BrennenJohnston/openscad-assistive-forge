@@ -10,7 +10,9 @@ import {
   MANIFEST_URL,
   MINIMAL_SCAD,
   MOCK_BASE,
+  liveHistory,
   minimalManifest,
+  recordLiveRegions,
   setupMockManifestServer,
 } from './helpers/mock-manifest-server.js'
 
@@ -841,4 +843,352 @@ cube([width, height, depth]);
       await expect(page.locator('#savePresetBtn')).toHaveAttribute('data-dirty', 'false')
     })
   }
+})
+
+// ---------------------------------------------------------------------------
+// D-194: the status line after a preset link says what the announcement says
+//
+// It put an em dash between the project and the preset, the one em dash among
+// the app's status lines, while the announcement right after it said
+// "{project} loaded with preset {name}". The status region is a live region
+// too, so a screen reader heard one event in two wordings.
+// ---------------------------------------------------------------------------
+
+test.describe('The status line after a preset link (D-194)', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test('is the sentence the announcement says, with no em dash', async ({ page }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const sentence = 'Test Project loaded with preset Config A'
+    const said = async (src) =>
+      (await liveHistory(page)).filter((h) => h.src === src).map((h) => h.text)
+    // The announcement says it right after the handler writes its status line.
+    await expect.poll(() => said('srAnnouncer'), { timeout: 60_000 }).toContain(sentence)
+    const status = await said('statusArea')
+    expect(status, status.join(' | ')).toContain(sentence)
+    const withDash = (await liveHistory(page)).filter((h) => h.text.includes('—'))
+    expect(withDash.map((h) => `${h.src}: ${h.text}`)).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// D-195: a link that names a preset the project does not have says so
+//
+// It said so only in the status line, which stood about 300 ms before the
+// render replaced it, and the announcer replaced it at once with "loaded from
+// manifest": nobody learned that no preset was applied. Now it is a notice
+// that stays until dismissed, like the one for a starter setting the design
+// does not have.
+// ---------------------------------------------------------------------------
+
+test.describe('A link that names a missing preset (D-195)', () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  const TITLE = 'This link asks for a preset this project does not have'
+  const LINE =
+    'There is no preset named "No Such Preset". No preset was applied. You can choose one under Presets.'
+  const PRESETS = JSON.stringify({
+    parameterSets: { 'Config A': { width: '75', height: '50' } },
+    fileFormatVersion: '1',
+  })
+
+  // Every time the status region or the announcer goes to a new sentence. The
+  // announcer empties itself before each announcement, so a sentence said
+  // twice is counted twice, and a sentence said once is counted once.
+  async function recordSaid(page) {
+    await page.addInitScript(() => {
+      window.__said = []
+      const start = () => {
+        for (const id of ['statusArea', 'srAnnouncer']) {
+          const el = document.getElementById(id)
+          if (!el) continue
+          let last = el.textContent.trim()
+          new MutationObserver(() => {
+            const text = el.textContent.trim()
+            if (text && text !== last) window.__said.push({ src: id, text })
+            last = text
+          }).observe(el, { childList: true, characterData: true, subtree: true })
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start)
+      } else {
+        start()
+      }
+    })
+  }
+
+  const said = (page, src) =>
+    page.evaluate(
+      (s) => window.__said.filter((e) => e.src === s).map((e) => e.text),
+      src
+    )
+
+  // The save-copy question may follow the load; the keyboard needs the page.
+  async function skipSaveCopyIfAsked(page) {
+    const skip = page.locator('#manifestSaveCopySkip')
+    const asked = await skip
+      .waitFor({ state: 'visible', timeout: 3000 })
+      .then(
+        () => true,
+        () => false
+      )
+    if (asked) {
+      await skip.click()
+      await skip.waitFor({ state: 'hidden', timeout: 3000 })
+      // closeModal gives the focus back, then again 50 ms and one frame
+      // later (its WebKit retry). MEASURED: a test that moved the focus
+      // inside those 50 ms lost it to the retry in 3 runs of 10.
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => requestAnimationFrame(() => resolve()), 60)
+          )
+      )
+    }
+  }
+
+  async function openMissingPresetLink(page) {
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': PRESETS,
+      },
+    })
+    await recordSaid(page)
+    await page.goto(
+      `/?manifest=${encodeURIComponent(MANIFEST_URL)}&preset=No+Such+Preset`
+    )
+  }
+
+  const presetNotice = (page) =>
+    page.locator('#parameterNotices .parameter-notice[data-notice="missing-preset"]')
+
+  test('says so in a notice, once, and the notice can be dismissed from the keyboard', async ({
+    page,
+  }) => {
+    await openMissingPresetLink(page)
+
+    const notice = presetNotice(page)
+    await expect(notice).toBeVisible({ timeout: 60_000 })
+    await expect(notice.locator('.parameter-notice-title')).toHaveText(TITLE)
+    await expect(notice.locator('li')).toHaveText(LINE)
+
+    // Said once, not again a moment later.
+    const count = async () =>
+      (await said(page, 'srAnnouncer')).filter((t) => t.includes(LINE)).length
+    await expect.poll(count, { timeout: 5_000 }).toBeGreaterThan(0)
+    await page.waitForTimeout(1_500)
+    expect(await count()).toBe(1)
+
+    // The status line says what the plain load says, and the old sentence
+    // that stood for a moment is gone.
+    const status = await said(page, 'statusArea')
+    expect(status).toContain('Test Project loaded from manifest')
+    expect(status.filter((t) => t.includes('not found'))).toEqual([])
+
+    await skipSaveCopyIfAsked(page)
+    const dismiss = page.getByRole('button', {
+      name: 'Dismiss the notice about the preset',
+    })
+    await dismiss.focus()
+    await expect(dismiss).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(notice).toHaveCount(0)
+    await expect(page.locator('#parameterNotices')).toBeHidden()
+    await expect.poll(() => said(page, 'srAnnouncer')).toContain('Notice dismissed.')
+  })
+
+  test('stays on screen after the preview is ready', async ({ page }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+    await openMissingPresetLink(page)
+
+    await expect
+      .poll(() => said(page, 'statusArea'), { timeout: 90_000 })
+      .toContain('Preview ready')
+    await expect(presetNotice(page)).toBeVisible()
+    await expect(presetNotice(page)).toContainText(LINE)
+  })
+
+  test('keeps what else the link reported, and each notice has its own Dismiss', async ({
+    page,
+  }) => {
+    await setupMockManifestServer(page, {
+      manifest: {
+        forgeManifest: '1.0',
+        name: 'Starter Test Project',
+        files: { main: 'test.scad' },
+        defaults: {
+          starterParameters: ['width', 'not_a_parameter'],
+          preset: 'No Such Preset',
+        },
+      },
+      files: { 'test.scad': STARTER_SCAD },
+    })
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const notices = page.locator('#parameterNotices .parameter-notice')
+    await expect(notices).toHaveCount(2, { timeout: 60_000 })
+    await expect(notices.nth(0)).toContainText(
+      'One starting setting in this link is not part of this design'
+    )
+    await expect(notices.nth(1)).toContainText(TITLE)
+
+    await skipSaveCopyIfAsked(page)
+    await page
+      .getByRole('button', { name: 'Dismiss the notice about the preset' })
+      .focus()
+    await page.keyboard.press('Enter')
+
+    await expect(notices).toHaveCount(1)
+    await expect(notices.first()).toContainText(
+      'One starting setting in this link is not part of this design'
+    )
+    // The focus goes to the notice still showing, not to the page.
+    await expect(
+      page.getByRole('button', { name: 'Dismiss the notice about changed values' })
+    ).toBeFocused()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// D-199: a manifest project goes by its main file's name
+//
+// The manifest lane hands the loader no file object, so the loader fell back
+// to the placeholder "example.scad": the name in the file box and the Classic
+// title bar, in "Loaded: ... + N presets" (said to screen readers too), and
+// the key the project's interface preferences are kept under. Every manifest
+// project was "example.scad".
+// ---------------------------------------------------------------------------
+
+test.describe('The name a manifest project goes by (D-199)', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test('is its main file, in the file box and in what is said', async ({ page }) => {
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    await expect(page.locator('#fileInfoSummary')).toHaveText('test.scad', {
+      timeout: 60_000,
+    })
+    const said = async () =>
+      (await liveHistory(page)).map((h) => `${h.src}: ${h.text}`)
+    await expect
+      .poll(async () => (await said()).some((s) => s.includes('Loaded: test.scad')), {
+        timeout: 30_000,
+      })
+      .toBe(true)
+    const all = await said()
+    expect(all.filter((s) => s.includes('example.scad')), all.join(' | ')).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// D-200: a link that applies a preset renders the preset, and only that
+//
+// The file loader started its first preview with the design's own values,
+// then the link applied its preset and rendered again; the first picture was
+// thrown away unseen. My Plug Puller's defaults take 19 s in the browser and
+// its "Small hands" preset under 1 s, so that link made a person wait 20 s
+// for a picture that cost one.
+// ---------------------------------------------------------------------------
+
+test.describe('A link that applies a preset (D-200)', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test('renders once, with the preset values', async ({ page }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+    const dispatches = []
+    const defineArgs = []
+    page.on('console', (msg) => {
+      const text = msg.text()
+      if (text.includes('[AutoPreview Diag] Render dispatch')) dispatches.push(text)
+      if (text.includes('[AutoPreview Diag] Worker defineArgs')) defineArgs.push(text)
+    })
+    await setupMockManifestServer(page, {
+      manifest: fullManifest(),
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const status = async () =>
+      (await liveHistory(page)).filter((h) => h.src === 'statusArea').map((h) => h.text)
+    await expect.poll(status, { timeout: 60_000 }).toContain('Preview ready')
+    // A second render would start within the auto-preview debounce.
+    await page.waitForTimeout(3000)
+
+    expect(dispatches, dispatches.join('\n')).toHaveLength(1)
+    expect(defineArgs.join('\n')).toContain('width=75')
+  })
+
+  test('still renders once, with the design values, when the preset is not found', async ({
+    page,
+  }) => {
+    test.skip(isCI, 'WASM processing is slow/unreliable in CI')
+
+    const dispatches = []
+    page.on('console', (msg) => {
+      if (msg.text().includes('[AutoPreview Diag] Render dispatch')) {
+        dispatches.push(msg.text())
+      }
+    })
+    // No autoPreview: the preview must come from the link's own request.
+    await setupMockManifestServer(page, {
+      manifest: { ...fullManifest(), defaults: { preset: 'No Such Preset' } },
+      files: {
+        'test.scad': MINIMAL_SCAD,
+        'helper.txt': '// companion content\n',
+        'presets.json': JSON.stringify({
+          parameterSets: { 'Config A': { width: '75', height: '50' } },
+          fileFormatVersion: '1',
+        }),
+      },
+    })
+    await recordLiveRegions(page)
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const status = async () =>
+      (await liveHistory(page)).filter((h) => h.src === 'statusArea').map((h) => h.text)
+    await expect.poll(status, { timeout: 60_000 }).toContain('Preview ready')
+    await page.waitForTimeout(3000)
+
+    expect(dispatches, dispatches.join('\n')).toHaveLength(1)
+  })
 })

@@ -1,5 +1,29 @@
 # Release Notes
 
+## v5.2.0 (2026-10-05)
+
+The braille tools translate the way liblouis does: each typed line whole,
+on liblouis 3.39.0 built from its release source, in Unified English
+Braille only, so a capital passage and every other rule that spans words
+comes out as liblouis writes it. The Braille Sign is built to the figures
+of ADA 703: letters measured on the capital I, letter spacing that keeps
+capitals and digits 3.2 mm to four strokes apart, letters and braille at
+least 9.525 mm inside the border, capital signs only where ADA 703.3.1
+allows them, and every range held; a standards page says which rule governs each figure. The
+Braille Card and the Braille Charm keep their dots inside the same ranges,
+rounded only. The braille editor, now on the charm too, takes braille ASCII
+and six-key entry, a divided address or long number carries the line
+continuation sign, and a screen reader hears the braille tools' messages
+once, in words, and every six-key cell, even the same cell twice in a row.
+
+Models that use `minkowski()` no longer fall back to a much slower method
+in the browser: my two-sided Plug Puller, with its old `minkowski()`
+edges, took about 65 s to preview and takes about 10 s now. A shared link renders its first preview once, with
+its preset, says in a notice when the preset it names is missing, and goes
+by its main file's name; a directive inside a comment no longer brings a
+missing-file warning, and a warning from the engine is announced as a
+warning.
+
 ## v5.1.1 (2026-09-23)
 
 Shared project links open for the person who receives them. A first visit

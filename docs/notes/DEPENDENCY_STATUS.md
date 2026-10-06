@@ -3,62 +3,64 @@
 A dated record of what this app ships against what upstream offers, for
 the pieces that matter most: the OpenSCAD engine that renders models and
 the liblouis engine that translates braille. I re-check these before
-each major release; the table below is the 2026-09-01 reading.
+each major release; the table below is the 2026-09-01 reading, with the
+liblouis row updated on 2026-10-01.
 
 ## Summary
 
 | Piece | We ship | Upstream newest | Decision |
 |---|---|---|---|
-| OpenSCAD WASM engine | OpenSCAD-2026.04.03 (vendored, integrity-pinned) | snapshot channel: OpenSCAD-2025.09.10.wasm27277 | **Hold.** The channel's newest build is older-dated than what we already vendor; no upgrade exists to take. |
+| OpenSCAD WASM engine | OpenSCAD-2026.04.03+forge.1: OpenSCAD's 2026.04.03 source built here with one rounding fix (vendored, integrity-pinned) | snapshot channel: OpenSCAD-2026.09.29 (read 2026-09-30) | **Hold.** A newer upstream build has the same rounding fault until OpenSCAD takes the fix, and it needs its own parity run. |
 | OpenSCAD desktop (verification binary) | 2026.01.03 nightly (CI pin) | snapshot channel: OpenSCAD-2025.09.10 win64 | **Hold**, same reason. |
-| liblouis engine + tables | liblouis-build 3.2.0-rc (published 2017) + easy-api (liblouis npm ^0.4.0), curated UEB/US tables with their include closure | liblouis v3.38.0 (2026-06-01); liblouis/js-build has no releases (latest commit 2026-08-28) | **Proposal below — nothing moves without a decision and a translation parity check.** Braille output is accessibility-critical. |
+| liblouis engine + tables | liblouis 3.39.0, built here from its release tarball (`scripts/build-liblouis-wasm.sh`), with the Unified English Braille tables and every table they include | liblouis v3.39.0 (2026-09-01) | **Done** (2026-10-01): built from source and checked against native liblouis; see below. |
 | npm dependencies | lockfile at v5 prep | `npm audit`: **0 vulnerabilities** (2026-09-01) | Nothing to patch. Major bumps stay post-v5 candidates. |
 
 ## The OpenSCAD engine, in detail
 
 The vendored engine lives in `public/wasm/openscad-official/` with
-SHA-256 pins in `INTEGRITY.json` (build OpenSCAD-2026.04.03, Manifold and
-CGAL enabled, known issues listed in the manifest). The official
-snapshot channel at files.openscad.org has not published a newer
-WebAssembly build since 2025-09-10 — that is *older* than the build we
-vendor, so there is nothing to upgrade to. If the channel wakes up with
-a newer build, the path is already written: run the geometry parity
-harness (`npm run parity`) across versions, read the known-issues delta,
-and replace the vendored bytes only with the integrity manifest updated
-in the same change. The WASM files are a protected class in this repo;
-they never move silently.
+SHA-256 pins in `INTEGRITY.json` (build OpenSCAD-2026.04.03+forge.1,
+Manifold and CGAL enabled, known issues listed in the manifest). It is
+OpenSCAD's own source at the commit behind the official 2026.04.03
+snapshot, built by `scripts/build-openscad-wasm.sh` with one compile
+definition added, `CGAL_ALWAYS_ROUND_TO_NEAREST`. WebAssembly can only
+round to nearest, and without that definition `minkowski()` could take
+about a minute and gave meshes slightly off desktop OpenSCAD's;
+`public/wasm/README.txt` has the detail. Built without the change, the
+recipe gives the official engine back byte for byte, and the "Build
+OpenSCAD wasm" workflow fails a pull request whose engine files are not
+what the recipe builds.
 
-## The liblouis question, and my proposal
+The official snapshot channel at files.openscad.org publishes
+WebAssembly builds again (2026.09.29 when I read it on 2026-09-30).
+OpenSCAD's build still lacks the definition, so a newer official build
+would bring the fault back. Moving to newer OpenSCAD source means a new
+pinned commit in the recipe, the geometry parity harness
+(`npm run parity`) across versions, the known-issues delta, and the
+vendored bytes replaced only with the integrity manifest updated in the
+same change. The WASM files are a protected class in this repo; they
+never move silently.
 
-The braille engine this app ships was published to npm in 2017
-(liblouis-build 3.2.0-rc, still the newest on npm). Upstream liblouis
-reached 3.38.0 in June 2026. Nine years of table fixes — UEB refinements
-included — are not in the app.
+## The liblouis question, answered (2026-10-01)
 
-There is no drop-in fix: the js-build repository publishes no releases
-(though its main branch saw commits as recently as 2026-08-28), so a
-newer engine means building liblouis with emscripten ourselves and
-vendoring the result like the OpenSCAD engine. The three honest paths:
+Until October 2026 the braille engine was the one published to npm in 2017
+(liblouis-build 3.2.0-rc), called through bindings (liblouis-js 0.4.0) that
+sized the output buffer in bytes and told liblouis it held that many
+characters. Braille longer than its text ran off the end of the buffer, and a
+word such as "See3D" stopped the translator. The braille tests it passed never
+had more cells than letters, so they could not see it.
 
-1. **Self-build and vendor liblouis 3.38.0.** The durable fix. Real
-   cost: an emscripten/autotools build pipeline (practically a
-   WSL/container job on this machine), a vendoring layout with integrity
-   pins, and a full translation parity run of the braille unit goldens
-   plus eyes-on braille output before it ships. This is its own work
-   package, not a release-week task.
-2. **Refresh only the curated tables against the old engine.** Cheaper,
-   but I do not recommend it blind: newer tables can use opcodes a
-   2017 engine does not know, and the failure mode is *silent
-   mistranslation* — the worst possible failure for braille. Any table
-   refresh needs the same parity gate as path 1, which removes most of
-   its cost advantage.
-3. **Hold**, and schedule path 1 as its own future work package.
+I took path 1. liblouis 3.39.0, the newest release, is compiled from its
+checksummed release tarball by `scripts/build-liblouis-wasm.sh` in the "Build
+liblouis wasm" workflow, the way Potrace is built. The same run builds a native
+`lou_translate` from the same tarball and checks the wasm against it on 63 test
+phrases in both English tables; they agree cell for cell. The binding is my own
+(`src/js/liblouis-engine.js`): every buffer is sized in characters, and a
+translation that stopped short is retried, never returned as if it were whole.
+The tables come from the same tarball, Unified English Braille only; the U.S.
+code from before 2016 is gone.
 
-**My recommendation: hold for v5.0.0 and schedule the self-build as its
-own package.** The current engine+tables pass every braille golden in
-the suite; the risk of moving them under release pressure outweighs nine
-years of fixes we have lived without. The decision stays open until I
-sign one of the three paths.
+A later upgrade is a new version and checksum in the recipe, a workflow run,
+and the checks that come with it.
 
 ## npm
 

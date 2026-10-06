@@ -51,13 +51,12 @@ describe('braille_wedge_card.scad parser integration', () => {
       expect(param, `Line_${i}`).toBeDefined();
       expect(param.type).toBe('string');
     }
-    // Defaults contain Unicode braille (survives parsing)
+    // Defaults contain Unicode braille (survives parsing): "hello" and
+    // "world" in Grade 2, the card's default table
     expect(parsed.parameters.Line_1.default).toBe(
       '\u2813\u2811\u2807\u2807\u2815'
     );
-    expect(parsed.parameters.Line_2.default).toBe(
-      '\u283A\u2815\u2817\u2807\u2819'
-    );
+    expect(parsed.parameters.Line_2.default).toBe('\u2838\u283A');
   });
 
   it('extracts card size and spacing parameters used for capacity math', () => {
@@ -71,9 +70,62 @@ describe('braille_wedge_card.scad parser integration', () => {
     expect(parsed.parameters.card_face_width_mm.default).toBe(200);
     expect(parsed.parameters.card_face_height_mm.default).toBe(100);
     expect(parsed.parameters.cell_spacing.default).toBe(7.0);
-    expect(parsed.parameters.line_spacing.default).toBe(10.0);
+    expect(parsed.parameters.line_spacing.default).toBe(10.1);
     expect(parsed.parameters.grid_columns.default).toBe(26);
     expect(parsed.parameters.grid_rows.default).toBe(8);
+  });
+
+  it('keeps each dot setting inside the ADA range the sign keeps (ADA 703.3.1)', () => {
+    const scad = readScad();
+    const params = extractParameters(scad).parameters;
+    // [slider, the range the model enforces], from the standards page
+    const ranges = {
+      rounded_dot_base_diameter: [[1.5, 1.6], 'ADA_DOT_BASE_MM', [1.5, 1.6]],
+      dot_spacing: [[2.3, 2.5], 'ADA_DOT_SPACING_MM', [2.3, 2.5]],
+      cell_spacing: [[6.13, 7.6], 'ADA_CELL_SPACING_MM', [6.1214, 7.6]],
+      line_spacing: [[10.04, 10.16], 'ADA_LINE_SPACING_MM', [10.033, 10.16]],
+    };
+    for (const [name, [slider, constant, enforced]] of Object.entries(ranges)) {
+      const p = params[name];
+      expect([p.minimum, p.maximum], `${name} slider`).toEqual(slider);
+      expect(p.default, `${name} default`).toBeGreaterThanOrEqual(slider[0]);
+      expect(p.default, `${name} default`).toBeLessThanOrEqual(slider[1]);
+      const declared = scad.match(
+        new RegExp(`^${constant} += \\[([\\d.]+), ([\\d.]+)\\];`, 'm')
+      );
+      expect(declared?.slice(1).map(Number), constant).toEqual(enforced);
+      expect(scad, `${name} is checked`).toMatch(
+        new RegExp(`^assert\\(in_range\\(${name}, ${constant}\\),`, 'm')
+      );
+    }
+    expect(scad).toMatch(/^ADA_DOT_HEIGHT_MM += \[0\.635, 0\.9\];/m);
+    expect(scad).toMatch(
+      /^assert\(in_range\(rounded_dot_base_height \+ rounded_dot_dome_height - DOT_FACE_EMBED, ADA_DOT_HEIGHT_MM\),/m
+    );
+  });
+
+  it('offers only rounded dots, as the sign does', () => {
+    const scad = readScad();
+    const { parameters } = extractParameters(scad);
+    for (const name of [
+      'dot_shape',
+      'cone_dot_base_diameter',
+      'cone_dot_height',
+      'cone_dot_flat_hat',
+    ]) {
+      expect(parameters[name], name).toBeUndefined();
+    }
+    expect(scad).not.toMatch(/\bCone\b|cone_dot_/);
+    // The rounded dot's base still uses it
+    expect(parameters.cone_segments).toBeDefined();
+  });
+
+  it('spaces its lines at 10.1 mm, with the panel in step', async () => {
+    const { CARD_DEFAULT_LINE_SPACING } = await import(
+      '../../src/js/braille-panel.js'
+    );
+    const { line_spacing } = extractParameters(readScad()).parameters;
+    expect(CARD_DEFAULT_LINE_SPACING).toBe(line_spacing.default);
   });
 
   it('defaults to a 1 mm card thickness', () => {
@@ -170,7 +222,7 @@ describe('braille-wedge-card manifest', () => {
 
   it('brailleTranslation declares the default table and catalog URL', () => {
     const bt = readManifest().brailleTranslation;
-    expect(bt.defaultTable).toBe('en-ueb-g1.ctb');
+    expect(bt.defaultTable).toBe('en-ueb-g2.ctb');
     expect(bt.tablesCatalog).toBe('/liblouis/tables.json');
   });
 });

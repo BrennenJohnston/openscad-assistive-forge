@@ -17002,6 +17002,74 @@ body.tutorial-body-locked {
   color: var(--color-text-primary);
 }
 
+/* Six-key entry sits just under a button: its row is the touch target (the
+   label toggles the box), which also keeps the box clear of the button */
+.braille-six-key-row {
+  min-height: var(--size-touch-target);
+}
+
+.braille-six-key-row input[type='checkbox'] {
+  flex-shrink: 0;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin: 0;
+}
+
+.braille-six-key-row input[type='checkbox']:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset, 2px);
+}
+
+.braille-six-key-row label {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+/* D-236: the sign's capitals choice, two radios in a fieldset. As with
+   six-key entry, each row is the touch target (the label checks its radio) */
+.braille-panel-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.braille-panel-choice legend {
+  padding: 0;
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-panel-choice .braille-panel-toggle-row {
+  min-height: var(--size-touch-target);
+}
+
+.braille-panel-choice input[type='radio'] {
+  flex-shrink: 0;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin: 0;
+}
+
+.braille-panel-choice input[type='radio']:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset, 2px);
+}
+
+.braille-panel-choice .braille-panel-toggle-row label {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
 .braille-panel-field-row {
   display: flex;
   align-items: center;
@@ -17059,10 +17127,6 @@ body.tutorial-body-locked {
   gap: var(--space-sm);
   align-items: center;
   flex-wrap: wrap;
-}
-
-.braille-field-status:empty {
-  display: none;
 }
 
 .braille-preview {
@@ -17125,6 +17189,23 @@ body.tutorial-body-locked {
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning);
   color: var(--color-warning-text);
+}
+
+/* D-230, D-229: an empty status line or message box stays in the
+   accessibility tree, hidden the way .sr-only hides, because a live region
+   revealed together with its first message is not announced. After the box
+   styles above, so their borders and padding give way while it is empty. */
+.braille-field-status:empty,
+.braille-messages:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 .braille-messages-list {
@@ -17194,6 +17275,35 @@ body.tutorial-body-locked {
 
 .braille-pager-hint {
   flex-basis: 100%;
+}
+
+/* D-228: at either end the pager button keeps focus, marked aria-disabled
+   rather than disabled, and reads as unavailable. 0.7, not a disabled .btn's
+   0.5: this button can hold focus, and at 0.5 its focus ring measured 2.42:1
+   against the panel, under the 3:1 a focus ring needs. The City Walk's
+   launch button made the same choice for the same reason (game.css). */
+.braille-pager-btn[aria-disabled='true'] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.braille-pager-btn[aria-disabled='true']:hover {
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+.braille-pager-btn[aria-disabled='true']:active {
+  transform: none;
+}
+
+/* After the rules above, so forced colors keep the house disabled look
+   (no opacity) as .btn:disabled does there. */
+@media (forced-colors: active) {
+  .braille-pager-btn[aria-disabled='true'] {
+    opacity: 1;
+    color: GrayText;
+    border-color: GrayText !important;
+  }
 }
 
 /* High contrast */
