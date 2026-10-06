@@ -123,6 +123,8 @@ preset.
   error in words, each warning once rather than after every layout, and
   each pager page once. The pager's end buttons keep focus and are
   announced as unavailable.
+- A message that repeats within a second and a half is spoken again. With
+  six-key entry, a cell typed right after the same cell had been silent.
 - The memory indicator no longer says "0 MB allocated to the OpenSCAD
   engine" every ten seconds, and Fontconfig's note that it has no config
   file is no longer called an error on every render that draws text.

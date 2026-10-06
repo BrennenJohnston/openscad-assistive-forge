@@ -14,7 +14,7 @@ Braille Card and the Braille Charm keep their dots inside the same ranges,
 rounded only. The braille editor, now on the charm too, takes braille ASCII
 and six-key entry, a divided address or long number carries the line
 continuation sign, and a screen reader hears the braille tools' messages
-once, in words.
+once, in words, and every six-key cell, even the same cell twice in a row.
 
 Models that use `minkowski()` no longer fall back to a much slower method
 in the browser: my two-sided Plug Puller, with its old `minkowski()`
