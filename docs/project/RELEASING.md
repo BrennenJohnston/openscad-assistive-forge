@@ -16,9 +16,8 @@ pull request and nothing to merge back.
    npm version X.Y.Z --no-git-tag-version
    ```
 
-   In `CHANGELOG.md`, rename "Unreleased" to the version and the date. Keep the
-   section to what a user would notice: one line per change, about 40 lines at
-   most.
+   In `CHANGELOG.md`, rename "Unreleased" to the version and the date, and trim
+   the section to about 40 lines.
 3. Wait for the checks to pass on `develop` after that pull request merges.
 
 ### Braille tools
@@ -48,7 +47,7 @@ holds the release until it has run.
 ```bash
 git fetch origin
 
-# Move main forward to develop. No merge commit, no squash.
+# Move main forward to develop.
 git push origin origin/develop:main
 
 # Tag it and publish.
@@ -88,5 +87,3 @@ Semver: MAJOR.MINOR.PATCH
 - Major = breaking changes
 - Minor = new features
 - Patch = bug fixes
-
-The service worker cache version is separate and managed automatically.

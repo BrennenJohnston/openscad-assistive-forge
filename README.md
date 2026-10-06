@@ -100,15 +100,12 @@ it is verifiable against the files it cites.
 
 ## Status
 
-Version 5.2 is the current release. I maintain the project alone, so two
-things to know before you rely on it:
+I maintain the project alone, so two things to know before you rely on it:
 
 - Very complex models can be slow. That is mostly OpenSCAD running in a browser.
 - Phones work, but I consider them supported, not optimized.
 
-[What's new in version 5](docs/updates/WHATS_NEW_v5.md) is a photo journal of
-everything since version 4.5.0, and the [changelog](CHANGELOG.md) has every
-release.
+The [changelog](CHANGELOG.md) has every release.
 
 ## Develop locally
 
@@ -123,7 +120,6 @@ Then open `http://localhost:5173`.
 
 ## Docs (where to start)
 
-- [Docs index](docs/README.md)
 - [Deployment](docs/deploying/DEPLOYMENT.md)
 - [Testing](docs/developing/TESTING.md)
 - [Troubleshooting](docs/developing/TROUBLESHOOTING.md)
@@ -135,10 +131,9 @@ If you found a bug, confusing UI, or a missing accessibility affordance: please 
 
 The [contributing guide](.github/CONTRIBUTING.md) has the details.
 
-## How this is built
+## AI tools
 
-I build this with the help of AI coding assistants, under my direction and
-review. [How I use AI tools](docs/project/AI_USE.md) says what that means.
+See [How I use AI tools](docs/project/AI_USE.md).
 
 ## License
 

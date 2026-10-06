@@ -414,9 +414,6 @@ illustrated version.
 
 ## [4.5.0] - 2026-07-12
 
-The braille tools arrived, the SVG import was rebuilt, and the preview works
-again in browsers without WebGL 2.
-
 - **Braille Card Customizer**: a new tool family on the welcome screen. Type
   plain text and get 3D-printable braille, translated on your device by
   liblouis; the text never leaves the browser. Three tools: the Braille Card,

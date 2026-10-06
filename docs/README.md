@@ -95,8 +95,8 @@ If you're setting up the project for development or thinking about forking:
 
 ## Notes and records
 
-- `notes/` -- working notes: the NVDA listening pack, the screen reader lessons, the color pass-through, the dependency status
-- `archive/` -- dated records that current documents and tests still cite: the KI-012 investigation, the desktop parity audit, the offline measurements. Each says what was true on the day it was written and is not maintained afterwards.
+- [`notes/`](./notes/README.md) -- working notes that are still in use
+- [`archive/`](./archive/README.md) -- dated records that are still cited
 
 ---
 
