@@ -121,6 +121,8 @@ preset.
 
 ### Development
 
+- `source-map-js` is 1.2.2, which clears a high-severity audit finding
+  in development tools; the app that ships does not include it.
 - `brace-expansion` is 5.0.12, which clears a high-severity audit finding
   in a development tool; the app that ships does not include it.
 
