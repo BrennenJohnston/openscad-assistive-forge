@@ -22,7 +22,6 @@ function getBuildInfo() {
   const commitSha =
     process.env.CF_PAGES_COMMIT_SHA ||
     process.env.GITHUB_SHA ||
-    process.env.VERCEL_GIT_COMMIT_SHA ||
     'local';
 
   // Build timestamp

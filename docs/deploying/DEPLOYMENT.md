@@ -154,28 +154,6 @@ Create `netlify.toml`:
     Cross-Origin-Resource-Policy = "cross-origin"
 ```
 
-### Vercel
-
-Create `vercel.json`:
-
-```json
-{
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
-        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
-        { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" }
-      ]
-    }
-  ],
-  "rewrites": [
-    { "source": "/((?!assets).*)", "destination": "/index.html" }
-  ]
-}
-```
-
 ### nginx
 
 ```nginx
@@ -361,18 +339,10 @@ For incident response procedures, see:
 
 ### Git-based Rollback
 
-```bash
-# Find the last good commit
-git log --oneline
-
-# Revert to it
-git revert HEAD~n..HEAD  # or specific commits
-git push origin main
-
-# Or force rollback (destructive)
-git reset --hard <good-commit>
-git push --force origin main
-```
+A revert is a change like any other: a pull request into `develop`, the
+checks, then `main` moved forward. The steps are in the
+[Rollback Runbook](./ROLLBACK_RUNBOOK.md), procedure 3. `main` refuses a
+direct push and a force-push.
 
 ### Emergency: Static File Rollback
 
