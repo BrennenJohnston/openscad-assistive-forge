@@ -8,7 +8,7 @@
  * `style-src 'self'` refuses that element outright, and the editor loses
  * `white-space: pre`, its monospace font and its gutter layout: the gutter
  * becomes a full-width block and the code paints tens of thousands of pixels
- * below the fold. Line numbers, no code — the shipped defect.
+ * below the fold. Line numbers, no code.
  *
  * Constructable stylesheets are CSSOM rather than markup, so CSP does not
  * govern them. Copying style-mod's rules into document.adoptedStyleSheets
@@ -18,8 +18,8 @@
  * This runs everywhere, not only where the policy bites. Adopted sheets sort
  * after document stylesheets in the cascade, so restricting it to production
  * would leave the dev server resolving `.cm-*` rules in a different order
- * than the deployed app — the exact class of divergence that let this defect
- * ship green.
+ * than the deployed app, a divergence that tests on the dev server would
+ * not catch.
  *
  * @license GPL-3.0-or-later
  */

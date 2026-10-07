@@ -99,7 +99,7 @@ export function initSequenceDetector(onMatch) {
   }
 
   // One listener; capture helps if anything stops propagation later.
-  // IMPORTANT: use boolean `true` so removeEventListener works reliably.
+  // Use boolean `true` so removeEventListener works reliably.
   document.addEventListener('click', handleDocClick, true);
 
   // Return cleanup to remove listeners if needed

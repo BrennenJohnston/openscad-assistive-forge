@@ -712,7 +712,7 @@ class BraillePanel {
       'Text above updated from this braille. The braille stays in charge ' +
         'until you clear this editor.'
     );
-    // On a sign the raised letters come from the text box (D-219).
+    // On a sign the raised letters come from the text box.
     this.scheduleLayout(0);
   }
 
@@ -820,7 +820,7 @@ class BraillePanel {
   }
 
   /**
-   * The sign's capitals choice (D-236). ADA 703.3.1 keeps capitals in sign
+   * The sign's capitals choice. ADA 703.3.1 keeps capitals in sign
    * braille for names, single letters, initials, acronyms and a sentence's
    * first word; only the person typing knows which words those are, so the
    * rule is the default and "Exactly as typed" keeps what they type.
@@ -1082,7 +1082,7 @@ class BraillePanel {
     // Error tier: content will not fit / was truncated. role=alert so
     // screen readers announce immediately. Neither box is ever hidden: an
     // empty box is out of sight by CSS but stays in the accessibility tree,
-    // so its first message is announced (D-229).
+    // so its first message is announced.
     const errorsBox = document.createElement('div');
     errorsBox.className = 'braille-messages braille-errors';
     errorsBox.id = 'brailleErrors';
@@ -1194,8 +1194,7 @@ class BraillePanel {
     pager.appendChild(prevBtn);
     this.refs.prevBtn = prevBtn;
 
-    // Not a live region: showCard() and showCharm() announce each page once
-    // (D-231)
+    // Not a live region: showCard() and showCharm() announce each page once.
     const pagerStatus = document.createElement('span');
     pagerStatus.className = 'braille-pager-status';
     pagerStatus.id = 'braillePagerStatus';
@@ -1400,7 +1399,7 @@ class BraillePanel {
       this.runLayout().catch((error) => {
         console.error('[BraillePanel] Layout failed:', error);
         // Braille for the previous text must not stand in for text that
-        // could not be translated (D-209); the error says what happened.
+        // could not be translated; the error says what happened.
         this.refs.preview.replaceChildren();
         if (this.refs.rowSummary) {
           this.refs.rowSummary.textContent = '';
@@ -1450,10 +1449,10 @@ class BraillePanel {
   /**
    * Surface the rows clamp: when the card height cannot fit the
    * requested "Max rows per card", computeCapacity() lowers the row
-   * count that gets written to grid_rows. That used to happen silently;
-   * now it lands in the warning tier and is announced once per distinct
-   * clamp. "Max rows per card" keeps the user's requested value (sticky
-   * intent), so the request takes effect again when the card grows.
+   * count that gets written to grid_rows; the clamp lands in the warning
+   * tier and is announced once per distinct clamp. "Max rows per card" keeps
+   * the user's requested value (sticky intent), so the request takes effect
+   * again when the card grows.
    * @param {Array<{ type: string, message: string }>} warnings
    * @param {Object} geometry - getGeometry() result
    * @param {number} rowsPerCard - Clamped row count from computeCapacity()
@@ -2423,7 +2422,7 @@ class BraillePanel {
   }
 
   /**
-   * Write ALL wrapped lines plus the All-cards layout params, so the
+   * Write all wrapped lines plus the All-cards layout params, so the
    * SCAD renders every card in one model.
    */
   applyAllCardsToParams() {
@@ -2499,8 +2498,8 @@ class BraillePanel {
     const charms = this.charms;
     if (!charms || charms.length === 0) return null;
     if (charms.length > 1 && this.generateAll) {
-      // While the braille editor drives the charms, the characters box
-      // no longer names them
+      // While the braille editor drives the charms, the characters box does not
+      // name them.
       const word = this.isBrailleFieldActive()
         ? ''
         : (this.refs.textarea?.value.trim() ?? '');
@@ -2624,7 +2623,7 @@ class BraillePanel {
 /**
  * Mark a pager button unavailable at the end of the set without disabling
  * it: a focused button that disables itself drops focus to the page, so the
- * button stays focusable and reads as unavailable instead (D-228).
+ * button stays focusable and reads as unavailable instead.
  * @param {HTMLButtonElement} button
  * @param {boolean} unavailable
  */
@@ -2642,7 +2641,7 @@ const shownTierMessages = new WeakMap();
 
 /**
  * Render one severity tier into its container box.
- * Severity is conveyed by a text prefix AND an icon (never color alone).
+ * Severity is conveyed by a text prefix and an icon (never color alone).
  * @param {HTMLElement} box - Tier container
  * @param {Array<{ type: string, message: string }>} items
  * @param {'error'|'warning'} severity
@@ -2651,7 +2650,7 @@ function renderMessageTier(box, items, severity) {
   if (!box) return;
   // Each box is a live region, which says its whole text again whenever it
   // is rewritten, so a layout that leaves the messages as they were writes
-  // nothing (D-234).
+  // nothing.
   const shown = JSON.stringify((items || []).map((item) => item.message));
   if (shownTierMessages.get(box) === shown) return;
   shownTierMessages.set(box, shown);

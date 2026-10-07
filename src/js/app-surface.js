@@ -2,8 +2,8 @@
  * Body-level record of which surface is on screen: the welcome screen or an
  * open project.
  *
- * classic.css keys the Classic welcome-screen chrome hide off this attribute
- * (U-22, UF-13): the icon toolbar and status bar have nothing to act on until
+ * classic.css keys the Classic welcome-screen chrome hide off this
+ * attribute: the icon toolbar and status bar have nothing to act on until
  * a project opens. The menu bar reaches the same answer through
  * applyToolbarModeVisibility, which reads #mainInterface's hidden class at
  * call time; this attribute is the CSS-visible form of that same truth, so
@@ -11,7 +11,7 @@
  * classList changes. index.html ships the body with
  * data-app-surface="welcome" so first paint agrees before any script runs.
  *
- * Deliberately NOT conflated with the View > Hide Classic Toolbar preference
+ * Deliberately not conflated with the View > Hide Classic Toolbar preference
  * (data-classic-toolbar-hidden): that is the user's stored choice about the
  * project surface, and it must survive welcome round-trips untouched.
  */
@@ -20,7 +20,7 @@
 const listeners = new Set();
 
 /**
- * Subscribe to real surface flips. The back guard (UF-39) rides this rather
+ * Subscribe to real surface flips. The back guard rides this rather
  * than the seven call sites: one hook cannot be half-wired, and a repeat call
  * with the surface already on screen is not a flip and does not notify.
  *

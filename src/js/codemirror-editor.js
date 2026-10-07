@@ -78,7 +78,7 @@ import { loadEditorPrefs } from './editor-prefs.js';
 import { themeManager } from './theme-manager.js';
 
 /**
- * Where the editor's dark mode comes from (U-4): the APP, never the OS media
+ * Where the editor's dark mode comes from: the app, never the OS media
  * query. Classic is always light — its chrome is the desktop token remap and
  * the desktop editor is white. Every other mode follows the resolved app
  * theme; 'auto' keeps data-theme synced to the OS, so auto still works
@@ -232,10 +232,9 @@ const openscadStreamLanguage = StreamLanguage.define({
       return 'variable';
     }
 
-    // Operators and punctuation. Added in UF-29: this tokenizer never emitted
-    // them, so they fell through to `null` and painted as plain text — which
-    // is why the palette's `operator` entry had nothing to color. The desktop
-    // draws them in its operator color, brackets and semicolons included.
+    // Operators and punctuation, which the desktop draws in its operator
+    // color, brackets and semicolons included. Without this match they fall
+    // through to `null` and paint as plain text.
     if (stream.match(/[+\-*/%=<>!&|?:;,.()[\]{}]/)) {
       return 'operator';
     }
@@ -244,14 +243,11 @@ const openscadStreamLanguage = StreamLanguage.define({
     return null;
   },
 
-  // Without this, four of the tokens above reach no tag at all. MEASURED in
-  // the running editor before it was added: only five token classes were ever
-  // painted (keywords, line comments, block comments, strings, numbers), and
-  // builtins, functions, constants and $-variables all rendered as plain black
-  // text while the highlight style carried entries for tags this tokenizer
-  // never produces. `builtin` is the only one CodeMirror's legacy table knows;
-  // `function`, `constant` and `special` are modifier names rather than tags,
-  // so they resolved to nothing.
+  // Without this, four of the tokens above reach no tag at all: builtins,
+  // functions, constants and $-variables would render as plain text.
+  // `builtin` is the only one CodeMirror's legacy table knows; `function`,
+  // `constant` and `special` are modifier names rather than tags, so on
+  // their own they resolve to nothing.
   tokenTable: {
     builtin: tags.standard(tags.variableName),
     function: tags.function(tags.variableName),
@@ -266,9 +262,9 @@ const openscadStreamLanguage = StreamLanguage.define({
 
 // ─── Highlight styles (light + dark) ────────────────────────────────────────
 //
-// Built from the desktop's own editor schemes (UF-29, Q-60a). The mapping from
-// the scheme file's keys to this tokenizer's tokens, MEASURED against the
-// owner's screenshots rather than assumed:
+// Built from the desktop's own editor schemes. The mapping from the scheme
+// file's keys to this tokenizer's tokens, checked against desktop
+// screenshots rather than assumed:
 //
 //   keyword1  Green      language keywords     `module` renders green
 //   keyword2  Green      constants             true / false / undef / PI
@@ -279,13 +275,12 @@ const openscadStreamLanguage = StreamLanguage.define({
 //   string    DarkMagenta
 //   operator  Blue       brackets and punctuation included
 //
-// $-variables are keyword3 by INFERENCE — no screenshot showed one — and are
-// grouped with the builtins they belong to. Everything else was read off the
-// pixels.
+// $-variables are keyword3 by inference (no screenshot showed one) and are
+// grouped with the builtins they belong to. Everything else was read off
+// the pixels.
 //
 // Neither bold nor italic is applied: the desktop renders keywords and
-// comments at the same weight and slope as everything else, and the previous
-// VS Code port's bold keywords / italic comments were its own invention.
+// comments at the same weight and slope as everything else.
 
 /**
  * @param {import('./editor-color-scheme.js').EditorScheme} scheme
@@ -318,13 +313,12 @@ const darkHighlightStyle = highlightStyleFor(DARK_SCHEME);
  * up. Given in px because the control is a px control (Edit ▸ Font Size has
  * always announced "Font size: 14px").
  *
- * The explicit line-height is not decoration. MEASURED: before anything set
- * a font size on the editor root, rows were 22px against 14px text — 1.57,
- * inherited by accident from the page. Setting the root to 14px recomputed
- * that inherited unitless line-height against a smaller number and rows fell
- * to 20px, i.e. 1.43, under the 1.5 that WCAG 2.2 SC 1.4.12 Text Spacing
- * asks for. Pinning it here keeps the ratio at every font size the user can
- * choose, instead of letting it drift out of range whenever the size changes.
+ * The explicit line-height is not decoration. Inherited from the page, the
+ * unitless line-height recomputes against the root's font size: at 14px
+ * rows fall to 20px, a ratio of 1.43, under the 1.5 that WCAG 2.2 SC 1.4.12
+ * Text Spacing asks for. Pinning it here keeps the ratio at every font size
+ * the user can choose, instead of letting it drift out of range whenever
+ * the size changes.
  *
  * @param {number} px
  */
@@ -343,11 +337,9 @@ function fontSizeTheme(px) {
 /**
  * The editor chrome, from the same scheme file as the syntax colors.
  *
- * `.cm-activeLine` takes the scheme's caret-line background verbatim. That is
- * a visible change from the old themes, whose light active line was fully
- * transparent (`#F8F8F800`) and whose dark one was barely there — and it is
- * why every foreground in editor-color-scheme.js is contrast-checked against
- * the caret line as well as the paper.
+ * `.cm-activeLine` takes the scheme's caret-line background verbatim,
+ * which is why every foreground in editor-color-scheme.js is
+ * contrast-checked against the caret line as well as the paper.
  *
  * @param {import('./editor-color-scheme.js').EditorScheme} scheme
  * @param {{dark?: boolean}} [options]
@@ -377,8 +369,8 @@ function editorThemeFor(scheme, options = {}) {
       '.cm-activeLine': {
         backgroundColor: scheme.caretLine,
       },
-      // Brace matching (Q-61). The scheme carries both pairs, so the rider
-      // needed no color of its own.
+      // Brace matching. The scheme carries both pairs, so it needs no color of
+      // its own.
       '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
         backgroundColor: scheme.matchedBraceBackground,
         color: scheme.matchedBraceForeground,
@@ -690,7 +682,7 @@ const useSelectionForFind = (view) => {
 // commentTokens languageData on the OpenSCAD stream language above.
 const EDITOR_COMMANDS = {
   // Text undo/redo, distinct from the app's parameter history. A full-document
-  // programmatic setValue resets this history on purpose (A1), so Undo can
+  // programmatic setValue resets this history on purpose, so Undo can
   // never resurrect a previously loaded project.
   undo,
   redo,
@@ -699,8 +691,8 @@ const EDITOR_COMMANDS = {
   comment: lineComment,
   uncomment: lineUncomment,
   find: openSearchPanel,
-  // CodeMirror's search panel includes the replace controls — verified in the
-  // browser at R3b-1, so Find and Replace needs no separate panel.
+  // CodeMirror's search panel includes the replace controls, so Find and
+  // Replace needs no separate panel.
   findReplace: openSearchPanel,
   findNext,
   findPrevious,
@@ -827,7 +819,7 @@ export class CodeMirrorEditor {
         // the right border, both from the desktop's own defaults. Neither
         // mark is made of characters, so the document is untouched. Two
         // compartments because the desktop keeps them as two settings and
-        // Q-58 chose to mirror that.
+        // this mirrors that.
         this._wrapIndentCompartment.of(
           this._editorPrefs.wrapIndent ? wrapIndent() : []
         ),
@@ -848,7 +840,7 @@ export class CodeMirrorEditor {
         codeFolding(),
         scadFoldService,
         boxedFoldGutter(),
-        // Q-61: the desktop highlights the brace matching the one at the
+        // The desktop highlights the brace matching the one at the
         // cursor, and its scheme file already carried both color pairs. It is
         // a real setting there (settings.cc enableBraceMatching, default true)
         // sitting beside highlightCurrentLine, so it is a real setting here.
@@ -949,14 +941,14 @@ export class CodeMirrorEditor {
   }
 
   /**
-   * Re-measure when the pane changes width (D-53).
+   * Re-measure when the pane changes width.
    *
    * CodeMirror already watches its own scroller, but the handler is guarded:
    * `if (view.docView.lastUpdate < Date.now() - 75) this.onResize()`
    * (@codemirror/view, the DOMObserver constructor). A resize that lands
    * within 75ms of a doc-view update is dropped and never retried, and
    * Classic's responsive reflow does exactly that — it re-lays the dock and
-   * updates the editor in the same moment. MEASURED: dragging the viewport to
+   * updates the editor in the same moment. Measured: dragging the viewport to
    * 768 took the editor from 213px to 701px of content while CodeMirror went
    * on believing the old width for as long as it was left alone, curing only
    * on the next click or window resize.
@@ -965,7 +957,7 @@ export class CodeMirrorEditor {
    * resize. `requestMeasure` coalesces into CodeMirror's own measure cycle, so
    * a drag costs one measure per frame rather than one per pixel.
    *
-   * A measure on its own is not enough, which cost a while to find: view-level
+   * A measure on its own is not enough: view-level
    * extensions only recompute inside a ViewUpdate, and re-wrapping is done by
    * the browser in CSS without the doc view being redrawn, so no update is
    * produced. The empty transaction makes one. It carries no changes, and the

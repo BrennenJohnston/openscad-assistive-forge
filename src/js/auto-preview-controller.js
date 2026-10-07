@@ -49,7 +49,7 @@ export class AutoPreviewController {
     // Configuration
     // MANIFOLD OPTIMIZED: Reduced debounce time for more responsive previews
     // Manifold renders most models in under 1 second, so we can respond faster
-    this.debounceMs = options.debounceMs ?? 800; // Was 1500ms, now 800ms
+    this.debounceMs = options.debounceMs ?? 800;
     this.maxCacheSize = options.maxCacheSize ?? 10;
     this.enabled = options.enabled ?? true;
     // When enabled is false, this helps distinguish "user turned it off"
@@ -119,7 +119,7 @@ export class AutoPreviewController {
     this.onError = options.onError || (() => {});
     // A full render is starting. Unlike renderPreview() this path sets no
     // preview state, so onStateChange never fires for it and anything that
-    // has to stand back — the Animate panel, F5 — has nothing else to hear.
+    // has to stand back — the Animate panel — has nothing else to hear.
     this.onFullRenderStart = options.onFullRenderStart || (() => {});
   }
 
@@ -210,7 +210,7 @@ export class AutoPreviewController {
    * not part of the preview cache key, so every cached preview may embed
    * the previous library set - none can be reused. Re-render the unchanged
    * parameters through the normal debounced path so a model that needs the
-   * switched-off library says so instead of showing leftovers (D-42).
+   * switched-off library says so instead of showing leftovers.
    * @param {Object} parameters - Current parameter values
    */
   onLibrariesChange(parameters) {
@@ -271,14 +271,9 @@ export class AutoPreviewController {
   }
 
   /**
-   * Detect the render state for model coloring based on parameters.
-   * Delegates to the shared render-intent classifier and maps the result
-   * to the legacy color-tinting values expected by the preview manager.
-   *
-   * Now a no-op that always returns null: the fabricated 'preview'/'laser'
-   * tinting was removed because it does not correspond to any desktop
-   * OpenSCAD behavior. Model color comes from COFF per-face data or the
-   * theme default.
+   * The render state for model coloring: always null. Desktop OpenSCAD has
+   * no render-state tinting, so model color comes from COFF per-face data or
+   * the theme default.
    *
    * @param {Object} parameters
    * @param {boolean} _isFullQuality
@@ -445,10 +440,10 @@ export class AutoPreviewController {
       return;
     }
 
-    // D-196: the render underway is for these very values, so its result
-    // is the answer. isBusy() is false while the worker restarts before a
-    // render, which is how a manifest's autoPreview request used to start
-    // a second, identical render of a slow model.
+    // The render underway is for these very values, so its result is the
+    // answer. isBusy() is false while the worker restarts before a render, so
+    // without this check a manifest's autoPreview request would start a
+    // second, identical render of a slow model.
     if (this.renderingPreview?.cacheKey === cacheKey) {
       if (this.debounceTimer) {
         clearTimeout(this.debounceTimer);
@@ -781,7 +776,7 @@ export class AutoPreviewController {
    * Detect whether a SCAD source file uses the `#` debug modifier.
    *
    * Desktop OpenSCAD renders `#`-modified geometry with a fixed highlight
-   * color {255, 81, 81, 128} that OVERRIDES any user-defined color().
+   * color {255, 81, 81, 128} that overrides any user-defined color().
    * In COFF export the face colors still carry the user color, so the
    * preview layer must apply the override when this modifier is detected.
    *
@@ -858,9 +853,9 @@ export class AutoPreviewController {
   }
 
   /**
-   * Render one animation frame at a given $t (F5).
+   * Render one animation frame at a given $t.
    *
-   * Deliberately NOT renderPreview(): that path is built for a user changing a
+   * Deliberately not renderPreview(): that path is built for a user changing a
    * parameter, so it consults the cache, drops itself as stale when the
    * parameter hash has moved on, and schedules pending work in its finally
    * block. An animation asks for a specific frame, now, and every frame has a
@@ -868,12 +863,11 @@ export class AutoPreviewController {
    * discard frames the panel had explicitly asked for.
    *
    * $t reaches OpenSCAD as a -D flag through the ordinary parameter path
-   * (scad-param-formatter.js), which is why the plan could call this feasible
-   * before any of it was written.
+   * (scad-param-formatter.js).
    *
    * The camera is preserved on every frame: re-fitting it between frames would
    * make the model appear to swim, and it would fight a low-vision user who
-   * has zoomed in to watch one detail (the reasoning behind D-11).
+   * has zoomed in to watch one detail.
    *
    * @param {number} tValue - $t for this frame, 0..1
    * @param {Object} [parameters] - the model's current parameters
@@ -986,12 +980,12 @@ export class AutoPreviewController {
     );
 
     let previewOutputFormat;
-    // The render always uses the user's UNMODIFIED source. injectCsgColors()
-    // used to wrap each difference() subtractor in its own color(){} block,
-    // but each block is a new lexical scope, so variables assigned in one
-    // subtractor became undef in the next — silently wrong geometry (KI-012
-    // phase 1, the confirmed keyguard-corruption root cause). Colorless and
-    // monochrome models now get viewer-side cavity tinting in loadOFF().
+    // The render always uses the user's unmodified source. Wrapping each
+    // difference() subtractor in its own color(){} block for tinting would
+    // open a new lexical scope per block, so variables assigned in one
+    // subtractor would be undef in the next: silently wrong geometry.
+    // Colorless and monochrome models get viewer-side cavity tinting in
+    // loadOFF() instead.
     const scadForPreview = this.currentScadContent;
     const filesForPreview = this.projectFiles;
     const csgColorsInjected = false;
@@ -1009,7 +1003,7 @@ export class AutoPreviewController {
 
     const sourceOverridesActive = isDebugPrefEnabled('sourceOverrides');
 
-    // Ground-truth diagnostics for LWFL geometry debugging (Phase 1)
+    // Ground-truth diagnostics: what this render is dispatched with
     const previewOverridesActive = previewParameters !== parameters;
     const parityDiagActive = isDebugPrefEnabled('previewParity');
     console.log('[AutoPreview Diag] Render dispatch:', {
@@ -1358,8 +1352,8 @@ export class AutoPreviewController {
     );
 
     let fullOutputFormat;
-    // Always render the user's UNMODIFIED source — see the matching comment
-    // in renderPreview() for why injectCsgColors() was removed (KI-012).
+    // Always render the user's unmodified source; see the matching comment in
+    // renderPreview().
     const scadContentForRender = this.currentScadContent;
     const filesForRender = this.projectFiles;
     const csgColorsInjected = false;
@@ -1517,7 +1511,7 @@ export class AutoPreviewController {
       } catch (stlError) {
         // Never leave OFF bytes where the download path expects STL: clear
         // the cached artifact entirely and fail loudly. Returning the OFF
-        // result here used to make the app silently save OFF bytes as .stl.
+        // result here would make the app silently save OFF bytes as .stl.
         this.fullQualitySTL = null;
         this.fullQualityFormat = null;
         this.fullQualityStats = null;
@@ -1531,7 +1525,7 @@ export class AutoPreviewController {
         exportError.cause = stlError;
         // Carry the raw OpenSCAD output across the wrap. Without it the UI
         // can only see this sentence, and every specific diagnosis the
-        // worker made is lost behind a generic failure (D-42).
+        // worker made is lost behind a generic failure.
         exportError.details = stlError.details;
         throw exportError;
       }
@@ -1590,10 +1584,11 @@ export class AutoPreviewController {
       const msg = (svgError?.message || '').toLowerCase();
       if (svgError?.code === 'MODEL_NOT_2D' || msg.includes('not a 2d')) {
         try {
-          // Draft PREVIEW of the projected outline (on-screen only, no
+          // A draft preview of the projected outline (on-screen only, no
           // file leaves the app, so no consent dialog here). Strip the
-          // 2D-mode generate so the 3D pass renders the model's default
-          // geometry — render2DFallback no longer rewrites parameters.
+          // 2D-mode generate here so the 3D pass renders the model's
+          // default geometry; render2DFallback does not rewrite parameters
+          // itself.
           const fallbackResult = await this.renderController.render2DFallback(
             this.currentScadContent,
             strip2DGenerateForFallback(parameters),

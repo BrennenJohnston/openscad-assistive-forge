@@ -36,8 +36,9 @@ const DEFAULT_CLEAR_DELAY_MS = 1500;
 
 // When the same words are still in the region, emptying it and writing them
 // again one frame later is too quick for the accessibility tree to see a
-// change, and the screen reader says nothing (D-239: a six-key cell repeating
-// the one before it went unsaid). A repeat waits this long after the clear.
+// change, and the screen reader says nothing (a six-key braille cell that
+// repeats the one before it would go unsaid). A repeat waits this long
+// after the clear.
 const REPEAT_GAP_MS = 100;
 
 // Politeness levels

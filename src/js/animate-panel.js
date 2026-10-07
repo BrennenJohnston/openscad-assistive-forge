@@ -1,11 +1,11 @@
 /**
- * Animate panel (F5) — Classic's equivalent of desktop OpenSCAD's Animate
- * dock, transcribed from upstream Animate.ui (Appendix U5).
+ * Animate panel — Classic's equivalent of desktop OpenSCAD's Animate
+ * dock, transcribed from upstream Animate.ui.
  *
  * Real playback, not a mock: each frame sets `$t` and re-renders the model
  * through the ordinary -D parameter path, exactly as the desktop does.
  *
- * ## FPS is a ceiling, never a promise (D-31)
+ * ## FPS is a ceiling, never a promise
  *
  * A WASM preview render takes somewhere between 0.3 and 10 seconds depending
  * on the model. Playback therefore self-paces: it renders a frame, and only
@@ -16,7 +16,7 @@
  *
  * ## What it will not do to a screen-reader user
  *
- * Playback is announced ONCE when it starts and once when it stops. Never per
+ * Playback is announced once when it starts and once when it stops. Never per
  * frame. A model animating at even one frame per second would otherwise
  * produce a stream of announcements that makes the rest of the page
  * unusable — and this is an assistive-technology project, so that is a
@@ -29,7 +29,7 @@
  * ## Yielding to everything else
  *
  * Any render that is not ours — a parameter change, the Preview or Render
- * button — pauses playback and does NOT resume it. Two render requests
+ * button — pauses playback and does not resume it. Two render requests
  * fighting over one blocking worker would make both slow and neither correct.
  *
  * @license GPL-3.0-or-later

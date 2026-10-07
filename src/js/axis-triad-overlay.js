@@ -1,6 +1,6 @@
 /**
- * Corner XYZ triad — desktop OpenSCAD 2021.01's `showSmallaxes()`
- * transcribed (UF-7 P3; R-IV-approved feature table rows, Q-26: lower-left).
+ * Corner XYZ triad: desktop OpenSCAD 2021.01's `showSmallaxes()`
+ * transcribed, in the lower-left corner.
  *
  * A separate miniature scene rendered as a second pass into a scissored
  * corner viewport (preview.js owns the pass). Matching the desktop:
@@ -12,16 +12,16 @@
  *     ±90·dpi ortho frustum)
  *   - arms pure red (X), green (Y), blue (Z) — `glColor3d(1,0,0)` etc.
  *   - letters are little stroke glyphs (2–3 line segments each) drawn
- *     screen-upright at 1.2× the arm length, in the SCHEME'S AXES COLOR —
+ *     screen-upright at 1.2× the arm length, in the scheme's axes color:
  *     the desktop passes its axescolor into showSmallaxes; the caller
  *     passes the same resolveAxisMarkColor() result here
- *   - the camera copies only the main camera's ROTATION: pan and zoom
+ *   - the camera copies only the main camera's rotation: pan and zoom
  *     leave the triad untouched (both desktop references verify this)
  *
  * This module imports three directly: it is consumed only by preview.js,
- * which already holds first-class three imports — there is no injected
- * subset to under-export (the R-IV trap) and no import back into
- * preview.js (the cycle the plan warned about).
+ * which already holds first-class three imports, so there is no injected
+ * subset to under-export and no import back into preview.js (which would
+ * be a cycle).
  *
  * @license GPL-3.0-or-later
  */
