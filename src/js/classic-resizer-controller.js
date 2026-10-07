@@ -1,9 +1,9 @@
 /**
- * Classic Resizer Controller — keyboard-operable dock splitters (B4).
+ * Classic Resizer Controller — keyboard-operable dock splitters.
  *
  * Three separators size the Classic dock grid: two vertical ones between the
  * editor/3D view and the 3D view/Customizer, and one horizontal one between
- * the 3D view and the bottom strip (D-2). They exist only in Classic at
+ * the 3D view and the bottom strip. They exist only in Classic at
  * >=1024px; the Forge layouts keep Split.js, which is destroyed on entering
  * Classic because its inline styles would fight the grid.
  *
@@ -18,7 +18,7 @@
  * --classic-row-bottom) via CSSOM setProperty. No inline geometry, no style
  * injection, nothing for the CSP to object to.
  *
- * Keyboard model is the Forge gutter's (main.js:7989-8039): Arrow +/-2%,
+ * Keyboard model is the Forge gutter's (in main.js): Arrow +/-2%,
  * Shift+Arrow +/-5%, Home/End to the bounds.
  *
  * @license GPL-3.0-or-later
@@ -35,7 +35,7 @@ const STEP_LARGE = 5;
 /**
  * The separators, in DOM order. `property` is the custom property each one
  * writes; `minToken`/`otherMinToken` name the classic.css tokens that bound
- * it. Labels and value text are owner-approved (D-35, 2026-08-06).
+ * it.
  */
 const RESIZER_DEFS = [
   {
@@ -87,8 +87,8 @@ function readPxToken(host, token) {
 
 /**
  * Announce that the dock geometry changed. The 3D canvas sizes itself from
- * its container, so it has to re-measure — the same contract Split.js's
- * onDrag fulfills for the Forge layout (main.js:7908-7915).
+ * its container, so it has to re-measure: the same contract Split.js's
+ * onDrag fulfills for the Forge layout in main.js.
  */
 function emitLayoutResize() {
   document.dispatchEvent(new CustomEvent('classic-layout-resize'));
@@ -184,7 +184,7 @@ export class ClassicResizerController {
 
   /**
    * The percentage bounds for one separator, derived from the min-width
-   * tokens. Mirrors getAriaRange (main.js:7959-7971).
+   * tokens. Mirrors getAriaRange in main.js.
    * @param {string} key
    * @returns {{min: number, max: number}}
    * @private
@@ -219,7 +219,7 @@ export class ClassicResizerController {
         readPxToken(host, '--classic-resizer-track') * 2;
       max = toPct(total - reserved);
     } else {
-      // The floor belongs to the 3D VIEW, not to the display row as a whole:
+      // The floor belongs to the 3D view, not to the display row as a whole:
       // the camera bar sits between the view and the strip and takes real
       // height, so it has to come out of the budget too or the view is
       // squeezed below its minimum by exactly the bar's height.

@@ -1,10 +1,10 @@
 /**
- * Classic Editor Toolbar controller (D4).
+ * Classic Editor Toolbar controller.
  *
  * Wires the eight buttons of #classicEditorToolbar — file ops, text-editing
  * ops and 3D Print — whose markup lives in index.html so it travels into the
  * Classic editor slot with the panel. The workflow buttons (Preview, Render,
- * STL, DXF) moved to the top Classic toolbar (U-5/Q-18a).
+ * STL, DXF) live on the top Classic toolbar.
  *
  * Every handler delegates to machinery that already exists — the file-actions
  * controller, the editor's own performAction — so this module owns wiring
@@ -16,24 +16,24 @@
  * menus that already describe the same conditions, so a user meets the same
  * wording wherever they hit the same wall.
  *
- * Dependencies are injected (the pattern of file-actions-controller.js:79-87)
- * rather than imported, because they are main.js closures.
+ * Dependencies are injected (the pattern of setExportDependencies in
+ * file-actions-controller.js) rather than imported, because they are
+ * main.js closures.
  *
  * @license GPL-3.0-or-later
  */
 
 import { announceImmediate } from './announcer.js';
 
-/** Reason strings, reused verbatim from the menus (owner-approved 2026-08-07). */
+/** Reason strings, reused verbatim from the menus. */
 const REASON_NOTHING_TO_UNDO = 'Nothing to undo';
 const REASON_NOTHING_TO_REDO = 'Nothing to redo';
 const REASON_BASIC_EDITOR = 'Not available in the basic text editor';
 /**
- * Classic-truthful wording, owner-approved 2026-08-09 (Q-19): Classic has no
- * Generate surface, so the old "Press Generate first…" named a control the
- * user could not find. Exported for the top toolbar's STL button (main.js),
- * which is the one gated export surface now that the workflow buttons left
- * this toolbar (U-5/Q-18a).
+ * Classic-truthful wording: Classic has no Generate surface, so a reason
+ * that said "Press Generate first" would name a control the user cannot
+ * find. Exported for the top toolbar's STL button (main.js), the one gated
+ * export surface.
  */
 export const REASON_NEEDS_RENDER = 'Render the model first (F6)';
 
@@ -134,8 +134,8 @@ export class ClassicEditorToolbar {
     click('classicEdUnindentBtn', () => this._editorAction('unindent'));
     click('classicEdIndentBtn', () => this._editorAction('indent'));
 
-    // 3D Print is permanently unavailable this round (D-26); its reason span
-    // is static markup, so the shared announce path covers it.
+    // 3D Print is always unavailable; its reason span is static markup, so the
+    // shared announce path covers it.
     click('classicEdPrintBtn', () => {});
   }
 
@@ -216,11 +216,11 @@ export class ClassicEditorToolbar {
   }
 
   /**
-   * APG toolbar pattern: the whole toolbar is ONE tab stop and arrows move
-   * within it. Copied from the #classicToolbar implementation
-   * (main.js:8326-8386) rather than invented, so both toolbars behave the
-   * same. aria-disabled buttons stay in the ring on purpose — that is how a
-   * keyboard user discovers them and hears why they are unavailable.
+   * APG toolbar pattern: the whole toolbar is one tab stop and arrows move
+   * within it. It follows the #classicToolbar implementation in main.js
+   * (wireRovingToolbar), so both toolbars behave the same. aria-disabled
+   * buttons stay in the ring on purpose: that is how a keyboard user
+   * discovers them and hears why they are unavailable.
    * @private
    */
   _wireRovingTabindex() {
@@ -273,7 +273,7 @@ export class ClassicEditorToolbar {
   }
 
   /**
-   * The single tab stop must always be a VISIBLE button, or Tab skips it and
+   * The single tab stop must always be a visible button, or Tab skips it and
    * the whole toolbar drops out of the keyboard order.
    * @private
    */

@@ -1,5 +1,5 @@
 /**
- * Classic chrome text mirrors: the window-bottom status bar (C8) and the
+ * Classic chrome text mirrors: the window-bottom status bar and the
  * desktop window caption.
  *
  * Mirrors the in-viewport status overlay (#previewStatusText,
@@ -47,7 +47,7 @@ function statusNumber(value) {
 }
 
 /**
- * The desktop's status line, verbatim in shape (OpenSCAD_1):
+ * The desktop's status line, verbatim in shape:
  *
  *   Viewport: translate = [ 26.02 18.31 10.03 ], rotate = [ 57.80 0.00 48.80 ],
  *   distance = 550.78, fov = 22.50 (1156x779)
@@ -104,10 +104,10 @@ function start() {
     observers.push(observer);
   }
 
-  // Viewport telemetry (P8). The Viewport-Control panel owns the throttle in
+  // Viewport telemetry. The Viewport-Control panel owns the throttle in
   // front of the camera's change feed and emits the pose it has already read,
   // so there is exactly one subscription to a feed that fires ~118 times per
-  // drag. The target span sits OUTSIDE the bar's live region.
+  // drag. The target span sits outside the bar's live region.
   onCameraChange = (event) => {
     const span = document.getElementById('classicStatusViewport');
     if (span) span.textContent = formatViewportStatus(event.detail);

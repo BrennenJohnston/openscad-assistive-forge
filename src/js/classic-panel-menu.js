@@ -1,20 +1,20 @@
 /**
- * Classic dock "Move panel" menus (B8) — the only way to relocate a panel this
- * round (D-3). Keyboard-first by design: there is no drag gesture, and half a
- * drag would be worse than none.
+ * Classic dock "Move panel" menus: the only way to relocate a panel.
+ * Keyboard-first by design: there is no drag gesture, and half a drag would
+ * be worse than none.
  *
  * Each dock title bar gets a trailing menu button whose items are the fields
  * that panel can legally reach, plus the panels it can merge with. A field the
  * panel already occupies is not listed — it would be an item that does
- * nothing. When the title bar belongs to a merged group (B7) the menu covers
+ * nothing. When the title bar belongs to a merged group the menu covers
  * every occupant, so a background tab can be moved without being activated.
  *
- * This is a purpose-built WAI-ARIA menu button, NOT the application menubar.
- * ToolbarMenuController cannot host it: its menu ids are a closed list of six,
- * init() requires #toolbarMenuBar plus static per-menu markup, and its arrow
- * keys walk between top-level menus — behavior a standalone title-bar popup
- * must not have. Restructuring that controller is out of scope (plan §9), so
- * the APG pattern is implemented here over native <button> elements.
+ * This is a purpose-built WAI-ARIA menu button, not the application menubar.
+ * ToolbarMenuController cannot host it: its menu ids are a closed list of
+ * six, init() requires #toolbarMenuBar plus static per-menu markup, and its
+ * arrow keys walk between top-level menus, which a standalone title-bar
+ * popup must not do. So the APG pattern is implemented here over native
+ * <button> elements.
  *
  * @license GPL-3.0-or-later
  */
@@ -37,19 +37,19 @@ const TITLEBAR_CLASS = 'classic-pane-titlebar';
 const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 
 /**
- * Where the ⋮ belongs in a title bar. The owner's order (Q-1, 2026-08-08,
- * extended by Q-20b) is `[title …spacer… collapse ▾ | ⋮ | ✕ | stow »]`: the ⋮
- * follows the bar's disclosure controls and precedes its close button, and
- * the field-stow control holds the bar's outer corner past everything else.
- * Before this the ⋮ was simply appended, which put it to the RIGHT of every ✕.
+ * Where the ⋮ belongs in a title bar. The order is
+ * `[title …spacer… collapse ▾ | ⋮ | ✕ | stow »]`: the ⋮ follows the bar's
+ * disclosure controls and precedes its close button, and the field-stow
+ * control holds the bar's outer corner past everything else. Simply
+ * appending the ⋮ would put it to the right of every ✕.
  *
  * A disclosure is told apart by the `aria-expanded` it must carry to be one at
  * all, rather than by a list of button ids that would rot the next time a pane
- * gains a control. Close buttons carry no such state. The stow control DOES
- * carry aria-expanded, but when it holds the bar's END it marks the outer
- * corner (Q-20b) and stops the walk the way a ✕ does — otherwise a bar with
- * no ✕ would append the ⋮ after it. A left-edge stow control sits FIRST in
- * its bar and is skipped like any other disclosure.
+ * gains a control. Close buttons carry no such state. The stow control does
+ * carry aria-expanded, but when it holds the bar's end it marks the outer
+ * corner and stops the walk the way a ✕ does; otherwise a bar with no ✕
+ * would append the ⋮ after it. A left-edge stow control sits first in its
+ * bar and is skipped like any other disclosure.
  *
  * @param {Element} bar
  * @returns {Element|null} the node to insert before; null means append
@@ -107,14 +107,14 @@ export class ClassicPanelMenus {
     // A fixed-position popup would drift away from its button; closing is
     // honest and matches how the application menus behave.
     //
-    // Only for scrolls that actually MOVE the button, though. This is a
+    // Only for scrolls that actually move the button, though. This is a
     // capturing window listener, so it hears every element in the app scroll
-    // its own content — and a pane scrolling inside itself leaves the title
-    // bar, and therefore the menu, exactly where it was. Since UF-19 the
-    // console log scrolls itself to its newest line whenever output arrives,
-    // which was silently closing an open dock menu and throwing focus back to
-    // the button mid-keystroke. A page scroll reports the document as its
-    // target, not an Element, so those still close.
+    // its own content, and a pane scrolling inside itself leaves the title
+    // bar, and therefore the menu, exactly where it was. The console log
+    // scrolls itself to its newest line whenever output arrives; closing on
+    // that would shut an open dock menu and throw focus back to the button
+    // mid-keystroke. A page scroll reports the document as its target, not an
+    // Element, so those still close.
     this._onReposition = (event) => {
       if (
         event?.type === 'scroll' &&
@@ -163,7 +163,7 @@ export class ClassicPanelMenus {
 
   /**
    * Which panels a title bar's menu serves: the whole group when the bar is
-   * the shared bar of a merged field (B7), otherwise the one panel it belongs
+   * the shared bar of a merged field, otherwise the one panel it belongs
    * to.
    * @param {Element} bar
    * @returns {string[]}
@@ -177,7 +177,7 @@ export class ClassicPanelMenus {
       return [...tabs].map((tab) => tab.dataset.classicPanel).filter(Boolean);
     }
     // Not always a direct child: the Customizer's title bar lives one level
-    // down, inside #classicCustomizerBar. The panel's FIRST title bar is its
+    // down, inside #classicCustomizerBar. The panel's first title bar is its
     // own — anything deeper belongs to something nested inside it.
     return this._deps.getAllPanels().filter((id) => {
       const el = document.getElementById(elementIdFor(id));
@@ -191,8 +191,8 @@ export class ClassicPanelMenus {
    * @private
    */
   _buttonLabel(panels) {
-    // Owner-approved 2026-08-07: name the panel, so four of these in the
-    // bottom strip do not all read the same.
+    // Name the panel, so four of these in the bottom strip do not all read
+    // the same.
     if (panels.length === 1) return `Move ${panelLabel(panels[0])}`;
     return 'Move panels';
   }
@@ -387,9 +387,9 @@ export class ClassicPanelMenus {
    * The menu's items for a title bar. Exposed so the tests can assert the item
    * set without opening a popup.
    *
-   * Labels are owner-approved 2026-08-07: plain-language positions, the
-   * panel's current field omitted rather than shown disabled, and the panel
-   * named in each item once a merged bar serves more than one.
+   * Labels: plain-language positions, the panel's current field omitted
+   * rather than shown disabled, and the panel named in each item once a
+   * merged bar serves more than one.
    *
    * @param {string[]} panels
    * @returns {Array<{label: string, panelId: string, field: string, mergeWith: string|null, separatorBefore: boolean}>}
@@ -452,8 +452,8 @@ export class ClassicPanelMenus {
 }
 
 /**
- * Owner-approved 2026-08-07: say what moved and where, and for a merge say
- * that a tab group now exists.
+ * Say what moved and where, and for a merge say that a tab group now
+ * exists.
  * @param {{panelId: string, field: string, mergeWith: string|null}} item
  * @param {Function} [getGroup] - the group the panel landed in, for "tab N of M"
  * @returns {string}
