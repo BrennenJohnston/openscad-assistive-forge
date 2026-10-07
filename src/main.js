@@ -9679,8 +9679,8 @@ if (rounded) {
   // Export/Generate right after a pause still sees the edit.
   const EDITOR_WRITE_BACK_DELAY_MS = 500;
 
-  // Owner-approved wording (UF-18, Q-45). Names the control and its shortcut
-  // so the next step is not left to be guessed.
+  // Names the control and its shortcut so the next step is not left to be
+  // guessed.
   const EDITED_PENDING_PREVIEW_MESSAGE =
     'Edited. Press Preview (F5) to update the model.';
 
@@ -9688,7 +9688,7 @@ if (rounded) {
    * Publish an editor edit into the app's single source of truth, so render,
    * export and save all see it. Mirrors the folder-watch writer
    * (`main.js` folder-change handler) minus its re-render: typing must not
-   * start a render (D-12) — Preview/F5 does that.
+   * start a render — Preview/F5 does that.
    * @param {string} code
    * @param {Object} [options]
    * @param {boolean} [options.announcePending=true] - False when something is
@@ -9716,18 +9716,17 @@ if (rounded) {
     if (autoPreviewController) {
       const cameraSettled = autoPreviewController.initialPreviewDone;
       autoPreviewController.setScadContent(code);
-      // D-11: an edit is not a new file — keep the user's viewpoint instead
+      // An edit is not a new file — keep the user's viewpoint instead
       // of re-fitting to the model. setScadContent clears the preview cache
       // (which is keyed on parameters, not source) but also resets the
       // camera-settled flag, which would snap a zoomed-in user back out.
       autoPreviewController.initialPreviewDone = cameraSettled;
     }
 
-    // Typing deliberately does not render (D-12, desktop parity), and until
-    // now nothing said so: P0 measured zero renders after an edit with no
-    // affordance anywhere on screen, which is half of why U-30 read as
-    // "completely useless". Fires once per edit burst, not per keystroke,
-    // and the next render's own status replaces it.
+    // Typing deliberately does not render (desktop parity), so this says so:
+    // without it there is no affordance anywhere on screen after an edit.
+    // Fires once per edit burst, not per keystroke, and the next render's own
+    // status replaces it.
     if (announcePending) updateStatus(EDITED_PENDING_PREVIEW_MESSAGE);
 
     updatePrimaryActionButton();
@@ -9758,7 +9757,7 @@ if (rounded) {
       applyEditorEdit(code, { announcePending: false });
   }
 
-  // Reconciliation bookkeeping (UF-18, Q-45a). `retiredParameterValues` holds
+  // Reconciliation bookkeeping. `retiredParameterValues` holds
   // values the user had set on parameters the code has since removed, so
   // editing a declaration away and back does not reset their choice.
   let lastReconciledSource = null;
@@ -9767,14 +9766,13 @@ if (rounded) {
 
   /**
    * Re-read the parameter schema from the edited source and fold it into the
-   * live values (Q-45a).
+   * live values.
    *
-   * The schema used to be parsed once, when the file loaded, and every render
-   * then passed `-D` for every parameter in it — so an edited default reached
-   * the worker but the stale `-D` overrode it and the model never moved
-   * (U-30). This runs on Preview, Render and Save: the owner chose those
-   * moments over a typing-pause timer so the Customizer is never rebuilt
-   * under a user's hand or mid-sentence for a screen reader.
+   * A schema parsed once at load would pass `-D` for every parameter in it,
+   * so an edited default would reach the worker but the stale `-D` would
+   * override it and the model would never move. This runs on Preview, Render
+   * and Save rather than on a typing-pause timer, so the Customizer is never
+   * rebuilt under a user's hand or mid-sentence for a screen reader.
    *
    * @returns {{added: string[], removed: string[]}|null} null when nothing moved
    */
@@ -9892,7 +9890,7 @@ if (rounded) {
     // Expose modeManager globally for keyboard shortcut handler
     window._modeManager = modeManager;
 
-    // Classic-mode editor co-existence (C5): the desktop shell shows the
+    // Classic-mode editor co-existence: the desktop shell shows the
     // editor pane ALONGSIDE the customizer, so entering classic must never
     // route through modeManager's exclusive expert view (which hides
     // #paramPanelBody). If expert mode was active, unwind it first so the
@@ -9971,17 +9969,13 @@ if (rounded) {
           currentEditor.refreshLayout?.();
         }
 
-        // Focus the editor. Partial mitigation for D-15, NOT a fix for it:
-        // 100ms is long enough for the user to have opened a menu, tabbed
-        // onward or clicked something else, and this used to take focus
-        // regardless. It now declines when something else has claimed focus,
-        // which can only ever mean one fewer steal.
+        // Focus the editor, unless something else has claimed focus in the
+        // 100 ms since: by then the user may have opened a menu, tabbed onward or
+        // clicked something else.
         //
-        // It does not close D-15. Measured 2026-08-08: with this guard in
-        // place, pressing the toggle and moving focus in the same task still
-        // ends with the editor focused, so at least one other path focuses it —
-        // most likely initExpertEditor's own first-run focus. Finding that path
-        // is its own piece of work and is not attempted here.
+        // This does not stop every steal: pressing the toggle and moving focus in
+        // the same task still ends with the editor focused, so at least one other
+        // path focuses it - most likely initExpertEditor's own first-run focus.
         if (currentEditor && currentEditor.focus) {
           clearTimeout(editorFocusTimer);
           editorFocusTimer = setTimeout(() => {
@@ -10021,9 +10015,9 @@ if (rounded) {
     /**
      * The source the editor should show. `uploadedFile.content` is the single
      * source of truth — it is what render, export, save and auto-preview all
-     * read, and what every loader writes. Reading anything else first (as this
-     * used to) lets a stale cache win forever, so a second project load could
-     * never reach the editor.
+     * read, and what every loader writes. Reading anything else first would
+     * let a stale cache win forever, so a second project load could never
+     * reach the editor.
      * @returns {string}
      */
     function resolveEditorSource() {
@@ -10048,9 +10042,8 @@ if (rounded) {
           getClassicEditorToolbar()?.refresh();
         },
         onSave: () => {
-          // #saveProjectBtn does not exist in index.html, so the editor's
-          // Ctrl+S was a no-op that still announced "Saved". Route it to the
-          // same handler the File menu uses; it flushes the write-back first.
+          // The editor's Ctrl+S goes to the same handler the File menu uses; it
+          // flushes the write-back first.
           fileActionsController.onSave();
         },
         onRun: () => {
@@ -10097,8 +10090,8 @@ if (rounded) {
 
     /**
      * Render a preview of the editor's current code. Explicit user action
-     * (▶ Preview, Ctrl+Enter) — typing alone never renders (D-12). The
-     * dirty flag is untouched: only saving clears it (D-10).
+     * (▶ Preview, Ctrl+Enter) — typing alone never renders. The
+     * dirty flag is untouched: only saving clears it.
      */
     function triggerPreviewFromEditor() {
       if (!currentEditor) return;
@@ -10260,8 +10253,7 @@ if (rounded) {
     // Push channel: loaded source → editor. Every writer of
     // uploadedFile.content (the load funnel, folder-watch, back-to-welcome)
     // reaches the editor through this one subscription, so Standard,
-    // Simplified and Classic all refill from the same place. Replaces a
-    // 'scadCodeUpdated' event that had a listener and no dispatchers.
+    // Simplified and Classic all refill from the same place.
     stateManager.subscribe((newState, prevState) => {
       if (isApplyingEditorEdit) return;
       const nextFile = newState?.uploadedFile;
@@ -10303,8 +10295,8 @@ if (rounded) {
   let splitInstance = null;
   const previewPanel = document.querySelector('.preview-panel');
 
-  // Note: Vertical split (preview info vs canvas) is now handled by the overlay drawer
-  // in preview-settings-drawer.js - no Split.js needed for that anymore
+  // The vertical split (preview info vs canvas) is the overlay drawer in
+  // preview-settings-drawer.js; no Split.js is needed for that.
 
   if (paramPanel && previewPanel) {
     // (Storage key defined at module level as STORAGE_KEY_LAYOUT_SIZES)
@@ -10538,7 +10530,7 @@ if (rounded) {
     // viewport re-detects on every entry and exit (detectTheme() returns
     // 'classic' while the mode is active).
     const syncPreviewSceneToMode = () => {
-      // UF-14 P3: the flip crosses a preference-namespace boundary, so the
+      // The flip crosses a preference-namespace boundary, so the
       // target interface's own saved viewing state is re-applied in one
       // pass. The DOM surfaces swap even before any model exists...
       reloadScopedUiSurfaces();
@@ -10586,22 +10578,21 @@ if (rounded) {
       },
     });
 
-    // Classic window-bottom status bar (C8): mirrors the viewport overlay
+    // Classic window-bottom status bar: mirrors the viewport overlay
     initClassicStatusBar();
 
-    // Classic editor toolbar (D4). Dependencies are injected because they are
+    // Classic editor toolbar. Dependencies are injected because they are
     // closures in here; the toolbar owns wiring and enablement only, never a
-    // second implementation of any action.
-    // The workflow buttons (Preview/Render/STL/DXF) left this toolbar for
-    // the top Classic toolbar (U-5/Q-18a), taking their render-state deps
-    // with them.
+    // second implementation of any action. The workflow buttons
+    // (Preview/Render/STL/DXF) live on the top Classic toolbar, with their
+    // render-state deps.
     initClassicEditorToolbar({
       fileActionsController,
       getEditor: () => getModeManager()?.getEditorInstance?.() || null,
       getState: () => stateManager.getState(),
     });
 
-    // Classic Font List panel (F3). Registering the sample faces costs no new
+    // Classic Font List panel. Registering the sample faces costs no new
     // bandwidth: the worker fetches these same four files from the same URLs
     // to mount them for text(), so the browser serves these from cache.
     {
@@ -10613,19 +10604,19 @@ if (rounded) {
       fontListPanel.loadSampleFaces();
     }
 
-    // Classic Viewport-Control panel (F4). The PreviewManager is built lazily
+    // Classic Viewport-Control panel. The PreviewManager is built lazily
     // once WASM is ready, so the panel binds to its camera later, the same way
     // the display-options and overlay-grid controllers do.
     initViewportControlPanel({ getPreviewManager: () => previewManager });
 
-    // Classic Animate panel (F5). Playback drives real renders through the
+    // Classic Animate panel. Playback drives real renders through the
     // auto-preview controller's -D $t path.
     initAnimatePanel({
       getAutoPreviewController: () => autoPreviewController,
       getParameters: () => stateManager.getState().parameters || {},
     });
 
-    // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
+    // Classic Customizer bar: titlebar ✕ + the Automatic Preview mirror.
     // All state flows through the real controls (#autoPreviewToggle), never
     // element-to-element side channels.
     document
@@ -10651,14 +10642,14 @@ if (rounded) {
       }
     }
 
-    // Classic display strip (C4.5): snap views, axes/grid overlays, bed
+    // Classic display strip: snap views, axes/grid overlays, bed
     // size, Preview/Render — thin wrappers over the existing actions
-    // Classic icon toolbar (C6): thin wrappers over the same actions the
+    // Classic icon toolbar: thin wrappers over the same actions the
     // menus drive — no new state anywhere.
     const classicToolbar = document.getElementById('classicToolbar');
     if (classicToolbar) {
       restoreClassicToolbarPrefs();
-      // E3 moved the snap-view buttons to the 3D view toolbar. Scoping this
+      // The snap-view buttons live on the 3D view toolbar. Scoping this
       // to #classicToolbar would silently leave every one of them dead, so it
       // queries the document — both bars are Classic-only markup.
       document.querySelectorAll('[data-classic-view]').forEach((btn) => {
@@ -10670,8 +10661,7 @@ if (rounded) {
       });
 
       // The bar's View All and Reset View carry the same labels as the View
-      // menu's items, so they run the same commands (G4). Reset View used to
-      // be a third behavior again — a snap to the diagonal view.
+      // menu's items, so they run the same commands.
       document
         .getElementById('classicViewHomeBtn')
         ?.addEventListener('click', () => {
@@ -10710,7 +10700,7 @@ if (rounded) {
         ?.addEventListener('click', () =>
           document.getElementById('redoBtn')?.click()
         );
-      // U-8b: the desktop's Export STL exports a render that exists; ours
+      // The desktop's Export STL exports a render that exists; ours
       // gates the same way. aria-disabled + reason rather than disabled, so
       // keyboard and screen-reader users can find the button and hear why
       // (the editor toolbar's pattern). Enabled, it downloads the existing
@@ -10751,7 +10741,7 @@ if (rounded) {
         });
       }
 
-      // The workflow triad's other members (U-5, Q-18a).
+      // The workflow triad's other members.
       document
         .getElementById('classicTbPreviewBtn')
         ?.addEventListener('click', () => {
@@ -10789,9 +10779,9 @@ if (rounded) {
         perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
         orthoBtn?.setAttribute('aria-pressed', String(mode === 'orthographic'));
       };
-      // These used to update only inside their own click handlers, so changing
-      // projection from the View menu or the P shortcut left the pair claiming
-      // the wrong state (D-10). R3a's event reaches every mirror.
+      // Synced from the projection event, not only inside their own click
+      // handlers, so changing projection from the View menu or the P shortcut
+      // keeps the pair truthful.
       syncProjectionButtons();
       document.addEventListener(
         'preview-projection-change',
@@ -10837,19 +10827,18 @@ if (rounded) {
         });
       };
       wireOverlayToggle('classicEdgesToggle', 'edges');
-      // Honest split per D-16: the combined "Axes (mm)" button drove two
-      // separate display flags at once, so the View menu and the toolbar
-      // could disagree about either. Each now drives exactly its own flag,
-      // and axisMarks IS this app's scale-marker overlay.
+      // One flag per button: a combined "Axes (mm)" button driving two display
+      // flags at once would let the View menu and the toolbar disagree about
+      // either. axisMarks is this app's scale-marker overlay.
       wireOverlayToggle('classicAxesToggle', 'axes');
       wireOverlayToggle('classicScaleMarkersToggle', 'axisMarks');
 
-      // Bed grid and its size select are dropped from Classic entirely
-      // (D-18); both remain in Simplified and Standard, where the preview
-      // settings drawer owns them.
+      // Bed grid and its size select are dropped from Classic entirely; both
+      // remain in Simplified and Standard, where the preview settings drawer
+      // owns them.
 
       // Zoom uses the one shared step so the bar, the View menu and the
-      // camera panel all move the camera by the same amount (D-19).
+      // camera panel all move the camera by the same amount.
       const wireZoom = (btnId, direction) => {
         document.getElementById(btnId)?.addEventListener('click', () => {
           if (!previewManager) return;
@@ -10860,7 +10849,7 @@ if (rounded) {
       wireZoom('classicZoomInBtn', 1);
       wireZoom('classicZoomOutBtn', -1);
 
-      // Measurement has no engine yet (D-15). The buttons are aria-disabled
+      // Measurement has no engine yet. The buttons are aria-disabled
       // rather than disabled so they stay discoverable; activating one says
       // why instead of doing nothing.
       for (const id of ['classicMeasureDistBtn', 'classicMeasureAngleBtn']) {
@@ -10881,11 +10870,10 @@ if (rounded) {
         ?.addEventListener('click', () => {
           const stripState = stateManager.getState();
           if (!stripState.uploadedFile) return;
-          // The same flushing trigger the top toolbar's Preview uses (E3-era
-          // defect, re-reported UF-1 §L): the plain path re-serves the cached
-          // preview of the last PUBLISHED content, so an edit typed within
-          // the write-back debounce was invisible to exactly this button.
-          // Null until the expert block initializes (a Simplified-only
+          // The same flushing trigger the top toolbar's Preview uses: the plain
+          // path re-serves the cached preview of the last published content, so an
+          // edit typed within the write-back debounce would be invisible to exactly
+          // this button. Null until the expert block initializes (a Simplified-only
           // session), where the plain path is right.
           if (editorPreviewTrigger) {
             editorPreviewTrigger();
@@ -10987,7 +10975,7 @@ if (rounded) {
     // Initialize image measurement tool
     initImageMeasurement({
       onCoordinateCopied: (axis, value) => {
-        // GAP 7: populate focused parameter field with copied coordinate
+        // Populate focused parameter field with copied coordinate
         const active = document.activeElement;
         if (
           active &&
