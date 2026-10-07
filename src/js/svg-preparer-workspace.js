@@ -33,8 +33,8 @@ import {
 import { getPathBBox } from 'svg-path-commander';
 import { mmToSvgUnits } from './svg-offset.js';
 import { isEnabled } from './feature-flags.js';
-// Re-exported below so every caller keeps the import it already had. The
-// flatten itself moved to a module a worker can load: see flatten-rings.js.
+// Re-exported below so every caller keeps the import it has. The flatten
+// itself lives in a module a worker can load: see flatten-rings.js.
 import { flattenWithRings, flattenCompoundRings } from './flatten-rings.js';
 import { createFlattenRunner, FlattenCancelled } from './flatten-runner.js';
 import { choicesKeyOf } from './reopen-key.js';
@@ -45,9 +45,9 @@ export { flattenWithRings };
 
 /**
  * How wide the editor takes a design to be printed when the model does not
- * say. The Design width control has offered this since DP-5 and the thin-line
- * advisory measures against it; it is one number in one place because two
- * copies of a default is this project's oldest bug (core rule 9).
+ * say. The Design width control offers it and the thin-line advisory
+ * measures against it; it is one number in one place because two copies of
+ * a default is this project's oldest bug.
  */
 export const DEFAULT_DESIGN_WIDTH_MM = 14;
 
@@ -56,18 +56,16 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /**
  * The three things a shape can be, in the words a person reads.
  *
- * "Raised", not "Foreground" (DP-Q40, 2026-09-14). Foreground is a word about
- * drawing programs; what this control decides is whether the shape STANDS UP
- * off the charm's face, which is the thing a finger will find. The value
- * underneath stays `foreground`, because that is the model's parameter and
- * changing a parameter is a different decision from changing a label.
+ * On, Cut out, Off: what the shape is in the drawing - printed at its
+ * layer, cut out of what it sits in, or as if it had never been drawn. Not
+ * "Foreground", which is a word about drawing programs, and not "Raised"
+ * and "Hole", which name a 3D outcome the style decides (with the engraved
+ * style a "hole" stands up as an island and a "raised" shape is cut in).
+ * The value underneath stays `foreground`, because that is the model's
+ * parameter and changing a parameter is a different decision from changing
+ * a label.
  */
 const ROLE_OPTIONS = [
-  // DP-Q59 (2026-09-17): On, Cut out, Off. "Raised" and "Hole" named a 3D
-  // outcome the style decides (with the engraved style a "hole" stands up
-  // as an island and a "raised" shape is cut in); these name what the shape
-  // IS in the drawing: printed at its layer, cut out of what it sits in, or
-  // as if it had never been drawn.
   { value: 'foreground', label: 'On' },
   { value: 'hole', label: 'Cut out' },
   { value: 'ignore', label: 'Off' },
@@ -76,7 +74,7 @@ const ROLE_OPTIONS = [
 // Compound paths only distinguish included vs excluded subpaths —
 // "Hole" is meaningless because subpaths are concatenated, not subtracted.
 const COMPOUND_ROLE_OPTIONS = [
-  // DP-Q59: one vocabulary; Include / Exclude were the same two states.
+  // One vocabulary: the same On and Off as every other shape.
   { value: 'foreground', label: 'On' },
   { value: 'ignore', label: 'Off' },
 ];
@@ -85,16 +83,16 @@ const COMPOUND_ROLE_OPTIONS = [
  * The legend's chips, in the words of whichever role table is in force.
  *
  * It is painted again when a drawing arrives, because a compound path is not
- * offered Raised / Hole / Ignore at all - it is offered Include / Exclude -
- * and a legend that disagrees with the control beside it, for the same
- * color, is the defect this pair was built to stop.
+ * offered Cut out at all - only On and Off - and a legend that disagrees
+ * with the control beside it, for the same color, is the defect this pair
+ * was built to stop.
  *
  * @param {HTMLElement} legendRow
  * @param {Array<{value: string, label: string}>} options
  */
 /**
  * The legend under the picture says what the picture paints. With layers
- * (DP-Q60) an On shape is painted in its layer's color, so the On chip
+ * an On shape is painted in its layer's color, so the On chip
  * becomes one chip per layer the design supports; Cut out and Off keep
  * their one chip each.
  *
@@ -127,11 +125,9 @@ function paintLegend(legendRow, options, layerCount = 0) {
 /**
  * The word for a role, from whichever table is in force.
  *
- * The row's accessible name used to carry the VALUE - "role: foreground" -
- * which was the same word a sighted person read, right up until DP-Q40 made
- * the visible word "Raised". Blind and sighted people reading the same thing
- * is the whole point of the row this release signs, so the name reads the
- * label and nothing has to be kept in step by hand.
+ * The row's accessible name reads the label, not the value ("On", not
+ * "foreground"), so blind and sighted people read the same word and
+ * nothing has to be kept in step by hand.
  *
  * @param {string} value
  * @param {Array<{value: string, label: string}>} options
@@ -194,7 +190,7 @@ function swatchColor(el) {
 /**
  * viewBox/width/height off an SVG, deriving a viewBox when it has none.
  *
- * Exported for DP-7's per-layer emission: every layer file must be written on
+ * Exported for the per-layer emission: every layer file must be written on
  * the SAME viewBox as the design, or the passes print offset from each other.
  *
  * @param {string} svgString
@@ -260,7 +256,7 @@ function buildWorkspaceDom() {
   rolesToggleBtn.textContent = 'Show roles';
   rolesToggleBtn.setAttribute('aria-pressed', 'true');
 
-  // G0 (DP-24): the edited drawing is the editor's one picture; the original
+  // The edited drawing is the editor's one picture; the original
   // sits beside it only while this is pressed.
   const compareBtn = document.createElement('button');
   compareBtn.className = 'svg-prep-compare-btn btn btn-secondary';
@@ -293,11 +289,10 @@ function buildWorkspaceDom() {
   designWidthInput.step = '1';
   designWidthInput.value = String(DEFAULT_DESIGN_WIDTH_MM);
 
-  // Under the tools, above the picture. It started in the header beside the
-  // width control - the two numbers do belong together - but the header is a
-  // flex row of buttons and the sentence collapsed to nothing between them.
-  // An e2e caught it reading the right words at zero width. A sentence that
-  // has to wrap does not live in a button row.
+  // Under the tools, above the picture. Not in the header beside the width
+  // control, though the two numbers do belong together: the header is a
+  // flex row of buttons and a sentence collapses to nothing between them. A
+  // sentence that has to wrap does not live in a button row.
   //
   // Not inside designWidthGroup either: that is hidden unless the offset
   // control is on, and a line that will not print is worth saying regardless.
@@ -312,12 +307,11 @@ function buildWorkspaceDom() {
   designWidthLabel.append(designWidthInput, ' ', designWidthUnit);
   designWidthGroup.appendChild(designWidthLabel);
 
-  // DP-83 (the review of every control): the box arrives filled by the
-  // charm's fit box (D-144) and a person who did not type it is owed the
-  // reason. One sentence, under the tools row where a sentence can wrap
-  // (the header is a row of buttons), tied to the box by aria-describedby;
-  // its words follow whether the width is the charm's or the editor's own
-  // (updateDesignWidthHelp).
+  // The box arrives filled by the charm's fit box, and a person who did not
+  // type it is owed the reason. One sentence, under the tools row where a
+  // sentence can wrap (the header is a row of buttons), tied to the box by
+  // aria-describedby; its words follow whether the width is the charm's or
+  // the editor's own (updateDesignWidthHelp).
   const designWidthHelp = document.createElement('p');
   designWidthHelp.className = 'svg-prep-design-width-help';
   designWidthHelp.id = 'svgPrepDesignWidthHelp';
@@ -339,7 +333,7 @@ function buildWorkspaceDom() {
 
   const sourcePaneWrap = document.createElement('div');
   sourcePaneWrap.className = 'svg-prep-pane-wrap svg-prep-pane-wrap--source';
-  // One picture by default (DP-24): the original waits behind Compare.
+  // One picture by default: the original waits behind Compare.
   sourcePaneWrap.hidden = true;
 
   const sourceCaption = document.createElement('span');
@@ -349,7 +343,7 @@ function buildWorkspaceDom() {
   const sourcePane = document.createElement('div');
   sourcePane.className = 'svg-prep-source-pane';
   // A group, not an image: these panes hold zoom buttons, and role="img" with
-  // focusable descendants is refused by assistive technology (D-102). The
+  // focusable descendants is refused by assistive technology. The
   // picture itself carries role="img" when it is rendered in.
   sourcePane.setAttribute('role', 'group');
   sourcePane.setAttribute('aria-label', 'Source SVG');
@@ -370,9 +364,9 @@ function buildWorkspaceDom() {
   resultPane.setAttribute('role', 'group');
   resultPane.setAttribute('aria-label', 'Prepared result');
 
-  // DP-4's bulk bar. It sits OUTSIDE the object list on purpose: that list is
+  // The bulk bar. It sits outside the object list on purpose: that list is
   // role="list", which accepts only listitem children, so a toolbar inside it
-  // would be dropped from the accessibility tree (D-101).
+  // would be dropped from the accessibility tree.
   const bulkBar = document.createElement('div');
   bulkBar.className = 'svg-prep-bulk-bar';
   bulkBar.setAttribute('role', 'group');
@@ -423,9 +417,9 @@ function buildWorkspaceDom() {
   keepLargestBtn.dataset.action = 'keep-largest';
   keepLargestBtn.textContent = 'Delete the rest';
 
-  // DP-54: the shapes too thin to print, and one press to leave them out.
-  // Opt-in: nothing is ignored until the button is pressed, every row keeps
-  // its own Raised / Hole / Ignore control, and Undo ignore is one level.
+  // The shapes too thin to print, and one press to leave them out. Opt-in:
+  // nothing is turned off until the button is pressed, every row keeps its
+  // own On / Cut out / Off control, and the undo is one level.
   const thinLabel = document.createElement('label');
   thinLabel.className = 'svg-prep-bulk-field';
   thinLabel.append(document.createTextNode('Thinner than '));
@@ -455,7 +449,7 @@ function buildWorkspaceDom() {
   undoIgnoreBtn.textContent = 'Turn those back on';
   undoIgnoreBtn.disabled = true;
 
-  // DP-39 P2. A selection nobody can act on is not a feature, and Delete is
+  // A selection nobody can act on is not a feature, and Delete is
   // the thing people said they wanted it for. It says how many, because "3"
   // is the whole reason somebody selected rather than deleted one at a time.
   const deleteSelectedBtn = document.createElement('button');
@@ -489,8 +483,7 @@ function buildWorkspaceDom() {
   const resultZoom = buildZoomControls('result');
   resultPane.appendChild(resultZoom);
 
-  // DP-3: above tier A the boolean never runs on its own, so the result pane
-  // needs a way to ask for it. Hidden (and never focusable) in the auto band.
+  // The render row, hidden until a combine runs.
   const renderRow = document.createElement('div');
   renderRow.className = 'svg-prep-render-row';
   renderRow.hidden = true;
@@ -505,11 +498,11 @@ function buildWorkspaceDom() {
   renderBtn.dataset.action = 'render-preview';
   renderBtn.textContent = 'Render preview';
   renderBtn.setAttribute('aria-describedby', renderNote.id);
-  // DP-53: the combine runs by itself, so the drawing view has no button
+  // The combine runs by itself, so the drawing view has no button
   // to ask for it. The row still carries the bar and Cancel while it runs.
   renderBtn.hidden = true;
 
-  // DP-37 P2: while the combine runs it runs in a worker, so there is a bar to
+  // While the combine runs it runs in a worker, so there is a bar to
   // watch and a way to stop it. A native <progress> with no value: the ring
   // union is one call into the engine and cannot say where it has got to, and
   // an honest bar with no number beats a number that is made up.
@@ -517,8 +510,8 @@ function buildWorkspaceDom() {
   renderProgress.className = 'svg-prep-render-progress';
   renderProgress.id = 'svgPrepRenderProgress';
   renderProgress.hidden = true;
-  // A <label for> does NOT name a <progress> in Chromium - measured at DP-34,
-  // where the same mistake left the trace's bar unnamed. aria-labelledby does.
+  // A <label for> does not name a <progress> in Chromium; aria-labelledby
+  // does.
   renderProgress.setAttribute('aria-labelledby', renderNote.id);
 
   const renderCancelBtn = document.createElement('button');
@@ -540,13 +533,13 @@ function buildWorkspaceDom() {
   legendRow.className = 'svg-prep-legend';
   paintLegend(legendRow, ROLE_OPTIONS);
 
-  // DP-7. How many layers this artwork can carry, and how many rows currently
-  // break the containment law. Sits OUTSIDE the role="list" (D-101).
+  // How many layers the design offers, and how to build a stack. Sits
+  // outside the role="list".
   const layerSummary = document.createElement('p');
   layerSummary.className = 'svg-prep-layer-summary';
   layerSummary.hidden = true;
 
-  // DP-54: how many shapes are under the print floor at the design width,
+  // How many shapes are under the print floor at the design width,
   // said above the list. A status region, so a screen reader hears the count
   // change as the width or the floor moves.
   const thinNotice = document.createElement('p');
@@ -562,7 +555,7 @@ function buildWorkspaceDom() {
   objects.setAttribute('role', 'list');
   objects.setAttribute('aria-label', 'Shapes');
 
-  // DP-47: the keys, said once, where a person meets the list.
+  // The keys, said once, where a person meets the list.
   //
   // A shortcut nobody is told about is a shortcut nobody has. It is a
   // DESCRIPTION rather than aria-keyshortcuts, because the keys belong to the
@@ -589,7 +582,7 @@ function buildWorkspaceDom() {
   const applyBtn = document.createElement('button');
   applyBtn.className = 'btn btn-primary';
   applyBtn.dataset.action = 'apply';
-  // DP-46: one word on the button, the whole sentence in the accessible name.
+  // One word on the button, the whole sentence in the accessible name.
   // The row has to hold six controls at the editor's real 692 px, and "Apply
   // prepared SVG" is a third of that on its own; but a person listening still
   // needs to know WHAT is applied and WHERE it goes.
@@ -647,15 +640,13 @@ function buildWorkspaceDom() {
   toolsSlot.className = 'svg-prep-tools-slot';
   toolsSlot.hidden = true;
 
-  // ★ The picture first, at every width (audit 21).
+  // The picture first, at every width.
   //
-  // The ink panel used to come before it, and the panel is tall: MEASURED with
-  // a traced icon through the Edit Drawing door, the panel ran 694 px at 1280,
-  // 853 at 900 and 1,242 at 412, which put "Will print as" at y 862, y 1,024
-  // and y 1,590. On a 900-tall window the person's own picture was below the
-  // fold at every width, and nearly two screens down on a phone - so the first
-  // thing they met after choosing a picture was a column of settings for a
-  // drawing they could not see.
+  // The ink panel is tall - with a traced icon through the Edit Drawing
+  // door it runs 694 px at 1280, 853 at 900 and 1,242 at 412 - so placed
+  // before the picture it would put the person's own picture below the fold
+  // at every width on a 900-tall window, and nearly two screens down on a
+  // phone: a column of settings for a drawing they cannot see.
   //
   // What sits with the picture stays with it: the thin-line advisory and the
   // tint legend both describe what is in the frame above them.
@@ -759,9 +750,9 @@ function buildZoomControls(pane) {
   zoomOutBtn.setAttribute('aria-label', `Zoom out ${pane}`);
   zoomOutBtn.textContent = '\u2212';
 
-  // D-153: once the picture is zoomed there was no way to move the view on a
-  // desktop, and only two fingers on a phone. Four buttons, a quarter of a
-  // view each; the arrow keys do the same with the picture focused.
+  // Once the picture is zoomed, a person needs a way to move the view: four
+  // buttons, a quarter of a view each; the arrow keys do the same with the
+  // picture focused.
   const pan = (dir, glyph, label) => {
     const btn = document.createElement('button');
     btn.className = `svg-prep-pan svg-prep-pan-${dir}`;
@@ -790,11 +781,11 @@ function buildZoomControls(pane) {
  * @param {HTMLElement} liveRegion - ARIA live region for announcements. It
  *   lives on the workspace root, NOT in this list: role="list" accepts only
  *   listitem children, and a live region among them made the whole list
- *   invalid to assistive technology (D-101).
+ *   invalid to assistive technology.
  * @param {boolean} [isCompound=false] - Compound-path mode (Include/Exclude)
  * @param {{limit: number}|null} [layerInfo=null] - How many layers this
  *   drawing can offer; null for a tile that did not ask for the column. The
- *   starting VALUE is always layer 1 (D-142).
+ *   starting VALUE is always layer 1.
  * @returns {{roles: string[], offsets: number[], layers: number[]}} Initial
  *   assignments
  */
@@ -814,15 +805,13 @@ function populateObjectList(
   const layers = [];
 
   elements.forEach((el, i) => {
-    // SIGNED BY THE OWNER at DP-Q45 (2026-09-14): "Shape", not "Subpath".
-    // A subpath is SVG's word for an internal detail of a path's `d`
-    // attribute, and nobody in this editor is choosing about a `d` attribute -
-    // they are choosing whether a shape is part of the drawing. It became
-    // worth saying when DP-Q43 made Potrace the default: Potrace returns one
-    // compound path, so this branch went from occasional to usual and the word
-    // is now what a screen reader says about every traced picture. Element
-    // mode keeps describeElement's richer names, which say something true
-    // about the shape ("Circle 3 (r=12)").
+    // "Shape", not "Subpath". A subpath is SVG's word for an internal detail
+    // of a path's `d` attribute, and nobody in this editor is choosing about a
+    // `d` attribute - they are choosing whether a shape is part of the
+    // drawing. Potrace, the default tracer, returns one compound path, so this
+    // branch is the usual one and the word is what a screen reader says about
+    // every traced picture. Element mode keeps describeElement's richer names,
+    // which say something true about the shape ("Circle 3 (r=12)").
     const name = isCompound ? `Shape ${i + 1}` : describeElement(el.element, i);
     const color = swatchColor(el);
     let role = el.autoRole || 'ignore';
@@ -871,8 +860,8 @@ function populateObjectList(
 
     item.append(swatch, nameSpan, fieldset);
 
-    // DP-39 P2, row model A (DP-Q36): offset, Layer and Delete stop competing
-    // with the name for the one line and live behind one control instead.
+    // Offset, Layer and Delete do not compete with the name for the one line;
+    // they live behind one control instead.
     //
     // A button and a panel it names, not a <details>: the panel has to take
     // the row's full width when it opens, and a <details> keeps its summary
@@ -907,7 +896,7 @@ function populateObjectList(
       offsetInput.name = `svg-prep-offset-${i}`;
       offsetInput.min = '-2';
       offsetInput.max = '2';
-      // DP-Q74 (2026-09-20): 0.05 mm, the step the owner found useful.
+      // 0.05 mm, the step found useful in practice.
       offsetInput.step = '0.05';
       offsetInput.value = '0';
       offsetInput.setAttribute('aria-label', `Offset for ${name} (mm)`);
@@ -916,14 +905,12 @@ function populateObjectList(
     }
 
     if (layerCount > 0) {
-      // ★ D-142 (DP-51, the owner's second walk of 2026-09-16): EVERY SHAPE
-      // STARTS ON LAYER 1. This used to pre-select the shape's nesting depth.
-      // MEASURED on the owner's CREATE logo in Colors: 394 of 553 rows opened
-      // on layer 2 and 158 on layer 3, so the counter inside the R read
-      // "Layer 3" and Apply emitted a three-layer stack nobody had built.
-      // Nesting depth still decides how many layers a drawing can OFFER
-      // (layerLimit, below); it no longer decides what a shape sits on. A
-      // stack is something a person builds (D-135, the owner at DP-Q44).
+      // Every shape starts on layer 1. Pre-selecting each shape's nesting depth
+      // would open a Colors logo with 394 of 553 rows on layer 2 and 158 on
+      // layer 3, so the counter inside an R would read "Layer 3" and Apply would
+      // emit a three-layer stack nobody built. Nesting depth decides how many
+      // layers a drawing can offer (layerLimit, below), not what a shape sits
+      // on: a stack is something a person builds.
       layers.push(1);
 
       const layerSelect = document.createElement('select');
@@ -954,13 +941,13 @@ function populateObjectList(
       nameSpan.after(warning);
     }
 
-    // DP-4. Ignore already removes a shape from the OUTPUT; this removes it
-    // from the LIST. At 831 rows that is the difference between a table you
-    // can work in and one you only scroll past.
+    // Off removes a shape from the output; this removes it from the list. At
+    // 831 rows that is the difference between a table you can work in and one
+    // you only scroll past.
     //
-    // DP-47: it says "Remove from list" now. The Delete KEY sets a shape to
-    // Ignore and leaves it in the list, so two things called Delete would mean
-    // two different things one press apart.
+    // It says "Remove from list": the Delete key sets a shape to Off and
+    // leaves it in the list, so two things called Delete would mean two
+    // different things one press apart.
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'svg-prep-object-delete';
@@ -1026,7 +1013,7 @@ function renderWarnings(warningsEl, warnings) {
  */
 /**
  * Under this, a 0.4 mm nozzle cannot be relied on to lay a line down. One
- * number, kept where the per-shape measure lives (DP-54); DP-Q58 signed it.
+ * number, kept where the per-shape measure lives.
  */
 export const THIN_LINE_MM = THIN_PRINT_MM;
 
@@ -1039,8 +1026,8 @@ export const THIN_LINE_MM = THIN_PRINT_MM;
  * the width the design will actually be, so this needs that width and says
  * which one it used.
  *
- * A PROPOSAL, never an action. MEASURED on nine stock icons at charm size,
- * their outlines land between 0.31 and 0.65 mm: some print and some do not,
+ * A proposal, never an action. On nine stock icons at charm size the
+ * outlines land between 0.31 and 0.65 mm: some print and some do not,
  * and a blanket offset applied to all of them would fatten the ones that were
  * already fine. So it names the lever and leaves the hand on it.
  *
@@ -1106,7 +1093,7 @@ function markAsPicture(svgEl, label) {
 }
 
 /**
- * DP-53: how long the changes have to settle before the combine runs by
+ * How long the changes have to settle before the combine runs by
  * itself. A person clicking through a column of radios makes one combine,
  * not one per click; a change during a combine supersedes it.
  */
@@ -1123,7 +1110,7 @@ export function createSvgPrepWorkspace(containerEl) {
   let fullscreenTrap = null;
   let previousFocusEl = null;
   let currentResult = null;
-  /** DP-81: the counts of a reopen painted from its stored result, or null. */
+  /** The counts of a reopen painted from its stored result, or null. */
   let openedAsLeft = null;
   let roles = [];
   let offsets = [];
@@ -1141,11 +1128,9 @@ export function createSvgPrepWorkspace(containerEl) {
   let highlightCleanup = null;
   let picturePointerCleanup = null;
   let offsetDebounceTimer = null;
-  // DP-53: the combine runs by itself after every change, once the changes
-  // settle. The owner's instruction of 2026-09-16 (plan §1.6, item 1)
-  // superseded DP-Q33's budget for the decision to RUN it; the prediction now
-  // phrases the wait instead of gating the work, and DP-Q34 stands (the
-  // painted stand-in is the picture until a result exists).
+  // The combine runs by itself after every change, once the changes settle.
+  // The flatten budget does not gate it; the prediction phrases the wait
+  // instead, and the painted stand-in is the picture until a result exists.
   let combineSettleTimer = null;
   let combineWaiters = [];
   // True once Apply or Keep original has fired; closing without either
@@ -1153,20 +1138,19 @@ export function createSvgPrepWorkspace(containerEl) {
   // replaced by an auto-prepared version.
   let resolved = false;
   let rolesVisible = true;
-  // One picture by default (G0, DP-24); Compare turns the pair on.
+  // One picture by default; Compare turns the pair on.
   let compareOpen = false;
-  // DP-3: whether the boolean flatten may run by itself. True only in tier A
-  // (50 shapes or fewer), where DP-0 measured it at about a second.
+  // Whether the combine runs by itself, which every drawing does (see
+  // setPreviewBand).
   let autoPreview = true;
-  // D-120: the flatten goes through the ring engine, which lives in the
+  // The flatten goes through the ring engine, which lives in the
   // lazy chunk. Loaded once at the first open; a preview asked for before
   // it lands is re-run the moment it does.
   let ringEngine = null;
   let ringEnginePromise = null;
 
-  // DP-37 P2: the flatten runs off the main thread. MEASURED on it before this,
-  // in Chromium over traced curves: 50 shapes 485 ms, 200 shapes 14.7 s, 800
-  // shapes eight and a half minutes - every one of them with the page frozen.
+  // The flatten runs off the main thread: on it, 800 traced shapes freeze
+  // the page for eight and a half minutes (the table is in flatten-rings.js).
   let flattenRunner = null;
   /** Where the measured constant is kept between visits. */
   const FLATTEN_COST_KEY = 'openscad-forge-flatten-cost';
@@ -1226,16 +1210,16 @@ export function createSvgPrepWorkspace(containerEl) {
   /**
    * Milliseconds per (shape x ring point), as this machine has measured it.
    *
-   * DP-Q33 signed the calibration as well as the predictor because the
-   * constant belongs to the artwork and the machine, not to the formula:
-   * MEASURED, it moves less than a quarter within one class of drawing and
-   * five-fold between classes. It starts at the default and is replaced by
-   * the first real flatten big enough to have measured anything.
+   * There is a calibration as well as a predictor because the constant
+   * belongs to the artwork and the machine, not to the formula: it moves less
+   * than a quarter within one class of drawing and five-fold between classes.
+   * It starts at the default and is replaced by the first real flatten big
+   * enough to have measured anything.
    *
-   * The owner signed remembering it (2026-09-14): without that, the first
-   * drawing of every visit is judged by the cautious default and some quick
-   * drawings are handed a button they did not need. What is kept is ONE
-   * number about this machine's speed - never a drawing, never a file name.
+   * It is remembered between visits: without that, the first drawing of
+   * every visit is judged by the cautious default and some quick drawings are
+   * handed a button they did not need. What is kept is one number about this
+   * machine's speed - never a drawing, never a file name.
    */
   let flattenCost = readFlattenCost();
   function loadRingEngine() {
@@ -1257,7 +1241,7 @@ export function createSvgPrepWorkspace(containerEl) {
     }
     return ringEnginePromise;
   }
-  // DP-4. Deleting a row shifts every index after it, and roles, offsets, the
+  // Deleting a row shifts every index after it, and roles, offsets, the
   // rows' data-index, the radio names and the SAVED prepOverrides/prepOffsets
   // are ALL positional. So each surviving row remembers the index it had in
   // the analysis as first read, and everything that leaves this module is
@@ -1271,23 +1255,23 @@ export function createSvgPrepWorkspace(containerEl) {
   // One level, this session only. A stack that rode prepMetadata into saved
   // projects would grow without bound in a 2 MB localStorage lane.
   let lastDeletion = null;
-  // DP-54: every row's thickness at the width and floor as they stand, and
-  // the last batch Ignore those made, for one level of undo.
+  // Every row's thickness at the width and floor as they stand, and
+  // the last batch of rows they turned off, for one level of undo.
   let thickness = null;
   let lastIgnore = null;
-  // DP-7. The layer column appears only for a tile that asked for it, so a
-  // non-layered editor is byte-for-byte what it was before.
+  // The layer column appears only for a tile that asked for it, so a
+  // non-layered editor carries none of it.
   let layersEnabled = false;
   let nestingTree = null;
   let layerCount = 0;
   let layers = [];
-  // D-142. A stack exists only once a person has built one: a Layer select
-  // changed this session, or a saved column restored above layer 1. Until
-  // then getLayerAssignments() reports no stack at all, so the emit leaves
-  // every layer file empty and the charm is the ordinary design with its
-  // holes cut - the "previous logic" the owner asked to come back.
+  // A stack exists only once a person has built one: a Layer select changed
+  // this session, or a saved column restored above layer 1. Until then
+  // getLayerAssignments() reports no stack at all, so the emit leaves every
+  // layer file empty and the charm is the ordinary design with its holes
+  // cut.
   let layersTouched = false;
-  // DP-19. When a host surface has mounted this workspace inside itself, the
+  // When a host surface has mounted this workspace inside itself, the
   // host owns the announcements and the size: it says "opened" once, in its
   // own words, and it is already the biggest thing on the page, so there is
   // no cramped inline box to expand out of.
@@ -1298,7 +1282,7 @@ export function createSvgPrepWorkspace(containerEl) {
   liveRegion.className = 'sr-only';
   liveRegion.setAttribute('aria-live', 'polite');
   liveRegion.setAttribute('aria-atomic', 'true');
-  // On the root, never inside the object list: see populateObjectList (D-101).
+  // On the root, never inside the object list: see populateObjectList.
   root.appendChild(liveRegion);
 
   // ── Internal rendering ────────────────────────────────────────────────
@@ -1355,27 +1339,20 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * ★ The picture that stands in until a combined result exists.
+   * The picture that stands in until a combined result exists.
    *
-   * Above the auto budget the result pane used to be EMPTY: `markPreviewStale`
-   * removed the drawing and left a captioned box with nothing in it, and DP-24
-   * had already hidden the source pane behind Compare. So a person who opened
-   * a drawing of 210 shapes was shown "Will print as", an empty rectangle, two
-   * zoom buttons floating in it, and a sentence telling them to press a button.
-   * MEASURED at 1268 x 160 with no svg in it at all.
-   *
-   * "One picture" was built by hiding rather than by showing, and it was walked
-   * on the one class of drawing - the bird, at tier A - that could not show it.
-   *
-   * So this fills it: the same drawing, with the same role tints, marked as not
-   * yet combined. It is a picture of what the person HAS, standing where the
-   * picture of what they will GET goes, and the button below says which is
-   * which. Signed at DP-Q34.
+   * Without it the result pane is empty while a combine is pending - a
+   * captioned box, "Will print as", with nothing in it and two zoom buttons
+   * floating in it - and the source pane is behind Compare. So this fills
+   * it: the same drawing, with the same role tints, marked as not yet
+   * combined. It is a picture of what the person has, standing where the
+   * picture of what they will get goes, and the status sentence says which
+   * is which.
    */
   function renderStandInResult() {
-    // DP-47 P4: the name says what is IN the picture, because the picture now
-    // changes with the roles. Somebody who cannot see it presses Ignore and
-    // hears the count fall, which is the same answer the drawing gives.
+    // The name says what is in the picture, because the picture changes with
+    // the roles. Somebody who cannot see it presses Off and hears the count
+    // fall, which is the same answer the drawing gives.
     const counts = { foreground: 0, hole: 0, ignore: 0 };
     liveElements.forEach((el, i) => {
       if (!el.pathData) return;
@@ -1397,23 +1374,18 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * ★ The drawing as the ROLES have left it (DP-47 P4).
+   * The drawing as the roles have left it.
    *
-   * The stand-in used to be the raw drawing with translucent role tints laid
-   * over it, and the owner's sentence about that is the reason this exists:
-   * "I tried to select and change the letters at the bottom and could not
-   * ignore any path." Pressing Ignore changed a radio, a tint at 12 % opacity
-   * and a number in a note - and left the shape sitting in the picture exactly
-   * as before, because the picture WAS the original file. Above the combine
-   * budget, which is where a drawing of any size lives, that is every visible
-   * answer a person gets until they press Render preview.
+   * Raw art with translucent role tints over it would leave a shape sitting
+   * in the picture exactly as it was after a person turned it off: a radio, a
+   * tint at 12 % opacity and a number in a note would change, and nothing a
+   * person can see. So this paints the picture from the live elements
+   * instead: On shapes in ink, cut-outs in the paper color over them, and Off
+   * shapes in the left-out style, so a shape turned off visibly leaves the
+   * drawing and can still be found and turned on again.
    *
-   * So this paints the picture from the live elements instead: raised shapes
-   * in ink, holes in the paper color over them, and ignored shapes ABSENT.
-   * An ignored letter leaves the drawing the moment it is ignored.
-   *
-   * The hit layer is still built from EVERY element, ignored ones included:
-   * a shape you cannot see is still a shape you must be able to choose again,
+   * The hit layer is still built from every element, Off ones included: a
+   * shape turned off is still a shape a person must be able to choose again,
    * and its row is still in the list pointing at it.
    */
   function renderPaintedInto(pane, before, label) {
@@ -1437,9 +1409,9 @@ export function createSvgPrepWorkspace(containerEl) {
     svg.dataset.hatch = hatchPrefix;
     svg.appendChild(buildStandinArt());
 
-    // D-154: a shape set to Off used to leave the picture entirely, so
-    // there was nothing to point at to bring it back. It stays, painted in
-    // the left-out style, above the ink so it can be seen where it was.
+    // A shape set to Off stays in the picture, painted in the left-out style
+    // above the ink, so it can be seen where it was and pointed at to bring
+    // it back.
     svg.appendChild(buildLeftOutLayer(hatchPrefix));
 
     const roleLayer = document.createElementNS(SVG_NS, 'g');
@@ -1479,16 +1451,15 @@ export function createSvgPrepWorkspace(containerEl) {
    * One shape per element, invisible, on top, and the only thing in the
    * picture a pointer can hit.
    *
-   * DP-40: the list can already point at the picture (DP-39 P3); this is the
-   * other direction. It is its own layer rather than the role tints, because
-   * the tints are a VIEW - "Show roles" turns them off - and a picture you can
-   * no longer touch because you turned the colors off would be a strange
-   * thing to build.
+   * The list can point at the picture; this is the other direction. It is
+   * its own layer rather than the role tints, because the tints are a view -
+   * "Show roles" turns them off - and a picture you can no longer touch
+   * because you turned the colors off would be a strange thing to build.
    *
    * `pointer-events: all` is what makes an unpainted shape hittable: it means
    * "answer for your fill and your stroke whatever they are painted", which is
-   * the only way a stroke-only drawing (every CAD export, D-118's whole
-   * subject) can be pointed at at all.
+   * the only way a stroke-only drawing (every CAD export) can be pointed at
+   * at all.
    */
   /**
    * The marks layer of a picture: what a person CHOSE, and where the pointer
@@ -1508,13 +1479,13 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * The wall behind a Colors drawing, while it is left out. MEASURED on the
-   * owner's logo (DP-R5 session 4): that element is the whole canvas, so its
-   * hit target sat under every point of the picture - pointing at the
-   * background washed the whole drawing in the hover color, and a click on
-   * empty space chose "Path 1, Ignore" instead of clearing the choice. Its row
-   * stays, and a wall somebody raises is a shape again and can be pointed at.
-   * Every other ignored shape keeps its target (DP-47 P4's rule).
+   * The wall behind a Colors drawing, while it is left out. That element is
+   * the whole canvas, so its hit target would sit under every point of the
+   * picture: pointing at the background would wash the whole drawing in the
+   * hover color, and a click on empty space would choose the wall instead of
+   * clearing the choice. Its row stays, and a wall somebody turns on is a
+   * shape again and can be pointed at. Every other Off shape keeps its
+   * target.
    */
   function isIgnoredWall(el, i) {
     return (
@@ -1530,14 +1501,13 @@ export function createSvgPrepWorkspace(containerEl) {
   };
 
   /**
-   * The stand-in's art, ONE painter's pass in area order: the biggest shape
+   * The stand-in's art, one painter's pass in area order: the biggest shape
    * first, islands last. A cut-out inside a shape is smaller than the shape
    * and lands over it, which is what "cut out of what it sits in" looks
    * like; a cut-out that encloses the drawing (a bird's paper) is bigger
-   * than everything and lands under it, where it hid the whole bird when
-   * cut-outs were a second pass over the ink (the journal picture caught
-   * it). DP-Q60: with layers, an On shape wears its layer's class and color.
-   * Rebuilt by itself when a layer changes.
+   * than everything and lands under it, where it cannot hide the bird. With
+   * layers, an On shape wears its layer's class and color. Rebuilt by itself
+   * when a layer changes.
    */
   function buildStandinArt() {
     const art = document.createElementNS(SVG_NS, 'g');
@@ -1572,7 +1542,7 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * DP-Q60: a layer change repaints what the layers decide, in whichever
+   * A layer change repaints what the layers decide, in whichever
    * picture the pane holds, without combining again: the geometry did not
    * change, only its colors did.
    */
@@ -1591,7 +1561,7 @@ export function createSvgPrepWorkspace(containerEl) {
     });
   }
 
-  /** DP-Q60: colors follow the layers only where the host offers layers. */
+  /** Colors follow the layers only where the host offers layers. */
   function paintsByLayer() {
     return layersEnabled && layerCount > 1;
   }
@@ -1608,7 +1578,7 @@ export function createSvgPrepWorkspace(containerEl) {
   let hatchPrefix = '';
 
   /**
-   * DP-Q60: the hatch an Off shape wears, one pattern per layer (and one
+   * The hatch an Off shape wears, one pattern per layer (and one
    * neutral pattern where there are no layers), sized to the drawing so the
    * texture reads at every scale: a hundredth of the drawing's width.
    */
@@ -1640,11 +1610,11 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * D-154: the shapes turned off, painted so they can be seen and chosen
-   * again. Every Off shape but the wall of a Colors drawing, which is the
-   * whole canvas and would flood the picture; its row still turns it on.
-   * DP-Q60: the paint is the layer's color muted under a hatch, the texture
-   * the owner asked for, so the shape is plainly there and plainly off.
+   * The shapes turned off, painted so they can be seen and chosen again.
+   * Every Off shape but the wall of a Colors drawing, which is the whole
+   * canvas and would flood the picture; its row still turns it on. The paint
+   * is the layer's color muted under a hatch, so the shape is plainly there
+   * and plainly off.
    */
   function buildLeftOutLayer(prefix = hatchPrefix) {
     const layer = document.createElementNS(SVG_NS, 'g');
@@ -1670,7 +1640,7 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * DP-Q60, over the combined result: the union is painted as layer 1, and
+   * Over the combined result, the union is painted as layer 1, and
    * every On shape on a deeper layer is painted over it in its own color,
    * with the cut-outs as paper over those, so the picture shows the stack
    * the way the model builds it. Nothing without layers.
@@ -1705,10 +1675,10 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * D-159: the order the picture is painted and hit-tested in. Containers
-   * first and islands last, by the box each outline fills, so the navy dot
-   * inside the figure's arm is painted over the figure and is what a click
-   * there finds. Element order put the wall's islands under everything.
+   * The order the picture is painted and hit-tested in. Containers first and
+   * islands last, by the box each outline fills, so a dot inside a figure's
+   * arm is painted over the figure and is what a click there finds. Element
+   * order would put the wall's islands under everything.
    */
   function paintOrder() {
     const area = (el) => {
@@ -1788,9 +1758,8 @@ export function createSvgPrepWorkspace(containerEl) {
   /**
    * @param {boolean} enabled
    * @param {string} [hint] - Why not, when disabled. Naming the real reason
-   *   matters: the hint's one fixed sentence used to be "No shapes included",
-   *   which is a lie when the shapes are there and only the flatten is
-   *   waiting (D-117's mistake in miniature).
+   *   matters: "No shapes included" is a lie when the shapes are there and
+   *   only the flatten is waiting.
    */
   function setApplyEnabled(enabled, hint = 'No shapes included') {
     refs.applyBtn.disabled = !enabled;
@@ -1821,7 +1790,7 @@ export function createSvgPrepWorkspace(containerEl) {
    * How big the combine on screen actually is: the shapes that will be folded
    * together, and the ring points they will make.
    *
-   * Ignored shapes are left out of BOTH numbers because the flatten leaves
+   * Off shapes are left out of BOTH numbers because the flatten leaves
    * them out too, and the prediction and the calibration have to be measured
    * on the same thing or the constant learned from one would be read back
    * against the other.
@@ -1840,17 +1809,11 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * Decide whether the combine may run by itself, from what it is PREDICTED to
-   * cost rather than from how many shapes there are.
-   *
-   * DP-Q33 (2026-09-13) retired DP-Q9's 50 / 200 counts: the same 200 shapes
-   * cost 77 ms as rectangles and 593 ms as curves, so a count was answering
-   * the question in the wrong unit. The budget is in milliseconds and the
-   * predictor is calibrated by this session's own flattens.
+   * The combine's band. Every drawing combines by itself, whatever it is
+   * predicted to cost; the prediction is still made, to say how long the
+   * wait is.
    */
   function setPreviewBand() {
-    // DP-53: every drawing combines by itself, whatever it is predicted to
-    // cost. The prediction is still made, to say how long the wait is.
     autoPreview = true;
     refs.renderRow.hidden = true;
   }
@@ -1859,14 +1822,11 @@ export function createSvgPrepWorkspace(containerEl) {
    * A change was made: the pane goes stale at once, and the combine follows
    * once the changes settle.
    *
-   * DP-3 measured the flatten at 1.0 s for 50 shapes, 56.7 s for 200 and
-   * 447.9 s for 400 (the retired pairwise chain; the ring engine and the
-   * worker have since replaced it), and DP-Q33 gated the automatic run on a
-   * predicted 300 ms. DP-53 retires the gate: the combine always runs by
-   * itself, in the worker, after the settle, and a change made while one is
-   * in flight supersedes it (the runner's start() does that). A person who
-   * keeps changing a very large drawing gets a result when they pause for
-   * the predicted wait, and the status sentence says so.
+   * The combine always runs by itself, in the worker, after the settle, and
+   * a change made while one is in flight supersedes it (the runner's start()
+   * does that). A person who keeps changing a very large drawing gets a
+   * result when they pause for the predicted wait, and the status sentence
+   * says so.
    */
   function requestResultPreview() {
     markPreviewStale();
@@ -1892,12 +1852,10 @@ export function createSvgPrepWorkspace(containerEl) {
       ? refs.resultPane.querySelector('svg')?.getAttribute('viewBox') || null
       : null;
     // A combine already in flight is answering a question nobody is asking any
-    // more: it was built from the choices as they stood BEFORE this change, so
+    // more: it was built from the choices as they stood before this change, so
     // letting it land would put the very picture of older choices into the
-    // pane that this function exists to prevent. MEASURED on the 210-shape
-    // drawing: a role changed 200 ms into the combine armed Apply fifteen
-    // seconds later with the replaced choice's result. It could not happen
-    // before DP-37 P2 - nothing could be clicked while the thread was taken.
+    // pane that this function exists to prevent - and arm Apply with the
+    // replaced choice's result.
     if (flattenRunner && flattenRunner.isRunning()) {
       flattenRunner.cancel('stale');
     }
@@ -1954,7 +1912,7 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * The status sentence while the shapes are being combined (DP-53). Both
+   * The status sentence while the shapes are being combined. Both
    * numbers read fresh: holding the prediction from when the band was last set
    * would let the count move while the duration stood still.
    */
@@ -1969,10 +1927,9 @@ export function createSvgPrepWorkspace(containerEl) {
 
   /** Show the combine as work in progress, with a way to stop it. */
   function setRenderBusy(busy) {
-    // The bar and the Cancel button live INSIDE the render row, and on an
-    // auto-preview drawing that row is hidden - so unhiding the two of them
-    // showed a person NOTHING while the combine ran. The row is what reports
-    // the work, at every tier; it goes back to the tier's own state after.
+    // The bar and the Cancel button live inside the render row, which is
+    // hidden when nothing is combining, so the row itself has to be shown for
+    // them to be seen. It goes back to its own state after.
     refs.renderRow.hidden = busy ? false : autoPreview;
     refs.renderProgress.hidden = !busy;
     refs.renderCancelBtn.hidden = !busy;
@@ -1992,11 +1949,10 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * Put a combined drawing in the result pane and arm Apply on it. ONE
+   * Put a combined drawing in the result pane and arm Apply on it. One
    * builder for the two ways a result arrives: the combine that just landed
-   * (DP-37 P2) and a stored result a reopen trusts (DP-81, D-175); a second
-   * copy of the painting is how the overlay's marks went missing once
-   * (DP-47).
+   * and a stored result a reopen trusts; a second copy of the painting would
+   * drift from the first.
    *
    * @param {string} resultSvgString
    * @param {object} [options]
@@ -2022,10 +1978,9 @@ export function createSvgPrepWorkspace(containerEl) {
     setApplyEnabled(true);
 
     // Now, and not before: the old picture held the pane while the combine
-    // ran. And the zoom is read NOW, from that picture, not from when the
-    // combine began: DP-53 runs the combine by itself and lets a person
-    // pinch the stand-in meanwhile, and PR #240's board found the result
-    // landing with the earlier viewBox, so two fingers did nothing.
+    // ran. And the zoom is read now, from that picture, not from when the
+    // combine began: a person may pinch the stand-in while the combine runs,
+    // and a result landing with the earlier viewBox would undo it.
     const stale = refs.resultPane.querySelector('svg');
     const keptViewBox = stale
       ? stale.getAttribute('viewBox') || previousViewBox
@@ -2039,7 +1994,7 @@ export function createSvgPrepWorkspace(containerEl) {
 
     const imported = document.importNode(svg, true);
     if (keptViewBox) imported.setAttribute('viewBox', keptViewBox);
-    // DP-Q60: the union is layer 1's paint; deeper layers go over it.
+    // The union is layer 1's paint; deeper layers go over it.
     imported.insertBefore(
       buildHatchDefs(keptViewBox || currentSvgMeta.viewBox),
       imported.firstChild
@@ -2053,15 +2008,11 @@ export function createSvgPrepWorkspace(containerEl) {
       );
     });
     // The picture a person is looking at is the one the list has to be able
-    // to point at, and since DP-37 P1 that is THIS one. ★ DP-47: through
-    // the SAME builder as every other picture. This used to build a bare
-    // overlay of its own, and the two marks that live in it went missing on
-    // the combined result the moment they moved into groups - which is a
-    // third copy of the same three lines, and exactly how the first two
-    // copies drifted apart.
-    // D-154: the combined result is what will print, and the shapes left
-    // out are drawn over it in the left-out style, so they can be seen and
-    // chosen again here too.
+    // to point at, and that is this one, built through the same builder as
+    // every other picture so its marks cannot drift from theirs.
+    // The combined result is what will print, and the shapes left out are
+    // drawn over it in the left-out style, so they can be seen and chosen
+    // again here too.
     imported.appendChild(buildLayerPaint());
     imported.appendChild(buildLeftOutLayer(hatchPrefix));
     imported.appendChild(buildOverlay());
@@ -2086,12 +2037,10 @@ export function createSvgPrepWorkspace(containerEl) {
 
     // Preserve the user's zoom level across preview re-renders.
     //
-    // ★ The old picture is NOT removed here. It used to be, and that was fine
-    // while the combine finished inside this same turn - but the combine went
-    // into a worker (DP-37 P2) and now the await below can last seconds, which
-    // would leave the pane empty for all of them. That is the blank P1 just
-    // repaired, reintroduced by making the work asynchronous. Whatever is in
-    // the pane stays there until there is something better to put in it.
+    // The old picture is not removed here: the combine runs in a worker and
+    // the await below can last seconds, which would leave the pane empty for
+    // all of them. Whatever is in the pane stays there until there is
+    // something better to put in it.
     const existingSvg = refs.resultPane.querySelector('svg');
     const previousViewBox = existingSvg
       ? existingSvg.getAttribute('viewBox')
@@ -2120,7 +2069,7 @@ export function createSvgPrepWorkspace(containerEl) {
       );
 
       const isCompound = currentAnalysis.isCompoundPathOnly;
-      // DP-82 (D-174): an offset needs the drawing's rings, and the rings
+      // An offset needs the drawing's rings, and the rings
       // need the engine. On the ring road each element is offset here, ring
       // by ring with its own sign, before the fold; on the compound road
       // the rows go to the combine with their offsets, because the sign of
@@ -2144,17 +2093,14 @@ export function createSvgPrepWorkspace(containerEl) {
       if (isCompound && !anyOffset) {
         resultSvgString = concatenateSubpaths(withOffsets, currentSvgMeta);
       } else if (canUseWorker()) {
-        // D-120: order-independent ring flatten; never the pairwise chain.
-        // DP-37 P2: and off this thread, because it is the most expensive
-        // thing this app does to a drawing and it used to freeze the page for
-        // as long as it took.
+        // The order-independent ring flatten, never the pairwise chain, and off
+        // this thread, because it is the most expensive thing this app does to a
+        // drawing.
         setRenderBusy(true);
-        // There is no result to apply until the combine lands. Pressing Apply
-        // used to be impossible too early because the combine finished inside
-        // this same turn; now it is seconds of worker start-up and work, and
-        // Apply's handler refuses on a null result by RETURNING - so the
-        // button sat enabled and did nothing at all when pressed. Firefox on
-        // CI pressed it in that window and the stack was never built.
+        // There is no result to apply until the combine lands, which takes seconds
+        // of worker start-up and work, and Apply's handler refuses a null result
+        // by returning - so an enabled button would do nothing at all when
+        // pressed.
         setApplyEnabled(false, combiningSentence());
         try {
           const size = flattenSizeOf();
@@ -2164,7 +2110,7 @@ export function createSvgPrepWorkspace(containerEl) {
             { compound: isCompound }
           );
           resultSvgString = out.svg;
-          // DP-Q33's calibration: what this drawing really cost, on this
+          // The calibration: what this drawing really cost, on this
           // machine, replaces the default for every prediction after it.
           // The compound combine is another job with another cost and does
           // not teach the predictor.
@@ -2234,8 +2180,8 @@ export function createSvgPrepWorkspace(containerEl) {
       if (!resultSvgString) {
         currentResult = null;
         setApplyEnabled(false);
-        // The pane keeps the drawing rather than emptying: there is no result
-        // to show, and showing nothing at all is the defect P1 repaired.
+        // The pane keeps the drawing rather than emptying: there is no result to
+        // show, and showing nothing at all is worse.
         renderStandInResult();
         liveRegion.textContent = 'No shapes included. The preview is empty.';
         return;
@@ -2307,7 +2253,7 @@ export function createSvgPrepWorkspace(containerEl) {
     }
 
     /**
-     * D-153: move the view by a share of itself. The view's middle never
+     * Move the view by a share of itself. The view's middle never
      * leaves the drawing's box, so the picture cannot be steered out of
      * sight; Fit brings the whole drawing back.
      */
@@ -2373,14 +2319,14 @@ export function createSvgPrepWorkspace(containerEl) {
     panDownBtn?.addEventListener('click', handlePanDown);
     pane.addEventListener('keydown', handlePaneKeydown);
 
-    // ── DP-40 P2: two fingers, signed at DP-Q37 ─────────────────────────
+    // ── Two fingers ─────────────────────────────────────────────────────
     //
     // A cache keyed by pointerId, which is the pattern the platform is built
     // for: a touch is not a mouse with one position, it is N pointers that
     // arrive and leave independently, and anything that tracks "the" pointer
     // gets the second finger wrong.
     //
-    // The split is DP-Q37's: two fingers pinch and pan the picture, ONE
+    // The split: two fingers pinch and pan the picture, ONE
     // finger scrolls the page. That is `touch-action: pan-y` on the picture
     // and nowhere else - the browser keeps vertical panning, which is how
     // somebody gets DOWN a long editor on a phone, and hands us everything
@@ -2489,12 +2435,11 @@ export function createSvgPrepWorkspace(containerEl) {
    * The picture answers a pointer, and the list follows.
    *
    * Hover lights the shape up and marks its row; a press chooses it, with the
-   * same Ctrl and Shift as the list. Signed at DP-Q37 and directive item 6.
+   * same Ctrl and Shift as the list.
    *
-   * ★ Built on the SVG picture, NOT on the DP-20 canvas the plan named. That
-   * line was written before DP-37 P1 made one picture the default; mounting a
-   * second one to be able to touch it would undo the release that got the
-   * editor down to a single drawing.
+   * Built on the SVG picture, not on the stencil's region canvas: the editor
+   * shows one picture, and mounting a second one to be able to touch it would
+   * undo that.
    */
   function setupPicturePointer() {
     const indexOf = (e) => {
@@ -2589,12 +2534,10 @@ export function createSvgPrepWorkspace(containerEl) {
     /**
      * Every picture on screen, not one named pane.
      *
-     * ★ It used to be the SOURCE pane alone, which was right until DP-37 P1
-     * made one picture the default and put the source behind Compare. MEASURED
-     * at 1280 after that: the source pane was 0 by 0, the result pane was 808
-     * by 354, and hovering a row drew a highlight path 0 px wide into the pane
-     * nobody could see. The list stopped being able to point at the drawing
-     * and nothing said so.
+     * The source pane alone is not enough: with one picture by default the
+     * source is behind Compare and 0 by 0, and a highlight drawn there would
+     * be invisible, so the list could no longer point at the drawing and
+     * nothing would say so.
      *
      * Every overlay, so Compare lights the shape up in both pictures at once -
      * the same rule renderRoleLayer already follows for the tints.
@@ -2652,10 +2595,10 @@ export function createSvgPrepWorkspace(containerEl) {
    * shuts - anything else and one press with a menu open would close the whole
    * editor, which is a long way further than anybody meant to go.
    *
-   * This has to live HERE rather than on the list, where it started. The focus
-   * trap listens on the document in the CAPTURE phase, so it reaches Escape
-   * before any bubbling listener inside the editor could: MEASURED, the menu
-   * stayed open and the editor closed under it. One Escape policy, one place.
+   * This has to live here rather than on the list. The focus trap listens on
+   * the document in the capture phase, so it reaches Escape before any
+   * bubbling listener inside the editor could, and the menu would stay open
+   * while the editor closed under it. One Escape policy, one place.
    *
    * @returns {boolean} whether the press was spent
    */
@@ -2684,15 +2627,15 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * ★ The keys the owner asked for, in the relief purpose (D-141).
+   * Delete and Ctrl+A, in the relief purpose.
    *
-   * MEASURED before this: Delete did nothing at all, and Ctrl+A selected
-   * 35,759 characters of PAGE TEXT - the whole app turned blue - because the
-   * editor bound neither and the browser's own select-all took the press.
+   * Unbound, Delete does nothing at all and Ctrl+A selects the whole page's
+   * text - the whole app turns blue - because the browser's own select-all
+   * takes the press.
    *
-   * Both are handled here and STOPPED here. The app has its own Ctrl+Z and
-   * its own ideas about Delete; an editor that lets its shortcuts through to
-   * the page is the Ctrl+Z bug of DP-21 again.
+   * Both are handled here and stopped here. The app has its own Ctrl+Z and
+   * its own ideas about Delete, and an editor that lets its shortcuts through
+   * to the page sets them off.
    */
   function handleShortcutKey(e) {
     if (e.altKey || isTypingTarget(e.target)) return false;
@@ -2729,13 +2672,11 @@ export function createSvgPrepWorkspace(containerEl) {
   /**
    * The shortcut keys, wherever the press lands.
    *
-   * ★ This is attached to the LIST as well as to the root, and the reason is
-   * a defect this release nearly shipped: the surface MOVES the shapes list
-   * out of the workspace and into its own panel
+   * This is attached to the list as well as to the root: the surface moves
+   * the shapes list out of the workspace and into its own panel
    * (`shapesBlock.append(refs.layerSummary, refs.bulkBar, refs.objects)`), so
-   * a press on a row does not bubble through the workspace root at all. The
-   * workspace's own unit tests passed; the editor a person actually uses did
-   * nothing. Listeners belong on the elements that travel.
+   * a press on a row does not bubble through the workspace root at all.
+   * Listeners belong on the elements that travel.
    */
   function handleShortcutKeydown(e) {
     if (e.key === 'Escape') return;
@@ -2753,9 +2694,9 @@ export function createSvgPrepWorkspace(containerEl) {
     if (e.key === 'Escape') {
       // Somebody upstream has already spent this press. The surface's focus
       // trap listens on the document in the capture phase and calls
-      // preventDefault before its own handler runs, and it does NOT stop the
-      // event - so without this, one Escape shut the row's menu on the way
-      // down and then closed the whole editor on the way up. MEASURED.
+      // preventDefault before its own handler runs, and it does not stop the
+      // event - so without this, one Escape would shut the row's menu on the way
+      // down and then close the whole editor on the way up.
       if (e.defaultPrevented) return;
       e.preventDefault();
       if (closeOpenMenu()) return;
@@ -2767,20 +2708,19 @@ export function createSvgPrepWorkspace(containerEl) {
     }
   }
 
-  // ── DP-39 P2: the selection ────────────────────────────────────────────
+  // ── The selection ──────────────────────────────────────────────────────
   //
-  // Signed at DP-Q36 as part of row model A: "click selects, Shift and Ctrl
-  // extend". The ROW is the target and nothing is added to it - which is not
-  // only tidy, it is the only thing that fits. MEASURED at the drawer's 280 px
-  // floor the signed row has no spare width at all, so a checkbox per row
-  // (about 30 px once it clears the 44 px floor) would have cost the one line
-  // this release just bought.
+  // Click selects, Shift and Ctrl extend. The row is the target and nothing
+  // is added to it - which is not only tidy, it is the only thing that fits:
+  // at the drawer's 280 px floor the row has no spare width at all, so a
+  // checkbox per row (about 30 px once it clears the 44 px floor) would cost
+  // the row its one line.
   //
-  // What it does NOT do is claim `aria-selected`. That attribute belongs to
+  // What it does not do is claim `aria-selected`. That attribute belongs to
   // options and grid rows; these are list items, and they hold radios and a
   // button, which an option may not. Rather than change what the whole list
-  // reads as - the thing the gate pinned - the state is said out loud when it
-  // changes and counted where the actions are.
+  // reads as, the state is said out loud when it changes and counted where
+  // the actions are.
 
   /** Indices currently selected. */
   let selected = new Set();
@@ -2793,13 +2733,9 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * ★ The selection, drawn ON THE PICTURE as well as on the rows (D-141).
-   *
-   * MEASURED before this: choosing two rows drew two highlighted rows and
-   * nothing at all in the drawing - the only thing the picture ever showed was
-   * the hover mark of ONE shape. A person choosing shapes to ignore could not
-   * see which shapes they had chosen, in the one place where shapes look like
-   * anything.
+   * The selection, drawn on the picture as well as on the rows: a person
+   * choosing shapes to turn off has to see which shapes they have chosen in
+   * the one place where shapes look like anything.
    *
    * An outline, not a fill: the role tints already fill, and two fills over
    * one shape is a color nobody chose. `non-scaling-stroke` keeps the outline
@@ -2813,10 +2749,8 @@ export function createSvgPrepWorkspace(containerEl) {
         const el = liveElements[index];
         if (!el || !el.pathData) continue;
         // A light halo under the outline, so the mark shows on a shape painted
-        // in the ink color as well as on the paper. LOOKED AT on the owner's
-        // logo (DP-R5 session 4): an outline in the ink color over shapes in
-        // the ink color marked nothing a person could see - the DOM said six
-        // marks, the eyes said none.
+        // in the ink color as well as on the paper: an outline in the ink color
+        // over shapes in the ink color marks nothing a person can see.
         const halo = document.createElementNS(SVG_NS, 'path');
         halo.setAttribute('d', el.pathData);
         halo.setAttribute('class', 'svg-prep-selected-halo');
@@ -2837,10 +2771,10 @@ export function createSvgPrepWorkspace(containerEl) {
     });
     paintSelectionLayers();
     refs.deleteSelectedBtn.hidden = selected.size === 0;
-    // DP-47: "Remove from list" and not "Delete", because the Delete KEY now
-    // means something else on this list - it sets the chosen shapes to Ignore,
-    // which keeps them in the drawing. This button takes rows out of the list
-    // and is the one that cannot be undone by a radio.
+    // "Remove from list" and not "Delete", because the Delete key means
+    // something else on this list - it sets the chosen shapes to Off, which
+    // keeps them in the drawing. This button takes rows out of the list and is
+    // the one that cannot be undone by a radio.
     refs.deleteSelectedBtn.textContent =
       selected.size > 0
         ? `Remove from list (${selected.size})`
@@ -2927,10 +2861,9 @@ export function createSvgPrepWorkspace(containerEl) {
 
   /**
    * A Shift-click chooses a range of rows. The browser's own Shift-click
-   * extends a TEXT selection from wherever the caret was, and MEASURED on the
-   * built app (DP-R5 session 4) it painted 49 characters of the rows' own text
-   * blue across two rows. The default is stopped for that one modifier, and
-   * the row still takes focus, which is the part of the default worth keeping.
+   * extends a text selection from wherever the caret was, painting the rows'
+   * own text blue. The default is stopped for that one modifier, and the row
+   * still takes focus, which is the part of the default worth keeping.
    */
   function handleRowMousedown(e) {
     if (!e.shiftKey) return;
@@ -2969,11 +2902,11 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * ★ Set a role on one shape or on fifty, with ONE repaint, ONE preview
-   * request and ONE sentence (DP-47).
+   * Set a role on one shape or on fifty, with one repaint, one preview
+   * request and one sentence.
    *
-   * The Delete key acts on a SELECTION, and a selection is often several
-   * shapes: the two lines of small text on the owner's logo are dozens. Doing
+   * The Delete key acts on a selection, and a selection is often several
+   * shapes: two lines of small text on a logo are dozens. Doing
    * this per row would ask for the combine dozens of times and say dozens of
    * sentences, and a screen reader would still be reading the first when the
    * last arrived.
@@ -3020,7 +2953,7 @@ export function createSvgPrepWorkspace(containerEl) {
         }
       }
 
-      // An ignored shape is not built at all, so it cannot be on a layer.
+      // An Off shape is not built at all, so it cannot be on a layer.
       const layerSelect = item.querySelector('.svg-prep-layer-select');
       if (layerSelect) layerSelect.disabled = role === 'ignore';
     }
@@ -3046,11 +2979,10 @@ export function createSvgPrepWorkspace(containerEl) {
     const match = e.target.name.match(/^svg-prep-role-(\d+)$/);
     if (!match) return;
     const idx = parseInt(match[1], 10);
-    // D-161: a role pressed on a row that is part of the selection is pressed
-    // for the whole selection. The owner chose several shapes and found no
-    // action that reached them all; the row's own switch is that action, and
-    // the announcement counts the rows it changed. A row outside the
-    // selection is just itself, and the radio says its own name and state.
+    // A role pressed on a row that is part of the selection is pressed for
+    // the whole selection: the row's own switch is the action that reaches
+    // them all, and the announcement counts the rows it changed. A row outside
+    // the selection is just itself, and the radio says its own name and state.
     if (selected.size > 1 && selected.has(idx)) {
       applyRole([...selected], e.target.value, { announce: true });
       return;
@@ -3059,12 +2991,10 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * D-160: the containment law that used to be checked here ("Nothing
-   * surrounds this shape, so layer 3 would print with nothing under it") is
-   * gone. Every shape on layer N or deeper is written into layer N's file and
-   * the model extrudes each raised pass from below every floor, so a layer 3
-   * shape carries its own column wherever it sits; the warning was false and
-   * the owner believed it.
+   * No containment check here: every shape on layer N or deeper is written
+   * into layer N's file and the model extrudes each raised pass from below
+   * every floor, so a layer 3 shape carries its own column wherever it sits,
+   * and a warning that it would print with nothing under it would be false.
    */
   function updateLayerSummary() {
     if (!refs.layerSummary) return;
@@ -3073,16 +3003,16 @@ export function createSvgPrepWorkspace(containerEl) {
       return;
     }
     refs.layerSummary.hidden = false;
-    // D-142, text-pack row 180. The sentence says what the column HOLDS, not
-    // only what the drawing could carry: until somebody builds a stack every
-    // shape is on layer 1, and the way to build one is worth saying once,
-    // because the selects live behind each row's More button.
-    // D-162: three layers, always; the sentence says what they are for.
+    // The sentence says what the column holds, not only what the drawing
+    // could carry: until somebody builds a stack every shape is on layer 1,
+    // and the way to build one is worth saying once, because the selects live
+    // behind each row's More button. Three layers, always; the sentence says
+    // what they are for.
     const limitText = `${layerCount} layers, each with its own height on the charm.`;
     const startText = layersTouched
       ? ''
       : ' Every shape starts on layer 1. Choose a layer under More to build a stack.';
-    // DP-47: once a stack exists, the thing worth knowing is WHEN it shows.
+    // Once a stack exists, the thing worth knowing is WHEN it shows.
     // The charm behind the editor is the last APPLIED design, so a person who
     // has just built a stack and is looking at an unchanged charm is owed the
     // reason rather than left to conclude the layers did nothing.
@@ -3118,7 +3048,7 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * G0 (DP-24): one picture by default. The edited drawing is the editor;
+   * One picture by default. The edited drawing is the editor;
    * pressing Compare puts the original beside it, un-pressing takes it away.
    */
   function setCompare(on, { silent = false } = {}) {
@@ -3160,7 +3090,7 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * The whole-drawing advisory (DP-36) at the width as it stands: the trace's
+   * The whole-drawing advisory at the width as it stands: the trace's
    * line widths against the box beside it, saying which width it used.
    */
   function updateThinLineSentence() {
@@ -3176,9 +3106,9 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * DP-83: what the Design width box holds and why. Text pack rows 22 and
-   * 30: the charm's own width on the charm host, the editor's default on a
-   * host that has no charm to measure (the door).
+   * What the Design width box holds and why: the charm's own width on the
+   * charm host, the editor's default on a host that has no charm to measure
+   * (the door).
    */
   function updateDesignWidthHelp() {
     refs.designWidthHelp.textContent =
@@ -3188,7 +3118,7 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * The width the host has learned since the editor opened (D-144: the charm
+   * The width the host has learned since the editor opened (the charm
    * re-renders and its fit box arrives after the drawing was chosen). Sets
    * the box and everything that reads it.
    * @param {number} mm
@@ -3204,39 +3134,29 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   function handleDesignWidthChange() {
-    // DP-54: the print floor is a width away; the marks, the notice and the
+    // The print floor is a width away; the marks, the notice and the
     // advisory follow the box at once (65 ms on the logo), the combine after
     // the settle.
     measureThickness();
     updateThinLineSentence();
     clearTimeout(offsetDebounceTimer);
-    // Through the GATE, not straight at the combine (the owner, 2026-09-14).
-    // This called `updateResultPreview` directly and so obeyed no budget at
-    // all: typing in the width box on a thousand-shape drawing started a
-    // flatten nobody had asked for. Every other change in this editor asks
-    // first; this one now asks too.
+    // Through requestResultPreview, not straight at the combine: like every
+    // other change in this editor, the width waits for the settle rather than
+    // starting a flatten on every keystroke.
     offsetDebounceTimer = setTimeout(requestResultPreview, 300);
   }
 
-  /**
-   * Run the flatten because someone asked for it, and say so while it happens.
-   *
-   * The work is synchronous and, on a big drawing, long - DP-0 measured 56.7 s
-   * at 200 shapes. So the waiting state is painted and announced, then a frame
-   * is yielded, so the button really does look and read as busy instead of the
-   * page freezing with the old label still on it.
-   */
   /** Stop a combine in flight. The person gets the page and the button back. */
   function cancelRender() {
     if (!flattenRunner || !flattenRunner.isRunning()) return;
     // The announcement is made HERE, by the action the person took, and
-    // updateResultPreview says nothing more about it (DP-32: one action, one
+    // updateResultPreview says nothing more about it (one action, one
     // announcement).
     flattenRunner.cancel();
     announce('Combining canceled');
   }
 
-  // ── DP-4: deleting rows, and keeping the saved metadata honest ──────────
+  // ── Deleting rows, and keeping the saved metadata honest ────────────────
 
   /**
    * Rebuild the rows from `liveElements`, then put the kept roles and offsets
@@ -3251,11 +3171,11 @@ export function createSvgPrepWorkspace(containerEl) {
     const keptRoles = [...roles];
     const keptOffsets = [...offsets];
     const keptLayers = [...layers];
-    // Deleting a shape CHANGES what encloses what: remove the outer square and
-    // the inner one is supported by nothing. The tree has to be rebuilt or the
-    // law would be checked against a design that no longer exists. Deleting is
-    // deliberate and occasional, so the 157 ms is affordable here in a way it
-    // would not be on every role click.
+    // Deleting a shape changes what encloses what: remove the outer square
+    // and nothing encloses the inner one. The tree has to be rebuilt or it
+    // would describe a design that no longer exists. Deleting is deliberate
+    // and occasional, so the 157 ms is affordable here in a way it would not
+    // be on every role click.
     if (layersEnabled) {
       nestingTree = buildNestingTree(liveElements);
       layerCount = LAYER_CAP;
@@ -3281,12 +3201,10 @@ export function createSvgPrepWorkspace(containerEl) {
     applyInitialOffsets(offsets);
     applyLayerSelections();
     renderRoleLayer();
-    // DP-4: the band is a property of what is left to combine, so it has to be
-    // re-read after every delete and undo. Cutting a 210-shape drawing down to
-    // 40 brings it under the budget, and the preview should start behaving
-    // like the simple drawing it has just been made into.
+    // The band is a property of what is left to combine, so it is re-read
+    // after every delete and undo.
     //
-    // AFTER the roles are back, not before: the band reads them, and until
+    // After the roles are back, not before: the band reads them, and until
     // this point `roles` is still the array from before the rebuild and is a
     // different length from `liveElements`.
     setPreviewBand();
@@ -3298,7 +3216,7 @@ export function createSvgPrepWorkspace(containerEl) {
     measureThickness();
   }
 
-  /** Push the current layer array back into the selects, then re-check. */
+  /** Push the current layer array back into the selects, then refresh the summary. */
   function applyLayerSelections() {
     if (!layersEnabled || layerCount === 0) {
       updateLayerSummary();
@@ -3369,7 +3287,7 @@ export function createSvgPrepWorkspace(containerEl) {
     announce(message);
   }
 
-  // ── DP-54: the shapes too thin to print ──────────────────────────────────
+  // ── The shapes too thin to print ─────────────────────────────────────────
 
   function thinFloorMm() {
     const v = parseFloat(refs.thinInput.value);
@@ -3382,8 +3300,8 @@ export function createSvgPrepWorkspace(containerEl) {
 
   /**
    * Measure every row at the width and the floor as they stand, then show
-   * it: the marks on the rows and the notice above the list. MEASURED at P0:
-   * about 65 ms for the logo's 206 shapes, 95 ms for 1,200.
+   * it: the marks on the rows and the notice above the list. About 65 ms for
+   * a logo's 206 shapes, 95 ms for 1,200.
    */
   function measureThickness() {
     const vb = parseViewBox(currentSvgMeta?.viewBox);
@@ -3435,9 +3353,8 @@ export function createSvgPrepWorkspace(containerEl) {
         mark.className = 'svg-prep-thin-mark';
         mark.id = `${refs.thinMarkPrefix}-${i}`;
         // A short badge to the eye, the full words to a screen reader as the
-        // row's description. The words themselves after the name wrapped the
-        // signed one-line row (DP-39) on CI's wider Firefox fonts (REPORTED
-        // by PR #242's board: "row 1 took 2 lines").
+        // row's description. The words themselves after the name would wrap the
+        // one-line row on wider fonts.
         const badge = document.createElement('span');
         badge.className = 'svg-prep-thin-mark-badge';
         badge.setAttribute('aria-hidden', 'true');
@@ -3471,7 +3388,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.thinNotice.hidden = false;
   }
 
-  /** One press: every row under the floor to Ignore, through applyRole. */
+  /** One press: every row under the floor to Off, through applyRole. */
   function ignoreThin() {
     const rows = thinRows().filter((i) => roles[i] !== 'ignore');
     if (rows.length === 0) {
@@ -3678,9 +3595,8 @@ export function createSvgPrepWorkspace(containerEl) {
             offsetInput.value = '0';
             offsetInput.disabled = role === 'ignore';
           }
-          // DP-83: the Layer column goes back to 1 with the rest. It used to
-          // stay where it was, so "Reset" left a stack standing that the
-          // sentence never mentioned.
+          // The Layer column goes back to 1 with the rest, or Reset would leave a
+          // stack standing that the sentence never mentions.
           const layerSelect = item.querySelector('.svg-prep-layer-select');
           if (layerSelect) {
             layerSelect.value = '1';
@@ -3688,11 +3604,10 @@ export function createSvgPrepWorkspace(containerEl) {
           }
           const nameSpan = item.querySelector('.svg-prep-object-name');
           const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
-          // The word on the control, not the value behind it. FOUR places
-          // write this label; DP-39 changed two and left these two, so Reset
-          // used to turn every row from "Shape 3, Raised" back into "Shape 3,
-          // role: foreground" - the word this round retired, spoken only to
-          // the people who cannot see the control that says otherwise.
+          // The word on the control, not the value behind it. Four places write
+          // this label, and all four must say the same word: "role: foreground"
+          // would be spoken only to the people who cannot see the control that says
+          // otherwise.
           item.setAttribute(
             'aria-label',
             `${nameText}, ${roleWord(role, currentRoleOptions())}`
@@ -3700,7 +3615,7 @@ export function createSvgPrepWorkspace(containerEl) {
         });
         if (layersEnabled && layerCount > 0) {
           layers = liveElements.map(() => 1);
-          // A column of ones is no stack (D-142): the summary says so again
+          // A column of ones is no stack: the summary says so again
           // and Apply emits none.
           layersTouched = false;
           updateLayerSummary();
@@ -3709,7 +3624,7 @@ export function createSvgPrepWorkspace(containerEl) {
         renderRoleLayer();
         requestResultPreview();
       }
-      // Text pack rows 21 and 29: the sentence names what the editor has.
+      // The sentence names what the editor has.
       liveRegion.textContent =
         layersEnabled && layerCount > 0
           ? 'Roles, offsets and layers reset.'
@@ -3776,7 +3691,7 @@ export function createSvgPrepWorkspace(containerEl) {
    * deleted list carries them instead.
    */
   /**
-   * DP-81 (D-175): the key a stored result is trusted by on a reopen: the
+   * The key a stored result is trusted by on a reopen: the
    * choices as they stand (roles, offsets, deletions and layers by ORIGINAL
    * index), the width the editor measures at, and the raw drawing itself.
    * Null when nothing is open.
@@ -3794,7 +3709,7 @@ export function createSvgPrepWorkspace(containerEl) {
     });
   }
 
-  /** DP-81: the counts a trusted reopen was painted with, else null. */
+  /** The counts a trusted reopen was painted with, else null. */
   function wasOpenedAsLeft() {
     return openedAsLeft ? { ...openedAsLeft } : null;
   }
@@ -3831,10 +3746,10 @@ export function createSvgPrepWorkspace(containerEl) {
    * A SPARSE ARRAY, the same shape roles and offsets travel in, so the
    * persistence and reopen plumbing needs no special case for layers.
    *
-   * D-142: `layers` is NULL until somebody builds a stack, which is what
+   * `layers` is null until somebody builds a stack, which is what
    * `buildLayerCompanions` reads as "no stack to emit". A column of ones is
-   * not a stack, and reporting it as one is how a three-layer emission used
-   * to ride out of an editor nobody had touched.
+   * not a stack, and reporting it as one would send a three-layer emission
+   * out of an editor nobody had touched.
    *
    * @returns {{layers: Array|null, limit: number, problems: Array}} Empty when
    *   the tile did not opt in; `layers: null` when no stack has been built.
@@ -3868,7 +3783,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.rolesToggleBtn.setAttribute('aria-pressed', 'true');
     refs.legendRow.hidden = false;
     setCompare(false, { silent: true });
-    // D-120: the flatten needs the ring engine; start it on its way now so
+    // The flatten needs the ring engine; start it on its way now so
     // the first preview rarely has to wait for it.
     loadRingEngine().catch(() => {});
     root.hidden = false;
@@ -3881,7 +3796,7 @@ export function createSvgPrepWorkspace(containerEl) {
     currentAnalysis = analysis;
     currentSvgMeta = extractSvgMeta(svgString);
 
-    // DP-54 (D-144): a host that knows how wide the design prints says so,
+    // A host that knows how wide the design prints says so,
     // and the box starts there rather than at the editor's default.
     if (
       Number.isFinite(callbacks.designWidthMm) &&
@@ -3920,7 +3835,7 @@ export function createSvgPrepWorkspace(containerEl) {
       refs.toolsSlot.hidden = true;
     }
 
-    // DP-4: deletions are restored FIRST, so the roles and offsets that follow
+    // Deletions are restored first, so the roles and offsets that follow
     // are read against the list the person actually left behind. They travel as
     // ORIGINAL indices, which is the only numbering that survives a delete.
     const allElements = analysis.elements || [];
@@ -3931,16 +3846,16 @@ export function createSvgPrepWorkspace(containerEl) {
     liveElements = originalIndex.map((i) => allElements[i]);
     lastDeletion = null;
 
-    // DP-7. The tree is built ONCE per open, on the geometry the emission
-    // will actually use - analysis.elements carries stroke-converted pathData.
-    // MEASURED (browser, WATAP HD, 831 elements): 157 ms on the converted
-    // geometry against 9 ms on the raw. Recomputing it on every radio click
-    // would be that cost per click, and the depth SUGGESTION is a starting
-    // point that does not need to chase each role change.
+    // The tree is built once per open, on the geometry the emission will
+    // actually use - analysis.elements carries stroke-converted pathData. On
+    // an 831-element drawing that is 157 ms against 9 ms on the raw geometry;
+    // recomputing it on every radio click would be that cost per click, and
+    // the depth suggestion is a starting point that does not need to chase
+    // each role change.
     layersEnabled = callbacks.layersEnabled === true;
     layersTouched = false;
     if (layersEnabled) {
-      // DP-78 P3: the analysis may carry the tree it built for the wall
+      // The analysis may carry the tree it built for the wall
       // rule, over these same elements in this same order; a reopen with
       // deletions restored has fewer live elements and builds its own.
       const given = analysis && analysis.nestingTree;
@@ -3950,16 +3865,15 @@ export function createSvgPrepWorkspace(containerEl) {
         given.nodes.length === liveElements.length
           ? given
           : buildNestingTree(liveElements);
-      // D-162: the layers are height classes a person assigns (D-160), so a
-      // host with layers offers all three whatever the drawing nests to; the
-      // nesting depth used to cap them, and the owner's line drawing offered
-      // one or two.
+      // The layers are height classes a person assigns, so a host with layers
+      // offers all three whatever the drawing nests to; capped by nesting depth,
+      // a line drawing would offer only one or two.
       layerCount = LAYER_CAP;
     } else {
       nestingTree = null;
       layerCount = 0;
     }
-    // The legend follows the role table AND the layers (DP-Q60), so it is
+    // The legend follows the role table AND the layers, so it is
     // painted once both are known.
     paintLegend(refs.legendRow, currentRoleOptions(), layerCount);
 
@@ -3986,13 +3900,13 @@ export function createSvgPrepWorkspace(containerEl) {
         const v = parseInt(saved[i], 10);
         if (v >= 1) layers[i] = Math.min(v, layerCount || 1);
       }
-      // D-142: a saved column that stands above layer 1 is a stack somebody
+      // A saved column that stands above layer 1 is a stack somebody
       // built in an earlier visit, so reopening the design keeps it rather
       // than quietly flattening their work back to one pass.
       if (layers.some((v) => v >= 2)) layersTouched = true;
     }
-    // Run the law once on open, so a design that already breaks it says so
-    // instead of waiting for the person to touch a control first.
+    // The layers go into the selects and the summary is said once on open,
+    // rather than waiting for the person to touch a control first.
     applyLayerSelections();
     updateDeleteUi();
 
@@ -4000,18 +3914,18 @@ export function createSvgPrepWorkspace(containerEl) {
 
     renderSourcePane();
     renderRoleLayer();
-    // DP-53: the first combine runs at once (there is nothing to settle);
+    // The first combine runs at once (there is nothing to settle);
     // every change after it waits for the settle. The stand-in goes up
     // first, so the pane is never empty while the engine loads or the
-    // worker works (DP-37 P1's rule).
+    // worker works.
     setPreviewBand();
     clearSelection();
-    // DP-81 (D-175): a reopen whose stored result was made from exactly
-    // these choices, at this width, on this drawing, is painted from that
-    // result and Apply is ready at once; the first change combines as
-    // ever. Anything else takes the usual road: the stand-in, the combine.
-    // MEASURED at DP-77 P0c: every reopen combined again, 14.7 s at 200
-    // shapes on the ring road, and Apply waited for all of it.
+    // A reopen whose stored result was made from exactly these choices, at
+    // this width, on this drawing, is painted from that result and Apply is
+    // ready at once; the first change combines as ever. Anything else takes
+    // the usual road: the stand-in, the combine. Combining again on every
+    // reopen would cost 14.7 s at 200 shapes, with Apply waiting for all of
+    // it.
     openedAsLeft = null;
     if (
       typeof callbacks.initialResult === 'string' &&
@@ -4105,13 +4019,10 @@ export function createSvgPrepWorkspace(containerEl) {
   function close() {
     if (!isOpen) return;
 
-    // A combine outlives the editor otherwise. `destroy` stopped one, but the
-    // surface's Close calls THIS, so the worker carried on with a drawing
-    // nobody is looking at any more and then drew its result into the closed
-    // editor and announced it - MEASURED at 419 ms on the 210-shape drawing,
-    // and minutes on the biggest this app accepts. It could not happen before
-    // DP-37 P2, when the thread was taken for the whole combine and there was
-    // nothing to press.
+    // A combine outlives the editor otherwise. `destroy` stops one, but the
+    // surface's Close calls this, so the worker would carry on with a drawing
+    // nobody is looking at any more and then draw its result into the closed
+    // editor and announce it.
     if (flattenRunner && flattenRunner.isRunning()) {
       flattenRunner.cancel('closed');
     }
@@ -4301,7 +4212,7 @@ export function createSvgPrepWorkspace(containerEl) {
     setDesignWidthMm,
     /**
      * The ring engine, once the lazy chunk is in; null while it is not.
-     * D-132: the file control's layer companions flatten with the same engine
+     * The file control's layer companions flatten with the same engine
      * the preview uses, and the control cannot import the chunk itself without
      * pulling clipper into the core bundle.
      */
@@ -4311,10 +4222,10 @@ export function createSvgPrepWorkspace(containerEl) {
      *
      * Escape belongs to whoever is hosting this editor - the standalone door
      * traps focus and uses Escape as the way out, and the surface's trap
-     * listens on the document in the CAPTURE phase, so nothing inside the
-     * workspace can reach the press first. MEASURED: the workspace's own
-     * keydown handler never ran at all. So the host asks this before it acts,
-     * and the innermost open thing is the first thing Escape shuts.
+     * listens on the document in the capture phase, so nothing inside the
+     * workspace can reach the press first: the workspace's own keydown handler
+     * never runs. So the host asks this before it acts, and the innermost open
+     * thing is the first thing Escape shuts.
      *
      * @returns {boolean} true if a menu was open and is now shut
      */
