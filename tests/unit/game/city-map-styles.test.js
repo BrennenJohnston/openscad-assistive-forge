@@ -15,13 +15,13 @@ import {
 } from '../../../src/js/game/city-map-styles.js';
 
 /**
- * CW-60 (CW-Q57): four map styles.
+ * Four map styles.
  *
  * What is guarded here is the claim the styles make - that each one is a
- * SIMPLIFICATION rather than a palette swap - plus the arithmetic of the
+ * simplification rather than a palette swap - plus the arithmetic of the
  * wayfinding mark, which is the part no photograph can check.
  */
-describe('map styles (CW-60)', () => {
+describe('map styles', () => {
   it('gives four well-formed styles, Standard first', () => {
     expect(MAP_STYLES).toHaveLength(4);
     expect(MAP_STYLES[0].id).toBe(DEFAULT_MAP_STYLE);
@@ -37,7 +37,7 @@ describe('map styles (CW-60)', () => {
     }
   });
 
-  it('★★ makes every style a SIMPLIFICATION, not a palette swap', () => {
+  it('makes every style a simplification, not a palette swap', () => {
     // The whole argument for the feature. A style that only recoloured things
     // would be a repaint wearing a tactile-map citation, so each style after
     // Standard must either hide a layer outright or move one to a tone
@@ -61,15 +61,15 @@ describe('map styles (CW-60)', () => {
     expect(hiders.map((s) => s.id)).toContain('roads');
   });
 
-  it('★ only the Wayfinding style draws the wayfinding layer', () => {
-    // CW-43 parsed crossings, kerbs and tactile paving and nothing has ever
-    // drawn them. Seattle has 5,355 of them, so this layer is either the
-    // subject of a style or it is a carpet over every other one.
+  it('only the Wayfinding style draws the wayfinding layer', () => {
+    // Crossings, kerbs and tactile paving are parsed for this layer alone.
+    // Seattle has 5,355 of them, so the layer is either the subject of a style
+    // or it is a carpet over every other one.
     const showing = MAP_STYLES.filter((s) => s.wayfinding.show);
     expect(showing.map((s) => s.id)).toEqual(['wayfinding']);
   });
 
-  it('★ keeps the roads visible in every style, even the one that buries them', () => {
+  it('keeps the roads visible in every style, even the one that buries them', () => {
     // A map with no network is not a map of a city. Buildings only dims the
     // roads to a hairline rather than removing them, so the shape of the
     // place survives.
@@ -96,12 +96,12 @@ describe('map styles (CW-60)', () => {
     expect(cycleMapStyle(MAP_STYLES.at(-1).id, 1)).toBe('standard');
   });
 
-  it('★★ sizes a wayfinding mark on SCREEN, not in metres', () => {
-    // ★ The first version used a fixed 2.6 m divided by the zoom. At zoom 1
-    // the whole city is in frame and one pixel is about four metres, so the
-    // marks were SUB-PIXEL and the style photographed as an empty map. Size
-    // comes from the city's own span now, the same family the player marker
-    // uses, so a small extract and a large one both work.
+  it('sizes a wayfinding mark on screen, not in metres', () => {
+    // Not a fixed size divided by the zoom: at zoom 1 the whole city is in
+    // frame and one pixel is about four metres, so a 2.6 m mark would be
+    // sub-pixel and the style would photograph as an empty map. Size comes
+    // from the city's own span, the same family the player marker uses, so a
+    // small extract and a large one both work.
     const SEATTLE = 5000;
     const wide = wayfindMarkSizeM(0.25, SEATTLE);
     const mid = wayfindMarkSizeM(1, SEATTLE);
@@ -120,7 +120,7 @@ describe('map styles (CW-60)', () => {
     expect(wayfindMarkSizeM(10000, SEATTLE)).toBe(
       SEATTLE * WAYFIND_MARK_SPAN_FRACTION * WAYFIND_ZOOM_MIN
     );
-    // ★ A SMALL CITY GETS SMALLER MARKS, which is the point of tying this to
+    // A small city gets smaller marks, which is the point of tying this to
     // the span rather than to a constant: Albuquerque's extract is a fraction
     // of Seattle's and a Seattle-sized mark would cover it.
     expect(wayfindMarkSizeM(1, 1200)).toBeLessThan(mid);
@@ -129,10 +129,10 @@ describe('map styles (CW-60)', () => {
     expect(wayfindMarkSizeM(1, undefined)).toBeGreaterThan(0);
   });
 
-  it('★★ says out loud what the picture just did (CW-60 P2)', () => {
-    // ACCESSIBILITY-CRITICAL. A style change is a change to the whole
+  it('says out loud what the picture just did', () => {
+    // Accessibility-critical. A style change is a change to the whole
     // picture, and the picture is the one thing a screen-reader user cannot
-    // check for themselves - so the sentence has to name the style AND say
+    // check for themselves - so the sentence has to name the style and say
     // what it did, not just announce that something happened.
     for (const s of MAP_STYLES) {
       const said = mapStyleAnnouncement(s.id);
@@ -141,7 +141,7 @@ describe('map styles (CW-60)', () => {
       // Two sentences, both finished. A truncated one reads as a glitch.
       expect(said.endsWith('.'), s.id).toBe(true);
       expect(s.detail.length, s.id).toBeGreaterThan(20);
-      // UI text carries no em dashes in this project (UF-3).
+      // UI text carries no em dashes in this project.
       expect(said, s.id).not.toContain('—');
     }
     // Four distinct sentences: a style that borrowed another's words would
@@ -156,7 +156,7 @@ describe('map styles (CW-60)', () => {
     );
   });
 
-  it('★ tells the three kinds apart by BRIGHTNESS, and orders them honestly', () => {
+  it('tells the three kinds apart by brightness, and orders them honestly', () => {
     // At one or two character cells a triangle and a square are the same
     // cell - the hydrant lesson - so shape cannot carry the difference and
     // brightness has to.

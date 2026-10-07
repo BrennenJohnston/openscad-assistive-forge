@@ -18,11 +18,11 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
 /**
- * CW-68. The whole release is one claim - "a cell that barely changed keeps
- * what it had, and a cell whose surface changed does not" - so every test
- * below states the OLD stateless answer beside the new one. A test that only
- * checks the new behaviour cannot tell a working dead band from a band of
- * zero, which is the shape of the bug this would ship.
+ * The memory is one claim - "a cell that barely changed keeps what it had,
+ * and a cell whose surface changed does not" - so every test below states
+ * the stateless answer beside the one with memory. A test that only checks
+ * the memory cannot tell a working dead band from a band of zero, which is
+ * the shape of the bug this guards against.
  */
 
 const BAND = 0.02
@@ -62,9 +62,8 @@ describe('_hfm-hysteresis: the glyph memory', () => {
   })
 
   it('takes the new glyph the instant the surface under the cell changes', () => {
-    // The CW-52 objection, answered: a cell that swept across a geometry edge
-    // must not keep the glyph of the surface it left, however close the
-    // distances are.
+    // A cell that swept across a geometry edge must not keep the glyph of the
+    // surface it left, however close the distances are.
     const res = glyphWithMemory({
       candidate: 7,
       candidateDist2: 0.1,
@@ -181,7 +180,7 @@ describe('_hfm-hysteresis: reverse video', () => {
 
   it('is comparing against a float sum, exactly on the boundary', () => {
     // 0.8 + 0.02 is 0.8200000000000001 in binary floating point, so a cell
-    // at exactly 0.82 does NOT enter. Pinned rather than papered over: the
+    // at exactly 0.82 does not enter. Pinned rather than papered over: the
     // band is a decision about a hair's breadth either way, and somebody
     // reading "enter at 0.82" should be able to find out what that means.
     expect(0.8 + 0.02).not.toBe(0.82)
@@ -264,7 +263,7 @@ describe('_hfm-hysteresis: configuration and history', () => {
 
   it('gives the reverse cliff a band of its own', () => {
     // The two cliffs are not the same mistake: a drive step changes a cell's
-    // brightness, the reverse cliff turns it into a solid block. A release
+    // brightness, the reverse cliff turns it into a solid block. A change
     // that widens one must be able to leave the other alone.
     const bands = normalizeHysteresis({ drive: 0.1, reverse: 0.02 })
     expect(bands.drive).toBe(0.1)
@@ -320,17 +319,17 @@ describe('_hfm-hysteresis: configuration and history', () => {
 
 describe('_hfm-hysteresis: whose converter gets a memory', () => {
   /**
-   * The converter is SHARED. `_hfm.js` draws the main app's Alt View as well
-   * as the game, and the Alt View converts ONE STILL FRAME: a memory of a
-   * previous frame can only cost it, and the round's hard rule is that the
-   * main app's defaults do not move. The guarantee is structural, so the
-   * guard is too - a future release that reaches for setTemporalHysteresis
-   * from anywhere else has to come here and say why.
+   * The converter is shared. `_hfm.js` draws the main app's Alt View as well
+   * as the game, and the Alt View converts one still frame: a memory of a
+   * previous frame can only cost it, and the main app's defaults must not
+   * move. The guarantee is structural, so the guard is too - a future change
+   * that reaches for setTemporalHysteresis from anywhere else has to come
+   * here and say why.
    */
   /** Every converter switch that must stay the game's alone, and its caller. */
   const GAME_ONLY_SWITCHES = [
     ['.setTemporalHysteresis', 'js/game/city-walk-controller.js'],
-    // CW-70: the share cap bounds the solid bright layer. The main app's Alt
+    // The share cap bounds the solid bright layer. The main app's Alt
     // View draws a still and has no layer to bound.
     ['.setReverseShareCap', 'js/game/city-walk-controller.js'],
   ]
@@ -384,25 +383,25 @@ describe('_hfm-hysteresis: whose converter gets a memory', () => {
   })
 })
 
-describe('★★★ CW-89 (D-125): blank is never held, and never blocks ink', () => {
-  // The owner walked past a wall and the ink stayed behind. Measured on a
-  // 24-frame walk at 30 %: 230 cells on the first frame rising to ~500 by the
-  // last were drawing a character where the stateless answer was SPACE, and
-  // 323 of them held the full five frames. The memory chooses between
-  // CHARACTERS; whether a cell has content at all is decided before it.
+describe('blank is never held, and never blocks ink', () => {
+  // Holding a blank would leave ink behind a wall a walker passed: on a
+  // 24-frame walk at 30 %, 230 cells on the first frame rising to ~500 by
+  // the last would draw a character where the stateless answer was space,
+  // 323 of them for the full five frames. The memory chooses between
+  // characters; whether a cell has content at all is decided before it.
   const near = { candidateDist2: 0.10, prevDist2: 0.14 } // inside a 0.06 band
 
-  it('★★ agrees with the painter about which index is empty', () => {
+  it('agrees with the painter about which index is empty', () => {
     // SPACE_GLYPH is declared in the hysteresis module so it stays a leaf the
     // shader comment can point at. If the painter ever renumbers, this fails
     // rather than the trail quietly coming back.
     expect(SPACE_GLYPH).toBe(SPACE_INDEX)
   })
 
-  it('★★★ a cell whose new answer is BLANK draws nothing, at once', () => {
-    // RED PROOF (run by hand, CW-89): drop `blankNow` from the reset
-    // condition in glyphWithMemory and this case returns glyph 7 with a hold
-    // of 1 - which is the trail, in one assertion.
+  it('a cell whose new answer is blank draws nothing, at once', () => {
+    // To see this fail: drop `blankNow` from the reset condition in
+    // glyphWithMemory and this case returns glyph 7 with a hold of 1 - which
+    // is the trail, in one assertion.
     const r = glyphWithMemory({
       candidate: SPACE_GLYPH,
       candidateDist2: 0.10,
@@ -416,8 +415,8 @@ describe('★★★ CW-89 (D-125): blank is never held, and never blocks ink', (
     expect(r).toEqual({ glyph: SPACE_GLYPH, hold: 0 })
   })
 
-  it('★★ a cell that WAS blank takes its new character, at once', () => {
-    // The same rule the other way round. A dead band holding SPACE would
+  it('a cell that was blank takes its new character, at once', () => {
+    // The same rule the other way round. A dead band holding a space would
     // keep a cell dark after the thing lighting it had arrived - the trail's
     // mirror image, and just as wrong.
     const r = glyphWithMemory({
@@ -432,7 +431,7 @@ describe('★★★ CW-89 (D-125): blank is never held, and never blocks ink', (
     expect(r).toEqual({ glyph: 7, hold: 0 })
   })
 
-  it('★ and it is NOT a fourth dead band - there is no slightly blank', () => {
+  it('and it is not a fourth dead band - there is no slightly blank', () => {
     // However far inside the band the blank answer sits, it wins. This is the
     // case that would pass by accident if the rule were implemented as a
     // widened band rather than as a short circuit.
@@ -451,9 +450,10 @@ describe('★★★ CW-89 (D-125): blank is never held, and never blocks ink', (
     }
   })
 
-  it('★★ still holds between two real characters, which is its whole job', () => {
-    // The guard against over-correcting: CW-89 must not turn the memory off.
-    // Two ordinary glyphs, the new one barely better, and the old one stays.
+  it('still holds between two real characters, which is its whole job', () => {
+    // The guard against over-correcting: blank handling must not turn the
+    // memory off. Two ordinary glyphs, the new one barely better, and the
+    // old one stays.
     const r = glyphWithMemory({
       candidate: 9,
       ...near,

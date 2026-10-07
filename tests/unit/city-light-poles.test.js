@@ -25,8 +25,8 @@ function pole(id, dm, { lit = true, heightFt = 0 } = {}) {
 
 describe('provenance', () => {
   it('says out loud that the source states no licence, and who authorised it', () => {
-    // The whole reason this needed a gate question. A file that carried the
-    // poles without saying this would be the dishonest version.
+    // The source states no licence, and the file must say so: carrying the
+    // poles without saying it would be the dishonest version.
     expect(CITY_LIGHT_PROVENANCE.license).toMatch(/no licence is stated/i)
     expect(CITY_LIGHT_PROVENANCE.license).toContain('CW-Q76')
     expect(CITY_LIGHT_PROVENANCE.publisher).toBe('City of Seattle')
@@ -34,14 +34,13 @@ describe('provenance', () => {
   })
 
   it('names no Google surface anywhere', () => {
-    // Plan section 8.3, checked rather than assumed.
     const text = JSON.stringify(CITY_LIGHT_PROVENANCE)
     expect(/google/i.test(text)).toBe(false)
   })
 })
 
 describe('pageUrl', () => {
-  it('asks the FEATURE endpoint, in metres, with geometry', () => {
+  it('asks the feature endpoint, in metres, with geometry', () => {
     const u = pageUrl(CENTER, R, 2000)
     expect(u).toContain('/FeatureServer/0/query')
     expect(u).toContain('units=esriSRUnit_Meter')
@@ -115,7 +114,7 @@ describe('polesToElements', () => {
     expect(out.elements.every((e) => e.tags.highway === 'street_lamp')).toBe(true)
   })
 
-  it('★ RE-MEASURES the radius, because the service own filter cannot be trusted', () => {
+  it('re-measures the radius: the service filter cannot be trusted', () => {
     // The service reports 21,703 poles inside this circle and returns 4,115.
     // Anything it hands back is checked here against the distance rather than
     // believed, and this is the case that proves the check is live.
@@ -124,7 +123,7 @@ describe('polesToElements', () => {
     expect(out.outside).toBe(1)
   })
 
-  it('gives every pole a NEGATIVE id, so nothing is mistaken for OSM', () => {
+  it('gives every pole a negative id, so nothing is mistaken for OSM', () => {
     const out = polesToElements([pole(1353729, 10)], CENTER, R)
     expect(out.elements[0].id).toBe(-1353729)
     expect(out.elements[0].tags.ref).toBe('1353729')

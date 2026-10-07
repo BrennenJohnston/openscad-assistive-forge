@@ -7,9 +7,9 @@ import {
 } from './hfm-convert-fixture.js'
 
 /**
- * CW-30 P2: the tabulated contrast curves must not change the picture.
+ * The tabulated contrast curves must not change the picture.
  *
- * Unlike the sampling plan, this one is an APPROXIMATION - pow(t, exp) read
+ * Unlike the sampling plan, this one is an approximation - pow(t, exp) read
  * from a 2048-step table with linear interpolation instead of computed - so
  * the honest gate is a measured agreement rate, not an equality assertion.
  * The worst-case interpolation error is around 6e-7, four orders of magnitude
@@ -47,7 +47,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('CW-30 contrast curves — tabulated pow keeps the same picture', () => {
+describe('contrast curves — tabulated pow keeps the same picture', () => {
   it('agrees with computed pow on essentially every cell', async () => {
     await convertBothWays({ contrast: true })
 
@@ -59,7 +59,7 @@ describe('CW-30 contrast curves — tabulated pow keeps the same picture', () =>
       computed.glyphIndices,
       tabulated.glyphIndices
     )
-    // The plan's parity gate is 99% of cells. A 2048-step table clears that by
+    // The parity bar is 99% of cells. A 2048-step table clears that by
     // a wide margin on noise, and the margin is the point: a table coarse
     // enough to be visible would land far below this.
     expect(agreement).toBeGreaterThanOrEqual(0.999)

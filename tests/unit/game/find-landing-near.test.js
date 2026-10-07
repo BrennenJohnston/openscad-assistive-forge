@@ -7,7 +7,7 @@ import {
 } from '../../../src/js/game/walk-controls.js'
 
 /**
- * findLandingNear — where a player dropped on the map actually lands (CW-36).
+ * findLandingNear — where a player dropped on the map actually lands.
  *
  * The oracle these cases hold it to is the same one the walker itself uses:
  * a landing must never be a place the player could not have walked to.

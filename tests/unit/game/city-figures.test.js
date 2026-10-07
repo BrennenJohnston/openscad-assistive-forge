@@ -38,7 +38,7 @@ const boundsOf = (geoms) => {
 
 const allOf = (zones) => [...zones.legs, ...zones.torso, ...zones.figure]
 
-describe('makeFigureSpec (CW-45, CW-Q45)', () => {
+describe('makeFigureSpec', () => {
   it('draws every figure inside the signed, documented ranges', () => {
     // Height 1.50-1.95 m ~ the adult 1st-99th percentile stature span
     // across sexes (CDC/NHANES anthropometric reference, Series 3 No. 46);
@@ -187,21 +187,20 @@ describe('makeFigureGeoms', () => {
 })
 
 /**
- * ★★ CW-65 ADDED TWO ZONES TO THIS FUNCTION, AND 3,029 FIGURES IN SEATTLE
- * ALONE GO THROUGH IT. The property worth a permanent guard is not that the
- * traveler is right - it is that NOTHING ELSE MOVED.
+ * The traveler's two zones go through the same function as every other
+ * figure: 3,029 figures in Seattle alone. The property worth a permanent
+ * guard is not that the traveler is right, but that nothing else moved.
  *
  * The checksums below are FNV-1a over the raw float bits of every vertex in
- * the three original zones, taken at the commit that added the cane, and
- * verified against the pre-CW-65 implementation directly: 800 specs across all
- * four poses, 633,600 float comparisons, ZERO differences. The instrument that
- * said so was red-proven by perturbing HEAD_FRACTION by one part in a million,
- * which flagged all 800.
+ * the three original zones, verified against the implementation without the
+ * traveler zones: 800 specs across all four poses, 633,600 float
+ * comparisons, zero differences. Perturbing HEAD_FRACTION by one part in a
+ * million flags all 800, so the instrument can fail.
  *
- * If one of these moves, a figure moved. That is the whole point, so DO NOT
+ * If one of these moves, a figure moved. That is the whole point, so do not
  * re-baseline a failing number without finding out which vertex went where.
  */
-describe('the traveler zones cost the ordinary figure nothing (CW-65)', () => {
+describe('the traveler zones cost the ordinary figure nothing', () => {
   /** FNV-1a over the float bits of legs + torso + figure. */
   const zoneSum = (zones) => {
     let h = 0x811c9dc5 >>> 0
@@ -244,10 +243,10 @@ describe('the traveler zones cost the ordinary figure nothing (CW-65)', () => {
   })
 })
 
-describe('the traveler (CW-65, CW-Q60)', () => {
+describe('the traveler', () => {
   it('is one more figure spec, inside the same signed ranges', () => {
-    // NOT a hardcoded body. The accessibility rule is that dimensions
-    // describing PEOPLE are parameters with documented ranges, and the
+    // Not a hardcoded body. The accessibility rule is that dimensions
+    // describing people are parameters with documented ranges, and the
     // traveler is a person like every other person in the city.
     for (let i = 0; i < 200; i++) {
       const spec = makeTravelerSpec(lcg(1000 + i))
@@ -265,7 +264,7 @@ describe('the traveler (CW-65, CW-Q60)', () => {
     expect(zones.glasses).toHaveLength(1)
   })
 
-  it('puts the cane tip ON THE GROUND, ahead of the figure', () => {
+  it('puts the cane tip on the ground, ahead of the figure', () => {
     // A cane that floats is not a cane, and a cane that ends under the
     // pavement is worse: the tip is what a player reads as contact.
     const spec = makeTravelerSpec(lcg(3), { caneSide: 1 })
@@ -292,7 +291,7 @@ describe('the traveler (CW-65, CW-Q60)', () => {
     expect(headTop).toBeGreaterThan(bb.max.z)
   })
 
-  it('hangs the cane off the SAME side the caller asks for', () => {
+  it('hangs the cane off the same side the caller asks for', () => {
     const right = makeFigureGeoms(0, 0, 0, makeTravelerSpec(lcg(5), { caneSide: 1 }))
     const left = makeFigureGeoms(0, 0, 0, makeTravelerSpec(lcg(5), { caneSide: -1 }))
     right.cane[0].computeBoundingBox()

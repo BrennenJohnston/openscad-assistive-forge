@@ -8,10 +8,9 @@ import {
 } from '../../../src/js/game/city-scene.js'
 
 /**
- * CW-74. The storefront picker read POI NODES within 35 m and nothing else, so
- * a building carrying `amenity=library` was never asked what it was: its
- * ground floor fell through to a hash of its index. The order is now the
- * building's OWN TAG, then the nearest POI, then the hash.
+ * The storefront picker's order: the building's own tag, then the nearest
+ * POI within 35 m, then a hash of its index. Reading only POI nodes would
+ * never ask a building carrying `amenity=library` what it was.
  */
 
 const bandOf = (name) => {
@@ -21,9 +20,9 @@ const bandOf = (name) => {
 }
 
 describe('storefrontBandForBuilding', () => {
-  it('★ the building own tag beats a nearer POI of another kind', () => {
-    // A bakery with a restaurant next door is a bakery. Before CW-74 the
-    // restaurant won, because the building was never asked.
+  it('the building own tag beats a nearer POI of another kind', () => {
+    // A bakery with a restaurant next door is a bakery: the building is asked
+    // first.
     const choice = storefrontBandForBuilding({ shop: 'bakery' }, 'restaurant')
     expect(choice).toEqual({
       band: bandOf('bakery'),
@@ -50,7 +49,7 @@ describe('storefrontBandForBuilding', () => {
     expect(storefrontBandForBuilding(undefined, null).source).toBe('hash')
   })
 
-  it('a hotel keeps its lobby band (CW-53)', () => {
+  it('a hotel keeps its lobby band', () => {
     const choice = storefrontBandForBuilding({ tourism: 'hotel' }, 'restaurant')
     expect(choice.band).toBe(bandOf('hotel'))
     expect(choice.source).toBe('own')
@@ -59,7 +58,7 @@ describe('storefrontBandForBuilding', () => {
     expect(storefrontBandFor('hotel')).toBe(bandOf('hotel'))
   })
 
-  it('★ a building with no shopfront gets NO BAND, not a hashed one', () => {
+  it('a building with no shopfront gets no band, not a hashed one', () => {
     // 65 `amenity=parking` buildings across the four extracts were taking a
     // hashed shop window across their base.
     for (const amenity of ['parking', 'shelter', 'place_of_worship', 'fuel']) {
@@ -76,28 +75,28 @@ describe('storefrontBandForBuilding', () => {
     for (const amenity of ['courthouse', 'townhall', 'police', 'school']) {
       const choice = storefrontBandForBuilding({ amenity }, null)
       expect(choice.band, amenity).toBe(bandOf('lobby'))
-      // ★ `kind` is what the CW-46 warm/cool bias is keyed on, and the table
-      // has no word for a courthouse. A band NAME is a different vocabulary
+      // `kind` is what the warm/cool bias is keyed on, and the table
+      // has no word for a courthouse. A band name is a different vocabulary
       // and putting one here loses the bias silently.
       expect(choice.kind, amenity).toBe('library')
     }
   })
 
-  it('an unlisted shop value still reads as a shop (CW-53)', () => {
+  it('an unlisted shop value still reads as a shop', () => {
     const choice = storefrontBandForBuilding({ shop: 'car_repair' }, null)
     expect(choice.band).toBe(bandOf('glass'))
     expect(choice.kind).toBe('shop')
   })
 
-  it('★ shop beats amenity beats tourism', () => {
+  it('shop beats amenity beats tourism', () => {
     expect(
       storefrontBandForBuilding({ shop: 'bakery', amenity: 'cafe' }, null).band
     ).toBe(bandOf('bakery'))
-    // ★ THE AMENITY/TOURISM HALF IS A CONVENTION, NOT A MEASUREMENT. Only
+    // The amenity/tourism half is a convention, not a measurement. Only
     // three buildings in the four extracts carry two of the three tags and
     // none of them distinguishes this order (the Library is a lobby either
-    // way), so the case below is SYNTHETIC and pins the convention: what a
-    // building IS beats what it is a destination FOR. The `shop` half is real
+    // way), so the case below is synthetic and pins the convention: what a
+    // building is beats what it is a destination for. The `shop` half is real
     // and is pinned against the extract further down.
     expect(
       storefrontBandForBuilding({ amenity: 'cafe', tourism: 'museum' }, null)
@@ -112,8 +111,8 @@ describe('storefrontBandForBuilding', () => {
 })
 
 describe('the Central Library, pinned against the shipped extract', () => {
-  // CW-63 left this on the ledger: the Library's ground floor was picked by a
-  // coin toss. The pin reads the extract the game actually loads, so a rebake
+  // Without its tag the Library's ground floor would be a coin toss. The
+  // pin reads the extract the game actually loads, so a rebake
   // that drops the tag reddens here rather than silently returning the
   // building to the hash.
   const extract = JSON.parse(
@@ -131,7 +130,7 @@ describe('the Central Library, pinned against the shipped extract', () => {
     expect(library.tags.tourism).toBe('attraction')
   })
 
-  it('★ gets a lobby rather than a coin toss', () => {
+  it('gets a lobby rather than a coin toss', () => {
     const choice = storefrontBandForBuilding(library.tags, null)
     expect(choice.source).toBe('own')
     expect(choice.band).toBe(bandOf('lobby'))
@@ -147,7 +146,7 @@ describe('the one building in four cities where the tag order decides', () => {
   )
   const gallery = abq.elements.find((e) => e.id === 437189766)
 
-  it('★ the Richard Levy Gallery is a SHOP, not a gallery lobby', () => {
+  it('the Richard Levy Gallery is a shop, not a gallery lobby', () => {
     // `shop=art` + `tourism=gallery`. It is the only building in the four
     // extracts whose ground floor changes if `shop` stops going first, which
     // is what makes this the guard for that half of the order.

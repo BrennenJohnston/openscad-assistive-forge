@@ -1,18 +1,18 @@
 /**
- * CW-85 - the backing behind the characters ("Day"): its tables, and the one
+ * The backing behind the characters ("Day"): its tables, and the one
  * thing it is not allowed to cost.
  *
- * Today every glyph in the City Walk sits on pure black. A backing paints
- * something behind it, which can only LOWER the contrast ratio, and lowering
- * contrast is the direction this project does not let a change go
- * (02-accessibility rule 1). So the tints are not a taste to be reviewed in a
- * screenshot: they are measured here, with colorjs.io, against every palette
- * entry the game can put on top of them, and against the dimmest drive the
- * mono ladder ships. A tint that reads nicely and measures 4.3 fails.
+ * Without a backing, every glyph in the City Walk sits on pure black. A
+ * backing paints something behind it, which can only lower the contrast
+ * ratio, and lowering contrast is the direction this project does not let
+ * a change go. So the tints are not a taste to be judged in a screenshot:
+ * they are measured here, with colorjs.io, against every palette entry the
+ * game can put on top of them, and against the dimmest drive the mono
+ * ladder ships. A tint that reads nicely and measures 4.3 fails.
  *
  * The class table guard asks SURFACE_CLASS itself rather than a copied list,
  * so a class appended later (the ids are a wire format and are only ever
- * appended - CW-33) fails this file until it has a tint.
+ * appended) fails this file until it has a tint.
  */
 import { describe, it, expect } from 'vitest'
 import Color from 'colorjs.io'
@@ -72,13 +72,13 @@ const PHOSPHOR_AMBER = tokenIn(
 
 const CLASS_IDS = Object.values(SURFACE_CLASS)
 
-describe('CW-85 backing tables are TOTAL over the surface classes', () => {
+describe('backing tables are total over the surface classes', () => {
   it('reads a real phosphor token for each theme', () => {
     expect(PHOSPHOR_GREEN).toMatch(/^#[0-9a-f]{6}$/i)
     expect(PHOSPHOR_AMBER).toMatch(/^#[0-9a-f]{6}$/i)
   })
 
-  it('★★ every surface class has a mono drive', () => {
+  it('every surface class has a mono drive', () => {
     // Asks the class list itself. A class appended to SURFACE_CLASS without a
     // tint would otherwise back as undefined and paint nothing, silently.
     expect(CLASS_IDS.length).toBeGreaterThan(0)
@@ -92,7 +92,7 @@ describe('CW-85 backing tables are TOTAL over the surface classes', () => {
     }
   })
 
-  it('★★ every surface class has a tint in EVERY palette', () => {
+  it('every surface class has a tint in every palette', () => {
     for (const palette of Object.keys(CITY_BACKING_COLOUR)) {
       for (const id of CLASS_IDS) {
         expect(
@@ -135,10 +135,10 @@ describe('CW-85 backing tables are TOTAL over the surface classes', () => {
   })
 })
 
-describe('★★★ CW-85 the backing never costs a glyph its contrast', () => {
+describe('the backing never costs a glyph its contrast', () => {
   const dimmestDrive = Math.min(...MONO_INTENSITY_LEVELS)
 
-  it('mono: the DIMMEST ink still clears 4.5:1 over every backing', () => {
+  it('mono: the dimmest ink still clears 4.5:1 over every backing', () => {
     const rows = []
     for (const [name, phosphor] of [
       ['green', PHOSPHOR_GREEN],
@@ -158,14 +158,14 @@ describe('★★★ CW-85 the backing never costs a glyph its contrast', () => {
         ).toBeGreaterThanOrEqual(AA_TEXT)
       }
     }
-    // Printed so the record can quote the worst case without re-deriving it.
+    // Printed so the worst case can be quoted without re-deriving it.
     const worst = rows
       .map((r) => [parseFloat(r.split(': ')[1]), r])
       .sort((a, b) => a[0] - b[0])[0]
     console.log(`[CW-85 backing] mono worst case ${worst[1]}`)
   })
 
-  it('colour: EVERY palette entry clears 4.5:1 over every backing', () => {
+  it('colour: every palette entry clears 4.5:1 over every backing', () => {
     const palettes = { green: HC_PALETTE_GREEN, amber: HC_PALETTE_AMBER }
     let worst = { ratio: Infinity, where: '' }
     for (const [name, entries] of Object.entries(palettes)) {
@@ -190,7 +190,7 @@ describe('★★★ CW-85 the backing never costs a glyph its contrast', () => {
     )
   })
 
-  it('★ the backing is DARKER than the dimmest ink, in every palette', () => {
+  it('the backing is darker than the dimmest ink, in every palette', () => {
     // The bar above is the contrast the player reads. This is the separate
     // claim the layer rests on: a blank cell over backing must read as
     // SURFACE, never as a character that happens to be dim. If a tint were
@@ -208,8 +208,8 @@ describe('★★★ CW-85 the backing never costs a glyph its contrast', () => {
   })
 })
 
-describe('CW-85 the backing arithmetic', () => {
-  it('★ a depth byte round-trips to metres within one step', () => {
+describe('the backing arithmetic', () => {
+  it('a depth byte round-trips to metres within one step', () => {
     // 260 m over 255 steps is 1.02 m a step, which is finer than the fade
     // needs and far finer than a 3x6 px cell can show.
     const step = CLASS_DEPTH_FAR_M / 255
@@ -221,7 +221,7 @@ describe('CW-85 the backing arithmetic', () => {
     expect(depthMetres(255)).toBeCloseTo(CLASS_DEPTH_FAR_M, 6)
   })
 
-  it('★ the fade is full to the near bound, gone at the fog far', () => {
+  it('the fade is full to the near bound, gone at the fog far', () => {
     expect(backingFade(0)).toBe(1)
     expect(backingFade(CITY_BACKING_NEAR_M)).toBe(1)
     expect(backingFade(CITY_BACKING_NEAR_M - 1)).toBe(1)
@@ -252,7 +252,7 @@ describe('CW-85 the backing arithmetic', () => {
     expect((p >> 16) & 255).toBe(27)
   })
 
-  it('★★ backs a near surface, leaves the sky and the far skyline bare', () => {
+  it('backs a near surface, leaves the sky and the far skyline bare', () => {
     const table = backingTable({
       mono: false,
       palette: 'green',
@@ -279,9 +279,9 @@ describe('CW-85 the backing arithmetic', () => {
     expect(table[SURFACE_CLASS.ROAD]).not.toBe(table[SURFACE_CLASS.BUILDING_WALL])
   })
 
-  it('★★ a cell the city does not cover reads as sky, not as zero metres', () => {
+  it('a cell the city does not cover reads as sky, not as zero metres', () => {
     // The class pass clears to 0, which is SKY, so an uncovered cell arrives
-    // with class 0 AND depth 0 - the one place "right against the lens" and
+    // with class 0 and depth 0 - the one place "right against the lens" and
     // "nothing there" look identical. The exemption is what resolves it, and
     // it is the reason the sky is on the exempt list at all.
     const table = backingTable({
@@ -331,7 +331,7 @@ describe('CW-85 the backing arithmetic', () => {
     )
   })
 
-  it('★ mono backing is the phosphor, and every class differs from black', () => {
+  it('mono backing is the phosphor, and every class differs from black', () => {
     const table = backingTable({
       mono: true,
       palette: 'amber',

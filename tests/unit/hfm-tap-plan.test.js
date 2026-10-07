@@ -6,7 +6,7 @@ import {
 } from './hfm-convert-fixture.js'
 
 /**
- * CW-30 P1: the deduped sampling plan must be EXACT, not merely close.
+ * The deduped sampling plan must be exact, not merely close.
  *
  * The sixteen taps a cell makes are rounded to whole sample pixels, and at
  * small character sizes many of them round to the same pixel - at the 10%
@@ -47,7 +47,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('CW-30 sampling plan — the deduped taps read the same picture', () => {
+describe('sampling plan — the deduped taps read the same picture', () => {
   it('produces glyph-for-glyph identical output to the per-tap path', async () => {
     await convertBothWays({ taps: true })
 

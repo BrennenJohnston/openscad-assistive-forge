@@ -1,10 +1,10 @@
 import { vi } from 'vitest'
 
 /**
- * Shared scaffolding for the CW-30 converter parity tests.
+ * Shared scaffolding for the converter parity tests.
  *
  * Both of them do the same thing: run one real conversion down the old code
- * path and one down the new one, over the SAME synthetic frame, and compare
+ * path and one down the new one, over the same synthetic frame, and compare
  * the glyph indices the painter is handed. Only the switch they flip differs.
  *
  * `vi.mock` is hoisted per file and cannot be shared, so each test file keeps

@@ -73,7 +73,7 @@ describe('gridPoints', () => {
     expect(inside).toBeLessThan(g.points.length)
   })
 
-  it('asks for the SAME points on a second bake, so the cache is reusable', () => {
+  it('asks for the same points on a second bake, so the cache is reusable', () => {
     const a = gridPoints(SEATTLE, 300, ELEVATION_STEP_M)
     const b = gridPoints(SEATTLE, 300, ELEVATION_STEP_M)
     expect(JSON.stringify(a.points)).toBe(JSON.stringify(b.points))
@@ -118,7 +118,7 @@ describe('sampleUrl and readSample', () => {
     expect(readSample('nrcan', { altitude: 138 })).toBe(138)
   })
 
-  it('★ treats the EPQS out-of-coverage sentinel as NO DATA, not as a cliff', () => {
+  it('treats the EPQS out-of-coverage sentinel as no data, not as a cliff', () => {
     // EPQS answers a point it does not cover with a large negative number and
     // HTTP 200. Believed, it would put a kilometre-deep hole in the terrain.
     expect(readSample('usgs', { value: '-1000000' })).toBeNull()
@@ -156,7 +156,7 @@ describe('sampleGrid', () => {
     }
   })
 
-  it('backs off a 429 SHORTLY and keeps the answer that follows', async () => {
+  it('backs off a 429 shortly and keeps the answer that follows', async () => {
     let first = true
     const f = fakeFetcher(() => {
       if (first) {
@@ -181,7 +181,7 @@ describe('sampleGrid', () => {
     expect(out.holes).toBe(0)
   })
 
-  it('gives up a point as a HOLE after four tries, and says so', async () => {
+  it('gives up a point as a hole after four tries, and says so', async () => {
     const g = tiny()
     // One real point of this grid, so the fake fails something that exists.
     const doomed = sampleUrl('usgs', g.points.find(Boolean))
@@ -203,13 +203,12 @@ describe('sampleGrid', () => {
     expect(out.samples.some((v) => v === 0)).toBe(false)
   })
 
-  it('★ every warning it raises is one the bake gate can actually see', () => {
-    // THIS TEST FOUND A REAL HOLE. The gate first filtered its input for
-    // /WARNING:|ERROR:/ - and none of these messages carries either word, so
-    // a run that lost points to a 503 would have written the extract anyway,
-    // which is the exact D-97 shape the gate exists to stop. The gate now
-    // treats ANY entry as fatal, and this pins that: a message must not have
-    // to say the word to be heard.
+  it('every warning it raises is one the bake gate can actually see', () => {
+    // A gate that filtered its input for /WARNING:|ERROR:/ would miss these:
+    // none of the messages carries either word, so a run that lost points to a
+    // 503 would write the extract anyway, the failure the gate exists to stop.
+    // The gate treats any entry as fatal, and this pins that: a message must
+    // not have to say the word to be heard.
     const line = 'elevation sample HTTP 503 at 47.61,-122.34 - left as a hole'
     expect(/WARNING:|ERROR:/i.test(line)).toBe(false)
     expect(line.trim().length).toBeGreaterThan(0)
@@ -266,11 +265,11 @@ describe('sampleGrid', () => {
 })
 
 describe('readJson', () => {
-  it('★ treats HTTP 200 with an UNREADABLE BODY as a retryable failure', async () => {
-    // THIS KILLED A REAL BAKE. USGS EPQS answers 200 with an empty body often
-    // enough to hit once in the first 2,000 points of Seattle, and an
-    // unguarded `await r.json()` threw out of the worker, out of Promise.all
-    // and out of the script, twenty minutes in. 200 is not an answer.
+  it('treats HTTP 200 with an unreadable body as a retryable failure', async () => {
+    // USGS EPQS answers 200 with an empty body often enough to hit once in the
+    // first 2,000 points of Seattle, and an unguarded `await r.json()` would
+    // throw out of the worker, out of Promise.all and out of the script, twenty
+    // minutes into a bake. 200 is not an answer.
     const res = await readJson('x', '', async () => ({
       ok: true,
       status: 200,
@@ -340,7 +339,7 @@ describe('elevationBlock and parseElevation', () => {
     const parsed = parseElevation(block)
     expect(parsed.cols).toBe(g.cols)
     expect(parsed.samples.length).toBe(g.cols * g.rows)
-    // ★ COVERAGE IS OF THE POINTS THE BAKE ASKED FOR, not of the rectangle.
+    // Coverage is of the points the bake asked for, not of the rectangle.
     // A circle fills about 61 % of its own bounding square at this step, and
     // reporting that as "61 % covered" reads as a third of the terrain being
     // missing when nothing is. Everything inside the circle answered here, so
@@ -364,7 +363,7 @@ describe('elevationBlock and parseElevation', () => {
     ).toBeNull()
   })
 
-  it('reports LESS than full coverage when a point really is missing', () => {
+  it('reports less than full coverage when a point really is missing', () => {
     const { g, block } = built()
     const holed = { ...block, samples: block.samples.slice() }
     const firstReal = holed.samples.findIndex((v) => v !== null)

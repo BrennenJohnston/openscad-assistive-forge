@@ -23,18 +23,18 @@ import {
 } from '../../../src/js/game/hc-palettes.js'
 
 /**
- * CW-57 (CW-Q55): planters, flowerbeds and picnic tables.
+ * Planters, flowerbeds and picnic tables.
  *
- * The flower tables are cited design data and the owner's to veto, so what is
- * guarded is not WHICH flowers - that is an argument - but that the tables are
- * well formed, that the shapes are the sizes they claim, and that the one
- * design claim worth making is true: the desert city's flowers read as desert
- * flowers.
+ * The flower tables are cited design data and a matter of taste, so what is
+ * guarded is not which flowers - that is an argument - but that the tables
+ * are well formed, that the shapes are the sizes they claim, and that the
+ * one design claim worth making is true: the desert city's flowers read as
+ * desert flowers.
  */
-describe('plantings and their flowers (CW-57)', () => {
+describe('plantings and their flowers', () => {
   const CITIES = Object.keys(CITY_FLOWERS)
 
-  // D-112: the converter reads the frame AFTER the renderer's output
+  // The converter reads the frame after the renderer's output
   // encoding, so a palette claim tested on the linear tint is a claim about
   // numbers nobody ever sees.
   const encode = (c) =>
@@ -89,7 +89,7 @@ describe('plantings and their flowers (CW-57)', () => {
     }
   })
 
-  it('★ makes the desert city read as the desert, ENCODED (D-112)', () => {
+  it('makes the desert city read as the desert, encoded', () => {
     // The whole argument for per-city flower tables. Measured through the
     // encoded pipeline, not the linear tint: three of Albuquerque's five land
     // YELLOW, and not one of Seattle's does.
@@ -113,8 +113,8 @@ describe('plantings and their flowers (CW-57)', () => {
   })
 
   it('records what the palettes do with a blue flower, rather than hiding it', () => {
-    // ★ The ANSI set has SIX entries - green, cyan, yellow, magenta, red,
-    // white - and NO BLUE. Colorado's columbine is blue-violet and British
+    // The ANSI set has six entries - green, cyan, yellow, magenta, red,
+    // white - and no blue. Colorado's columbine is blue-violet and British
     // Columbia's hydrangeas are blue. Neither can land on blue because there
     // is none; both land on their nearest neighbour there and on the neon
     // set's violet, which is right. Pinned so nobody later "fixes" the hue to
@@ -156,7 +156,7 @@ describe('plantings and their flowers (CW-57)', () => {
     const top = lid.z + lid.h / 2
     expect(top).toBeCloseTo(PLANTER_H_M - 0.01, 5)
     // The two overlap rather than touching exactly - exactly-touching faces
-    // are the coplanar fight D-110 is about.
+    // are a coplanar fight in the id buffer.
     expect(lid.z - lid.h / 2).toBeLessThan(box.z + box.h / 2)
   })
 
@@ -178,7 +178,7 @@ describe('plantings and their flowers (CW-57)', () => {
     }
   })
 
-  it('sizes a flowerbed from its OWN area', () => {
+  it('sizes a flowerbed from its own area', () => {
     const small = flowerbedPositions(0, 0, 4, 1)
     const big = flowerbedPositions(0, 0, 60, 1)
     const tris = (a) => a.length / 9

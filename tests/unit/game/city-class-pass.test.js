@@ -3,18 +3,18 @@ import { Color, Mesh, Scene } from 'three'
 import { createClassPass, SURFACE_CLASS } from '../../../src/js/game/city-class-pass.js'
 
 /**
- * The class pass needs a GL context to produce a picture, so what CAN be
+ * The class pass needs a GL context to produce a picture, so what can be
  * pinned without one is the contract around it: which material each named mesh
  * is dressed in, what that material's shader is asked to compute, and that the
  * readback is turned the right way up.
  *
- * D-73 is the reason the shader assertion exists. The roof test asks which way
- * a face points, and it was asking relative to the CAMERA rather than to the
- * world, so a wall the walker stood square to classified as a rooftop and was
- * drawn with the horizontal roof glyphs - venetian blinds across every facade
- * you looked straight at. Nothing failed: the picture was merely wrong. The
+ * The shader assertion exists because the roof test asks which way a face
+ * points. Asked relative to the camera rather than to the world, a wall the
+ * walker stood square to would classify as a rooftop and be drawn with the
+ * horizontal roof glyphs: venetian blinds across every facade looked at
+ * straight on. Nothing would fail; the picture would merely be wrong. The
  * guard below fails if a normal ever goes through a matrix on its way into
- * vUp again.
+ * vUp.
  */
 
 /** A renderer stub that records the calls and hands back canned pixels. */
@@ -83,7 +83,7 @@ function materialsDuringPass(scene) {
 }
 
 describe('city-class-pass', () => {
-  it('asks which way a face points in the WORLD, never relative to the camera (D-73)', () => {
+  it('asks which way a face points in the world, never relative to the camera', () => {
     const seen = materialsDuringPass(sceneWith(['buildings']))
     const vertex = seen.get('buildings').vertexShader
     const vUpLine = vertex
@@ -111,10 +111,10 @@ describe('city-class-pass', () => {
     expect(seen.get('confetti').uniforms.uId.value).toBe(SURFACE_CLASS.SKY)
   })
 
-  it('dresses the CW-43 street furniture in the voices of what it resembles', () => {
+  it('dresses the street furniture in the voices of what it resembles', () => {
     // Zero new class ids on purpose: the span table is exactly full, and at
-    // playable sizes a hydrant is a few cells - a distinct vocabulary could
-    // not show (the CW-43 record's photographs check this call).
+    // playable sizes a hydrant is a few cells, so a distinct vocabulary could
+    // not show.
     const seen = materialsDuringPass(
       sceneWith([
         'bus-stop-poles',
@@ -141,14 +141,14 @@ describe('city-class-pass', () => {
     expect(seen.get('hydrants').uniforms.uId.value).toBe(SURFACE_CLASS.LAMP)
   })
 
-  it('carries each mesh own depth bias into the class material (D-110)', () => {
+  it('carries each mesh own depth bias into the class material', () => {
     // Several of this city surfaces are deliberately coplanar with the one
     // behind them and are pulled forward by a polygon offset rather than by a
-    // gap. Dressing them in a material that DROPS that offset makes them
+    // gap. Dressing them in a material that drops that offset makes them
     // coplanar again here, in the id buffer, where the winner is then decided
     // by floating-point luck and re-rolled by any view change - and the class
-    // id is what picks the cell glyph vocabulary. MEASURED before the fix,
-    // over a 20-frame sub-cell turn at the Seattle spawn: 104,180 class
+    // id is what picks the cell glyph vocabulary. Without the offset, a
+    // 20-frame sub-cell turn at the Seattle spawn would make 104,180 class
     // transitions, 101,263 of them the storefront/wall pair.
     const seen = materialsDuringPass(
       sceneWithOffsets({
@@ -180,7 +180,7 @@ describe('city-class-pass', () => {
   it('gives two meshes of one class different materials when their bias differs', () => {
     // The material cache is keyed on the offset as well as the class, or the
     // first mesh of a class would lend its depth bias to every later one.
-    // Curbs and painted lines share the CURB voice (CW-51) but sit at
+    // Curbs and painted lines share the CURB voice but sit at
     // different depths above the roadway.
     const seen = materialsDuringPass(
       sceneWithOffsets({ curbs: [-2, -2], 'road-lines': [-4, -4] })
@@ -204,7 +204,7 @@ describe('city-class-pass', () => {
     pass.dispose()
   })
 
-  it('turns the readback the right way up: row 0 is the TOP of the picture', () => {
+  it('turns the readback the right way up: row 0 is the top of the picture', () => {
     // readRenderTargetPixels hands back rows bottom-up. Fill row y with y+1 so
     // an unflipped map would come back starting at the largest value.
     const pass = createClassPass(fakeRenderer((_x, y) => y + 1), sceneWith(['roads']))
@@ -223,20 +223,20 @@ describe('city-class-pass', () => {
 })
 
 /**
- * ★ CW-56: the question this map keeps failing.
+ * The question this map keeps failing.
  *
  * A mesh name missing from CLASS_BY_MESH_NAME is not an error anywhere. The
  * pass simply leaves that mesh out, and it reads as SKY - a safe default for
  * a mesh nobody added, and a silent, invisible defect for one somebody just
- * did. CW-56 built a ground mesh that would have been dressed in the sky's
- * voice, and nothing anywhere would have said so.
+ * did: a new ground mesh would be dressed in the sky's voice, and nothing
+ * anywhere would say so.
  *
- * So this does not copy the list. It BUILDS a city, enumerates the meshes the
- * builders actually made, and asks the map about each one. A future release
+ * So this does not copy the list. It builds a city, enumerates the meshes the
+ * builders actually made, and asks the map about each one. A future change
  * that adds a mesh and forgets this map fails here rather than in a
  * photograph nobody takes.
  */
-describe('every mesh the city builds has a class (CW-56)', () => {
+describe('every mesh the city builds has a class', () => {
   it('asks the builders, not a copy of the list', async () => {
     const [
       { CLASS_BY_MESH_NAME },
@@ -307,16 +307,15 @@ describe('every mesh the city builds has a class (CW-56)', () => {
     expect(built.length).toBeGreaterThan(4)
 
     /**
-     * ★★ CW-65: THE GUARD HAD A HOLE THE SIZE OF EVERY STANDALONE BUILDER.
-     * It enumerated buildStreetProps and nothing else, so `fireworks` (CW-64)
-     * and `traveler` (CW-65) were both outside what it could see - and a mesh
-     * it cannot see is exactly the mesh that gets forgotten. Ask THEM too.
+     * The standalone builders too: enumerating buildStreetProps alone would
+     * leave `fireworks` and `traveler` outside what the guard can see, and a
+     * mesh it cannot see is exactly the mesh that gets forgotten. Ask them too.
      */
     const fireworks = buildFireworks(1000)
     const traveler = buildTraveler('seattle')
     traveler.place(0, 0, 0)
-    // CW-78: the waypoint marks are the third standalone builder to arrive
-    // through the same hole. Asked by name like the other two.
+    // The waypoint marks are a third standalone builder, asked by name like
+    // the other two.
     const waypoints = buildWaypointMarks([
       { x: 0, y: 0, facingRad: 0, name: 'guard', placement: 'pavement' },
     ])

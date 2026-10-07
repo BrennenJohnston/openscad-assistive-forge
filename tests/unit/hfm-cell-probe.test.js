@@ -5,10 +5,10 @@ import {
   createMockPreviewManager,
 } from './hfm-convert-fixture.js'
 
-// CW-52: the DEV-only cell probe. It is the instrument the temporal stability
+// The DEV-only cell probe. It is the instrument the temporal stability
 // work is measured on, so what it promises has to hold: off by default, a
-// SNAPSHOT rather than a live view of the converter's own arrays, and a grid
-// that agrees with the cell count the stats already reported.
+// snapshot rather than a live view of the converter's own arrays, and a
+// grid that agrees with the cell count the stats already reported.
 
 async function makeConverted(options = {}) {
   vi.resetModules()
@@ -27,7 +27,7 @@ async function makeConverted(options = {}) {
   return { api, convert, done: () => (nowSpy.mockRestore(), api.dispose()) }
 }
 
-describe('CW-52 cell probe', () => {
+describe('cell probe', () => {
   beforeEach(() => installCanvasMock())
   afterEach(() => removeCanvasMock())
 
