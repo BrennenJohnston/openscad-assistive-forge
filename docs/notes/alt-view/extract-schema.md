@@ -113,11 +113,11 @@ with the role `inner` become holes; everything else is treated as an outer ring.
 
 Standalone nodes are point props and point data. The parser routes them, in
 this order: street trees (`natural=tree`); planters (`man_made=planter`) and
-picnic tables (`leisure=picnic_table` — CW-55); rendered street furniture
+picnic tables (`leisure=picnic_table`); rendered street furniture
 (`highway=bus_stop`, `amenity` in bench / waste_basket / bicycle_parking,
-`emergency=fire_hydrant` — CW-43); data-only wayfinding points
-(`highway=crossing`, bare `kerb=*`, bare `tactile_paving=*` — CW-43); named
-attractions (`tourism=attraction` or `attraction=*` with a `name` — CW-44);
+`emergency=fire_hydrant`); data-only wayfinding points
+(`highway=crossing`, bare `kerb=*`, bare `tactile_paving=*`); named
+attractions (`tourism=attraction` or `attraction=*` with a `name`);
 then storefront pois (`shop` or any remaining `amenity`). The order matters:
 a bench is an `amenity` node and a picnic table is a `leisure` node, and
 without their own branches both would reach the storefront chooser.
@@ -157,18 +157,18 @@ the size of the raw Overpass response.
 | `lanes`, `width` | Kept for a future release. Too sparse to design on today: at most fourteen `width` tags in any of the four bundled cities. |
 | `landuse`, `leisure` | Greenspace, for the named values below. |
 | `building:material`, `building:colour` | Facade variety, where a mapper has said. |
-| `emergency` | Fire hydrants (CW-43). |
+| `emergency` | Fire hydrants. |
 | `shelter`, `bench`, `bin` | A bus stop's companions: does the stop offer a roof, a seat, a basket. |
 | `backrest`, `seats` | A bench's own shape. |
 | `kerb` | Kerb form at crossings and on bare kerb nodes: raised, lowered, flush, rolled. |
 | `tactile_paving` | Tactile paving presence: yes, no, partial, contrasted. |
 | `crossing`, `crossing:island`, `crossing:markings` | What kind of crossing, whether an island splits it, how it is marked. |
 | `traffic_signals:sound`, `traffic_signals:vibration` | Whether the signal speaks or buzzes — wayfinding data for the mission the owner named. |
-| `attraction` | The specific attraction kind on a named node (CW-44): `big_wheel`, `carousel`… |
-| `genus`, `species` | What a tree is, where a mapper has said. Near-absent in all four bundled cities and kept anyway, at no measurable size cost, so a later release never has to rebake to read them (CW-55). |
-| `leaf_type` | `broadleaved` or `needleleaved`. The one tree tag that is actually there: Seattle 990 of 1,759 trees, Burnaby 170 of 244, Denver 66 of 2,325, Albuquerque none (CW-55). |
-| `denotation` | Whether a tree is an avenue tree, a landmark, a natural monument (CW-55). |
-| `man_made` | Carries `man_made=planter` (CW-55). |
+| `attraction` | The specific attraction kind on a named node: `big_wheel`, `carousel`… |
+| `genus`, `species` | What a tree is, where a mapper has said. Near-absent in all four bundled cities and kept anyway, at no measurable size cost, so a later release never has to rebake to read them. |
+| `leaf_type` | `broadleaved` or `needleleaved`. The one tree tag that is actually there: Seattle 990 of 1,759 trees, Burnaby 170 of 244, Denver 66 of 2,325, Albuquerque none. |
+| `denotation` | Whether a tree is an avenue tree, a landmark, a natural monument. |
+| `man_made` | Carries `man_made=planter`. |
 
 ### Greenspace
 
@@ -220,7 +220,7 @@ Two consequences for anyone writing an extract:
 
 ### `ascii-city-extract@2`
 
-Version 2 (CW-77) is **additive**. Everything version 1 carried is present
+Version 2 is **additive**. Everything version 1 carried is present
 and unchanged, so a version 1 reader gets exactly the city it always got. Two
 things are new:
 
@@ -279,7 +279,7 @@ lamps alternating every 55 m, a wider one gets opposite pairs every 76 m, and
 a pedestrian street gets luminaires every 18 m.
 
 Seattle's extract additionally carries Seattle City Light's own surveyed pole
-register, on the project owner's explicit authorization (CW-Q76) after being
+register, on the project owner's explicit authorization after being
 told the publisher's catalog page states no license. Those nodes carry
 `operator=Seattle City Light` and a **negative id**: OpenStreetMap ids are
 positive, so a negative id marks an element that is not from OSM, and the ODbL
@@ -316,7 +316,7 @@ draws it.
     }
   ],
   roads: [{ points: [[x, y], ...], widthM, kind, name, sidewalk, surface }],
-  // CW-77. `lamps` is empty for a v1 extract; `elevation` is null.
+  // `lamps` is empty for a v1 extract; `elevation` is null.
   lamps: [{ x, y, mount, heightM, operator, ref }],
   elevation: { originX, originY, stepM, cols, rows, inCircle, samples: Float32Array, coverage, minM, maxM, source, license, attribution } | null,
   trees: [{ x, y, leafType?, genus?, species?, denotation? }, ...],
@@ -339,23 +339,23 @@ draws it.
 }
 ```
 
-**`trees` changed shape in CW-55**, from `[x, y]` pairs to objects. What a tree
+**`trees` changed shape**, from `[x, y]` pairs to objects. What a tree
 IS has to travel with where it is; a parallel array keyed by index is how two
 lists drift apart. Every field but `x` and `y` is optional, because most trees
 in most cities carry nothing — Albuquerque has 142 trees and not one
 `leaf_type` among them.
 
-`furniture` (CW-43) is the rendered street furniture at true node positions;
+`furniture` is the rendered street furniture at true node positions;
 `kind` is one of `bus_stop`, `bench`, `waste_basket`, `bicycle_parking`,
 `fire_hydrant`; a bus stop carries `shelter` and a bench `backrest`, both
 booleans. `wayfinding` is the data-only accessibility layer — `kind` is
 `crossing`, `kerb` or `tactile_paving`, and `tags` carries the kept
 companions (a crossing with kerb and tactile companions is one point, not
-three). Nothing is drawn from it yet. `attractions` (CW-44) are the named
+three). Nothing is drawn from it yet. `attractions` are the named
 attraction nodes that join the landmark legend; `heightM` is parsed from the
 `height` tag, `0` where untagged.
 
-`plantings` (CW-55) are planters and flowerbeds — `kind` is `planter` or
+`plantings` are planters and flowerbeds — `kind` is `planter` or
 `flowerbed`. A planting mapped as a polygon is carried as its **centroid and
 its area**, never as a ring: a two-by-four pixel character cell cannot show the
 shape of a flowerbed, and keeping the ring would put real bytes in every
@@ -489,7 +489,7 @@ anything else.
 
 - **Additive changes keep `@1`.** A new kept tag, a new optional field on a
   parsed object, or a new `stats` counter does not break a reader that ignores
-  it. Everything CW-26 and CW-27 added was additive.
+  it. Everything added since has been additive.
 - **A breaking change bumps to `@2`.** Renaming or removing a field, changing a
   unit, changing what a coordinate means, or changing the element shapes. A
   reader that sees a version it does not know should say so rather than guess.

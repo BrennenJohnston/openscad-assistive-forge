@@ -20,9 +20,10 @@
 //  - Geometry, parameters, and layout logic are otherwise unchanged.
 //
 // A directly readable 3D-printed braille card. The card prints leaning back
-// at face_angle_deg from the bed (default 75 degrees -- the angle CHI 2024
-// research found fastest and most comfortable to read, because near-vertical
-// printing moves the layer seams off the finger-contact surface). A
+// at face_angle_deg from the bed (default 75 degrees: in CHI 2024 research,
+// braille printed at 75 degrees or vertical was read faster than flat and
+// rated more comfortable, and near-vertical printing moves the layer seams
+// off the finger-contact surface). A
 // parametric array of triangular BREAK-AWAY SUPPORT FINS stands behind the
 // card, joined to it by tiny snap-off bridges and grounded by a built-in
 // brim, so the whole thing prints support-free and exports as ONE fused STL.
