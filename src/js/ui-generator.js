@@ -889,7 +889,6 @@ export function updateDependentParameters(changedParam, newValue) {
   });
 }
 
-
 /**
  * Apply dependency attributes and initial visibility to a parameter control
  * @param {HTMLElement} container - The parameter control container
@@ -4630,7 +4629,6 @@ function createFileControl(
 
   return container;
 }
-
 
 /**
  * Create a vector parameter control with individual component inputs
