@@ -41,8 +41,8 @@ describe('ClassicDockModel — default arrangement (B6)', () => {
   it('keeps the bottom strip side by side rather than tabbed', () => {
     const model = new ClassicDockModel();
 
-    // Four separate groups, not one group of four: B7 only draws tabs for a
-    // group with more than one member, so the default strip stays as shot 1.
+    // Four separate groups, not one group of four: tabs are drawn only for a
+    // group with more than one member, so the default strip stays untabbed.
     expect(model.getArrangement().bottom).toHaveLength(4);
     expect(model.getGroupOf('console')).toEqual(['console']);
   });
@@ -188,7 +188,7 @@ describe('ClassicDockModel — movePanel (B6)', () => {
 
   it('refuses a field that is not rendered, so no panel is stranded', () => {
     const simplified = new ClassicDockModel({
-      // Simplified drops every dock but the Customizer (D-7).
+      // Simplified drops every dock but the Customizer.
       isFieldAvailable: (field) => field === 'right-top',
     });
 
@@ -353,7 +353,7 @@ describe('ClassicDockModel — applyToDom (B6)', () => {
       getElement: (id) => elements.get(id) || null,
     });
 
-    // Animate and Font List are reserved slots until sub-plan F builds them.
+    // Animate and Font List have no element in this fixture: skipped.
     expect(() => model.applyToDom()).not.toThrow();
     expect(
       [...elements.get('classicBottomStrip').children].map((e) => e.id)
@@ -487,7 +487,7 @@ describe('ClassicDockModel — tab-merge (B7)', () => {
         controls: 'classicErrorLogSlot',
       },
     ]);
-    // The panel that just arrived is the one showing (B7).
+    // The panel that just arrived is the one showing.
     expect(model.getActivePanel('console')).toBe('errorLog');
     expect(elements.get('classicConsoleSlot').hidden).toBe(true);
     expect(elements.get('classicErrorLogSlot').hidden).toBe(false);
@@ -513,7 +513,7 @@ describe('ClassicDockModel — tab-merge (B7)', () => {
     expect(tabgroup()).toBeNull();
   });
 
-  it('shows ONE titlebar — the active panel’s, with its buttons still live', () => {
+  it('shows one titlebar — the active panel’s, with its buttons still live', () => {
     let folds = 0;
     document
       .getElementById('classicConsoleSlotBtn')
@@ -671,8 +671,8 @@ describe('ClassicDockModel — persistence and the breakpoint (B9)', () => {
     model.save();
 
     expect(localStorage.getItem(KEY)).not.toBeNull();
-    // The arrangement lives apart from the pane visibility (B3) and the
-    // column widths (B4), so clearing one never costs the others.
+    // The arrangement lives apart from the pane visibility and the column
+    // widths, so clearing one never costs the others.
     expect(localStorage.getItem('openscad-forge-classic-panes')).toBeNull();
     expect(localStorage.getItem('openscad-forge-classic-columns')).toBeNull();
     expect(JSON.parse(localStorage.getItem(KEY)).left).toEqual([
@@ -719,7 +719,7 @@ describe('ClassicDockModel — persistence and the breakpoint (B9)', () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  it('keeps an arrangement naming a panel the density hides (D-7)', () => {
+  it('keeps an arrangement naming a panel the density hides', () => {
     const saved = new ClassicDockModel();
     saved.movePanel('viewportControl', 'bottom');
     saved.save();

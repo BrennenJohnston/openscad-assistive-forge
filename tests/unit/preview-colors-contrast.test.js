@@ -7,9 +7,8 @@
  * Low Vision Task Force guidance for thin strokes it is held to the
  * 4.5:1 text threshold against the model color it is drawn on.
  *
- * The light theme previously used the desktop Cornfield pair
- * (#f9d72c / #9dcb51), which measured 1.3:1 / 1.7:1 and failed — these
- * tests keep that regression from coming back.
+ * The desktop Cornfield pair (#f9d72c / #9dcb51) measures 1.3:1 / 1.7:1 on
+ * the light theme and fails, so the light theme cannot use it.
  *
  * @license GPL-3.0-or-later
  */
@@ -108,8 +107,8 @@ describe('PREVIEW_COLORS non-text contrast (WCAG 2.2 SC 1.4.11)', () => {
 });
 
 /**
- * The desktop viewport schemes (Preferences ▸ 3D View), per owner decision
- * Q-10: ten schemes, backgrounds verbatim from upstream, model and edge
+ * The desktop viewport schemes (Preferences ▸ 3D View):
+ * ten schemes, backgrounds verbatim from upstream, model and edge
  * colours tuned the minimum distance needed to pass.
  *
  * The suite above already holds every one of them to 3:1 and 4.5:1 because
@@ -148,7 +147,7 @@ describe('desktop viewport colour schemes', () => {
 
   // Verbatim from OpenSCAD tag openscad-2021.01: Cornfield from
   // src/colormap.cc line 39, the rest from color-schemes/render/*.json.
-  // A background is the one value Q-10 says must NOT be tuned.
+  // A background is the one value that must not be tuned.
   const UPSTREAM_BACKGROUNDS = {
     cornfield: 0xffffe5,
     metallic: 0xaaaaff,
@@ -169,7 +168,7 @@ describe('desktop viewport colour schemes', () => {
     }
   );
 
-  // Verbatim from the same upstream files (U-13): Cornfield's AXES_COLOR
+  // Verbatim from the same upstream files: Cornfield's AXES_COLOR
   // from src/colormap.cc line 40, the rest from each scheme JSON's
   // "axes-color". All ten already pass SC 1.4.11 against their own
   // backgrounds (sunset is the narrowest at 3.20:1), so unlike the model
@@ -205,7 +204,7 @@ describe('desktop viewport colour schemes', () => {
   );
 
   it('leaves Starnight and DeepOcean exactly as upstream drew them', () => {
-    // MEASURED: these two are the only schemes that already pass all three
+    // Measured: these two are the only schemes that already pass all three
     // thresholds untouched, so tuning them would have been a change with no
     // accessibility justification.
     expect(PREVIEW_COLORS.starnight.model).toBe(0xffffe0);

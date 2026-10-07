@@ -5,18 +5,18 @@ import path from 'path'
 import { devWorkerModuleGraph, DEV_WORKER_ENTRIES } from '../../vite.config.js'
 
 /**
- * D-31 and D-133: WebKit refuses a CACHED module when a worker imports it under
- * Cross-Origin-Embedder-Policy, so the dev server serves the render worker's
- * whole module graph `no-store`. D-31 covered the worker's own directory.
- * D-133 was the same failure one directory over: the worker also imports four
- * modules from src/js/ that the main document loads first, and WebKit refused
- * every one of them, so no preview could render in dev on Safari at all.
+ * WebKit refuses a cached module when a worker imports it under
+ * Cross-Origin-Embedder-Policy, so the dev server serves the render
+ * worker's whole module graph `no-store`: the worker's own directory, and
+ * the four modules from src/js/ it imports that the main document loads
+ * first. Without them WebKit refuses every one, and no preview can render
+ * in dev on Safari at all.
  *
  * The scope is computed from the worker's real imports rather than listed by
  * hand. These tests are the pin that the computation actually reaches the
  * far side of the graph - a hand-written list is what failed twice.
  */
-describe('the dev render worker\'s no-store scope (D-31, D-133)', () => {
+describe('the dev render worker\'s no-store scope', () => {
   const graph = devWorkerModuleGraph()
 
   it('covers the worker entry itself', () => {
@@ -24,7 +24,7 @@ describe('the dev render worker\'s no-store scope (D-31, D-133)', () => {
   })
 
   it('covers every module the worker imports, including the ones outside src/worker/', () => {
-    // These four are the D-133 case: shared with the main thread, cached by it,
+    // These four are shared with the main thread, cached by it,
     // then refused for the worker. color-utils.js is reached transitively.
     for (const url of [
       '/src/js/file-param-resolver.js',
@@ -83,11 +83,11 @@ describe('the dev render worker\'s no-store scope (D-31, D-133)', () => {
 })
 
 /**
- * DP-34's trace worker is the second module worker built from src/, and it
- * imports image-import.js and ink-extraction.js, both of which the main thread
- * loads first. That is precisely the D-133 shape, so it needs the same scope.
+ * The trace worker is the second module worker built from src/, and it
+ * imports image-import.js and ink-extraction.js, both of which the main
+ * thread loads first, so it needs the same scope.
  */
-describe("the trace worker's no-store scope (DP-34)", () => {
+describe("the trace worker's no-store scope", () => {
   const graph = devWorkerModuleGraph('src/js/trace-worker.js')
 
   it('covers the worker entry', () => {

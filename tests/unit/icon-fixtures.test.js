@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * DP-36: the whole road, on a picture that is a file.
+ * The whole road, on a picture that is a file.
  *
  * The credit-line tests work on drawings built as strings, which is the right
  * way to test a rule. This traces two PNGs through the engine that actually
@@ -8,7 +8,7 @@
  * picture travels and the only place the pieces can disagree with each other.
  *
  * The fixtures are drawn by scripts/make-icon-fixtures.mjs. They are stand-ins
- * for a stock icon and copy only the SHAPE of the problem, measured across nine
+ * for a stock icon and copy only the shape of the problem, measured across nine
  * real ones; no stock icon is in this repository.
  *
  * Node environment: the committed Potrace module supports it, and under jsdom
@@ -85,8 +85,8 @@ async function draw(name, ink = { mode: 'lineart' }) {
 
 const shapeCount = (svg) => (parseSvgElements(svg).length)
 
-describe('a stock-icon shaped picture, end to end (DP-36)', () => {
-  it('★ the outline drawing comes out as the outline, not the outline plus a caption', async () => {
+describe('a stock-icon shaped picture, end to end', () => {
+  it('the outline drawing comes out as the outline, not the outline plus a caption', async () => {
     const svg = await draw('outline-ring.png')
     const before = shapeCount(svg)
     // The caption is most of the picture, exactly as it is on the real ones.
@@ -100,7 +100,7 @@ describe('a stock-icon shaped picture, end to end (DP-36)', () => {
     expect(findCreditLine(out.svg).count).toBe(0)
   })
 
-  it('★ the ring keeps its counter, so it is still a ring', async () => {
+  it('the ring keeps its counter, so it is still a ring', async () => {
     const svg = await draw('outline-ring.png')
     const out = removeCreditLine(svg)
     // An outline is two closed shapes: the outside and the hole it encloses.
@@ -108,7 +108,7 @@ describe('a stock-icon shaped picture, end to end (DP-36)', () => {
     expect(shapeCount(out.svg)).toBe(2)
   })
 
-  it('★ the face keeps all three counters as holes', async () => {
+  it('the face keeps all three counters as holes', async () => {
     const svg = await draw('filled-face.png')
     const out = removeCreditLine(svg)
     // Outer boundary, two eyes, one mouth.

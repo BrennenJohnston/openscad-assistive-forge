@@ -109,7 +109,7 @@ describe('CodeMirrorEditor', () => {
       expect(editor.getValue()).toBe(code);
     });
 
-    it('should NOT fire onChange when setValue is called', () => {
+    it('should not fire onChange when setValue is called', () => {
       const onChange = vi.fn();
       createEditor({ onChange });
       editor.initialize();
@@ -252,7 +252,7 @@ describe('CodeMirrorEditor', () => {
       editor.initialize();
       editor.setValue('cube(10);');
 
-      // setValue resets history (A1), so the editor toolbar must not offer
+      // setValue resets history, so the editor toolbar must not offer
       // an Undo that would wipe the project the user just opened
       expect(editor.canUndo()).toBe(false);
       expect(editor.canRedo()).toBe(false);
@@ -385,7 +385,7 @@ describe('CodeMirrorEditor', () => {
     });
   });
 
-  describe('resolveEditorDarkMode (U-4)', () => {
+  describe('resolveEditorDarkMode', () => {
     it('follows the resolved app theme, not the OS: dark app is dark', () => {
       expect(
         resolveEditorDarkMode({ uiMode: 'standard', resolvedTheme: 'dark' })
