@@ -1592,7 +1592,7 @@ async function initApp() {
     }
   });
 
-  // B1 fix: Terminate WASM worker before page unload to prevent browser freeze.
+  // Terminate WASM worker before page unload to prevent browser freeze.
   // Without this, a mid-render worker blocks the unload sequence on some browsers.
   window.addEventListener('beforeunload', () => {
     if (renderController) {
@@ -1600,7 +1600,7 @@ async function initApp() {
     }
   });
 
-  // U-41 (UF-39): the Back button gets an answer instead of the door. Installed
+  // The Back button gets an answer instead of the door. Installed
   // before any surface can flip, so the very first project opened is guarded.
   // The comparison view keeps its own popstate consumer, and this hands that
   // press to it rather than asking on top of it.
@@ -1617,7 +1617,7 @@ async function initApp() {
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
 
-  // Advertise shortcuts to assistive technology (MC-1) and keep the
+  // Advertise shortcuts to assistive technology and keep the
   // attributes current when the user re-maps a shortcut.
   applyAriaKeyshortcuts(keyboardConfig.getAllShortcuts());
   keyboardConfig.addChangeListener((shortcuts) =>
@@ -1851,7 +1851,7 @@ async function initApp() {
     if (usedEl) usedEl.textContent = displayText;
   }
 
-  // Smart Cache Clear Dialog (v2)
+  // Smart Cache Clear Dialog
   async function showSmartCacheClearDialog() {
     try {
       const storageInfo = await getDetailedStorageInfo();
@@ -2156,7 +2156,7 @@ async function initApp() {
     }
   }
 
-  // Wire up storage clear button (now uses smart dialog)
+  // Wire up storage clear button
   const clearStorageBtn = document.getElementById('clearStorageBtn');
   if (clearStorageBtn) {
     clearStorageBtn.addEventListener('click', showSmartCacheClearDialog);
@@ -2283,23 +2283,18 @@ async function initApp() {
     }
   }
 
-  // _collectFilesFromDir moved to file-handler.js
-
-  // handleFolderImport moved to file-handler.js
-
-  // ── F35 Phase A: Persistent local-folder sync (Chromium only) ───────────
+  // ── Persistent local-folder sync (Chromium only) ────────────────────────
   //
   // Hidden by default. Reveals only when:
-  //   1. The local_folder_sync feature flag is on (defaults OFF until
-  //      Spike S1 has been verified on Chrome / Edge), AND
+  //   1. The local_folder_sync feature flag is on, AND
   //   2. The runtime exposes showDirectoryPicker (Chromium today).
   //
   // The connect / restore flows reuse the existing file-handler folder
   // walker so the loaded files behave identically to a snapshot import;
-  // Phase A only adds persistence of the directory handle. Phase B
-  // (file-watcher / F14) and Phase C (write-back) build on this.
+  // this part adds persistence of the directory handle, and the watcher and
+  // the write-back below build on it.
   const folderSyncCtrl = getFolderSyncController();
-  // Exposed to the File menu (C5.1); stays null on unsupported browsers so
+  // Exposed to the File menu; stays null on unsupported browsers so
   // the menu item can render disabled with an honest tooltip.
   let connectToLocalFolder = null;
   if (_isEnabled('local_folder_sync') && folderSyncCtrl.isSupported()) {
@@ -2311,7 +2306,7 @@ async function initApp() {
 
     if (connectBtn) connectBtn.hidden = false;
 
-    // ── Sub-plan H: every linked folder listed, one connected ───────────
+    // ── Every linked folder listed, one connected ───────────────────────
     // Created here so the section only ever exists on a browser that can
     // actually hold folder handles.
     const linkedFoldersUi = createLinkedFoldersUi({
@@ -2428,7 +2423,7 @@ async function initApp() {
      * Reflect controller state into the status pill + buttons. Called
      * via `subscribe()` so this stays the single source of truth.
      *
-     * The pill describes the ONE connected folder (D-33); the linked-folders
+     * The pill describes the ONE connected folder; the linked-folders
      * list below it shows every folder this browser knows. Connect Folder
      * therefore stays visible in every state — it is how a second folder
      * gets linked.
@@ -2475,12 +2470,12 @@ async function initApp() {
 
     /**
      * After connect / restore succeeds, walk the folder and hand the
-     * collected files to the existing snapshot loader. Keeps Phase A
+     * collected files to the existing snapshot loader. Keeps the
      * file-loading semantics identical to the cross-browser flow so
      * everything downstream (parser, schema, presets, render) is
      * unchanged.
      */
-    // Created below when folder_sync_watch is enabled (C5.2)
+    // Created below when folder_sync_watch is enabled
     let folderWatcher = null;
 
     async function _loadFromConnectedFolder(handle) {
@@ -2545,7 +2540,7 @@ async function initApp() {
         );
 
         // Apply per-project UI preferences from the record (same contract as
-        // loadSavedProject) \u2014 cheap now that folder-link records are tiny.
+        // loadSavedProject): cheap, because folder-link records are tiny.
         try {
           const record = await getProject(linkResult.id);
           if (record?.uiPreferences != null) {
@@ -2624,7 +2619,7 @@ async function initApp() {
       updateStatus('Disconnected from folder');
     });
 
-    // ── C5.2 (Phase B): watch the connected folder for external edits ──
+    // ── Watch the connected folder for external edits ──
     if (_isEnabled('folder_sync_watch')) {
       resumeFolderWatch = async () => {
         if (!folderWatcher) return;
@@ -2723,12 +2718,12 @@ async function initApp() {
       });
     }
 
-    // ── C5.3 (Phase C, default OFF): writing back into the folder ────────
+    // ── Writing back into the folder (off by default) ────────────────────
     //
-    // The instance is built regardless and the FLAG is checked at every use.
-    // IR-5 gave the export and companion paths a way in here, and they live
-    // far from this block; hoisting the object is what lets them share the one
-    // self-trigger contract instead of writing bytes of their own.
+    // The instance is built regardless and the flag is checked at every use.
+    // The export and companion paths use it too, and they live far from this
+    // block; hoisting the object is what lets them share the one self-trigger
+    // contract instead of writing bytes of their own.
     folderWriteBack = new FolderWriteBack({
       getHandle: () => folderSyncCtrl.getHandle(),
       getWatcher: () => folderWatcher,
@@ -2776,8 +2771,6 @@ async function initApp() {
     });
   }
 
-  // _promptScadSelection moved to file-handler.js
-
   let storageUpdateTimeout = null;
   const scheduleStorageUpdate = (delayMs = 2500) => {
     if (storageUpdateTimeout) {
@@ -2803,21 +2796,21 @@ async function initApp() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════
-  // FIRST-VISIT GATE — Critical Initialization Barrier
+  // First-visit gate: the critical initialization barrier
   //
   // On the very first visit the app shows a blocking disclosure modal that
   // the user must accept before any downloads (WASM, manifest files, etc.)
   // can begin. Several subsystems depend on this gate:
   //
   //   ┌──────────────────────────────────────────────────────────────────┐
-  //   │  Z-INDEX STACK (highest on top)                                 │
+  //   │  Z-index stack (highest on top)                                 │
   //   │                                                                 │
   //   │  z: 10009  Tour card over the Features Guide                    │
   //   │  z: 10008  The tour's own dialogs (resume / error / mode)       │
   //   │  z: 10007  Tutorial panel + pill (--z-index-tutorial-panel)     │
   //   │  z: 10006  Tutorial veil       (--z-index-tutorial-spotlight)   │
   //   │  z: 10005  Tutorial overlay    (--z-index-tutorial-backdrop)    │
-  //   │  z: 10001..10004  Tutorial highlight family (D-67 tokens)       │
+  //   │  z: 10001..10004  Tutorial highlight family (tokens)            │
   //   │  z: 10000  Processing overlay  (.processing-overlay)            │
   //   │  z: 10000  Memory banner / WASM overlay (--z-index-app-overlay) │
   //   │  z:  9999  Skip-link                                            │
@@ -2826,11 +2819,11 @@ async function initApp() {
   //   │  z:   900  Drawers             (--z-index-drawer)               │
   //   └──────────────────────────────────────────────────────────────────┘
   //
-  // A tutorial layer above a modal is NOT a license to paint over one: while
-  // a user-opened dialog is on screen the tour stands down entirely (D-61,
-  // Q-66). See applyDialogStandDown in tutorial-sandbox.js.
+  // A tutorial layer above a modal is not a license to paint over one: while
+  // a user-opened dialog is on screen the tour stands down entirely. See
+  // applyDialogStandDown in tutorial-sandbox.js.
   //
-  // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
+  // Invariant: the processing overlay (z: 10000) must never be shown while
   // the first-visit modal (z: 1000) is open. Because the overlay sits
   // above the modal, it would cover the "Download & Continue" button and
   // trap the user in an infinite spinner. All code paths that call
@@ -2856,9 +2849,8 @@ async function initApp() {
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
-    // The legacy keydown listener checked this flag itself. Now that its
-    // shortcuts live in the registry, the guard belongs there — and it covers
-    // every registered shortcut, not only the six that were folded in (G7).
+    // The guard lives in the shortcut registry, so it covers every
+    // registered shortcut.
     keyboardConfig.setEnabled(!blocked);
     if (appRoot) {
       if (blocked) {
@@ -2882,12 +2874,12 @@ async function initApp() {
     });
   };
 
-  // U-10 (UF-5): the modal's Classic card is genuinely disabled while the
-  // viewport is mobile-shaped, with the reason VISIBLE in the card (the
-  // C-15 shape — a real disabled attribute cannot snap back under the
-  // user's hand), and re-enables live if the window turns desktop-shaped
-  // while the modal is open. A checked Classic choice is cleared when the
-  // gate closes over it so it cannot be submitted stale.
+  // The modal's Classic card is genuinely disabled while the viewport is
+  // mobile-shaped, with the reason visible in the card (a real disabled
+  // attribute cannot snap back under the user's hand), and re-enables live
+  // if the window turns desktop-shaped while the modal is open. A checked
+  // Classic choice is cleared when the gate closes over it so it cannot be
+  // submitted stale.
   const updateFirstVisitClassicGate = () => {
     const radio = document.getElementById('firstVisitChoiceClassic');
     const note = document.getElementById('firstVisitClassicGate');
@@ -2904,7 +2896,7 @@ async function initApp() {
     if (gated && radio.checked) {
       radio.checked = false;
     }
-    // UF-41 (U-39): the modal's mobile layout — stowed concept rows instead
+    // The modal's mobile layout — stowed concept rows instead
     // of the four bullets, no screenshots, no desktop-switching line — rides
     // this same predicate rather than a second breakpoint of its own, so the
     // pictures disappear exactly where the choice they illustrate is not
@@ -2920,11 +2912,11 @@ async function initApp() {
   const firstVisitModal = document.getElementById('first-visit-modal');
   const firstVisitCheck = isFirstVisit();
 
-  // U-21: the Forge card image and the backdrop's Forge half follow the
+  // The Forge card image and the backdrop's Forge half follow the
   // app's active theme, resolved exactly the way detectTheme() resolves
   // dark-vs-light outside Classic (data-theme attribute, else the system
-  // preference). High contrast resolves through the same two values
-  // (Q-38); Classic's side stays the light capture always - Classic is
+  // preference). High contrast resolves through the same two values;
+  // Classic's side stays the light capture always - Classic is
   // light by design. The backdrop swap rides a class so the image URL
   // stays in the stylesheet (CSP: no inline styles).
   const applyFirstVisitThemeAssets = () => {
@@ -2942,12 +2934,12 @@ async function initApp() {
     firstVisitModal?.classList.toggle('first-visit-forge-dark', dark);
   };
 
-  // UF-41 (U-39): the modal's body scrolls on the sizes where the content
-  // still cannot fit (360x640 and 375x667 are arithmetically out of reach —
-  // see the release record's height table), and before this there was no
-  // affordance of any kind: `overflow: auto` with Android's overlay
-  // scrollbars, which fade out on their own. The cue is the fade; the class
-  // is the only thing driving it, so it can never be shown at the scroll end.
+  // The modal's body scrolls on the sizes where the content still cannot
+  // fit (360x640 and 375x667 are arithmetically out of reach), and
+  // `overflow: auto` alone gives no affordance of any kind with Android's
+  // overlay scrollbars, which fade out on their own. The cue is the fade;
+  // the class is the only thing driving it, so it can never be shown at the
+  // scroll end.
   const firstVisitBody = firstVisitModal?.querySelector('.modal-body');
   const updateFirstVisitScrollCue = () => {
     const box = firstVisitModal?.querySelector('.modal-first-visit');
@@ -2982,7 +2974,7 @@ async function initApp() {
     window.addEventListener('resize', updateFirstVisitScrollCue);
     // And this catches everything neither of those can see: a web font
     // arriving, high contrast resolving late, a user's own text-size
-    // setting. MEASURED without it — booting into high contrast at
+    // setting. Without it, booting into high contrast at
     // 1280x800 leaves 22px below the fold and no cue at all, because
     // nothing the other listeners watch for has happened. The scroller
     // itself is watched for the viewport half; its children are watched
@@ -3042,7 +3034,7 @@ async function initApp() {
       showFirstVisitChoiceError();
       return;
     }
-    // U-10 belt-and-braces: if the window turned mobile-shaped inside the
+    // Belt and braces: if the window turned mobile-shaped inside the
     // gate's debounce window, a checked Classic radio can race the Continue
     // press. Clear it and fall into the ordinary no-choice flow instead of
     // silently submitting a gated choice.
@@ -3056,11 +3048,9 @@ async function initApp() {
     // Unchecked "remember" = proceed this session only; the modal returns
     // next visit because the first-visit marker is never written.
     //
-    // Q-21 (2026-08-10) signed "remember checked by default". The owner's
-    // directive of 2026-08-27 (line 2) supersedes it: the box now ships
-    // UNCHECKED, so the test has to be null-safe toward NOT remembering.
-    // `?.checked !== false` would remember whenever the element goes missing,
-    // which is remember-by-default surviving as DOM drift.
+    // The box ships unchecked, so the test has to be null-safe toward not
+    // remembering: `?.checked !== false` would remember whenever the element
+    // goes missing, which is remember-by-default surviving as DOM drift.
     if (document.getElementById('firstVisitRemember')?.checked === true) {
       markFirstVisitComplete();
     }
@@ -3162,11 +3152,11 @@ async function initApp() {
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
 
-  // U-10 (UF-5 P4+P5): one dismissible banner, two notices. The boot
-  // notice says a saved Classic preference was deferred by the viewport
-  // gate (the preference stays saved — the controller's deferral flag
-  // protects it until an explicit mode switch). The live notice says a
-  // Classic session whose window turned phone-shaped stays alive (Q-24a).
+  // One dismissible banner, two notices. The boot notice says a saved
+  // Classic preference was deferred by the viewport gate (the preference
+  // stays saved — the controller's deferral flag protects it until an
+  // explicit mode switch). The live notice says a Classic session whose
+  // window turned phone-shaped stays alive.
   const classicGateBanner = document.getElementById('classicGateBanner');
   const showClassicGateNotice = (kind) => {
     if (!classicGateBanner) return null;
@@ -3229,7 +3219,7 @@ async function initApp() {
     applyToolbarModeVisibility(newMode);
   });
 
-  // U-46 (Q-73a): on a mobile-shaped project surface the four app-chrome
+  // On a mobile-shaped project surface the four app-chrome
   // controls move out of their own row and into the Customizer row. Wired
   // after applyToolbarModeVisibility so the row it collapses has already
   // settled into the density it is going to hold.
@@ -3264,7 +3254,7 @@ async function initApp() {
             : undefined,
       });
       if (result.success) {
-        // The dirty flag means "differs from the saved project" (D-10), so
+        // The dirty flag means "differs from the saved project", so
         // saving — and only saving — clears it.
         getEditorStateManager().markClean();
         companionFilesCtrl.updateCompanionSaveButton();
@@ -3292,7 +3282,7 @@ async function initApp() {
    * @param {string} format - 'svg' or 'dxf'
    */
   async function _export2DOneClick(format) {
-    // D-29, same as the 3D export path: this is reached both through
+    // As on the 3D export path, this is reached both through
     // _renderForExport and directly from the Classic toolbar's DXF button,
     // so it publishes on its own account rather than trusting its caller.
     publishEditorEdits();
@@ -3466,7 +3456,7 @@ async function initApp() {
    * @returns {Promise<'ready'|'downloaded'|false>}
    */
   async function _renderForExport(format, { stlBinary = true } = {}) {
-    // D-29: File > Export renders straight from state, so it needs the
+    // File > Export renders straight from state, so it needs the
     // editor published first for the same reason Render does.
     publishEditorEdits();
 
@@ -3605,7 +3595,7 @@ async function initApp() {
   // A recent entry is only a file name, so re-opening works when this browser
   // still holds the content: a saved project, or a bundled example. A one-off
   // upload leaves nothing behind, and that entry renders disabled with a
-  // reason rather than failing on click (D-28). Menu builders are synchronous,
+  // reason rather than failing on click. Menu builders are synchronous,
   // so the lookup is cached and rebuilt whenever the project list changes.
   const recentResolution = new Map();
 
