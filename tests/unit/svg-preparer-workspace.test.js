@@ -1,7 +1,7 @@
 /**
  * SVG Preparation Workspace — Unit tests
  *
- * Phase 2: Tests for createSvgPrepWorkspace DOM structure, ARIA attributes,
+ * Tests for createSvgPrepWorkspace DOM structure, ARIA attributes,
  * fullscreen toggle, close behavior, keyboard handling, and lifecycle.
  *
  * focus-trap and announcer are mocked because jsdom does not provide layout
@@ -149,12 +149,11 @@ describe('createSvgPrepWorkspace', () => {
       ws.destroy();
     });
 
-    // D-102: these two assertions used to require role="img" on the panes, and
-    // that is what they were pinning: a pane holds three zoom buttons, and an
-    // element with role="img" may not contain focusable descendants. Measured
-    // with axe on the shipped editor: "nested-interactive", serious, on both
-    // panes. The pane is now the GROUP that holds the picture and its
-    // controls; the picture inside carries role="img".
+    // Not role="img" on the panes: a pane holds three zoom buttons, and an
+    // element with role="img" may not contain focusable descendants (axe:
+    // "nested-interactive", serious, on both panes). The pane is the group
+    // that holds the picture and its controls; the picture inside carries
+    // role="img".
     it('creates dual preview panes with correct ARIA', () => {
       const ws = createSvgPrepWorkspace(container);
       const root = ws._root;
@@ -222,7 +221,7 @@ describe('createSvgPrepWorkspace', () => {
 
       const applyBtn = footer.querySelector('[data-action="apply"]');
       expect(applyBtn).toBeTruthy();
-      // DP-46: one word on the button so the working row holds one line, the
+      // One word on the button so the working row holds one line, the
       // whole sentence in the accessible name so a person listening still
       // learns what is applied and where it goes.
       expect(applyBtn.textContent).toBe('Apply');
@@ -406,11 +405,9 @@ describe('createSvgPrepWorkspace', () => {
     });
 
     it('aria-label includes element name and role, in the words on screen', () => {
-      // RE-PINNED at DP-39 P2. It used to read the role VALUE - "role:
-      // foreground" - which was the same word a sighted person read right up
-      // until DP-Q40 made the visible word "Raised". Blind and sighted people
-      // reading the same thing is the whole point of the row this release
-      // signs, so the name reads the label.
+      // The name reads the label ("Raised"), not the role value ("role:
+      // foreground"): blind and sighted people reading the same thing is the
+      // whole point of the row.
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));
 
@@ -421,12 +418,11 @@ describe('createSvgPrepWorkspace', () => {
     });
 
     it('the row still says the words on screen after a change and a Reset', () => {
-      // DP-41 found this with the text pack in hand. FOUR places write this
-      // label; DP-39 changed two of them and left two. Pressing Reset turned
-      // every row from "Circle 1, Raised" back into "Circle 1, role:
-      // foreground" - the word this round retired, said only to the people
-      // who cannot see the control that says otherwise. The test above pins
-      // the row as BUILT, which is one of the two paths that always worked.
+      // Four places write this label. If Reset wrote the old form, every row
+      // would turn from "Circle 1, Raised" back into "Circle 1, role:
+      // foreground" - a retired word, said only to the people who cannot see
+      // the control that says otherwise. The test above pins the row as built;
+      // this one pins it after Reset.
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));
 
@@ -923,9 +919,9 @@ describe('describeElement', () => {
   });
 });
 
-// ── Phase 3 — Live preview, zoom, highlighting ──────────────────────────────
+// ── Live preview, zoom, highlighting ────────────────────────────────────────
 
-describe('Phase 3: source pane rendering', () => {
+describe('source pane rendering', () => {
   it('renders source SVG inline in the source pane on open', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
@@ -947,11 +943,10 @@ describe('Phase 3: source pane rendering', () => {
     expect(overlay).toBeTruthy();
     expect(roleLayer.getAttribute('aria-hidden')).toBe('true');
     expect(overlay.getAttribute('aria-hidden')).toBe('true');
-    // The overlay draws on top of the ARTWORK and the tints, so it comes
-    // after both. RE-PINNED at DP-40: it is no longer the last child, because
-    // the layer a pointer hits goes above everything - the highlight is a
-    // picture and the hit layer is a target, and a target under a picture is
-    // not a target.
+    // The overlay draws on top of the artwork and the tints, so it comes
+    // after both. It is not the last child: the layer a pointer hits goes
+    // above everything - the highlight is a picture and the hit layer is a
+    // target, and a target under a picture is not a target.
     const kids = [...sourceSvg.children];
     expect(kids.indexOf(overlay)).toBeGreaterThan(kids.indexOf(roleLayer));
     expect(sourceSvg.lastElementChild.classList.contains('svg-prep-hit-layer')).toBe(
@@ -973,10 +968,10 @@ describe('Phase 3: source pane rendering', () => {
   });
 });
 
-// D-120: the flatten runs through the lazily loaded ring engine, so a test
+// The flatten runs through the lazily loaded ring engine, so a test
 // that reads the result awaits whenReady() once after open. After that the
 // engine is in and every later re-render is synchronous.
-describe('Phase 3: result pane rendering', () => {
+describe('result pane rendering', () => {
   it('renders prepared result in the result pane on open', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
@@ -993,10 +988,10 @@ describe('Phase 3: result pane rendering', () => {
     ws.open(SIMPLE_SVG, makeAnalysis(1));
     await ws.whenReady();
 
-    // The RESULT is one compound path. RE-PINNED at DP-40: the picture also
-    // carries a layer of invisible shapes for a pointer to hit, one per
-    // element, and counting every path in the pane counts those too. What
-    // this test is about is the result.
+    // The result is one compound path. The picture also carries a layer of
+    // invisible shapes for a pointer to hit, one per element, and counting
+    // every path in the pane counts those too. What this test is about is the
+    // result.
     const paths = ws._root.querySelectorAll(
       '.svg-prep-result-pane path:not(.svg-prep-hit-path)'
     );
@@ -1005,7 +1000,7 @@ describe('Phase 3: result pane rendering', () => {
     ws.destroy();
   });
 
-  it('result path carries the ring flatten fill rule (nonzero since D-120)', async () => {
+  it('result path carries the ring flatten fill rule (nonzero)', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
     await ws.whenReady();
@@ -1041,7 +1036,7 @@ describe('Phase 3: result pane rendering', () => {
   });
 });
 
-describe('Phase 3: role change updates result preview', () => {
+describe('role change updates result preview', () => {
   it('changing role to ignore empties the preview', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
@@ -1051,8 +1046,8 @@ describe('Phase 3: role change updates result preview', () => {
     ignoreRadio.checked = true;
     ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
 
-    // DP-53: the pane is never empty. The stand-in stands in for the result
-    // that does not exist (DP-Q34).
+    // The pane is never empty: the stand-in stands in for the result that
+    // does not exist.
     const resultSvg = ws._root.querySelector('.svg-prep-result-pane svg');
     expect(resultSvg.classList.contains('svg-prep-standin')).toBe(true);
     expect(ws.getResult()).toBeNull();
@@ -1109,7 +1104,7 @@ describe('Phase 3: role change updates result preview', () => {
   });
 });
 
-describe('Phase 3: object list highlighting (overlay paths)', () => {
+describe('object list highlighting (overlay paths)', () => {
   function getOverlay(ws) {
     return ws._root.querySelector('.svg-prep-source-pane .svg-prep-overlay');
   }
@@ -1137,9 +1132,9 @@ describe('Phase 3: object list highlighting (overlay paths)', () => {
     item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     item.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
 
-    // DP-47: the overlay holds two groups of its own now - what a person
-    // CHOSE and where the pointer IS - so "cleared" is about the marks in it,
-    // not about the groups.
+    // The overlay holds two groups of its own - what a person chose and where
+    // the pointer is - so "cleared" is about the marks in it, not about the
+    // groups.
     expect(
       getOverlay(ws).querySelectorAll('.svg-prep-highlight-path')
     ).toHaveLength(0);
@@ -1353,7 +1348,7 @@ describe('role color-coding layer and legend', () => {
   });
 });
 
-describe('Phase 3: zoom controls', () => {
+describe('zoom controls', () => {
   it('zoom in reduces the source pane viewBox', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
@@ -1474,7 +1469,7 @@ describe('Phase 3: zoom controls', () => {
   });
 });
 
-describe('Phase 3: reset behavior', () => {
+describe('reset behavior', () => {
   it('Reset restores radio buttons to auto-classification', () => {
     const ws = createSvgPrepWorkspace(container);
     const analysis = makeAnalysis(2);
@@ -1509,10 +1504,9 @@ describe('Phase 3: reset behavior', () => {
     ignoreRadio.checked = true;
     ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
 
-    // RE-PINNED at DP-37: this used to assert the pane held NO svg at all.
-    // The pane is never empty now (P1) - with every shape ignored there is no
-    // combined result, and what stands in its place is the drawing itself,
-    // marked as not yet combined. Emptiness was the evidence, not the point.
+    // The pane is never empty: with every shape ignored there is no combined
+    // result, and what stands in its place is the drawing itself, marked as
+    // not yet combined.
     expect(
       ws._root.querySelector('.svg-prep-result-pane svg.svg-prep-standin')
     ).toBeTruthy();
@@ -1529,7 +1523,7 @@ describe('Phase 3: reset behavior', () => {
 
 // ── Phase 4a — Callback integration ─────────────────────────────────────
 
-describe('Phase 4a: open() callbacks parameter', () => {
+describe('open() callbacks parameter', () => {
   it('open() accepts an optional callbacks parameter', () => {
     const ws = createSvgPrepWorkspace(container);
     const onApply = vi.fn();
@@ -1546,7 +1540,7 @@ describe('Phase 4a: open() callbacks parameter', () => {
   });
 });
 
-describe('Phase 4a: Apply button fires onApply callback', () => {
+describe('Apply button fires onApply callback', () => {
   it('calls onApply with the prepared result on Apply', async () => {
     const onApply = vi.fn();
     const ws = createSvgPrepWorkspace(container);
@@ -1575,7 +1569,7 @@ describe('Phase 4a: Apply button fires onApply callback', () => {
   });
 });
 
-describe('Phase 4a: Keep original fires onKeepOriginal callback', () => {
+describe('Keep original fires onKeepOriginal callback', () => {
   it('calls onKeepOriginal on Keep original', () => {
     const onKeepOriginal = vi.fn();
     const ws = createSvgPrepWorkspace(container);
@@ -1609,7 +1603,7 @@ describe('Phase 4a: Keep original fires onKeepOriginal callback', () => {
   });
 });
 
-describe('Phase 4a: Escape / close button keep the original', () => {
+describe('Escape / close button keep the original', () => {
   it('Escape fires onKeepOriginal (close without Apply = keep original)', () => {
     const onApply = vi.fn();
     const onKeepOriginal = vi.fn();
@@ -1713,7 +1707,7 @@ describe('Apply button disabled state', () => {
     ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
     fgRadio.checked = true;
     fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
-    // DP-53: the combine follows the settle.
+    // The combine follows the settle.
     await ws.whenCombined();
 
     const applyBtn = ws._root.querySelector('[data-action="apply"]');
@@ -1795,11 +1789,11 @@ describe('compound-path mode (Include/Exclude)', () => {
     ws.destroy();
   });
 
-  it('labels rows "Shape N" in compound mode (DP-Q45)', () => {
-    // Signed wording: a person is choosing whether a shape is in the drawing,
-    // not about a `d` attribute. It matters more since DP-Q43 made Potrace the
-    // default - Potrace returns one compound path, so this is what a screen
-    // reader says about every traced picture now, not the occasional one.
+  it('labels rows "Shape N" in compound mode', () => {
+    // The wording: a person is choosing whether a shape is in the drawing,
+    // not about a `d` attribute. Potrace is the default and returns one
+    // compound path, so this is what a screen reader says about every traced
+    // picture, not the occasional one.
     const { svg, analysis } = makeCompoundAnalysis();
     const ws = createSvgPrepWorkspace(container);
     ws.open(svg, analysis);
@@ -1919,7 +1913,7 @@ describe('preview error handling', () => {
       expect(() =>
         fgRadio.dispatchEvent(new Event('change', { bubbles: true }))
       ).not.toThrow();
-      // DP-53: the combine, and so the throw, comes after the settle.
+      // The combine, and so the throw, comes after the settle.
       await ws.whenCombined();
     } finally {
       globalThis.DOMParser = RealDOMParser;
@@ -1948,7 +1942,7 @@ describe('preview error handling', () => {
   });
 });
 
-describe('Phase 4a: callbacks are cleared on close', () => {
+describe('callbacks are cleared on close', () => {
   it('does not fire stale callbacks on re-open without callbacks', () => {
     const onApply = vi.fn();
     const ws = createSvgPrepWorkspace(container);
@@ -1964,9 +1958,9 @@ describe('Phase 4a: callbacks are cleared on close', () => {
   });
 });
 
-// ── Phase 5 — Persistence support ───────────────────────────────────────
+// ── Persistence support ─────────────────────────────────────────────────
 
-describe('Phase 5: getRoleOverrides()', () => {
+describe('getRoleOverrides()', () => {
   it('returns current roles as an array copy', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(3));
@@ -2029,7 +2023,7 @@ describe('Phase 5: getRoleOverrides()', () => {
   });
 });
 
-describe('Phase 5: open() with initialOverrides', () => {
+describe('open() with initialOverrides', () => {
   it('applies initial overrides to radio buttons', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(3), {
@@ -2051,11 +2045,9 @@ describe('Phase 5: open() with initialOverrides', () => {
   });
 
   it('updates aria-labels when applying initial overrides', () => {
-    // RE-PINNED at DP-41. This test was holding the retired words in place:
-    // it asserted "role: ignore" and "role: foreground", which is what this
-    // path still wrote after DP-39 gave the control the words Raised, Hole
-    // and Ignore. The assertion was green because the code and the test
-    // agreed with each other and with nothing a person reads.
+    // This path must write the control's own words (Raised, Hole, Ignore),
+    // not "role: ignore" or "role: foreground": a test and code that agree
+    // with each other and with nothing a person reads would stay green.
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2), {
       initialOverrides: ['ignore', 'foreground'],
@@ -2114,7 +2106,7 @@ describe('Phase 5: open() with initialOverrides', () => {
       initialOverrides: ['ignore', 'ignore'],
     });
 
-    // DP-53: the pane is never empty; with every shape ignored the stand-in
+    // The pane is never empty; with every shape ignored the stand-in
     // stands in and there is no result.
     const picture = ws._root.querySelector('.svg-prep-result-pane svg');
     expect(picture.classList.contains('svg-prep-standin')).toBe(true);
@@ -2126,7 +2118,7 @@ describe('Phase 5: open() with initialOverrides', () => {
 
 // ── Phase 6b — Accessibility validation ──────────────────────────────────
 
-describe('Phase 6b: accessibility — screen reader landmarks', () => {
+describe('accessibility — screen reader landmarks', () => {
   it('workspace root is a labelled region', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
@@ -2165,15 +2157,14 @@ describe('Phase 6b: accessibility — screen reader landmarks', () => {
     expect(res.getAttribute('role')).toBe('group');
     expect(res.getAttribute('aria-label')).toBe('Prepared result');
 
-    // The zoom buttons are why: role="img" cannot hold focusable children
-    // (D-102).
+    // The zoom buttons are why: role="img" cannot hold focusable children.
     expect(src.querySelectorAll('button').length).toBeGreaterThan(0);
     expect(res.querySelectorAll('button').length).toBeGreaterThan(0);
 
     ws.destroy();
   });
 
-  it('the live region is not a child of the object list (D-101)', () => {
+  it('the live region is not a child of the object list', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
 
@@ -2213,7 +2204,7 @@ describe('Phase 6b: accessibility — screen reader landmarks', () => {
   });
 });
 
-describe('Phase 6b: accessibility — all interactive elements have names', () => {
+describe('accessibility — all interactive elements have names', () => {
   it('fullscreen button has an accessible name', () => {
     const ws = createSvgPrepWorkspace(container);
     const btn = ws._root.querySelector('.svg-prep-fullscreen-btn');
@@ -2313,7 +2304,7 @@ describe('Phase 6b: accessibility — all interactive elements have names', () =
   });
 });
 
-describe('Phase 6b: accessibility — keyboard walkthrough', () => {
+describe('accessibility — keyboard walkthrough', () => {
   it('all object list items are keyboard-focusable', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(3));
@@ -2406,7 +2397,7 @@ describe('Phase 6b: accessibility — keyboard walkthrough', () => {
   });
 });
 
-describe('Phase 6b: accessibility — focus management', () => {
+describe('accessibility — focus management', () => {
   it('openFullscreen creates a focus trap', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
@@ -2469,7 +2460,6 @@ describe('Phase 6b: accessibility — focus management', () => {
 //
 // jsdom does not compute styles from external CSS. These tests read the
 // stylesheet source to verify the layout contract for fullscreen mode.
-// They are intentionally red until Phase 2 adds the required CSS rules.
 
 describe('Fullscreen sticky layout CSS contract', () => {
   let css;
@@ -2527,9 +2517,9 @@ describe('Fullscreen sticky layout CSS contract', () => {
   });
 });
 
-// ── Phase 9 — Offset input unit tests ────────────────────────────────────
+// ── Offset input unit tests ──────────────────────────────────────────────
 
-describe('Phase 9: offset inputs (flag disabled)', () => {
+describe('offset inputs (flag disabled)', () => {
   it('does not render offset inputs when flag is disabled', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
@@ -2550,7 +2540,7 @@ describe('Phase 9: offset inputs (flag disabled)', () => {
   });
 });
 
-describe('Phase 9: offset inputs (flag enabled)', () => {
+describe('offset inputs (flag enabled)', () => {
   beforeEach(() => {
     isEnabled.mockReturnValue(true);
   });
@@ -2576,7 +2566,7 @@ describe('Phase 9: offset inputs (flag enabled)', () => {
     expect(input.type).toBe('number');
     expect(input.min).toBe('-2');
     expect(input.max).toBe('2');
-    // DP-Q74 (2026-09-20): 0.05 mm, the step the owner found useful.
+    // 0.05 mm, a step fine enough to be useful.
     expect(input.step).toBe('0.05');
     expect(input.value).toBe('0');
 
@@ -2667,7 +2657,7 @@ describe('Phase 9: offset inputs (flag enabled)', () => {
   });
 });
 
-describe('Phase 9: getOffsetOverrides()', () => {
+describe('getOffsetOverrides()', () => {
   beforeEach(() => {
     isEnabled.mockReturnValue(true);
   });
@@ -2731,7 +2721,7 @@ describe('Phase 9: getOffsetOverrides()', () => {
   });
 });
 
-describe('Phase 9: open() with initialOffsets', () => {
+describe('open() with initialOffsets', () => {
   beforeEach(() => {
     isEnabled.mockReturnValue(true);
   });
@@ -2785,7 +2775,7 @@ describe('Phase 9: open() with initialOffsets', () => {
   });
 });
 
-describe('Phase 9: design-width input', () => {
+describe('design-width input', () => {
   beforeEach(() => {
     isEnabled.mockReturnValue(true);
   });
@@ -2835,7 +2825,7 @@ describe('Phase 9: design-width input', () => {
   });
 });
 
-describe('Phase 9: Reset restores offsets', () => {
+describe('Reset restores offsets', () => {
   beforeEach(() => {
     isEnabled.mockReturnValue(true);
   });
@@ -2881,16 +2871,16 @@ describe('Phase 9: Reset restores offsets', () => {
 });
 
 /**
- * DP-4: removing shapes from the LIST, not just from the output.
+ * Removing shapes from the list, not just from the output.
  *
  * The sharp edge here is not the deleting, it is what deleting does to
  * everything that is keyed by position: the rows' data-index, the radio group
- * names, the roles and offsets arrays, and above all the SAVED
+ * names, the roles and offsets arrays, and above all the saved
  * prepOverrides / prepOffsets. The editor reopens on the raw SVG and
  * re-analyses it, so a saved role array that is positional against the
  * post-delete list would be applied to the wrong shapes on the next visit.
  */
-describe('deleting shapes from the list (DP-4)', () => {
+describe('deleting shapes from the list', () => {
   const openWith = (ws, count, callbacks = {}) => {
     const analysis = makeAnalysis(count);
     ws.open(SIMPLE_SVG, analysis, callbacks);
@@ -2937,7 +2927,7 @@ describe('deleting shapes from the list (DP-4)', () => {
     ws.destroy();
   });
 
-  it('saves roles against the ORIGINAL indices, so a reopen lands them right', () => {
+  it('saves roles against the original indices, so a reopen lands them right', () => {
     const ws = createSvgPrepWorkspace(container);
     openWith(ws, 4, {
       initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
@@ -2945,7 +2935,7 @@ describe('deleting shapes from the list (DP-4)', () => {
 
     deleteRow(ws, 1);
 
-    // Position 1 in the saved array is still the shape that WAS at position 1,
+    // Position 1 in the saved array is still the shape that was at position 1,
     // and it is absent because it was deleted.
     const saved = ws.getRoleOverrides();
     expect(saved[0]).toBe('foreground');
@@ -3023,7 +3013,7 @@ describe('deleting shapes from the list (DP-4)', () => {
   });
 
   it('the bulk bar lives outside the list, which takes listitems only', () => {
-    // D-101: a toolbar inside role="list" is dropped from the accessibility
+    // A toolbar inside role="list" is dropped from the accessibility
     // tree, so this is a placement the markup has to keep.
     const ws = createSvgPrepWorkspace(container);
     openWith(ws, 3);
@@ -3061,7 +3051,7 @@ describe('deleting shapes from the list (DP-4)', () => {
   });
 
   it('every delete control clears the 44 px target floor in its own styles', () => {
-    // jsdom has no layout, so the rule is asserted where it is WRITTEN rather
+    // jsdom has no layout, so the rule is asserted where it is written rather
     // than measured - the e2e walk measures it for real. The block is cut at
     // its own closing brace: reading a fixed number of characters would let a
     // neighbouring rule's min-height satisfy this, which is a guard that
@@ -3089,7 +3079,7 @@ describe('deleting shapes from the list (DP-4)', () => {
   });
 });
 
-// ── DP-7: the Layer column ───────────────────────────────────────────────────
+// ── The Layer column ─────────────────────────────────────────────────────────
 
 /** Nested squares as an analysis, outermost first. */
 function makeNestedAnalysis(count = 3, outer = 100) {
@@ -3141,9 +3131,9 @@ function setLayer(ws, i, value) {
   s.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-describe('the Layer column (DP-7)', () => {
+describe('the Layer column', () => {
   describe('opt-in', () => {
-    it('is ABSENT for a tile that did not ask for it', () => {
+    it('is absent for a tile that did not ask for it', () => {
       // The control case: a non-layered editor must be exactly what it was.
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(3);
@@ -3165,7 +3155,7 @@ describe('the Layer column (DP-7)', () => {
       expect(ws._refs.layerSummary.hidden).toBe(false);
     });
 
-    it('offers three layers when nothing encloses anything (D-162)', () => {
+    it('offers three layers when nothing encloses anything', () => {
       const ws = createSvgPrepWorkspace(container);
       const parser = new DOMParser();
       const a = 'M 0 0 L 10 0 L 10 10 L 0 10 Z';
@@ -3196,10 +3186,10 @@ describe('the Layer column (DP-7)', () => {
     });
   });
 
-  // D-142 (DP-51, the owner's second walk, 2026-09-16): nesting depth decides
-  // how many layers a drawing OFFERS and never what a shape sits on. MEASURED
-  // on the owner's CREATE logo before the fix: 394 of 553 rows opened on layer
-  // 2 and 158 on layer 3, and Apply emitted a three-layer stack nobody built.
+  // Nesting depth decides how many layers a drawing offers and never what a
+  // shape sits on. Starting rows from their depth, a 553-row logo would
+  // open 394 rows on layer 2 and 158 on layer 3, and Apply would emit a
+  // three-layer stack nobody built.
   describe('the starting column', () => {
     it('starts every shape on layer 1, however deep the artwork nests', () => {
       const ws = createSvgPrepWorkspace(container);
@@ -3208,7 +3198,7 @@ describe('the Layer column (DP-7)', () => {
       expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
     });
 
-    it('offers three layers whatever the artwork nests to (D-162)', () => {
+    it('offers three layers whatever the artwork nests to', () => {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(2);
       ws.open(svgString, analysis, { layersEnabled: true });
@@ -3242,12 +3232,12 @@ describe('the Layer column (DP-7)', () => {
       const said = ws._refs.layerSummary.textContent;
       expect(said).not.toContain('Every shape starts on layer 1');
       expect(said).toContain('3 layers, each with its own height on the charm.');
-      // DP-47: the charm behind the editor is the last APPLIED design, so a
+      // The charm behind the editor is the last APPLIED design, so a
       // stack that has not been applied is not on it yet.
       expect(said).toContain('Layers show on the charm after you press Apply.');
     });
 
-    it('reports NO STACK until somebody builds one', () => {
+    it('reports no stack until somebody builds one', () => {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(3);
       ws.open(svgString, analysis, { layersEnabled: true });
@@ -3313,14 +3303,13 @@ describe('the Layer column (DP-7)', () => {
     });
   });
 
-  describe('layers are height classes, and no row is ever marked (D-160)', () => {
+  describe('layers are height classes, and no row is ever marked', () => {
     /**
-     * Open the nested squares and BUILD the stack, the way a person does
-     * since D-142: the column starts at all ones, so the middle square is
-     * put on layer 2 and the inner one on layer 3 by hand. The containment
-     * law that used to mark a stranded row is gone: the emission writes a
-     * layer 3 shape into every layer's file and the model extrudes each
-     * raised pass from below every floor, so nothing floats.
+     * Open the nested squares and build the stack, the way a person does: the
+     * column starts at all ones, so the middle square is put on layer 2 and
+     * the inner one on layer 3 by hand. No row can be stranded: the emission
+     * writes a layer 3 shape into every layer's file and the model extrudes
+     * each raised pass from below every floor, so nothing floats.
      */
     function openNested(count = 3) {
       const ws = createSvgPrepWorkspace(container);
@@ -3339,7 +3328,7 @@ describe('the Layer column (DP-7)', () => {
     it('a layer 3 shape with nothing on layer 2 around it is not a problem: nothing floats', () => {
       const ws = openNested();
       // The middle square back on layer 1: the inner one is on layer 3 with
-      // no layer 2 around it. It carries its own column from the face now.
+      // no layer 2 around it. It carries its own column from the face.
       announce.mockClear();
       setLayer(ws, 1, 1);
       expect(ws.getLayerAssignments().problems).toEqual([]);
@@ -3356,7 +3345,7 @@ describe('the Layer column (DP-7)', () => {
       expect(said.join(' ')).not.toMatch(/under it|different layer/);
     });
 
-    it('NEVER reassigns the layer the person chose', () => {
+    it('never reassigns the layer the person chose', () => {
       const ws = openNested();
       setLayer(ws, 1, 1);
       expect(layerSelects(ws)[2].value).toBe('3');
@@ -3407,7 +3396,7 @@ describe('the Layer column (DP-7)', () => {
       expect(layerSelects(ws)[1].value).toBe('3');
     });
 
-    it('keys assignments by ORIGINAL index, so a delete cannot shift them', () => {
+    it('keys assignments by original index, so a delete cannot shift them', () => {
       const ws = createSvgPrepWorkspace(container);
       const { svgString, analysis } = makeNestedAnalysis(3);
       ws.open(svgString, analysis, { layersEnabled: true });
@@ -3418,12 +3407,10 @@ describe('the Layer column (DP-7)', () => {
   });
 });
 
-// G0 2026-09-01 (DP-24): the owner's words - "It should be one picture svg
-// that you are seeing the elements turning on or off. A side by side of
-// original to edited is offed in a button toggle if the user wishes but is
-// not default." The edited drawing IS the editor; the original arrives
-// beside it only when Compare is pressed.
-describe('one picture by default (DP-24)', () => {
+// One picture by default: the edited drawing is the editor, with the
+// elements turning on or off in it; the original arrives beside it only
+// when Compare is pressed.
+describe('one picture by default', () => {
   it('opens with the original pane hidden and the edited drawing alone', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
@@ -3494,12 +3481,12 @@ describe('one picture by default (DP-24)', () => {
   });
 });
 
-describe('the thin-line advisory (DP-36 P3)', () => {
-  // MEASURED on nine stock icons at charm size: their outlines land between
+describe('the thin-line advisory', () => {
+  // Measured on nine stock icons at charm size: their outlines land between
   // 0.31 and 0.65 mm. Some print and some do not, and nothing said which.
   const px = (p10) => ({ p10, p50: p10 * 2, ridgePx: 100 });
 
-  it('★ turns pixels into the millimetres this will actually print at', () => {
+  it('turns pixels into the millimetres this will actually print at', () => {
     // Three pixels on a 700-pixel icon is 0.06 mm on a 14 mm charm. The same
     // three pixels on a 60 mm coaster is 0.26 mm. The pixel count alone is not
     // a fact anybody can act on.
@@ -3516,7 +3503,7 @@ describe('the thin-line advisory (DP-36 P3)', () => {
     );
   });
 
-  it('★ says when the width is the editor’s own default, not the model’s', () => {
+  it('says when the width is the editor’s own default, not the model’s', () => {
     // A number the person did not choose, presented as if they had, is the
     // kind of thing that sends someone hunting for where they set it.
     expect(thinLineSentence(px(10), 700, 14, false)).toContain(
@@ -3548,39 +3535,35 @@ describe('the thin-line advisory (DP-36 P3)', () => {
     expect(thinLineSentence(px(3), 700, 0)).toBe('');
   });
 
-  it('★ proposes and never acts: no default is changed by it', () => {
-    // The plan is explicit that this is a proposal. Nine icons at 0.31 to
-    // 0.65 mm means a blanket offset would fatten the ones already fine.
+  it('proposes and never acts: no default is changed by it', () => {
+    // This is a proposal, not an action: nine icons at 0.31 to 0.65 mm means
+    // a blanket offset would fatten the ones already fine.
     const said = thinLineSentence(px(3), 700, 14);
-    // DP-82: the dial has read "Offset" since DP-44; the lever names it.
+    // The dial reads "Offset"; the lever names it.
     expect(said).toContain('Raise Offset in the Design group');
     expect(said).toContain('or make the design bigger');
   });
 });
 
-describe('the result pane is never empty (DP-37 P1)', () => {
-  // ★ "One picture" was built by HIDING rather than by showing. Above the auto
-  // budget markPreviewStale removed the drawing from the result pane, and
-  // DP-24 had already put the source pane behind Compare, so somebody who
-  // opened a 210-shape drawing was shown "Will print as", an empty rectangle,
-  // two zoom buttons floating in it, and a sentence telling them to press a
-  // button. MEASURED in the browser at 1268 x 160 with no svg in it at all.
-  //
-  // It was walked on the bird - tier A, the one class of drawing that could
-  // not show it.
+describe('the result pane is never empty', () => {
+  // "One picture" must be built by showing, not by hiding. With the source
+  // pane behind Compare, a result pane emptied above the auto budget would
+  // show somebody who opened a 210-shape drawing "Will print as", an empty
+  // rectangle, two zoom buttons floating in it, and a sentence telling them
+  // to press a button. Small drawings combine at once, so only a large one
+  // can show it.
 
   // Above FLATTEN_BUDGET_MS, which is the band the blank lived in. Below it
   // the editor combines on its own and the pane holds a real result.
   //
   // Each of these elements is an M and two arcs, which the estimator prices at
   // 33 ring points, so the prediction is 1.5e-3 x n x 33n and the 300 ms
-  // budget falls between 77 and 78 of them. 100 is over it with room. It used
-  // to be 60, which was over DP-Q9's retired count of 50 and is under the
-  // budget that replaced it (178 ms) - the re-sign at DP-Q33 moved this line
-  // and the drawing that sits on it had to move too.
+  // budget falls between 77 and 78 of them. 100 is over it with room; a
+  // count picked against an older budget would sit under this one, so the
+  // drawing has to move with the budget.
   const ABOVE_BUDGET = 100;
 
-  it('★ shows the drawing where the combined result will go', () => {
+  it('shows the drawing where the combined result will go', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
 
@@ -3592,15 +3575,15 @@ describe('the result pane is never empty (DP-37 P1)', () => {
     ws.destroy();
   });
 
-  it('★ says what it is, so nobody mistakes it for the result', () => {
+  it('says what it is, so nobody mistakes it for the result', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
 
     const picture = ws._root.querySelector('.svg-prep-result-pane svg');
     expect(picture.getAttribute('role')).toBe('img');
-    // DP-47 P4: the name counts what is in the picture, because the picture
-    // is painted from the roles now and changes when they do. It still says
-    // plainly that this is not the combined result.
+    // The name counts what is in the picture, because the picture is painted
+    // from the roles and changes when they do. It still says plainly that this
+    // is not the combined result.
     expect(picture.getAttribute('aria-label')).toMatch(
       /^The drawing as it is now: \d+ raised, \d+ holes?, \d+ left out, not yet combined$/
     );
@@ -3608,9 +3591,9 @@ describe('the result pane is never empty (DP-37 P1)', () => {
     ws.destroy();
   });
 
-  it('★ a picture in the pane is still not a result: Apply stays refused', () => {
+  it('a picture in the pane is still not a result: Apply stays refused', () => {
     // The pane having something in it must not be mistaken for having a
-    // result. currentResult === null IS the staleness flag, and Apply and Save
+    // result. currentResult === null is the staleness flag, and Apply and Save
     // read it, not the pane.
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(ABOVE_BUDGET));
@@ -3653,8 +3636,8 @@ describe('the result pane is never empty (DP-37 P1)', () => {
   });
 });
 
-describe('the drawer breakpoint lives in two files (DP-Q46a)', () => {
-  it('★ the number in surface.js and the number in the stylesheet are the same', async () => {
+describe('the drawer breakpoint lives in two files', () => {
+  it('the number in surface.js and the number in the stylesheet are the same', async () => {
     // surface.js has to choose the drawer's starting state before anything is
     // laid out, so it cannot ask the stylesheet - it repeats the number. Two
     // copies of a number drift; this is what stops them.
@@ -3666,16 +3649,13 @@ describe('the drawer breakpoint lives in two files (DP-Q46a)', () => {
   });
 });
 
-// ── DP-47 / D-141: choosing shapes, and changing them together ──────────────
+// ── Choosing shapes, and changing them together ─────────────────────────────
 //
-// The owner's words, on their own logo: "I tried to select and change the
-// letters at the bottom and could not ignore any path, even when I pressed
-// ignore or layer. This defeats the entire purpose of the drawing editor."
-// MEASURED before this release: Delete did nothing at all, Ctrl+A selected
-// 35,759 characters of PAGE text, and the picture never marked the selection -
-// the only thing it ever drew was the hover mark of one shape.
+// Choosing shapes has to work: Delete and Ignore must act on the chosen
+// shapes, Ctrl+A must choose shapes rather than page text, and the
+// picture must mark the selection, not only the hover of one shape.
 
-describe('choosing shapes and changing them together (DP-47, D-141)', () => {
+describe('choosing shapes and changing them together', () => {
   const rows = (ws) => [
     ...ws._refs.objects.querySelectorAll('.svg-prep-object'),
   ];
@@ -3707,7 +3687,7 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     return ws;
   }
 
-  it('★ paints every selected shape on the picture, not just the rows', () => {
+  it('paints every selected shape on the picture, not just the rows', () => {
     const ws = openThree();
     clickRow(ws, 0);
     clickRow(ws, 2, { ctrlKey: true });
@@ -3718,7 +3698,7 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     ws.destroy();
   });
 
-  it('★ the hover mark and the selection do not wipe each other', () => {
+  it('the hover mark and the selection do not wipe each other', () => {
     const ws = openThree();
     clickRow(ws, 0);
     expect(selectionPaths(ws).length).toBeGreaterThanOrEqual(1);
@@ -3740,7 +3720,7 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     ws.destroy();
   });
 
-  it('★ Delete sets the whole selection to Ignore, and says so once', () => {
+  it('Delete sets the whole selection to Ignore, and says so once', () => {
     const ws = openThree();
     clickRow(ws, 0);
     clickRow(ws, 1, { ctrlKey: true });
@@ -3788,11 +3768,11 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     ws.destroy();
   });
 
-  it('★ Ctrl+A selects every row, and the press never reaches the page', () => {
+  it('Ctrl+A selects every row, and the press never reaches the page', () => {
     const ws = openThree();
     announce.mockClear();
-    // What the app would hear, if the editor let the press through: the real
-    // defect was 35,759 characters of page text going blue.
+    // What the app would hear, if the editor let the press through: 35,759
+    // characters of page text going blue.
     const heardOutside = vi.fn();
     document.addEventListener('keydown', heardOutside);
 
@@ -3832,7 +3812,7 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     ws.destroy();
   });
 
-  it('★ the bulk button says Remove from list, because Delete means Ignore now', () => {
+  it('the bulk button says Remove from list, because Delete means Ignore', () => {
     const ws = openThree();
     clickRow(ws, 0);
     expect(ws._refs.deleteSelectedBtn.textContent).toBe('Remove from list (1)');
@@ -3876,14 +3856,12 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     );
   });
 
-  it('★ Ignore takes the shape out of the picture at once (P4)', () => {
-    // The owner's complaint, in one assertion. Above the combine budget the
-    // "Will print as" pane is a STAND-IN, and it used to be the original file
-    // with a 12 %-opacity tint over it: pressing Ignore changed a radio and
-    // nothing a person could see. The stand-in is painted from the roles now.
-    // Above the combine budget, which is the band the stand-in lives in - and
-    // where every drawing of the owner's kind lives. 100 elements, the same
-    // count the DP-37 P1 suite uses for the same reason.
+  it('Ignore takes the shape out of the picture at once', () => {
+    // Above the combine budget the "Will print as" pane is a stand-in, painted
+    // from the roles: pressing Ignore must change what a person sees, not only
+    // a radio. 100 elements puts the drawing above the budget, in the band the
+    // stand-in lives in, the same count the suite above uses for the same
+    // reason.
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(100));
 
@@ -3921,12 +3899,9 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     ws.destroy();
   });
 
-  // ── Session 4 of DP-R5: what the owner's walk of the merged code found ─────
-
-  it('★ the selection mark is drawn so it shows on a dark shape: a light halo under the outline', () => {
-    // LOOKED AT on the owner's logo after DP-47: the outline was drawn in the
-    // ink color over shapes painted in the ink color, and three chosen letters
-    // showed no mark a person could see. The DOM count said 6; the eyes said 0.
+  it('the selection mark is drawn so it shows on a dark shape: a light halo under the outline', () => {
+    // An outline in the ink color over shapes painted in the ink color shows
+    // no mark a person can see: the DOM count would say 6 and the eyes 0.
     const ws = openThree();
     clickRow(ws, 0);
     clickRow(ws, 2, { ctrlKey: true });
@@ -3967,10 +3942,11 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     );
   });
 
-  it('★ a Shift-click extends the choice, not the page\'s text selection', () => {
-    // MEASURED on the built app: a Shift-click on a row left 49 characters of
-    // the rows' own text selected and painted blue across two rows, because
-    // the browser extends its text selection on Shift before the click lands.
+  it('a Shift-click extends the choice, not the page\'s text selection', () => {
+    // Measured on the built app: a Shift-click on a row can leave 49
+    // characters of the rows' own text selected and painted blue across two
+    // rows, because the browser extends its text selection on Shift before
+    // the click lands.
     const ws = openThree();
     clickRow(ws, 0);
     const name = rows(ws)[2].querySelector('.svg-prep-object-name');
@@ -3990,12 +3966,12 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
     ws.destroy();
   });
 
-  it('★ the wall behind a Colors drawing is not a pointer target while it is ignored', () => {
-    // MEASURED on the owner's logo: the navy wall is one element the size of
-    // the whole canvas, set to Ignore by the wall rule (D-137). Its hit path
-    // sat under every point of the picture, so pointing at the background
-    // washed the whole drawing in the hover color and a click on empty space
-    // chose "Path 1, Ignore" instead of clearing the choice.
+  it('the wall behind a Colors drawing is not a pointer target while it is ignored', () => {
+    // A traced logo's background wall can be one element the size of the
+    // whole canvas, set to Ignore by the wall rule. If its hit path sat under
+    // every point of the picture, pointing at the background would wash the
+    // whole drawing in the hover color and a click on empty space would
+    // choose "Path 1, Ignore" instead of clearing the choice.
     const analysis = makeAnalysis(100);
     analysis.elements[0].element.setAttribute('data-background', 'true');
     analysis.elements[0].autoRole = 'ignore';
@@ -4005,7 +3981,7 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
       ws._refs.resultPane.querySelectorAll('.svg-prep-hit-path').length;
     expect(roleOf(ws, 0)).toBe('ignore');
     expect(hits(), 'the ignored wall has no hit path').toBe(99);
-    // Every other ignored shape keeps its target (DP-47 P4's rule).
+    // Every other ignored shape keeps its target.
     clickRow(ws, 5);
     press(rows(ws)[5], 'Delete');
     expect(roleOf(ws, 5)).toBe('ignore');
@@ -4019,14 +3995,14 @@ describe('choosing shapes and changing them together (DP-47, D-141)', () => {
   });
 });
 
-describe('DP-53 P1: the drawing view combines by itself', () => {
-  // The band the button lived in: over DP-Q33's 300 ms budget (see the
-  // arithmetic on ABOVE_BUDGET in the describe above this one).
+describe('the drawing view combines by itself', () => {
+  // Over the 300 ms budget (see the arithmetic on ABOVE_BUDGET in the
+  // describe above this one).
   const OVER = 100;
   const settle = () =>
     new Promise((resolve) => setTimeout(resolve, COMBINE_SETTLE_MS + 30));
 
-  it('★ a drawing over the old budget combines on open, with no button to press', async () => {
+  it('a drawing over the budget combines on open, with no button to press', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(OVER));
     await ws.whenReady();
@@ -4041,7 +4017,7 @@ describe('DP-53 P1: the drawing view combines by itself', () => {
     ws.destroy();
   });
 
-  it('★ a change goes stale at once, says the combine is coming, and combines once the changes settle', async () => {
+  it('a change goes stale at once, says the combine is coming, and combines once the changes settle', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(3));
     await ws.whenReady();
@@ -4124,7 +4100,7 @@ describe('DP-53 P1: the drawing view combines by itself', () => {
   });
 });
 
-describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () => {
+describe('the too-thin shapes, and one press to leave them out', () => {
   // A 200-unit picture at the editor's default 14 mm: 0.07 mm per unit. A bar
   // 2 units tall is 0.14 mm and 2 px: too thin to print, too small to trace.
   // A 40-unit square is 2.8 mm and 40 px: fine both ways.
@@ -4158,7 +4134,7 @@ describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () =>
     return mark.querySelector('.svg-prep-thin-mark-words')?.textContent ?? null;
   };
 
-  it('★ the notice counts the shapes under the print floor at the design width, in a sentence', async () => {
+  it('the notice counts the shapes under the print floor at the design width, in a sentence', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]));
     await ws.whenReady();
@@ -4174,7 +4150,7 @@ describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () =>
     ws.destroy();
   });
 
-  it('★ each too-thin row carries its mark, read with the name; a sound row carries none', async () => {
+  it('each too-thin row carries its mark, read with the name; a sound row carries none', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]));
     await ws.whenReady();
@@ -4183,7 +4159,7 @@ describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () =>
     ws.destroy();
   });
 
-  it('★ Ignore those sets the flagged rows to Ignore in one press and says so; Undo ignore puts them back', async () => {
+  it('Ignore those sets the flagged rows to Ignore in one press and says so; Undo ignore puts them back', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, BAR2, SQUARE]));
     await ws.whenReady();
@@ -4264,7 +4240,7 @@ describe('DP-54 P2: the too-thin shapes, and one press to leave them out', () =>
   });
 });
 
-describe('DP-54 P3: the width the host knows (D-144)', () => {
+describe('the width the host knows', () => {
   const BAR = 'M10,10h100v2h-100z';
   const SQUARE = 'M120,20h40v40h-40z';
   const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"></svg>';
@@ -4284,7 +4260,7 @@ describe('DP-54 P3: the width the host knows (D-144)', () => {
     };
   }
 
-  it('★ a host that knows the width opens the editor at it, and the sentences say so', async () => {
+  it('a host that knows the width opens the editor at it, and the sentences say so', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]), {
       designWidthMm: 11.97,
@@ -4303,7 +4279,7 @@ describe('DP-54 P3: the width the host knows (D-144)', () => {
     ws.destroy();
   });
 
-  it('★ a width that arrives while the editor is open moves the box, the notice and the advisory', async () => {
+  it('a width that arrives while the editor is open moves the box, the notice and the advisory', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]), { lineWidthPx: { p10: 2 } });
     await ws.whenReady();
@@ -4331,7 +4307,7 @@ describe('DP-54 P3: the width the host knows (D-144)', () => {
   });
 });
 
-describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154)', () => {
+describe('the shapes you left out, and a view you can steer', () => {
   const BAR = 'M10,10h100v20h-100z';
   const SQUARE = 'M120,20h40v40h-40z';
   const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"></svg>';
@@ -4357,7 +4333,7 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
   };
   const vbOf = (svg) => svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
 
-  it('★ D-154: a shape set to Ignore stays in the picture, in the left-out style, and keeps its hit path', async () => {
+  it('a shape set to Ignore stays in the picture, in the left-out style, and keeps its hit path', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]));
     await ws.whenReady();
@@ -4366,7 +4342,7 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
     const leftOut = pane.querySelectorAll('.svg-prep-standin-path--ignore');
     expect(leftOut).toHaveLength(1);
     expect(leftOut[0].getAttribute('d')).toBe(BAR);
-    // Not painted as raised any more.
+    // Not painted as raised.
     const raised = Array.from(pane.querySelectorAll('.svg-prep-standin-path--raised')).map((p) => p.getAttribute('d'));
     expect(raised).toEqual([SQUARE]);
     // And still a shape a pointer can choose.
@@ -4377,7 +4353,7 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
     ws.destroy();
   });
 
-  it('★ D-154: the combined result keeps the left-out shapes in view', async () => {
+  it('the combined result keeps the left-out shapes in view', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]));
     await ws.whenReady();
@@ -4403,7 +4379,7 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
     ws.destroy();
   });
 
-  it('★ D-153: four buttons move the view by a quarter of it, and the arrow keys do the same', async () => {
+  it('four buttons move the view by a quarter of it, and the arrow keys do the same', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]));
     await ws.whenReady();
@@ -4427,7 +4403,7 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
     ws.destroy();
   });
 
-  it('D-153: the view cannot be steered off the drawing', async () => {
+  it('the view cannot be steered off the drawing', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR, SQUARE]));
     await ws.whenReady();
@@ -4445,7 +4421,7 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
     ws.destroy();
   });
 
-  it('D-153: the four buttons carry their names, in both panes', () => {
+  it('the four buttons carry their names, in both panes', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SVG, analysisOf([BAR]));
     for (const pane of ['source', 'result']) {
@@ -4459,9 +4435,8 @@ describe('DP-56: the shapes you left out, and a view you can steer (D-153, D-154
   });
 });
 
-// ── DP-57 P5: the words On / Cut out / Off, and the layer colors (DP-Q59,
-// DP-Q60, signed 2026-09-17) ─────────────────────────────────────────────────
-describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => {
+// ── The words On / Cut out / Off, and the layer colors ───────────────────────
+describe('the words On / Cut out / Off, and the layer colors', () => {
   const legendWords = (ws) =>
     [...ws._root.querySelectorAll('.svg-prep-legend-item')].map((el) =>
       el.textContent.trim()
@@ -4583,7 +4558,7 @@ describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => 
     ws.open(svg, analyzeSvg(svg), { layersEnabled: true });
     await ws.whenReady();
     const pane = ws._root.querySelector('.svg-prep-result-pane');
-    // D-167 starts the paper Off; a person can still call it a Cut out, and
+    // The paper starts Off; a person can still call it a Cut out, and
     // this is what that press paints.
     setRole(ws, 0, 'hole');
     // A role press puts the stand-in up while the combine runs; read it
@@ -4633,8 +4608,7 @@ describe('the words On / Cut out / Off, and the layer colors (DP-57 P5)', () => 
   });
 });
 
-// ── DP-58: the owner's fifth walk (D-161, D-162) ─────────────────────────────
-describe('a role pressed on a chosen row is pressed for the selection (D-161)', () => {
+describe('a role pressed on a chosen row is pressed for the selection', () => {
   const clickRow = (ws, i, opts = {}) =>
     ws._refs.objects
       .querySelectorAll('.svg-prep-object')[i]
@@ -4686,7 +4660,7 @@ describe('a role pressed on a chosen row is pressed for the selection (D-161)', 
   });
 });
 
-describe('three layers, whatever the drawing nests to (D-162)', () => {
+describe('three layers, whatever the drawing nests to', () => {
   it('two shapes side by side still offer layers 1, 2 and 3, and the summary says so', async () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
@@ -4704,10 +4678,8 @@ describe('three layers, whatever the drawing nests to (D-162)', () => {
   });
 });
 
-// ── DP-83: the review of every control, the three fixes ─────────────────────
-
-describe('DP-83: Reset puts the Layer column back and says what it reset', () => {
-  it('★ resets a layer a person set, so no stack is left standing', () => {
+describe('Reset puts the Layer column back and says what it reset', () => {
+  it('resets a layer a person set, so no stack is left standing', () => {
     const ws = createSvgPrepWorkspace(container);
     const { svgString, analysis } = makeNestedAnalysis(3);
     ws.open(svgString, analysis, { layersEnabled: true });
@@ -4722,7 +4694,7 @@ describe('DP-83: Reset puts the Layer column back and says what it reset', () =>
     ws._root.querySelector('[data-action="reset"]').click();
 
     expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '1']);
-    // A column of ones is no stack (D-142): Apply will emit none.
+    // A column of ones is no stack: Apply will emit none.
     expect(ws.getLayerAssignments().layers).toBeNull();
     expect(ws._refs.layerSummary.textContent).toContain(
       'Every shape starts on layer 1'
@@ -4746,7 +4718,7 @@ describe('DP-83: Reset puts the Layer column back and says what it reset', () =>
   });
 });
 
-describe('DP-83: the Design width box says where its number came from', () => {
+describe('the Design width box says where its number came from', () => {
   beforeEach(() => {
     isEnabled.mockReturnValue(true);
   });
@@ -4754,7 +4726,7 @@ describe('DP-83: the Design width box says where its number came from', () => {
     isEnabled.mockReturnValue(false);
   });
 
-  it('★ describes the box, in words a person can see, when the charm set the width', () => {
+  it('describes the box, in words a person can see, when the charm set the width', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1), {
       designWidthMm: 11.97,
@@ -4778,7 +4750,7 @@ describe('DP-83: the Design width box says where its number came from', () => {
     expect(help.textContent).toBe(
       "The editor's default width. Type the width your design prints at."
     );
-    // The charm's width arriving later (D-144) changes the words with it.
+    // The charm's width arriving later changes the words with it.
     ws.setDesignWidthMm(9.3);
     expect(help.textContent).toContain('The charm sets this from its size.');
     ws.destroy();
@@ -4794,7 +4766,7 @@ describe('DP-83: the Design width box says where its number came from', () => {
   });
 });
 
-describe('DP-83: the bulk bar says which size it measures', () => {
+describe('the bulk bar says which size it measures', () => {
   it('names the box around each shape, and what that does to a long thin line', () => {
     const ws = createSvgPrepWorkspace(container);
     const help = ws._root.querySelector('.svg-prep-bulk-help');

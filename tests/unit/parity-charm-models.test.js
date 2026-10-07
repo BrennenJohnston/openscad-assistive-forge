@@ -1,9 +1,9 @@
 /**
- * Feature parity across the charm-program models (DP-9).
+ * Feature parity across the charm-program models.
  *
  * The Bracelet Clip Charm grew features that the Flat Pendant and the Logo
  * Plate never got, and nothing noticed. These cases are the noticing: they
- * read each model's own parameter surface and compare it against the signed
+ * read each model's own parameter surface and compare it against the parity
  * matrix, so a feature added to one model and forgotten on the others fails
  * here rather than in someone's hands.
  *
@@ -25,7 +25,7 @@ const MODELS = {
 
 /**
  * The Logo Plate names its design parameter logo_file, not design_file, so
- * the matrix is checked against each model's OWN prefix rather than against
+ * the matrix is checked against each model's own prefix rather than against
  * one hard-coded family of names.
  */
 const PREFIX = { 'logo-plate': 'logo', default: 'design' };
@@ -34,12 +34,12 @@ const pre = (key) => PREFIX[key] || PREFIX.default;
 const sourceOf = (key) => readFileSync(join(PUBLIC_DIR, MODELS[key]), 'utf8');
 const paramsOf = (key) => extractParameters(sourceOf(key)).parameters;
 
-describe('D-116 - the aspect companion the app actually writes', () => {
+describe('the aspect companion the app actually writes', () => {
   it('every design file parameter has a "<name>_aspect" beside it', () => {
-    // The app sets `${fileParam}_aspect`. The Flat Pendant called its one
-    // design_aspect, so every measured ratio went into a parameter nothing
-    // read, and a tall design was fitted against a square assumption. The
-    // stripe in the DP-0 A/B cut off both rims because of exactly this.
+    // The app sets `${fileParam}_aspect`. A model that called its one
+    // design_aspect would send every measured ratio into a parameter nothing
+    // reads, and a tall design would be fitted against a square assumption,
+    // cutting off both rims of a stripe.
     for (const key of Object.keys(MODELS)) {
       const params = paramsOf(key);
       const files = Object.values(params).filter((p) => p.uiType === 'file');
@@ -53,7 +53,7 @@ describe('D-116 - the aspect companion the app actually writes', () => {
     }
   });
 
-  it('the Flat Pendant no longer carries the old name anywhere', () => {
+  it('the Flat Pendant carries no design_aspect anywhere', () => {
     const src = sourceOf('nasif-charm-maker');
     expect(src).not.toMatch(/\bdesign_aspect\b/);
     expect(src).toContain('design_file_aspect');
@@ -83,10 +83,10 @@ describe('a default design file desktop OpenSCAD can actually open', () => {
 
 describe('raised text is clamped to the face, like designs', () => {
   it.each(Object.keys(MODELS))('%s clamps every raised text layer', (key) => {
-    // MEASURED on the Bracelet Clip Charm before the repair: text at size 7
-    // pushed sideways reached X 34.09 on a charm whose body ends at 11.01 -
-    // material floating in mid-air. Clamped, the whole model measures
-    // -11.01 to 11.01 and 29,760 facets against 31,424.
+    // Measured on the Bracelet Clip Charm: unclamped, text at size 7 pushed
+    // sideways reaches X 34.09 on a charm whose body ends at 11.01 - material
+    // floating in mid-air. Clamped, the whole model measures -11.01 to 11.01
+    // and 29,760 facets against 31,424.
     const src = sourceOf(key);
     // Every place a text module is extruded must sit inside an intersection
     // with the face. Reading it this way, rather than by matching whole
@@ -141,8 +141,8 @@ describe('the signed parity matrix, per model', () => {
     '%s offers a lanyard slot',
     (key) => {
       // A slot takes a flat strap where a round hole takes a ring. Both models
-      // that carry an attachment CHOICE must offer it. The Logo Plate is not
-      // in this list on purpose: the signed matrix gives it the hole plus
+      // that carry an attachment choice must offer it. The Logo Plate is not
+      // in this list on purpose: the parity matrix gives it the hole plus
       // position controls, not a choice of attachment, so demanding a slot of
       // it would be this guard inventing scope rather than checking it.
       const values = paramsOf(key).attachment_type.enum.map((e) => e.value);
@@ -186,7 +186,7 @@ describe('the signed parity matrix, per model', () => {
   });
 });
 
-// ── DP-10: the contract table IS the guard ──────────────────────────────────
+// ── The contract table is the guard ────────────────────────────────────────
 
 /**
  * How each feature is DETECTED in a model's own parameter surface.
@@ -268,7 +268,7 @@ function readContract() {
   return { models, rows };
 }
 
-describe('the parity contract (DP-10)', () => {
+describe('the parity contract', () => {
   const { models, rows } = readContract();
 
   it('names the models this repo actually ships', () => {
@@ -317,10 +317,10 @@ describe('the parity contract (DP-10)', () => {
   });
 });
 
-describe('D-166 - the pendant\u2019s bail loop is material, not a cut', () => {
-  // Choosing Bail loop carved a half-torus groove into the edge and added
-  // no loop: the hole, the slot and the loop lived in one attachment()
-  // module that every top-level module subtracted. The loop is added now.
+describe('the pendant\u2019s bail loop is material, not a cut', () => {
+  // Bail loop must add a loop, not carve a half-torus groove into the edge:
+  // the loop cannot live in the attachment() module every top-level module
+  // subtracts, so it is added on its own.
   const src = sourceOf('nasif-charm-maker');
   const between = (from, to) => {
     const a = src.indexOf(from);

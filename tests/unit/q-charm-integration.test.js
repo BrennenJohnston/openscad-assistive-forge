@@ -82,7 +82,7 @@ describe('q_charm.scad parser integration', () => {
     expect(groupIds).not.toContain('Dimensions');
   });
 
-  it('extracts Fit parameters added in Phase 2', () => {
+  it('extracts Fit parameters', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -108,7 +108,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.gap_width.maximum).toBe(8);
   });
 
-  it('extracts Design parameters with Phase 9 updates', () => {
+  it('extracts Design parameters', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -125,7 +125,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_offset.maximum).toBe(1.5);
   });
 
-  it('extracts design_left_right and design_up_down position parameters (Phase 7)', () => {
+  it('extracts design_left_right and design_up_down position parameters', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -156,7 +156,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_rotation.group).toBe('Design');
   });
 
-  it('Border group removed in Phase 9', () => {
+  it('has no Border group', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -167,7 +167,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.border_height).toBeUndefined();
   });
 
-  it('extracts Rounding parameters updated in Phase 4 remediation', () => {
+  it('extracts Rounding parameters', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -198,7 +198,7 @@ describe('q_charm.scad parser integration', () => {
     expect(groupIds).toContain('Rounding');
   });
 
-  it('extracts Text parameters with updated defaults (Phase 9)', () => {
+  it('extracts Text parameters with their defaults', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -216,7 +216,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.text_raised).toBeUndefined();
   });
 
-  it('extracts Attachment parameters including position and depth from Phase 7', () => {
+  it('extracts Attachment parameters including position and depth', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -246,7 +246,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.attachment_depth.maximum).toBe(10);
   });
 
-  it('extracts Design Layer 2 parameters including Z-offset added in Phase 5', () => {
+  it('extracts Design Layer 2 parameters including Z-offset', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -501,7 +501,7 @@ describe('PROGRAM_DEFINITIONS', () => {
     });
   }
 
-  it('q-charm and nasif-charm-maker are program examples (F-25 save prompt)', () => {
+  it('q-charm and nasif-charm-maker are program examples (save prompt)', () => {
     const programExampleKeys = new Set();
     for (const prog of Object.values(PROGRAM_DEFINITIONS)) {
       for (const key of prog.examples) {
@@ -519,10 +519,10 @@ describe('PROGRAM_DEFINITIONS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// F-26: SVG gallery exports from ui-generator
+// SVG gallery exports from ui-generator
 // ---------------------------------------------------------------------------
 
-describe('SVG gallery module exports (F-26)', () => {
+describe('SVG gallery module exports', () => {
   it('exports setGalleryOptions and clearGalleryOptions', async () => {
     const mod = await import('../../src/js/ui-generator.js');
     expect(typeof mod.setGalleryOptions).toBe('function');
@@ -547,10 +547,10 @@ describe('SVG gallery module exports (F-26)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DP-8: the layered design surface
+// The layered design surface
 // ---------------------------------------------------------------------------
 
-describe('q-charm layered design (DP-8)', () => {
+describe('q-charm layered design', () => {
   const source = readFileSync(
     join(PUBLIC_DIR, 'examples/q-charm/q_charm.scad'),
     'utf8'
@@ -570,9 +570,8 @@ describe('q-charm layered design (DP-8)', () => {
     expect(byName.design_layer_4).toBeUndefined();
   });
 
-  it('is ADDITIVE: every layer starts empty, so the charm is unchanged', () => {
-    // The signed shape of this feature (DP-Q10): the tiered mode is selected
-    // by filling a layer in, never by default.
+  it('is additive: every layer starts empty, so the charm is unchanged', () => {
+    // The tiered mode is selected by filling a layer in, never by default.
     for (let n = 1; n <= 3; n++) {
       expect(byName[`design_layer_${n}`].default).toBe('');
       expect(byName[`design_layer_${n}_aspect`].default).toBe(1);
@@ -580,7 +579,7 @@ describe('q-charm layered design (DP-8)', () => {
     }
   });
 
-  it('holds the 0.4 mm floor on every layer depth, in the RANGE and an assert', () => {
+  it('holds the 0.4 mm floor on every layer depth, in the range and an assert', () => {
     // A pass thinner than this does not survive a 0.4 mm nozzle. The range
     // stops the app's slider; the assert stops everything else, including
     // desktop OpenSCAD and a hand-edited preset.
@@ -595,9 +594,9 @@ describe('q-charm layered design (DP-8)', () => {
   });
 
   it('leaves every existing design and text parameter untouched', () => {
-    // The tiered mode sits BESIDE the shipped surfaces. Re-anchoring
+    // The tiered mode sits beside the shipped surfaces. Re-anchoring
     // design_file_2 to "the previous termination" would silently change a
-    // public parameter's meaning, which is not this release's to do.
+    // public parameter's meaning.
     expect(byName.design_2_thickness.minimum).toBe(-3);
     expect(byName.design_2_thickness.maximum).toBe(3);
     expect(byName.design_2_thickness.default).toBe(0);
@@ -606,10 +605,10 @@ describe('q-charm layered design (DP-8)', () => {
     expect(byName.design_scale.default).toBe(60);
   });
 
-  it('stacks the layers as height classes, each direction from the face (D-160)', () => {
-    // The owner's rule: raised tops accumulate upward from the face,
+  it('stacks the layers as height classes, each direction from the face', () => {
+    // The rule: raised tops accumulate upward from the face,
     // engraved floors downward, and a layer with no file travels nowhere.
-    // MEASURED on the STLs, face at 8.65: raised 0.5 / 0.5 / 1.0 tops out at
+    // Measured on the STLs, face at 8.65: raised 0.5 / 0.5 / 1.0 tops out at
     // 10.65; layer 2 at 1.0 moves it to 11.15; raised 1.0 beside engraved
     // 1.0 leaves 9.65 over 7.65, two millimeters between the surfaces.
     expect(source).toContain('layer_top_0 = charm_top_z;');
@@ -628,7 +627,7 @@ describe('q-charm layered design (DP-8)', () => {
         `layer_${n}_down = (layer_${n}_on && design_layer_${n}_style != "raised") ? design_layer_${n}_depth : 0;`
       );
     }
-    // D-163: each layer's exact shapes (file n minus file n+1) are built once,
+    // Each layer's exact shapes (file n minus file n+1) are built once,
     // in their own band, going their own layer's way; the raised bands are
     // added and the engraved bands cut; nothing is drawn twice.
     expect(source).toContain('module layer_exact_2d(n) {');
@@ -637,9 +636,9 @@ describe('q-charm layered design (DP-8)', () => {
       expect(source).toContain(`layer_raised_band(${n});`);
       expect(source).toContain(`layer_engraved_band(${n});`);
     }
-    // With layer files present the stack IS the design: the single design
-    // pass is gated off, or the design printed once more at Engrave depth
-    // under the stack (D-135's mechanism, the owner's duplicate).
+    // With layer files present the stack is the design: the single design
+    // pass is gated off, or the design would print once more at Engrave depth
+    // under the stack.
     expect(source).toContain(
       'if (!layered_mode && design_style == "raised") {'
     );
@@ -660,7 +659,7 @@ describe('q-charm layered design (DP-8)', () => {
 
   it('overlaps every boolean by the epsilon, never exactly touching', () => {
     expect(source).toContain('layer_eps = 0.01;');
-    // D-163: a raised band is one slab, its own depth plus the epsilon so
+    // A raised band is one slab, its own depth plus the epsilon so
     // the slabs are one body; an engraved band cuts its own depth plus the
     // epsilon through the floor above it.
     expect(source).toContain('linear_extrude(height = up + layer_eps)');
@@ -673,9 +672,9 @@ describe('q-charm layered design (DP-8)', () => {
     expect(source).toContain('layer_canvas_span = 100;');
   });
 
-  it('scales the passes by ONE factor and never resizes them apart', () => {
-    // MEASURED: resize() fits the CONTENT box, so resizing each pass
-    // separately scaled an 8 mm inner square up to the 36 mm outer one.
+  it('scales the passes by one factor and never resizes them apart', () => {
+    // resize() fits the content box, so resizing each pass separately would
+    // scale an 8 mm inner square up to the 36 mm outer one.
     const moduleBody = source.slice(
       source.indexOf('module design_layer_2d('),
       source.indexOf('module top_face_2d(')
@@ -704,7 +703,7 @@ describe('q-charm layered design (DP-8)', () => {
     }
   });
 
-  it('all three example passes share ONE transform, so the stack lines up', () => {
+  it('all three example passes share one transform, so the stack lines up', () => {
     const transforms = [1, 2, 3].map((n) => {
       const svg = readFileSync(
         join(PUBLIC_DIR, `examples/q-charm/design_layer_${n}.svg`),

@@ -1,8 +1,6 @@
 /**
- * Phase 4 — Targeted Parity Probes
- *
- * Investigative tests for the OpenSCAD Color/Display Parity Audit.
- * Each describe block maps to a probe in the Phase 4 plan.
+ * Targeted parity probes for colour and display parity with desktop
+ * OpenSCAD. Each describe block is one probe.
  *
  * Probes 1 & 2 test the JavaScript pipeline with synthetic OFF/COFF data.
  * The actual WASM output question (does the binary emit COFF?) requires
@@ -33,7 +31,7 @@ import {
 } from '../../src/js/render-intent.js';
 import { getBuiltinManifest } from '../../src/js/project-manifest.js';
 
-// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// The deprecated resolve2DExportIntent wrapper is gone; this
 // local equivalent keeps the proposal-engine assertions exercising the
 // same behavior (unconditional application of the builtin rules).
 const resolve2DExportIntent = (parameters, schema, format) =>
@@ -145,7 +143,7 @@ const OFF_WITH_INLINE_INT_RGBA = `OFF
 3 0 5 4 0 255 0 200
 `;
 
-// Multi-color OFF matching Phase 0 desktop baseline colors:
+// Multi-color OFF matching the desktop baseline colors:
 // Red #FF0000 RGB(255,0,0) — keyguard overlay faces
 // Turquoise #40E0D0 RGB(64,224,208) — frame faces
 // Uses "OFF" header with integer 0-255 (OpenSCAD export_off.cc format)
@@ -206,7 +204,7 @@ const MIXED_COLOR_OFF = `OFF
 3 4 6 7
 `;
 
-// OFF where the first face is black (RGB 0,0,0) — edge case per RQ-2
+// OFF where the first face is black (RGB 0,0,0) — an edge case
 const FIRST_FACE_BLACK_OFF = `OFF
 8 4 0
 0 0 0
@@ -223,8 +221,8 @@ const FIRST_FACE_BLACK_OFF = `OFF
 3 4 6 7 0 128 255
 `;
 
-// ── Standalone parser extraction — mirrors loadOFF() lines 1206-1307 ─────────
-// Extracted for unit testability without Three.js DOM dependency (fallback gate).
+// ── Standalone parser extraction — mirrors loadOFF() ─────────────────────────
+// Extracted for unit testability without Three.js DOM dependency.
 function parseOFFColors(offData) {
   const text =
     typeof offData === 'string' ? offData : new TextDecoder().decode(offData);
@@ -368,7 +366,7 @@ cube(10);
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROBE 1: COFF Output Verification (JavaScript pipeline side)
+// Probe 1: COFF output verification (JavaScript pipeline side)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Probe 1: COFF parser correctness (JavaScript pipeline)', () => {
@@ -436,7 +434,7 @@ describe('Probe 1: COFF parser correctness (JavaScript pipeline)', () => {
   });
 
   it('console log format matches expected COFF ✓ / OFF (no color) pattern', () => {
-    // Verifies the diagnostic log format at auto-preview-controller.js:812
+    // Verifies the diagnostic log format in auto-preview-controller.js
     const resultFormat = 'off';
     const hasColorsTrue = true;
     const hasColorsFalse = false;
@@ -542,7 +540,7 @@ describe('Probe 2: # debug modifier handling in COFF pipeline', () => {
   });
 
   it('debug modifier is detected independently of color()', () => {
-    // New gate: hasDebugModifier = scadUsesDebugModifier(...)
+    // The gate: hasDebugModifier = scadUsesDebugModifier(...)
     // useColorPassthrough = flag && (usesColor || hasDebugModifier)
     const hasDebugWithColor =
       AutoPreviewController.scadUsesDebugModifier(COLOR_PLUS_DEBUG_SCAD);
@@ -566,10 +564,10 @@ describe('Probe 2: # debug modifier handling in COFF pipeline', () => {
     expect(format).toBe('off');
   });
 
-  it('COFF per-face alpha is NOT used — material-level opacity is used instead', () => {
-    // Verifying design: preview.js:1167 pushes (r,g,b) × 3 vertices
-    // but does NOT include 'a' from the COFF RGBA.
-    // Material opacity comes from debugHighlight.opacity at line 1218.
+  it('COFF per-face alpha is not used — material-level opacity is used instead', () => {
+    // By design, preview.js pushes (r,g,b) × 3 vertices and does not
+    // include 'a' from the COFF RGBA; material opacity comes from
+    // debugHighlight.opacity.
     const colfLine = '3 0 1 2  1.0 0.0 0.0 0.5';
     const parts = colfLine.split(/\s+/).map(Number);
     const n = parts[0]; // 3
@@ -583,7 +581,7 @@ describe('Probe 2: # debug modifier handling in COFF pipeline', () => {
     const b = parts[n + 3];
     colors.push(r, g, b, r, g, b, r, g, b);
     expect(colors.length).toBe(9);
-    expect(colors).not.toContain(0.5); // alpha is NOT in the color buffer
+    expect(colors).not.toContain(0.5); // alpha is not in the color buffer
   });
 });
 
@@ -612,13 +610,13 @@ describe('Probe 3: scadUsesColor() detection accuracy', () => {
   });
 
   // False-positive resistance — variable names
-  it('does NOT false-positive on variable named keyguard_color (no function call)', () => {
+  it('does not false-positive on variable named keyguard_color (no function call)', () => {
     expect(
       AutoPreviewController.scadUsesColor(COLOR_IN_VARIABLE_NAMES_SCAD)
     ).toBe(false);
   });
 
-  it('does NOT false-positive on "background_color_hex" variable name', () => {
+  it('does not false-positive on "background_color_hex" variable name', () => {
     expect(
       AutoPreviewController.scadUsesColor(
         'background_color_hex = "333333";\ncube(10);'
@@ -627,13 +625,13 @@ describe('Probe 3: scadUsesColor() detection accuracy', () => {
   });
 
   // False-positive resistance — comments
-  it('does NOT detect color() in single-line comment', () => {
+  it('does not detect color() in single-line comment', () => {
     expect(
       AutoPreviewController.scadUsesColor(COLOR_IN_COMMENT_ONLY_SCAD)
     ).toBe(false);
   });
 
-  it('does NOT detect color() in block comment', () => {
+  it('does not detect color() in block comment', () => {
     expect(
       AutoPreviewController.scadUsesColor('/* color("red") */ cube(10);')
     ).toBe(false);
@@ -705,19 +703,19 @@ describe('Probe 3: scadUsesDebugModifier() detection accuracy', () => {
     ).toBe(true);
   });
 
-  it('does NOT false-positive on # inside hex color string', () => {
+  it('does not false-positive on # inside hex color string', () => {
     expect(
       AutoPreviewController.scadUsesDebugModifier('color("#ff0000") cube(10);')
     ).toBe(false);
   });
 
-  it('does NOT false-positive on # inside single-line comment', () => {
+  it('does not false-positive on # inside single-line comment', () => {
     expect(
       AutoPreviewController.scadUsesDebugModifier('// # cube(10);\ncube(10);')
     ).toBe(false);
   });
 
-  it('does NOT false-positive on # inside block comment', () => {
+  it('does not false-positive on # inside block comment', () => {
     expect(
       AutoPreviewController.scadUsesDebugModifier(
         '/* # cube(10); */ sphere(5);'
@@ -725,13 +723,13 @@ describe('Probe 3: scadUsesDebugModifier() detection accuracy', () => {
     ).toBe(false);
   });
 
-  it('does NOT false-positive on plain geometry without #', () => {
+  it('does not false-positive on plain geometry without #', () => {
     expect(
       AutoPreviewController.scadUsesDebugModifier(NO_COLOR_SCAD)
     ).toBe(false);
   });
 
-  it('does NOT false-positive on module-internal debug helper branches', () => {
+  it('does not false-positive on module-internal debug helper branches', () => {
     expect(
       AutoPreviewController.scadUsesDebugModifier(
         'module helper(id) {\n  if (id == "#") {\n    # translate([0,0,0]) cube(10);\n  }\n}\ncolor("Turquoise") cube(20);'
@@ -751,7 +749,7 @@ describe('Probe 3: scadUsesDebugModifier() detection accuracy', () => {
 
 // Hex→vector conversion applies ONLY to params the schema declares as
 // 'color' (// [color] hint). Untyped 6-hex-char strings stay quoted —
-// the old always-on conversion corrupted text params like "decade".
+// an always-on conversion would corrupt text params like "decade".
 describe('Probe 4: hex color serialization via buildDefineArgs', () => {
   const COLOR_TYPES = {
     keyguard_color: 'color',
@@ -795,15 +793,15 @@ describe('Probe 4: hex color serialization via buildDefineArgs', () => {
     expect(args).toContain('generate="Customizer Settings"');
   });
 
-  it('preserves UNTYPED hex-shaped strings as quoted strings (no coercion)', () => {
+  it('preserves untyped hex-shaped strings as quoted strings (no coercion)', () => {
     const args = buildDefineArgs({ label: 'decade', code: '#FF0000' });
     expect(args).toContain('label="decade"');
     expect(args).toContain('code="#FF0000"');
   });
 
-  it('does NOT treat 3-digit hex as color (regex requires 6 digits)', () => {
+  it('does not treat 3-digit hex as color (regex requires 6 digits)', () => {
     const args = buildDefineArgs({ keyguard_color: '#F00' }, COLOR_TYPES);
-    // 3-digit hex does NOT match /^#?[0-9A-Fa-f]{6}$/
+    // 3-digit hex does not match /^#?[0-9A-Fa-f]{6}$/
     expect(args).toContain('keyguard_color="#F00"');
   });
 
@@ -887,7 +885,7 @@ describe('Probe 5: blank display state for non-previewable modes', () => {
     expect(result).toBe(true);
   });
 
-  it('does NOT classify "3D Printed" as non-previewable', () => {
+  it('does not classify "3D Printed" as non-previewable', () => {
     const result = AutoPreviewController.isNonPreviewableParameters({
       generate: '3D Printed',
     });
@@ -910,7 +908,7 @@ describe('Probe 5: blank display state for non-previewable modes', () => {
     );
   });
 
-  it('renderPreview does NOT invoke the worker for Customizer Settings', async () => {
+  it('renderPreview does not invoke the worker for Customizer Settings', async () => {
     const params = { generate: 'Customizer Settings' };
     const paramHash = controller.hashParams(params);
     controller.currentParamHash = paramHash;
@@ -950,8 +948,7 @@ describe('Probe 5: blank display state for non-previewable modes', () => {
   });
 
   it('setRenderState is a no-op (fabricated tinting removed)', () => {
-    // Documented in Phase 3: preview.js:511-512
-    // setRenderState(_state) {} — empty body
+    // preview.js: setRenderState(_state) {} has an empty body.
     previewManager.setRenderState('preview');
     previewManager.setRenderState('laser');
     previewManager.setRenderState(null);
@@ -1015,10 +1012,10 @@ describe('Probe 1/2 Supplemental: format routing decision', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// S-005: Dual-render integration — # modifier triggers loadOFF with debugHighlight
+// Dual-render integration — # modifier triggers loadOFF with debugHighlight
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('S-005: dual-render integration for # debug modifier', () => {
+describe('dual-render integration for # debug modifier', () => {
   let renderController;
   let previewManager;
   let controller;
@@ -1066,7 +1063,7 @@ describe('S-005: dual-render integration for # debug modifier', () => {
     );
   });
 
-  it('passes debugHighlight to loadOFF when # detected WITHOUT color()', async () => {
+  it('passes debugHighlight to loadOFF when # detected without color()', async () => {
     controller.setScadContent(DEBUG_ONLY_SCAD);
     const params = {};
     const paramHash = controller.hashParams(params);
@@ -1141,17 +1138,17 @@ describe('S-005: dual-render integration for # debug modifier', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 1: Multi-Color COFF Unit Probe
+// Multi-color COFF unit probe
 //
 // Validates that the loadOFF() parser logic correctly handles COFF data with
 // multiple distinct face-color groups. Uses standalone parser extraction
-// (fallback gate: Three.js unavailable in jsdom test environment).
+// (Three.js is unavailable in the jsdom test environment).
 //
-// Anchored to Phase 0 desktop baseline: Red #FF0000 + Turquoise #40E0D0,
+// Anchored to the desktop baseline: Red #FF0000 + Turquoise #40E0D0,
 // integer 0-255 scale, "OFF" header (OpenSCAD export_off.cc format).
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Phase 1: Multi-color COFF parser probe (loadOFF extraction)', () => {
+describe('Multi-color COFF parser probe (loadOFF extraction)', () => {
   // Helper: extract unique RGB triples from the flat colors array
   function extractUniqueColors(colors) {
     const seen = new Set();
@@ -1289,15 +1286,15 @@ describe('Phase 1: Multi-color COFF parser probe (loadOFF extraction)', () => {
       expect(result.hasColors).toBe(true);
     });
 
-    it('colors.length < positions.length (geometry guard would FAIL)', () => {
-      // loadOFF() line 1324: hasColors && colors.length === positions.length
+    it('colors.length < positions.length (geometry guard would fail)', () => {
+      // loadOFF(): hasColors && colors.length === positions.length
       // Mixed faces → 2 colored + 2 uncolored → colors has 18, positions has 36
       expect(result.colors.length).toBeLessThan(result.positions.length);
     });
 
     it('documents: mesh would fall back to solid theme color (no vertex colors)', () => {
       // When colors.length !== positions.length, the geometry guard at
-      // preview.js:1324 prevents the color attribute from being set.
+      // preview.js prevents the color attribute from being set.
       // The mesh falls back to the solid theme color via _resolveModelColor().
       const geometryGuardPasses =
         result.hasColors && result.colors.length === result.positions.length;
@@ -1400,15 +1397,14 @@ describe('Phase 1: Multi-color COFF parser probe (loadOFF extraction)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 1 Audit: Effective parameter pipeline trace for shelf/grid presets
+// Effective parameter pipeline trace for shelf/grid presets
 //
 // Validates that the parameter pipeline (resolve2DExportIntent → buildDefineArgs)
 // produces the expected serialization for concrete preset values taken from
-// keyguard_v75.json. Anchored to the Phase 1 completion record in the
-// keyguard_geometry_parity plan.
+// keyguard_v75.json.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
+describe('shelf/grid preset pipeline trace', () => {
   const SHELF_PRESET_FOCUS = {
     mounting_method: 'Shelf',
     shelf_thickness: '3',
@@ -1630,9 +1626,9 @@ describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
     });
   });
 
-  describe('Geometry Fix Regression: desktop reference parity (Phase 2 baseline)', () => {
-    // Desktop reference data from docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
-    // These fixtures are inlined to keep the test self-contained (same pattern as buildDefineArgs above).
+  describe('desktop reference parity', () => {
+    // Desktop reference data from OpenSCAD Nightly CLI extracts, inlined to
+    // keep the test self-contained (same pattern as buildDefineArgs above).
     const DESKTOP_REFERENCES = {
       '3d-printed-keyguard': {
         scenarioId: '3d-printed-keyguard',
@@ -1752,8 +1748,9 @@ describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
           generate: 'keyguard frame',
           // Missing show_keyguard_with_frame and have_a_keyguard_frame
         });
-        // Should NOT match keyguard-frame-multicolor since only 2 of 4 params present.
-        // May match 3d-printed-keyguard since generate='keyguard frame' != 'keyguard'.
+        // Should not match keyguard-frame-multicolor since only 2 of 4
+        // params are present. May match 3d-printed-keyguard since
+        // generate='keyguard frame' != 'keyguard'.
         expect(match?.scenarioId).not.toBe('keyguard-frame-multicolor');
       });
     });
@@ -1771,12 +1768,11 @@ describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
       });
     });
 
-    describe('Phase 2 observed baseline recording', () => {
-      // OBSERVED (browser runtime, 2026-04-03): compareGeometry() at RENDER_QUALITY.FULL
-      // reported 10,348 triangles for the default 3D-printed keyguard preset.
-      // Desktop Nightly reference: 12,016 facets.
-      // Delta: -1,668 (-13.9%) — outside 10% tolerance.
-      // This was measured with WASM build OpenSCAD-2025.03.25 (pre-Phase 4 update).
+    describe('observed browser baseline', () => {
+      // Observed in the browser with WASM build OpenSCAD-2025.03.25:
+      // compareGeometry() at RENDER_QUALITY.FULL reported 10,348 triangles for
+      // the default 3D-printed keyguard preset. Desktop Nightly reference:
+      // 12,016 facets. Delta: -1,668 (-13.9%), outside 10% tolerance.
       const BROWSER_BASELINE_PRE_PHASE4 = 10348;
       const DESKTOP_REFERENCE_FACETS = 12016;
 
@@ -1884,7 +1880,7 @@ describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 4: Serialization Parity — shared formatScadValue regression tests
+// Serialization parity — shared formatScadValue regression tests
 //
 // Validates that the single formatting function (scad-param-formatter.js)
 // produces identical output for all code paths: buildDefineArgs (-D flags),
@@ -1892,7 +1888,7 @@ describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
 // and dumpRenderArgs (diagnostic logging).
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Phase 4: formatScadValue parity — yes/no string enums', () => {
+describe('formatScadValue parity — yes/no string enums', () => {
   it('preserves "yes" as quoted string when paramType is string', () => {
     expect(formatScadValue('have_a_case', 'yes', { have_a_case: 'string' })).toBe('"yes"');
   });
@@ -1937,7 +1933,7 @@ describe('Phase 4: formatScadValue parity — yes/no string enums', () => {
   });
 });
 
-describe('Phase 4: formatScadValue parity — numeric-string coercion', () => {
+describe('formatScadValue parity — numeric-string coercion', () => {
   it('emits unquoted number for integer-typed string "40"', () => {
     expect(formatScadValue('smoothness', '40', { smoothness: 'integer' })).toBe('40');
   });
@@ -1985,7 +1981,7 @@ describe('Phase 4: formatScadValue parity — numeric-string coercion', () => {
   });
 });
 
-describe('Phase 4: formatScadValue parity — edge cases', () => {
+describe('formatScadValue parity — edge cases', () => {
   it('returns null for null value', () => {
     expect(formatScadValue('key', null)).toBeNull();
   });
@@ -2021,7 +2017,7 @@ describe('Phase 4: formatScadValue parity — edge cases', () => {
   });
 });
 
-describe('Phase 4: buildDefineArgs and formatScadValue produce identical output', () => {
+describe('buildDefineArgs and formatScadValue produce identical output', () => {
   const LWFL_PARAMS = {
     expose_home_button: 'yes',
     expose_upper_message_bar: 'no',
@@ -2083,7 +2079,7 @@ describe('Phase 4: buildDefineArgs and formatScadValue produce identical output'
   });
 });
 
-describe('Phase 4: serializeScadVector', () => {
+describe('serializeScadVector', () => {
   it('serializes flat array', () => {
     expect(serializeScadVector([1, 2, 3])).toBe('[1,2,3]');
   });
@@ -2105,7 +2101,7 @@ describe('Phase 4: serializeScadVector', () => {
   });
 });
 
-describe('Phase 4: detectColorParamLiteralStyle', () => {
+describe('detectColorParamLiteralStyle', () => {
   it('detects string-style color with #', () => {
     const scad = 'keyguard_color = "#FF0000"; // [#FF0000, #00FF00]';
     const result = detectColorParamLiteralStyle(scad, 'keyguard_color');
@@ -2139,7 +2135,7 @@ describe('Phase 4: detectColorParamLiteralStyle', () => {
   });
 });
 
-describe('Phase 4: escapeRegExp', () => {
+describe('escapeRegExp', () => {
   it('escapes regex special characters', () => {
     expect(escapeRegExp('foo.bar')).toBe('foo\\.bar');
     expect(escapeRegExp('a+b')).toBe('a\\+b');

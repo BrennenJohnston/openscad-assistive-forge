@@ -1,6 +1,6 @@
 /**
- * Colours out of a picture, pinned against the owner's own photograph of
- * their cat and against three synthetic pictures whose answers are known.
+ * Colours out of a picture, pinned against a real photograph of a cat and
+ * against three synthetic pictures whose answers are known.
  *
  * @license GPL-3.0-or-later
  */
@@ -75,7 +75,7 @@ function ringOnGround(size = 60) {
   return { width: size, height: size, data }
 }
 
-/** The owner's cat, flattened onto white the way a print would. */
+/** The cat photograph, flattened onto white the way a print would. */
 function cat() {
   const png = PNG.sync.read(
     readFileSync(join('tests', 'fixtures', 'harley', 'sketch4.png'))
@@ -188,11 +188,11 @@ describe('modeDown', () => {
     expect(small).not.toBe(CAT)
   })
 
-  it('★ is what makes a colour covering 1% of a picture findable', () => {
-    // MEASURED on the cat, comparing palettes within 12 units per channel so
+  it('is what makes a colour covering 1% of a picture findable', () => {
+    // Measured on the cat, comparing palettes within 12 units per channel so
     // a desaturated grey cannot pass for a sage green:
-    //   full image, six colours          finds NEITHER    93 ms
-    //   mode-downsampled, six colours    finds the GREEN  13 ms
+    //   full image, six colours          finds neither    93 ms
+    //   mode-downsampled, six colours    finds the green  13 ms
     //   mode-downsampled, seven          finds both       13 ms
     // Asked flat, the clustering spends its budget on the black-to-white ramp
     // anti-aliasing leaves along every edge. The mode of a block is a colour
@@ -236,13 +236,13 @@ describe('masksFor and traceMask', () => {
     expect(strict.dropped).toBeGreaterThan(0)
   })
 
-  // DP-24 P3: the traced colour masks DID NOT TILE. Each mask is traced on
-  // its own, the tracer pulls every boundary inward, and the hairline gaps
-  // between neighbouring colours became 567 loose pieces on the owner's
-  // cat. Grown under a pixel before tracing, neighbours MEET: together the
-  // traced colours cover at least the whole canvas (overlap is fine - the
-  // paint order paints over it; a gap is a sliver on a plate).
-  it('★ grown masks tile: the traced colours cover the whole picture', () => {
+  // Traced colour masks must tile. Each mask is traced on its own and the
+  // tracer pulls every boundary inward, so ungrown, the hairline gaps
+  // between neighbouring colours become 567 loose pieces on the cat. Grown
+  // under a pixel before tracing, neighbours meet: together the traced
+  // colours cover at least the whole canvas (overlap is fine - the paint
+  // order paints over it; a gap is a sliver on a plate).
+  it('grown masks tile: the traced colours cover the whole picture', () => {
     const img = threeStripes()
     const { palette, assignments } = quantise(img, 3)
     const masks = masksFor(assignments, palette.length)
@@ -255,7 +255,7 @@ describe('masksFor and traceMask', () => {
   })
 })
 
-describe('separateColours on the owner cat', () => {
+describe('separateColours on a cat photograph', () => {
   const six = separateColours(CAT, { count: 6 })
   const seven = separateColours(CAT, { count: 7 })
 
@@ -274,7 +274,7 @@ describe('separateColours on the owner cat', () => {
     expect(wall.hex.toLowerCase()).toMatch(/^#f[ed]/)
   })
 
-  it('★ finds the green eyes at six, and the pink nose as well at seven', () => {
+  it('finds the green eyes at six, and the pink nose as well at seven', () => {
     // The picture has seven colours a person would name, because its outlines
     // are a second, purer black than its fur. Six finds the green; seven finds
     // the pink too. The panel says the share of each, so a person can see a
@@ -286,7 +286,7 @@ describe('separateColours on the owner cat', () => {
     expect(has(seven, '#b0767d')).toBe(true)
   })
 
-  it('★ cannot tell the white FUR from the white paper, and a named palette can', () => {
+  it('cannot tell the white fur from the white paper, and a named palette can', () => {
     // #fafbf8 and #ffffff are five units apart in RGB. No clustering will ever
     // separate them; a person naming their paint will.
     expect(seven.colours.some((c) => c.hex === '#fafbf8')).toBe(false)
@@ -308,13 +308,12 @@ describe('separateColours on the owner cat', () => {
   })
 
   it('melts the anti-alias slivers rather than shipping them as regions', () => {
-    // The planning probe measured 181 paths for brown and 178 for grey with
-    // the tracer left to quantise. One colour at a time plus an area floor
-    // brings a whole picture down to tens. RESCOPED at DP-24 P3 from 80 to
-    // 120: the floor is now applied to the mask's own pixels before the
-    // grow (measured 105 kept) - the old 80 was the tracer's inward pull
-    // accidentally under-measuring marginal four-to-six-pixel pieces and
-    // killing shapes the floor's own definition keeps.
+    // With the tracer left to quantise, the cat gives 181 paths for brown and
+    // 178 for grey. One colour at a time plus an area floor brings a whole
+    // picture down to tens. The bound is 120 (measured 105 kept): the floor
+    // is applied to the mask's own pixels before the grow, so the tracer's
+    // inward pull cannot under-measure marginal four-to-six-pixel pieces and
+    // kill shapes the floor's own definition keeps.
     const shapes = six.colours.reduce((sum, c) => sum + c.shapes, 0)
     expect(shapes).toBeLessThan(120)
     expect(six.droppedTotal).toBeGreaterThan(100)
@@ -332,8 +331,8 @@ describe('separateColours on the owner cat', () => {
   })
 })
 
-// ── D-138: the edge between two colors is not a third color (DP-48 P2) ──────
-describe('the share floor (D-138, DP-Q54 proposed at 2 %)', () => {
+// ── The edge between two colors is not a third color ───────────────────────
+describe('the share floor (2 %)', () => {
   /** A light mark on a dark ground, with a soft edge between them. */
   function rampedMark(w = 120, h = 120) {
     const data = new Uint8ClampedArray(w * h * 4)
@@ -400,8 +399,8 @@ describe('the share floor (D-138, DP-Q54 proposed at 2 %)', () => {
     expect(keepAboveShare(q, 0).palette).toHaveLength(3)
   })
 
-  it('★ a two-color picture with a soft edge separates into TWO colors', () => {
-    // The owner's logo in miniature. Without the floor the ramp becomes
+  it('a two-color picture with a soft edge separates into two colors', () => {
+    // A logo in miniature. Without the floor the ramp becomes
     // colors of its own and each one traces into its own pile of slivers.
     const img = rampedMark()
     const loose = separateColours(img, { count: 6 })
@@ -412,7 +411,7 @@ describe('the share floor (D-138, DP-Q54 proposed at 2 %)', () => {
     expect(countPaths(folded.svg)).toBeLessThan(countPaths(loose.svg))
   })
 
-  it('★ keeps the artwork: the folded picture still covers the mark', () => {
+  it('keeps the artwork: the folded picture still covers the mark', () => {
     // The floor removes colors, never shapes: what was ramp pixels becomes
     // part of the color it sits against, so nothing of the drawing is lost.
     const img = rampedMark()

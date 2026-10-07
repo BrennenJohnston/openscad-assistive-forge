@@ -1,10 +1,10 @@
 /**
- * The drawing editor surface (DP-19).
+ * The drawing editor surface.
  *
- * What is pinned here is the SURFACE: where it lives, how it opens and gives
+ * What is pinned here is the surface: where it lives, how it opens and gives
  * the area back, that the workspace mounted inside it still gets every option
  * it used to, that the one gesture takes one path, and that the stencil
- * purpose reads the owner's own drawing into regions a person can colour.
+ * purpose reads a real drawing into regions a person can colour.
  * What happens inside the mounted workspace is pinned by its own 3,200 lines.
  *
  * @license GPL-3.0-or-later
@@ -146,8 +146,8 @@ describe('the surface', () => {
   it('two editors on one page do not share the ids the surface mints', () => {
     // The mounted workspace carries three fixed ids of its own (its title,
     // its bulk-bar help and its render note), and two workspaces on one page
-    // would already have shared those before this surface existed. What is
-    // pinned here is that the SURFACE adds no fourth.
+    // would share those anyway. What is pinned here is that the surface adds
+    // no fourth.
     const other = document.createElement('div')
     document.body.appendChild(other)
     make()
@@ -191,7 +191,7 @@ describe('the mounted workspace', () => {
     expect(warnings.contains(refs.warnings)).toBe(true)
   })
 
-  it('keeps its live region on its own root, where the old spec looks for it', () => {
+  it('keeps its live region on its own root', () => {
     make()
     expect(surface.querySelector('.svg-prep-workspace > .sr-only[aria-live]')).not.toBeNull()
   })
@@ -239,7 +239,7 @@ describe('opening and giving the area back', () => {
       deletedSeenInside = editor.getDeletedIndices()
     })
     openOn(editor, THREE, { initialDeleted: [2], onApply })
-    // D-120: Apply is enabled once the ring engine's first preview lands.
+    // Apply is enabled once the ring engine's first preview lands.
     await editor.whenReady()
     editor._workspace._refs.applyBtn.click()
     expect(onApply).toHaveBeenCalledTimes(1)
@@ -271,7 +271,7 @@ describe('opening and giving the area back', () => {
     const onClose = vi.fn()
     const editor = make({ onClose })
     const { onKeepOriginal } = openOn(editor, THREE)
-    // The shape list now lives in the panel, outside the workspace root.
+    // The shape list lives in the panel, outside the workspace root.
     const row = surface.querySelector('.svg-prep-object')
     row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(onKeepOriginal).toHaveBeenCalledTimes(1)
@@ -357,12 +357,10 @@ describe('the relief purpose', () => {
     expect(editor.getPlan()).toBeNull()
   })
 
-  it('★ the relief keys reach the shapes, and stop inside the editor (DP-47)', () => {
+  it('the relief keys reach the shapes, and stop inside the editor', () => {
     // The surface takes every shortcut the stencil purpose uses and stops it
-    // there, and for the relief purpose it used to return before any key at
-    // all - so Delete did nothing and Ctrl+A selected the whole page. The
-    // workspace handles both now, INSIDE the surface, and the app never hears
-    // them.
+    // there. For the relief purpose the workspace handles Delete and Ctrl+A
+    // inside the surface, and the app never hears them.
     const editor = make()
     openOn(editor, THREE, { purpose: 'relief' })
     const heardOutside = vi.fn()
@@ -405,7 +403,7 @@ describe('the relief purpose', () => {
   })
 })
 
-describe('the stencil purpose, on the owner drawing', () => {
+describe('the stencil purpose, on a real drawing', () => {
   it('finds the faces, one row each, and says what it found with the opening', async () => {
     const editor = make()
     openOn(editor, CAT_SVG, { purpose: 'stencil' })
@@ -470,7 +468,7 @@ describe('the stencil purpose, on the owner drawing', () => {
     form.querySelector('input[type="color"]').value = '#997048'
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 
-    // The LAST row: the smallest face, which has nothing nested in it. The
+    // The last row: the smallest face, which has nothing nested in it. The
     // largest face has, and cutting it alone leaves that as a loose piece -
     // which the engine reports, honestly, and which is not what this case is
     // about.
@@ -486,7 +484,7 @@ describe('the stencil purpose, on the owner drawing', () => {
     expect(announce).toHaveBeenLastCalledWith(S.regionSet(name, 'Brown', 2))
     const swatches = [...surface.querySelectorAll('.drawing-editor-swatch-row')]
     expect(swatches[1].textContent).toContain(S.usedBy(1))
-    // Each plate line carries its order buttons after the sentence (DP-20).
+    // Each plate line carries its order buttons after the sentence.
     const plates = [...surface.querySelectorAll('.drawing-editor-plates li > span:first-child')]
     expect(plates[1].textContent).toBe(S.plateLine(2, 'Brown', 1, 0))
     expect(plates[0].textContent).toBe(S.plateGround(1, 'Base coat'))
@@ -522,8 +520,8 @@ describe('the stencil purpose, on the owner drawing', () => {
   })
 })
 
-// ── DP-58, D-165: one editor per surface element ─────────────────────────────
-describe('one editor per surface element (D-165)', () => {
+// ── One editor per surface element ──────────────────────────────────────────
+describe('one editor per surface element', () => {
   it('a second editor built into the same element replaces the first instead of standing beside it', async () => {
     const surface = document.createElement('div')
     surface.id = 'drawingEditorSurface-d165'
@@ -531,8 +529,8 @@ describe('one editor per surface element (D-165)', () => {
     const { createDrawingEditor } = await import('../../src/js/drawing-editor/surface.js')
     const first = createDrawingEditor({ surfaceEl: surface, announce: () => {} })
     const second = createDrawingEditor({ surfaceEl: surface, announce: () => {} })
-    // The owner's screenshots: three and four toolbars side by side, one per
-    // file control the customizer had rendered into the same element.
+    // Without this, a customizer that renders several file controls into the
+    // same element would show three or four toolbars side by side.
     expect(surface.querySelectorAll(':scope > .drawing-editor')).toHaveLength(1)
     expect(surface.querySelectorAll('.drawing-editor-toolbar')).toHaveLength(1)
     expect(second._root.isConnected).toBe(true)
