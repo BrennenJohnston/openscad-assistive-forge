@@ -9,7 +9,7 @@ import { getAppPrefKey } from './storage-keys.js';
 /**
  * Parameter History Manager for Undo/Redo functionality
  *
- * Undo-stack model: callers push the CURRENT state BEFORE making a change.
+ * Undo-stack model: callers push the current state before making a change.
  * The undoStack holds prior snapshots; the redoStack holds snapshots
  * displaced by undo operations. The live application state is always
  * "ahead" of the undoStack top.
@@ -615,8 +615,8 @@ async function deserializeURLParams() {
     // The schema only accepts scalar (string) values, so array-valued parameters
     // (e.g. nested tablet position data: [[x,y], ...]) must be partitioned out
     // before validation and merged back in afterward.
-    // Tech-debt: widen urlParamValueSchema in validation-schemas.js to accept
-    // array types natively so this split is no longer needed.
+    // Widening urlParamValueSchema in validation-schemas.js to accept
+    // array types natively would make this split unnecessary.
     const arrayParams = {};
     const scalarParams = {};
     for (const [k, v] of Object.entries(params)) {

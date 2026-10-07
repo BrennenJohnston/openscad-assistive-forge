@@ -11,9 +11,9 @@ import {
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 
 // Re-export quality tier system for convenience.
-// RENDER_QUALITY now lives in quality-tiers.js (single source of truth for
-// tessellation defaults); existing `import { RENDER_QUALITY } from
-// './render-controller.js'` sites keep working through this re-export.
+// RENDER_QUALITY lives in quality-tiers.js (the single source of truth for
+// tessellation defaults); `import { RENDER_QUALITY } from
+// './render-controller.js'` sites work through this re-export.
 export {
   COMPLEXITY_TIER,
   QUALITY_TIERS,
@@ -214,11 +214,11 @@ export class RenderController {
     this._restartInProgress = null;
 
     /**
-     * Names this render must NOT pass as `-D` (UF-18, Q-45a). Supplied by the
-     * app, which is the only layer that knows which parameters a person
-     * actually changed. Everything withheld here falls through to the value
-     * the SCAD source declares, which is the point: a `-D` for every
-     * parameter is what made an edited default invisible (U-30).
+     * Names this render must not pass as `-D`. Supplied by the app, which is
+     * the only layer that knows which parameters a person actually changed.
+     * Everything withheld here falls through to the value the SCAD source
+     * declares, which is the point: a `-D` for every parameter would make an
+     * edited default invisible.
      * @type {(() => Set<string>)|null}
      */
     this._getWithheldDefineKeys = null;
@@ -659,7 +659,7 @@ export class RenderController {
         payload: { id: ++this._heartbeatId },
       });
 
-      // Check if last pong was too long ago AND we're not in a render
+      // Check if last pong was too long ago and we're not in a render
       const silenceMs = Date.now() - this._lastPongTimestamp;
       const isRendering = !!this.currentRequest;
       if (!isRendering && silenceMs > intervalMs * 3) {
@@ -704,7 +704,7 @@ export class RenderController {
   }
 
   /**
-   * Supply the names this controller must withhold from `-D` (UF-18, Q-45a).
+   * Supply the names this controller must withhold from `-D`.
    * @param {(() => Set<string>)|null} resolver
    */
   setWithheldDefineKeyResolver(resolver) {
@@ -715,7 +715,7 @@ export class RenderController {
    * Drop the parameters the app says the user never touched, so the SCAD
    * source's own declarations decide their values.
    *
-   * Applied AFTER the quality preset, never before: `applyQualitySettings`
+   * Applied after the quality preset, never before: `applyQualitySettings`
    * reads `$fn` to decide whether to cap it, and a preset that forces `$fn`
    * writes a value that has to survive to the command line.
    *
@@ -1159,18 +1159,17 @@ export class RenderController {
    * MODEL_NOT_2D.
    *
    * Fallback strategy:
-   *   Pass 1 — Render the model to STL with the parameters EXACTLY as
+   *   Pass 1 — Render the model to STL with the parameters exactly as
    *            given (the caller decides which 3D-producing parameters to
-   *            use — this method never rewrites them; the historical
-   *            silent `generate`-stripping moved to the consent flow in
-   *            main.js).
+   *            use; this method never rewrites them, and stripping
+   *            `generate` belongs to the consent flow in main.js).
    *   Pass 2 — Compile `projection(cut=true) { import("mesh.stl"); }`
    *            to the target 2D format on another fresh worker.
    *
-   * The output is an APPROXIMATION: a polyline projection of a
+   * The output is an approximation: a polyline projection of a
    * tessellated mesh, not OpenSCAD's exact 2D geometry. Results are
    * tagged `approximation: 'stl-projection'` and SVG output carries an
-   * explanatory comment. EXPORT callers must obtain user consent before
+   * explanatory comment. Export callers must obtain user consent before
    * invoking this (see the MODEL_NOT_2D handlers in main.js); the draft
    * 2D preview may use it without a dialog since nothing leaves the app.
    *

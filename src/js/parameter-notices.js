@@ -1,13 +1,11 @@
 /**
  * Notices about the parameters on screen, that stay until they are read.
  *
- * WHY THIS EXISTS. When a shared link carries a value the model does not allow,
- * Forge adjusts it and says so. That sentence used to be unreachable - the
- * "Ready, N parameters loaded" line overwrote it in the same tick (D-98) - and
- * once that was fixed it was still a STATUS: measured, it stood for about
- * 660 ms before the render replaced it. Someone who looked up late never
- * learned their number had been changed, and the number is the whole point of
- * the link they were sent.
+ * Why this exists: when a shared link carries a value the model does not
+ * allow, Forge adjusts it and says so. As a status line, that sentence
+ * would stand for about 660 ms before the render replaced it, and someone
+ * who looked up late would never learn their number had been changed; the
+ * number is the whole point of the link they were sent.
  *
  * So this is a notice, not a status. It names each parameter, what the link
  * asked for and what it became, and it stays on screen until dismissed.
@@ -74,9 +72,9 @@ export function describeAdjustments(adjustments, appliedValues = {}) {
 }
 
 /**
- * The notice for a link that names a preset the project does not have (D-195).
- * It used to be a status line that stood about 300 ms before the render
- * replaced it, and the announcer replaced it at once: nobody learned that no
+ * The notice for a link that names a preset the project does not have. A
+ * status line would stand about 300 ms before the render replaced it, and
+ * the announcer would replace it at once: nobody would learn that no
  * preset was applied.
  *
  * @param {string} name - The preset name the link asked for
@@ -184,7 +182,7 @@ export function createParameterNotices(container, { announce } = {}) {
 
   /**
    * Show a notice beside the ones already showing, for a second thing the
-   * same link has to say. D-195: a missing preset is found after a changed
+   * same link has to say. A missing preset is found after a changed
    * value or an unknown starter setting was reported, and saying it must not
    * erase them. With nothing showing, this is show().
    *

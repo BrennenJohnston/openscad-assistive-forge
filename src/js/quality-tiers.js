@@ -165,11 +165,11 @@ export const QUALITY_TIERS = {
    * Optimized for: braille embossers, perforated patterns, organic shapes,
    *                models with 100+ spheres/cylinders
    *
-   * MANIFOLD RECALIBRATED: Previously very conservative due to CGAL slowness.
-   * With Manifold, we can significantly increase quality while maintaining
-   * reasonable render times. The keyguard (complex model) renders in ~1s.
+   * Calibrated for Manifold, which is fast enough to allow much higher
+   * quality than CGAL did at reasonable render times: the keyguard (a
+   * complex model) renders in about 1 s.
    *
-   * GEOMETRY THRESHOLD ANALYSIS:
+   * Geometry threshold analysis:
    * - $fn determines segments per circle. For a quarter-circle (rounded corner),
    *   segments = $fn/4. Minimum to avoid "right angle" appearance:
    *   - $fn=8: 2 segments/corner = octagonal (borderline angular)
@@ -539,15 +539,14 @@ const STANDARD_TIER = QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
 /**
  * Legacy render quality presets (for backwards compatibility)
  *
- * Single source of truth for tessellation defaults — moved here verbatim
- * from render-controller.js so the same numbers cannot drift between files
- * (cross-file default drift is this project's #1 historical bug source).
- * render-controller.js re-exports this for its existing import sites.
+ * Single source of truth for tessellation defaults, so the same numbers
+ * cannot drift between files; render-controller.js re-exports this for its
+ * import sites.
  *
- * NOTE: New code should use the adaptive quality tier system above.
+ * New code should use the adaptive quality tier system above.
  * These presets are based on community standards for STANDARD complexity models.
  *
- * MANIFOLD OPTIMIZED: These values have been recalibrated for the Manifold
+ * These values are calibrated for the Manifold
  * rendering backend, which is 10-100x faster than CGAL for boolean operations.
  *
  * For adaptive quality based on model complexity and hardware, use:
@@ -640,10 +639,9 @@ export const RENDER_QUALITY = {
  * 'fidelity' maps to RENDER_QUALITY.DESKTOP_DEFAULT (maxFn: null): the
  * model's own $fn/$fa/$fs are honored exactly like desktop OpenSCAD's F5,
  * with OpenSCAD's stock $fa=12/$fs=2 only when the model declares neither.
- * The previous 'auto' default silently downgraded complex models to
- * complex-preview-low (forced $fn=10), which rendered curved designs as
- * faceted blocks on first load — owner-reported against the keyguard.
- * 'auto' remains available as the opt-in performance mode.
+ * 'auto' would silently downgrade complex models to complex-preview-low
+ * (forced $fn=10), rendering curved designs as faceted blocks on first
+ * load, so it is the opt-in performance mode rather than the default.
  */
 export const PREVIEW_QUALITY_DEFAULT = 'fidelity';
 

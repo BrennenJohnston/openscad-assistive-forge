@@ -6,9 +6,8 @@
  * Pure and DOM-free: jszip assembly and the download itself stay in the caller,
  * so the contents of an export can be asserted without a browser.
  *
- * PROPOSED SCHEMA (IR-Q6): `forge-provenance.json` is new and additive, and
- * its shape is a proposal awaiting the owner's countersign. Nothing reads it
- * back yet; it exists so a file that comes home carries where it came from.
+ * `forge-provenance.json` is additive, and nothing reads it back: it
+ * exists so a file that comes home carries where it came from.
  *
  * @license GPL-3.0-or-later
  */

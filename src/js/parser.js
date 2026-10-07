@@ -370,7 +370,7 @@ function parseEnumValues(enumStr) {
   // The colon separates value from label
   return rawValues.map((item) => {
     // Check for value:label format (colon not inside quotes)
-    // Only split on the FIRST colon to allow labels with colons
+    // Only split on the first colon to allow labels with colons
     const colonIndex = findLabelSeparator(item);
 
     if (colonIndex !== -1) {
@@ -581,8 +581,9 @@ export function extractParameters(scadContent) {
   const lines = scadContent.split('\n');
   const groups = [];
   const parameters = {};
-  // Track [Hidden] parameters separately for export parity with desktop OpenSCAD
-  // Hidden params: stored in JSON exports, NOT loaded from imports, NOT displayed in UI
+  // Track [Hidden] parameters separately, for export parity with desktop
+  // OpenSCAD: stored in JSON exports, not loaded from imports, not shown in
+  // the UI.
   const hiddenParameters = {};
 
   let currentGroup = 'General';
@@ -672,7 +673,7 @@ export function extractParameters(scadContent) {
     }
 
     if (depthBefore === 0) {
-      // C2: Desktop parity -- stop parsing at __Customizer_Limit__ sentinel module
+      // Desktop parity -- stop parsing at __Customizer_Limit__ sentinel module
       if (/^module\s+__Customizer_Limit__\s*\(/.test(line)) {
         break;
       }
@@ -757,7 +758,8 @@ export function extractParameters(scadContent) {
         // Parse default value
         const defaultVal = parseDefaultValue(valueStr);
 
-        // C3: Desktop parity -- skip non-literal assignments (expressions, variables, function calls)
+        // Desktop parity: skip non-literal assignments (expressions,
+        // variables, function calls).
         if (!isLiteralAssignment(valueStr, defaultVal)) {
           const scopeState = { inBlockComment };
           const scopeLine = stripForScope(rawLine, scopeState);
@@ -773,7 +775,8 @@ export function extractParameters(scadContent) {
         // Check for bracket hint and comment
         const afterAssignment = line.substring(line.indexOf(';') + 1);
 
-        // C4: Desktop parity -- on multi-assignment lines, annotation applies only to last assignment
+        // Desktop parity: on multi-assignment lines, the annotation applies
+        // only to the last assignment.
         const codeAfterSemi = afterAssignment
           .replace(/\/\/.*$/, '')
           .replace(/\/\*.*?\*\/$/, '')
@@ -810,7 +813,7 @@ export function extractParameters(scadContent) {
           param.uiType = defaultVal.uiType;
           if (defaultVal.nested) {
             param.nested = true;
-            // Nested vectors use raw mode for now
+            // Nested vectors use raw mode
             param.uiType = 'raw';
           }
         } else if (defaultVal.type === 'raw') {
@@ -916,7 +919,8 @@ export function extractParameters(scadContent) {
               isNumericLiteral(hint.trim()) &&
               (param.type === 'integer' || param.type === 'number')
             ) {
-              // C1: MakerBot [max] single-number slider (desktop parameterobject.cpp line 55)
+              // MakerBot [max] single-number slider (desktop
+              // parameterobject.cpp line 55).
               param.maximum = parseFloat(hint.trim());
               param.uiType = 'slider';
 
@@ -1058,7 +1062,7 @@ export function extractParameters(scadContent) {
           }
         }
 
-        // C5: Fractional step hint for numeric params (desktop parity)
+        // Fractional step hint for numeric params (desktop parity)
         // Format: x = 5.5; // .5  (sets spinbox step to 0.5)
         if (
           (param.type === 'integer' || param.type === 'number') &&

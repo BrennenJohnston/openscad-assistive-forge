@@ -1,11 +1,11 @@
 /**
- * Preferences dialog (P11a shell).
+ * Preferences dialog.
  *
  * Desktop OpenSCAD's Preferences is a six-tab dialog. This is the shell: the
  * dialog itself, an APG tab bar, focus handling, and every tab present and
  * honest about its own state. Tabs whose engine does not exist in a browser
  * build are visibly disabled and name their reason via aria-describedby --
- * the pattern this whole plan uses, because "silently absent" tells a user
+ * the pattern this app uses, because "silently absent" tells a user
  * nothing and a missing tab cannot be asked about.
  *
  * APG tabs, automatic activation: exactly one tab is in the page tab order
@@ -14,11 +14,11 @@
  *
  * Unavailable tabs keep `aria-disabled="true"`, so they are announced as
  * unavailable, but they are reachable and selectable like any other, and
- * their panel holds the explanation. R-III skipped them with the arrows and
- * left the reason to `aria-describedby` alone; MEASURED, that made the reason
- * text invisible to every sighted user and, because a skipped tab also has
- * `tabindex="-1"`, unreachable by keyboard at all — only a mouse click could
- * focus it. Owner decision 2026-08-09: show the reason in the panel.
+ * their panel holds the explanation. Skipping them with the arrows and
+ * leaving the reason to `aria-describedby` alone would make the reason text
+ * invisible to every sighted user and, because a skipped tab also has
+ * `tabindex="-1"`, unreachable by keyboard: only a mouse click could focus
+ * it.
  *
  * @license GPL-3.0-or-later
  */
@@ -143,9 +143,9 @@ let activeHandlers = {};
  */
 
 /**
- * The Axes tab's read-only status line (Q-32a). A user could never verify
- * that their controller was seen — the reason text names the live engine,
- * but nothing on screen reflected the actual device. This states it.
+ * The Axes tab's read-only status line, so a user can verify that their
+ * controller was seen: the reason text names the live engine, and this
+ * states the actual device.
  *
  * @param {{supported: boolean, padName: string|null, deadZone: number|null}} [status]
  * @returns {string}
@@ -166,8 +166,8 @@ export function formatGamepadStatus(status) {
 
 /**
  * Render the status line. Skipped entirely when no handler was provided:
- * a claim about controller support with no data behind it would be the
- * exact false-reason shape R-IV removed from these tabs.
+ * a claim about controller support with no data behind it would be a false
+ * reason.
  */
 function renderGamepadStatus() {
   if (!activeHandlers.getGamepadStatus) return;
@@ -263,8 +263,8 @@ function wireEditorTab() {
 }
 
 /**
- * Rebuild the Grid size select from the app's current preset list (UF-14,
- * Q-40c). Options come from the handler on every open — the drawer is the
+ * Rebuild the Grid size select from the app's current preset list. Options
+ * come from the handler on every open — the drawer is the
  * canonical preset editor, so the dialog can be stale before it is shown
  * (the same multi-copy rule syncControls() states). When the current size
  * matches no preset, a synthetic "Current" option keeps the control honest
@@ -355,16 +355,16 @@ export function initPreferencesDialog(handlers = {}) {
   window.addEventListener('gamepadconnected', renderGamepadStatus);
   window.addEventListener('gamepaddisconnected', renderGamepadStatus);
 
-  // The shared helper wires the close button, the overlay AND Escape. Wiring
-  // those by hand is how the first cut of this dialog shipped without Escape,
-  // which is a WCAG 2.1.2 failure and an APG dialog requirement.
+  // The shared helper wires the close button, the overlay and Escape;
+  // wiring those by hand risks a dialog without Escape, which is a WCAG
+  // 2.1.2 failure and an APG dialog requirement.
   setupModalCloseHandlers(modal);
 
   const close = () => closeModal(modal);
   el('preferencesModalDone')?.addEventListener('click', close);
 
   el('preferencesOpenShortcuts')?.addEventListener('click', () => {
-    // The shortcuts editor is its own dialog and stays that way for now:
+    // The shortcuts editor is its own dialog and stays that way:
     // its markup wires Reset All / Done / overlay / close by element id, so
     // a second copy inside this panel would drive the other dialog's
     // buttons. Closing first keeps one dialog on screen at a time.
@@ -381,7 +381,7 @@ export function initPreferencesDialog(handlers = {}) {
  * `returnFocusTo` matters more than it looks: openModal remembers whatever
  * has focus as the element to restore on close, and a menu item is destroyed
  * when its menu closes. Restoring focus to a detached node silently drops
- * the user on <body> — MEASURED. Hand it a element that outlives the menu.
+ * the user on <body> — so hand it an element that outlives the menu.
  *
  * @param {{tab?: string, returnFocusTo?: HTMLElement}} [options]
  */

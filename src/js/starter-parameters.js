@@ -98,8 +98,7 @@ export function starterViewApplies(declaration, activeFileKey, knownCount) {
 }
 
 // --- Text ------------------------------------------------------------------
-// FLAGGED FOR OWNER REVIEW (D-35). Every sentence below is read or heard by
-// somebody; none of it is final.
+// Every sentence below is read or heard by somebody.
 
 /** Label on the control while only the starter parameters are showing. */
 export const SHOW_ALL_LABEL = 'Show all parameters';
@@ -153,9 +152,9 @@ export function unknownStarterMessage(unknown) {
 /**
  * The same news, shaped for the notice that sits above the parameters.
  *
- * A status line would be the wrong place: IR-13 measured one standing for about
- * 660 ms before the render replaced it, which is not long enough for anyone to
- * read. This reuses the persistent notice that release built.
+ * A status line would be the wrong place: one stands for about 660 ms
+ * before the render replaces it, which is not long enough for anyone to
+ * read. This reuses the persistent notice.
  *
  * @param {string[]} unknown
  * @returns {{title: string, lines: string[]}|null}

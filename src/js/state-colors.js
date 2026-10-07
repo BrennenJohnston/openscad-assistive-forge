@@ -1,23 +1,20 @@
 /**
  * Desktop-parity styling constants for 2D preview/render display.
  *
- * Single source for the hex values that were previously copy-pasted in
- * five places (main.js ×2, auto-preview-controller.js ×2, preview.js).
- * All values are OBSERVED desktop OpenSCAD output for 2D geometry,
- * recorded in Testing Round 7 ("Color Codes for settings previews and
- * renders", desktop 2021.01):
+ * Single source for these hex values, which main.js,
+ * auto-preview-controller.js and preview.js all use. All values are
+ * observed desktop OpenSCAD 2021.01 output for 2D geometry:
  *
  *   F5 draft preview of 2D first-layer ... #7A9F7A sage green
  *   F6 rendered 2D first-layer .......... #07D0A7 teal fill,
  *                                          #FF0603 red outlines
  *
- * The same Round 7 capture also recorded 3D-state colors (e.g. preview
- * 3D-printed keyguard #39bdb0, rendered #D3B627 + #85AC46). Those are NOT
- * constants here on purpose: they are produced by the model's own color()
- * calls and the engine's native CSG render colors, which flow through the
- * pipeline untouched since the injectCsgColors removal. Desktop OpenSCAD
- * does not tint models by render state, and neither do we (see the
- * RENDER_STATE_COLORS removal note in preview.js).
+ * 3D-state colors (e.g. a previewed 3D-printed keyguard #39bdb0, rendered
+ * #D3B627 + #85AC46) are not constants here on purpose: they come from the
+ * model's own color() calls and the engine's native CSG render colors,
+ * which flow through the pipeline untouched. Desktop OpenSCAD does not
+ * tint models by render state, and neither does this app (see the note
+ * above PreviewManager in preview.js).
  *
  * @license GPL-3.0-or-later
  */

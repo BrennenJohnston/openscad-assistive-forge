@@ -334,7 +334,7 @@ export function coercePresetValues(presetValues, paramSchema = {}) {
 /**
  * Auto-detect type from a value (for parameters not in schema)
  *
- * IMPORTANT: "yes"/"no" are NOT converted to boolean here because without
+ * "yes"/"no" are not converted to boolean here because without
  * schema context we cannot distinguish between a boolean parameter (MW_version = false)
  * and a string dropdown parameter (expose_home_button = "yes"; //[yes,no]).
  * Converting "yes"/"no" to boolean breaks OpenSCAD string comparisons like
@@ -457,7 +457,7 @@ export class PresetManager {
   }
 
   /**
-   * D-47: move a bucket saved under a legacy key (the delivering archive's
+   * Move a bucket saved under a legacy key (the delivering archive's
    * filename) to the project's stable key (its main file path). Runs on
    * every dropdown refresh and is a no-op once the legacy bucket is gone.
    * A preset whose name already exists under the stable key is left in
@@ -747,7 +747,8 @@ export class PresetManager {
 
     const parameterSets = {};
 
-    // "design default values" is ALWAYS first in export (desktop OpenSCAD parity)
+    // "design default values" is always first in export (desktop OpenSCAD
+    // parity).
     // Empty object {} signals "use whatever the .scad source defines"
     parameterSets['design default values'] = {};
 
@@ -758,7 +759,7 @@ export class PresetManager {
         for (const [key, value] of Object.entries(preset.parameters)) {
           stringifiedParams[key] = stringifyForOpenSCAD(value);
         }
-        // Desktop parity: Hidden parameters ARE included in exported JSON
+        // Desktop parity: Hidden parameters are included in exported JSON
         // (current values at time of export, not from the preset itself)
         if (hiddenParameters && Object.keys(hiddenParameters).length > 0) {
           for (const [key, hiddenDef] of Object.entries(hiddenParameters)) {
@@ -1220,7 +1221,7 @@ export class PresetManager {
     const hiddenNames = new Set(hiddenParameterNames);
 
     // Model name is required for OpenSCAD native format
-    // IMPORTANT: This must match state.uploadedFile.name for presets to show in dropdown
+    // This must match state.uploadedFile.name for presets to show in dropdown
     const effectiveModelName = modelName || 'Unknown Model';
 
     let imported = 0;

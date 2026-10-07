@@ -101,8 +101,9 @@ export function formatScadValue(key, value, paramTypes = {}, scadContent = '') {
     }
 
     // Hex→RGB conversion is strictly opt-in via the declared 'color' type.
-    // Without the type gate, any 6-hex-char word ("decade", "facade") was
-    // silently converted to an RGB vector, corrupting text parameters.
+    // Without the type gate, any 6-hex-char word ("decade", "facade")
+    // would be silently converted to an RGB vector, corrupting text
+    // parameters.
     if (paramTypes[key] === 'color' && /^#?[0-9A-Fa-f]{6}$/.test(value)) {
       const colorStyle = detectColorParamLiteralStyle(scadContent, key);
 

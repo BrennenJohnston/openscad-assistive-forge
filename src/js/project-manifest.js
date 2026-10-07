@@ -39,15 +39,13 @@ export const PROJECT_MANIFEST_FILENAME = 'forge.project.json';
 export const PROJECT_MANIFEST_VERSION = 1;
 
 /**
- * Historical hardcoded behavior, previously inlined in application code:
+ * The built-in rules for manifest-less projects:
  * - previewOverrides: during fast auto-preview, force render_quality to
  *   'Low' and clamp cone_segments into [8, 12].
  * - export2D: the keyguard-family heuristics (switch type_of_keyguard to
  *   its laser entry; set laser-cutting best-practices toggles to yes).
  *
- * Every rule is inert for models that do not declare the named parameters,
- * so supplying this as the fallback for manifest-less projects preserves
- * existing behavior exactly.
+ * Every rule is inert for models that do not declare the named parameters.
  *
  * @returns {Object} A builtin manifest object
  */

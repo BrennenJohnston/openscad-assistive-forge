@@ -10,7 +10,7 @@ import { escapeHtml, setupNotesCounter } from './html-utils.js';
 import { formatFileSize } from './download.js';
 import { openModal, closeModal } from './modal-manager.js';
 
-// AF-7: the delete dialog's title, exported so the terminology suite can
+// The delete dialog's title, exported so the terminology suite can
 // pin the exact string at the module boundary.
 export const DELETE_CONFIRM_TITLE = 'Delete Saved Project';
 import {
@@ -104,18 +104,19 @@ export function initSavedProjectsUI({
   }
 
   /**
-   * Render saved projects list on welcome screen (v2 with folder tree)
-   */
-  /**
    * Every path that changes the stored project set ends in a re-render, so
    * this is where other welcome-screen surfaces learn about it — the
-   * linked-folders list (sub-plan H) has to drop a row when a folder-link
+   * linked-folders list has to drop a row when a folder-link
    * card is deleted, which also clears that folder's stored handle.
    */
   function announceProjectsRendered() {
     document.dispatchEvent(new CustomEvent('saved-projects-rendered'));
   }
 
+  /**
+   * Render the saved projects list on the welcome screen, with its folder
+   * tree.
+   */
   async function renderSavedProjectsList() {
     const savedProjectsList = document.getElementById('savedProjectsList');
     const savedProjectsEmpty = document.getElementById('savedProjectsEmpty');

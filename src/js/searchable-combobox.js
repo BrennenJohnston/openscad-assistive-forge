@@ -105,7 +105,7 @@ export function initSearchableCombobox({
   /** @type {ComboboxOption[]} */
   let allOptions = [];
   let selectedId = null;
-  // AF-10: what the closed box shows when NOTHING is selected. The desktop's
+  // What the closed box shows when nothing is selected. The desktop's
   // resting state is the active "design default values", not a search hint.
   // Display only - it never occupies selectedId, so open/navigate/Enter
   // behave exactly as with no selection.
@@ -334,11 +334,11 @@ export function initSearchableCombobox({
     allOptions = Array.isArray(newOptions) ? newOptions : [];
     selectedId = newSelectedId ?? null;
     if (isOpen) {
-      // AF-10: a rebuild can land while the user is mid-search (the app
-      // refreshes the dropdown on preset events). Writing the selected
-      // label into the input here turned the open list into a one-item
-      // filter of itself; keep whatever the user has typed and re-render
-      // with THAT filter. The label is restored by closeList() as always.
+      // A rebuild can land while the user is mid-search (the app refreshes the
+      // dropdown on preset events). Writing the selected label into the input
+      // here would turn the open list into a one-item filter of itself; keep
+      // whatever the user has typed and re-render with that filter. The label
+      // is restored by closeList() as always.
       renderOptions(input.value);
       return;
     }
