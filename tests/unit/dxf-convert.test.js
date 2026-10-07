@@ -121,7 +121,7 @@ describe('translateConversionError', () => {
 describe('dxfToSvg', () => {
   const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>';
 
-  it('mounts BOTH the wrapper and the drawing, and names the wrapper as main', async () => {
+  it('mounts both the wrapper and the drawing, and names the wrapper as main', async () => {
     // The engine resolves a relative import against the MAIN file's directory,
     // so a wrapper that is not itself mounted cannot find what it imports.
     // Measured: omitting mainFile made the import silently produce nothing.
@@ -166,7 +166,7 @@ describe('svgToDxf', () => {
       fileName: 'drawing.dxf',
       render,
     });
-    // DP-13: what comes back is the engine's drawing PLUS a declaration of
+    // What comes back is the engine's drawing plus a declaration of
     // its units, which OpenSCAD does not write. Everything the engine
     // produced is still there, in order.
     expect(dxf).not.toBe(HEADER);
@@ -191,7 +191,7 @@ describe('svgToDxf', () => {
   });
 });
 
-// ── DP-13: the drawing says what unit it is in ──────────────────────────────
+// ── The drawing says what unit it is in ────────────────────────────────────
 
 describe('withMetricUnits', () => {
   // Built without backslash escapes so the fixture is exactly what it looks
@@ -218,11 +218,12 @@ describe('withMetricUnits', () => {
     'ENDSEC',
   ].join(CRLF);
 
-  it('★ declares millimetres, which OpenSCAD does not', () => {
-    // MEASURED on our own export: correct millimetre COORDINATES and no
-    // $INSUNITS at all, so the file says nothing about what its numbers mean.
-    // Laser software configured for inches reads 50 as fifty INCHES - a 25.4x
-    // error that looks perfectly fine on screen and ruins a sheet of material.
+  it('declares millimetres, which OpenSCAD does not', () => {
+    // Without the declaration an export has correct millimetre coordinates
+    // and no $INSUNITS at all, so the file says nothing about what its
+    // numbers mean. Laser software configured for inches reads 50 as fifty
+    // inches - a 25.4x error that looks perfectly fine on screen and ruins a
+    // sheet of material.
     expect(HEADER).not.toContain('$INSUNITS');
     const out = withMetricUnits(HEADER);
     expect(out).toContain('$INSUNITS');

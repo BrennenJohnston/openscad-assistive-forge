@@ -1,7 +1,7 @@
 /**
- * DP-79: the photo defaults inside the trace worker (D-173, D-176). The same
- * harness as trace-worker.test.js: a stood-in `self`, the real stages on real
- * pixels, Potrace stood in for so what it is HANDED can be read.
+ * The photo defaults inside the trace worker. The same harness as
+ * trace-worker.test.js: a stood-in `self`, the real stages on real pixels,
+ * Potrace stood in for so what it is handed can be read.
  *
  * @license GPL-3.0-or-later
  */
@@ -50,10 +50,10 @@ function speckled(width, height) {
 }
 
 /**
- * A long bar with forty seven-pixel specks around it: the shape of D-176.
+ * A long bar with forty seven-pixel specks around it.
  * Worked 2.5 times smaller each speck is about three pixels square, nine
  * ridge pixels of width one against the bar's five hundred or so, so the
- * tenth percentile of the line widths IS the specks until the floor takes
+ * tenth percentile of the line widths is the specks until the floor takes
  * them (49 source pixels is 8 worked ones, far under the 160-pixel floor).
  */
 function barAndSpecks(width, height) {
@@ -94,13 +94,13 @@ const done = (messages) => messages.find((m) => m.type === 'done');
 
 const camera = { camera: true, mmPerPixel: 14 / 1400 };
 
-describe('the photo defaults (DP-79, D-173, D-176)', () => {
+describe('the photo defaults', () => {
   beforeEach(() => {
     posted.length = 0;
     potraceTrace.mockClear();
   });
 
-  it("★ a camera picture with a printed width is worked at the print's cell, and the summary says so", async () => {
+  it("a camera picture with a printed width is worked at the print's cell, and the summary says so", async () => {
     const out = await run({
       id: 1,
       image: speckled(1400, 1000),
@@ -122,13 +122,13 @@ describe('the photo defaults (DP-79, D-173, D-176)', () => {
     expect(reply.svg).toContain('width="560" height="400"');
   });
 
-  it("★ a picture over the cap keeps its printed width: the cap's factor rescales the millimeters per pixel", async () => {
+  it("a picture over the cap keeps its printed width: the cap's factor rescales the millimeters per pixel", async () => {
     // 2000 x 1500 is 3 MP: the cap halves it first. The host's mmPerPixel is
     // for the 2000 source pixels; carried across the cap it is twice that,
-    // and the working resolution and the floor follow the PRINT (14 mm, 560
-    // px, 160 px) and not the cap. MEASURED before this on the sharpie
-    // photograph (capped by four): "the size a 1.9 mm design can use" for a
-    // 7.6 mm print, and a floor sixteen times too strict.
+    // and the working resolution and the floor follow the print (14 mm, 560
+    // px, 160 px) and not the cap. Following the cap, a photograph capped by
+    // four would read "the size a 1.9 mm design can use" for a 7.6 mm print,
+    // with a floor sixteen times too strict.
     const out = await run({
       id: 11,
       image: speckled(2000, 1500),
@@ -157,7 +157,7 @@ describe('the photo defaults (DP-79, D-173, D-176)', () => {
     expect(potraceTrace.mock.calls[0][1]).toBe(1400);
   });
 
-  it("★ the speck floor drops what is under 0.1 mm² and sets Potrace's floor to match", async () => {
+  it("the speck floor drops what is under 0.1 mm² and sets Potrace's floor to match", async () => {
     const out = await run({
       id: 3,
       image: speckled(1400, 1000),
@@ -167,7 +167,7 @@ describe('the photo defaults (DP-79, D-173, D-176)', () => {
     const reply = done(out);
     expect(reply.summary.specksDropped).toBeGreaterThanOrEqual(1);
     expect(reply.summary.speckFloorMm2).toBe(0.1);
-    // At 0.025 mm per pixel the floor is 160 px (asked at DP-Q73 (a)).
+    // At 0.025 mm per pixel the floor is 160 px.
     expect(potraceTrace.mock.calls[0][3].turdsize).toBe(160);
     expect(potraceTrace.mock.calls[0][3].opttolerance).toBe(1.0);
   });
@@ -185,7 +185,7 @@ describe('the photo defaults (DP-79, D-173, D-176)', () => {
     expect(potraceTrace.mock.calls[0][3]).toEqual({ opttolerance: 1.0 });
   });
 
-  it('★ the line widths are measured after the floor (D-176)', async () => {
+  it('the line widths are measured after the floor', async () => {
     const raw = await run({
       id: 5,
       image: barAndSpecks(1400, 1000),

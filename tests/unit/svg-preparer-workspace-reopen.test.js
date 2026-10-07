@@ -1,5 +1,5 @@
 /**
- * The editor reopens where it was left (DP-81, D-175).
+ * The editor reopens where it was left.
  *
  * Apply stores the combined drawing and the key of the choices it was made
  * from. A reopen that restores the same choices, at the same width, on the
@@ -90,7 +90,7 @@ const RESULT =
 const startsAsked = () =>
   runners.reduce((n, r) => n + r.start.mock.calls.length, 0);
 
-describe('the editor reopens where it was left (DP-81, D-175)', () => {
+describe('the editor reopens where it was left', () => {
   let container;
   let realWorker;
 
@@ -116,7 +116,7 @@ describe('the editor reopens where it was left (DP-81, D-175)', () => {
     return key;
   }
 
-  it('★ a matching key paints the stored result and arms Apply without asking for a combine', async () => {
+  it('a matching key paints the stored result and arms Apply without asking for a combine', async () => {
     const ws = createSvgPrepWorkspace(container);
     const choices = { initialOverrides: ['foreground', 'ignore'], designWidthMm: 11.97 };
     const key = await keyFor(ws, choices);
@@ -141,7 +141,7 @@ describe('the editor reopens where it was left (DP-81, D-175)', () => {
     ws.destroy();
   });
 
-  it('★ a stale key combines as before: a role, or the width, changed since Apply', async () => {
+  it('a stale key combines as before: a role, or the width, changed since Apply', async () => {
     const ws = createSvgPrepWorkspace(container);
     const key = await keyFor(ws, {
       initialOverrides: ['foreground', 'ignore'],

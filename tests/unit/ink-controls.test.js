@@ -1,11 +1,10 @@
 /**
- * The ink panel's words follow the host's purpose (DP-57, D-156).
+ * The ink panel's words follow the host's purpose.
  *
  * One panel is built for two hosts: a charm (relief) and the stencil tile.
- * The words were the stencil's on both, so a charm's file control described
- * "a plate for each" color and "the surface behind the stencil" where no
- * stencil is possible. The relief host gets relief words; the stencil keeps
- * its own.
+ * The stencil's words on a charm's file control would describe "a plate
+ * for each" color and "the surface behind the stencil" where no stencil is
+ * possible. The relief host gets relief words; the stencil keeps its own.
  *
  * @license GPL-3.0-or-later
  */
@@ -24,7 +23,7 @@ const colours = [
   { name: 'White', hex: '#fffeff', share: 0.14, isBackground: false },
 ];
 
-describe('ink controls: the words follow the purpose (D-156)', () => {
+describe('ink controls: the words follow the purpose', () => {
   it('a relief panel never says stencil, plate or paint', () => {
     const panel = createInkControls({
       idPrefix: 'relief',
@@ -94,7 +93,7 @@ describe('ink controls: the words follow the purpose (D-156)', () => {
   });
 });
 
-describe('ink controls: a quiet summary (DP-78)', () => {
+describe('ink controls: a quiet summary', () => {
   it('quiet writes the sentence and announces nothing: the refusal is the one announcement', () => {
     const said = [];
     const panel = createInkControls({
@@ -127,7 +126,7 @@ describe('ink controls: a quiet summary (DP-78)', () => {
   });
 });
 
-describe('ink controls: a change that waits for a press says so (D-157)', () => {
+describe('ink controls: a change that waits for a press says so', () => {
   const build = (runsBySelf, startLabel) => {
     const said = [];
     const panel = createInkControls({

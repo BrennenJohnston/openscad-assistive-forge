@@ -1,5 +1,5 @@
 /**
- * The compound road's combine when a row carries an offset (DP-82, D-174).
+ * The compound road's combine when a row carries an offset.
  *
  * A traced drawing is one path whose rings are the editor's rows. With no
  * offset the rows are concatenated back into one even-odd path; with one,
@@ -32,12 +32,12 @@ const widthsOf = (svg) =>
     })
     .sort((a, b) => b - a);
 
-describe('flattenCompoundRings (DP-82)', () => {
-  it('★ keeps a detail drawn inside a loop, which the plain fold of rows loses', () => {
+describe('flattenCompoundRings', () => {
+  it('keeps a detail drawn inside a loop, which the plain fold of rows loses', () => {
     // Four nested squares as rows: the even-odd ink is the outer band plus
     // the island's band, 3,600 + 1,200. Handed to flattenWithRings one per
     // element, the island is unioned into the outer and cut away with the
-    // hole: 3,600 (MEASURED, dp82-nesting-probe). That is why an offset
+    // hole: 3,600 (measured). That is why an offset
     // compound drawing has a combine of its own.
     const rows = [sq(0, 100), sq(10, 90), sq(30, 70), sq(40, 60)].map(
       (d, i) => ({ pathData: d, role: i % 2 ? 'hole' : 'foreground' })
@@ -49,7 +49,7 @@ describe('flattenCompoundRings (DP-82)', () => {
     expect(inkArea(flattenWithRings(engine, rows, META))).toBeCloseTo(3600, 0);
   });
 
-  it('★ D-174: +0.3 mm on both rows of a square line thickens it by twice that', () => {
+  it('+0.3 mm on both rows of a square line thickens it by twice that', () => {
     const rows = [sq(0, 100), sq(10, 90)].map((d, i) => ({
       pathData: d,
       role: i ? 'hole' : 'foreground',
@@ -61,7 +61,7 @@ describe('flattenCompoundRings (DP-82)', () => {
     expect(Math.abs((outer - inner) / 2 - 14.29)).toBeLessThan(0.15);
   });
 
-  it('★ -0.3 mm on both rows thins it: the outer ring in, the hole ring out', () => {
+  it('-0.3 mm on both rows thins it: the outer ring in, the hole ring out', () => {
     const rows = [sq(0, 100), sq(10, 90)].map((d, i) => ({
       pathData: d,
       role: i ? 'hole' : 'foreground',
@@ -82,7 +82,7 @@ describe('flattenCompoundRings (DP-82)', () => {
     expect(Math.abs(inner - 80)).toBeLessThan(0.15);
   });
 
-  it('★ two rings grown into each other MERGE, where the even-odd concatenation inverted the overlap', () => {
+  it('two rings grown into each other merge, where the even-odd concatenation would invert the overlap', () => {
     // Two 40-unit squares 10 apart, each +10: as squares the union would be
     // 110 x 60 = 6,600 and the even-odd fill 6,000 (the overlap counted
     // twice and emptied). Rounded corners cost a little, never a hole.
@@ -114,7 +114,7 @@ describe('flattenCompoundRings (DP-82)', () => {
     ).toBeNull();
   });
 
-  it('★ the parity is of the rows KEPT: with the outer row Off, the inner ring is solid, as the concatenation drew it', () => {
+  it('the parity is of the rows kept: with the outer row Off, the inner ring is solid, as the concatenation drew it', () => {
     const rows = [
       { pathData: sq(0, 100), role: 'ignore' },
       { pathData: sq(10, 90), role: 'hole', offset: U },
@@ -161,7 +161,7 @@ describe('flattenCompoundRings (DP-82)', () => {
   });
 });
 
-describe('offsetDrawing (DP-82)', () => {
+describe('offsetDrawing', () => {
   it('reads rings as one drawing and signs each offset by its parity', () => {
     const rings = [sq(0, 100), sq(10, 90)].map(
       (d) => engine.ringsFromPathData(d)[0]

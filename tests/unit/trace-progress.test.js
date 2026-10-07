@@ -1,9 +1,9 @@
 /**
- * The Start panel and its Crop first button (DP-80).
+ * The Start panel and its Crop first button.
  *
  * A photograph of a page is mostly the page. Crop first sits beside Start
  * from the moment the pixels are read, so the part that matters can be cut
- * out BEFORE anything is converted; once the picture has converted it reads
+ * out before anything is converted; once the picture has converted it reads
  * Crop. It goes away with Start while a person's own conversion runs and
  * comes back when it ends; a conversion that started by itself keeps it,
  * because a press on it is the person's answer to work nobody asked for.
@@ -18,7 +18,7 @@ import {
   CROP_FIRST_NAME,
 } from '../../src/js/trace-progress.js';
 
-describe('createTraceProgress: Crop first (DP-80)', () => {
+describe('createTraceProgress: Crop first', () => {
   let onStart;
   let onCrop;
   let panel;
@@ -34,7 +34,7 @@ describe('createTraceProgress: Crop first (DP-80)', () => {
     document.body.innerHTML = '';
   });
 
-  it('★ is not on screen until the host offers it, then sits beside Start with the visible words in its name', () => {
+  it('is not on screen until the host offers it, then sits beside Start with the visible words in its name', () => {
     expect(panel.cropButton.hidden).toBe(true);
     panel.offer('Start conversion');
     expect(panel.cropButton.hidden).toBe(true);
@@ -69,7 +69,7 @@ describe('createTraceProgress: Crop first (DP-80)', () => {
     );
   });
 
-  it("★ goes away with Start while a person's conversion runs and comes back when it ends; a self-started run keeps it", () => {
+  it("goes away with Start while a person's conversion runs and comes back when it ends; a self-started run keeps it", () => {
     panel.offer();
     panel.offerCrop();
 

@@ -1,10 +1,10 @@
 /**
- * DP-79: a camera made it. The photo defaults follow this verdict, and a
- * FILE must never get them: MEASURED (build/dp-r6/dp-79, dp79-ground.mjs)
- * the four camera pictures spread 9.5 to 27.4 at the thumbnail scale, every
- * library icon, the owner's logo and the repo's fixtures 0 to 1.9, as PNGs
- * and re-saved as JPEGs. Grain could not tell them apart: the logo saved as
- * a JPEG rings around its lettering as much as a photograph's paper grains.
+ * A camera made it. The photo defaults follow this verdict, and a file must
+ * never get them: measured at the thumbnail scale, four camera pictures
+ * spread 9.5 to 27.4, while every library icon, a logo and the repo's
+ * fixtures spread 0 to 1.9, as PNGs and re-saved as JPEGs. Grain could not
+ * tell them apart: a logo saved as a JPEG rings around its lettering as
+ * much as a photograph's paper grains.
  *
  * @license GPL-3.0-or-later
  */
@@ -97,7 +97,7 @@ function dotGrid(size = 600, perSide = 12) {
 
 const look = (pixels) => quickLook(pixels, { makeImageData, deviceFactor: 1 });
 
-describe('a camera made it (DP-79)', () => {
+describe('a camera made it', () => {
   it('the rule is written down: both signals, and the numbers', () => {
     expect(CAMERA_GROUND_SPREAD_MIN).toBe(5);
     expect(CAMERA_GRAIN_MIN).toBe(0.1);
@@ -114,7 +114,7 @@ describe('a camera made it (DP-79)', () => {
     expect(grainShare(litPaper(600))).toBeGreaterThan(0.5);
   });
 
-  it("★ calls photographed paper a camera picture, and a program's drawing a file", () => {
+  it("calls photographed paper a camera picture, and a program's drawing a file", () => {
     const lit = look(litPaper(600));
     expect(lit.camera).toBe(true);
     expect(lit.groundSpread).toBeGreaterThanOrEqual(CAMERA_GROUND_SPREAD_MIN);
@@ -124,14 +124,13 @@ describe('a camera made it (DP-79)', () => {
     expect(look(iconLike(700)).camera).toBe(false);
   });
 
-  it('★ one signal alone is not enough: a dense clean pattern, a smooth gradient', () => {
-    // MEASURED on the gear grid the Start-and-Cancel guard draws: a clean
+  it('one signal alone is not enough: a dense clean pattern, a smooth gradient', () => {
+    // Measured on the gear grid the Start-and-Cancel guard draws: a clean
     // file whose dots make the thumbnail's ground look lit (spread 19) with
-    // no grain at all; on the spread alone it was worked at 560 px and the
-    // floor dropped all 900 of its gears. And the owner's logo saved as a
-    // JPEG has grain (0.24, the ringing around its letters) and a flat
-    // ground (1.9): the spread alone would have kept it, the grain alone
-    // would not.
+    // no grain at all; on the spread alone it would be worked at 560 px and
+    // the floor would drop all 900 of its gears. And a logo saved as a JPEG
+    // has grain (0.24, the ringing around its letters) and a flat ground
+    // (1.9): the spread alone would keep it, the grain alone would not.
     const grid = look(dotGrid(600));
     expect(grid.groundSpread).toBeGreaterThanOrEqual(CAMERA_GROUND_SPREAD_MIN);
     expect(grid.grain).toBeLessThan(CAMERA_GRAIN_MIN);

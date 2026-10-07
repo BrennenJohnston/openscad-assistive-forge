@@ -1,7 +1,6 @@
 /**
- * DP-79: the two photo defaults on the ink panel, and the sentences that say
- * what the worker did with a camera picture (DP-R6 text pack rows 3 to 11,
- * 27, 28).
+ * The two photo defaults on the ink panel, and the sentences that say what
+ * the worker did with a camera picture.
  *
  * @license GPL-3.0-or-later
  */
@@ -32,7 +31,7 @@ const build = () => {
   return { panel, said };
 };
 
-describe('the two switches (DP-79)', () => {
+describe('the two switches', () => {
   it('are checkboxes with visible names and help, off for a file', () => {
     const { panel } = build();
     const smooth = panel.element.querySelector('#p-smooth');
@@ -62,7 +61,7 @@ describe('the two switches (DP-79)', () => {
     });
   });
 
-  it('★ a camera picture starts with both on, and the settings say so', () => {
+  it('a camera picture starts with both on, and the settings say so', () => {
     const { panel, said } = build();
     panel.setPictureClass({ camera: true });
     expect(panel.element.querySelector('#p-smooth').checked).toBe(true);
@@ -142,7 +141,7 @@ describe('what the panel says about a camera picture (rows 7 to 9)', () => {
     expect(specksSentence(null)).toBe('');
   });
 
-  it('★ the summary carries both, once, in its one announcement', () => {
+  it('the summary carries both, once, in its one announcement', () => {
     const { panel, said } = build();
     panel.setSummary(
       {

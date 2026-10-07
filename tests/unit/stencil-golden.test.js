@@ -127,7 +127,7 @@ describe('the reference plates', () => {
     const plate = readPlate(referencePlate(1))
     expect(plate.cuts).toHaveLength(1)
     expect(plate.dropped).toHaveLength(5)
-    // The owner's silhouette: 31.69 x 39.70 mm, measured off the STL.
+    // The reference silhouette: 31.69 x 39.70 mm, measured off the STL.
     expect(plate.cuts[0].w).toBeCloseTo(31.69, 1)
     expect(plate.cuts[0].h).toBeCloseTo(39.7, 1)
   })
@@ -151,9 +151,8 @@ describe('the reference plates', () => {
     const counts = [1, 2, 3, 4, 5, 6].map(
       (n) => readPlate(referencePlate(n)).cuts.length
     )
-    // Plate 6 is the owner's CORRECTED one, supplied at gate G1: the plate
-    // first measured here also repeated plate 5's two pupil cuts, which they
-    // confirmed was a leftover from editing plate 5.
+    // Plate 6 is the corrected reference: an earlier copy also repeated
+    // plate 5's two pupil cuts, a leftover from editing plate 5.
     expect(counts).toEqual([1, 4, 4, 2, 4, 2])
   })
 })

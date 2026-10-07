@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 
 /**
- * DP-37 P2: the runner that owns the flatten worker.
+ * The runner that owns the flatten worker.
  *
  * The worker is faked here so cancelling, superseding and a dead worker can be
  * driven at will. What is pinned is not that a flatten returns an SVG - the
@@ -63,7 +63,7 @@ const shapes = (n = 3) =>
 
 const META = { viewBox: '0 0 10 10', width: '10', height: '10' }
 
-describe('the flatten runner (DP-37 P2)', () => {
+describe('the flatten runner', () => {
   beforeEach(() => {
     FakeWorker.instances = []
   })
@@ -86,8 +86,8 @@ describe('the flatten runner (DP-37 P2)', () => {
     })
   })
 
-  it('★ carries what the union COST, which is what the budget learns from', async () => {
-    // DP-37 P3: the caller predicts the next combine from the last one it
+  it('carries what the union cost, which is what the budget learns from', async () => {
+    // The caller predicts the next combine from the last one it
     // measured, so a reply with no timing in it has to come back as null
     // rather than as a zero somebody could divide by and believe.
     const r = runner()
@@ -102,16 +102,15 @@ describe('the flatten runner (DP-37 P2)', () => {
     await expect(untimed).resolves.toMatchObject({ ms: null })
   })
 
-  it('★ sends only what the flatten reads, because the rest cannot be cloned', () => {
+  it('sends only what the flatten reads, because the rest cannot be cloned', () => {
     // A classified element carries its DOM node. structuredClone throws on one,
     // so posting the elements whole would fail at the boundary rather than in
     // any test that stubs the worker - which is exactly the kind of defect that
     // only shows up in a browser.
     const r = runner()
-    // Every promise this file creates is CLAIMED. A cancelled job rejects, and
+    // Every promise this file creates is claimed. A cancelled job rejects, and
     // a rejection nobody is holding is an unhandled rejection - which passes
-    // locally and fails the whole file on CI, where the timing differs. DP-34
-    // learned this the hard way in the trace runner's tests.
+    // locally and fails the whole file on CI, where the timing differs.
     const promise = r.start(shapes(2), META)
     const settled = expect(promise).rejects.toMatchObject({
       reason: 'cancelled',
@@ -126,7 +125,7 @@ describe('the flatten runner (DP-37 P2)', () => {
     return settled
   })
 
-  it("★ DP-82: a row's offset travels only when it has one, and the compound road is named", () => {
+  it("a row's offset travels only when it has one, and the compound road is named", () => {
     const r = runner()
     const els = shapes(3)
     els[1].offset = 2.5
@@ -147,7 +146,7 @@ describe('the flatten runner (DP-37 P2)', () => {
     return settled
   })
 
-  it("DP-82: the ring road's message carries no road flag", () => {
+  it("the ring road's message carries no road flag", () => {
     const r = runner()
     const promise = r.start(shapes(1), META)
     const settled = expect(promise).rejects.toMatchObject({
@@ -158,7 +157,7 @@ describe('the flatten runner (DP-37 P2)', () => {
     return settled
   })
 
-  it("★ leaves the caller's own shapes alone, so a re-run needs no re-read", () => {
+  it("leaves the caller's own shapes alone, so a re-run needs no re-read", () => {
     const els = shapes(2)
     const before = els.map((el) => ({ ...el }))
     const r = runner()
@@ -179,7 +178,7 @@ describe('the flatten runner (DP-37 P2)', () => {
     expect(seen).toEqual(['combining'])
   })
 
-  it('★ cancel terminates the worker and rejects, at any moment', async () => {
+  it('cancel terminates the worker and rejects, at any moment', async () => {
     const r = runner()
     const promise = r.start(shapes(), META)
     const w = latest()
@@ -194,7 +193,7 @@ describe('the flatten runner (DP-37 P2)', () => {
     await expect(promise).rejects.toMatchObject({ reason: 'cancelled' })
   })
 
-  it('★ names WHY a job ended, because the pane answers the three differently', async () => {
+  it('names why a job ended, because the pane answers the three differently', async () => {
     // A person's Cancel says so and offers the render again; a job replaced by
     // a newer one must not touch the pane at all, because the newer one owns
     // it; a job abandoned because the choices changed under it has already
@@ -224,7 +223,7 @@ describe('the flatten runner (DP-37 P2)', () => {
     expect(r.isRunning()).toBe(false)
   })
 
-  it('★ a new start supersedes the one in flight rather than queueing behind it', async () => {
+  it('a new start supersedes the one in flight rather than queueing behind it', async () => {
     const r = runner()
     const first = r.start(shapes(), META)
     const firstWorker = latest()
@@ -239,7 +238,7 @@ describe('the flatten runner (DP-37 P2)', () => {
     await expect(second).resolves.toMatchObject({ svg: '<svg/>' })
   })
 
-  it('★ drops a reply from a job that is no longer the one in flight', async () => {
+  it('drops a reply from a job that is no longer the one in flight', async () => {
     const r = runner()
     const first = r.start(shapes(), META)
     const firstId = latest().jobId

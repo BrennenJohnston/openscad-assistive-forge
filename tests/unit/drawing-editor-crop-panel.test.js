@@ -1,5 +1,5 @@
 /**
- * The crop view (DP-49 P2).
+ * The crop view.
  *
  * Four rows a person can read and type into, a picture with the kept
  * rectangle clear and the rest shaded, Save crop and Cancel, focus that lands
@@ -48,7 +48,7 @@ describe('createCropPanel', () => {
     host.remove();
   });
 
-  it('★ names itself, its four rows and its two buttons, with the customizer\'s own row classes', () => {
+  it('names itself, its four rows and its two buttons, with the customizer\'s own row classes', () => {
     const el = panel.element;
     expect(el.hidden).toBe(true);
     const group = el.querySelector('fieldset');
@@ -91,7 +91,7 @@ describe('createCropPanel', () => {
     );
   });
 
-  it('★ opens on the whole picture, says so, and puts focus on Top', () => {
+  it('opens on the whole picture, says so, and puts focus on Top', () => {
     const returnTo = document.createElement('button');
     host.appendChild(returnTo);
     panel.open({ box: BOX, previewHref: HREF, returnTo });
@@ -109,7 +109,7 @@ describe('createCropPanel', () => {
     expect(image.getAttribute('href')).toBe(HREF);
   });
 
-  it('★ the rows move the rectangle, the sentence and the shade together', () => {
+  it('the rows move the rectangle, the sentence and the shade together', () => {
     panel.open({ box: BOX, previewHref: HREF });
     setRange(panel, 'top', 10);
     setRange(panel, 'right', 25);
@@ -143,7 +143,7 @@ describe('createCropPanel', () => {
     expect(panel.getRect().x).toBe(360);
   });
 
-  it('★ Save hands the rectangle and the insets over; Cancel hands nothing; both close and return focus', () => {
+  it('Save hands the rectangle and the insets over; Cancel hands nothing; both close and return focus', () => {
     const returnTo = document.createElement('button');
     host.appendChild(returnTo);
     panel.open({ box: BOX, previewHref: HREF, returnTo });
@@ -165,7 +165,7 @@ describe('createCropPanel', () => {
     expect(panel.isOpen()).toBe(false);
   });
 
-  it('★ Escape cancels the view and goes no further', () => {
+  it('Escape cancels the view and goes no further', () => {
     const outer = vi.fn();
     document.addEventListener('keydown', outer, true);
     try {

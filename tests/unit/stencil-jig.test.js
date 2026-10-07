@@ -1,8 +1,8 @@
 /**
- * The registration jig, pinned against the base plate the owner printed.
+ * The registration jig, pinned against a printed reference base plate.
  *
- * Every number here except `holeClearance` was measured off their STL by
- * DP-15, and `holeClearance` is the one the reference does not carry because
+ * Every number here except `holeClearance` was measured off the reference
+ * STL, and `holeClearance` is the one the reference does not carry because
  * CAD does not need it and a printer does.
  *
  * @license GPL-3.0-or-later
@@ -20,7 +20,7 @@ import {
 import { ringsFromPathData, areaOf } from '../../src/js/ring-geometry.js'
 
 describe('the reference numbers', () => {
-  it('matches the base plate the owner printed', () => {
+  it('matches the reference base plate', () => {
     expect(JIG_DEFAULTS.pegDiameter).toBe(3.0)
     expect(JIG_DEFAULTS.keyWidth).toBe(3.0)
     expect(JIG_DEFAULTS.keyDepth).toBe(2.0)
@@ -29,14 +29,14 @@ describe('the reference numbers', () => {
   })
 
   it('proposes a clearance the reference does not have', () => {
-    // The owner's plate holes are exactly the size of their pegs: 6.99 mm2
+    // The reference plate's holes are exactly the size of its pegs: 6.99 mm2
     // against 6.99 and 6.00 against 6.00. That is a CAD fit, not a print fit.
     expect(JIG_DEFAULTS.holeClearance).toBe(0.2)
   })
 })
 
 describe('jigFeatureCentres', () => {
-  it('★ puts the ROUND pegs at the top and the KEYS at the bottom', () => {
+  it('puts the round pegs at the top and the keys at the bottom', () => {
     // Four identical pegs let a plate go on rotated a half turn, and a stencil
     // laid on backwards paints one colour mirrored over five correct ones.
     const f = jigFeatureCentres(60, 60)
@@ -95,7 +95,7 @@ describe('jigHolePathData', () => {
   const d = jigHolePathData({ plateW: 60, plateH: 60 })
   const rings = ringsFromPathData(d)
 
-  it('cuts four features, as four subpaths of ONE path', () => {
+  it('cuts four features, as four subpaths of one path', () => {
     expect(rings).toHaveLength(4)
     // Every subpath is part of the same `d`: a hole in a path of its own is
     // not a hole, it is more material.

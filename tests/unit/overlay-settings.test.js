@@ -1,5 +1,5 @@
 /**
- * Per-project reference-overlay settings (DP-5).
+ * Per-project reference-overlay settings.
  *
  * The thing worth pinning is not that a record round-trips - it is the two
  * ways this could quietly hurt someone: restoring a size against the wrong
@@ -107,7 +107,7 @@ describe('serializeOverlaySettings', () => {
 });
 
 describe('applyOverlaySettings', () => {
-  it('restores the aspect lock BEFORE the size', () => {
+  it('restores the aspect lock before the size', () => {
     // setOverlaySize recomputes the other dimension from the lock, so doing
     // this in the wrong order re-derives one of the two numbers the person
     // saved and silently loses their placement.
@@ -142,7 +142,7 @@ describe('applyOverlaySettings', () => {
     expect(pm.setScaleFactor).not.toHaveBeenCalled();
   });
 
-  it('does NOT switch the overlay image', () => {
+  it('does not switch the overlay image', () => {
     // Choosing the picture is the person's act, and the file named in a saved
     // record may not be in this project at all.
     const pm = fakePreview();

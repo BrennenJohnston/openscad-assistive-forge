@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
 
 /**
- * DP-36: finding the attribution a stock icon carries, and taking it off.
+ * Finding the attribution a stock icon carries, and taking it off.
  *
  * The drawings here are synthesized - a ring, a face, a row of letter-sized
  * marks - because no stock icon belongs in this repository. They are built to
- * the shapes MEASURED on the real ones: a caption of forty-odd letters, each
+ * the shapes measured on the real ones: a caption of forty-odd letters, each
  * about 3% of the picture wide, sitting in a strip about 7% of the height tall
  * along the bottom edge.
  *
- * The cases that matter most are the ones where the rule must NOT fire. A
+ * The cases that matter most are the ones where the rule must not fire. A
  * drawing that loses part of itself to an over-eager caption filter is a worse
  * failure than one that keeps its caption, because the person can see a caption
  * and cannot see what is missing.
@@ -55,8 +55,8 @@ const asCompound = (pieces, size = SIZE) =>
 /** The icon itself: a ring, which is an outline and its counter. */
 const RING = [box(200, 120, 300, 300), box(250, 170, 200, 200)]
 
-describe('the credit line a slice at a time (DP-78 P3, D-171)', () => {
-  it('★ finds and removes exactly what the whole pass does, on both groupings', async () => {
+describe('the credit line a slice at a time', () => {
+  it('finds and removes exactly what the whole pass does, on both groupings', async () => {
     const pieces = [...RING, ...caption(22, { y: 600 }), ...caption(18, { y: 630 })]
     for (const svg of [asCompound(pieces), asElements(pieces)]) {
       const whole = removeCreditLine(svg)
@@ -102,9 +102,9 @@ describe('the credit line a slice at a time (DP-78 P3, D-171)', () => {
   })
 })
 
-describe('the credit line (DP-36)', () => {
+describe('the credit line', () => {
   describe('what it finds', () => {
-    it('★ finds a two-line caption under an icon, and says how many', () => {
+    it('finds a two-line caption under an icon, and says how many', () => {
       const svg = asCompound([
         ...RING,
         ...caption(22, { y: 600 }),
@@ -132,7 +132,7 @@ describe('the credit line (DP-36)', () => {
   })
 
   describe('what it leaves alone', () => {
-    it('★ four honest dots along the bottom survive', () => {
+    it('four honest dots along the bottom survive', () => {
       // The counter-case the rule exists to protect. A drawing may end in a
       // few marks; a sentence does not have four letters.
       const dots = [
@@ -148,7 +148,7 @@ describe('the credit line (DP-36)', () => {
       expect(removeCreditLine(svg).svg).toBe(svg)
     })
 
-    it('★ detail scattered down the drawing is drawing, not a caption', () => {
+    it('detail scattered down the drawing is drawing, not a caption', () => {
       // Twenty small marks, but spread over the whole lower third rather than
       // lying in a strip. A line of text is one or two lines tall.
       const scattered = []
@@ -184,21 +184,21 @@ describe('the credit line (DP-36)', () => {
   })
 
   describe('taking it off', () => {
-    it('★ leaves the icon and removes every letter, from a compound path', () => {
+    it('leaves the icon and removes every letter, from a compound path', () => {
       const svg = asCompound([...RING, ...caption(30)])
       const out = removeCreditLine(svg)
       expect(out.removed).toBe(30)
       // What is left is the ring: two closed shapes, still in one element.
       expect((out.svg.match(/<path/g) || []).length).toBe(1)
       expect((out.svg.match(/M/g) || []).length).toBe(2)
-      // ★ And nothing of the caption survived, which is the measurement that
+      // And nothing of the caption survived, which is the measurement that
       // matters: a stray letter is worse than a whole caption, because the
       // person can see a caption and cannot explain a speck.
       expect(findCreditLine(out.svg).found).toBe(false)
       expect(findCreditLine(out.svg).count).toBe(0)
     })
 
-    it('★ leaves the icon and removes every letter, from separate elements', () => {
+    it('leaves the icon and removes every letter, from separate elements', () => {
       const svg = asElements([...RING, ...caption(30)])
       const out = removeCreditLine(svg)
       expect(out.removed).toBe(30)
@@ -227,7 +227,7 @@ describe('the credit line (DP-36)', () => {
       expect(findCreditLine(out.svg).count).toBe(0)
     })
 
-    it('★ hands back the original, so Undo is exact', () => {
+    it('hands back the original, so Undo is exact', () => {
       // Undo puts this string back rather than reassembling the pieces.
       // Reassembly is a second chance to be wrong for no gain.
       const svg = asCompound([...RING, ...caption(20)])
@@ -277,7 +277,7 @@ describe('the credit line (DP-36)', () => {
       })
     })
 
-    it('★ the worker knows the same band, and a test keeps them level', () => {
+    it('the worker knows the same band, and a test keeps them level', () => {
       // trace-worker.js repeats the band share rather than importing it: this
       // module needs a DOM parser and the worker has no DOM. A number crossing
       // the wire is cheaper than a parser, but two copies of a number drift,
@@ -302,14 +302,14 @@ describe('the credit line (DP-36)', () => {
   })
 })
 
-describe('what the person is told (DP-36)', () => {
+describe('what the person is told', () => {
   it('names the count and what it thinks it was', () => {
     expect(creditLineSentence({ removed: 46 })).toBe(
       'Removed 46 small shapes from the bottom edge, most likely a credit line.'
     )
   })
 
-  it('★ says "most likely", because it is a guess', () => {
+  it('says "most likely", because it is a guess', () => {
     // The rule is a heuristic on shapes and positions. It cannot read, so it
     // cannot know. Undo exists for the same reason, and the sentence should
     // not claim more certainty than the button implies.

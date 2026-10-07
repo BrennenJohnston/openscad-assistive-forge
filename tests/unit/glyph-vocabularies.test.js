@@ -8,7 +8,7 @@ import { GLYPH_COUNT, FIRST_CHAR_CODE } from '../../src/js/_hfm-paint.js'
  * these guard the two rules an edit can break without looking broken until
  * someone walks the city and sees it.
  */
-describe('glyph vocabularies (CW-23)', () => {
+describe('glyph vocabularies', () => {
   const rows = Object.entries(GLYPH_VOCABULARIES)
   const nameOf = (id) =>
     Object.keys(SURFACE_CLASS).find((k) => SURFACE_CLASS[k] === Number(id)) ??
@@ -74,9 +74,9 @@ describe('glyph vocabularies (CW-23)', () => {
   }
 })
 
-describe('surface classes (CW-23)', () => {
+describe('surface classes', () => {
   it('gives every class a distinct id, with sky at zero', () => {
-    // Zero is what an unclassified pixel reads back as, so sky has to BE zero
+    // Zero is what an unclassified pixel reads back as, so sky has to be zero
     // or an unknown mesh would be reported as some real surface.
     expect(SURFACE_CLASS.SKY).toBe(0)
     const ids = Object.values(SURFACE_CLASS)

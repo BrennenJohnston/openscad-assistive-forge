@@ -9,14 +9,14 @@ import { flattenWithRings } from '../../src/js/svg-preparer-workspace.js'
 import * as ringEngine from '../../src/js/ring-geometry.js'
 
 /**
- * D-132: the charm's file control built its layer companions with
- * `flattenToCompoundPath`, the pairwise path-bool chain that D-120 retired from
- * the editor, on the main thread, on every emit. CPU-profiled on the owner's
- * activities icon at 1x it was 18,905 ms of an 18,960 ms emit, while the trace
- * that produced the drawing took 186 ms.
+ * The charm's file control builds its layer companions through the ring
+ * engine. Built with `flattenToCompoundPath`, the pairwise path-bool chain,
+ * on the main thread, on every emit, an activities icon at 1x spent
+ * 18,905 ms of an 18,960 ms emit there, while the trace that produced the
+ * drawing took 186 ms.
  *
- * The fix gives `flattenLayers` an injected flatten so the caller can hand it
- * the ring engine. The engine cannot be imported by svg-preparer.js itself: it
+ * `flattenLayers` takes an injected flatten so the caller can hand it the
+ * ring engine. The engine cannot be imported by svg-preparer.js itself: it
  * lives in a lazy chunk, and its wrapper lives in the workspace, which imports
  * svg-preparer.js. These tests pin the seam, and that the ring path produces a
  * real stack rather than quietly producing nothing.
@@ -46,7 +46,7 @@ function stackOf(svgText) {
 const ringFlatten = (els, meta, warnings) =>
   flattenWithRings(ringEngine, els, meta, warnings)
 
-describe('the layer stack can be flattened by the ring engine (D-132)', () => {
+describe('the layer stack can be flattened by the ring engine', () => {
   it('uses the injected flatten instead of the built-in one', () => {
     const { elements, layers, limit, meta } = stackOf(NESTED)
     const spy = vi.fn(ringFlatten)
@@ -94,7 +94,7 @@ describe('the layer stack can be flattened by the ring engine (D-132)', () => {
       expect(svg).toContain('<path')
       expect(/ d="[^"]+"/.test(svg)).toBe(true)
     }
-    // D-7's law: ONE transform and ONE canvas across the stack, or OpenSCAD's
+    // One transform and one canvas across the stack, or OpenSCAD's
     // resize() fits each pass on its own and the stack prints as slabs.
     const transforms = new Set(built.map((s) => /<g transform="([^"]*)"/.exec(s)?.[1]))
     const canvases = new Set(built.map((s) => /viewBox="([^"]*)"/.exec(s)?.[1]))
@@ -103,7 +103,7 @@ describe('the layer stack can be flattened by the ring engine (D-132)', () => {
   })
 
   it('keeps the stencil’s solid mode working through the injected flatten', () => {
-    // DP-12: the bridge-less stencil needs every cut solid, and that option is
+    // The bridge-less stencil needs every cut solid, and that option is
     // applied before the flatten, so it must survive the seam.
     const { elements, layers, limit, meta } = stackOf(NESTED)
     const seen = []

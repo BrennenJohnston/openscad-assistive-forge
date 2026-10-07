@@ -1,5 +1,5 @@
 /**
- * The ink panel takes its settings back (DP-81, D-175 b).
+ * The ink panel takes its settings back.
  *
  * A file control rebuilt with a traced drawing (a preset, an undo, a reset)
  * puts the settings the drawing was traced with back on the panel: every
@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createInkControls } from '../../src/js/ink-controls.js';
 
-describe('createInkControls: setSettings (DP-81)', () => {
+describe('createInkControls: setSettings', () => {
   let announce;
   let onChange;
   let panel;
@@ -39,7 +39,7 @@ describe('createInkControls: setSettings (DP-81)', () => {
     panel.element.querySelector(`input[type="radio"][value="${value}"]`);
   const range = (key) => panel.element.querySelector(`#ink-test-${key}`);
 
-  it('★ puts a whole trace back: the mode, the thresholds, the colors, the wall, the switches, and says nothing', () => {
+  it('puts a whole trace back: the mode, the thresholds, the colors, the wall, the switches, and says nothing', () => {
     panel.setSettings({
       mode: 'colours',
       lightnessMax: 40,

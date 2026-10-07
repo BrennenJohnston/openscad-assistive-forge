@@ -1,5 +1,5 @@
 /**
- * Unit tests for Phase 7: SVG/DXF Export Workflow Redesign (S-009).
+ * Unit tests for the SVG/DXF export workflow.
  *
  * Tests:
  *   - FileActionsController onExport2D callback support
@@ -19,7 +19,7 @@ import {
 import { propose2DExportAdjustments } from '../../src/js/render-intent.js';
 import { getBuiltinManifest } from '../../src/js/project-manifest.js';
 
-// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// The deprecated resolve2DExportIntent wrapper is gone; this
 // local equivalent keeps the proposal-engine assertions exercising the
 // same behavior (unconditional application of the builtin rules).
 const resolve2DExportIntent = (parameters, schema, format) =>

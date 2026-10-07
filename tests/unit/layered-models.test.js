@@ -1,9 +1,9 @@
 /**
- * The layered design, per model (DP-60, DP-61).
+ * The layered design, per model.
  *
- * The Bracelet Clip Charm built the stack first (DP-7, D-160, D-163) and the
- * other two shapes of the Charm Designer had none, so the Layer column, the
- * three heights and the thin check were one shape's. These cases read each
+ * Every layered shape of the Charm Designer carries the stack, not only the
+ * Bracelet Clip Charm: the Layer column, the three heights and the thin
+ * check belong to each. These cases read each
  * layered model's own source and pin the parts the app and the geometry
  * depend on: the twelve layer parameters under the model's own prefix, the
  * fit-box echo the thin check reads, the band modules, the gate that skips
@@ -71,13 +71,13 @@ describe.each(Object.keys(LAYERED))('the layered design on %s', (key) => {
     }
   });
 
-  it('says how wide it fits a design, so the editor can measure each shape (DP-54)', () => {
+  it('says how wide it fits a design, so the editor can measure each shape', () => {
     // main.js reads exactly this line out of the render's echo and hands it to
     // every file control; a model that says nothing gets no thin check.
     expect(sourceOf(key)).toContain('echo(str("design fit box mm: w=');
   });
 
-  it('builds each layer’s exact shapes once, in its own band (D-163)', () => {
+  it('builds each layer’s exact shapes once, in its own band', () => {
     const source = sourceOf(key);
     expect(source).toContain('module layer_exact_2d(n) {');
     expect(source).toContain('module layer_band_2d(n, raised) {');
@@ -133,7 +133,7 @@ describe.each(Object.keys(LAYERED))('the layered design on %s', (key) => {
     expect(sourceOf(key)).toContain('layer_canvas_span = 100;');
   });
 
-  it('scales the passes by ONE factor and never resizes them apart', () => {
+  it('scales the passes by one factor and never resizes them apart', () => {
     const source = sourceOf(key);
     const start = source.indexOf(`module ${prefix}_layer_2d(`);
     expect(start, `${prefix}_layer_2d`).toBeGreaterThan(0);
@@ -156,7 +156,7 @@ describe.each(Object.keys(LAYERED))('the layered design on %s', (key) => {
       expect(svg).toContain('width="100mm"');
       transforms.push(/<g transform="([^"]*)"/.exec(svg)?.[1]);
     }
-    // ONE transform across the three, so the stack lines up.
+    // One transform across the three, so the stack lines up.
     expect(new Set(transforms).size).toBe(1);
     const entry = EXAMPLE_DEFINITIONS[key];
     for (const n of [1, 2, 3]) {
@@ -167,7 +167,7 @@ describe.each(Object.keys(LAYERED))('the layered design on %s', (key) => {
   });
 });
 
-describe('the Logo Plate’s own rules (DP-60)', () => {
+describe('the Logo Plate’s own rules', () => {
   const source = readFileSync(
     join(PUBLIC_DIR, LAYERED['logo-plate'].file),
     'utf8'
@@ -194,7 +194,7 @@ describe('the Logo Plate’s own rules (DP-60)', () => {
   });
 });
 
-describe('the Flat Pendant\u2019s own rules (DP-61)', () => {
+describe('the Flat Pendant\u2019s own rules', () => {
   const source = readFileSync(
     join(PUBLIC_DIR, LAYERED['nasif-charm-maker'].file),
     'utf8'

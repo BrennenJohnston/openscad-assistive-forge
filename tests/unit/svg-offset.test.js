@@ -240,16 +240,15 @@ describe('offsetPath', () => {
 });
 
 // ---------------------------------------------------------------------------
-// offsetPath — MAGNITUDE (D-107)
+// offsetPath — magnitude
 //
-// The original suite only asserted direction (bbox grew or shrank), which a
-// defective engine passed while delivering 92–95% of requested outsets and
-// 9–15% of requested insets (measured against clipper2-js@1.2.4's
-// ClipperOffset on this exact square). These tests pin the amount and the
-// symmetry so a regression cannot ship green again.
+// Asserting only direction (bbox grew or shrank) would pass a defective
+// engine delivering 92–95% of requested outsets and 9–15% of requested
+// insets (clipper2-js@1.2.4's ClipperOffset on this exact square does).
+// These tests pin the amount and the symmetry.
 // ---------------------------------------------------------------------------
 
-describe('offsetPath magnitude (D-107)', () => {
+describe('offsetPath magnitude', () => {
   // SQUARE_PATH is 80×80 with corners at 10 and 90.
   const measure = (delta) => {
     const out = offsetPath(SQUARE_PATH, delta, { smooth: false });
@@ -458,10 +457,10 @@ describe('offsetPath smoothing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// offsetRing — the per-ring half of offsetPath (DP-82, D-174)
+// offsetRing — the per-ring half of offsetPath
 // ---------------------------------------------------------------------------
 
-describe('offsetRing (DP-82)', () => {
+describe('offsetRing', () => {
   const square = [
     { x: 10, y: 10 },
     { x: 90, y: 10 },
@@ -484,7 +483,7 @@ describe('offsetRing (DP-82)', () => {
     expect(Math.abs(b.maxX - 85)).toBeLessThan(0.15);
   });
 
-  it('★ a ring wound the other way offsets the same way: outward is outward', () => {
+  it('a ring wound the other way offsets the same way: outward is outward', () => {
     // A hole ring arrives wound negative (clipper's convention) and the
     // caller decides its sign; the builder must not flip it a second time.
     const reversed = [...square].reverse();
@@ -503,13 +502,13 @@ describe('offsetRing (DP-82)', () => {
     expect(offsetRing(square, 0)).toEqual([square]);
   });
 
-  it('★ D-180: the default smoothing rounds a corner by about one sample, not by a quarter of its edges', () => {
-    // MEASURED before the fix: clipper's union of the offset outline left
-    // 417 points along the first edge of an inset square and the bare corner
-    // on each of the other three, and Chaikin cut those bare corners by a
-    // quarter of their 70-unit edges: the inset's worst point sat 4.7 units
-    // (offsetRing) and 9.7 units (offsetPath) inside the ideal square. The
-    // union's points are spaced evenly along the perimeter first now.
+  it('the default smoothing rounds a corner by about one sample, not by a quarter of its edges', () => {
+    // Clipper's union of the offset outline can leave 417 points along the
+    // first edge of an inset square and the bare corner on each of the other
+    // three, and Chaikin would cut those bare corners by a quarter of their
+    // 70-unit edges: the inset's worst point would sit 4.7 units (offsetRing)
+    // and 9.7 units (offsetPath) inside the ideal square. So the union's
+    // points are spaced evenly along the perimeter first.
     const ideal = { lo: 15, hi: 85 };
     const worstOf = (ring) =>
       Math.max(
@@ -537,7 +536,7 @@ describe('offsetRing (DP-82)', () => {
   });
 });
 
-describe('resampleRing (DP-82)', () => {
+describe('resampleRing', () => {
   const rect = [
     { x: 0, y: 0 },
     { x: 100, y: 0 },

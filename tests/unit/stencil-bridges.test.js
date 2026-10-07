@@ -1,9 +1,9 @@
 /**
- * Bridges for the laser lane (DP-13).
+ * Bridges for the laser lane.
  *
  * A bridge is a rib of material left across a cut so an island stays put. The
  * cases below are about ribs that actually reach both sides, about an island
- * that CANNOT be held being reported rather than quietly dropped, and about
+ * that cannot be held being reported rather than quietly dropped, and about
  * bridges staying out of the layered mode, which needs none.
  *
  * @license GPL-3.0-or-later
@@ -86,7 +86,7 @@ describe('generateBridgesForIsland', () => {
     expect(failedAngles).toEqual([]);
   });
 
-  it('★ each rib REACHES both sides, or it holds nothing', () => {
+  it('each rib reaches both sides, or it holds nothing', () => {
     // A rib that stops short of the enclosing material is decoration. Each
     // one must start inside the island and finish inside the surround.
     const { rects } = generateBridgesForIsland(island, { count: 4 });
@@ -105,10 +105,10 @@ describe('generateBridgesForIsland', () => {
     }
   });
 
-  it('uses an INTERIOR point, so a concave island works', () => {
-    // The owner's version fans from the centroid, and the middle of a C is in
-    // the gap. Rays fired from outside cross the ring in the wrong order and
-    // the ribs come out backwards.
+  it('uses an interior point, so a concave island works', () => {
+    // Fanning from the centroid fails on a C, whose middle is in the gap, and
+    // rays fired from outside cross the ring in the wrong order and bring the
+    // ribs out backwards.
     const c = ring(
       'M 20 20 L 80 20 L 80 35 L 35 35 L 35 65 L 80 65 L 80 80 L 20 80 Z'
     );
@@ -120,7 +120,7 @@ describe('generateBridgesForIsland', () => {
   });
 
   it('reports an angle it could not place rather than dropping it', () => {
-    // An island held by one rib instead of two is something to know BEFORE
+    // An island held by one rib instead of two is something to know before
     // cutting, not after it falls on the floor.
     const { failedAngles } = generateBridgesForIsland(
       { ring: INNER, enclosingRing: [] },
@@ -182,7 +182,7 @@ describe('findIslands and buildBridges', () => {
     expect(r.message).toBeNull();
   });
 
-  it('★ says plainly when a shape will fall out', () => {
+  it('says plainly when a shape will fall out', () => {
     // Silence here means someone cuts a sheet and finds a hole in it.
     const fake = {
       nodes: [

@@ -1,9 +1,9 @@
 /**
- * The drawing editor's tools (DP-20): the command stack, the region canvas,
+ * The drawing editor's tools: the command stack, the region canvas,
  * and the surface's selection, keys, undo, colour actions, paint order, the
  * plate rule and a saved plan coming back.
  *
- * What is pinned: that a click on the canvas and a tick in the table are ONE
+ * What is pinned: that a click on the canvas and a tick in the table are one
  * selection; that every change is a command Undo can take back and name; that
  * the keys do what the help sentence says; and that a plan applied, saved and
  * reopened is the same plan.
@@ -285,9 +285,9 @@ describe('the region canvas', () => {
   })
 })
 
-// ── The surface, on the owner drawing ───────────────────────────────────────
+// ── The surface, on a real drawing ──────────────────────────────────────────
 
-describe('the stencil purpose with tools (DP-20)', () => {
+describe('the stencil purpose with tools', () => {
   let surface
   let announce
   let editor
@@ -568,17 +568,15 @@ describe('the stencil purpose with tools (DP-20)', () => {
   })
 })
 
-// ── Session 4 of DP-R5: Close leaves the editor and changes nothing ──────────
+// ── Close leaves the editor and changes nothing ───────────────────────────
 //
-// MEASURED on the built app with the owner's logo: Apply (CREATE raised,
-// 53,490 triangles), reopen to look, press Close - and the charm became a
-// raised slab (29,388 triangles). Close was wired as Keep original, so a look
-// at an applied drawing ended by replacing it with the raw one. Close now
-// asks the host to leave things as they are (`onClose`) and falls back to
-// Keep original only for a host that offers nothing else; the Keep original
-// BUTTON keeps its meaning (D-149).
+// Close asks the host to leave things as they are (`onClose`) and falls
+// back to Keep original only for a host that offers nothing else; the Keep
+// original button keeps its meaning. Wired as Keep original, a look at an
+// applied drawing (a logo raised to 53,490 triangles) would end by
+// replacing it with the raw one (a raised slab, 29,388 triangles).
 
-describe('leaving the relief editor (D-149)', () => {
+describe('leaving the relief editor', () => {
   let surface
   let editor
 
@@ -598,7 +596,7 @@ describe('leaving the relief editor (D-149)', () => {
     expect(surface.hidden).toBe(false)
   }
 
-  it('★ Close calls onClose, not onKeepOriginal, when the host offers it', () => {
+  it('Close calls onClose, not onKeepOriginal, when the host offers it', () => {
     const onClose = vi.fn()
     const onKeepOriginal = vi.fn()
     openRelief({ onApply: vi.fn(), onKeepOriginal, onClose })

@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * DP-43: the Potrace engine, running the wasm that actually ships.
+ * The Potrace engine, running the wasm that actually ships.
  *
  * Runs in the node environment because that is what the committed module was
  * built to support alongside web and worker; under jsdom it would take the
@@ -70,7 +70,7 @@ function box(pathData) {
   }
 }
 
-describe('the Potrace engine (DP-43)', () => {
+describe('the Potrace engine', () => {
   beforeEach(() => resetPotrace())
   afterEach(() => resetPotrace())
 
@@ -104,7 +104,7 @@ describe('the Potrace engine (DP-43)', () => {
     await expect(run(mask(16, 16))).resolves.toBe('')
   })
 
-  it('★ a 4x4 bitmap traces to the path it should, to the character', async () => {
+  it('a 4x4 bitmap traces to the path it should, to the character', async () => {
     // Two pixels across in the middle of a four-pixel square. Potrace rounds a
     // shape that small into a circle, and this is what that circle is: centred
     // on (2,2), radius 1, control points a shade over half a pixel out - the
@@ -117,7 +117,7 @@ describe('the Potrace engine (DP-43)', () => {
     )
   })
 
-  it('★ one pixel in the top left corner comes back in the top left corner', async () => {
+  it('one pixel in the top left corner comes back in the top left corner', async () => {
     // The sharpest form of the orientation question there is: the whole drawing
     // is one pixel, and it has exactly one right answer.
     const m = new Uint8Array(16)
@@ -139,7 +139,7 @@ describe('the Potrace engine (DP-43)', () => {
     expect(bounds.maxY).toBeCloseTo(12, 0)
   })
 
-  it('★ keeps the top of the picture at the top of the drawing', async () => {
+  it('keeps the top of the picture at the top of the drawing', async () => {
     // Potrace counts its rows from the bottom and its own SVG backend flips
     // them back. A build that does only half of that pair traces every picture
     // upside down, and nothing else in the app would notice.
@@ -149,12 +149,12 @@ describe('the Potrace engine (DP-43)', () => {
     expect(bottom.minY).toBeGreaterThanOrEqual(8)
   })
 
-  it('★ keeps the left of the picture on the left', async () => {
+  it('keeps the left of the picture on the left', async () => {
     const left = box(await run(fill(mask(16, 16), 0, 0, 2, 16)))
     expect(left.maxX).toBeLessThanOrEqual(8)
   })
 
-  it('★ a ring keeps its hole, and an island inside the hole comes back', async () => {
+  it('a ring keeps its hole, and an island inside the hole comes back', async () => {
     // Two shapes filled even-odd is a ring; three is a ring with something in
     // it. If the hole were lost the charm would print solid.
     const ring = fill(fill(mask(24, 24), 4, 4, 20, 20), 9, 9, 15, 15, 0)
@@ -199,7 +199,7 @@ describe('the Potrace engine (DP-43)', () => {
     await expect(first).resolves.toBe(await second)
   })
 
-  it('★ a failed load does not poison the next attempt', async () => {
+  it('a failed load does not poison the next attempt', async () => {
     // Someone whose network drops mid-session gets to try again by tracing
     // again, rather than being told no for the rest of the visit.
     const broken = () => Promise.reject(new Error('offline'))
@@ -223,7 +223,7 @@ describe('the Potrace engine (DP-43)', () => {
       )
     })
 
-    it('★ says even-odd on the path, never by default', () => {
+    it('says even-odd on the path, never by default', () => {
       // SVG fills nonzero unless told otherwise, and a hole drawn as a second
       // subpath only becomes a hole under even-odd. This is the whole
       // agreement between the two halves of the tracer.

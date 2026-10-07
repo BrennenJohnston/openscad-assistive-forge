@@ -1,8 +1,8 @@
 /**
- * Nesting analysis (DP-7 P1).
+ * Nesting analysis.
  *
  * Depth is the number the containment law is written in, so these cases are
- * mostly about depth being RIGHT rather than merely present: right when the
+ * mostly about depth being right rather than merely present: right when the
  * shapes arrive in a different order, right for a letter whose counter
  * touches its stem, and honest when the artwork is degenerate.
  *
@@ -120,7 +120,7 @@ describe('interiorPoint', () => {
     expect(pointInPolygon(p, sq)).toBe(true);
   });
 
-  it('finds one inside a C shape, where the centroid is OUTSIDE', () => {
+  it('finds one inside a C shape, where the centroid is outside', () => {
     // This is why a vertex or a centroid will not do: a letter C, and the
     // area-weighted centre of it sits in the gap.
     const c = 'M 0 0 L 30 0 L 30 10 L 10 10 L 10 30 L 30 30 L 30 40 L 0 40 Z';
@@ -170,7 +170,7 @@ describe('selfIntersects', () => {
     expect(selfIntersects(sq)).toEqual({ checked: true, intersects: false });
   });
 
-  it('says it did NOT look rather than reporting clean, past its budget', () => {
+  it('says it did not look rather than reporting clean, past its budget', () => {
     // An unchecked shape reported as fine is the shape that reaches the
     // printer. The budget is honest about itself instead.
     const many = [];
@@ -220,7 +220,7 @@ describe('buildNestingTree', () => {
     expect(tree.depthLimit).toBe(1);
   });
 
-  it('does NOT nest a shape whose bounds overlap but whose area does not', () => {
+  it('does not nest a shape whose bounds overlap but whose area does not', () => {
     // Two interlocking L shapes share a bounding box and contain nothing.
     const tree = buildNestingTree([
       { pathData: 'M 0 0 L 30 0 L 30 10 L 10 10 L 10 30 L 0 30 Z' },
@@ -231,7 +231,7 @@ describe('buildNestingTree', () => {
 
   it('handles the letters case: counters inside letters inside a field', () => {
     // A lens field, two letters on it, and the counter inside each letter -
-    // the shape of the owner's own artwork.
+    // the shape of a real stencil design.
     const field = square(0, 0, 200);
     const letterO = 'M 20 20 L 80 20 L 80 120 L 20 120 Z';
     const counterO = 'M 35 35 L 65 35 L 65 105 L 35 105 Z';
@@ -281,7 +281,7 @@ describe('buildNestingTree', () => {
   });
 });
 
-describe('buildNestingTreeAsync: the same tree, a slice at a time (DP-78 P3)', () => {
+describe('buildNestingTreeAsync: the same tree, a slice at a time', () => {
   /** Nested squares, two siblings, an open line and an empty path. */
   const mixed = () => [
     ...nestedSquares(3),
@@ -291,7 +291,7 @@ describe('buildNestingTreeAsync: the same tree, a slice at a time (DP-78 P3)', (
     { pathData: '' },
   ];
 
-  it('★ gives exactly what the sync builder gives, and checkpoints every slice', async () => {
+  it('gives exactly what the sync builder gives, and checkpoints every slice', async () => {
     const checkpoint = vi.fn(async () => {});
     const sync = buildNestingTree(mixed());
     const sliced = await buildNestingTreeAsync(mixed(), {
@@ -368,11 +368,10 @@ describe('suggestLayers and layerLimit', () => {
 
 describe('the clipper2-js trap', () => {
   it('the analysis never imports clipper2-js', () => {
-    // clipper2-js IS a dependency of this app, so this is not a hypothetical.
+    // clipper2-js is a dependency of this app, so this is not a hypothetical.
     // At 1.2.4 its pointInPolygon returns IsOn for every input and
     // executePolyTree throws internally and returns an empty tree; a nesting
-    // tree built on either would be confidently wrong. Measured in the
-    // owner's stencil-forge repo, 2026-08-25.
+    // tree built on either would be confidently wrong.
     const source = readFileSync(
       resolve(process.cwd(), 'src/js/svg-nesting.js'),
       'utf8'
@@ -396,7 +395,7 @@ describe('the clipper2-js trap', () => {
   });
 });
 
-// ── DP-11: the outline, and where a hole may go ─────────────────────────────
+// ── The outline, and where a hole may go ────────────────────────────────────
 
 describe('distanceToEdge', () => {
   const sq = polygonFromPathData('M 0 0 L 20 0 L 20 20 L 0 20 Z').points;
@@ -473,7 +472,7 @@ describe('flattenSilhouette - the outline a pendant is cut from', () => {
     return flattenSilhouette(raw, roles, { viewBox: '0 0 40 40' });
   }
 
-  it('★ a stroke-drawn outline becomes a SOLID body, not a ring', () => {
+  it('a stroke-drawn outline becomes a solid body, not a ring', () => {
     // The bird fixture's own outline is a stroke. Built from the CONVERTED
     // geometry the pendant came out as a hollow ring with the eye and the
     // feathers floating in the hole. The raw subpath, filled, is the body.
@@ -488,7 +487,7 @@ describe('flattenSilhouette - the outline a pendant is cut from', () => {
     expect((dOf(out).match(/M/gi) || []).length).toBe(1);
   });
 
-  it('★ descends past a full-bleed background to the drawing on it', () => {
+  it('descends past a full-bleed background to the drawing on it', () => {
     // A traced photograph's outermost shape is the paper it was drawn on.
     // Taking roots naively gave a rectangle, so every traced photograph would
     // have made a rectangular pendant.
@@ -513,7 +512,7 @@ describe('flattenSilhouette - the outline a pendant is cut from', () => {
     expect((dOf(out).match(/M/gi) || []).length).toBe(1);
   });
 
-  it('a hole in the RELIEF is not a hole in the pendant', () => {
+  it('a hole in the relief is not a hole in the pendant', () => {
     // Someone marked the middle "cut out" so it would not print as material.
     // Sawing the body in half is not what they asked for.
     const svg =
@@ -536,7 +535,7 @@ describe('flattenSilhouette - the outline a pendant is cut from', () => {
     expect(box.maxX).toBe(60);
   });
 
-  it('lands on the SAME canvas as the layer files', () => {
+  it('lands on the same canvas as the layer files', () => {
     // The body and the reliefs must share one coordinate system, or the
     // pendant and the detail on it are fitted against different boxes.
     const svg =

@@ -1,5 +1,5 @@
 /**
- * Cropping a vector drawing (DP-49).
+ * Cropping a vector drawing.
  *
  * A crop of a drawing is a clip: every shape's rings intersected with the
  * kept rectangle, shapes the clip empties dropped, the picture's box rewritten
@@ -32,7 +32,7 @@ function root(svg) {
 }
 
 describe('cropSvgDrawing', () => {
-  it('★ keeps a shape inside the rectangle whole, clips one on the edge, drops one outside', () => {
+  it('keeps a shape inside the rectangle whole, clips one on the edge, drops one outside', () => {
     const svg = drawing(
       '<rect x="10" y="10" width="20" height="20" fill="#111"/>' +
         '<rect x="90" y="10" width="40" height="20" fill="#222"/>' +
@@ -48,7 +48,7 @@ describe('cropSvgDrawing', () => {
     expect(areas[1]).toBeCloseTo(200, 3);
   });
 
-  it('★ the box becomes the rectangle, in the same units', () => {
+  it('the box becomes the rectangle, in the same units', () => {
     const svg = drawing('<rect x="10" y="10" width="20" height="20"/>');
     const out = cropSvgDrawing(svg, { x: 5, y: 8, width: 60, height: 40 });
     const el = root(out.svg);
@@ -57,7 +57,7 @@ describe('cropSvgDrawing', () => {
     expect(el.getAttribute('height')).toBe('40');
   });
 
-  it('★ a hole survives the clip as a hole', () => {
+  it('a hole survives the clip as a hole', () => {
     // A 40 by 40 square with a 20 by 20 hole, drawn as one path.
     const svg = drawing(
       '<path d="M10,10h40v40h-40z M20,20v20h20v-20z" fill="#000"/>'

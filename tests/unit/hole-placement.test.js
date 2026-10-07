@@ -1,7 +1,7 @@
 /**
- * Where a keychain hole may go on a design-shaped pendant (DP-11).
+ * Where a keychain hole may go on a design-shaped pendant.
  *
- * The cases below are all about a hole that WOULD render perfectly and print
+ * The cases below are all about a hole that would render perfectly and print
  * as rubbish: outside the shape, or so near an edge that the ring tears out
  * the first time the charm is pulled. Neither is visible in a preview.
  *
@@ -100,7 +100,7 @@ describe('checkHolePlacement', () => {
     expect(r.message).toBeNull();
   });
 
-  it('★ catches a hole in the gap of a concave shape', () => {
+  it('catches a hole in the gap of a concave shape', () => {
     // The whole reason this is geometry and not a bounding box. The middle of
     // a C's bounding box is thin air; a rectangle check would put the ring
     // there and the preview would look perfect.

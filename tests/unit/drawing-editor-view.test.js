@@ -1,5 +1,5 @@
 /**
- * The drawing editor's view (DP-21): the plan drawn over the art, "Show
+ * The drawing editor's view: the plan drawn over the art, "Show
  * original", the two-stroke highlight that pulses and settles (and never
  * pulses under reduced motion), the plate stepper, and the contrast the
  * highlight's two strokes have against any region colour, measured with the
@@ -57,7 +57,7 @@ function setReducedMotion(reduce) {
   })
 }
 
-describe('the canvas view (DP-21)', () => {
+describe('the canvas view', () => {
   let container
   let canvas
   const label = document.createElement('span')
@@ -104,7 +104,7 @@ describe('the canvas view (DP-21)', () => {
     expect(a.hasAttribute('fill')).toBe(false)
   })
 
-  it('a keyboard highlight is two strokes over the region that PULSE, then settle on animationend', () => {
+  it('a keyboard highlight is two strokes over the region that pulse, then settle on animationend', () => {
     canvas.setHighlight('b', { pulse: true })
     const layer = canvas.highlightLayer
     expect(layer.getAttribute('visibility')).toBe('visible')
@@ -162,7 +162,7 @@ describe('the two strokes read on any region colour', () => {
     return m ? m[1] : null
   }
 
-  it('★ MEASURED: the plan first asked for the page background under the focus colour, and that pair fails on a white region', () => {
+  it('the page background under the focus colour fails on a white region', () => {
     // #66b3ff is the dark theme's --color-focus and the accent's neighbour
     // in light; either way a light blue on the cat's white fur is under 3:1.
     expect(contrastRatio('#66b3ff', '#fafbf8')).toBeLessThan(3)
@@ -317,12 +317,12 @@ describe('the surface: Show original and the plate stepper', () => {
   })
 })
 
-// G0 2026-09-01 (DP-24): the picture is the editor. The side panel becomes a
-// drawer over it - closed by default on the stencil purpose, where the canvas
-// and the paint tools carry the task; open on the relief purpose, where the
-// shape list IS the hands - and the toolbar holds two rows at desktop width
-// instead of wrapping to four.
-describe('the panel drawer and the two-row toolbar (DP-24)', () => {
+// The picture is the editor. The side panel is a drawer over it - closed
+// by default on the stencil purpose, where the canvas and the paint tools
+// carry the task; open on the relief purpose, where the shape list is the
+// hands - and the toolbar holds two rows at desktop width instead of
+// wrapping to four.
+describe('the panel drawer and the two-row toolbar', () => {
   let surface
   let announce
   let editor
@@ -395,7 +395,7 @@ describe('the panel drawer and the two-row toolbar (DP-24)', () => {
 
   it('Escape inside the open drawer keeps the one path: the editor closes', async () => {
     // "Escape from anywhere inside takes one path" is pinned behaviour the
-    // owner already has; the drawer never intercepts it. Its way shut is
+    // editor already has; the drawer never intercepts it. Its way shut is
     // the toggle.
     const onKeepOriginal = vi.fn()
     editor.open(CAT_SVG, analyzeSvg(CAT_SVG), {
@@ -424,10 +424,10 @@ describe('the panel drawer and the two-row toolbar (DP-24)', () => {
   })
 
   it('the toolbar is three named rows: actions, view, hands', async () => {
-    // Two was the aim; MEASURED at a 1280 window the toolbar's real width
-    // is 692 px (the editor shares the window with the customizer) and the
+    // Two rows would not fit: at a 1280 window the toolbar's real width is
+    // 692 px (the editor shares the window with the customizer) and the
     // groups sum to 1,705 px, so three named rows that never wrap is the
-    // honest answer to G0's four-row complaint.
+    // honest answer to a four-row wrap.
     await openCat()
     const rows = surface.querySelectorAll('.drawing-editor-toolbar-row')
     expect(rows.length).toBe(3)
@@ -452,7 +452,7 @@ describe('the panel drawer and the two-row toolbar (DP-24)', () => {
   })
 })
 
-describe('DP-53 P2: the charm view renders the charm on request', () => {
+describe('the charm view renders the charm on request', () => {
   let surface
   let editor
   let announce
@@ -488,7 +488,7 @@ describe('DP-53 P2: the charm view renders the charm on request', () => {
     await editor._workspace.whenCombined()
   }
 
-  it('★ Render preview belongs to the charm view of a host that can draw a draft', () => {
+  it('Render preview belongs to the charm view of a host that can draw a draft', () => {
     openRelief({ onDraftRender: vi.fn() })
     const btn = surface.querySelector('.drawing-editor-render-charm')
     expect(btn).not.toBeNull()
@@ -508,7 +508,7 @@ describe('DP-53 P2: the charm view renders the charm on request', () => {
     expect(btn.hidden).toBe(true)
   })
 
-  it('★ pressing it hands the host the combined result and the layers, and the note says what the charm shows', async () => {
+  it('pressing it hands the host the combined result and the layers, and the note says what the charm shows', async () => {
     const onDraftRender = vi.fn()
     openRelief({ onDraftRender })
     await combined()
@@ -525,11 +525,11 @@ describe('DP-53 P2: the charm view renders the charm on request', () => {
     expect(announce).toHaveBeenCalledWith(S.renderCharmStarted)
   })
 
-  it('★ while the shapes are still combining it waits, says so, and renders once they are', async () => {
+  it('while the shapes are still combining it waits, says so, and renders once they are', async () => {
     const onDraftRender = vi.fn()
     openRelief({ onDraftRender })
     await combined()
-    // The surface moves the shapes list out of the workspace root (session 3),
+    // The surface moves the shapes list out of the workspace root,
     // so the rows are found from the surface.
     const radio = surface.querySelector('.svg-prep-object input[type=radio][value="ignore"]')
     radio.checked = true
@@ -570,7 +570,7 @@ describe('DP-53 P2: the charm view renders the charm on request', () => {
   })
 })
 
-describe('DP-49 P3: the crop view in the surface', () => {
+describe('the crop view in the surface', () => {
   let surface
   let editor
   let announce
@@ -604,7 +604,7 @@ describe('DP-49 P3: the crop view in the surface', () => {
   const escapeOn = (el) =>
     el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
 
-  it('★ Crop belongs to the drawing view of a relief editor whose host can crop', () => {
+  it('Crop belongs to the drawing view of a relief editor whose host can crop', () => {
     openRelief({ onCrop: vi.fn() })
     const btn = surface.querySelector('.drawing-editor-crop-btn')
     expect(btn).not.toBeNull()
@@ -618,7 +618,7 @@ describe('DP-49 P3: the crop view in the surface', () => {
     expect(surface.querySelector('.drawing-editor-crop-btn').hidden).toBe(true)
   })
 
-  it('★ pressing Crop opens the view in place of the drawing with focus on Top; Escape brings the drawing back, focus on Crop, the editor still open', () => {
+  it('pressing Crop opens the view in place of the drawing with focus on Top; Escape brings the drawing back, focus on Crop, the editor still open', () => {
     openRelief({ onCrop: vi.fn() })
     const btn = surface.querySelector('.drawing-editor-crop-btn')
     btn.click()
@@ -636,7 +636,7 @@ describe('DP-49 P3: the crop view in the surface', () => {
     expect(surface.hidden).toBe(false)
   })
 
-  it("★ Save crop hands the host the rectangle in the drawing's units and the insets, and the drawing comes back", () => {
+  it("Save crop hands the host the rectangle in the drawing's units and the insets, and the drawing comes back", () => {
     const onCrop = vi.fn()
     openRelief({ onCrop })
     surface.querySelector('.drawing-editor-crop-btn').click()

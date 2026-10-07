@@ -1,10 +1,10 @@
 /**
- * D-123 (DP-26 P2): the curve entities OpenSCAD's importer does not read
- * are evaluated to line chains before the engine sees the file.
+ * The curve entities OpenSCAD's importer does not read are evaluated to
+ * line chains before the engine sees the file.
  *
- * The fixture is the owner's own Fusion sketch: 31 SPLINE, 2 ELLIPSE,
- * 1 LINE. MEASURED before the fix, through the whole door: the editor
- * showed TWO shapes of the 34 and said nothing was missing.
+ * The fixture is a real Fusion sketch: 31 SPLINE, 2 ELLIPSE, 1 LINE.
+ * Unevaluated, the editor shows two shapes of the 34 and says nothing is
+ * missing.
  *
  * @license GPL-3.0-or-later
  */
@@ -22,10 +22,10 @@ const SKETCH = readFileSync(
 const count = (text, entity) =>
   (text.match(new RegExp(`^${entity}\\r?$`, 'gm')) || []).length
 
-describe('evaluateDxfCurves (D-123)', () => {
+describe('evaluateDxfCurves', () => {
   const result = evaluateDxfCurves(SKETCH)
 
-  it('★ evaluates all 31 splines and both ellipses of the owner sketch', () => {
+  it('evaluates all 31 splines and both ellipses of the sketch', () => {
     expect(result.splines).toBe(31)
     expect(result.ellipses).toBe(2)
   })
@@ -38,7 +38,7 @@ describe('evaluateDxfCurves (D-123)', () => {
   it('emits line chains dense enough to be the curves', () => {
     // 33 curves at a handful of segments each; the fixture's one original
     // LINE stays. The exact figure is the evaluator's business - the pin
-    // is that the drawing is now MADE of lines.
+    // is that the drawing is made of lines.
     expect(count(result.text, 'LINE')).toBeGreaterThan(500)
   })
 

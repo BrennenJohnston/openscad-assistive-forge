@@ -1,13 +1,13 @@
 /**
- * A shape's own thickness, at the printed size and in the picture (DP-54 P1).
+ * A shape's own thickness, at the printed size and in the picture.
  *
- * The measure is DP-36's ridge (a distance transform's local maxima, twice
- * the distance being the width there) taken over ONE shape's rings, raster-
+ * The measure is the ridge (a distance transform's local maxima, twice the
+ * distance being the width there) taken over one shape's rings, raster-
  * ized into a small mask: at 0.025 mm per cell at the design width, and at
- * one cell per picture unit for the picture floor. P0 MEASURED the logo's
- * 206 shapes in about 50 ms this way, and 1,200 rects in 80 ms, so no
- * cheaper stand-in is needed (2A/P was the fallback; it halves a blob's
- * diameter, which the ridge does not).
+ * one cell per picture unit for the picture floor. Measured on a 206-shape
+ * logo in about 50 ms this way, and 1,200 rects in 80 ms, so no cheaper
+ * stand-in is needed (the fallback considered halves a blob's diameter,
+ * which the ridge does not).
  * @license GPL-3.0-or-later
  */
 import { describe, it, expect } from 'vitest';
@@ -76,7 +76,7 @@ describe('ridgeWidth on a shape of its own', () => {
 });
 
 describe('measureShapeThickness', () => {
-  it('★ names both measures: mm at the design width, px in the picture, and what each floor says', () => {
+  it('names both measures: mm at the design width, px in the picture, and what each floor says', () => {
     // A 600-unit picture printed 12 mm wide: 50 units per mm. A stroke 10
     // units wide is 0.2 mm and 10 px: too thin to print, wide enough to trace.
     const m = measureShapeThickness(rect(0, 0, 100, 10), {

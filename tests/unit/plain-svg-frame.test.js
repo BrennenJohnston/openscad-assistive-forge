@@ -1,17 +1,17 @@
 /**
- * D-167: a plain SVG's own frame is its paper, not a cut-out.
+ * A plain SVG's own frame is its paper, not a cut-out.
  *
  * Drawing programs put a background rectangle behind the artwork. Classed by
- * its luminance alone it was a Cut out, and the automatic preparation, which
- * subtracts every cut-out from everything, erased the drawing and applied an
- * empty design under "Simplified 7 shapes for 3D printing". MEASURED on the
- * bird fixture: the applied file was 210 bytes, one `<path d="">`. The
- * editor kept the bird, because its paint only cuts a hole inside a shape
- * that encloses it, so the two paths disagreed about the same drawing.
+ * its luminance alone it would be a Cut out, and the automatic preparation,
+ * which subtracts every cut-out from everything, would erase the drawing and
+ * apply an empty design under "Simplified 7 shapes for 3D printing" (on the
+ * bird fixture, a 210-byte file with one `<path d="">`). The editor would
+ * keep the bird, because its paint only cuts a hole inside a shape that
+ * encloses it, so the two paths would disagree about the same drawing.
  *
- * The rule the wall already has (DP-Q53): the ground the picture sits on is
- * Off. A single light root shape that encloses every other shape is that
- * ground, whatever program drew it.
+ * The rule the wall already has: the ground the picture sits on is Off. A
+ * single light root shape that encloses every other shape is that ground,
+ * whatever program drew it.
  *
  * @license GPL-3.0-or-later
  */
@@ -35,7 +35,7 @@ const BIRD = readFileSync(
 const pathData = (svg) =>
   [...svg.matchAll(/\sd="([^"]*)"/g)].map((m) => m[1]).join(' ');
 
-describe('D-167: a plain SVG’s light frame is the wall', () => {
+describe('a plain SVG’s light frame is the wall', () => {
   it('the bird’s background rectangle is Off, not Cut out', () => {
     const elements = parseSvgElements(BIRD);
     const overrides = wallRoleOverrides(elements);

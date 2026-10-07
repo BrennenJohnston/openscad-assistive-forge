@@ -1,5 +1,5 @@
 /**
- * The photo defaults (DP-79, D-173, D-176): the working resolution, the
+ * The photo defaults: the working resolution, the
  * median, the speck floor and the close, as the one module both roads to the
  * tracer call. Pure arithmetic over hand-built pictures small enough to read.
  *
@@ -42,7 +42,7 @@ function paper(width, height, rects) {
 
 const INK = { mode: 'lineart', lightnessMax: 55, chromaMax: 25 };
 
-describe('the working resolution (DP-79)', () => {
+describe('the working resolution', () => {
   it('forty pixels per printed millimeter: 1400 px at 14 mm shrinks by 2.5', () => {
     expect(PRINT_CELL_MM).toBe(0.025);
     expect(workingFactor(1400, 1000, 14)).toBeCloseTo(2.5, 5);
@@ -133,7 +133,7 @@ describe('resampleBy: a fractional box filter', () => {
 });
 
 describe('workingPicture: only a camera picture with a printed width', () => {
-  it('★ resamples a camera picture to the cell and re-scales its millimeters per pixel', () => {
+  it('resamples a camera picture to the cell and re-scales its millimeters per pixel', () => {
     const img = paper(1400, 1000, [[100, 100, 400, 400]]);
     const out = workingPicture(img, {
       ...INK,
@@ -184,7 +184,7 @@ describe('inkStage: the median, the floor and the close', () => {
     ]);
   const at = { camera: true, mmPerPixel: 0.025 };
 
-  it('★ the floor drops the speck, counts it, and hands Potrace the same floor', () => {
+  it('the floor drops the speck, counts it, and hands Potrace the same floor', () => {
     const out = inkStage(scene(), { ...INK, ...at, speckFloor: true }, {
       makeImageData,
     });
@@ -218,7 +218,7 @@ describe('inkStage: the median, the floor and the close', () => {
     expect(out.turdsize).toBeUndefined();
   });
 
-  it('★ the close bridges a crayon gap on a Solid shape, and only there', () => {
+  it('the close bridges a crayon gap on a Solid shape, and only there', () => {
     // Two blocks three pixels apart: at 0.025 mm per pixel the close's
     // radius is four, wide enough to join them.
     const gap = paper(120, 60, [
