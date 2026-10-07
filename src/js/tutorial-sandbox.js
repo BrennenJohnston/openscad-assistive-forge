@@ -1094,11 +1094,11 @@ const TUTORIALS = {
           <details class="tutorial-more">
             <summary>What each button does</summary>
             <ul>
-              <li><strong>Select</strong> (dropdown) — pick a saved design</li>
-              <li><strong>Save</strong> — overwrite the current design with your changes</li>
-              <li><strong>Add (+)</strong> — create a new design from current settings</li>
-              <li><strong>Delete (\u2212)</strong> — remove the selected design</li>
-              <li><strong>Import / Export</strong> — share designs as JSON files. You can sort designs or choose to merge or replace all when importing.</li>
+              <li><strong>Select</strong> (dropdown): pick a saved design</li>
+              <li><strong>Save</strong>: overwrite the current design with your changes</li>
+              <li><strong>Add (+)</strong>: create a new design from current settings</li>
+              <li><strong>Delete (\u2212)</strong>: remove the selected design</li>
+              <li><strong>Import / Export</strong>: share designs as JSON files. You can sort designs or choose to merge or replace all when importing.</li>
             </ul>
           </details>
           <p class="tutorial-hint">Designs are saved in your browser for this model.</p>
@@ -1123,7 +1123,7 @@ const TUTORIALS = {
             <li>Status and progress</li>
             <li>Model dimensions</li>
             <li>Preview quality</li>
-            <li><strong>Grid size</strong> — set the grid to match your printer bed. <strong>Try it:</strong> change the width to match your printer.</li>
+            <li><strong>Grid size</strong>: set the grid to match your printer bed. <strong>Try it:</strong> change the width to match your printer.</li>
           </ul>
           <p class="tutorial-hint">You can resize this drawer using the handle. With keyboard: focus the handle, then use arrow keys.</p>
         `,
@@ -1179,7 +1179,7 @@ const TUTORIALS = {
         title: 'Companion Files & Screenshot Overlay',
         content: `
           <p>Some designs use extra files (like <code>.txt</code> or <code>.svg</code>). When loaded from a ZIP, they appear in the <strong>Companion Files</strong> section.</p>
-          <p>If a <code>screenshot.png</code> file is included, the app automatically loads it as a <strong>reference overlay</strong> behind your keyguard in the 3D preview — helping you align openings with tablet buttons.</p>
+          <p>If a <code>screenshot.png</code> file is included, the app automatically loads it as a <strong>reference overlay</strong> behind your keyguard in the 3D preview, helping you align openings with tablet buttons.</p>
           <p class="tutorial-hint">You can also add files manually using the <strong>Add File</strong> button.</p>
         `,
         contentCompact: `
@@ -1792,8 +1792,8 @@ const TUTORIALS = {
         content: `
           <p>In <strong>Import / Export Designs</strong>, you can choose how imported designs are merged:</p>
           <ul>
-            <li><strong>Merge</strong> — add imports alongside your existing designs</li>
-            <li><strong>Replace all</strong> — delete existing designs and start fresh from the import file</li>
+            <li><strong>Merge</strong>: add imports alongside your existing designs</li>
+            <li><strong>Replace all</strong>: delete existing designs and start fresh from the import file</li>
           </ul>
           <p class="tutorial-hint">Replace mode always asks for confirmation before deleting.</p>
         `,
@@ -1867,7 +1867,7 @@ const TUTORIALS = {
           <ul>
             <li>Tab to a group header, then Tab again to reach the <strong>Hide group</strong> button (×).</li>
             <li>Press <kbd>Space</kbd> or <kbd>Enter</kbd> to hide the group.</li>
-            <li>A <strong>Show all</strong> button appears at the bottom of the panel — Tab to it and press <kbd>Enter</kbd> to restore all groups.</li>
+            <li>A <strong>Show all</strong> button appears at the bottom of the panel. Tab to it and press <kbd>Enter</kbd> to restore all groups.</li>
           </ul>
           <p class="tutorial-hint">Hidden groups are remembered per model.</p>
         `,
@@ -3151,10 +3151,10 @@ function createTutorialOverlay() {
             </svg>
           </summary>
           <div class="tutorial-keyboard-help-content" role="note">
-            <div><kbd>←</kbd>/<kbd>→</kbd> or <kbd>b</kbd>/<kbd>n</kbd> — steps</div>
-            <div><kbd>Esc</kbd> — exit</div>
-            <div><kbd>Home</kbd>/<kbd>End</kbd> — first/last</div>
-            <div><kbd>?</kbd> — open this help</div>
+            <div><kbd>←</kbd>/<kbd>→</kbd> or <kbd>b</kbd>/<kbd>n</kbd>: steps</div>
+            <div><kbd>Esc</kbd>: exit</div>
+            <div><kbd>Home</kbd>/<kbd>End</kbd>: first/last</div>
+            <div><kbd>?</kbd>: open this help</div>
           </div>
         </details>
       </div>

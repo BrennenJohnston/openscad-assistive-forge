@@ -276,9 +276,10 @@ export class FontListPanel {
     const entry = this.fonts.find((f) => f.file === file) || null;
 
     if (this.selName)
-      this.selName.textContent = entry ? fontScadName(entry) : '—';
-    if (this.selPath) this.selPath.textContent = entry ? entry.mountPath : '—';
-    if (this.selStyle) this.selStyle.textContent = entry ? entry.style : '—';
+      this.selName.textContent = entry ? fontScadName(entry) : 'None';
+    if (this.selPath)
+      this.selPath.textContent = entry ? entry.mountPath : 'None';
+    if (this.selStyle) this.selStyle.textContent = entry ? entry.style : 'None';
     if (this.copyBtn) this.copyBtn.disabled = !entry;
   }
 

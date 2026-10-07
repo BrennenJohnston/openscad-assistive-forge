@@ -1741,7 +1741,7 @@ export function initFileHandler({
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       showErrorToast({
         title: 'STL Too Large',
-        message: `"${file.name}" is ${sizeMB} MB — the viewing limit is ${limitMB} MB.`,
+        message: `"${file.name}" is ${sizeMB} MB. The viewing limit is ${limitMB} MB.`,
       });
       return;
     }
@@ -1780,7 +1780,7 @@ export function initFileHandler({
         const notice = document.createElement('p');
         notice.className = 'stl-view-notice';
         notice.textContent =
-          `Viewing ${file.name} — STL files have no editable parameters. ` +
+          `Viewing ${file.name}. STL files have no editable parameters. ` +
           'Open a .scad model to customize a design.';
         parametersContainer.appendChild(notice);
       }

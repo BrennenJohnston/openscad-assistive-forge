@@ -53,9 +53,7 @@ export class DesignPanelController {
 
     this.onFlushComplete();
     this._updateGeometryDisplay(null);
-    announceImmediate(
-      'Caches flushed — files, libraries, and geometry cleared'
-    );
+    announceImmediate('Caches flushed: files, libraries, and geometry cleared');
   }
 
   // ---------------------------------------------------------------------------
@@ -117,7 +115,7 @@ export class DesignPanelController {
   checkValidity() {
     const pm = this.getPreviewManager();
     if (!pm?.mesh) {
-      announceImmediate('No model loaded — render first to check validity');
+      announceImmediate('No model loaded. Render first to check validity');
       return;
     }
 

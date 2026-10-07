@@ -236,7 +236,7 @@ const VERTEX_SHADER = /* glsl */ `
   void main() {
     // Object space is world space here: the city group is never rotated, the
     // merged meshes bake their own transforms in at build time, and nothing in
-    // the scene is scaled — so the object normal already points where the face
+    // the scene is scaled, so the object normal already points where the face
     // points in the world, and no matrix belongs in this line. normalMatrix is
     // built from modelViewMatrix, so multiplying by it would ask which way the
     // face points relative to the CAMERA, and the roof test below would then

@@ -289,7 +289,7 @@ export class ErrorLogPanel {
         const ts = new Date(e.timestamp).toISOString();
         const loc =
           e.line !== null ? `${e.file || ''}:${e.line}` : e.file || '';
-        return `[${ts}] [${e.type.toUpperCase()}] ${loc ? loc + ' — ' : ''}${e.message}`;
+        return `[${ts}] [${e.type.toUpperCase()}] ${loc ? loc + ': ' : ''}${e.message}`;
       })
       .join('\n');
   }
@@ -603,7 +603,7 @@ export class ErrorLogPanel {
 
     const fileCell = document.createElement('td');
     fileCell.className = 'error-log-cell--file';
-    fileCell.textContent = entry.file || '—';
+    fileCell.textContent = entry.file || 'None';
     row.appendChild(fileCell);
 
     const lineCell = document.createElement('td');
@@ -619,7 +619,7 @@ export class ErrorLogPanel {
       );
       lineCell.appendChild(link);
     } else {
-      lineCell.textContent = entry.line !== null ? String(entry.line) : '—';
+      lineCell.textContent = entry.line !== null ? String(entry.line) : 'None';
     }
     row.appendChild(lineCell);
 

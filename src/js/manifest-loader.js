@@ -226,7 +226,7 @@ export function resolveFileUrl(filePath, manifestUrl) {
   // Reject directory traversal
   if (filePath.includes('..')) {
     throw new ManifestError(
-      `Suspicious path in manifest: "${filePath}" — directory traversal is not allowed`,
+      `Suspicious path in manifest: "${filePath}" (directory traversal is not allowed)`,
       'INVALID_PATH'
     );
   }

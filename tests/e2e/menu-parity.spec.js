@@ -10,7 +10,7 @@ import path from 'path'
 
 const RECENT_KEY = 'openscad-forge-recent-files'
 const RECENT_UNAVAILABLE_REASON =
-  'Not saved in this browser — open the file again to reload it'
+  'Not saved in this browser. Open the file again to reload it'
 
 // Appendix U2, with the adaptations recorded in main.js's File-menu comment:
 // Save All and Python omitted (D-24); Quit's slot dropped and the single Close
@@ -1411,7 +1411,7 @@ test.describe('Forge direction (UF-11)', () => {
     await page.locator('#viewMenuBtn').click()
     await menuItem(page, 'view', 'Edge Detail Limit').click()
     await page
-      .getByRole('menuitemradio', { name: 'High — 250,000 edges' })
+      .getByRole('menuitemradio', { name: 'High (250,000 edges)' })
       .click()
 
     // Since UF-14 the budget persists in the Forge namespace's own copy (U-25).
@@ -1427,7 +1427,7 @@ test.describe('Forge direction (UF-11)', () => {
     await page.locator('#viewMenuBtn').click()
     await menuItem(page, 'view', 'Edge Detail Limit').click()
     await expect(
-      page.getByRole('menuitemradio', { name: 'High — 250,000 edges' })
+      page.getByRole('menuitemradio', { name: 'High (250,000 edges)' })
     ).toHaveAttribute('aria-checked', 'true')
   })
 })

@@ -169,13 +169,13 @@ gap_width = 3; // [2:0.5:8]
 // Side edge rounding radius (0 = sharp side edges)
 edge_radius = 1.0; // [0:0.25:3]
 
-// Side edge radius — rounds the edges along the side profile of the charm (0 = off)
+// Side edge radius: rounds the edges along the side profile of the charm (0 = off)
 side_edge_radius = 2.5; // [0:0.25:3]
 
-// Outer corner radius — rounds the 4 outer corners of the C-clip cross-section (0 = sharp corners)
+// Outer corner radius: rounds the 4 outer corners of the C-clip cross-section (0 = sharp corners)
 profile_corner_radius = 2; // [0:0.5:4]
 
-// Inner corner radius — rounds the 4 inner channel corners (0 = sharp corners)
+// Inner corner radius: rounds the 4 inner channel corners (0 = sharp corners)
 inner_corner_radius = 1; // [0:0.25:3]
 
 /* [Attachment] */
@@ -200,7 +200,7 @@ attachment_y = 0; // [-10:0.5:10]
 // Vertical position offset for attachment (Z axis)
 attachment_z = 0; // [-5:0.5:5]
 
-// Cutout depth — 0 cuts through entire height; positive values cut partially from the top surface
+// Cutout depth: 0 cuts through entire height; positive values cut partially from the top surface
 attachment_depth = 0; // [0:0.5:10]
 
 /* [Quality] */
