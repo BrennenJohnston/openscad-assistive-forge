@@ -263,9 +263,9 @@ self.onmessage = async (event) => {
       }
     } else {
       // Standard keeps the picture's own colors and builds no mask, so a
-      // see-through picture would reach the tracer with its alpha and the tracer
-      // would decide what that meant. It is put on white first, which is what
-      // the person has already seen in every viewer they opened it in.
+      // see-through picture would reach the tracer with its alpha and the
+      // tracer would decide what that meant. It is put on white first, which
+      // is what the person has already seen in every viewer they opened it in.
       const flat = compositeOntoWhite(pixels, makeImageData);
       pixels = flat.imageData;
       // The median for a camera picture, on this road too.

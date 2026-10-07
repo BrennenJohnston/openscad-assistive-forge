@@ -748,10 +748,10 @@ export function createInkControls({
       // Only ever writes the waiting line; setSummary is what clears it.
       // Clearing on the way out would erase a summary that had already landed.
       //
-      // The trace runs in a worker, so the waiting line is visible for as long
-      // as the trace takes, which is the point of having it. Anything waiting on
-      // this element has to wait past the waiting line rather than treat a
-      // change as an answer.
+      // The trace runs in a worker, so the waiting line is visible for as
+      // long as the trace takes, which is the point of having it. Anything
+      // waiting on this element has to wait past the waiting line rather than
+      // treat a change as an answer.
       if (busy) {
         summaryEl.textContent = 'Re-reading the picture…';
         // The run that is starting has not removed anything yet, and the one

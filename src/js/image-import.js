@@ -215,10 +215,10 @@ export async function convertImageDataToSvg(imageData, options = {}) {
   let summary = null;
 
   if (inkAt && inkAt.mode && inkAt.mode !== 'standard') {
-    // `pixels`, not `imageData`: reading the original here would throw away the
-    // downscale above for every ink mode, and an 8 MP picture would be extracted
-    // and traced at full size, three to ten times slower, while the summary
-    // said it had been scaled down.
+    // `pixels`, not `imageData`: reading the original here would throw away
+    // the downscale above for every ink mode, and an 8 MP picture would be
+    // extracted and traced at full size, three to ten times slower, while the
+    // summary said it had been scaled down.
     const stage = inkStage(pixels, inkAt, { makeImageData });
     pixels = stage.pixels;
     summary = stage.summary;

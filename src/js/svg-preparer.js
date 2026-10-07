@@ -1582,16 +1582,16 @@ export function flattenLayers(
   for (let layer = 1; layer <= count; layer++) {
     const forThisLayer = classifiedElements
       .filter((el, i) => (layers[i] || 1) >= layer)
-      // Solid mode, for the bridge-less stencil. There, depth alone decides and
-      // every cut must be one solid region: layer 1's cut is the letter A
-      // including where its counter will be, because the counter is cut at
-      // layer 1 too and only becomes its own shape at layer 2. That is the whole
-      // reason the method needs no bridges - no cut is ever an annulus, so
-      // nothing is ever left connected to nothing.
+      // Solid mode, for the bridge-less stencil. There, depth alone decides
+      // and every cut must be one solid region: layer 1's cut is the letter
+      // A including where its counter will be, because the counter is cut at
+      // layer 1 too and only becomes its own shape at layer 2. That is the
+      // whole reason the method needs no bridges - no cut is ever an annulus,
+      // so nothing is ever left connected to nothing.
       //
-      // Without it the letter A is two subpaths, its counter a hole, and layer 2
-      // is null, because the counter is classified 'hole' and a compound path
-      // with no foreground is nothing.
+      // Without it the letter A is two subpaths, its counter a hole, and
+      // layer 2 is null, because the counter is classified 'hole' and a
+      // compound path with no foreground is nothing.
       //
       // The charm keeps roles on purpose - there a hole IS a hole in the
       // relief, and the walls of a counter must not close over as the stack

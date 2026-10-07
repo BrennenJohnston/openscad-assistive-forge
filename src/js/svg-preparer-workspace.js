@@ -905,12 +905,12 @@ function populateObjectList(
     }
 
     if (layerCount > 0) {
-      // Every shape starts on layer 1. Pre-selecting each shape's nesting depth
-      // would open a Colors logo with 394 of 553 rows on layer 2 and 158 on
-      // layer 3, so the counter inside an R would read "Layer 3" and Apply would
-      // emit a three-layer stack nobody built. Nesting depth decides how many
-      // layers a drawing can offer (layerLimit, below), not what a shape sits
-      // on: a stack is something a person builds.
+      // Every shape starts on layer 1. Pre-selecting each shape's nesting
+      // depth would open a Colors logo with 394 of 553 rows on layer 2 and 158
+      // on layer 3, so the counter inside an R would read "Layer 3" and Apply
+      // would emit a three-layer stack nobody built. Nesting depth decides how
+      // many layers a drawing can offer (layerLimit, below), not what a shape
+      // sits on: a stack is something a person builds.
       layers.push(1);
 
       const layerSelect = document.createElement('select');
@@ -2093,14 +2093,14 @@ export function createSvgPrepWorkspace(containerEl) {
       if (isCompound && !anyOffset) {
         resultSvgString = concatenateSubpaths(withOffsets, currentSvgMeta);
       } else if (canUseWorker()) {
-        // The order-independent ring flatten, never the pairwise chain, and off
-        // this thread, because it is the most expensive thing this app does to a
-        // drawing.
+        // The order-independent ring flatten, never the pairwise chain, and
+        // off this thread, because it is the most expensive thing this app does
+        // to a drawing.
         setRenderBusy(true);
-        // There is no result to apply until the combine lands, which takes seconds
-        // of worker start-up and work, and Apply's handler refuses a null result
-        // by returning - so an enabled button would do nothing at all when
-        // pressed.
+        // There is no result to apply until the combine lands, which takes
+        // seconds of worker start-up and work, and Apply's handler refuses a
+        // null result by returning - so an enabled button would do nothing at
+        // all when pressed.
         setApplyEnabled(false, combiningSentence());
         try {
           const size = flattenSizeOf();
@@ -2180,8 +2180,8 @@ export function createSvgPrepWorkspace(containerEl) {
       if (!resultSvgString) {
         currentResult = null;
         setApplyEnabled(false);
-        // The pane keeps the drawing rather than emptying: there is no result to
-        // show, and showing nothing at all is worse.
+        // The pane keeps the drawing rather than emptying: there is no result
+        // to show, and showing nothing at all is worse.
         renderStandInResult();
         liveRegion.textContent = 'No shapes included. The preview is empty.';
         return;
@@ -2695,8 +2695,8 @@ export function createSvgPrepWorkspace(containerEl) {
       // Somebody upstream has already spent this press. The surface's focus
       // trap listens on the document in the capture phase and calls
       // preventDefault before its own handler runs, and it does not stop the
-      // event - so without this, one Escape would shut the row's menu on the way
-      // down and then close the whole editor on the way up.
+      // event - so without this, one Escape would shut the row's menu on the
+      // way down and then close the whole editor on the way up.
       if (e.defaultPrevented) return;
       e.preventDefault();
       if (closeOpenMenu()) return;
@@ -3216,7 +3216,7 @@ export function createSvgPrepWorkspace(containerEl) {
     measureThickness();
   }
 
-  /** Push the current layer array back into the selects, then refresh the summary. */
+  /** Push the layer array back into the selects, then refresh the summary. */
   function applyLayerSelections() {
     if (!layersEnabled || layerCount === 0) {
       updateLayerSummary();
@@ -3595,8 +3595,8 @@ export function createSvgPrepWorkspace(containerEl) {
             offsetInput.value = '0';
             offsetInput.disabled = role === 'ignore';
           }
-          // The Layer column goes back to 1 with the rest, or Reset would leave a
-          // stack standing that the sentence never mentions.
+          // The Layer column goes back to 1 with the rest, or Reset would
+          // leave a stack standing that the sentence never mentions.
           const layerSelect = item.querySelector('.svg-prep-layer-select');
           if (layerSelect) {
             layerSelect.value = '1';
@@ -3604,10 +3604,10 @@ export function createSvgPrepWorkspace(containerEl) {
           }
           const nameSpan = item.querySelector('.svg-prep-object-name');
           const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
-          // The word on the control, not the value behind it. Four places write
-          // this label, and all four must say the same word: "role: foreground"
-          // would be spoken only to the people who cannot see the control that says
-          // otherwise.
+          // The word on the control, not the value behind it. Four places
+          // write this label and all four must say the same word, or the
+          // people who cannot see the control would hear "role: foreground"
+          // where everyone else reads "On".
           item.setAttribute(
             'aria-label',
             `${nameText}, ${roleWord(role, currentRoleOptions())}`
@@ -3865,9 +3865,9 @@ export function createSvgPrepWorkspace(containerEl) {
         given.nodes.length === liveElements.length
           ? given
           : buildNestingTree(liveElements);
-      // The layers are height classes a person assigns, so a host with layers
-      // offers all three whatever the drawing nests to; capped by nesting depth,
-      // a line drawing would offer only one or two.
+      // The layers are height classes a person assigns, so a host with
+      // layers offers all three whatever the drawing nests to; capped by
+      // nesting depth, a line drawing would offer only one or two.
       layerCount = LAYER_CAP;
     } else {
       nestingTree = null;

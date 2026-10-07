@@ -235,9 +235,10 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       return await job.run({
         imageData,
         settings: ink,
-        // A trace with more shapes than the editor lists is turned away here, the
-        // moment the worker is done, rather than parsed for seconds in showSvg
-        // and refused there with a vector editor's advice for a photograph.
+        // A trace with more shapes than the editor lists is turned away here,
+        // the moment the worker is done, rather than parsed for seconds in
+        // showSvg and refused there with a vector editor's advice for a
+        // photograph.
         refuse: ({ svg }) => {
           const count = countTracedShapes(svg);
           return isOverListCap(count)
@@ -478,8 +479,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         currentSourceDataUrl = before.sourceDataUrl;
         if (error instanceof TraceCancelled) return;
         if (error instanceof TraceRefused) {
-          // The crop traced into more than the editor lists. The sentence is the
-          // whole report; the waiting line in the panel would otherwise stand.
+          // The crop traced into more than the editor lists. The sentence is
+          // the whole report; the waiting line in the panel would otherwise
+          // stand.
           fail(error.sentence);
           if (inkControls) inkControls.setFailed(error.sentence);
           return;
