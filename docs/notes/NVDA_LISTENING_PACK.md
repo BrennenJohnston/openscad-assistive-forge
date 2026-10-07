@@ -100,7 +100,7 @@ ask for it.
 | Choosing a picture reads it, then says the file's name, its size and "Ready to convert" — and does **not** start converting | ☐ | |
 | The quick look's two sentences (what the picture looks like, and about how long converting will take) are findable by browsing, and are not announced over anything | ☐ | |
 | "Start conversion" is a real button with that name, and Enter starts it | ☐ | |
-| While it runs, the bar is a progress bar named "Converting your picture", and the stage sentence under it changes without announcing each change (DP-32: one action, one announcement) | ☐ | |
+| While it runs, the bar is a progress bar named "Converting your picture", and the stage sentence under it changes without announcing each change (one action, one announcement) | ☐ | |
 | Cancel is reachable by Tab while the bar is up, and pressing it says "Conversion canceled" once | ☐ | |
 | Letting it finish says "Converted: N shapes" once; a one-shape picture says "1 shape", not "1 shapes" | ☐ | |
 | When a credit line came off, that is said once with the count, and "Undo" is the next control after the sentence | ☐ | |
@@ -117,8 +117,8 @@ ask for it.
 Open a charm design, give it a drawing, press **Edit Drawing**. Tab into the
 shapes panel and walk the rows.
 
-Three of the four things this section used to warn about were fixed at
-DP-42 P0b, so do not go listening for them. What changed, in case you hear
+Three of the four things this section used to warn about are fixed, so
+do not go listening for them. What changed, in case you hear
 the old words anywhere and want to know they are wrong:
 
 - the list is named **"Shapes"** now, not "SVG objects"

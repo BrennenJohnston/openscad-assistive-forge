@@ -237,7 +237,7 @@ row that says 474 can be followed to the street it is on. The rows that matter:
 | trunks / lamp posts inside a roadway | a prop standing on the tarmac. Both are counted from the obstacle's own square side, never lumped together: a 0.15 m lamp pole is not a tree, and a count that mixes them is a wrong number with a right shape |
 | traffic vs parked, parked vs parked, traffic vs traffic | two cars occupying the same ground, as a true rotated-rectangle overlap rather than a distance |
 | people in a roadway, no crossing | somebody standing in the road where the map records no crossing |
-| floating buildings, roofs solid from the ground | CW-76's subject, measured here so that release inherits a before number it did not take itself |
+| floating buildings, roofs solid from the ground | measured here so the work that grounds them starts from a before number |
 
 **It never re-implements a placement.** Every position it judges comes out of
 the builders themselves - `buildStreetProps` writes down every car it places,
@@ -558,14 +558,14 @@ pictures beside each option. The answers:
 
 A facade used to be picked by `hash % 9`, with a mapped `building:material`
 narrowing the choice where there was one, and then laid onto the wall in world
-meters. Two things followed, and CW-73 removes both.
+meters. Two things followed, and the facade grammar removes both.
 
 **The map data said which building was which, and nothing read it.** Across the
 four shipped extracts there are 605 `building=apartments`, 266 `commercial`,
 139 `retail`, 91 `office` and 32 `hotel`, and a block of flats had exactly the
 same chance of a curtain wall as an office tower. The type now chooses a
 FAMILY, the material narrows it, and the building's own hash still picks which
-face inside it - so the variety CW-34 bought is kept while the kind of building
+face inside it - so the variety the hash gives is kept while the kind of building
 becomes legible.
 
 | family | `building=*` | glazing | story |
@@ -624,7 +624,7 @@ The storefront picker looked at POI NODES within 35 meters and at nothing else.
 A building carrying `amenity=library` was never asked what it was, so the
 Central Library's ground floor - and 130 other grounded Seattle buildings, and
 27, 44 and 9 in the other three cities - came from a hash of the building's
-index. CW-53 had already carved out one exception, `tourism=hotel`, because a
+index. One exception was already carved out, `tourism=hotel`, because a
 hotel is a way in every extract and the POI index only ever sees nodes; that
 exception is now the rule.
 
@@ -688,7 +688,7 @@ within a share of that street's own interval.
 
 **Seattle carries a surveyed register.** Seattle City Light publishes every
 pole it owns with a "has streetlight" flag, and I authorized its use
-(CW-Q76) knowing the publisher states no license. What it holds inside the
+knowing the publisher states no license. What it holds inside the
 baked circle:
 
 | | |
@@ -735,8 +735,8 @@ pedestrian street takes luminaires every 60 ft (18 m).
 
 ★ **The wide-street rule cannot fire in any of these four cities, and the code
 says so out loud.** Every class this game lights is 14 m or narrower, and the
-only class wider than 15.2 m - motorway - has been deliberately unlit since
-CW-18. The rule is written against the WIDTH rather than the class name so a
+only class wider than 15.2 m - motorway - is deliberately unlit. The rule
+is written against the width rather than the class name so a
 future change reaches it, and a unit test drives it with a synthetic 18 m road,
 because a rule nothing exercises is a rule nobody has tested.
 
@@ -783,7 +783,7 @@ problem is now fatal.
 
 ### What is behind the characters
 
-Until CW-85 the answer was: nothing. A cell the converter leaves blank is the
+Without a backing the answer is: nothing. A cell the converter leaves blank is the
 page's own black, and the only solid paint in the game is the bright
 reverse-video layer. So a parked car was a car-shaped arrangement of characters
 with the void showing between them, and a wall was a hatch you could see
@@ -881,7 +881,7 @@ looking at a slightly different patch of wall, so the match can come out
 differently, and the character changes although nothing in the city did. That
 is the churn this whole part of the document has been circling: 8 per cent of
 facade cells and 23 per cent of ground cells every single frame, at a walking
-pace. The frame-to-frame memory added in CW-68 does not stop it happening; it
+pace. The frame-to-frame memory does not stop it happening; it
 holds the old character over the top, and the hold is what read as a trail.
 
 The reference this project works from never had the problem, because it chooses

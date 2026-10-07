@@ -39,7 +39,7 @@ export const CITY_LIGHT_PROVENANCE = {
   // Stated plainly because it is the whole reason this needed a decision.
   license:
     'No licence is stated on the publisher catalog page. Used with the ' +
-    'project owner explicit authorisation (CW-Q76, 2026-08-29).',
+    "project owner's explicit authorisation.",
   attribution: 'Streetlight positions: Seattle City Light pole register',
 };
 

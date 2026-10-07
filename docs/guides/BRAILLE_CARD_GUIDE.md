@@ -10,7 +10,7 @@ The Braille Card Designer is a family of three tools that share the same transla
 
 ## What the card makes
 
-A flat card that prints leaning back at 75 degrees, the angle CHI 2024 research found fastest and most comfortable to read (near-vertical printing moves layer seams off the finger-contact surface). A row of break-away support fins stands behind the card so the whole thing prints support-free as one fused STL. After printing, snap the fins off and the card is ready.
+A flat card that prints leaning back at 75 degrees. In CHI 2024 research, braille printed at 75 degrees or vertical was read faster than flat braille and rated more comfortable, and near-vertical printing also moves layer seams off the finger-contact surface. A row of break-away support fins stands behind the card so the whole thing prints support-free as one fused STL. After printing, snap the fins off and the card is ready.
 
 Good uses:
 

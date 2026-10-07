@@ -28,7 +28,7 @@ describe('provenance', () => {
     // The source states no licence, and the file must say so: carrying the
     // poles without saying it would be the dishonest version.
     expect(CITY_LIGHT_PROVENANCE.license).toMatch(/no licence is stated/i)
-    expect(CITY_LIGHT_PROVENANCE.license).toContain('CW-Q76')
+    expect(CITY_LIGHT_PROVENANCE.license).toMatch(/explicit authorisation/i)
     expect(CITY_LIGHT_PROVENANCE.publisher).toBe('City of Seattle')
     expect(CITY_LIGHT_PROVENANCE.service).toContain('arcgis.com')
   })

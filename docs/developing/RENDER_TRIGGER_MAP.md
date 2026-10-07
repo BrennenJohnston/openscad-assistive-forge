@@ -42,7 +42,7 @@ Before executing any `renderPreview()` call, `AutoPreviewController` checks `isN
 
 ---
 
-## Publish-Before-Render Contract (UF-18)
+## Publish-Before-Render Contract
 
 **Added 2026-08-13. Audited against `src/main.js`, `src/js/parameter-reconciler.js`, `src/js/render-controller.js`.**
 
@@ -68,7 +68,7 @@ Two rules that are easy to break:
 
 ### Known gaps
 
-The render queue (`renderQueue.setProject`) and comparison mode (`comparisonController.setProject`) read `uploadedFile.content` without publishing first — the same defect class as D-29, which UF-18 fixed for Render and Export.
+The render queue (`renderQueue.setProject`) and comparison mode (`comparisonController.setProject`) read `uploadedFile.content` without publishing first, the same class of defect the contract above closes for Render and Export.
 
 ---
 

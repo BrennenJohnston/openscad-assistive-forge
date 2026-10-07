@@ -25,9 +25,10 @@
 //
 // PRINT ORIENTATIONS — every shape exports already oriented for printing
 //  • Angled (default for the pendant shapes): the charm leans back at
-//    face_angle_deg (75 degrees = the angle CHI 2024 research found fastest
-//    and most comfortable to read, because near-vertical printing moves the
-//    layer seams off the finger-contact surface). The bottom edge is sunk
+//    face_angle_deg (75 degrees: in CHI 2024 research, braille printed at
+//    75 degrees or vertical was read faster than flat and rated more
+//    comfortable, and near-vertical printing moves the layer seams off the
+//    finger-contact surface). The bottom edge is sunk
 //    bed_contact_mm into the bed and trimmed flat, so the first layer is a
 //    real contact strip instead of a knife edge. A single slim break-away
 //    support fin stands behind the charm, joined by tiny snap-off bridges
