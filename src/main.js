@@ -6001,7 +6001,7 @@ async function initApp() {
 
     if (!indicator || !memoryInfo) return;
 
-    // D-227: the indicator is a polite live region and NVDA says its tooltip
+    // The indicator is a polite live region and NVDA says its tooltip
     // whenever it is written, so a poll that finds the same value must leave
     // the text, the classes and the tooltip untouched.
     if (indicator.classList.contains('hidden')) {
@@ -6014,7 +6014,7 @@ async function initApp() {
       text.textContent = label;
     }
 
-    // BR-4: no fictional percent. Warning state is driven by an absolute-MB
+    // No fictional percent. Warning state is driven by an absolute-MB
     // threshold so the indicator turns "warning" only when the WASM heap
     // buffer is genuinely large. The MemoryMonitor decides the badge
     // separately via memoryInfo.usedMB.
@@ -6033,7 +6033,7 @@ async function initApp() {
     }
   }
 
-  // memoryPollInterval is now declared at the top of initApp() to avoid TDZ
+  // memoryPollInterval is declared at the top of initApp() to avoid TDZ
   function startMemoryPolling() {
     if (memoryPollInterval) return;
 
@@ -6063,7 +6063,7 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
-    // BUG-B fix: handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
+    // Handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
     // generate=Customizer Settings (or similar non-previewable mode). The previous mesh
     // must be cleared so the 3D canvas is empty, matching the expectation that
     // "Customizer Settings" produces no visible geometry.
@@ -6117,8 +6117,8 @@ async function initApp() {
     }
 
     // A library the model needs did not resolve. Say that, because the empty
-    // geometry handled below is its CONSEQUENCE: the old guidance sent the
-    // user hunting through parameters for a cause that was a checkbox (D-42).
+    // geometry handled below is its consequence, and its guidance would send
+    // the user hunting through parameters for a cause that is a checkbox.
     if (findMissingLibrary(`${msg}\n${detailsStr}`)) {
       if (previewManager) {
         previewManager.clear();
@@ -6132,7 +6132,7 @@ async function initApp() {
 
     // One of the model's own checks (an assert()) stopped it. Its message
     // is the cause; the empty geometry handled below is only its
-    // consequence, whose guidance sent people looking for an option (D-224).
+    // consequence, whose guidance would send people looking for an option.
     // Announced once, assertively, as an error.
     const failedCheck = findFailedCheck(`${msg}\n${detailsStr}`);
     if (failedCheck) {
@@ -6496,8 +6496,8 @@ async function initApp() {
       const fileSizeHeavy = scadContent.length > 15000; // 15KB+ SCAD file
       estimatedSlow =
         estimate.warning ||
-        estimate.seconds >= 8 || // Lowered from 12s to 8s
-        estimate.complexity >= 80 || // Lowered from 120 to 80
+        estimate.seconds >= 8 ||
+        estimate.complexity >= 80 ||
         fileSizeHeavy;
     }
 
@@ -6552,7 +6552,7 @@ async function initApp() {
     previewQualityMode = getSelectedPreviewQualityMode();
     adaptivePreviewMemo = { key: null, info: null };
 
-    // DP-38 P2. Read here rather than written into the select, so the
+    // Read here rather than written into the select, so the
     // person's own choice is untouched and comes back by itself the moment
     // the session ends.
     if (editorDraftQuality && previewQualityMode !== 'auto') {
@@ -6661,13 +6661,13 @@ async function initApp() {
       (state.complexityAnalysis?.warnings?.length ?? 0) > 0;
     if (!isComplex) return;
     lastComplexityAdvisedFile = fileName;
-    // D-202: the advisory fires before the first preview, so it cannot know
-    // the preview will be slow, and it said so of a model that draws in 2 s.
+    // The advisory fires before the first preview, so it cannot know the
+    // preview will be slow, and must not say so of a model that draws in 2 s.
     const advisoryMsg =
       'This model has many parts. If previews are slow, switch Preview ' +
       'quality to "Performance (auto)".';
-    // updateStatus announces on its own; a second call here said the whole
-    // advisory twice.
+    // updateStatus announces on its own; a second call here would say the
+    // whole advisory twice.
     updateStatus(advisoryMsg, 'info');
   }
 
@@ -6719,7 +6719,7 @@ async function initApp() {
     });
   }
 
-  // Status bar visibility. The control is View > Show Status Bar (UF-11);
+  // Status bar visibility. The control is View > Show Status Bar;
   // boot only restores the persisted choice here.
   function setPreviewStatusBarShown(shown) {
     const bar = document.getElementById('previewStatusBar');
@@ -7015,7 +7015,7 @@ async function initApp() {
   }
 
   /**
-   * The live swap (UF-14 P3): re-read the main.js-owned PER-UI surfaces
+   * The live swap: re-read the main.js-owned per-UI surfaces
    * from the newly active namespace and re-apply them — status-bar
    * visibility, model color override, the appearance sliders, and
    * auto-rotate (via the overlay/grid controller). Runs on every
@@ -7074,10 +7074,8 @@ async function initApp() {
   function getThemeDefaultColor() {
     const root = document.documentElement;
     const uiVariant = root.getAttribute('data-ui-variant');
-    // themeManager exposes highContrast as a property; the method call this
-    // used to make (isHighContrastEnabled) never existed and threw the
-    // moment UF-14's live swap became the first caller to actually reach
-    // this line (every older path short-circuited on the picker's value).
+    // themeManager exposes highContrast as a property; there is no
+    // isHighContrastEnabled method.
     const highContrast = themeManager.highContrast === true;
 
     // Check for mono variant first
@@ -7089,7 +7087,7 @@ async function initApp() {
     const activeTheme = themeManager.getActiveTheme();
     const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
 
-    // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
+    // Match PREVIEW_COLORS from preview.js (Cornfield gold)
     const PREVIEW_COLORS = {
       light: 0xf9d72c,
       dark: 0x4d9fff,
@@ -7157,7 +7155,7 @@ async function initApp() {
       [PREVIEW_STATE.ERROR]: '✗ Preview failed',
     };
     previewStateIndicator.textContent = stateMessages[state] || state;
-    // DP-53: a draft of the drawing is not the design, and the badge says so
+    // A draft of the drawing is not the design, and the badge says so
     // for as long as it is what is on screen.
     const draftStands =
       state === PREVIEW_STATE.CURRENT &&
@@ -7276,7 +7274,7 @@ async function initApp() {
    * @param {boolean} deferIfNotReady - If true, will attempt to init WASM first if not ready
    */
   async function initAutoPreviewController(deferIfNotReady = false) {
-    // D-181: renderController exists from the first line of
+    // renderController exists from the first line of
     // ensureWasmInitialized, long before its worker can render. A controller
     // made in that window previews at once, fails ("Worker not ready") and
     // tells the person "Preview failed" about a project that never had a
@@ -7327,7 +7325,7 @@ async function initApp() {
           previewQualityMode === 'auto' ? resolveAdaptiveCacheKey : null,
         resolvePreviewParameters:
           previewQualityMode === 'auto' ? resolveAdaptiveParameters : null,
-        // Render / Generate / export. Playback stops and stays stopped (F5):
+        // Render / Generate / export. Playback stops and stays stopped:
         // two render requests would queue behind each other on the one
         // blocking worker and make both slow.
         onFullRenderStart: () => getAnimatePanel()?.pauseForExternalRender(),
@@ -7378,7 +7376,7 @@ async function initApp() {
           ) {
             window.updateConsoleOutput(consoleOutput);
           }
-          // DP-54 (D-144): a model that says how wide it fits a design tells
+          // A model that says how wide it fits a design tells
           // the file control, so the drawing editor measures against the size
           // the design really prints at.
           const fit = consoleOutput
@@ -7391,11 +7389,10 @@ async function initApp() {
         onProgress: (percent, message, type) => {
           // Simplified status: just show what's happening, no confusing percentages
           if (type === 'preview') {
-            // DP-32 (one action, one announcement): an auto-preview fires on
-            // every parameter change and this progress callback repeats -
-            // measured through the live region, one change spoke "Rendering
-            // preview..." four times before "Preview ready". The progress
-            // line stays visible on the status surfaces; the completion (or
+            // One action, one announcement: an auto-preview fires on every parameter
+            // change and this progress callback repeats, so one change would speak
+            // "Rendering preview..." several times before "Preview ready". The
+            // progress line stays visible on the status surfaces; the completion (or
             // the error) is the news and still speaks.
             updateStatus('Rendering preview...', 'default', {
               announce: false,
@@ -7538,7 +7535,7 @@ async function initApp() {
 
   /**
    * Announce render-state transitions to every surface that gates on them
-   * (the Classic STL buttons, U-8b). Dispatched from inside
+   * (the Classic STL buttons). Dispatched from inside
    * updatePrimaryActionButton() — the one place that computes the state —
    * so the event can never drift from what the transformer shows.
    * @param {boolean} hasFullRender
@@ -7549,10 +7546,10 @@ async function initApp() {
     );
   }
 
-  // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
+  // Import shared validation schemas (FILE_SIZE_LIMITS is imported at top of initApp() to avoid TDZ)
   ({ validateFileUpload } = await import('./js/validation-schemas.js'));
 
-  // Initialize file handler controller (extracted from main.js)
+  // Initialize file handler controller
   fileHandler = initFileHandler({
     getPreviewManager: () => previewManager,
     setPreviewManager: (pm) => {
@@ -7602,7 +7599,7 @@ async function initApp() {
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
   // IMPORTANT: Skip draft restoration if a manifest or project URL is specified --
-  // the URL intent takes priority over any cached draft (fixes race condition)
+  // the URL intent takes priority over any cached draft
   const hasManifestParam = urlParams.get('manifest');
   const hasProjectParam = urlParams.get('project') || urlParams.get('scad');
   const draft =
@@ -7888,17 +7885,6 @@ async function initApp() {
   function announceToScreenReader(message) {
     stateManager.announceChange(message);
   }
-
-  // Companion file functions (detectIncludeUse, detectRequiredCompanionFiles,
-  // autoSaveCompanionFiles, updateCompanionSaveButton, renderProjectFilesList,
-  // syncOverlayWithScreenshotParam, autoSelectOverlaySource, getFileIcon,
-  // handleProjectFileAction, handleAddCompanionFile, removeProjectFile,
-  // editProjectFile, applyTextFileEditorChanges, updateProjectFilesUI)
-  // moved to companion-files-controller.js
-
-  // showProcessingOverlay moved to file-handler.js
-
-  // handleFile moved to file-handler.js
 
   // ── Unified upload routing (welcome zone + file picker) ─────────────────
 
