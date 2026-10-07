@@ -2073,11 +2073,10 @@ export function createDrawingEditor({
   });
 
   /**
-   * How many loose pieces a plate lists in full. On a cat picture traced at
-   * seven colors the masks do not tile, and 567 sliver gaps between them are
-   * real islands - 236 on plate 1 alone. Listing every
-   * one is a wall nobody can walk with a screen reader, so each plate shows
-   * its largest few and counts the rest; the section's count stays true.
+   * How many loose pieces a plate lists in full. A traced picture can leave
+   * hundreds of loose pieces on a plate, and listing every one is a wall
+   * nobody can walk with a screen reader, so each plate shows its largest few
+   * and counts the rest; the section's count stays true.
    */
   const ISLAND_LIST_CAP = 8;
 

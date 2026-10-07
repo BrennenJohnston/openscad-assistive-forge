@@ -1,5 +1,5 @@
 /**
- * Is there enough material around the hole? (DP-11)
+ * Is there enough material around the hole?
  *
  * When a pendant takes its shape from someone's own drawing, the outline is
  * whatever they drew, and "the top middle" is no longer a safe place to put a
@@ -9,7 +9,7 @@
  * breaking out of the shape or leaving a wall too thin to survive - and says
  * so in a sentence rather than a code.
  *
- * IT NEVER MOVES THE HOLE. A hole that does not fit is reported with its
+ * It never moves the hole. A hole that does not fit is reported with its
  * numbers so the person can decide. Sliding it somewhere legal would put the
  * ring where they did not choose, on a pendant shaped like their own drawing,
  * and they would have no idea it had happened.
@@ -23,7 +23,7 @@ import { polygonFromPathData, boundsOf, holeFits } from './svg-nesting.js';
  * The thinnest wall worth printing between a hole and an edge.
  *
  * A safety-critical printability value: below this the ring tears out the
- * first time the charm is pulled. Not to be changed without the owner.
+ * first time the charm is pulled.
  */
 export const MIN_WEB_MM = 1.2;
 
@@ -115,7 +115,6 @@ export function checkHolePlacement({
 
 /**
  * The warning, said to a person.
- * STRINGS: owner review pending (accessibility-critical, DP-R1 text pack).
  */
 function messageFor(result, webMm) {
   const need = result.required.toFixed(1);
