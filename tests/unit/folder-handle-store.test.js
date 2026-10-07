@@ -1,8 +1,8 @@
 /**
- * Tests for the F35 Phase A folder-handle persistence layer.
+ * Tests for the folder-handle persistence layer.
  *
  * IndexedDB calls go through jsdom's built-in IDB shim (vitest's
- * `jsdom` environment provides one via `fake-indexeddb` is NOT
+ * `jsdom` environment provides one via `fake-indexeddb` is not
  * required because vitest uses jsdom which ships its own subset).
  * Where the shim is missing pieces we inject a tiny in-memory
  * factory.
@@ -133,7 +133,7 @@ function makeMemoryIdb() {
   };
 }
 
-describe('folder-handle-store (F35 Phase A)', () => {
+describe('folder-handle-store', () => {
   let memIdb;
 
   beforeEach(() => {
@@ -271,14 +271,14 @@ describe('folder-handle-store (F35 Phase A)', () => {
       const listed = await listFolderHandles({ idbFactory: memIdb });
 
       expect(listed).toHaveLength(3);
-      // Each key must carry ITS OWN handle — the pairing is the point.
+      // Each key must carry its own handle — the pairing is the point.
       const byKey = Object.fromEntries(listed.map((e) => [e.key, e.handle]));
       expect(byKey[ROOT_KEY]).toEqual(root);
       expect(byKey['fh-a']).toEqual(linkedA);
       expect(byKey['fh-b']).toEqual(linkedB);
     });
 
-    it('reads keys and values inside ONE transaction', async () => {
+    it('reads keys and values inside one transaction', async () => {
       await saveFolderHandle(
         { name: 'one', kind: 'directory' },
         { idbFactory: memIdb }

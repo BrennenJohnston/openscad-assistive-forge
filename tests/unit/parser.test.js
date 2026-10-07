@@ -412,7 +412,7 @@ describe('Parameter Parser', () => {
       expect(result.parameters.scale_factor.isGlobal).toBe(true)
       expect(result.parameters.scale_factor.group).toBe('General') // Assigned to General for storage
       
-      // Regular parameters should NOT have isGlobal
+      // Regular parameters should not have isGlobal
       expect(result.parameters.width.isGlobal).toBeUndefined()
       expect(result.parameters.height.isGlobal).toBeUndefined()
     })
@@ -559,7 +559,7 @@ describe('Parameter Parser', () => {
       expect(result.parameters.shape).toBeDefined()
       expect(result.parameters.shape.group).toBe('Options')
       
-      // enum values are now objects with { value, label, hasLabel }
+      // enum values are objects with { value, label, hasLabel }
       if (result.parameters.shape.enum) {
         const enumValues = result.parameters.shape.enum.map(item => item.value)
         expect(enumValues).toContain('round')
@@ -1237,7 +1237,7 @@ describe('Parameter Parser', () => {
   })
 
   // =========================================================================
-  // Keyguard-specific annotation pattern tests (Stakeholder Validation Plan)
+  // Keyguard-specific annotation pattern tests
   // =========================================================================
   describe('Keyguard Annotation Patterns', () => {
     it('should extract 90+ options from a large enum (type_of_tablet)', () => {
@@ -1324,7 +1324,7 @@ describe('Parameter Parser', () => {
 
     it('should parse labeled enum options with colons (known parser behavior)', () => {
       // From keyguard_v75.scad line 598
-      // NOTE: The parser currently treats [1:10mm..., 2:16mm..., 3:20mm...] as a range
+      // The parser treats [1:10mm..., 2:16mm..., 3:20mm...] as a range
       // because each colon-separated segment starts with a number that parseFloat() accepts.
       // This is a known limitation -- the parser falls into the range branch first,
       // but since it has 4+ parts it doesn't match [min:max] or [min:step:max],
@@ -1364,7 +1364,7 @@ describe('Parameter Parser', () => {
       expect(result.hiddenParameters.MW_version).toBeDefined()
       expect(result.hiddenParameters.fudge).toBeDefined()
 
-      // Should NOT appear in regular parameters
+      // Should not appear in regular parameters
       expect(result.parameters.keyguard_designer_version).toBeUndefined()
       expect(result.parameters.MW_version).toBeUndefined()
       expect(result.parameters.fudge).toBeUndefined()
@@ -1451,7 +1451,7 @@ describe('Parameter Parser', () => {
     })
 
     // =====================================================================
-    // CRITICAL: Boolean vs String "yes"/"no" Type Detection
+    // Boolean vs string "yes"/"no" type detection
     // These tests verify the parser correctly distinguishes between:
     // - Boolean params: MW_version = false;  → type: 'boolean'
     // - String dropdown params: expose_home_button = "yes"; //[yes,no]  → type: 'string'
@@ -1460,7 +1460,7 @@ describe('Parameter Parser', () => {
     // since OpenSCAD's `if (expose_home_button == "yes")` requires a string.
     // =====================================================================
 
-    it('should detect string "yes"/"no" dropdown as type: string, NOT boolean', () => {
+    it('should detect string "yes"/"no" dropdown as type: string, not boolean', () => {
       const scad = `
         /*[Options]*/
         expose_home_button = "yes"; //[yes,no]
@@ -1503,7 +1503,7 @@ describe('Parameter Parser', () => {
       expect(param.default).toBe(true)
     })
 
-    it('should NOT confuse string "no" dropdown with boolean false', () => {
+    it('should not confuse string "no" dropdown with boolean false', () => {
       const scad = `
         /*[Options]*/
         expose_status_bar = "no"; //[yes,no]
@@ -1512,7 +1512,7 @@ describe('Parameter Parser', () => {
       `
       const result = extractParameters(scad)
 
-      // All three should be string type, NOT boolean
+      // All three should be string type, not boolean
       expect(result.parameters.expose_status_bar.type).toBe('string')
       expect(result.parameters.expose_status_bar.default).toBe('no')
 
@@ -1567,7 +1567,7 @@ describe('Parameter Parser', () => {
       expect(result.parameters.status_bar_height.unit).toBe('mm')
     })
 
-    it('should NOT let tab unit override explicit comment annotation', () => {
+    it('should not let tab unit override explicit comment annotation', () => {
       const scad = `
         /*[Dimensions in px]*/
         real_height = 10; // Height in mm [0:100]
@@ -1577,7 +1577,7 @@ describe('Parameter Parser', () => {
       expect(result.parameters.real_height.unit).toBe('mm')
     })
 
-    it('should NOT let tab unit override name-suffix inference', () => {
+    it('should not let tab unit override name-suffix inference', () => {
       const scad = `
         /*[Layout in px]*/
         rotation_angle = 45; // [0:360]
@@ -1653,7 +1653,7 @@ describe('Parameter Parser', () => {
       `
       const result = extractParameters(scad)
 
-      // First assignment captured but should have NO annotation
+      // First assignment captured but should have no annotation
       if (result.parameters.x25) {
         expect(result.parameters.x25.minimum).toBeUndefined()
         expect(result.parameters.x25.maximum).toBeUndefined()

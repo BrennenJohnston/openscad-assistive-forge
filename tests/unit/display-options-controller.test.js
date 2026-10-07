@@ -1,19 +1,15 @@
 /**
  * Regression tests for show-edges overlay refresh behavior.
  *
- * Bug 1: when "Show Edges" was enabled, the edge overlay stayed at its
- * original geometry after parameter changes or project switches because
- * refreshOverlays() was never called after model loads in non-HFM paths.
- *
- * Bug 2 (desync): the overlay used to be scene-parented with a one-time
- * copied transform, so any later mesh movement left it floating in the
- * wrong place. It is now parented to the mesh itself.
- *
- * Bug 3 (never attached): init() runs during app startup but the
- * PreviewManager is not constructed until the first model loads, so the
- * one-shot listener registration silently no-opped and nothing ever
- * refreshed. connectPreviewManager() is now public and idempotent, and
- * file-handler.js calls it once the manager exists.
+ * Three ways the overlay can go wrong, each guarded here: the overlay can
+ * stay at its original geometry after parameter changes or project
+ * switches unless refreshOverlays() runs after every model load (non-HFM
+ * paths included); a scene-parented overlay with a one-time copied
+ * transform floats in the wrong place once the mesh moves, so it is
+ * parented to the mesh itself; and init() runs during app startup, before
+ * the first model constructs the PreviewManager, so a one-shot listener
+ * registration would silently no-op - connectPreviewManager() is public
+ * and idempotent, and file-handler.js calls it once the manager exists.
  *
  * These tests verify that:
  *  1. refreshOverlays() rebuilds the edges overlay from the current mesh
@@ -77,17 +73,16 @@ function createMockThree() {
       this.position = { copy: vi.fn() };
       this.rotation = { copy: vi.fn() };
       this.scale = { copy: vi.fn() };
-      // Real LineSegments has this; the UF-7 overlay dashes its negative
+      // Real LineSegments has this; the tick overlay dashes its negative
       // ticks and calls it on the real class.
       this.computeLineDistances = vi.fn();
     }),
     AxesHelper: vi.fn(function () {
       this.name = '';
     }),
-    // The axis lines overlay replaced AxesHelper in P12. These mirror what
-    // getThreeModule() actually hands the controller — a mock that carries
-    // more than production does is how the axis-tick overlay kept 20 green
-    // tests while throwing on every real attempt.
+    // These mirror what getThreeModule() actually hands the controller: a
+    // mock that carries more than production does would keep tests green
+    // while the overlay throws on every real attempt.
     Group: vi.fn(function () {
       this.name = '';
       this.children = [];
@@ -113,9 +108,9 @@ function createMockThree() {
       this.name = '';
       this.computeLineDistances = vi.fn();
     }),
-    // The three sprite classes getThreeModule() gained in PR #59 — the tick
-    // overlay throws without them, which is the transient failure U-3's
-    // non-persisting failure path is tested against (delete one to break).
+    // The three sprite classes getThreeModule() carries - the tick overlay
+    // throws without them, which is the transient failure the non-persisting
+    // failure path is tested against (delete one to break).
     CanvasTexture: vi.fn(function (canvas) {
       this.canvas = canvas;
       this.needsUpdate = false;
@@ -426,7 +421,7 @@ describe('DisplayOptionsController — post-load listener registration', () => {
 });
 
 // ============================================================================
-// F20 — axis distance markings overlay
+// Axis distance markings overlay
 // ============================================================================
 
 function makeFatThreeMock() {
@@ -473,7 +468,7 @@ function makeFatThreeMock() {
       this.geometry = geometry;
       this.material = material;
       this.name = '';
-      // Real LineSegments has this; the UF-7 overlay calls it on its
+      // Real LineSegments has this; the tick overlay calls it on its
       // dashed negative ticks.
       this.computeLineDistances = vi.fn();
     }
@@ -782,8 +777,8 @@ describe('DisplayOptionsController — connectPreviewManager()', () => {
     ctrl.connectPreviewManager(pm);
 
     expect(mockThree.EdgesGeometry).toHaveBeenCalledWith(mockMesh.geometry, 15);
-    // P12 replaced AxesHelper with the axis-lines overlay, which owns a group
-    // and a dispose() rather than being a bare helper object.
+    // The axis-lines overlay owns a group and a dispose() rather than being a
+    // bare helper object.
     expect(pm.scene.add).toHaveBeenCalledWith(ctrl._axesOverlay.group);
     expect(ctrl._axesOverlay.group.children).toHaveLength(6);
   });
@@ -1017,7 +1012,7 @@ describe('DisplayOptionsController — edge budget', () => {
   });
 });
 
-describe('DisplayOptionsController — U-3: axis ticks survive failures and heal', () => {
+describe('DisplayOptionsController — axis ticks survive failures and heal', () => {
   let ctrl;
   let mockThree;
   let mockPm;
@@ -1034,19 +1029,19 @@ describe('DisplayOptionsController — U-3: axis ticks survive failures and heal
     });
   });
 
-  it('a failed overlay build turns the session state off but NEVER persists it', () => {
+  it('a failed overlay build turns the session state off but never persists it', () => {
     localStorage.setItem('test-display-axisMarks', 'true');
     ctrl.state.axisMarks = true;
     // The transient failure class this guards against: a consumer asking for
-    // a class the module object does not carry. (Was SpriteMaterial before
-    // UF-7 retired the sprite labels; the dashed negative ticks need this.)
+    // a class the module object does not carry (the dashed negative ticks
+    // need this one).
     delete mockThree.LineDashedMaterial;
 
     ctrl.refreshOverlays();
 
     expect(ctrl.state.axisMarks).toBe(false);
-    // The poison that kept the owner's ticks off across sessions: the saved
-    // preference must survive the failure so the next session retries.
+    // Persisting the failure would keep the ticks off across sessions: the
+    // saved preference must survive the failure so the next session retries.
     expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
     expect(localStorage.getItem('test-display-axisMarks--forge')).not.toBe(
       'false'
@@ -1077,12 +1072,11 @@ describe('DisplayOptionsController — U-3: axis ticks survive failures and heal
     expect(tickAdds()).toBeGreaterThan(ticksBefore);
   });
 
-  it('a pre-split poisoned profile heals in Classic through the namespace default (U-3 heir)', () => {
-    // The pre-UF-14 poison: ticks persisted off under the shared key by the
-    // old always-throwing build path. Seeding copies that into the FORGE
+  it('a pre-split poisoned profile heals in Classic through the namespace default', () => {
+    // An older profile can hold ticks persisted off under the shared key by a
+    // build path that always threw. Seeding copies that into the Forge
     // namespace (the user's Forge reality) but never into Classic, whose
-    // desktop default turns axes and ticks back on — the healing the v2
-    // stamp used to do, now with nothing left to poison.
+    // desktop default turns axes and ticks back on.
     localStorage.setItem('test-display-axisMarks', 'false');
 
     document.body.dataset.uiMode = 'classic';
@@ -1110,7 +1104,7 @@ describe('DisplayOptionsController — U-3: axis ticks survive failures and heal
   });
 });
 
-describe('DisplayOptionsController — UF-7 zoom-adaptive distance', () => {
+describe('DisplayOptionsController — zoom-adaptive distance', () => {
   beforeEach(() => {
     resetDisplayOptionsController();
     localStorage.clear();
@@ -1165,7 +1159,7 @@ describe('DisplayOptionsController — UF-7 zoom-adaptive distance', () => {
   });
 });
 
-describe('DisplayOptionsController — edges from the preview worker (DP-52 P4, D-143)', () => {
+describe('DisplayOptionsController — edges from the preview worker', () => {
   let ctrl;
   let mockThree;
   let mockPm;
@@ -1185,7 +1179,7 @@ describe('DisplayOptionsController — edges from the preview worker (DP-52 P4, 
     ctrl.state.edges = true;
   });
 
-  it('★ builds the overlay from the segments the worker made, without three.js EdgesGeometry', () => {
+  it('builds the overlay from the segments the worker made, without three.js EdgesGeometry', () => {
     mockMesh.geometry.userData = {
       edgeSegments: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 0]),
       edgeTotal: 2,
@@ -1214,7 +1208,7 @@ describe('DisplayOptionsController — edges from the preview worker (DP-52 P4, 
     expect(ctrl._edgeStats).toEqual({ total: 3, shown: 2 });
   });
 
-  it('★ while the worker is still at it, the overlay is empty rather than the page held', () => {
+  it('while the worker is still at it, the overlay is empty rather than the page held', () => {
     mockMesh.geometry.userData = { extrasPending: true };
     ctrl.refreshOverlays();
     expect(mockThree.EdgesGeometry).not.toHaveBeenCalled();

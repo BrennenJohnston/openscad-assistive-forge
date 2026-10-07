@@ -14,7 +14,7 @@ import {
   deleteProject,
   getSavedProjectsSummary,
   clearAllSavedProjects,
-  // v2: Folder operations
+  // Folder operations
   createFolder,
   getFolder,
   listFolders,
@@ -23,7 +23,7 @@ import {
   moveFolder,
   getFolderTree,
   getFolderBreadcrumbs,
-  // v2: Project-folder operations
+  // Project-folder operations
   moveProject,
   getProjectsInFolder,
 } from '../../src/js/saved-projects-manager.js';
@@ -385,7 +385,7 @@ describe('Large import batching', () => {
     expect(project.projectFiles['file-74.scad']).toBe('// File 74 content');
   });
 
-  it('does NOT batch when projectFiles count is at or below threshold', async () => {
+  it('does not batch when projectFiles count is at or below threshold', async () => {
     vi.resetModules();
 
     const storeWrites = {};
@@ -450,9 +450,9 @@ describe('Large import batching', () => {
 
   // ==========================================================================
   // Metadata writes must preserve batched storage (touchProject/updateProject)
-  // Regression for the 218MB single-record put that broke 211-file folder
-  // project loads: the batching done by saveProject must never be undone by
-  // later metadata writes.
+  // A single-record put of 218MB would break a 211-file folder project's
+  // load: the batching done by saveProject must never be undone by later
+  // metadata writes.
   // ==========================================================================
 
   function setupBatchingHarness(failFlags = {}) {
@@ -700,8 +700,8 @@ describe('Large import batching', () => {
       .filter((p) => p.id === result.id)
       .pop();
 
-    // Simulate the corruption the old bug produced: batched flag AND a stale
-    // inline copy in the same record.
+    // Simulate a corrupt record: the batched flag and a stale inline copy in
+    // the same record.
     dbInstance
       .transaction(['projects'])
       .objectStore()
@@ -1349,7 +1349,7 @@ describe('Saved Projects Manager', () => {
   });
 
   // ============================================================================
-  // Folder Operations Tests (v2)
+  // Folder Operations Tests
   // ============================================================================
 
   describe('Folder Operations (v2)', () => {

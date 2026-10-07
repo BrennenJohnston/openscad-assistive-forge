@@ -1,5 +1,5 @@
 /**
- * Unit tests for Console Panel Unification (Phase 6 / S-010).
+ * Unit tests for Console Panel Unification.
  *
  * Verifies:
  *   - DEPRECATED and TRACE parsing in ConsolePanel
@@ -267,7 +267,7 @@ describe('ConsolePanel — structured sub-panel coordination', () => {
     expect(structuredPanel.setFilter).toHaveBeenCalledWith('deprecated', false);
   });
 
-  it('_syncStructuredFilters does NOT propagate echo filter', () => {
+  it('_syncStructuredFilters does not propagate echo filter', () => {
     panel._syncStructuredFilters('echo', false);
     expect(structuredPanel.setFilter).not.toHaveBeenCalled();
   });
