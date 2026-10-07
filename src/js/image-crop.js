@@ -1,11 +1,11 @@
 /**
- * Cropping a reference image (DP-5).
+ * Cropping a reference image.
  *
  * A photograph of a page is mostly page. Tracing from it means the useful part
  * is a small rectangle in the middle, and everything else is competing with
  * the model for the same screen. So: choose a rectangle, and get a copy.
  *
- * A COPY, always. The original stays in the store untouched, because a crop is
+ * A copy, always. The original stays in the store untouched, because a crop is
  * a decision someone may want to take back, and because the same photograph is
  * often the source for more than one design.
  *
@@ -132,7 +132,7 @@ function loadImage(dataUrl) {
 }
 
 /**
- * Cut a rectangle out of pixels, on the page, before a trace (DP-49).
+ * Cut a rectangle out of pixels, on the page, before a trace.
  *
  * The picture a host holds for tracing is an ImageData and the worker takes
  * whatever has a width, a height and pixels, so this is a copy of the rows

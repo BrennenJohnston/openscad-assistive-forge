@@ -1,5 +1,5 @@
 /**
- * The crop dialog for a reference image (DP-5).
+ * The crop dialog for a reference image.
  *
  * The four numeric fields are the PRIMARY control, not a fallback beside a
  * drag handle. A handle cannot be operated from a keyboard or described to a
@@ -116,11 +116,11 @@ export function createCropDialog({ saveCopy, onCropped } = {}) {
     source = null;
     // Focus goes back where it came from, or the dialog leaves the keyboard
     // user on <body> with no idea what happened - the failure tour-nudge.js
-    // has its own rule against. MEASURED landing on BODY when this ran
-    // inline: hiding the modal blurs whatever was focused inside it, and the
-    // callers that run straight after a crop rebuild the very control focus
-    // is going back to. A frame later, everything has settled. This is the
-    // same idiom createFocusTrap uses to take focus in the first place.
+    // has its own rule against. Restored inline, it lands on <body>: hiding
+    // the modal blurs whatever was focused inside it, and the callers that run
+    // straight after a crop rebuild the very control focus is going back to.
+    // A frame later, everything has settled. This is the same idiom
+    // createFocusTrap uses to take focus in the first place.
     const returnTo = openerEl;
     openerEl = null;
     if (returnTo?.isConnected) {
@@ -151,15 +151,12 @@ export function createCropDialog({ saveCopy, onCropped } = {}) {
       );
       const name = croppedName(source.name);
       const record = await saveCopy?.(name, dataUrl);
-      // Everything the crop sets in motion finishes BEFORE the dialog closes,
+      // Everything the crop sets in motion finishes before the dialog closes,
       // so that closing is the last thing that happens and the focus it
-      // restores cannot be taken away again.
-      //
-      // MEASURED on CI Linux, three attempts, all red: with close() first the
-      // callback below rebuilt the source select and the Crop button after
-      // the restore, and focus ended up nowhere. It passed every time on a
-      // faster machine, which is exactly the kind of race a single frame of
-      // deferral hides rather than fixes.
+      // restores cannot be taken away again. With close() first, the callback
+      // below rebuilds the source select and the Crop button after the restore,
+      // and on a slow machine focus ends up nowhere; a faster machine hides the
+      // race rather than fixing it.
       if (onCropped) {
         await onCropped(record || { name, dataUrl, width, height });
       }

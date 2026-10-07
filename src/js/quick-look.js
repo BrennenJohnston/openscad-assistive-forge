@@ -1,41 +1,41 @@
 /**
  * A quick look at a picture, before anyone commits to converting it.
  *
- * The second thing the directive asks for: a person may choose a photograph
- * without realizing how much work it is, or that a simpler picture would give a
- * better charm. So before Start, one sentence about what the picture looks like
- * and roughly what it will cost ON THIS DEVICE. It never blocks and it never
- * refuses; it informs, and the person decides.
+ * A person may choose a photograph without realizing how much work it is,
+ * or that a simpler picture would give a better charm. So before Start, one
+ * sentence about what the picture looks like and roughly what it will cost
+ * on this device. It never blocks and it never refuses; it informs, and the
+ * person decides.
  *
- * ── What it is built on, and what it deliberately is NOT ──────────────────
+ * ── What it is built on, and what it deliberately is not ──────────────────
  *
- * It does NOT predict the shape count. That was measured and it does not work:
- * a 96 px thumbnail of a Noun Project icon traces into 2 to 12 shapes while the
- * full picture traces into 34 to 59, because the credit caption's letters
- * vanish at thumbnail scale. A number that wrong is worse than no number.
+ * It does not predict the shape count, because a thumbnail cannot: a 96 px
+ * thumbnail of a Noun Project icon traces into 2 to 12 shapes while the full
+ * picture traces into 34 to 59, because the credit caption's letters vanish
+ * at thumbnail scale. A number that wrong is worse than no number.
  *
- * What a thumbnail DOES carry honestly is the main mark's complexity and the ink
- * coverage. How fast the machine is gets measured separately, on a FIXED piece
- * of work, for the reason recorded above `calibrationPicture` below.
+ * What a thumbnail does carry honestly is the main mark's complexity and the
+ * ink coverage. How fast the machine is gets measured separately, on a fixed
+ * piece of work, for the reason given above `calibrationPicture` below.
  *
  * ── The cost model, measured ──────────────────────────────────────────────
  *
- * The dominant cost is the ink extraction, and which extraction runs is decided
- * by whether the picture has a transparent background. `extractInk` uses the
- * ALPHA channel when enough of the picture is see-through, which is cheap; with
- * no alpha it classifies every pixel by lightness and color, which is not.
+ * The dominant cost is the ink extraction, and which extraction runs is
+ * decided by whether the picture has a transparent background. `extractInk`
+ * uses the alpha channel when enough of the picture is see-through, which is
+ * cheap; with no alpha it classifies every pixel by lightness and color,
+ * which is not.
  *
- * MEASURED IN CHROMIUM, which is where this runs - the first version of these
- * numbers was measured in Node and told a person a photograph would take six
- * seconds when it took one and a half. Line art, this machine at full speed,
- * over the nine Noun Project icons and two opaque pictures
- * (build/dp-r4/harness/browser-cost.mjs):
+ * Measured in Chromium, which is where this runs: numbers measured in Node
+ * would tell a person a photograph takes six seconds when it takes one and a
+ * half. Line art, at full speed, over nine Noun Project icons and two opaque
+ * pictures:
  *
  *   the nine icons   0.49 MP, 44-92 % transparent    83-114 ms   170-233 per MP
  *   a plain drawing  0.64 MP, 0 % transparent           240 ms   375 per MP
- *   WATAP Paint v2   7.99 MP, 0 % transparent         1,046 ms   524 per MP
+ *   a photograph     7.99 MP, 0 % transparent         1,046 ms   524 per MP
  *
- * All measured against the CAPPED pixel count, because a picture over
+ * All measured against the capped pixel count, because a picture over
  * IMAGE_IMPORT_LIMITS.maxPixels is scaled down before any of this runs. That is
  * why an 8 MP photograph and a 12 MP one cost the same: both become 2 MP first.
  *
@@ -57,8 +57,8 @@ import {
 export const THUMBNAIL_EDGE = 96;
 
 /**
- * The calibration, all measured 2026-09-13 on the machine named above. Each is
- * a rate against the capped megapixel count, in milliseconds.
+ * The calibration, measured on the reference machine. Each is a rate
+ * against the capped megapixel count, in milliseconds.
  */
 export const COST_MODEL = Object.freeze({
   /** A picture with a transparent background: extractInk takes the alpha path. */
@@ -67,7 +67,7 @@ export const COST_MODEL = Object.freeze({
   msPerMegapixelColour: 450,
   /**
    * How long the fixed calibration workload below takes on the reference
-   * machine. MEASURED there; a machine that takes twice as long is called twice
+   * machine. Measured there; a machine that takes twice as long is called twice
    * as slow, and the estimate moves with it.
    */
   referenceCalibrationMs: 2.5,
@@ -95,12 +95,12 @@ export const COST_BANDS = Object.freeze({ quickMs: 700, fewSecondsMs: 5000 });
 const ALPHA_PATH_SHARE = MEANINGFUL_ALPHA_SHARE;
 
 /**
- * A FIXED piece of work, for measuring the machine rather than the picture.
+ * A fixed piece of work, for measuring the machine rather than the picture.
  *
- * The first version of this timed the thumbnail's own ink extraction, and that
- * was wrong in a way worth recording: which ink path runs depends on whether
- * the picture has transparency, so the SAME machine reported a factor of 0.5
- * for a library icon and 2.4 for a photograph. It was measuring the picture.
+ * Timing the thumbnail's own ink extraction would measure the picture:
+ * which ink path runs depends on whether the picture has transparency, so
+ * the same machine reports a factor of 0.5 for a library icon and 2.4 for a
+ * photograph.
  *
  * This is 96 x 96 pixels of opaque gray ramp - no alpha, so it always takes the
  * classifying path, and always exactly the same amount of it.
@@ -201,10 +201,9 @@ export function transparentShare(pixels) {
 
 /**
  * A ground whose luminance spreads this much at the thumbnail scale was lit
- * by a lamp, not filled by a program (DP-79). MEASURED on every picture in
- * hand (build/dp-r6/dp-79, `dp79-ground.mjs`): the four camera pictures
- * spread 9.5 to 27.4; the nine library icons, the owner's logo and the five
- * fixtures spread 0 to 1.9, as PNGs and re-saved as JPEGs.
+ * by a lamp, not filled by a program. Four camera pictures spread 9.5 to
+ * 27.4; nine library icons, a logo and five test pictures spread 0 to 1.9,
+ * as PNGs and re-saved as JPEGs.
  */
 export const CAMERA_GROUND_SPREAD_MIN = 5;
 
@@ -212,15 +211,15 @@ export const CAMERA_GROUND_SPREAD_MIN = 5;
  * Grain: the share of neighboring pixel pairs that differ a little (1 to 24
  * levels), the way a sensor's noise and paper's texture make every pixel
  * differ from the next, where a program's fill makes none differ and an
- * edge makes them differ a lot. MEASURED: the four camera pictures 0.22 to
- * 0.76; the icons, the logo and the fixtures 0 to 0.03 as PNGs.
+ * edge makes them differ a lot. The four camera pictures grain 0.22 to
+ * 0.76; the icons, the logo and the test pictures 0 to 0.03 as PNGs.
  *
  * Neither signal is enough alone, and both are asked for. The logo saved as
  * a JPEG grains to 0.24 (the ringing around its lettering) with a flat
- * ground of 1.9; a clean grid of gears (the Start-and-Cancel guard's own
- * picture) has a ground that spreads 19 at the thumbnail scale, because its
- * dots mix into every thumbnail pixel, and no grain at all. On the spread
- * alone that grid was worked at 560 px and the floor dropped all 900 gears.
+ * ground of 1.9; a clean grid of gears (a test picture) has a ground that
+ * spreads 19 at the thumbnail scale, because its dots mix into every
+ * thumbnail pixel, and no grain at all. On the spread alone that grid would
+ * be worked at 560 px, and the speck floor would drop all 900 gears.
  */
 export const CAMERA_GRAIN_MIN = 0.1;
 
@@ -296,7 +295,7 @@ export function groundSpread(thumb) {
  * What kind of picture this looks like.
  *
  * Three classes, because three is what the sentences need and what the evidence
- * supports. MEASURED on the nine icons (0.49 MP, 44-92 % transparent) and an
+ * supports: nine icons (0.49 MP, 44-92 % transparent) and an
  * 8 MP photograph (0 % transparent).
  */
 function classify({ megapixels, clearShare, inkCoverage }) {
@@ -379,7 +378,7 @@ export function quickLook(pixels, options = {}) {
         ? 'few'
         : 'long';
 
-  // DP-79: a camera made it when nothing is see-through and the ground is
+  // A camera made it when nothing is see-through and the ground is
   // not flat. The photo defaults (the working resolution, the median, the
   // speck floor) follow this verdict, and a file, whatever its class, never
   // gets them.
@@ -417,10 +416,8 @@ export function quickLook(pixels, options = {}) {
  * The sentence a person reads, built from a quick look.
  *
  * Two clauses at most, and never a warning about something they cannot act on.
- * The scale-down clause folds in the note the file control used to show
- * separately, so one sentence says the whole thing.
- *
- * STRINGS: owner review pending (DP-R4 text pack rows 9-15).
+ * The scale-down clause rides in the same sentence, so one sentence says
+ * the whole thing.
  *
  * @param {ReturnType<typeof quickLook>} look
  * @returns {string}
@@ -431,9 +428,8 @@ export function quickLookSentence(look) {
       ? 'Looks like a simple icon.'
       : look.pictureClass === 'drawing'
         ? 'Looks like a line drawing.'
-        : // DP-80: a photo is cropped to the part that matters before it is
+        : // A photo is cropped to the part that matters before it is
           // converted, and Crop first sits beside Start on the same control.
-          // STRINGS: owner review pending (DP-R6 text pack row 17).
           'Looks like a photo. Crop first to the part you want.';
 
   const cost =
