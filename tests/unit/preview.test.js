@@ -3839,3 +3839,59 @@ describe('the edges overlay follows the auto-bed', () => {
     expect(order.slice(0, 2)).toEqual(['bed', 'extras'])
   })
 })
+
+describe('the animation loop draws only a canvas people can see', () => {
+  let container
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+  })
+  afterEach(() => {
+    container.remove()
+    vi.unstubAllGlobals()
+  })
+
+  // Without a GPU every frame drawn behind the drawing editor is a software
+  // render, and the first frame shown again would wait for all of them
+  // (about 18 seconds to close the editor on a fast machine with the GPU off).
+  const managerWithCanvas = () => {
+    const manager = new PreviewManager(container)
+    const canvas = document.createElement('canvas')
+    manager.renderer = { render: vi.fn(), domElement: canvas }
+    manager.scene = {}
+    manager.getActiveCamera = () => ({})
+    manager._renderAxisTriadPass = vi.fn()
+    return { manager, canvas }
+  }
+
+  it('skips the draw while the canvas is hidden, and draws again once shown', () => {
+    const { manager, canvas } = managerWithCanvas()
+    canvas.style.display = 'none'
+    manager.animate()
+    expect(manager.renderer.render).not.toHaveBeenCalled()
+    expect(manager._renderAxisTriadPass).not.toHaveBeenCalled()
+    canvas.style.display = ''
+    manager.animate()
+    expect(manager.renderer.render).toHaveBeenCalledTimes(1)
+    expect(manager._renderAxisTriadPass).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips an alternative view pass while hidden too', () => {
+    const { manager, canvas } = managerWithCanvas()
+    manager._renderOverride = vi.fn()
+    canvas.style.display = 'none'
+    manager.animate()
+    expect(manager._renderOverride).not.toHaveBeenCalled()
+    canvas.style.display = ''
+    manager.animate()
+    expect(manager._renderOverride).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the loop going while hidden, so the first visible frame is drawn', () => {
+    const { manager, canvas } = managerWithCanvas()
+    canvas.style.display = 'none'
+    manager.animate()
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
+  })
+})

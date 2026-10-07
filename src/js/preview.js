@@ -1385,6 +1385,10 @@ export class PreviewManager {
     this.animationId = requestAnimationFrame(() => this.animate());
     if (this.controls) this.controls.update();
     if (!this.renderer) return;
+    // The drawing editor and the 2D preview hide the canvas. Without a GPU
+    // each frame drawn behind them is a software render, and the first frame
+    // shown again would wait for every one of them.
+    if (this.renderer.domElement?.style.display === 'none') return;
     if (this._renderOverride) {
       // The HFM alternative view replaces the whole pass, triad included.
       this._renderOverride();
