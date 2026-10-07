@@ -18574,17 +18574,6 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
-/* The status line sits under the toolbar rather than at the foot: the
-   preview's own "Rendering preview" pill overlays the foot of this area, and
-   a live region nobody can read is not a live region. */
-.drawing-editor-status {
-  order: 1;
-}
-
-.drawing-editor-body {
-  order: 2;
-}
-
 /* The one control in the colour column gets the room the column has. */
 .drawing-editor-regions-table .drawing-editor-colour-cell {
   width: 40%;

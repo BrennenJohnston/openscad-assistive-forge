@@ -8,6 +8,9 @@
  * @license GPL-3.0-or-later
  */
 
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   AutoPreviewController,
@@ -394,22 +397,24 @@ describe('Parity: scadUsesDebugModifier — # detection', () => {
   });
 });
 
-// ─── 8. Stakeholder E2E acknowledgement ─────────────────────────────────────
+// ─── 8. Keyguard-focused and generic E2E coverage ───────────────────────────
 
-describe('Parity: E2E stakeholder coverage acknowledgement', () => {
-  it('documents that 6 of 21 E2E files are stakeholder-specific', () => {
-    // Stakeholder-specific E2E files:
-    //   1. stakeholder-acceptance.spec.js
-    //   2. stakeholder-bugfix-verification.spec.js
-    //   3. stakeholder-zip-acceptance.spec.js
-    //   4. keyguard-compilation-smoke.spec.js
-    //   5. keyguard-parser-smoke.spec.js
-    //   6. keyguard-workflow.spec.js
-    //
-    // generic-project-baseline.spec.js balances that coverage.
-    const STAKEHOLDER_E2E_COUNT = 6;
-    const TOTAL_E2E_COUNT = 21;
-    expect(STAKEHOLDER_E2E_COUNT).toBe(6);
-    expect(TOTAL_E2E_COUNT).toBe(21);
+describe('Parity: E2E coverage beyond the keyguard', () => {
+  it('keeps the keyguard-focused E2E files and the generic baseline beside them', () => {
+    // Six browser suites follow the keyguard; generic-project-baseline
+    // balances them with a project that is not one.
+    const files = [
+      'stakeholder-acceptance.spec.js',
+      'stakeholder-bugfix-verification.spec.js',
+      'stakeholder-zip-acceptance.spec.js',
+      'keyguard-compilation-smoke.spec.js',
+      'keyguard-parser-smoke.spec.js',
+      'keyguard-workflow.spec.js',
+      'generic-project-baseline.spec.js',
+    ];
+    const e2eDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'e2e');
+    for (const file of files) {
+      expect(existsSync(join(e2eDir, file)), file).toBe(true);
+    }
   });
 });

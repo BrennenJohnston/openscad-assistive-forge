@@ -62,6 +62,7 @@ import {
   getThreeModule,
   CAMERA_ZOOM_STEP,
   VIEWPORT_SCHEMES,
+  PREVIEW_COLORS,
 } from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
@@ -7086,16 +7087,7 @@ async function initApp() {
 
     const activeTheme = themeManager.getActiveTheme();
     const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-
-    // Match PREVIEW_COLORS from preview.js (Cornfield gold)
-    const PREVIEW_COLORS = {
-      light: 0xf9d72c,
-      dark: 0x4d9fff,
-      'light-hc': 0x0052cc,
-      'dark-hc': 0x66b3ff,
-    };
-
-    const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
+    const colorHex = (PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light).model;
     return '#' + colorHex.toString(16).padStart(6, '0');
   }
 

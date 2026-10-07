@@ -162,7 +162,7 @@ describe('the backing never costs a glyph its contrast', () => {
     const worst = rows
       .map((r) => [parseFloat(r.split(': ')[1]), r])
       .sort((a, b) => a[0] - b[0])[0]
-    console.log(`[CW-85 backing] mono worst case ${worst[1]}`)
+    console.log(`[backing] mono worst case ${worst[1]}`)
   })
 
   it('colour: every palette entry clears 4.5:1 over every backing', () => {
@@ -186,7 +186,7 @@ describe('the backing never costs a glyph its contrast', () => {
       }
     }
     console.log(
-      `[CW-85 backing] colour worst case ${worst.ratio.toFixed(2)}:1 - ${worst.where}`
+      `[backing] colour worst case ${worst.ratio.toFixed(2)}:1 - ${worst.where}`
     )
   })
 
