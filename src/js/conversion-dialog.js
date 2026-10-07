@@ -1,23 +1,23 @@
 /**
- * The conversion dialog (DP-52 P2): a picture is being converted, here is the
+ * The conversion dialog: a picture is being converted, here is the
  * stage it has reached, and here is Cancel.
  *
- * I asked for this after hitting "Page Unresponsive" while a logo converted:
- * a new person takes a page that has stopped answering for a program that has
- * frozen, and there was nothing on screen that said "this is under way, and
- * the rest of the page is unavailable until it is done". The dialog says
- * exactly that, in markup as well as words: the page behind it is `inert`
- * for the dialog's life, the dialog is `aria-modal`, and Cancel has focus.
+ * A page that stops answering while a picture converts looks, to a new
+ * person, like a program that has frozen ("Page Unresponsive"), unless
+ * something on screen says "this is under way, and the rest of the page is
+ * unavailable until it is done". The dialog says exactly that, in markup as
+ * well as words: the page behind it is `inert` for the dialog's life, the
+ * dialog is `aria-modal`, and Cancel has focus.
  *
  * Accessibility, deliberately:
  *
  *   - Built on the shared focus trap, with the same overlay and content
  *     classes as the app's other dialogs, so it looks and behaves like one of
- *     them. Focus goes back to where it was when the dialog closes - ONCE,
+ *     them. Focus goes back to where it was when the dialog closes - once,
  *     synchronously. The modal manager's own close re-asserts its trigger 50
- *     ms and a frame later (a WebKit repair), and MEASURED here that stole
- *     focus from the drawing editor, which opens the moment this closes and
- *     puts focus on its own title.
+ *     ms and a frame later (a WebKit repair), which would steal focus from
+ *     the drawing editor, which opens the moment this closes and puts focus
+ *     on its own title.
  *   - `inert` on the app root is what "the other features are unavailable"
  *     means to assistive technology, not only to a pointer. The tutorial
  *     already uses the attribute; the focus trap is the fallback where a
@@ -25,12 +25,12 @@
  *   - The app's own live region lives INSIDE the app root, which is inert
  *     while this is open, so the one sentence spoken on open goes through a
  *     status region of the dialog's own. The stage sentence is visible and
- *     is not announced (DP-32: one action, one announcement); completion and
+ *     is not announced (one action, one announcement); completion and
  *     cancel are spoken by the host after the dialog has closed and the page
  *     is live again.
  *   - A native <progress>, named by the heading through aria-labelledby (a
  *     <label for> pointing at a <progress> reaches the tree with no name in
- *     Chromium - the same repair trace-progress.js made). Indeterminate
+ *     Chromium). Indeterminate
  *     inside a stage, a value across the stages, where the count is known.
  *   - Cancel is the only button, at least 44 px, and is where focus lands.
  *   - Reduced motion: the bar shares the trace bar's classes, whose sweep is

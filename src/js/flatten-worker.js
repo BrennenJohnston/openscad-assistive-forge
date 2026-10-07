@@ -2,11 +2,9 @@
  * The ring flatten, off the main thread.
  *
  * Folding a drawing's shapes into one printable region is the most expensive
- * thing this app does to a drawing, and until now it did it on the thread that
- * draws the page. MEASURED in Chromium over traced curves: 50 shapes took
- * 485 ms, 200 took 14.7 seconds, 800 took eight and a half minutes - and for
- * every one of those the tab was frozen. DP-34 moved the TRACE into a worker
- * for exactly this reason; this is the same defect one stage later.
+ * thing this app does to a drawing - eight and a half minutes for 800 traced
+ * shapes (the table is in flatten-rings.js) - and on the thread that draws
+ * the page the tab would be frozen for all of it.
  *
  * What crosses the wire is only what the flatten needs: each shape's path data
  * and the role a person gave it, plus the drawing's own size. No DOM, no
@@ -47,12 +45,12 @@ self.onmessage = async (event) => {
     const engine = await import('./ring-geometry.js');
 
     const warnings = [];
-    // Timed HERE, around the union alone: the import above happens once per
+    // Timed here, around the union alone: the import above happens once per
     // worker and the postMessage either side is not the drawing's fault. What
-    // goes back is what DP-37 P3 calibrates its budget on, so it has to be the
-    // cost of the work and nothing else.
+    // goes back is what the caller's budget is calibrated on, so it has to be
+    // the cost of the work and nothing else.
     const started = performance.now();
-    // DP-82: a traced drawing's rows with an offset among them take the
+    // A traced drawing's rows with an offset among them take the
     // parity-aware combine; every other drawing the fold of regions.
     const svg = compound
       ? flattenCompoundRings(engine, elements, svgMeta || {}, warnings)

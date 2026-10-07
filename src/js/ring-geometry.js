@@ -8,32 +8,29 @@
  * elements. This module is that layer, and nothing above it talks to
  * clipper2-js directly.
  *
- * PORTED FROM the owner's own stencil-forge repository,
- * src/js/geometry-core.js (https://github.com/BrennenJohnston/stencil-forge,
- * GPL-3.0-or-later): the SCALE convention, the Path64 conversions, the three
- * flat booleans, the signed-area and centroid formulas, and buildRingTree.
- * Three things changed on the way over:
+ * Ported from stencil-forge, src/js/geometry-core.js
+ * (https://github.com/BrennenJohnston/stencil-forge, GPL-3.0-or-later): the
+ * scale convention, the Path64 conversions, the three flat booleans, the
+ * signed-area and centroid formulas, and buildRingTree. Three things are
+ * different here:
  *
- *   1. The units are the CALLER'S, not millimeters. A face of a drawing is
+ *   1. The units are the caller's, not millimeters. A face of a drawing is
  *      found in SVG user units and only becomes millimeters when a plate
- *      size says so, and a module that calls everything mm invites exactly
- *      the mistake D-122 was.
- *   2. `pointInPolygon` and `boundsOf` are IMPORTED from svg-nesting.js
+ *      size says so, and a module that calls everything mm invites a units
+ *      mistake.
+ *   2. `pointInPolygon` and `boundsOf` are imported from svg-nesting.js
  *      rather than ported a second time. That file carries the same ray-cast,
  *      from the same source, and one copy of a predicate is the point.
- *   3. `offsetRegion` and `morphologicalOpen` were deliberately NOT brought
- *      over. Their only intended caller is the raster lane's sliver cleanup
- *      (DP-18), and the measured lesson there is a pixel-AREA floor, not a
- *      morphological open. Porting a hundred lines of resample-and-displace
- *      for a caller that may never want it is code no one asked for; it can
- *      come when something needs it, and svg-offset.js already carries the
- *      same construction for path strings.
+ *   3. `offsetRegion` and `morphologicalOpen` are deliberately not here.
+ *      Their only intended caller is the raster lane's sliver cleanup, and
+ *      what works there is a pixel-area floor, not a morphological open.
+ *      They can come when something needs them, and svg-offset.js already
+ *      carries the same construction for path strings.
  *
- * ★ clipper2-js@1.2.4 IS PARTLY BROKEN, and this module is written around it
- * (D-107, measured in the standalone and pinned by a guard test here):
+ * clipper2-js@1.2.4 is partly broken, and this module is written around it:
  *   - Flat `Union` / `Difference` / `Intersect` are correct. Only these.
  *   - `executePolyTree()` throws internally and hands back an empty tree, so
- *     ring nesting is built HERE (buildRingTree).
+ *     ring nesting is built here (buildRingTree).
  *   - `Clipper.pointInPolygon()` answers IsOn for every input, so the
  *     predicate comes from svg-nesting.
  *   - `ClipperOffset` / `InflatePaths` apply about half the delta asked for
@@ -114,9 +111,9 @@ export function toPaths64(rings) {
  * Paths64 back to rings.
  *
  * Degenerate rings are dropped here rather than by each caller: this port
- * occasionally emits a zero-area artifact ring - measured in the standalone
- * on a re-union of an already-unioned donut - and every clipper result in
- * this module comes back through this one function.
+ * occasionally emits a zero-area artifact ring (seen on a re-union of an
+ * already-unioned donut), and every clipper result in this module comes
+ * back through this one function.
  *
  * @param {import('clipper2-js').Paths64} paths
  * @returns {Array<Array<{x: number, y: number}>>}
@@ -133,20 +130,20 @@ export function fromPaths64(paths) {
 }
 
 /**
- * Read a set of rings the way an SVG reads them: EVEN-ODD.
+ * Read a set of rings the way an SVG reads them: even-odd.
  *
- * ★ THIS IS NOT A UNION, and calling it one is how the mistake gets made. Two
- * overlapping squares come back as a ring with a HOLE where they overlap,
+ * This is not a union, and calling it one is how the mistake gets made. Two
+ * overlapping squares come back as a ring with a hole where they overlap,
  * because a point covered twice is outside under even-odd. That is exactly
  * right when the rings are a drawing - a compound path's subpaths are even-odd
  * against each other, which is what makes the counter of a letter a counter -
  * and exactly wrong when they are two regions being combined.
  *
- * Use this to INTERPRET one drawing. Use `union` to COMBINE regions.
+ * Use this to interpret one drawing. Use `union` to combine regions.
  *
- * ★ Order-independent either way, which is the reason this layer exists. The
+ * Order-independent either way, which is the reason this layer exists. The
  * even-odd union `flattenToCompoundPath` performs through path-bool is
- * order-DEPENDENT once shapes overlap (D-120): the same 139 stroke bands in a
+ * order-dependent once shapes overlap: the same 139 stroke bands in a
  * different order give a different picture and the drawing quietly corrupts.
  * Clipper does not care what order the rings arrive in.
  *
@@ -361,7 +358,7 @@ export function buildRingTree(rings) {
  * Which ring sits inside which, on the rings AS GIVEN: no union first, so the
  * answer at index i is about the ring at index i. `buildRingTree` runs the
  * same containment over a union's output, where identity does not matter;
- * here it does (DP-82: each ring of a drawing carries its own offset, and
+ * here it does (each ring of a drawing carries its own offset, and
  * the parity that decides the offset's sign has to be the ring's own).
  *
  * The parent is the smallest larger ring that holds the ring's leftmost

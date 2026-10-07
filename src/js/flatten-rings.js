@@ -6,8 +6,8 @@
  * nothing but arrays of numbers and strings, which is what makes moving the
  * work off the main thread possible at all.
  *
- * ★ WHY IT HAD TO MOVE. MEASURED in Chromium, on the main thread, over traced
- * curves, with the engine that ships today:
+ * Why it runs in a worker: in Chromium, on the main thread, over traced
+ * curves, the flatten costs
  *
  *     shapes   ring points   flatten
  *         50         8,750       485 ms
@@ -16,8 +16,8 @@
  *        400        70,368    87,023 ms
  *        800       132,892   507,242 ms   (eight and a half minutes)
  *
- * The page could not answer for any of it. DP-34 moved the TRACE off the main
- * thread; this is the same defect one stage later.
+ * and the page cannot answer for any of it. The trace runs in a worker for
+ * the same reason.
  *
  * @license GPL-3.0-or-later
  */
@@ -25,22 +25,22 @@
 import { offsetRing } from './svg-offset.js';
 
 /**
- * D-120 (DP-26 P1): flatten classified elements through the ring engine.
+ * Flatten classified elements through the ring engine.
  *
- * The old road, `flattenToCompoundPath`, unions the elements PAIRWISE with
- * path-bool under even-odd, which is order-dependent once shapes overlap -
- * and on this app's own logo (139 converted strokes) the pairwise chain
- * does not merely corrupt: MEASURED, it exhausts an 8 GB node heap and
- * dies. The ring road reads each element on its own terms (even-odd, so a
- * counter stays a counter), then combines every region in one NonZero
- * union - order-independent, and the same fixture finishes in seconds
- * (1,280 rings, area 1,265 svg units squared).
+ * `flattenToCompoundPath` unions the elements pairwise with path-bool under
+ * even-odd, which is order-dependent once shapes overlap - and on this app's
+ * own logo (139 converted strokes) the pairwise chain does not merely
+ * corrupt: it exhausts an 8 GB node heap and dies. The ring road reads each
+ * element on its own terms (even-odd, so a counter stays a counter), then
+ * combines every region in one NonZero union - order-independent, and the
+ * same fixture finishes in seconds (1,280 rings, area 1,265 svg units
+ * squared).
  *
  * The cost, stated: rings are polylines, so curves leave at the ring
- * engine's resolution - the same trade the stencil lane shipped with
- * (plates reproduced at IoU 0.952). An element whose rings cannot be read
- * is appended verbatim on its own even-odd path, counted into the warning,
- * and never dropped.
+ * engine's resolution - the same trade the stencil lane makes (plates
+ * reproduced at IoU 0.952). An element whose rings cannot be read is
+ * appended verbatim on its own even-odd path, counted into the warning, and
+ * never dropped.
  *
  * The engine arrives as an argument so the workspace stays out of the lazy
  * chunk's way: this file is core, clipper is not.
@@ -80,15 +80,13 @@ export function flattenWithRings(
     }
   };
 
-  // ★ Regions are combined ONE AT A TIME, subject against clip - never by
-  // pouring every region's rings into a single NonZero subject. In one
-  // list the windings sum ACROSS regions: element B's solid ring inside
-  // element A's counter counts +1 - 1 = 0 and the area vanishes. MEASURED
-  // on the bird fixture: six healthy foreground regions one-shot-unioned
-  // to an EMPTY result, while the logo survived only because its bands'
-  // windings happened not to cancel. A fold of true unions is
-  // order-independent in the only sense that matters: the union of sets
-  // does not care what order it was taken in.
+  // Regions are combined one at a time, subject against clip - never by
+  // pouring every region's rings into a single NonZero subject. In one list
+  // the windings sum across regions: element B's solid ring inside element
+  // A's counter counts +1 - 1 = 0 and the area vanishes. On the bird fixture
+  // six healthy foreground regions unioned in one shot give an empty result.
+  // A fold of true unions is order-independent in the only sense that
+  // matters: the union of sets does not care what order it was taken in.
   const combine = (elements) => {
     let region = null;
     for (const el of elements) {
@@ -100,13 +98,12 @@ export function flattenWithRings(
   };
 
   let region = combine(foreground);
-  // Holes cut ONE AT A TIME, and a hole that would erase the whole drawing
-  // is the PAPER, not a cut. The bird fixture is the measured case: its
-  // full-bleed background rect is auto-classified as a hole, and
-  // subtracting it legally empties everything - the old flatten hid this
-  // by silently discarding an empty difference. The same law the
-  // silhouette already states ("a root classified as a hole is a
-  // background") is applied here explicitly, per hole, and said out loud.
+  // Holes are cut one at a time, and a hole that would erase the whole
+  // drawing is the paper, not a cut. The bird fixture's full-bleed background
+  // rect is auto-classified as a hole, and subtracting it legally empties
+  // everything. The rule the silhouette already states ("a root classified
+  // as a hole is a background") is applied here explicitly, per hole, and
+  // said out loud.
   let paperHoles = 0;
   for (const el of holes) {
     if (region.length === 0) break;
@@ -158,12 +155,12 @@ function regionSvg(engine, region, fallbacks, svgMeta, warningsOut) {
 }
 
 /**
- * A set of rings read as ONE drawing, each ring offset by its own amount,
- * folded into a region (DP-82, D-174).
+ * A set of rings read as one drawing, each ring offset by its own amount,
+ * folded into a region.
  *
  * The rings are read the way an even-odd fill reads them: a ring inside a
  * ring is a hole, a ring inside that is solid again. "+" is more ink on
- * every ring, so a solid ring grows by its offset and a hole ring SHRINKS
+ * every ring, so a solid ring grows by its offset and a hole ring shrinks
  * by its (the sign is the ring's parity, applied here to the amount the
  * caller hands in); a drawn line, two rings, thickens by twice the offset.
  * A hole shrunk to nothing is closed; a solid shrunk to nothing is gone.
@@ -172,11 +169,10 @@ function regionSvg(engine, region, fallbacks, svgMeta, warningsOut) {
  * and the regions are folded together as `flattenWithRings` folds a
  * drawing's shapes: a NonZero union, so a ring grown into its neighbor
  * merges with it instead of inverting it, which is what the even-odd
- * concatenation did to the sharpie's pump at +1 mm (DP-77 P0d). And an
- * island inside a hole is its own region and survives: the same rings
- * handed to `flattenWithRings` one per element lose it, because the island
- * is unioned into the outer ring and cut away with the hole (MEASURED,
- * `dp82-nesting-probe`: 3,600 of 4,800 units squared kept).
+ * concatenation does to a grown ring. And an island inside a hole is its
+ * own region and survives: the same rings handed to `flattenWithRings` one
+ * per element lose it, because the island is unioned into the outer ring
+ * and cut away with the hole (3,600 of 4,800 units squared kept).
  *
  * @param {object} engine - The ring-geometry module
  * @param {Array<Array<{x: number, y: number}>>} rings
@@ -216,7 +212,7 @@ export function offsetDrawing(engine, rings, deltaOf) {
 }
 
 /**
- * The compound road's combine when any row carries an offset (DP-82).
+ * The compound road's combine when any row carries an offset.
  *
  * A traced drawing is one path whose rings are the editor's rows, and with
  * no offset set the rows are concatenated back into one even-odd path,
