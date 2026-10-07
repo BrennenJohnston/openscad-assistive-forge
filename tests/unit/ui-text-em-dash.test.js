@@ -1,7 +1,9 @@
 /**
  * Nothing the app shows or says carries an em dash: the house rule for UI
  * text, and a screen reader hands the dash to its voice as a bare pause where
- * the sentence needs a stop or a colon. Read here:
+ * the sentence needs a stop or a colon. An en dash with a space on each side
+ * is doing an em dash's job and counts too; between two numbers or letters
+ * ("220-250 mm" written with an en dash) it is a range and stays. Read here:
  *   - every string in src/, with the American English scan's reader, except
  *     the arguments of a console call, which only a developer sees;
  *   - the text and the attributes a person reads in index.html;
@@ -24,11 +26,19 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const EM_DASH = String.fromCharCode(0x2014);
 const EM_DASH_ESCAPE = String.fromCharCode(92) + 'u2014';
 const EM_DASH_ENTITY = /&(mdash|#x2014|#8212);/i;
+const SPACED_EN_DASHES = [
+  String.fromCharCode(0x2013),
+  String.fromCharCode(92) + 'u2013',
+  '&ndash;',
+  '&#x2013;',
+  '&#8211;',
+].map((dash) => ` ${dash} `);
 
 const hasDash = (text) =>
   text.includes(EM_DASH) ||
   text.includes(EM_DASH_ESCAPE) ||
-  EM_DASH_ENTITY.test(text);
+  EM_DASH_ENTITY.test(text) ||
+  SPACED_EN_DASHES.some((dash) => text.includes(dash));
 
 function filesUnder(dir, extension, out = []) {
   for (const name of readdirSync(dir)) {
@@ -63,7 +73,7 @@ function enclosingCall(code, start) {
   return null;
 }
 
-describe('UI text carries no em dash', () => {
+describe('UI text carries no em dash, and no spaced en dash', () => {
   it('in the strings of src/, outside console calls', () => {
     const hits = [];
     let read = 0;
