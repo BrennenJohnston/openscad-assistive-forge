@@ -1,19 +1,19 @@
 /**
- * The Harley law: a layer is a paint COLOR a person assigns to regions.
+ * The Harley law: a layer is a paint color a person assigns to regions.
  *
- * Named after the drawing that taught it. The owner made a six-plate spray
- * stencil of their cat by hand and the plates say plainly what a layer is:
- * plate 1 cuts the whole silhouette and the base coat goes through it; plates
- * 2 to 6 cut the regions of one color each; the black lines between regions
- * are not cut by anything, because they are the base coat showing through.
- * Depth, which the app used to decide layers by, is at best a hint.
+ * Named after the drawing that taught it: a six-plate spray stencil of a
+ * cat, cut by hand, whose plates say plainly what a layer is. Plate 1 cuts
+ * the whole silhouette and the base coat goes through it; plates 2 to 6
+ * cut the regions of one color each; the black lines between regions are
+ * not cut by anything, because they are the base coat showing through.
+ * Depth is at best a hint.
  *
- * So this module is the model the app was missing:
+ * So this module is that model:
  *
  *   REGION      a closed area a person can point at.
  *   COLOR      a named swatch. "Base coat" and "Unpainted" are colors too,
- *               and a color may appear MORE THAN ONCE in the order - which
- *               is how the owner avoided islands without a single bridge.
+ *               and a color may appear more than once in the order - which
+ *               is how a hand-cut stencil avoids islands without a bridge.
  *   ASSIGNMENT  region -> color.
  *   ORDER       the colors, in spray order.
  *   PLATE k     under the stacked rule, the union of the regions of colors
@@ -21,21 +21,21 @@
  *               own rule, the regions of color k alone, which is the hand
  *               method and can leave islands.
  *
- * ★ WHAT A REGION IS IN A LINE DRAWING, which is the thing the old engine got
- * wrong. `sketch4.svg` is an Illustrator "Outline Stroke" export: the lines
- * are thin filled BANDS, and every element is unfilled black. Union those
- * bands and the result is one solid with holes in it - and the holes are the
- * FACES of the line network, which is exactly what the owner painted. The
- * bands themselves are never regions. MEASURED on the cat: 25 elements union
- * to one solid, 4 solid rings and 23 holes, of which 21 have area and 2 are
- * 0.0001-unit slivers; those 21 faces contain every one of the sixteen
- * regions the reference plates cut, each within a tenth of a unit of the
- * point measured out of the owner's own STLs.
+ * What a region is in a line drawing. `sketch4.svg` is an Illustrator
+ * "Outline Stroke" export: the lines are thin filled bands, and every
+ * element is unfilled black. Union those bands and the result is one solid
+ * with holes in it - and the holes are the faces of the line network,
+ * which is exactly what gets painted. The bands themselves are never
+ * regions. On the cat, 25 elements union to one solid, 4 solid rings and 23
+ * holes, of which 21 have area and 2 are 0.0001-unit slivers; those 21
+ * faces contain every one of the sixteen regions the reference plates cut,
+ * each within a tenth of a unit of the point measured out of the reference
+ * STLs.
  *
  * Nothing here draws, and nothing here knows about millimeters: regions are
  * found in the drawing's own units and become millimeters only when a plate
- * size says so. D-122 was what happens when a module is not sure which space
- * it is in.
+ * size says so. A module that is not sure which space it is in gets every
+ * size wrong.
  *
  * @license GPL-3.0-or-later
  */
@@ -65,7 +65,7 @@ export const REMOVED = 'removed';
  * How thin the ink of a drawing has to be before its holes are read as faces
  * rather than as holes in filled shapes.
  *
- * MEASURED, as the ratio of hole area to the area of the outer contour:
+ * Measured as the ratio of hole area to the area of the outer contour:
  *   sketch4.svg (a line drawing)          0.943   ink covers 5.7%
  *   trace-503px.svg (three nested solids) 0.355   ink covers 64%
  *   bird-drawing.svg (filled art)         0.287   ink covers 71%
@@ -77,7 +77,7 @@ export const LINE_ART_HOLE_RATIO = 0.6;
 
 /**
  * Faces smaller than this fraction of the silhouette are boolean litter, not
- * regions. MEASURED on the cat: the two rings the union leaves behind are
+ * regions. On the cat, the two rings the union leaves behind are
  * 0.0001 and 0.0000 units² against a silhouette of 12,603, while the smallest
  * face a person actually painted is 13.98. The floor sits a hundred times
  * below the real face and a thousand above the litter.
@@ -87,7 +87,7 @@ export const MIN_FACE_AREA_FRACTION = 1e-5;
 /**
  * Every sentence this module can say about an island, in one place.
  *
- * STRINGS: owner review pending (DP-R2 text pack). US English, no em dashes.
+ * US English, no em dashes.
  * They are written as advice a person can act on rather than as a diagnosis:
  * an island is not a mistake, it is a consequence of a paint order, and the
  * three ways out are all legitimate.
@@ -208,7 +208,7 @@ export function positionWord(point, box) {
 
 function describeRegion(index, interior, box, parent) {
   const where = positionWord(interior, box);
-  // STRINGS: owner review pending. "Region 7, top left" reads as a name;
+  // "Region 7, top left" reads as a name;
   // "Path 12" reads as a file format.
   return parent
     ? `Region ${index + 1}, ${where}, inside ${parent}`
@@ -301,17 +301,16 @@ export function buildRegions(elements, options = {}) {
     };
   }
 
-  // Filled art: one region per DRAWN SHAPE. The backdrop is stepped over by
+  // Filled art: one region per drawn shape. The backdrop is stepped over by
   // the same area rule the stencil layering uses - a root that covers
   // essentially the whole picture is the paper, and color cannot tell you
   // that.
   //
-  // ★ ONE REGION PER DOM ELEMENT, NOT PER SUBPATH. `parseSvgElements` splits a
+  // One region per DOM element, not per subpath. `parseSvgElements` splits a
   // compound path into one entry per subpath, which is right for a nesting
   // tree and wrong here: the counter of a letter A is not a second region to
-  // paint, it is the hole in the first one. MEASURED on a traced photograph,
-  // where every hole came back as its own region and a six-colour picture
-  // produced 81 regions instead of 51.
+  // paint, it is the hole in the first one. Per subpath, a six-colour traced
+  // photograph would come back as 81 regions instead of 51.
   const canvasArea =
     (box.maxX - box.minX) * (box.maxY - box.minY) || Number.POSITIVE_INFINITY;
   const groups = new Map();
@@ -369,7 +368,6 @@ export function buildRegions(elements, options = {}) {
 export function paletteFromFills(regions, options = {}) {
   const base = {
     id: BASE_COLOUR_ID,
-    // STRINGS: owner review pending.
     name: options.baseName || 'Base coat',
     hex: options.baseHex || '#171411',
   };
@@ -381,13 +379,9 @@ export function paletteFromFills(regions, options = {}) {
     seen.set(hex, seen.get(hex) + (r.area || 0));
   }
   if (seen.size < 2) return [base];
-  // ★ TWO SWATCHES MUST NOT SHARE A NAME. The color table has eighteen
-  // saturated anchors, so anything muted lands on a gray: MEASURED on a
-  // traced photograph of the owner's cat, its sage-green eyes, its dusty-pink
-  // nose and its gray muzzle ALL came out "Gray" - three swatches called the
-  // same thing, in a list whose whole job is telling them apart. The second
-  // and later get a number, until the owner decides whether to add muted
-  // anchors to the table (on the ledger).
+  // Two swatches must not share a name, in a list whose whole job is telling
+  // them apart. Where two colors still land on the same anchor, the second
+  // and later get a number.
   const used = new Map();
   return [...seen.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -407,10 +401,9 @@ export function paletteFromFills(regions, options = {}) {
  * A plain-language name for a color, so a plate can be called "the brown
  * one" rather than "#997048".
  *
- * Ported from the owner's stencil-forge `colorName` (color-separation.js,
- * GPL-3.0-or-later) with the same eighteen anchors.
- *
- * STRINGS: owner review pending - these names are rendered.
+ * Ported from stencil-forge's `colorName` (color-separation.js,
+ * GPL-3.0-or-later) with the same eighteen saturated anchors, plus the
+ * muted ones below. These names are rendered.
  *
  * @param {string} hex
  * @returns {string}
@@ -454,14 +447,11 @@ const NAMED_COLOURS = [
   { name: 'Pink', rgb: [240, 140, 190] },
   { name: 'Brown', rgb: [130, 85, 50] },
   { name: 'Tan', rgb: [200, 170, 130] },
-  // ★ The muted anchors, added at the owner's G0 decision (2026-09-01).
-  // The eighteen above are all saturated, so every muted color in a
-  // traced photograph landed on a gray: the cat's sage-green eyes, its
-  // dusty-pink nose and its gray muzzle were ALL "Gray" - three swatches
-  // sharing one name in a list whose whole job is telling them apart.
-  // Each anchor is placed so it names its own neighborhood without
-  // stealing from the saturated names (measured: an olive at 128,128,64
-  // took Brown's #997048; at 110,120,45 it does not).
+  // The muted anchors. With saturated anchors alone, every muted color in a
+  // traced photograph lands on a gray: a cat's sage-green eyes, dusty-pink
+  // nose and gray muzzle would all be "Gray". Each anchor is placed so it
+  // names its own neighborhood without stealing from the saturated names (an
+  // olive at 128,128,64 takes Brown's #997048; at 110,120,45 it does not).
   { name: 'Olive', rgb: [110, 120, 45] },
   { name: 'Sage', rgb: [140, 150, 115] },
   { name: 'Dusty pink', rgb: [180, 120, 125] },
@@ -471,22 +461,22 @@ const NAMED_COLOURS = [
 /**
  * The region a point is in.
  *
- * ★ TWO WAYS TO GET THIS WRONG, and this session found both of them.
+ * Two ways to get this wrong:
  *
- * 1. SMALLEST WINS. A face nested inside another face is inside both outer
+ * 1. Smallest wins. A face nested inside another face is inside both outer
  *    rings, so a search that takes the first match in any other order hands
- *    back the eye when it was asked about the pupil. MEASURED on the cat:
- *    matching largest-first gave the pupils' color to the eyes, emptied the
- *    green plate, and put two islands on the black plate that were nothing
- *    but the eye rings.
- * 2. SMALLEST BY THE OUTER RING, not by the region's paintable area. A
+ *    back the eye when it was asked about the pupil. On the cat, matching
+ *    largest-first gives the pupils' color to the eyes, empties the green
+ *    plate, and puts two islands on the black plate that are nothing but
+ *    the eye rings.
+ * 2. Smallest by the outer ring, not by the region's paintable area. A
  *    region's area is its ring minus whatever is nested in it, and on the cat
  *    the right pupil (82.0) is bigger by that measure than the eye that
- *    CONTAINS it (168.8 minus its 109.5 band = 59.4). Sorting on the net area
+ *    contains it (168.8 minus its 109.5 band = 59.4). Sorting on the net area
  *    picks the parent for a point in the child.
  *
  * A point that lands on a line between faces - inside a solid nested in a
- * face - belongs to the face around it, which is what the smallest ENCLOSING
+ * face - belongs to the face around it, which is what the smallest enclosing
  * outer ring gives. That is also what a person means when they click a line.
  *
  * @param {Array<object>} regions
@@ -520,8 +510,8 @@ export function autoAssign(regions, palette) {
   const byHex = new Map(list.map((c) => [c.hex.toLowerCase(), c.id]));
   // The base is whatever the palette calls its ground, and a palette that
   // does not have one starts at its first color. Hard-coding 'base' here
-  // wrote an id no palette contained and every region came out assigned to a
-  // color that did not exist.
+  // would write an id no palette contains, and every region would be
+  // assigned to a color that does not exist.
   const base =
     list.find((c) => c.id === BASE_COLOUR_ID)?.id ||
     list[0]?.id ||
@@ -537,9 +527,9 @@ export function autoAssign(regions, palette) {
 /**
  * The order to spray in: the base first, then the largest area first.
  *
- * Ported from stencil-forge's measured default (`defaultPaintOrder`). Largest
- * first because a big field is easier to cover than to cut around, and
- * because it is what the owner did by hand.
+ * Ported from stencil-forge's measured default (`defaultPaintOrder`).
+ * Largest first because a big field is easier to cover than to cut around,
+ * and because it is how a stencil is sprayed by hand.
  *
  * @param {Array<object>} regions
  * @param {Object<string, string>} assignment
@@ -567,15 +557,15 @@ export function defaultOrder(regions, assignment, palette) {
 /**
  * The rings each plate cuts.
  *
- * ★ The two rules are different laws, not a preference:
+ * The two rules are different laws, not a preference:
  *
- *   stacked  plate k cuts colors k..N together, so every cut is SOLID and no
+ *   stacked  plate k cuts colors k..N together, so every cut is solid and no
  *            plate ever has an island. Plate 1 is the whole silhouette. This
  *            is the 3D-printed multi-plate method, and it is the reason the
  *            method needs no bridges.
  *   own      plate k cuts color k alone, which is the hand method and what
- *            the reference plates do. It can leave islands, and the owner's
- *            answer to that was to paint black twice.
+ *            the reference plates do. It can leave islands, and the hand
+ *            answer to that is to paint black twice.
  *
  * @param {{palette: Array, order: Array<string>, assignment: object,
  *   rule?: string}} plan
@@ -612,13 +602,13 @@ export function platesFor(plan, regions, silhouette = null, options = {}) {
   return order.map((colourId, k) => {
     const mine = byColour.get(colourId) || [];
 
-    // ★ PLATE 1 IS THE SILHOUETTE FOR A LINE DRAWING, under BOTH rules, and
-    // the reason is the lines. In line art the marks between the faces are
-    // not regions at all: they are where the base coat shows through, and no
+    // Plate 1 is the silhouette for a line drawing, under both rules, and the
+    // reason is the lines. In line art the marks between the faces are not
+    // regions at all: they are where the base coat shows through, and no
     // later plate ever cuts them. A first plate built from the union of the
     // faces would leave every line uncut, so the base coat would never reach
     // them and the drawing would come out as a field of separated patches.
-    // The reference set is the OWN rule and its plate 1 is the silhouette,
+    // The reference set uses the own rule and its plate 1 is the silhouette,
     // which is what says this is not a property of the rule.
     //
     // Filled art has no lines to account for, so there plate 1 follows the
@@ -656,22 +646,22 @@ export function platesFor(plan, regions, silhouette = null, options = {}) {
 }
 
 /**
- * Optionally close the LINES a plate's cut has surrounded.
+ * Optionally close the lines a plate's cut has surrounded.
  *
- * ★ THE STACKED RULE DOES NOT GUARANTEE A SOLID CUT, and the plan said it
- * did. MEASURED on the cat: under the stacked rule, plate 2 cuts every color
- * from brown onwards, which includes both the eye faces and the pupil faces -
- * but the thin black BAND between an eye and its pupil is a line, not a
- * region, so it is not cut, and it ends up a ring of material with cut on
- * both sides. Two islands, 109.4 and 94.3 units², on three plates. The
- * stacked rule removes every island caused by NESTED REGIONS; it cannot
- * remove one caused by a line between two regions that are both cut.
+ * The stacked rule does not guarantee a solid cut. On the cat, under the
+ * stacked rule, plate 2 cuts every color from brown onwards, which includes
+ * both the eye faces and the pupil faces - but the thin black band between
+ * an eye and its pupil is a line, not a region, so it is not cut, and it
+ * ends up a ring of material with cut on both sides. Two islands, 109.4 and
+ * 94.3 units², on three plates. The stacked rule removes every island
+ * caused by nested regions; it cannot remove one caused by a line between
+ * two regions that are both cut.
  *
- * The owner's own answer was to cut the eye solid, band and all, which is
- * what this option does: any hole in the cut that contains no region at all
- * is a line, and it is filled in. It is NOT the default, because it changes
- * the picture - the band gets painted this color instead of staying base
- * coat - and that is the person's decision, not the engine's.
+ * The hand answer is to cut the eye solid, band and all, which is what this
+ * option does: any hole in the cut that contains no region at all is a
+ * line, and it is filled in. It is not the default, because it changes the
+ * picture - the band gets painted this color instead of staying base coat -
+ * and that is the person's decision, not the engine's.
  *
  * @param {Array<Array<object>>} rings
  * @param {Array<object>} regions
@@ -692,10 +682,10 @@ function absorbEnclosedLines(rings, regions, on, rank, position) {
       const at = rank.get(r.key);
       return at === undefined || at < position;
     });
-  // ★ A filled hole takes its whole SUBTREE with it. Dropping the ring alone
-  // leaves the rings nested inside it one parity out: MEASURED on the cat,
-  // filling the band between an eye and its pupil turned the PUPIL into a
-  // hole, and the two islands moved rather than went away.
+  // A filled hole takes its whole subtree with it. Dropping the ring alone
+  // leaves the rings nested inside it one parity out: on the cat, filling the
+  // band between an eye and its pupil would turn the pupil into a hole, and
+  // the two islands would move rather than go away.
   const walk = (node) => {
     if (node.isHole && !wouldLose(node.ring)) return;
     keep.push(node.ring);
@@ -743,8 +733,6 @@ export function islandsOf(plateRings, regions = []) {
 
 /**
  * What is wrong with a plan, in sentences a person can act on.
- *
- * STRINGS: owner review pending.
  *
  * @param {object} plan
  * @param {Array<object>} [regions]

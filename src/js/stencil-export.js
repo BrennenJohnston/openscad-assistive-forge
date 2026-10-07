@@ -8,14 +8,14 @@
  * zip whose names say what each file is, with the paint order written beside
  * them in a text file.
  *
- * ★ THE RENDERS ARE SEQUENTIAL ON PURPOSE. The engine is one worker; asking
+ * The renders are sequential on purpose. The engine is one worker; asking
  * it for seven models at once queues them anyway and takes the progress
  * reporting away from the person waiting. One at a time, each announced, is
  * slower to write and the same speed to run.
  *
  * Nothing here knows about the DOM. It takes a render function and gives back
  * a Blob, so it can be tested without a browser and moved without being
- * rewritten - DP-19 puts the button somewhere else.
+ * rewritten.
  *
  * @license GPL-3.0-or-later
  */
@@ -57,7 +57,6 @@ export function stencilSetJobs({
     const colour = colourNames[n - 1];
     const slug = colour ? `-${sanitizeFilename(colour).toLowerCase()}` : '';
     jobs.push({
-      // STRINGS: owner review pending (DP-R2 text pack).
       label: colour ? `Plate ${n}, ${colour}` : `Plate ${n}`,
       filename: `plate-${n}${slug}.${ext}`,
       parameters: {
@@ -152,7 +151,7 @@ export async function exportStencilSet({
 /**
  * What to say while it is happening, in one place.
  *
- * STRINGS: owner review pending (DP-R2 text pack). The count is spoken every
+ * The count is spoken every
  * time because a person who cannot see the progress bar has only the sentence.
  */
 export const EXPORT_STRINGS = Object.freeze({

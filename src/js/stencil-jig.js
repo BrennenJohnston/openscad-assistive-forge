@@ -4,26 +4,26 @@
  *
  * Corner crosses tell a person where to put the plate. Pegs do not ask: the
  * plate can only sit one way, and a six-plate stencil sprayed six times is
- * only as good as the sixth alignment. This is the owner's own design,
- * measured off the base plate they printed:
+ * only as good as the sixth alignment. The design is measured off a
+ * printed base plate:
  *
  *   a 0.6 mm sheet the size of the plate, with four pegs 4.4 mm tall;
- *   ROUND, 3.00 mm across, at the two TOP corners;
- *   RECTANGULAR, 3.00 x 2.00 mm, at the two BOTTOM corners;
+ *   round, 3.00 mm across, at the two top corners;
+ *   rectangular, 3.00 x 2.00 mm, at the two bottom corners;
  *   every center 2.50 mm in from both edges.
  *
- * ★ ROUND AT ONE END AND RECTANGULAR AT THE OTHER IS THE WHOLE POINT. Four
+ * Round at one end and rectangular at the other is the whole point. Four
  * identical pegs let a plate go on rotated a half turn, and a stencil laid on
  * backwards paints a mirror image of one color over five correct ones. Two
  * shapes make that impossible without anyone having to notice.
  *
- * ★ THE OWNER'S OWN PLATES MODEL NO CLEARANCE AT ALL: the holes are exactly
- * the size of the pegs, 6.99 mm² against 6.99 and 6.00 against 6.00, measured
- * off the STLs. That works in CAD and does not work in a printer, where a
- * 3.00 mm hole comes out under 3.00 and a 3.00 mm peg comes out over it. So
- * `holeClearance` exists, it is added to the hole and never taken off the peg,
- * and its value is the owner's to confirm - it is a print-fit number, and
- * nobody can choose it from a screen.
+ * The reference plates model no clearance at all: the holes are exactly
+ * the size of the pegs, 6.99 mm² against 6.99 and 6.00 against 6.00,
+ * measured off the STLs. That works in CAD and does not work in a printer,
+ * where a 3.00 mm hole comes out under 3.00 and a 3.00 mm peg comes out
+ * over it. So `holeClearance` exists, it is added to the hole and never
+ * taken off the peg, and it is a print-fit number that nobody can choose
+ * from a screen.
  *
  * Coordinates here are the PLATE's own millimeters with y measured DOWN from
  * the top left, which is what an SVG uses. OpenSCAD flips y on import, so a
@@ -82,7 +82,6 @@ export function jigFits({
   if (featureInset - widest / 2 < MIN_FEATURE_EDGE_MM) {
     return {
       ok: false,
-      // STRINGS: owner review pending (DP-R2 text pack).
       reason:
         'The registration holes would break the edge of the plate. Move them further in, or make them smaller.',
     };
@@ -118,7 +117,7 @@ function circlePath(cx, cy, radius, segments = 48) {
  * The holes and notches a plate needs, as path data in plate millimeters.
  *
  * They are subpaths of the plate's ONE even-odd path, like every other cut: a
- * hole in a path of its own is not a hole, it is more material (T22, measured
+ * hole in a path of its own is not a hole, it is more material (measured
  * against OpenSCAD 2026.01.03).
  *
  * @param {object} spec
