@@ -251,7 +251,7 @@ describe('chunkIntoCards / SCAD All-cards parity', () => {
    * mode: Line_1..Line_20 (padded with ''), content_rows = index of last
    * non-empty line + 1, cards_count = max(1, ceil(content_rows /
    * rows_per_card)), card k = lines[k*r .. min((k+1)*r, content_rows)-1].
-   * If the SCAD formula changes, change this mirror AND the SCAD together.
+   * If the SCAD formula changes, change this mirror and the SCAD together.
    */
   function scadCardChunks(lines, rowsPerCard, totalLineParams = 20) {
     const all = Array.from(

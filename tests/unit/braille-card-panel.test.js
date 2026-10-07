@@ -299,7 +299,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
       expect(params().Line_1).toBe('\u283F');
     });
 
-    // Editing the text does NOT clear a dirty editor; the braille wins.
+    // Editing the text does not clear a dirty editor; the braille wins.
     await typeText('bye', () => {
       // Layout re-runs but the editor still drives the params
       expect(params().Line_1).toBe('\u283F');
@@ -888,7 +888,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
   });
 });
 
-describe('braille panel — when the engine fails (D-209)', () => {
+describe('braille panel — when the engine fails', () => {
   beforeEach(() => mountCardPanel());
   afterEach(() => destroyBraillePanel());
 
@@ -910,7 +910,7 @@ describe('braille panel — when the engine fails (D-209)', () => {
   });
 });
 
-describe('braille panel — characters with no braille (D-218)', () => {
+describe('braille panel — characters with no braille', () => {
   beforeEach(() => mountCardPanel());
   afterEach(() => destroyBraillePanel());
 
@@ -924,7 +924,7 @@ describe('braille panel — characters with no braille (D-218)', () => {
   });
 });
 
-describe('braille panel sign mode — the ADA capitals rule by default (D-208, D-236)', () => {
+describe('braille panel sign mode — the ADA capitals rule by default', () => {
   const CAP = String.fromCodePoint(0x2820);
   const BLANK = String.fromCodePoint(0x2800);
   const signRows = () =>
@@ -983,7 +983,7 @@ describe('braille panel sign mode — the ADA capitals rule by default (D-208, D
     expect(document.getElementById('brailleWarnings').textContent).toBe('');
   });
 
-  it('offers the two capitals choices as one named group, with no checkbox (D-236)', () => {
+  it('offers the two capitals choices as one named group, with no checkbox', () => {
     mountSign({ capitals: 'off' });
     expect(document.getElementById('brailleCapsToggle')).toBeNull();
     const group = document.getElementById('brailleCapsChoice');
@@ -1006,7 +1006,7 @@ describe('braille panel sign mode — the ADA capitals rule by default (D-208, D
     ]);
   });
 
-  it('on the ADA sign rule, only a letter standing alone keeps its capital (D-236)', async () => {
+  it('on the ADA sign rule, only a letter standing alone keeps its capital', async () => {
     mountSign({ capitals: 'off' });
     await typeText('Wing C', () =>
       expect(signRows()[0]?.textContent).toBe(
@@ -1089,7 +1089,7 @@ describe('braille panel card mode — contracted braille by default', () => {
   });
 });
 
-describe('braille panel — the table list without its catalog (D-222)', () => {
+describe('braille panel — the table list without its catalog', () => {
   const shippedCatalog = JSON.parse(
     readFileSync(
       join(
@@ -1175,11 +1175,11 @@ describe('braille panel sign mode — rows by real letter widths', () => {
   });
 });
 
-describe('braille panel — the message boxes (D-229, D-234)', () => {
+describe('braille panel — the message boxes', () => {
   beforeEach(() => mountCardPanel());
   afterEach(() => destroyBraillePanel());
 
-  // D-229: a box revealed together with its first message is not announced
+  // A box revealed together with its first message is not announced
   // (NVDA said only "alert"), so an empty box is never hidden; CSS keeps it
   // out of sight while it stays in the accessibility tree.
   it('never hides an empty message box', async () => {
@@ -1194,8 +1194,8 @@ describe('braille panel — the message boxes (D-229, D-234)', () => {
     expect(errors.hidden).toBe(false);
   });
 
-  // D-234: a live region says its whole text again whenever it is rewritten,
-  // and the unchanged editor warning was said again after every layout.
+  // A live region says its whole text again whenever it is rewritten, so an
+  // unchanged editor warning must not be rewritten after every layout.
   it('leaves a message box alone while its messages stay the same', async () => {
     const warnings = document.getElementById('brailleWarnings');
     await typeBraille(cell('a'), () =>

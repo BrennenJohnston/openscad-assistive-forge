@@ -248,7 +248,7 @@ describe('braille-wedge-card registry entries', () => {
     expect(program.examples).toContain('braille-wedge-card');
   });
 
-  it('braille-wedge-card is a program example (F-25 save prompt)', () => {
+  it('braille-wedge-card is a program example (save prompt)', () => {
     const programExampleKeys = new Set();
     for (const prog of Object.values(PROGRAM_DEFINITIONS)) {
       for (const key of prog.examples) programExampleKeys.add(key);
