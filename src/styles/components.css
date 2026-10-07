@@ -25,15 +25,13 @@
 
 /* Global focus ring for interactive elements that are not `.btn`.
  *
- * The width and offset come from the tokens, not from numbers written here.
- * They used to be hardcoded 3px/2px, and because this rule carries
- * `!important` it beat every attempt to thicken them: `--focus-ring-width`
- * is already raised to 4px by `:root[data-high-contrast='true']` and now by
- * the `prefers-contrast: more` block, and neither reached a single button or
- * link. That media query's own `*:focus-visible { outline-width: 4px
- * !important }` lost the same way — it sits at (0,1,0) and
- * `button:focus-visible` here is (0,1,1). MEASURED on WebKit before the
- * change: a focused button under `prefers-contrast: more` reported 3px. */
+ * The width and offset come from the tokens, not from numbers written here:
+ * this rule carries `!important`, so hardcoded values would beat every
+ * attempt to thicken them. `--focus-ring-width` is raised to 4px by
+ * `:root[data-high-contrast='true']` and by the `prefers-contrast: more`
+ * block, and that media query's own `*:focus-visible { outline-width: 4px
+ * !important }` would lose anyway: it sits at (0,1,0) and
+ * `button:focus-visible` here is (0,1,1). */
 a:focus,
 button:focus,
 summary:focus,
@@ -111,15 +109,13 @@ summary:focus-visible,
   min-width: 0;
 }
 
-/* Hide button on each group header (C12): full touch target anchored at the
-   far right, well clear of the disclosure chevron (which param groups move
-   to the LEFT of the label) — the old 24px ✕ sat 4px from the chevron and
-   was constantly mis-pressed.
+/* Hide button on each group header: full touch target anchored at the far
+   right, well clear of the disclosure chevron (which param groups move to
+   the left of the label), so it is not mis-pressed.
 
-   UF-35: it no longer sits inside the <summary>. It is painted into the
-   header by .forge-disclosure-actions and .param-group-hide-slot holds its
-   place in the real header row — see the disclosure-header actions block
-   below. Its own box is unchanged. */
+   It does not sit inside the <summary>: it is painted into the header by
+   .forge-disclosure-actions, and .param-group-hide-slot holds its place in
+   the real header row (see the disclosure-header actions block below). */
 .param-group-hide-btn {
   display: inline-flex;
   align-items: center;
@@ -143,10 +139,10 @@ summary:focus-visible,
     background-color var(--motion-base) ease;
 }
 
-/* The button is outside the summary now, and the actions layer sits over the
-   header, so hovering the button itself is NOT hovering the summary — it
-   needs its own :hover here or the control vanishes as the pointer lands on
-   it. */
+/* The button is outside the summary, and the actions layer sits over the
+   header, so hovering the button itself is not hovering the summary: it
+   needs its own :hover here or the control vanishes as the pointer lands
+   on it. */
 .forge-disclosure-row:has(> .forge-disclosure > summary:hover)
   .param-group-hide-btn,
 .forge-disclosure-row:has(> .forge-disclosure > summary:focus-within)
@@ -198,7 +194,7 @@ summary:focus-visible,
   transform: rotate(45deg);
 }
 
-/* C12: param groups carry the chevron LEFT of the label (desktop Customizer
+/* Param groups carry the chevron left of the label (desktop Customizer
    look); other .forge-disclosure users keep the shared right chevron. */
 details.param-group.forge-disclosure > summary::after {
   display: none;
@@ -221,7 +217,7 @@ details.param-group.forge-disclosure[open] > summary::before {
   transform: rotate(45deg);
 }
 
-/* Per-group restore chips in the hidden-groups bar (C12) */
+/* Per-group restore chips in the hidden-groups bar */
 .param-groups-hidden-bar {
   display: flex;
   flex-wrap: wrap;
@@ -256,45 +252,45 @@ details.param-group.forge-disclosure[open] > summary::before {
 }
 
 /* ============================================================================
-   Disclosure header actions (UF-35)
+   Disclosure header actions
    ============================================================================
    A <summary> IS the disclosure's button, so a control placed inside it is a
    control inside a control: axe's nested-interactive, and a node screen
    readers are not required to expose. Nor is there a half-step — a <details>
    whose first child is not a <summary> gets a UA-generated "Details" marker
-   in its place, measured.
+   in its place.
 
-   So the control moves out to a sibling layer stacked over the header, and a
-   slot of the same size holds its place in the real header row. Q-64 (owner,
-   2026-08-17): the layer goes BEFORE the <details> in source order, so the
-   control is reached one Tab stop early rather than behind the whole panel —
-   which measured 2 stops on Companion Files, 5 on Presets, 11 on the Console
-   and 12 on the Dimensions group.
+   So the control moves out to a sibling layer stacked over the header, and
+   a slot of the same size holds its place in the real header row. The
+   layer goes before the <details> in source order, so the control is
+   reached one Tab stop early rather than behind the whole panel (which
+   would be 2 stops on Companion Files, 5 on Presets, 11 on the Console and
+   12 on the Dimensions group).
 
    The layer repeats the summary's padding, min-height, gap, border and font
    size rather than carrying an offset of its own, so it tracks all three
    space-token breakpoints and the high-contrast font bump without arithmetic.
    ============================================================================ */
-/* position:relative, NOT grid or flex. The row must let the disclosure's own
-   margins collapse straight through it, or it contains them and every panel
-   below shifts — MEASURED at 4 to 8px with a grid row, and the param groups'
-   own margin-bottom: var(--space-lg) collapsed to var(--space-xs) when a rule
-   here tried to normalise it. A relative block establishes no formatting
-   context, so the disclosure keeps whatever margins it already had. */
+/* position:relative, not grid or flex. The row must let the disclosure's
+   own margins collapse straight through it, or it contains them and every
+   panel below shifts (4 to 8px with a grid row; normalising the margins
+   here would collapse the param groups' margin-bottom: var(--space-lg) to
+   var(--space-xs)). A relative block establishes no formatting context,
+   so the disclosure keeps whatever margins it already had. */
 .forge-disclosure-row {
   position: relative;
 }
 
 /* A row whose disclosure is gone or hidden must go with it, or the actions
-   layer is left painting a control over nothing — MEASURED: without this, a
-   help button that has never been visible in Classic or Simplified appears in
-   both. The disclosure can leave in five ways, and this is every one the app
-   uses: Classic relocates whole panels between docks with appendChild, which
-   moves the <details> and leaves the row behind; Simplified adds
-   .ui-mode-hidden; C12 hides a group with [hidden]; the parameter search adds
-   .search-empty; the starter subset adds .starter-empty (IR-9); and .hidden is
-   the shared utility. A seventh idiom would need a line here, so add one with
-   any new way of hiding a disclosure. */
+   layer is left painting a control over nothing, such as a help button
+   appearing in Classic or Simplified. The disclosure can leave in six ways,
+   and this is every one the app uses: Classic relocates whole panels
+   between docks with appendChild, which moves the <details> and leaves the
+   row behind; Simplified adds .ui-mode-hidden; a hidden param group gets
+   [hidden]; the parameter search adds .search-empty; the starter subset
+   adds .starter-empty; and .hidden is the shared utility. A seventh idiom
+   would need a line here, so add one with any new way of hiding a
+   disclosure. */
 .forge-disclosure-row:not(:has(> .forge-disclosure)),
 .forge-disclosure-row:has(> .forge-disclosure[hidden]),
 .forge-disclosure-row:has(> .forge-disclosure.hidden),
@@ -440,10 +436,10 @@ details.param-group.forge-disclosure[open] > summary::before {
   border: 1px solid var(--color-border);
 }
 
-/* D-57: --color-hover-bg-strong, not --color-border. This rule sets a
-   background and nothing else, so whatever text colour another rule chose has
-   to stay legible on it - and against --color-border it did not: 4.33:1 in
-   Forge light and 3.65:1 in dark. The token is one step along the same scale
+/* --color-hover-bg-strong, not --color-border. This rule sets a background
+   and nothing else, so whatever text colour another rule chose has to stay
+   legible on it, and against --color-border it would not: 4.33:1 in Forge
+   light and 3.65:1 in dark. The token is one step along the same scale
    and is defined per theme in semantic-tokens.css. */
 .btn-secondary:hover:not(:disabled) {
   background-color: var(--color-hover-bg-strong);
@@ -630,9 +626,9 @@ details.param-group.forge-disclosure[open] > summary::before {
 }
 
 /* ============================================================================
-   U-46 / Q-73a: the workflow row's four controls join this one
+   The workflow row's four controls join this one
    ============================================================================
-   mobile-toolbar.js owns the decision — mobile-shaped viewport AND an open
+   mobile-toolbar.js owns the decision — mobile-shaped viewport and an open
    project — and writes body[data-mobile-toolbar]. Everything below follows
    from that one attribute so the predicate is never restated.
 
@@ -649,20 +645,19 @@ body[data-mobile-toolbar='relocated'] .preview-drawer-header-right {
    Page button and the interface switch take the row — so all it contributes
    is the two 4px gaps around an invisible box. Measured at 412px: the header
    controls need 289.6px, and the row offers 287.2px with the branding in the
-   flow and 291.2px without it. Those 8px are the whole difference between one
-   line and two, and 1.6px is all the margin there is — which is why the row
-   is also given permission to wrap rather than clip (see layout.css). Nothing
-   leaves the screen that was on it; the logo and title were not rendering
-   here before this rule.
+   flow and 291.2px without it. Those 8px are the whole difference between
+   one line and two, and 1.6px is all the margin there is, which is why the
+   row is also given permission to wrap rather than clip (see layout.css).
+   Nothing leaves the screen that was on it: the logo and title do not
+   render here at zero width anyway.
 
-   Taken out of the FLOW, not out of the accessibility tree. `display: none`
-   was tried first and measured to remove the document's only <h1> — 0px wide
-   on the base but still announced, gone entirely with display:none. A page
-   losing its main heading on a phone is not a trade this release gets to
-   make, so this is the sr-only treatment instead: no layout cost, same
-   heading. `.header-content` carries position: relative for it, which is the
-   R2a/UF-5 lesson — an absolute box in a static container resolves against
-   <html> and adds phantom page scroll.
+   Taken out of the flow, not out of the accessibility tree: `display:
+   none` would remove the document's only <h1>, which at zero width is
+   still announced. A page losing its main heading on a phone is not an
+   acceptable trade, so this is the sr-only treatment instead: no layout
+   cost, same heading. `.header-content` carries position: relative for
+   it: an absolute box in a static container resolves against <html> and
+   adds phantom page scroll.
 
    Scoped to the relocated (mobile + project) state, because the welcome
    surface has no Main Page button and the branding really does show there. */
@@ -685,8 +680,8 @@ body[data-mobile-toolbar='relocated'] .header-branding {
 /* The heading goes sr-only (mobile-toolbar.js adds the class) and it is what
    pays for the four controls: 148px of text in a 376px row. It keeps naming
    #previewInfoContent through aria-labelledby, so no accessible name is lost.
-   position: relative here is the R2a/UF-5 lesson: an absolute sr-only box in
-   a static container resolves against <html> and adds phantom page scroll. */
+   position: relative here because an absolute sr-only box in a static
+   container resolves against <html> and adds phantom page scroll. */
 body[data-mobile-toolbar='relocated'] .preview-drawer-header-left {
   position: relative;
   flex: 0 1 auto;
@@ -694,7 +689,7 @@ body[data-mobile-toolbar='relocated'] .preview-drawer-header-left {
 
 /* The row the controls left. In Standard the menu bar still lives there and
    the row stays; in Simplified nothing visible remains, and a 54px band of
-   padding around nothing is exactly what U-46 asked us to give back. Keyed on
+   padding around nothing is given back. Keyed on
    the menu bar's real state rather than on the density, because Simplified
    can show menus too when the panel registry says so. */
 body[data-mobile-toolbar='relocated']
@@ -732,7 +727,7 @@ body[data-mobile-toolbar='relocated']
   }
 }
 
-/* Preview drawer toggle now uses shared .btn-collapse-panel styling (see above). */
+/* Preview drawer toggle uses shared .btn-collapse-panel styling (see above). */
 
 /* ============================================================================
    Actions Drawer Toggle Button (Mobile)
@@ -1332,7 +1327,7 @@ body[data-mobile-toolbar='relocated']
 }
 
 /* ============================================================================
-   Folder Tree Styles (v2)
+   Folder Tree Styles
    ============================================================================ */
 
 /* Header with actions */
@@ -1361,7 +1356,7 @@ body[data-mobile-toolbar='relocated']
   gap: var(--space-xs);
 }
 
-/* F35 Phase A — folder-sync status pill */
+/* Folder-sync status pill */
 .folder-sync-status {
   display: flex;
   align-items: center;
@@ -1396,7 +1391,7 @@ body[data-mobile-toolbar='relocated']
   flex: 0 0 auto;
 }
 
-/* Sub-plan H — linked folders on the welcome screen.
+/* Linked folders on the welcome screen.
    Rows read name → state → actions. The surrounding column centres its
    text; a list of rows with trailing buttons is far easier to scan left
    aligned, so this block opts out. */
@@ -1423,7 +1418,7 @@ body[data-mobile-toolbar='relocated']
 .linked-folder {
   /* Each button carries an sr-only span, which is absolutely positioned.
      Without a positioned ancestor those resolve against <html> and push
-     the page sideways — the phantom-scroll trap R2a hit at 375px. */
+     the page sideways. */
   position: relative;
   display: flex;
   align-items: center;
@@ -1740,19 +1735,17 @@ body[data-mobile-toolbar='relocated']
 }
 
 /* Smart Cache Clear Dialog Styles */
-/* D-69 (found by UF-36, fixed here). `.cache-clear-dialog` is on the
-   `.preset-modal` SCRIM (main.js:1795 sets both classes), not on the box, so
-   this max-width was shrinking the full-screen flex centring container.
-   MEASURED at b4e55bd: at 800px and 1280px the scrim rendered w=500 pinned to
-   the left edge, taking the dark backdrop and the centring with it; only
-   phones were unaffected, because there the max-width never binds. Size the
-   content box, which is what every other dialog here does. */
+/* `.cache-clear-dialog` is on the `.preset-modal` scrim (main.js sets both
+   classes), not on the box, so a max-width on it would shrink the
+   full-screen flex centring container, pinning a 500px scrim to the left
+   edge on any window wider than that. Size the content box, which is what
+   every other dialog here does. */
 .cache-clear-dialog .preset-modal-content {
   max-width: 500px;
 }
 
 /* reset.css's `* { margin: 0 }` destroys the UA's `dialog { margin: auto }`,
-   so every native <dialog> opened with showModal() rendered top-left (U-1). */
+   so every native <dialog> opened with showModal() would render top-left. */
 dialog:modal {
   margin: auto;
 }
@@ -2003,7 +1996,7 @@ dialog:modal {
 }
 
 /* Project File Manager Modal
- * The outer .preset-modal must NOT have max-width — it is the full-viewport
+ * The outer .preset-modal must not have max-width — it is the full-viewport
  * backdrop. Constraining its width pins the overlay to the left edge.
  * Width/sizing is scoped to the inner content box only. */
 .file-manager-modal .preset-modal-content {
@@ -2883,7 +2876,7 @@ dialog:modal {
   align-items: stretch;
 }
 
-/* DP-6: handing the reference image to a design parameter. */
+/* Handing the reference image to a design parameter. */
 .overlay-use-row {
   display: flex;
   align-items: center;
@@ -2900,7 +2893,7 @@ dialog:modal {
   display: none;
 }
 
-/* DP-5: the crop dialog. The picture is a read-only illustration of what the
+/* The crop dialog. The picture is a read-only illustration of what the
    numeric fields say, so it carries no controls of its own. */
 .crop-modal-help {
   margin: 0 0 var(--space-sm);
@@ -2975,7 +2968,7 @@ dialog:modal {
   min-height: 44px;
 }
 
-/* DP-5: which surface the reference image sits against. The millimetre field
+/* Which surface the reference image sits against. The millimetre field
    belongs to the "A height I choose" preset and is hidden otherwise, so the
    panel never shows a number the preset is about to overwrite. */
 .overlay-z-control {
@@ -3984,10 +3977,9 @@ body.high-contrast .param-tooltip {
   gap: var(--space-md);
 }
 
-/* DP-Q55 (answered app-wide, 2026-09-17): the range's hit box is 44 px tall,
-   the touch floor, with the 6 px track painted across its middle so nothing
-   about the look changes; the thumb stays the browser's own, in the app's
-   accent. It was a 6 px element, which was the whole target. */
+/* The range's hit box is 44 px tall, the touch floor, with the 6 px track
+   painted across its middle so nothing about the look changes; the thumb
+   stays the browser's own, in the app's accent. */
 .slider-container input[type='range'] {
   flex: 1;
   height: 44px;
@@ -4026,8 +4018,7 @@ body.high-contrast .param-tooltip {
 .slider-spinbox {
   width: 80px;
   min-width: 80px;
-  /* DP-Q55: the box meets the 44 px floor (it was 42 in the customizer and
-     38 in the drawing editor's font size). */
+  /* The box meets the 44 px floor. */
   min-height: 44px;
   padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--color-border);
@@ -4385,11 +4376,11 @@ select:focus-visible {
 
 /* Processing Overlay — shown during long operations (ZIP extraction, etc.)
  *
- * z-index: 10000 — intentionally ABOVE all modals (z-index: 1000).
+ * z-index: 10000 — intentionally above all modals (z-index: 1000).
  * This means the overlay will cover any open modal. Code that shows this
- * overlay MUST first ensure no blocking modal (especially the first-visit
+ * overlay must first ensure no blocking modal (especially the first-visit
  * disclosure) is visible, or the user will be trapped behind the overlay.
- * See the "FIRST-VISIT GATE" and "MANIFEST DEEP-LINK LIFECYCLE" comments
+ * See the "First-visit gate" and "Manifest deep-link lifecycle" comments
  * in src/main.js for the required ordering. */
 .processing-overlay {
   position: fixed;
@@ -4475,7 +4466,7 @@ select:focus-visible {
 }
 
 /* ========================================
-   Auto-Preview Indicator Styles (v1.2)
+   Auto-Preview Indicator Styles
    ======================================== */
 
 /* Preview container wrapper */
@@ -4503,9 +4494,9 @@ select:focus-visible {
 }
 
 /* State: Current - preview matches parameters.
-   Defect D-46 (UF-25, owner 2026-08-15): this pill carries 14px text ON the
-   success fill, so it needs the 4.5:1 text pair, not the 3:1 solid-UI pair.
-   MEASURED on --color-success in the light theme: 3.07:1. */
+   This pill carries 14px text on the success fill, so it needs the 4.5:1
+   text pair, not the 3:1 solid-UI pair (--color-success measures 3.07:1
+   in the light theme). */
 .preview-state-indicator.state-current {
   background-color: var(--color-success-solid);
   color: var(--color-on-success);
@@ -4702,7 +4693,7 @@ select:focus-visible {
   color: var(--color-warning-text);
 }
 
-/* Dark theme overrides for complexity indicator - now handled by semantic tokens */
+/* Dark theme overrides for complexity indicator - handled by semantic tokens */
 [data-theme='dark'] .complexity-tier-label.tier-beginner {
   background-color: var(--color-success-bg);
   color: var(--color-success-text);
@@ -4923,7 +4914,7 @@ select:focus-visible {
 }
 
 /* Output Format Section (Left Panel) */
-/* The whole stencil set in one download (DP-17). Sits above the output format
+/* The whole stencil set in one download. Sits above the output format
    because it is a different question: which parts, not which file type. */
 .stencil-set-export {
   display: flex;
@@ -5299,7 +5290,7 @@ select:focus-visible {
   font-weight: bold;
 }
 
-/* Preset actions row - now for Import / Export button */
+/* Preset actions row - for the Import / Export button */
 .preset-actions {
   display: flex;
   gap: var(--space-sm);
@@ -5621,7 +5612,7 @@ body.first-visit-blocking #app {
 }
 
 /* =========================================
-   First-visit interface choice (U-9)
+   First-visit interface choice
    ========================================= */
 
 /* The overlay shows both interfaces as a split, lightly blurred preview:
@@ -5637,7 +5628,7 @@ body.first-visit-blocking #app {
 .first-visit-backdrop-half {
   flex: 1 1 50%;
   background-size: cover;
-  /* Blur kept low on purpose: the owner wants the layouts discernable
+  /* Blur kept low on purpose: the layouts stay discernible
      behind the modal, with the modal still carrying the focus. */
   filter: blur(4px);
   transform: scale(1.04);
@@ -5650,7 +5641,7 @@ body.first-visit-blocking #app {
   background-position: left center;
 }
 
-/* U-21: in dark theme the Forge half shows the dark capture, so the
+/* In dark theme the Forge half shows the dark capture, so the
    backdrop's contrast matches the choice being offered. The class is set
    at modal open from the resolved theme (see applyFirstVisitThemeAssets
    in main.js). */
@@ -5673,28 +5664,19 @@ body.first-visit-blocking #app {
 .modal-first-visit {
   max-width: 1160px;
   width: min(94vw, 1160px);
-  /* U-19: the note list and card links made the modal taller than the
-     shared 90vh cap; at 900px-tall desktops that pushed Download &
-     Continue below the modal's internal scroll fold. A slimmer margin
-     keeps the primary action on screen without scrolling.
+  /* The modal is a column: the title row and the footer are fixed, and only
+     the body between them scrolls, so Download & Continue stays on screen
+     wherever the content overflows (a slimmer margin alone leaves it below
+     the internal scroll fold, even at 1366x768).
 
-     UF-41 (U-39): that was not enough — Download & Continue sat below an
-     UNMARKED internal fold at all six sizes measured, 1366x768 included,
-     because the whole box scrolled as one. It is now a column: the title
-     row and the footer are fixed, and only the body between them scrolls.
-     Wherever the content still overflows, the primary action is on screen
-     anyway, which is the half of the owner's directive that survives a
-     360x640 viewport.
-
-     max-height was calc(100vh - 40px). 100vh is the LARGE viewport height —
-     the height a phone has with its browser chrome hidden — so on a phone
-     showing its chrome the box was taller than the space it is centred in,
-     and align-items:center cuts an overflowing item off at BOTH ends. That
-     is the title disappearing under the browser chrome (164304), and it is
-     why it never reproduced in emulation, where there is no chrome and
-     100vh equals the visible height. 100% is measured against .modal's own
-     content box, which is the space that actually exists and already has
-     the safe-area insets taken out of it by .modal's padding. */
+     max-height is 100%, not calc(100vh - 40px): 100vh is the large viewport
+     height, the height a phone has with its browser chrome hidden, so on a
+     phone showing its chrome the box would be taller than the space it is
+     centred in, and align-items:center cuts an overflowing item off at both
+     ends, hiding the title under the browser chrome (and never in
+     emulation, where there is no chrome). 100% is measured against .modal's
+     own content box, which is the space that actually exists and already
+     has the safe-area insets taken out of it by .modal's padding. */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -5719,10 +5701,9 @@ body.first-visit-blocking #app {
   scrollbar-gutter: stable;
 }
 
-/* U-20: reset.css strips colour and underline from every anchor, and no
-   scoped rule ever put them back here, so the modal's links read as body
-   text in every theme. Same shape as .role-path-meta a — the house link
-   convention. */
+/* reset.css strips colour and underline from every anchor, so without this
+   the modal's links would read as body text in every theme. Same shape as
+   .role-path-meta a, the house link convention. */
 .modal-first-visit a {
   color: var(--color-accent-fg);
   text-decoration: underline;
@@ -5755,8 +5736,8 @@ body.first-visit-blocking #app {
   font-size: 0.85em;
 }
 
-/* U-19: the intro is a heading + four bullets. Desktop lays the list as
-   two columns of two via grid COLUMN flow - DOM order 1-4 fills the left
+/* The intro is a heading + four bullets. Desktop lays the list as
+   two columns of two via grid column flow - DOM order 1-4 fills the left
    column top to bottom, then the right, so the virtual cursor still reads
    1-2-3-4. Narrow viewports stack (see the 900px block below). */
 .first-visit-note-title {
@@ -5776,10 +5757,10 @@ body.first-visit-blocking #app {
   padding-left: var(--space-lg);
 }
 
-/* UF-41 (U-39): the mobile half of the intro. Native details/summary — the
+/* The mobile half of the intro. Native details/summary — the
    summary IS the button, so there is no ARIA here and no tabindex, and
    Enter/Space/click all work without a line of JavaScript. Hidden outright
-   on desktop-shaped viewports, where the four bullets above stay (Q-69). */
+   on desktop-shaped viewports, where the four bullets above stay. */
 .first-visit-note-rows {
   display: none;
   margin-top: var(--space-xs);
@@ -5815,7 +5796,7 @@ body.first-visit-blocking #app {
    same border technique, and the same direction convention the app's other
    disclosures use (points right when closed, down when open). Drawn from the
    summary itself so it cannot become a second control inside the control
-   (UF-35's nested-interactive rule). */
+   (axe's nested-interactive rule). */
 .first-visit-note-row > summary::after {
   content: '';
   flex-shrink: 0;
@@ -5875,7 +5856,7 @@ body.first-visit-blocking #app {
   gap: var(--space-md);
 }
 
-/* U-19: the card box is the CELL (label + sibling learn-more link). The
+/* The card box is the cell (label + sibling learn-more link). The
    label inside remains the radio's whole click surface; the link row is
    part of the visual card but cannot toggle the radio. */
 .first-visit-option-cell {
@@ -5905,10 +5886,9 @@ body.first-visit-blocking #app {
   background: var(--color-accent-subtle);
 }
 
-/* DP-1 put a card in the checked state on first paint, which is the first
-   time this modal's accent-coloured text has ever sat on the subtle accent
-   fill. MEASURED: --color-accent-fg (#a35e00) is 4.44:1 on yellow-4, just
-   under AA - it was only ever validated against white and slate-2. The
+/* A card is in the checked state on first paint, so this modal's
+   accent-coloured text sits on the subtle accent fill, where
+   --color-accent-fg (#a35e00) is 4.44:1 on yellow-4, just under AA. The
    selected-card tint stays (a yellow-9 border alone is ~1.3:1 on white, so
    dropping it would weaken the selected affordance); the foreground moves to
    the token for this surface instead. */
@@ -5951,8 +5931,8 @@ body.first-visit-blocking #app {
   padding: 0 var(--space-sm);
 }
 
-/* U-10 gate note: the visible reason inside the Classic card while its
-   radio is genuinely disabled (C-15 shape). Warning tokens, not literals;
+/* Gate note: the visible reason inside the Classic card while its
+   radio is genuinely disabled. Warning tokens, not literals;
    readable in both themes and high contrast. */
 .first-visit-gate-note {
   display: block;
@@ -5982,14 +5962,13 @@ body.first-visit-blocking #app {
   opacity: 0.5;
 }
 
-/* UF-41 (Q-68b): the same two 1400x900 captures, rendered as small
-   side-by-side thumbnails instead of full-width. At 353px each they were
-   the single biggest reason a 1366x768 laptop could not see Download &
-   Continue; at 176px the whole layout of each interface still reads — one
-   panel and a big preview against four panes and a code editor, which is
-   the thing that actually tells them apart at a glance — and the desktop
-   budget closes with room to spare. No new asset, so nothing to keep in
-   step with the UI and no new bytes in the bundle. */
+/* The same two 1400x900 captures, as small side-by-side thumbnails: at
+   353px each they would be the single biggest reason a 1366x768 laptop
+   could not see Download & Continue. At 176px the whole layout of each
+   interface still reads (one panel and a big preview against four panes
+   and a code editor, which is what tells them apart at a glance), and the
+   desktop budget closes with room to spare. No new asset, so nothing to
+   keep in step with the UI and no new bytes in the bundle. */
 .first-visit-shot {
   display: block;
   width: auto;
@@ -6035,9 +6014,9 @@ body.first-visit-blocking #app {
   accent-color: var(--color-accent);
 }
 
-/* UF-41 (U-39): the same shape UF-38 reviewed for the tutorial card. Height
-   zero and overflow visible, so the cue paints UPWARD over the last line of
-   the body and can never be the reason something is cut off. */
+/* The same shape as the tutorial card's cue: height zero and overflow
+   visible, so the cue paints upward over the last line of the body and can
+   never be the reason something is cut off. */
 .first-visit-scroll-cue {
   position: relative;
   height: 0;
@@ -6156,11 +6135,11 @@ body.first-visit-blocking #app {
   }
 }
 
-/* ── UF-41 (U-39): the mobile-shaped modal ────────────────────────────────
+/* ── The mobile-shaped modal ────────────────────────────────
    The class is set by updateFirstVisitClassicGate() from the same
    isViewportDesktopShaped() predicate that disables the Classic card, so
    the pictures go exactly where the choice they illustrate is not offered.
-   A media query cannot say "at least 1024 wide AND not portrait", and a
+   A media query cannot say "at least 1024 wide and not portrait", and a
    second definition of "mobile" inside one modal is the cross-file drift
    this project keeps paying for. */
 
@@ -6174,11 +6153,11 @@ body.first-visit-blocking #app {
   display: block;
 }
 
-/* Q-68a: no screenshots on a phone. The layout description they carried is
-   not lost — it moved to the always-present sr-only span each radio is
-   described by, so a screen-reader user hears exactly what they heard
-   before. (Both files are fetched regardless: the split backdrop behind
-   this modal paints from the same two URLs.) */
+/* No screenshots on a phone. The layout description they carry is also in
+   the always-present sr-only span each radio is described by, so a
+   screen-reader user hears the same either way. (Both files are fetched
+   regardless: the split backdrop behind this modal paints from the same
+   two URLs.) */
 .first-visit-mobile-shaped .first-visit-shot {
   display: none;
 }
@@ -6234,7 +6213,7 @@ body.first-visit-blocking #app {
     flex-direction: column;
   }
 
-  /* U-19: the four bullets stack single-column, still DOM order 1-4. */
+  /* The four bullets stack single-column, still DOM order 1-4. */
   .first-visit-note-list {
     grid-auto-flow: row;
     grid-template-columns: none;
@@ -6595,12 +6574,12 @@ body.first-visit-blocking #app {
 }
 
 /* Help icon button inside panel summary rows.
-   Defect D-45 (UF-25, owner 2026-08-15): sized 1.25em against --font-size-xs
-   this measured 16.3 x 16.3 px, under WCAG 2.2 AA's 24 x 24 minimum, and axe
-   also reported target-offset because it sits close to its neighbour. Pinned
-   to 24px rather than left in em so a font-size preference cannot shrink it
-   back under the minimum. The owner chose the WCAG floor over this project's
-   own 44px touch-target guidance for this inline affordance. */
+   Sized 1.25em against --font-size-xs it would measure 16.3 x 16.3 px,
+   under WCAG 2.2 AA's 24 x 24 minimum (and too close to its neighbour for
+   axe's target-offset). Pinned to 24px rather than left in em so a
+   font-size preference cannot shrink it back under the minimum. This
+   inline affordance takes the WCAG floor rather than the project's own
+   44px touch-target guidance. */
 .panel-help-btn {
   display: inline-flex;
   align-items: center;
@@ -6877,8 +6856,6 @@ body.first-visit-blocking #app {
   }
 }
 
-/* File Actions Panel — REMOVED (features now in File toolbar menu) */
-
 /* ---- Error Log Panel ---------------------------------------------------- */
 
 .error-log-panel {
@@ -6918,8 +6895,8 @@ body.first-visit-blocking #app {
 
 .error-log-output {
   max-height: 250px;
-  /* A column so the Show row stays put and only the entries scroll. The scroll
-     itself moved to .error-log-entries with it. */
+  /* A column so the Show row stays put and only the entries scroll; the
+     scroll itself is on .error-log-entries. */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -6938,7 +6915,7 @@ body.first-visit-blocking #app {
   overflow-y: auto;
 }
 
-/* Upstream's "&Show [All ▾]" row above the table (U6b). */
+/* Upstream's "&Show [All ▾]" row above the table. */
 .error-log-show-row {
   flex: 0 0 auto;
   display: flex;
@@ -7007,9 +6984,9 @@ body.first-visit-blocking #app {
   font-weight: 600;
 }
 
-/* Group: wider than the old Type column, because the cell now carries the
-   severity badge AND the group name. Kept as tight as that allows — every em
-   here comes off Info, which is the column worth reading. */
+/* Group: wide enough for the severity badge and the group name, and kept
+   as tight as that allows: every em here comes off Info, which is the
+   column worth reading. */
 .error-log-table th:nth-child(1) {
   width: 9.5em;
 }
@@ -7099,10 +7076,10 @@ body.first-visit-blocking #app {
   word-break: break-word;
 }
 
-/* table-layout is fixed, but a cell with no overflow rule still paints past its
-   column: a /tmp/input.scad path ran straight through the Line number beside it
-   (measured, P7b). Truncated with an ellipsis instead — the full path is in the
-   Info cell on the same row, so nothing is lost. */
+/* table-layout is fixed, but a cell with no overflow rule still paints
+   past its column: a /tmp/input.scad path would run straight through the
+   Line number beside it. Truncated with an ellipsis instead; the full path
+   is in the Info cell on the same row, so nothing is lost. */
 .error-log-cell--file {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7147,11 +7124,7 @@ body.first-visit-blocking #app {
   }
 }
 
-/* Edit Tools Panel — REMOVED (features now in Edit toolbar menu) */
-
-/* Design Tools Panel — REMOVED (features now in Design toolbar menu)
-   Styles for design-validity-status, design-geometry-info, and design-ast
-   modal are kept below since the toolbar menu still uses them. */
+/* The Design toolbar menu's validity status, geometry info and AST modal. */
 
 .design-validity-status {
   font-size: var(--font-size-sm);
@@ -7219,8 +7192,6 @@ body.first-visit-blocking #app {
   margin-top: var(--space-md);
   min-height: var(--size-touch-target);
 }
-
-/* Display Options Panel — REMOVED (features now in View toolbar menu) */
 
 /* ---- Animation Panel & Controls ----------------------------------------- */
 
@@ -7833,7 +7804,7 @@ body.first-visit-blocking #app {
   line-height: 1.3;
 }
 
-/* AF-4: a library whose files this copy cannot reach says so on its row. */
+/* A library whose files this copy cannot reach says so on its row. */
 .library-unavailable-note {
   display: block;
   font-size: var(--font-size-sm);
@@ -8011,9 +7982,8 @@ body.first-visit-blocking #app {
 
 /* File list */
 /* The box grows with the tree and stops at six rows, counted in the same
-   token the rows are sized from: 236px on a mouse, 284px on a phone. A flat
-   200px ceiling showed five rows before UF-31 made the rows one target tall
-   and four after. */
+   token the rows are sized from: 236px on a mouse, 284px on a phone. A
+   flat 200px ceiling would show only four. */
 .project-files-list {
   display: flex;
   flex-direction: column;
@@ -8026,9 +7996,9 @@ body.first-visit-blocking #app {
   scrollbar-color: var(--color-border) transparent;
 }
 
-/* Every row is one touch target tall (D-37). The vertical padding is gone
-   because min-height now sets the height: with both, a row carrying buttons
-   would stand taller than a row without and the tree would read ragged. */
+/* Every row is one touch target tall. No vertical padding, because
+   min-height sets the height: with both, a row carrying buttons would
+   stand taller than a row without and the tree would read ragged. */
 .project-file-item {
   display: flex;
   align-items: center;
@@ -8041,7 +8011,7 @@ body.first-visit-blocking #app {
   font-size: var(--font-size-sm);
 }
 
-/* A file row is focusable only so a navigation can land on it (D-54), and the
+/* A file row is focusable only so a navigation can land on it, and the
    global ring fires on [tabindex]:focus rather than :focus-visible, so a mouse
    click into a folder would leave a ring sitting on the first row. Keyboard
    focus still matches :focus-visible and keeps its ring; only the pointer case
@@ -8050,10 +8020,10 @@ body.first-visit-blocking #app {
   outline: none !important;
 }
 
-/* MEASURED: a row sits flush with the list's left, top and bottom edges, and
+/* A row sits flush with the list's left, top and bottom edges, and
    the list is a scroll container in both axes, so the default 2px-offset ring
    is clipped on three sides — for the folder buttons too, which is why this is
-   not scoped to the new file rows. Drawing it inside the row keeps the whole
+   not scoped to the file rows. Drawing it inside the row keeps the whole
    3px visible without moving anything. */
 .project-file-item:focus-visible {
   outline-offset: -3px !important;
@@ -8099,9 +8069,9 @@ body.first-visit-blocking #app {
   flex-shrink: 0;
 }
 
-/* Edit and remove measured 26.5x24 and 19.8x24 before UF-31 — the two
-   smallest controls in the panel. Sized by the token, never a literal 44:
-   --size-touch-target resolves to 36px on a fine pointer and 44px otherwise. */
+/* Edit and remove, the two smallest controls in the panel, sized by the
+   token, never a literal 44: --size-touch-target resolves to 36px on a
+   fine pointer and 44px otherwise. */
 .project-file-btn {
   display: inline-flex;
   align-items: center;
@@ -8145,7 +8115,7 @@ body.first-visit-blocking #app {
 
 /* Breadcrumb bar — compact to fit in the constrained companion panel. Its own
    vertical padding is 0 so the bar is exactly one touch target tall: the
-   crumbs inside it carry the height (D-37). */
+   crumbs inside it carry the height. */
 .file-nav-breadcrumbs {
   display: flex;
   align-items: center;
@@ -8194,8 +8164,8 @@ body.first-visit-blocking #app {
   flex-shrink: 0;
 }
 
-/* The home crumb measured 24.5x22 and a folder crumb 30.8x22 before UF-31,
-   and these are the controls that ARE the way back through the tree. */
+/* Full touch targets: these are the controls that are the way back
+   through the tree. */
 .file-nav-breadcrumb-btn {
   display: inline-flex;
   align-items: center;
@@ -8247,7 +8217,7 @@ body.first-visit-blocking #app {
   background: var(--color-bg-secondary);
 }
 
-/* In the companion panel the row is a real <button> (D-38), which needs the
+/* In the companion panel the row is a real <button>, which needs the
    inherited type and alignment back. The file-manager modal still renders it
    as a div, so this is scoped to the element rather than the class. */
 button.file-nav-folder-row {
@@ -8387,10 +8357,9 @@ button.file-nav-folder-row {
   width: 100%;
 }
 
-/* AF-4 (C-20): .btn-sm alone resolves to 32px on desktop; Add File and
-   Save as Project are real targets, so they take the full touch token
-   (44px touch / 36px fine pointer) - the UF-31 rule, same as the
-   linked-folder actions. */
+/* .btn-sm alone resolves to 32px on desktop; Add File and Save as Project
+   are real targets, so they take the full touch token (44px touch / 36px
+   fine pointer), the same as the linked-folder actions. */
 .project-files-actions .btn,
 .companion-save-btn {
   min-height: var(--size-touch-target);
@@ -9680,8 +9649,9 @@ button.file-nav-folder-row {
   gap: var(--space-md);
   font-weight: 500;
   transform: translateY(-100%);
-  /* D-190: sliding it away left its buttons in the Tab order and its alert
-     text within a screen reader's reach. Hidden, once the slide is over. */
+  /* Sliding it away alone would leave its buttons in the Tab order and its
+     alert text within a screen reader's reach. Hidden, once the slide is
+     over. */
   visibility: hidden;
   transition:
     transform var(--motion-slow) ease-out,
@@ -10122,11 +10092,11 @@ button.file-nav-folder-row {
   border-radius: var(--border-radius-sm);
 }
 
-/* The console modal's <pre>. Named for the modal because it used to be called
-   .console-output, the same class the Log view's #console-output div carries,
-   and being the later block it won on both — handing a div full of generated
-   <div> rows a pre-wrap that rendered the generator's own indentation as blank
-   lines. Keep this selector element-specific to the modal. */
+/* The console modal's <pre>. Named for the modal: the Log view's
+   #console-output div is a different element, and a shared class would
+   hand its generated <div> rows a pre-wrap that renders the generator's
+   own indentation as blank lines. Keep this selector element-specific to
+   the modal. */
 .console-modal-output {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: var(--font-size-sm);
@@ -10325,7 +10295,7 @@ button.file-nav-folder-row {
   }
 }
 
-/* ========== FEATURES GUIDE MODAL ========== */
+/* ========== Features guide modal ========== */
 
 .features-guide-body {
   display: flex;
@@ -10677,13 +10647,13 @@ button.file-nav-folder-row {
   pointer-events: none;
 }
 
-/* D-66 (UF-38). `right: 100%` anchors the hint to the X and lets it run
-   leftward across whatever is there. On a phone the title, the hint and the X
-   share one row, so it printed straight over "Features Guide" - the owner
-   photographed it (164657). Give the hint its own row inside the header bar
-   instead: `flex-wrap` plus a full-basis pseudo-element reserves real space,
-   so it cannot overlap anything rather than merely being aimed elsewhere.
-   The close button's pulse is untouched. */
+/* `right: 100%` anchors the hint to the X and lets it run leftward across
+   whatever is there. On a phone the title, the hint and the X share one
+   row, so it would print straight over "Features Guide". Give the hint
+   its own row inside the header bar instead: `flex-wrap` plus a
+   full-basis pseudo-element reserves real space, so it cannot overlap
+   anything rather than merely being aimed elsewhere. The close button's
+   pulse is untouched. */
 @media (max-width: 600px) {
   #featuresGuideModal
     .modal-content.tutorial-target-highlight
@@ -10844,7 +10814,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   }
 }
 
-/* ========== WELCOME SCREEN FEATURES OVERVIEW ========== */
+/* ========== Welcome screen features overview ========== */
 
 .features-overview {
   margin-top: var(--space-xl);
@@ -11023,7 +10993,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin-bottom: 0;
 }
 
-/* W3: single-surface welcome — start actions and saved projects side by
+/* Single-surface welcome — start actions and saved projects side by
    side under one Get Started heading; stacks on narrow viewports */
 .welcome-columns {
   display: grid;
@@ -11070,7 +11040,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 
-/* U-23 (UF-16): the Beginners-card spotlight — a passive attention
+/* The Beginners-card spotlight — a passive attention
    affordance borrowing the tutorial highlight's visual language. The halo
    and the tag strip are the whole treatment: no veil, no focus trap. */
 .role-path-card.welcome-spotlight {
@@ -11143,10 +11113,10 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   }
 }
 
-/* U-27 (UF-22): the welcome tour nudge. The dim matches every other modal in
-   the app (.modal-overlay); what is new is that the tutorial menu stays lit
-   above it, so the dialog's words have something to point at. The lit region
-   is decoration only — pointer-events:none, and the dialog is aria-modal. */
+/* The welcome tour nudge. The dim matches every other modal in the app
+   (.modal-overlay), but the tutorial menu stays lit above it, so the
+   dialog's words have something to point at. The lit region is
+   decoration only: pointer-events:none, and the dialog is aria-modal. */
 .tour-nudge-backdrop {
   position: fixed;
   inset: 0;
@@ -11431,7 +11401,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 /* The four documentation links and the one action share this look. They do
-   NOT share a class: `.spotlight-link` means "a link to a document, with an
+   not share a class: `.spotlight-link` means "a link to a document, with an
    href", and an accessibility test asserts exactly that about all four. */
 .spotlight-link,
 .spotlight-action {
@@ -11670,11 +11640,11 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 /* Body content area.
-   D-65 (UF-38): `flex: 1` means the body is whatever the header and footer
-   leave, and two separate rules cap the card - the JS dock cap
-   (viewport.height * 0.45) and the `50dvh` further down this file. Neither
-   left the body a floor, so on a phone-height viewport the instructions were
-   the only part of the card that could vanish. */
+   `flex: 1` means the body is whatever the header and footer leave, and
+   two separate rules cap the card: the JS dock cap (viewport.height *
+   0.45) and the `50dvh` further down this file. Without a floor, on a
+   phone-height viewport the instructions would be the only part of the
+   card that could vanish. */
 .tutorial-body {
   flex: 1;
   min-height: var(--tutorial-body-min-height);
@@ -11686,7 +11656,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   color: var(--color-text-primary);
 }
 
-/* The cue that admits there is more below the fold (D-65).
+/* The cue that admits there is more below the fold.
    A zero-height flex item between the body and the footer: it cannot take
    space from the body it is reporting on, and being positioned it paints over
    the body's last, half-cut line. Decorative throughout - `aria-hidden` on the
@@ -11949,8 +11919,9 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   gap: var(--space-sm);
 }
 
-/* Tutorial navigation buttons - MUST override reset.css button { background: none; }
-   This is critical for accessibility - without explicit colors, Back button is invisible in dark theme */
+/* Tutorial navigation buttons must override reset.css's
+   button { background: none; }: without explicit colors, the Back button
+   is invisible in the dark theme. */
 .tutorial-btn-back,
 .tutorial-btn-next {
   min-height: 36px;
@@ -12488,17 +12459,17 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
   }
 }
 
-/* Mobile: only dock the panel when NOT positioned near a target.
+/* Mobile: only dock the panel when not positioned near a target.
    When a target is highlighted, allow JS positioning so the panel can move
    out of the way instead of covering the control. */
 @media (max-width: 600px) {
-  /* D-65 (UF-38): `:not(.tutorial-panel-positioned)` was also catching the
-     two branches that CENTRE the card - "position: center" steps and the
-     target-not-found fallback - which set `top: 50%` and a centring transform
-     in JS. Those cards then inherited bottom-sheet geometry they never asked
-     for, including the safe-area `padding-bottom` below: MEASURED at 412x810,
-     16px of dead band under the footer taken straight out of the body, and
-     ~48px on a real gesture-nav phone. A centred card is not a sheet. */
+  /* `:not(.tutorial-panel-positioned)` alone would also catch the two
+     branches that centre the card ("position: center" steps and the
+     target-not-found fallback), which set `top: 50%` and a centring
+     transform in JS. Those cards would then inherit bottom-sheet geometry
+     they never asked for, including the safe-area `padding-bottom` below
+     (16px of dead band under the footer at 412x810, ~48px on a real
+     gesture-nav phone). A centred card is not a sheet. */
   .tutorial-panel:not(.tutorial-panel-positioned):not(
       .tutorial-panel-centered
     ) {
@@ -12675,7 +12646,7 @@ body.tutorial-body-locked {
    ============================================================================ */
 
 /* =========================================
-   Parameter Search and Navigation (C2)
+   Parameter Search and Navigation
    ========================================= */
 
 .param-search-section {
@@ -12825,13 +12796,13 @@ body.tutorial-body-locked {
   display: none !important;
 }
 
-/* IR-9 — the starter subset. A manifest can say which handful of parameters a
+/* The starter subset. A manifest can say which handful of parameters a
    beginner should meet first; everything else waits behind one button. The
-   wall is display:none, which hides a control from EVERYBODY: a screen reader
+   wall is display:none, which hides a control from everybody: a screen reader
    never reaches a control a sighted person cannot see either, which is the
    only honest form of progressive disclosure. .starter-wall-open is what the
    reveal adds, and it puts everything back.
-   Every token below is one this project DEFINES - checked, not assumed. */
+   Every token below is one this project defines. */
 .param-control.starter-hidden:not(.starter-wall-open) {
   display: none !important;
 }
@@ -12896,11 +12867,10 @@ body.tutorial-body-locked {
 }
 
 /* =========================================
-   Workflow Progress Indicator (C3: COGA)
+   Workflow Progress Indicator (COGA)
    ========================================= */
 
 .workflow-progress {
-  /* Changed from fixed to sticky */
   position: sticky;
   top: 0;
   left: 0;
@@ -12919,12 +12889,10 @@ body.tutorial-body-locked {
   gap: var(--space-md);
 }
 
-/* Owner order 2026-08-09 moved the theme + high-contrast controls into
-   this row (beside Full Screen and Help). Their old header home was
-   always visible, so the row now shows on the welcome screen too — with
-   only the controls that do something before a file is open. Relocating
-   them must not make high contrast unreachable on the first screen a
-   low-vision user meets. */
+/* The theme and high-contrast controls live in this row (beside Full
+   Screen and Help), so the row shows on the welcome screen too, with only
+   the controls that do something before a file is open: high contrast
+   must stay reachable on the first screen a low-vision user meets. */
 #app:has(#welcomeScreen:not(.hidden)) #workflowProgress.hidden {
   display: flex !important;
 }
@@ -12944,11 +12912,11 @@ body.tutorial-body-locked {
   margin-left: auto;
 }
 
-/* One control height across the row (U-16): the HC and theme toggles
-   already stand at --size-touch-target, and the old literal 32px held
-   Full Screen and Help visibly shorter beside them — and under the 44px
-   touch minimum on phones. The token is pointer-aware, so the row is
-   uniform in every regime instead of only the one it was tuned in. */
+/* One control height across the row: the HC and theme toggles stand at
+   --size-touch-target, and a literal 32px would hold Full Screen and Help
+   visibly shorter beside them, and under the 44px touch minimum on
+   phones. The token is pointer-aware, so the row is uniform in every
+   regime. */
 .workflow-actions .btn {
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-size-xs);
@@ -13013,7 +12981,7 @@ body.tutorial-body-locked {
 }
 
 /* =========================================
-   Plain Language Error Display (C3: COGA)
+   Plain Language Error Display (COGA)
    ========================================= */
 
 .error-message-friendly {
@@ -13980,7 +13948,7 @@ body.tutorial-body-locked {
    Keyboard Shortcuts Editor
    =================================================== */
 
-/* About dialog (G6). Small like upstream's, and it inherits every modal
+/* About dialog. Small like upstream's, and it inherits every modal
    behaviour from .modal / .modal-content. */
 .about-modal-content {
   max-width: 34rem;
@@ -14262,10 +14230,10 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================================
-   Expert Mode (M2) - Code Editor Interface
+   Expert Mode - Code Editor Interface
    ============================================================================
-   Two-panel layout with code editor and preview. Supports Monaco and textarea
-   fallback editor. Accessibility-first design per M2 specification.
+   Two-panel layout with code editor and preview. Supports CodeMirror and
+   the textarea fallback editor.
    ============================================================================ */
 
 /* Mode toggle button in header — matches .btn .btn-sm sizing contract */
@@ -14841,7 +14809,7 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================
-   A shared link that failed (D-187): at the top of "Open or start
+   A shared link that failed: at the top of "Open or start
    a project" on the Main Page, until dismissed
    ============================================================ */
 
@@ -14886,7 +14854,7 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================
-   Start, a bar that moves, and Cancel (DP-34)
+   Start, a bar that moves, and Cancel
    ============================================================ */
 
 .trace-progress {
@@ -14896,7 +14864,7 @@ body.tutorial-body-locked {
   margin-top: var(--space-sm);
 }
 
-/* DP-80: Start and Crop first side by side, wrapping on a narrow column.
+/* Start and Crop first side by side, wrapping on a narrow column.
    Start keeps the room; Crop first takes its own width. */
 .trace-progress-buttons {
   display: flex;
@@ -14973,13 +14941,13 @@ body.tutorial-body-locked {
   color: var(--color-text-secondary);
 }
 
-/* DP-52: the conversion dialog. The bar, the stage sentence and Cancel moved
-   here from the inline panel: one place for the progress, in front of the page
+/* The conversion dialog. The bar, the stage sentence and Cancel live here,
+   not in the inline panel: one place for the progress, in front of the page
    the job has made unavailable. The overlay and the box are the app's own
    modal classes; what is set here is the stack inside the box. */
-/* No backdrop blur on THIS overlay. The dialog stands over the live 3D canvas
+/* No backdrop blur on this overlay. The dialog stands over the live 3D canvas
    while a slow machine is already busy, and a blur over a WebGL surface is
-   paid again on every frame; MEASURED at 4x CPU, the first frames after the
+   paid again on every frame: at 4x CPU, the first frames after the
    overlay appeared took 200 to 500 ms with the blur and 10 to 20 ms without.
    A darker plain overlay says the same thing for nothing. */
 .conversion-dialog .modal-overlay {
@@ -15101,7 +15069,7 @@ body.tutorial-body-locked {
   gap: var(--space-sm);
 }
 
-/* DP-79: the two photo defaults as switches. The label wraps the switch and
+/* The two photo defaults as switches. The label wraps the switch and
    its words, so the whole line is the target; the help sits under it. */
 .ink-switch-row {
   grid-template-columns: 1fr;
@@ -15228,12 +15196,10 @@ body.tutorial-body-locked {
    Publish / Share Project Modal
    ============================================================ */
 
-/* D-99: this block was written against token names this project does not
-   define (--color-surface-raised, --spacing-*, --radius-*), each with a
-   Catppuccin dark value as its fallback. In the light theme that painted a
-   dark box under dark text: the generated manifest and the URL field both
-   measured about 1.03:1 against WCAG's 4.5:1. Every value here now comes from
-   the project's own tokens, so the dialog follows the theme. */
+/* Every value here comes from the project's own tokens, so the dialog
+   follows the theme: undefined token names with dark fallbacks would
+   paint a dark box under dark text in the light theme (about 1.03:1
+   against WCAG's 4.5:1). */
 
 .publish-manifest-container {
   position: relative;
@@ -15366,7 +15332,7 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================================
-   Phase 8: Customizer Panel Header Row
+   Customizer Panel Header Row
    Mirrors desktop OpenSCAD Customizer header: Automatic Preview | Show Details | Reset
    ============================================================================ */
 
@@ -15402,7 +15368,7 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================================
-   Phase 9: Preset Panel Search + Combined Actions Row
+   Preset Panel Search + Combined Actions Row
    ============================================================================ */
 
 .preset-search {
@@ -15494,8 +15460,7 @@ body.tutorial-body-locked {
 /* ---------------------------------------------------------------------------
    SVG Preparation Workspace
    Inline editor component with dual preview, object list, and fullscreen.
-   Replaces the old .svg-preparer-* modal. Follows the .measure-fullscreen
-   pattern for fullscreen expansion.
+   Follows the .measure-fullscreen pattern for fullscreen expansion.
    --------------------------------------------------------------------------- */
 
 /* ── Region shell ────────────────────────────────────────────────────────── */
@@ -15618,19 +15583,19 @@ body.tutorial-body-locked {
   width: 100%;
   height: 100%;
   max-height: 300px;
-  /* DP-Q37: two fingers are the editor's, one finger is the page's. The
-     browser keeps vertical panning - which is how somebody gets DOWN a long
+  /* Two fingers are the editor's, one finger is the page's. The
+     browser keeps vertical panning - which is how somebody gets down a long
      editor on a phone - and hands us everything else. On the picture and
      nowhere else: a page you cannot scroll is a worse bargain than a picture
      you cannot pinch. */
   touch-action: pan-y;
 }
 
-/* ── DP-40: the only part of the picture a pointer can hit ───────────────
+/* ── The only part of the picture a pointer can hit ───────────────
    Invisible, on top, one shape per element. `pointer-events: all` is what
    makes an unpainted shape hittable at all: it means "answer for your fill and
    your stroke whatever they are painted", which is the only way a stroke-only
-   drawing - every CAD export, D-118's whole subject - can be pointed at. */
+   drawing - every CAD export - can be pointed at. */
 .svg-prep-hit-path {
   fill: none;
   stroke: none;
@@ -15659,7 +15624,7 @@ body.tutorial-body-locked {
   vector-effect: non-scaling-stroke;
 }
 
-/* DP-47: the shapes a person CHOSE, drawn on the picture.
+/* The shapes a person chose, drawn on the picture.
 
    An outline and no fill, so it never argues with the role tint underneath it
    about what color a shape is, and so several selected shapes at once still
@@ -15667,11 +15632,10 @@ body.tutorial-body-locked {
    which is a solid translucent fill of one shape: the two are on screen
    together whenever somebody points at a row while holding a selection.
 
-   A light halo sits UNDER the dashed outline (DP-R5 session 4). The outline
-   used to be drawn in the ink color, and the stand-in paints raised shapes in
-   the ink color, so on the owner's logo three chosen letters showed no mark a
-   person could see. The halo is the paper color and the outline the focus
-   color, which reads on ink and on paper alike.
+   A light halo sits under the dashed outline. An outline in the ink color
+   would vanish on raised shapes, which the stand-in paints in the ink
+   color; the halo is the paper color and the outline the focus color,
+   which reads on ink and on paper alike.
 
    non-scaling-stroke keeps both one width at every zoom, which matters here
    more than usual: a person zooms in to find the small shapes worth
@@ -15723,19 +15687,19 @@ body.tutorial-body-locked {
   opacity: 0.75;
 }
 
-/* DP-47 P4: the stand-in is PAINTED from the roles, not shown as the original
+/* The stand-in is painted from the roles, not shown as the original
    file, so a shape set to Ignore leaves the picture at once. Ink and paper
    rather than the drawing's own colors: this pane answers "what will print",
    and what prints is one material. */
-/* D-155: literal ink and paper, like the combined result's own black, because
+/* Literal ink and paper, like the combined result's own black, because
    the dark theme inverts the whole picture: the theme's light text token
-   turned dark on a dark pane and the stand-in all but vanished while the
-   shapes combined. Black inverts to white there, as the result does. */
+   would turn dark on a dark pane. Black inverts to white there, as the
+   result does. */
 .svg-prep-standin-path--raised {
   fill: #000;
 }
 
-/* D-154: a hole is paper cut out of ink, and paper on paper shows nothing, so
+/* A hole is paper cut out of ink, and paper on paper shows nothing, so
    a hole carries a fine dashed outline in a neutral color (it survives the
    dark theme's inversion). */
 .svg-prep-standin-path--hole {
@@ -15746,7 +15710,7 @@ body.tutorial-body-locked {
   vector-effect: non-scaling-stroke;
 }
 
-/* DP-Q60 (2026-09-17): with layers, an On shape is painted in its layer's
+/* With layers, an On shape is painted in its layer's
    color, each a step lighter than the last. The tokens' dark values are the
    inverses, so the panes' inversion in the dark theme gives the true color
    back. Two classes beat the one-class ink rule above. */
@@ -15763,7 +15727,7 @@ body.tutorial-body-locked {
   fill: var(--svg-prep-layer-3, #a6c72b);
 }
 
-/* D-154, DP-Q60: a shape turned off stays in the picture, its layer's color
+/* A shape turned off stays in the picture, its layer's color
    muted under a diagonal hatch with a dashed edge: there, and not printing.
    The fill is the pattern the picture carries (a presentation attribute, so
    no fill is set here); the edge takes the layer's color. Above the ink,
@@ -15862,9 +15826,9 @@ body.tutorial-body-locked {
   flex-shrink: 0;
 }
 
-/* D-154, DP-Q60: the legend says what the picture paints: ink (or one chip
+/* The legend says what the picture paints: ink (or one chip
    per layer), paper with a dashed edge for Cut out, a hatch for Off. The
-   chips sit OUTSIDE the inverted panes, so they take the true colors: in
+   chips sit outside the inverted panes, so they take the true colors: in
    the dark theme the tokens hold the inverses, and the chips invert them
    back themselves. */
 .svg-prep-legend-chip--foreground {
@@ -15908,7 +15872,7 @@ body.tutorial-body-locked {
   align-self: center;
 }
 
-/* D-153: seven buttons now, every one a 44 px target (the shared token is
+/* Seven buttons, every one a 44 px target (the shared token is
    36 px); the row wraps where it must. */
 .svg-prep-zoom-controls button {
   min-width: 44px;
@@ -15943,16 +15907,14 @@ body.tutorial-body-locked {
 
 .svg-prep-object {
   display: flex;
-  /* DP-39 P1. The row could not fit on one line and had no way to say so, so
-     it took the space out of the NAME and then out of Delete. MEASURED in the
-     standalone door on the bird, at 768: the name rendered at ZERO pixels wide
-     and Delete ran 38 px past the list, 40 px of the row clipped away. Seven
-     rows of a dot, three radios and a box, with nothing to tell one shape from
-     another - which is the complaint this release exists for.
+  /* The row cannot always fit on one line. Without wrapping it would take the
+     space out of the name and then out of Delete: at 768 wide the name would
+     render at zero pixels and Delete would run 38 px past the list, leaving
+     rows of a dot, three radios and a box with nothing to tell one shape from
+     another.
 
      Wrapping is what lets the row say it has run out of room. Nothing moves
-     while there is room for it: MEASURED at 1280 the row still lays out on one
-     line exactly as before. */
+     while there is room for it: at 1280 the row still lays out on one line. */
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2xs) var(--space-sm);
@@ -15968,14 +15930,13 @@ body.tutorial-body-locked {
   background: var(--color-hover-bg);
 }
 
-/* DP-39 P2: chosen.
-   A tinted ground AND a bar down the leading edge, so the state survives a
+/* A tinted ground and a bar down the leading edge, so the state survives a
    greyscale screenshot and never rests on colour alone.
 
-   The bar is the text colour, not the accent. MEASURED: the accent is #ffe629
-   on a #fcfcfd row, about 1.3:1, and a mark that carries meaning owes 3:1 to
-   what is beside it - the yellow was drawing perfectly and saying nothing.
-   It is the right colour for the role switch, where it is a GROUND with dark
+   The bar is the text colour, not the accent: the accent is #ffe629 on a
+   #fcfcfd row, about 1.3:1, and a mark that carries meaning owes 3:1 to
+   what is beside it, so the yellow would draw perfectly and say nothing. It
+   is the right colour for the role switch, where it is a ground with dark
    text on it and the text carries the contrast.
 
    And a real token for the ground, not an invented name with a fallback: a
@@ -15984,7 +15945,7 @@ body.tutorial-body-locked {
 
    The ground is the same step hover uses, on purpose. Hover is a thing that
    happens while a pointer is somewhere; selection is a thing that stays, and
-   the BAR is what says so - it is there when the pointer has gone. */
+   the bar is what says so - it is there when the pointer has gone. */
 .svg-prep-object--selected,
 .svg-prep-object--selected:hover {
   background: var(--color-bg-tertiary);
@@ -16016,24 +15977,24 @@ body.tutorial-body-locked {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* `min-width: 0` let the name be squeezed to nothing, which is what a flex
-     item does when something has to give and it is the only thing that can.
-     Six characters and an ellipsis is the floor: enough to tell one shape from
-     another, and the width the row is signed to keep for it. */
+  /* `min-width: 0` would let the name be squeezed to nothing, which is what
+     a flex item does when something has to give and it is the only thing
+     that can. Six characters and an ellipsis is the floor: enough to tell one
+     shape from another, and the width the row keeps for it. */
   flex: 1 1 6ch;
   min-width: 6ch;
 }
 
-/* ── DP-39 P2: the role control, drawn as a switch ───────────────────────
+/* ── The role control, drawn as a switch ─────────────────────────────────
    Three radios with the words beside them cost 199 px. Drawn as one
    segmented control with "Raised" in place of "Foreground" they cost about
    145, which is what lets the row hold one line down to the drawer's 280 px
    floor.
 
-   NOT ONE TAG OF MARKUP CHANGES. It is the same fieldset, the same legend and
-   the same three radios it has always been, so arrow keys still walk the
-   group, the legend still names it, and what a screen reader reads is what it
-   read before. Only the paint is different. */
+   The markup is unchanged: the same fieldset, the same legend and the same
+   three radios, so arrow keys still walk the group, the legend still names
+   it, and a screen reader reads what it always read. Only the paint is
+   different. */
 .svg-prep-role-group {
   display: inline-flex;
   flex: 0 0 auto;
@@ -16056,9 +16017,9 @@ body.tutorial-body-locked {
   padding: 0 var(--space-xs);
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
-  /* Both ways. MEASURED at 412 with height alone: "Hole" came to 37.75 px
-     wide, because it is a short word and padding is all that was holding it
-     out. A 44 px floor that only applies to one axis is not a 44 px floor. */
+  /* Both ways. With height alone, at 412 wide "Hole" would come to 37.75 px,
+     because it is a short word and padding is all that holds it out. A 44 px
+     floor that only applies to one axis is not a 44 px floor. */
   min-height: var(--size-touch-target);
   min-width: var(--size-touch-target);
   white-space: nowrap;
@@ -16066,7 +16027,7 @@ body.tutorial-body-locked {
 
 /* An inset shadow, not a border: a border takes its pixel out of the label's
    padding box, and the radio laid over that box then measures 43 px against a
-   44 px floor. MEASURED. The divider is drawn, the box stays whole. */
+   44 px floor. The divider is drawn, the box stays whole. */
 .svg-prep-role-group label + label {
   box-shadow: inset 1px 0 0 var(--color-border);
 }
@@ -16102,7 +16063,7 @@ body.tutorial-body-locked {
   cursor: not-allowed;
 }
 
-/* ── DP-39 P2: the row's own menu ────────────────────────────────────────
+/* ── The row's own menu ──────────────────────────────────────────────────
    Offset, Layer and Delete stop competing with the name for the one line.
    The panel takes the row's full width when it opens and pushes nothing off
    the edge, which an absolutely positioned menu would have done on the last
@@ -16171,7 +16132,7 @@ body.tutorial-body-locked {
   cursor: not-allowed;
 }
 
-/* ── Hole placement warning (DP-11) ─────────────────────────────────────── */
+/* ── Hole placement warning ─────────────────────────────────────────────── */
 .hole-placement-warning {
   margin: 0 0 var(--space-sm);
   padding: var(--space-xs) var(--space-sm);
@@ -16193,7 +16154,7 @@ body.tutorial-body-locked {
   }
 }
 
-/* ── Layer column (DP-7, shown only for a tile that opts in) ────────────── */
+/* ── Layer column (shown only for a tile that opts in) ──────────────────── */
 .svg-prep-object .svg-prep-layer-select {
   flex-shrink: 0;
   padding: var(--space-2xs) var(--space-xs);
@@ -16237,7 +16198,7 @@ body.tutorial-body-locked {
   line-height: 1.4;
 }
 
-/* DP-83: the Design width box's help, under the tools row where a sentence
+/* The Design width box's help, under the tools row where a sentence
    can wrap; tied to the box by aria-describedby. */
 .svg-prep-design-width-help {
   margin: 0 0 var(--space-sm);
@@ -16250,7 +16211,7 @@ body.tutorial-body-locked {
   display: none;
 }
 
-/* DP-54: the too-thin notice above the list, and a row's mark beside its name. */
+/* The too-thin notice above the list, and a row's mark beside its name. */
 .svg-prep-thin-notice {
   margin: 0 0 var(--space-xs);
   font-size: var(--font-size-sm);
@@ -16334,9 +16295,9 @@ body.tutorial-body-locked {
   display: none;
 }
 
-/* DP-4: removing shapes from the list, not just from the output. The bar sits
-   outside the role="list" container because that list takes listitem children
-   only (D-101). */
+/* Removing shapes from the list, not just from the output. The bar sits
+   outside the role="list" container because that list takes listitem
+   children only. */
 .svg-prep-bulk-bar {
   display: flex;
   align-items: center;
@@ -16359,8 +16320,9 @@ body.tutorial-body-locked {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   /* Keep "Smaller than" and "Keep largest" on one line. The bar itself wraps,
-     so a long label moves to its own row rather than being clipped - the
-     nowrap-plus-flex-end trap from UF-40 needs a NON-wrapping container. */
+     so a long label moves to its own row rather than being clipped: the
+     nowrap-plus-flex-end trap only springs in a container that does not
+     wrap. */
   white-space: nowrap;
 }
 
@@ -16396,8 +16358,9 @@ body.tutorial-body-locked {
   border-color: var(--color-border-hover);
 }
 
-/* DP-3: the on-demand render control under the result pane. Only present
-   above tier A, where the boolean is too slow to run on its own. */
+/* The render row under the result pane. Every drawing combines by itself,
+   so the row shows only while a combine runs, with its progress bar and
+   Cancel. */
 .svg-prep-render-row {
   display: flex;
   align-items: center;
@@ -16511,9 +16474,9 @@ body.tutorial-body-locked {
   overflow: hidden;
 }
 
-/* One picture by default (G0, DP-24): with the original waiting behind
-   Compare, the edited drawing is the subject and takes the height the pair
-   used to split. */
+/* One picture by default: with the original waiting behind Compare, the
+   edited drawing is the subject and takes the height the pair would
+   otherwise split. */
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews--single {
   flex: 0 0 50vh;
   flex: 0 0 50dvh;
@@ -16707,7 +16670,7 @@ body.tutorial-body-locked {
   }
 }
 
-/* DP-Q60: the chips take the tokens' dark values, which are the inverses
+/* The chips take the tokens' dark values, which are the inverses
    meant for the inverted panes; outside the panes they invert themselves. */
 :root[data-theme='dark'] .svg-prep-legend-chip--layer-1,
 :root[data-theme='dark'] .svg-prep-legend-chip--layer-2,
@@ -17027,8 +16990,8 @@ body.tutorial-body-locked {
   align-items: center;
 }
 
-/* D-236: the sign's capitals choice, two radios in a fieldset. As with
-   six-key entry, each row is the touch target (the label checks its radio) */
+/* The sign's capitals choice, two radios in a fieldset. As with
+   six-key entry, each row is the touch target (the label checks its radio). */
 .braille-panel-choice {
   margin: 0;
   padding: 0;
@@ -17191,7 +17154,7 @@ body.tutorial-body-locked {
   color: var(--color-warning-text);
 }
 
-/* D-230, D-229: an empty status line or message box stays in the
+/* An empty status line or message box stays in the
    accessibility tree, hidden the way .sr-only hides, because a live region
    revealed together with its first message is not announced. After the box
    styles above, so their borders and padding give way while it is empty. */
@@ -17277,9 +17240,9 @@ body.tutorial-body-locked {
   flex-basis: 100%;
 }
 
-/* D-228: at either end the pager button keeps focus, marked aria-disabled
+/* At either end the pager button keeps focus, marked aria-disabled
    rather than disabled, and reads as unavailable. 0.7, not a disabled .btn's
-   0.5: this button can hold focus, and at 0.5 its focus ring measured 2.42:1
+   0.5: this button can hold focus, and at 0.5 its focus ring is 2.42:1
    against the panel, under the 3:1 a focus ring needs. The City Walk's
    launch button made the same choice for the same reason (game.css). */
 .braille-pager-btn[aria-disabled='true'] {
@@ -17347,7 +17310,7 @@ body.tutorial-body-locked {
   }
 }
 
-/* ── Preferences dialog (P11a shell) ──────────────────────────────────────
+/* ── Preferences dialog ───────────────────────────────────────────────────
    A six-tab dialog mirroring desktop OpenSCAD's Preferences. Tabs whose
    engine this browser build does not have are visibly disabled and name
    their reason, so a user is never left guessing why a section is empty. */
@@ -17432,11 +17395,11 @@ body.tutorial-body-locked {
   max-width: 60ch;
 }
 
-/* Q-41 (UF-15): the scheme governs only the Classic viewport; outside
-   Classic the app theme paints it so high contrast keeps working. The
-   radios used to sit in Forge looking live while repainting nothing —
-   owner decision: the group exists only where it works. display:none is
-   the honest hide (out of the accessibility tree, not merely invisible). */
+/* The scheme governs only the Classic viewport; outside Classic the app
+   theme paints it so high contrast keeps working. Shown in Forge, the
+   radios would look live while repainting nothing, so the group exists
+   only where it works. display:none is the honest hide (out of the
+   accessibility tree, not merely invisible). */
 body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
@@ -17534,7 +17497,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   font-size: var(--font-size-sm);
 }
 
-/* ── The drawing editor surface (DP-19) ─────────────────────────────────────
+/* ── The drawing editor surface ─────────────────────────────────────────────
    It takes the preview area, so it is sized to fill whatever that is rather
    than to a height of its own. Tokens only: every colour, space and radius
    here is the same one the rest of the app uses, so a theme change reaches it
@@ -17546,9 +17509,9 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   background: var(--color-bg-primary);
   overflow: hidden;
   z-index: 1;
-  /* The layout below asks how wide the SURFACE is, not the window: at 768
-     the window is wide and the preview area beside the customizer is not
-     (MEASURED: a 135 px drawing next to a 245 px panel). */
+  /* The layout below asks how wide the surface is, not the window: at 768
+     the window is wide and the preview area beside the customizer is not,
+     and a window query would give a 135 px drawing next to a 245 px panel. */
   container-type: inline-size;
 }
 
@@ -17565,22 +17528,22 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-height: 0;
   gap: var(--space-sm);
   padding: var(--space-sm);
-  /* ★ The editor is the container its own layout rules ask about.
-     It was not one, and only .drawing-editor-surface was - so in the standalone
-     Edit Drawing door, where the surface is hidden at 0 px wide and the editor
-     is hosted in .svg-edit-standalone-host instead, NO ancestor of the stage
-     was a container and every @container rule below silently did nothing.
-     MEASURED at 412: the panel stayed a 280 px strip laid over the drawing
-     instead of becoming the full-width drawer written for exactly that width,
-     hiding 271 px of a 400 px picture and cutting the sentence under it
-     mid-word.
+  /* The editor is the container its own layout rules ask about, not only
+     .drawing-editor-surface. In the standalone editor (an image edited with
+     no project behind it) the surface is hidden at 0 px wide and the editor
+     is hosted in .svg-edit-standalone-host instead, so with the surface as
+     the only container no ancestor of the stage would be one and every
+     @container rule below would silently do nothing: at 412 the panel would
+     stay a 280 px strip laid over the drawing instead of becoming the sheet
+     under the picture written for exactly that width, hiding 271 px of a
+     400 px picture and cutting the sentence under it mid-word.
      Safe to make one: this element takes its width from its parent
      (width: 100%), never from its contents, which is the only thing
      inline-size containment forbids. */
   container-type: inline-size;
 }
 
-/* ── DP-38: the Drawing / Charm switch ─────────────────────────────────── */
+/* ── The Drawing / Charm switch ────────────────────────────────────────── */
 
 /* A fieldset drawn as a segmented control. The radios themselves are the
    thing that is checked and focused; the labels are what a finger and an eye
@@ -17605,7 +17568,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 /* Invisible, not absent, and the same size as the thing it looks like. A
    radio clipped to a pixel would leave the label as the only thing a pointer
-   could hit; this way the control itself IS the 44 px target. */
+   could hit; this way the control itself is the 44 px target. */
 .drawing-editor-view-switch input {
   position: absolute;
   inset: 0;
@@ -17659,7 +17622,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
-/* DP-53: the charm view's Render preview. */
+/* The charm view's Render preview. */
 .drawing-editor-render-charm {
   min-height: 44px;
   min-width: 44px;
@@ -17686,7 +17649,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   /* visibility, not display: the body keeps its box, so the panel drawer laid
      over it keeps the place it is laid over. And visibility:hidden takes the
      drawing out of the accessibility tree too, which display:none would also
-     do and opacity:0 would NOT - a drawing nobody can see must not still be
+     do and opacity:0 would not - a drawing nobody can see must not still be
      read out. */
   visibility: hidden;
 }
@@ -17698,7 +17661,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   pointer-events: auto;
 }
 
-/* DP-80: Crop first. The crop view opened on a picture nothing has
+/* Crop first. The crop view opened on a picture nothing has
    converted yet has no drawing behind it, so the rows of drawing tools and
    the shapes drawer stay out of the way; the header keeps the editor's name
    and Close, and the crop view carries Save crop and Cancel. */
@@ -17729,7 +17692,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   left: var(--space-sm);
 }
 
-/* Two rows at desktop width (G0 named the four-row wrap at 1280): the
+/* Two rows at desktop width rather than a four-row wrap at 1280: the
    actions row and the working-tools row. Each row may still wrap on a
    phone, where rows are expected. */
 .drawing-editor-toolbar {
@@ -17753,11 +17716,10 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
-/* ★ D-140: the status line and the reason Apply is off, on one block.
-   The hint used to live in the button row, where its 418 px sentence wrapped
-   the row and pushed Close onto a line of its own - and then unwrapped when
-   the hint went away, so the toolbar moved while a person worked. A sentence
-   belongs beside a sentence. */
+/* The status line and the reason Apply is off, on one block. In the button
+   row, the hint's 418 px sentence would wrap the row and push Close onto a
+   line of its own, then unwrap when the hint went away, so the toolbar
+   would move while a person worked. A sentence belongs beside a sentence. */
 .drawing-editor-statusline {
   display: flex;
   flex-wrap: wrap;
@@ -17767,16 +17729,16 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 /* Each sentence takes a line of its own as soon as the two will not share
-   one, and WRAPS inside it. Without the min-width the status keeps its
-   flex-shrink: 0 from the surface column it used to sit in, and a sentence
-   wider than the editor runs off the right edge instead: MEASURED at 412,
-   "...needs a look before it is use" with the last two characters cut. */
+   one, and wraps inside it. The status never shrinks (its own rule below),
+   so without the min-width a sentence wider than the editor would run off
+   the right edge instead: at 412, "...needs a look before it is use" with
+   the last two characters cut. */
 .drawing-editor-statusline > * {
   flex: 1 1 18rem;
   min-width: 0;
 }
 
-/* ★ D-140: row 1 is the name and the two ways out. The title takes the slack
+/* Row 1 is the name and the two ways out. The title takes the slack
    (margin-right: auto above), so Shapes and Close sit hard right and neither
    ever wraps: two 44 px targets and a heading fit at 376 px, the editor's
    width on a 412 px phone. */
@@ -17833,35 +17795,33 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   overflow: auto;
 }
 
-/* ★ Room for the side panel, which is positioned ABSOLUTELY over this body and
-   so takes no width from it. Nothing reserved any. MEASURED at 1280: stage
-   x 6..1274, panel x 814..1274, so 453 px of the drawing was painted
-   underneath the shapes list; at 900 it was 384 px. A person could not see a
-   third of their own picture and had no way to know it was there.
+/* Room for the side panel, which is positioned absolutely over this body and
+   so takes no width from it. Without a reservation, at 1280 (stage x 6..1274,
+   panel x 814..1274) 453 px of the drawing would be painted underneath the
+   shapes list, and 384 px at 900: a person could not see a third of their
+   own picture and would have no way to know it was there.
 
    The reservation repeats the panel's own clamp rather than sharing a custom
    property. Both percentages resolve against the same box - the body - so the
    two give the same number, but they are two separate facts about two separate
    boxes and writing them as one would make a coincidence look like a promise.
 
-   Not in the drawer band below 640: there the panel covering the drawing IS
-   the design, and closing it is one press.
+   Not below 640: there the panel joins the flow under the picture (see the
+   sheet rules below), so there is no room to reserve.
 
-   ★ D-136: the reservation follows the panel's own state. It used to be
-   unconditional, so pressing Shapes hid the list and left its room behind:
-   MEASURED on the charm host, panel hidden, padding-right still 304.469 px
-   and the drawing still 374 px wide, with an empty column where the list had
-   been. Two halves of one feature - DP-37 P1 reserved the room, DP-24's
-   toggle hid the panel - and nobody joined them. */
+   The reservation follows the panel's own state. Unconditional, pressing
+   Shapes would hide the list and leave its room behind: an empty column
+   where the list had been, and the drawing still squeezed beside it. */
 @container (min-width: 641px) {
   .drawing-editor--panel-open .drawing-editor-stage {
     padding-right: clamp(280px, 44%, 460px);
   }
 }
 
-/* G0 (DP-24): the picture is the editor. The panel is a DRAWER laid over
-   the drawing's right edge, not a column that squeezes it - the drawing
-   keeps the full width whether the drawer is open or shut. */
+/* The picture is the editor. The panel is a drawer laid over the body's
+   right edge, not a column in the layout: above 640 the stage makes room
+   for it while it is open (above), and below 640 it becomes a sheet under
+   the picture (below). */
 .drawing-editor-panel {
   position: absolute;
   inset-block: 0;
@@ -17873,15 +17833,15 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   padding-left: var(--space-sm);
   padding-right: var(--space-2xs);
   z-index: var(--z-index-drawer);
-  /* The table below asks how wide the PANEL is. */
+  /* The table below asks how wide the panel is. */
   container-type: inline-size;
   container-name: panel;
 }
 
 /* In a narrow side panel the Share column steps aside so the Remove button
-   is not the thing that scrolls out of sight: MEASURED at 1280, five
-   columns clipped it in a 310 px panel. Stacked below the drawing the panel
-   is the full width and every column shows. */
+   is not the thing that scrolls out of sight: at 1280, five columns would
+   clip it in a 310 px panel. Stacked below the drawing the panel is the
+   full width and every column shows. */
 @container panel (max-width: 360px) {
   .drawing-editor-regions-table th:nth-child(4),
   .drawing-editor-regions-table td:nth-child(4) {
@@ -17889,17 +17849,12 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   }
 }
 
-/* Narrow surface: the drawer takes the whole body instead of a 44% strip
-   nobody can read at 412 wide. The drawing underneath keeps its full size;
-   closing the drawer is one press. (The old stacked-columns answer here is
-   retired with the drawer - MEASURED before it: at 412 wide the panel grew
-   to 1,674 px and the stage was squeezed to 0.) */
-/* ── DP-39 P4: below 640 the list is a SHEET, not a cover ────────────────
+/* ── Below 640 the list is a sheet, not a cover ──────────────────────────
    The panel is laid absolutely over the body, which is right beside a wide
-   picture and wrong on a phone, where it is the full width. MEASURED at
-   412 x 915 with the drawer open: the panel covered 107,163 of the picture's
-   107,352 square pixels. 99.8 per cent. Opening the list to see which shape
-   is which hid the very thing you were trying to name.
+   picture and wrong on a phone, where it is the full width: at 412 x 915 an
+   open drawer would cover 107,163 of the picture's 107,352 square pixels,
+   99.8 per cent, so opening the list to see which shape is which would hide
+   the very thing a person was trying to name.
 
    So at this width the body becomes a column and the panel joins the flow
    underneath the picture: the drawing stays on screen, shorter, and the list
@@ -17928,20 +17883,19 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   .drawing-editor--panel-open .drawing-editor-stage {
     /* A share of the room, with a floor that holds the whole picture: the
        cap below is 160 px and the pane puts a caption and its padding around
-       it. MEASURED without the floor, the stage settled at 152 px and clipped
-       40 px off the bottom of a 160 px drawing - three quarters of a bird
-       instead of half, which is not the fix, only a smaller version of the
-       same bug. */
+       it. Without the floor the stage would settle at 152 px and clip 40 px
+       off the bottom of a 160 px drawing, a smaller version of the same
+       bug. */
     flex: 0 0 auto;
     min-height: 200px;
     max-height: 45%;
   }
 
-  /* And the drawing SHRINKS to the room it has rather than being cut off in
-     it. The picture is capped at 300 px and the shortened stage simply
-     scrolled the rest away: MEASURED at 412 x 915, a 284 px drawing in a
-     197 px stage, so what a person saw with the list open was the top half of
-     a bird. 160 px is the pane's own minimum height, so the picture is never
+  /* And the drawing shrinks to the room it has rather than being cut off in
+     it. The picture is otherwise capped at 300 px and the shortened stage
+     would scroll the rest away: at 412 x 915, a 284 px drawing in a 197 px
+     stage, so a person would see the top half of the picture with the list
+     open. 160 px is the pane's own minimum height, so the picture is never
      asked to fit somewhere the pane will not go. */
   .drawing-editor--panel-open .svg-prep-source-pane svg,
   .drawing-editor--panel-open .svg-prep-result-pane svg {
@@ -17987,18 +17941,18 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor-status {
   margin: 0;
   min-height: 1.4em;
-  /* The status is a flex child of the surface column and the body's flex:1
-     was shrinking it mid-line at narrow widths (MEASURED at 768 and 412:
-     the sentence's last line half-clipped). It says its piece in full. */
+  /* Kept from shrinking so the sentence is never cut off mid-line; the
+     status line block around it carries the same rule in the editor
+     column. */
   flex-shrink: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
 
-/* The workspace's own pieces, re-homed. Its footer is the action row and
-   sits in the toolbar; its shape list and warnings sit in the panel; what
-   stays in the stage loses the box it used to draw around itself, because
-   the surface is the box now. */
+/* The workspace's own pieces, placed in the editor. Its footer is the
+   action row and sits in the toolbar; its shape list and warnings sit in
+   the panel; what stays in the stage drops the box the workspace draws
+   around itself elsewhere, because here the surface is the box. */
 .drawing-editor-toolbar .svg-prep-footer {
   border-top: 0;
   padding-top: 0;
@@ -18031,8 +17985,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
-/* Five columns are wider than the side panel at 1280 (MEASURED: the Remove
-   button was clipped), so the table scrolls inside its own box rather than
+/* Five columns are wider than the side panel at 1280 (the Remove button
+   would be clipped), so the table scrolls inside its own box rather than
    the page or the panel ever scrolling sideways. */
 .drawing-editor-regions {
   overflow-x: auto;
@@ -18190,7 +18144,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   color: var(--color-text-secondary);
 }
 
-/* ── DP-20: the tools, the canvas, the table's checkboxes and actions ──── */
+/* ── The tools, the canvas, the table's checkboxes and actions ─────────── */
 .drawing-editor-stencil-tools {
   display: flex;
   flex-wrap: wrap;
@@ -18204,8 +18158,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: none;
 }
 
-/* Each group wraps on its own: MEASURED at 412 px wide, five tool buttons
-   in one unwrapping row ran off the edge. */
+/* Each group wraps on its own: at 412 px wide, five tool buttons in one
+   unwrapping row would run off the edge. */
 .drawing-editor-tools,
 .drawing-editor-paint,
 .drawing-editor-history,
@@ -18218,9 +18172,9 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 /* The paint pair (the colour and its one button) moves as a unit instead of
    wrapping inside itself: a nested wrap container reports a broken
-   intrinsic width (MEASURED: the group told its row 224 px while its
-   content needed 281), which wrapped the button under the select at every
-   width. The pair fits even a 412 screen. */
+   intrinsic width (the group would tell its row 224 px while its content
+   needs 281), which would wrap the button under the select at every width.
+   The pair fits even a 412 screen. */
 .drawing-editor-paint {
   flex-wrap: nowrap;
 }
@@ -18297,7 +18251,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   pointer-events: none;
 }
 
-/* One path per region: its colour at FULL contrast (DP-21), a selection as
+/* One path per region: its colour at full contrast, a selection as
    a thick outline, hover as a steady outline. Colour is never the only
    signal: the table says the same thing in words, and the legend names the
    four looks. */
@@ -18333,14 +18287,14 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   stroke-width: 2px;
 }
 
-/* ★ The keyboard highlight: two strokes drawn over the regions, the outer in
-   the page's TEXT colour and the inner in its BACKGROUND colour. That pair is
-   black and white in the light theme and white and black in the dark one,
-   and for any region colour at least one of black and white contrasts with
-   it at 4.58:1 or better (the geometric mean of 21:1), which is the
-   guarantee "reads on any region colour" needs. The plan's page-background
-   halo under a --color-focus stroke was MEASURED first: the focus blue on a
-   white region is 2.2:1. */
+/* The keyboard highlight: two strokes drawn over the regions, the outer in
+   the page's text colour and the inner in its background colour. That pair
+   is black and white in the light theme and white and black in the dark
+   one, and for any region colour at least one of black and white contrasts
+   with it at 4.58:1 or better (the geometric mean of 21:1), which is the
+   guarantee "reads on any region colour" needs. A page-background halo
+   under a --color-focus stroke would not do: the focus blue on a white
+   region is 2.2:1. */
 .drawing-editor-highlight-halo,
 .drawing-editor-highlight-stroke {
   fill: none;
@@ -18599,11 +18553,12 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   opacity: 0;
   pointer-events: none;
   /* The ready badge pulses its opacity while a render runs, and an
-     animation outranks the cascade: MEASURED, it stayed on screen. */
+     animation outranks the cascade, so without this it would stay on
+     screen. */
   animation: none;
 }
 
-/* ── The no-model door: the surface is the screen ─────────────────────── */
+/* ── No project behind it: the surface is the screen ──────────────────── */
 .drawing-editor-host {
   position: fixed;
   inset: 0;
@@ -18640,7 +18595,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-width: 6em;
 }
 
-/* ── The crop view (DP-49) ─────────────────────────────────────────────────
+/* ── The crop view ─────────────────────────────────────────────────────────
    Takes the stage's place while it is open: the picture with the kept
    rectangle clear and the rest shaded, four rows in the customizer's own
    slider classes, Save crop and Cancel. */
@@ -18654,10 +18609,10 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-height: 0;
   overflow: auto;
   container-type: inline-size;
-  /* The picture beside the rows when there is room for both (MEASURED: the
-     charm host's editor is 692 px wide at 1280, the door's 1268), one column
-     below that. Stacked, the view scrolled at every width and the Save button
-     sat below the fold. */
+  /* The picture beside the rows when there is room for both (the charm
+     host's editor is 692 px wide at 1280, the standalone editor's 1268), one
+     column below that. Stacked, the view would scroll at every width with
+     the Save button below the fold. */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   align-items: start;
@@ -18673,7 +18628,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 /* The customizer's number box keeps its own width here: a stretched box
-   pushed the slider down to 129 px of a 692 px row (MEASURED). */
+   would push the slider down to 129 px of a 692 px row. */
 .drawing-editor-crop .slider-container .slider-spinbox {
   width: 5.5em;
   min-width: 5.5em;
@@ -18731,8 +18686,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   margin-bottom: var(--space-xs);
 }
 
-/* The label beside its slider on one line: four stacked rows put the Save
-   button 43 px below the fold in the charm host's editor at 1280 (MEASURED). */
+/* The label beside its slider on one line: four stacked rows would put the
+   Save button 43 px below the fold in the charm host's editor at 1280. */
 .drawing-editor-crop .param-control {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -18758,8 +18713,9 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 /* One column (a phone, or the charm host's editor beside a wide customizer):
    the label on its own line, or the slider wraps and the label sits beside
-   the number box instead (MEASURED at 412). Last in this section: at equal specificity the later rule
-   wins, and this must beat the two-column rule above. */
+   the number box instead (at 412). Last in this section: at equal
+   specificity the later rule wins, and this must beat the two-column rule
+   above. */
 @container (max-width: 599px) {
   .drawing-editor-crop .param-control {
     grid-template-columns: 1fr;

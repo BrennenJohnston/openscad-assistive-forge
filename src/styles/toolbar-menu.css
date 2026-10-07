@@ -194,8 +194,8 @@
   text-overflow: ellipsis;
 }
 
-/* Access-key underline (G7). Display only — there is no Alt+letter
-   activation (D-30) — so this is styling, never a promise of behaviour. */
+/* Access-key underline. Display only: there is no Alt+letter activation,
+   so this is styling, never a promise of behaviour. */
 .menu-mnemonic {
   text-decoration: underline;
 }

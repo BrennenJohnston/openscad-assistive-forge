@@ -4,11 +4,11 @@
    ============================================================================
    Maps Radix color scales to semantic tokens used throughout the application.
    Preserves existing token names for backward compatibility.
-   
+
    Token Naming Convention:
    - --color-{purpose}-{variant}
    - --color-{component}-{element}-{state}
-   
+
    Radix Scale Reference:
    - Steps 1-4: Subtle backgrounds
    - Steps 5-8: Borders and UI elements
@@ -56,12 +56,12 @@
      Radix amber-11 (#ab6400) only achieves ~4.38:1 on slate-2 (#f9f9fb), failing AA.
      Custom #a35e00 achieves ~4.81:1 on slate-2 and ~5.06:1 on white, passing AA. */
   --color-accent-fg: #a35e00;
-  /* Foreground for accent-coloured text sitting ON --color-accent-subtle.
-     DP-1 (2026-08-28) MEASURED the gap this fills: --color-accent-fg was
+  /* Foreground for accent-coloured text sitting on --color-accent-subtle.
+     The gap this fills: --color-accent-fg was
      validated on white and slate-2 only, and on yellow-4 (#fff394) it lands
      at 4.44:1 — just under AA. #8a4f00 is the same hue, darker, and measures
      5.78:1 on yellow-4, 6.56:1 on white, 6.24:1 on slate-2.
-     Every OTHER theme's own accent-fg already clears AA on its own
+     Every other theme's own accent-fg already clears AA on its own
      accent-subtle (dark 11.05, HC light 8.59, HC dark 5.09, Classic 5.59,
      mono variants 13.33 / 10.63), so those blocks alias this to accent-fg. */
   --color-on-accent-subtle: #8a4f00;
@@ -71,8 +71,8 @@
      ========================================================================
      These are for components that use solid semantic backgrounds
      (e.g., badges, status pills, solid buttons).
-     
-     Important: Do NOT reuse --color-accent-text for non-accent colors.
+
+     Do not reuse --color-accent-text for non-accent colors.
      ======================================================================== */
   --color-on-accent: var(--color-accent-text);
   /* In light mode, slate-1 is near-white; in dark mode slate-1 is near-black. */
@@ -87,7 +87,7 @@
      ======================================================================== */
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);
-  /* Defect D-46 (UF-25): step-9 is a solid UI colour, not a text background.
+  /* Step-9 is a solid UI colour, not a text background.
      White on it measures 3.07:1, under the 4.5:1 that 14px text needs. Use
      this token wherever --color-on-success text sits ON a success fill;
      step-11 measures 4.67:1 against --slate-1. In dark themes --slate-1 is
@@ -98,7 +98,7 @@
   --color-success-bg: var(--green-3);
 
   /* ========================================================================
-     Info Colors (Teal - NEW)
+     Info Colors (Teal)
      ======================================================================== */
   --color-info: var(--teal-9);
   --color-info-hover: var(--teal-10);
@@ -111,10 +111,9 @@
      ======================================================================== */
   /* red-11, not the scale's solid step-9: white-on-red-9 measures 3.82:1 and
      WCAG AA wants 4.5:1 for normal text, so the Delete button and the ERROR
-     badge both failed. red-11 measures 5.08:1 with the same --color-on-error.
-     Owner-approved 2026-08-08 with the button on screen (Q-5). The hover step
-     has to move with it: red-10 is LIGHTER than red-11, so leaving it there
-     would have made hover both paler and non-compliant.
+     badge would fail. red-11 measures 5.08:1 with the same --color-on-error.
+     The hover step moves with it: red-10 is lighter than red-11, so leaving
+     it there would make hover both paler and non-compliant.
      Non-text contrast is unaffected — .btn carries a 1px border, so the button
      stays distinguishable from the page whatever the fill. */
   --color-error: var(--red-11);
@@ -153,22 +152,22 @@
      Interactive States
      ======================================================================== */
   --color-hover-bg: var(--slate-3);
-  /* D-57: the strong hover fill for .btn-secondary. It used --color-border
-       directly, which is a BORDER colour pressed into service as a SURFACE, and
-       it missed AA against its own text by a hair: 4.33:1 in light and 3.65:1 in
-       dark, where 4.5:1 is needed. One step along the same slate scale fixes it
-       and keeps the strong fill the design wanted - 4.96:1 light, 5.40:1 dark,
-       still 3.14:1 and 2.81:1 against the button at rest.
-       The two themes move in OPPOSITE directions (lighter under dark text,
-       darker under light text), which is why this is a token and not a value.
-       Every other scope below keeps var(--color-border), so Classic, high
-       contrast, the mono variants and forced-colors are unchanged - Classic
-       already measured 4.72:1 and high contrast aims higher than AA. */
+  /* The strong hover fill for .btn-secondary. --color-border directly would
+     be a border colour pressed into service as a surface, and it misses AA
+     against its own text by a hair: 4.33:1 in light and 3.65:1 in dark,
+     where 4.5:1 is needed. One step along the same slate scale fixes it and
+     keeps the strong fill the design wanted: 4.96:1 light, 5.40:1 dark,
+     still 3.14:1 and 2.81:1 against the button at rest.
+     The two themes move in opposite directions (lighter under dark text,
+     darker under light text), which is why this is a token and not a value.
+     Every other scope below keeps var(--color-border), so Classic, high
+     contrast, the mono variants and forced-colors are unchanged: Classic
+     measures 4.72:1, and high contrast aims higher than AA. */
   --color-hover-bg-strong: var(--slate-9);
 
   /* ========================================================================
      Focus Indicators
-     Note: Using brand-neutral blue for focus (per plan Phase 4.5)
+     Note: Using brand-neutral blue for focus
      This provides consistent, OS-convention focus indicators
      ======================================================================== */
   --color-focus: #0052cc;
@@ -189,7 +188,7 @@
   --shadow-lg: 0 10px 20px var(--slate-a6);
 
   /* ========================================================================
-     Drawing editor layer colors (DP-Q60, 2026-09-17): one hue per layer,
+     Drawing editor layer colors: one hue per layer,
      each a step lighter than the last, apart for every kind of color
      vision. The dark theme's values are the inverses, because the editor's
      panes are inverted there and the inversion hands the true color back.
@@ -244,7 +243,7 @@
   /* Success Colors */
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);
-  /* D-46: --slate-1 is near-black in dark themes, so step-9 passes here. */
+  /* --slate-1 is near-black in dark themes, so step-9 passes here. */
   --color-success-solid: var(--green-9);
   --color-success-text: var(--green-12);
   --color-success-bg: var(--green-3);
@@ -334,7 +333,7 @@
     /* Success Colors */
     --color-success: var(--green-9);
     --color-success-hover: var(--green-10);
-    /* D-46: --slate-1 is near-black here, so step-9 passes. */
+    /* --slate-1 is near-black here, so step-9 passes. */
     --color-success-solid: var(--green-9);
     --color-success-text: var(--green-12);
     --color-success-bg: var(--green-3);
@@ -425,8 +424,8 @@
 
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);
-  /* D-46: --slate-1 is near-black in dark themes, so step-9 passes here. */
-  /* D-46: explicit light theme, so the step-11 fill (see :root). */
+  /* --slate-1 is near-black in dark themes, so step-9 passes here. */
+  /* Explicit light theme, so the step-11 fill (see :root). */
   --color-success-solid: var(--green-11);
   --color-success-text: var(--green-12);
   --color-success-bg: var(--green-3);
@@ -468,7 +467,7 @@
   --shadow-lg: 0 10px 20px var(--slate-a6);
 
   /* ========================================================================
-     Drawing editor layer colors (DP-Q60, 2026-09-17): one hue per layer,
+     Drawing editor layer colors: one hue per layer,
      each a step lighter than the last, apart for every kind of color
      vision. The dark theme's values are the inverses, because the editor's
      panes are inverted there and the inversion hands the true color back.

@@ -58,11 +58,10 @@
     <div id="app">
       <header class="app-header">
         <div class="header-content">
-          <!-- U-2/Q-16: the way back to the main projects page sits at the
-               far left, nearest the browser's own Back button, in BOTH
-               themes. One DOM node, one handler — relocated from the
-               workflow row, not duplicated. Hidden while the welcome screen
-               is up (you are already there). -->
+          <!-- The way back to the main projects page sits at the far left,
+               nearest the browser's own Back button, in both themes. One DOM
+               node, one handler, not duplicated in the workflow row. Hidden
+               while the welcome screen is up (you are already there). -->
           <button
             type="button"
             id="clearFileBtn"
@@ -177,14 +176,13 @@
               </svg>
               <span class="shortcuts-label">Keys</span>
             </button>
-            <!-- Owner order 2026-08-09, post-UF-1 (supersedes U-7's
-                 in-Classic order from PR #60): the mode controls hold ONE
-                 position across both themes so nothing jumps on a theme
-                 switch. The Simplified/Standard slider — the Forge one and
-                 the Classic one occupy the same slot, visibility-swapped
-                 per mode — sits just left of the Classic / A. Forge
-                 toggle, which holds the top rightmost corner. Theme and
-                 high-contrast moved to the row below (workflow actions). -->
+            <!-- The mode controls hold one position across both themes so
+                 nothing jumps on a theme switch. The Simplified/Standard
+                 slider (the Forge one and the Classic one occupy the same
+                 slot, visibility-swapped per mode) sits just left of the
+                 Classic / A. Forge toggle, which holds the top rightmost
+                 corner. Theme and high contrast are in the row below
+                 (workflow actions). -->
             <button
               type="button"
               id="uiModeToggle"
@@ -230,11 +228,10 @@
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
-            <!-- U-10: read as the Classic toggle's description while the
-                 viewport gate holds it aria-disabled (phones, portrait,
-                 narrow windows). Leaving Classic is never gated. Sits
-                 BEFORE the button: U-7 pins the toggle as the header's
-                 last element. -->
+            <!-- Read as the Classic toggle's description while the viewport
+                 gate holds it aria-disabled (phones, portrait, narrow
+                 windows). Leaving Classic is never gated. Sits before the
+                 button, because the toggle is the header's last element. -->
             <span id="classicModeToggleReason" class="sr-only"
               >Classic is desktop-only for now. A mobile version is planned. Use
               the Assistive Forge interface on phones and narrow windows.</span
@@ -294,9 +291,9 @@
           </div>
         </div>
       </div>
-      <!-- U-10 boot notice: a saved Classic preference was deferred because
-           this window is phone-shaped (UF-5 P4). Shown once per boot by
-           main.js; the preference itself stays saved. -->
+      <!-- Boot notice: a saved Classic preference was deferred because
+           this window is phone-shaped. Shown once per boot by main.js; the
+           preference itself stays saved. -->
       <div
         id="classicGateBanner"
         class="update-banner hidden"
@@ -310,8 +307,8 @@
             Classic will open on your next visit from a desktop-sized
             window.</span
           >
-          <!-- U-10 in-session notice (UF-5 P5, Q-24a): a live Classic
-               window that turns phone-shaped stays alive; this says so. -->
+          <!-- In-session notice: a live Classic window that turns
+               phone-shaped stays alive; this says so. -->
           <span class="update-banner-text hidden" id="classicGateLiveText"
             >This window is now phone-shaped, and Classic is desktop-only for
             now. You can keep working, or switch to the Assistive Forge
@@ -405,7 +402,8 @@
         </div>
       </div>
       <div id="toolbarSlot">
-        <!-- Workflow Progress Indicator (C3: COGA breadcrumbs) - Moved here to prevent header overlap -->
+        <!-- Workflow Progress Indicator (COGA breadcrumbs), outside the
+             header so it cannot overlap it -->
         <!-- #toolbarMenuBar is a flex sibling of .workflow-steps inside this container so that
              in Advanced mode the toolbar buttons share the same row as the action buttons,
              exactly replacing the breadcrumb steps. -->
@@ -484,12 +482,11 @@
             </button>
           </div>
           <div class="workflow-actions">
-            <!-- #uiModeToggle moved to the header (owner order 2026-08-09):
-                 the Simplified/Standard slider holds one position across
-                 both themes, beside the Classic / A. Forge toggle. -->
-            <!-- Theme + high-contrast, relocated from the header (owner
-                 order 2026-08-09) and leading the row since U-16: the
-                 owner's order is HC, theme, Full Screen, Help. -->
+            <!-- #uiModeToggle is in the header: the Simplified/Standard
+                 slider holds one position across both themes, beside the
+                 Classic / A. Forge toggle. -->
+            <!-- Theme + high-contrast lead the row, in the order HC, theme,
+                 Full Screen, Help. -->
             <button
               type="button"
               id="contrastToggle"
@@ -618,7 +615,7 @@
             </button>
           </div>
         </div>
-        <!-- Classic icon toolbar (C6): desktop OpenSCAD's second toolbar row.
+        <!-- Classic icon toolbar: desktop OpenSCAD's second toolbar row.
              Shown only in classic (classic.css); vendored chokusen icons with
              sr-only text labels (missing icon degrades to an empty button,
              the accessible name always holds). -->
@@ -669,9 +666,9 @@
               ><span class="sr-only">Save</span>
             </button>
           </div>
-          <!-- Simplified only (U-5/Q-18): in Standard the editor toolbar has
-               its own Undo/Redo for text edits, and two visible pairs read
-               as duplicates — which is what the owner reported. -->
+          <!-- Simplified only: in Standard the editor toolbar has its own
+               Undo/Redo for text edits, and two visible pairs would read as
+               duplicates. -->
           <div
             class="classic-tb-group classic-simplified-only"
             role="group"
@@ -707,14 +704,12 @@
               ><span class="sr-only">Redo parameter change</span>
             </button>
           </div>
-          <!-- The workflow triad + DXF, both densities (U-5, Q-18 option a).
-               This consciously REVERSES the R2a-era decision to duplicate
-               the icon rows between the top and editor toolbars, and E3's
-               "exactly one export button" note that used to sit here: the
-               owner found the duplication confusing, and Preview→Render→STL
-               is the workflow every Classic user runs. The camera bar keeps
-               its own Preview/Render pair — that duplication is the
-               desktop's own (viewerToolBar, U3). -->
+          <!-- The workflow triad + DXF, in both densities. The icon rows are
+               not duplicated between the top and editor toolbars: duplicates
+               confuse, and Preview→Render→STL is the workflow every Classic
+               user runs, so it has one home here. The camera bar keeps its own
+               Preview/Render pair; that duplication is the desktop's own
+               (viewerToolBar). -->
           <div class="classic-tb-group" role="group" aria-label="Workflow">
             <button
               type="button"
@@ -786,8 +781,8 @@
             </button>
           </div>
         </div>
-        <!-- 3D view toolbar (E3). Order is upstream's viewerToolBar verbatim
-             (U3): Preview Render | View All, Zoom In, Zoom Out, Reset View,
+        <!-- 3D view toolbar. Order is upstream's viewerToolBar verbatim:
+             Preview Render | View All, Zoom In, Zoom Out, Reset View,
              Measure Distance, Measure Angle | Right Left Back Front Top
              Bottom | Perspective Orthogonal | Show Axes, Show Scale Markers,
              Show Edges. 19 buttons.
@@ -888,7 +883,7 @@
               ><span class="sr-only">Reset View</span>
             </button>
             <!-- Disabled with a reason rather than hidden, and focusable, so
-                 keyboard and screen-reader users can discover them (D-15). -->
+                 keyboard and screen-reader users can discover them. -->
             <button
               type="button"
               class="btn classic-tb-btn"
@@ -1035,9 +1030,8 @@
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Overlays">
-            <!-- Split from the old combined "Axes (mm)" button per upstream
-                 (D-16): axes lines and the millimeter tick overlay are two
-                 separate toggles, as they are in the View menu. -->
+            <!-- Axes lines and the millimeter tick overlay are two separate
+                 toggles, as they are upstream and in the View menu. -->
             <button
               type="button"
               class="btn classic-tb-btn"
@@ -1091,17 +1085,17 @@
               role="region"
               aria-labelledby="features-heading"
             >
-              <!-- DP-2: tabindex="-1" so "Not now" on the tour nudge can land
+              <!-- tabindex="-1" so "Not now" on the tour nudge can land
                    focus here. Not in the tab order; script-focusable only. -->
               <h2 id="features-heading" tabindex="-1">Main Page</h2>
-              <!-- UF-40 (U-44): the landing surface carries the name the
-                   tours, the header button and the docs all use, so the
-                   vocabulary is visible where it is introduced. The id and
-                   the aria-labelledby coupling stay (Q-40 facade). -->
+              <!-- The landing surface carries the name the tours, the header
+                   button and the docs all use, so the vocabulary is visible
+                   where it is introduced. The id and the aria-labelledby
+                   coupling stay. -->
               <p class="welcome-lede">
                 Your projects, organized like folders on a desktop computer.
               </p>
-              <!-- W3: one decluttered surface — start actions and
+              <!-- One decluttered surface: start actions and
                    saved projects side by side under a single heading -->
               <div class="welcome-columns">
                 <section
@@ -1110,7 +1104,7 @@
                   data-tutorial-target="welcome-open-panel"
                 >
                   <h3 id="upload-panel-heading">Open or start a project</h3>
-                  <!-- D-187: a shared link that failed says so here, where the
+                  <!-- A shared link that failed says so here, where the
                        person lands. The alert is filled after the notice is
                        shown, so it is announced once; the buttons sit outside
                        it so they are not read out as part of the message. -->
@@ -1141,7 +1135,7 @@
                     Upload an OpenSCAD (.scad) file to customize its parameters
                     and generate STL files
                   </p>
-                  <!-- Primary actions: Upload existing file OR start new -->
+                  <!-- Primary actions: Upload existing file or start new -->
                   <div class="welcome-actions">
                     <label
                       class="upload-zone"
@@ -1213,7 +1207,7 @@
                     </button>
                   </div>
                 </section>
-                <!-- Saved Projects Section (v2 with folder tree) -->
+                <!-- Saved Projects Section (with the folder tree) -->
                 <section
                   class="saved-projects-panel"
                   id="savedProjectsPanel"
@@ -1270,8 +1264,9 @@
                         </svg>
                         <span class="btn-text">Import</span>
                       </button>
-                      <!-- Import Folder button — hidden by default; shown by JS when
-                       folder_import flag is on AND webkitdirectory is supported -->
+                      <!-- Import Folder button, hidden by default; shown by JS
+                       when the folder_import flag is on and webkitdirectory is
+                       supported -->
                       <button
                         type="button"
                         class="btn btn-sm btn-outline"
@@ -1295,9 +1290,9 @@
                         </svg>
                         <span class="btn-text">Import Folder</span>
                       </button>
-                      <!-- Connect Folder button (F35 Phase A) — Chromium-only.
+                      <!-- Connect Folder button — Chromium-only.
                        Hidden by default; shown when local_folder_sync flag is on
-                       AND showDirectoryPicker is available. -->
+                       and showDirectoryPicker is available. -->
                       <button
                         type="button"
                         class="btn btn-sm btn-outline"
@@ -1327,7 +1322,7 @@
                         <span class="btn-text">Connect Folder</span>
                       </button>
                     </div>
-                    <!-- Folder-sync status pill (F35 Phase A). Hidden until the
+                    <!-- Folder-sync status pill. Hidden until the
                      controller fires its first state change. aria-live so
                      connection / restore / disconnect events are announced. -->
                     <div
@@ -1361,8 +1356,8 @@
                       </button>
                     </div>
                   </div>
-                  <!-- Linked folders (sub-plan H). Every folder this browser holds
-                   a handle for; exactly one is Connected at a time (D-33).
+                  <!-- Linked folders. Every folder this browser holds
+                   a handle for; exactly one is Connected at a time.
                    Stays hidden until linked-folders-ui.js finds at least one,
                    so browsers without showDirectoryPicker never see it. -->
                   <div class="linked-folders" id="linkedFolders" hidden>
@@ -1438,10 +1433,10 @@
                 </section>
               </div>
               <div class="role-paths-grid role-paths-grid--compact">
-                <!-- U-24 (UF-17): the welcome-page tour card leads the grid
-                     (Q-44). Its Start button loads no example, so the
-                     unified [data-example] handler never sees it; main.js
-                     wires it directly to startTutorial('welcome'). -->
+                <!-- The welcome-page tour card leads the grid. Its Start
+                     button loads no example, so the unified [data-example]
+                     handler never sees it; main.js wires it directly to
+                     startTutorial('welcome'). -->
                 <div class="role-path-card">
                   <h3 class="role-path-title">Main Page Tour</h3>
                   <p class="role-path-meta">Guided tour • about 2 minutes</p>
@@ -1469,7 +1464,7 @@
                     </button>
                   </div>
                 </div>
-                <!-- Beginners Start Here (only visible tutorial for now) -->
+                <!-- Beginners Start Here -->
                 <div
                   class="role-path-card"
                   data-tutorial-target="beginners-card"
@@ -1673,7 +1668,7 @@
                     </button>
                   </div>
                 </div>
-                <!-- ASCII City Walk (CW-4): hidden until the Alt View unlock
+                <!-- ASCII City Walk: hidden until the Alt View unlock
                      reveals every [data-hfm-gated] element. Its button loads
                      no example — main.js wires it to the game controller
                      directly, like the tour card above. -->
@@ -1710,11 +1705,11 @@
                       Enter the City
                     </button>
                   </div>
-                  <!-- CW-11: read as the launch button's description while the
+                  <!-- Read as the launch button's description while the
                        viewport gate holds it aria-disabled (phones, portrait,
                        narrow windows). main.js unhides it with the gate, so a
-                       sighted phone player sees the reason too. An OPEN game
-                       is never gated: only entry is (U-10/Q-24a). -->
+                       sighted phone player sees the reason too. An open game
+                       is never gated: only entry is. -->
                   <p class="role-path-meta" id="cityWalkGateReason" hidden>
                     Desktop only for now. The city walk needs a wide landscape
                     window. Try it on a computer, or widen this window.
@@ -2082,7 +2077,7 @@
             role="region"
             aria-labelledby="parameters-heading"
           >
-            <!-- Classic-only desktop-style Customizer header (C7): titlebar,
+            <!-- Classic-only desktop-style Customizer header: titlebar,
                  Automatic Preview / Reset row, and the preset row the
                  classic-layout-controller moves #presetControls into.
                  Hidden outside classic via classic.css. -->
@@ -2114,7 +2109,7 @@
               <div id="classicPresetRow" class="classic-preset-row"></div>
               <!-- Desktop's Customizer header is exactly the two rows above.
                    Everything this app adds beyond it lives in this collapsed
-                   section (D-20) rather than being blended into the desktop
+                   section rather than being blended into the desktop
                    rows; classic-layout-controller.js moves the controls in.
                    <details> is the codebase's disclosure primitive, so the
                    keyboard behavior, ARIA and focus ring come for free. -->
@@ -2215,7 +2210,7 @@
                 >
                   Reset
                 </button>
-                <!-- Code Editor toggle (M2) - hidden until feature flag enabled -->
+                <!-- Code Editor toggle, hidden until its feature flag is on -->
                 <button
                   type="button"
                   id="expertModeToggle"
@@ -2299,8 +2294,8 @@
               </button>
             </div>
             <div class="param-panel-body" id="paramPanelBody">
-              <!-- Console Panel: unified OpenSCAD output (S-010 desktop parity) -->
-              <!-- UF-35: the help control sits in .forge-disclosure-actions,
+              <!-- Console Panel: unified OpenSCAD output, as on the desktop -->
+              <!-- The help control sits in .forge-disclosure-actions,
                    outside the <summary>, because a control inside the
                    disclosure's own button is axe's nested-interactive. -->
               <div class="forge-disclosure-row">
@@ -2344,7 +2339,7 @@
                       aria-hidden="true"
                       >0</span
                     >
-                    <!-- Error/warning count for the Structured view (F1).
+                    <!-- Error/warning count for the Structured view.
                        Decorative, like #console-badge above it: ErrorLogPanel
                        already announces errors and warnings through the
                        announcer, so repeating the count to assistive tech
@@ -2472,12 +2467,12 @@
                         aria-relevant="additions"
                         tabindex="0"
                       >
-                        <!-- tabindex because this region scrolls and has nothing
-                         focusable inside it, so arrows and PageDown had no way
-                         in. Not the CodeMirror case (P2), where the scroller's
-                         contenteditable child IS reachable and the same axe
-                         rule is a false positive: here it was real, and P7
-                         made it visible by giving the log its content back. -->
+                        <!-- tabindex because this region scrolls and has
+                         nothing focusable inside it, so arrows and PageDown
+                         would have no way in. Not the CodeMirror case, where
+                         the scroller's contenteditable child is reachable and
+                         the same axe rule is a false positive: here it is
+                         real. -->
                         <div class="console-empty">
                           No output yet. Messages from the OpenSCAD engine will
                           appear here.
@@ -2494,8 +2489,8 @@
                       <!-- The Show filter and the table both live in here so both
                          travel into the Classic dock together (the layout
                          controller moves #error-log-output, not its parent).
-                         role="log"/aria-live have moved OFF this element and on
-                         to the inner region the panel rebuilds: a live region
+                         role="log"/aria-live sit on the inner region the panel
+                         rebuilds, not on this element: a live region
                          should hold only the content that changes, and a
                          <select> announcing itself on every render is exactly
                          what it should not hold. -->
@@ -2515,7 +2510,7 @@
                   </div>
                 </details>
               </div>
-              <!-- Classic Font List panel (F3), transcribed from upstream
+              <!-- Classic Font List panel, transcribed from upstream
                    FontList.ui. Declared here as static markup and moved into
                    #classicFontListSlot on entering Classic, the same way the
                    console and editor panes travel; hidden everywhere else.
@@ -2634,10 +2629,10 @@
                   </button>
                 </fieldset>
               </div>
-              <!-- Classic Viewport-Control panel (F4), transcribed from
+              <!-- Classic Viewport-Control panel, transcribed from
                    upstream ViewportControl.ui. Moved into
                    #classicViewportControlSlot on entering Classic.
-                   Deliberately carries NO aria-live: the camera emits ~60
+                   Deliberately carries no aria-live: the camera emits ~60
                    change events a second while orbiting, and a live region on
                    that feed would talk over everything else on the page. -->
               <div
@@ -2725,7 +2720,7 @@
                   </div>
                 </fieldset>
               </div>
-              <!-- Classic Animate panel (F5), transcribed from upstream
+              <!-- Classic Animate panel, transcribed from upstream
                    Animate.ui. Moved into #classicAnimateSlot on entering
                    Classic. Playback is always started by the user, and it
                    announces itself once on start and once on stop — never per
@@ -2866,7 +2861,6 @@
                   </div>
                 </fieldset>
               </div>
-              <!-- File Actions panel removed: all features now in File toolbar menu -->
               <!-- Image Measurement Tool -->
               <details
                 class="measure-details forge-disclosure"
@@ -3174,7 +3168,6 @@
                   </p>
                 </div>
               </details>
-              <!-- Edit Tools panel removed: all features now in Edit toolbar menu -->
               <div
                 id="measureFullscreenBackdrop"
                 class="measure-fullscreen-backdrop hidden"
@@ -3238,7 +3231,7 @@
                           aria-label="Upload overlay image file"
                         />
                       </label>
-                      <!-- DP-5: cropping saves a COPY; the original stays in
+                      <!-- Cropping saves a copy; the original stays in
                            the image list. Disabled until there is a raster
                            image chosen, because an SVG has nothing to crop. -->
                       <button
@@ -3250,8 +3243,8 @@
                         Crop
                       </button>
                     </div>
-                    <!-- DP-6: the picture you have been tracing against is
-                         usually the picture you want ON the model. This hands
+                    <!-- The picture you have been tracing against is
+                         usually the picture you want on the model. This hands
                          it to a design parameter through the ordinary upload
                          path, so it traces, opens the editor and lands in the
                          gallery exactly as a file chosen by hand would. -->
@@ -3367,7 +3360,8 @@
                     >Choose the color applied to SVG overlay strokes and fills.
                     Auto mode picks a visible color for the current theme.</span
                   >
-                  <!-- Tablet device selector: auto-sizes overlay to screen dimensions (ENH-B) -->
+                  <!-- Tablet device selector: auto-sizes overlay to screen
+                       dimensions -->
                   <div class="overlay-control overlay-tablet-control">
                     <label
                       class="overlay-control-label"
@@ -3406,7 +3400,7 @@
                       More options
                     </summary>
                     <div class="overlay-advanced-controls">
-                      <!-- DP-5: which surface the overlay sits against. A
+                      <!-- Which surface the overlay sits against. A
                            raw millimeter box alone is a poor control here -
                            "-0.25" says nothing to someone who wants to trace
                            onto the top of a charm - so the presets name the
@@ -3639,8 +3633,6 @@
                   </details>
                 </div>
               </details>
-              <!-- Design Tools panel removed: all features now in Design toolbar menu -->
-              <!-- Display Options panel removed: toggles now in View toolbar menu -->
               <!-- Library Controls -->
               <div
                 class="library-controls hidden"
@@ -3719,7 +3711,7 @@
                 role="region"
                 aria-label="Companion files for this design"
               >
-                <!-- UF-35: help control outside the <summary>. -->
+                <!-- Help control outside the <summary>. -->
                 <div class="forge-disclosure-row">
                   <div class="forge-disclosure-actions">
                     <a
@@ -3809,7 +3801,7 @@
                       </div>
                       <!-- Folder breadcrumbs. Outside the list below, and not
                          inside it, because a role="list" may own only
-                         listitems (D-38). -->
+                         listitems. -->
                       <div
                         class="project-files-breadcrumbs"
                         id="projectFilesBreadcrumbs"
@@ -4000,7 +3992,7 @@
                 </div>
               </details>
               <!-- Preset Controls -->
-              <!-- UF-35: help control outside the <summary>. -->
+              <!-- Help control outside the <summary>. -->
               <div class="forge-disclosure-row">
                 <div class="forge-disclosure-actions">
                   <a
@@ -4251,7 +4243,7 @@
                   </button>
                 </div>
               </div>
-              <!-- Parameter Search and Navigation (C2: Cognitive load reduction) -->
+              <!-- Parameter Search and Navigation (lower cognitive load) -->
               <div class="param-search-section" id="paramSearchSection">
                 <div class="param-search-row">
                   <div class="param-search-input-wrapper">
@@ -4318,7 +4310,7 @@
               >
                 <!-- Parameters will be dynamically generated here -->
               </div>
-              <!-- The whole stencil set in one download (DP-17). Shown only
+              <!-- The whole stencil set in one download. Shown only
                    when the loaded tile makes plates; main.js reveals it. -->
               <div id="stencilSetExport" class="stencil-set-export" hidden>
                 <button
@@ -4458,7 +4450,7 @@
                 </div>
               </div>
             </div>
-            <!-- Expert Mode Panel (M2) - Code editor interface -->
+            <!-- Expert Mode Panel: the code editor interface -->
             <div
               class="expert-mode-panel"
               id="expertModePanel"
@@ -4470,13 +4462,12 @@
               <div class="expert-mode-drag-handle" aria-hidden="true">
                 <span class="drag-handle-bar"></span>
               </div>
-              <!-- Classic editor toolbar (D1). Lives inside #expertModePanel so
-                   it travels into the Classic editor slot with the panel, and
-                   is hidden outside Classic. U-5/Q-18a superseded DCR-1's
-                   upstream transcription: the workflow buttons (Preview,
-                   Render, STL, DXF) live on the top Classic toolbar now, so
-                   this bar is New Open Save | Undo Redo Unindent Indent |
-                   3D Print. -->
+              <!-- Classic editor toolbar. Lives inside #expertModePanel so it
+                   travels into the Classic editor slot with the panel, and is
+                   hidden outside Classic. Unlike upstream's, it carries no
+                   workflow buttons: Preview, Render, STL and DXF live on the
+                   top Classic toolbar, so this bar is New Open Save | Undo
+                   Redo Unindent Indent | 3D Print. -->
               <div
                 id="classicEditorToolbar"
                 class="classic-editor-toolbar"
@@ -4551,7 +4542,7 @@
                     ></span
                     ><span class="sr-only">Redo edit</span>
                   </button>
-                  <!-- Upstream orders Unindent before Indent (U3) -->
+                  <!-- Upstream orders Unindent before Indent -->
                   <button
                     type="button"
                     class="btn classic-tb-btn"
@@ -4579,13 +4570,13 @@
                     ><span class="sr-only">Indent</span>
                   </button>
                 </div>
-                <!-- Preview/Render/STL/DXF moved to the top Classic toolbar
-                     (U-5, Q-18a): one home for the workflow triad in both
-                     densities. Text-editing ops and 3D Print stay. -->
+                <!-- Preview/Render/STL/DXF live on the top Classic toolbar:
+                     one home for the workflow triad in both densities.
+                     Text-editing ops and 3D Print stay here. -->
                 <div class="classic-tb-group" role="group" aria-label="Print">
                   <!-- aria-disabled rather than disabled: the button stays
                        focusable so keyboard and screen-reader users can find
-                       it and hear why it is unavailable (D-15/D-26). -->
+                       it and hear why it is unavailable. -->
                   <!-- No glyph: upstream assigns this action no icon either
                        (empty iconset in MainWindow.ui, never set in
                        MainWindow.cc), so the label is shown as text rather
@@ -4679,7 +4670,7 @@
                 <!-- Drawer toggle header with mobile params button -->
                 <div class="preview-drawer-header">
                   <div class="preview-drawer-header-left">
-                    <!-- Customizer button FIRST (left position) -->
+                    <!-- Customizer button first (left position) -->
                     <button
                       type="button"
                       id="mobileDrawerToggle"
@@ -4705,7 +4696,7 @@
                       </svg>
                       <span class="btn-label">Customizer</span>
                     </button>
-                    <!-- Preview Settings button SECOND (right of the Customizer) -->
+                    <!-- Preview Settings button, right of the Customizer -->
                     <button
                       type="button"
                       id="previewDrawerToggle"
@@ -4788,7 +4779,7 @@
                       <span>Preview Settings</span>
                     </div>
                     <div class="preview-settings">
-                      <!-- LEFT COLUMN: Preview Options -->
+                      <!-- Left column: Preview Options -->
                       <section
                         class="settings-col settings-col-options"
                         aria-labelledby="previewOptionsHeading"
@@ -4799,11 +4790,12 @@
                         >
                           Preview Options
                         </h3>
-                        <!-- The control that OWNS auto-preview state. The
-                             Classic Customizer checkbox and Design > Automatic
-                             Reload and Preview both drive this one; without it
-                             all three surfaces were dead. Hidden in Classic,
-                             which shows its own upstream-labelled mirror. -->
+                        <!-- The control that owns auto-preview state. The
+                             Classic Customizer checkbox and Design >
+                             Automatic Reload and Preview both drive this
+                             one; without it all three would do nothing.
+                             Hidden in Classic, which shows its own
+                             upstream-labelled mirror. -->
                         <label class="toggle-switch">
                           <input
                             type="checkbox"
@@ -4969,7 +4961,7 @@
                           </select>
                         </label>
                       </section>
-                      <!-- RIGHT COLUMN: Model Appearance + Color + Utilities -->
+                      <!-- Right column: Model Appearance, Color, Utilities -->
                       <section
                         class="settings-col settings-col-appearance"
                         aria-labelledby="modelAppearanceHeading"
@@ -5192,9 +5184,9 @@
                     aria-label="Rendered 2D SVG preview"
                   ></div>
                   <!-- The drawing editor takes this space when it is open,
-                       the same way the 2D preview does (DP-19). It is where
-                       the 3D view was because that is the biggest surface on
-                       the page, and on a phone it IS the page. -->
+                       the same way the 2D preview does. It takes the 3D view's
+                       place because that is the biggest surface on the page,
+                       and on a phone it is the page. -->
                   <div
                     id="drawingEditorSurface"
                     class="drawing-editor-surface hidden"
@@ -5232,11 +5224,10 @@
                     id="previewStatusStats"
                   ></span>
                   <!--
-                    BR-4: WASM memory indicator — absolute MB only.
-                    The previous percentage progressbar implied a known
-                    "limit" which the WASM runtime does not expose;
-                    HEAP8.length is the allocated buffer size, not used
-                    bytes. We now show just the MB value.
+                    WASM memory indicator, absolute MB only. A percentage
+                    bar would imply a known "limit" which the WASM runtime
+                    does not expose; HEAP8.length is the allocated buffer
+                    size, not used bytes.
                   -->
                   <span
                     class="memory-indicator hidden"
@@ -6203,9 +6194,8 @@
                     </svg>
                   </button>
                 </div>
-                <!-- UF-11: moved here from the Preview Settings drawer to sit
-                     beside the Auto rotate button it belongs to; the id stays
-                     and overlay-grid-controller's wiring carries over. -->
+                <!-- Beside the Auto rotate button it belongs to;
+                     overlay-grid-controller wires it by its id. -->
                 <div class="preview-setting rotation-speed-setting">
                   <label
                     class="preview-setting-label"
@@ -6583,21 +6573,21 @@
         aria-live="assertive"
         aria-atomic="true"
       ></div>
-      <!-- Classic window-bottom status bar (C8): mirrors the in-viewport
+      <!-- Classic window-bottom status bar: mirrors the in-viewport
            status overlay, which classic hides (so only one aria-live source
            speaks). Slim by design — it is never focusable, so the 44px
            touch-target rule does not apply (documented deviation). -->
       <div id="classicStatusBar" class="classic-status-bar">
-        <!-- Upstream's status bar is the viewport telemetry, at the left
-             (OpenSCAD_1). It is NOT in a live region: the camera's change feed
+        <!-- Upstream's status bar is the viewport telemetry, at the left.
+             It is not in a live region: the camera's change feed
              fires ~118 times per drag, and a polite region repeating a pose ten
              times a second is not a rough edge, it is a product failure. It is
              not aria-hidden either — a screen-reader user can still navigate to
              it deliberately. It simply never speaks on its own. -->
         <span id="classicStatusViewport" class="classic-status-viewport"></span>
         <span class="classic-status-spacer" aria-hidden="true"></span>
-        <!-- role="status" has moved off the bar and on to this one span. The
-             render state is the only thing here that should announce itself. -->
+        <!-- role="status" is on this one span, not on the bar: the render
+             state is the only thing here that should announce itself. -->
         <span id="classicStatusText" role="status" aria-live="polite"></span>
         <span class="classic-status-divider" aria-hidden="true">|</span>
         <span id="classicStatusStats"></span>
@@ -6605,11 +6595,11 @@
         <span id="classicStatusMemory"></span>
       </div>
     </div>
-    <!-- Global live regions (UF-11 P1). Body-level on purpose: inside #app
-         they sat in the Preview Settings drawer, whose content is
-         display:none while collapsed (the default) and in Classic entirely,
-         and #app itself goes inert while the first-visit gate blocks — so
-         real screen readers never heard them in those states. -->
+    <!-- Global live regions, body-level on purpose: inside #app they would
+         sit in the Preview Settings drawer, whose content is display:none
+         while collapsed (the default) and in Classic entirely, and #app
+         itself goes inert while the first-visit gate blocks, so real screen
+         readers would never hear them in those states. -->
     <div
       class="status-area"
       id="statusArea"
@@ -6633,7 +6623,7 @@
       aria-live="assertive"
       aria-atomic="true"
     ></div>
-    <!-- Crop the reference image (DP-5). Numeric fields are the primary
+    <!-- Crop the reference image. Numeric fields are the primary
          control, not a fallback: a drag handle cannot be operated by keyboard
          or described to a screen reader, and the numbers are what the person
          is actually deciding. The picture beside them shows the rectangle. -->
@@ -7964,9 +7954,8 @@
         </div>
       </div>
     </div>
-    <!-- About Modal (G6). Help > About used to open the Features Guide on its
-         accessibility tab, which claimed to be something it was not. Version
-         text is filled in at open time from the build's __APP_VERSION__. -->
+    <!-- About Modal (Help > About). Version text is filled in at open time
+         from the build's __APP_VERSION__. -->
     <div
       class="modal hidden"
       id="aboutModal"
@@ -8040,11 +8029,11 @@
         </div>
       </div>
     </div>
-    <!-- Preferences dialog (P11a shell). Six tabs mirroring desktop OpenSCAD's
-         Preferences. This release ships the shell: the dialog, the APG tab
-         bar, focus handling, and every tab present and honest about its own
-         state. Tabs whose engine does not exist here are visibly disabled and
-         name their reason, never silently absent. -->
+    <!-- Preferences dialog. Six tabs mirroring desktop OpenSCAD's
+         Preferences: the dialog, the APG tab bar, focus handling, and every
+         tab present and honest about its own state. Tabs whose engine does
+         not exist here are visibly disabled and name their reason, never
+         silently absent. -->
     <div
       class="modal hidden"
       id="preferencesModal"
@@ -8177,11 +8166,11 @@
             tabindex="0"
             hidden
           >
-            <!-- Q-41 (UF-15): outside Classic the app theme drives the
-                 viewport so high contrast keeps working, and these radios
-                 repainted nothing while looking live. Owner decision: the
-                 group exists only where it works (hidden by components.css
-                 when body[data-ui-mode] is not classic). -->
+            <!-- Outside Classic the app theme drives the viewport so high
+                 contrast keeps working, and these radios would repaint nothing
+                 while looking live, so the group exists only where it works
+                 (hidden by components.css when body[data-ui-mode] is not
+                 classic). -->
             <fieldset class="preferences-fieldset" id="prefsColorSchemeGroup">
               <legend class="preferences-legend">Color scheme</legend>
               <p id="prefs-scheme-note" class="preferences-field-note">
@@ -8310,9 +8299,8 @@
                 >Zoom toward the mouse pointer</label
               >
             </div>
-            <!-- UF-11: these moved here from the Preview Settings drawer and
-                 keep their ids — main.js and overlay-grid-controller wire
-                 them by id, and the elements are their setting's one home. -->
+            <!-- main.js and overlay-grid-controller wire these by id, and the
+                 elements are their setting's one home. -->
             <div class="preferences-check-row">
               <input
                 type="checkbox"
@@ -8327,10 +8315,10 @@
             </p>
             <fieldset class="preferences-fieldset">
               <legend class="preferences-legend">Grid</legend>
-              <!-- UF-14 (Q-40c): the grid is a per-interface preference now,
-                   and Preferences is Classic's home for its own copy. Both
-                   controls drive the same code paths as the Forge drawer's
-                   grid controls; custom sizes are still edited there. -->
+              <!-- The grid is a per-interface preference, and Preferences is
+                   Classic's home for its own copy. Both controls drive the same
+                   code paths as the Forge drawer's grid controls; custom sizes
+                   are edited there. -->
               <div class="preferences-check-row">
                 <input type="checkbox" id="prefsShowGrid" />
                 <label for="prefsShowGrid">Show grid</label>
@@ -8616,8 +8604,7 @@
               the edge detail limit in View ▸ Edge Detail Limit, and Design ▸
               Flush Caches clears cached geometry.
             </p>
-            <!-- UF-11: these moved here from the Preview Settings drawer and
-                 keep their ids — main.js wires them by id at startup. -->
+            <!-- main.js wires these by id at startup. -->
             <div class="preferences-check-row">
               <input
                 type="checkbox"
@@ -8657,10 +8644,10 @@
             tabindex="0"
             hidden
           >
-            <!-- DP-32: the disabled tab's description is the first sentence
-                 only; the rest stays visible here. Keep the id on the span -
-                 collapsing it back onto the paragraph silently restores the
-                 full text to every arrow-key pass along the tab strip. -->
+            <!-- The disabled tab's description is the first sentence only;
+                 the rest stays visible here. Keep the id on the span: moving
+                 it onto the paragraph would silently restore the full text to
+                 every arrow-key pass along the tab strip. -->
             <p class="preferences-panel-reason">
               <span id="prefs-reason-axes"
                 >A game controller already moves the view: the right stick
@@ -8671,7 +8658,7 @@
               Space mice and other specialist 3D input devices are not
               supported.
             </p>
-            <!-- Read-only, deliberately NOT a live region: plugging a pad in
+            <!-- Read-only, deliberately not a live region: plugging a pad in
                  already announces through the status line (main.js wires
                  gamepad connect/disconnect to updateStatus), so a live region
                  here would double-announce the same event. -->
@@ -8814,16 +8801,14 @@
             calculated values, or help troubleshoot configurations.
           </p>
           <div class="console-output-container">
-            <!-- console-MODAL-output, not console-output: this <pre> and the Log
-                 view's #console-output div shared one class name, and the block
-                 written for this element sat later in components.css, so it won
-                 on both. The Log view inherited white-space:pre-wrap, which
-                 turned ConsolePanel.renderEntry()'s template indentation into
-                 three rendered blank lines between every message (measured:
-                 63px gaps, scrollHeight 1795px against 451px of actual text),
-                 and a fixed max-height:400px that took no account of the pane
-                 it sits in. In Classic that box was clipped to 60px at 1024px
-                 wide and the console read as empty (D-27). -->
+            <!-- console-modal-output, not console-output: the Log view's
+                 #console-output div is a different element, and a shared class
+                 name would hand it this element's styles: white-space:pre-wrap,
+                 which renders ConsolePanel.renderEntry()'s template indentation
+                 as blank lines between every message, and a fixed max-height
+                 that takes no account of the pane it sits in (in Classic, a
+                 box clipped to 60px at 1024px wide and a console that reads as
+                 empty). -->
             <pre
               class="console-modal-output"
               id="consoleOutput"
@@ -8888,7 +8873,7 @@ No console output yet. Generate a model to see output.</pre
         </div>
       </div>
     </div>
-    <!-- First-Visit Disclosure Modal (U-9: theme choice; copy owner-approved, Q-21).
+    <!-- First-Visit Disclosure Modal: the Forge or Classic choice.
          The overlay carries the split preview backdrop: blurred Forge left,
          blurred Classic right, each 1:1 with what that side's choice loads. -->
     <div
@@ -8915,7 +8900,7 @@ No console output yet. Generate a model to see output.</pre
           <h2 id="first-visit-title">Welcome to OpenSCAD Assistive Forge</h2>
         </div>
         <div class="modal-body">
-          <!-- U-19: heading + four short bullets, two columns of two on
+          <!-- Heading + four short bullets, two columns of two on
                desktop (grid column flow keeps DOM order 1-4 for the
                virtual cursor), stacked at the modal's narrow breakpoint.
                The id stays: the dialog's aria-describedby points here. -->
@@ -8940,19 +8925,18 @@ No console output yet. Generate a model to see output.</pre
                 app itself.
               </li>
             </ul>
-            <!-- UF-41 (U-39, Q-69): the same four approved sentences behind
-                 concept-title rows, stowed on first view, for mobile-shaped
-                 viewports only. Exactly one of the two lists is in the layout
-                 (and therefore in the accessibility tree) at a time; the
-                 swap rides .first-visit-mobile-shaped, which is set from the
-                 SAME isViewportDesktopShaped() predicate that gates the
-                 Classic card, so the modal has one definition of "mobile".
+            <!-- The same four sentences behind concept-title rows, stowed on
+                 first view, for mobile-shaped viewports only. Exactly one of
+                 the two lists is in the layout (and therefore in the
+                 accessibility tree) at a time; the swap rides
+                 .first-visit-mobile-shaped, which is set from the same
+                 isViewportDesktopShaped() predicate that gates the Classic
+                 card, so the modal has one definition of "mobile".
 
                  The bodies are duplicated text on purpose: native
                  details/summary cannot be un-disclosed by CSS for the desktop
-                 view, and the owner kept the full bullets there (Q-69). The
-                 two copies are pinned equal by an e2e case so they cannot
-                 drift. -->
+                 view, which keeps the full bullets. The two copies are pinned
+                 equal by an e2e case so they cannot drift. -->
             <div class="first-visit-note-rows">
               <details class="first-visit-note-row">
                 <summary>Browser based process</summary>
@@ -8990,9 +8974,9 @@ No console output yet. Generate a model to see output.</pre
             <div class="first-visit-options">
               <!-- aria-labelledby/describedby instead of the wrapping label
                    naming the radio: the label would fold the screenshot's
-                   whole description into the radio's NAME; this keeps the
+                   whole description into the radio's name; this keeps the
                    name short and moves picture + guidance to the description. -->
-              <!-- U-19: the learn-more link is a SIBLING of the label, not
+              <!-- The learn-more link is a sibling of the label, not
                    a child - inside it, clicking the link would toggle the
                    radio and the link text would join the radio's
                    description. -->
@@ -9017,12 +9001,11 @@ No console output yet. Generate a model to see output.</pre
                       >Recommended for new users</span
                     >
                   </span>
-                  <!-- UF-41 (U-39): the layout description moved off the img's
-                       alt and onto an always-present sr-only span, because the
-                       picture itself leaves the layout on mobile-shaped
-                       viewports. The radio's accessible DESCRIPTION is
-                       unchanged either way — same words, same place — but it
-                       now survives the picture's removal. The img is alt=""
+                  <!-- The layout description is on an always-present sr-only
+                       span, not the img's alt, because the picture itself
+                       leaves the layout on mobile-shaped viewports: the
+                       radio's accessible description is the same either way
+                       and survives the picture's removal. The img is alt=""
                        so a desktop reader is not told the same thing twice. -->
                   <img
                     class="first-visit-shot"
@@ -9069,8 +9052,8 @@ No console output yet. Generate a model to see output.</pre
                       >Classic</span
                     >
                   </span>
-                  <!-- U-10: shown while the viewport gate disables this card
-                       (C-15 shape: genuinely disabled control + a VISIBLE
+                  <!-- Shown while the viewport gate disables this card
+                       (a genuinely disabled control with a visible
                        reason). Toggled by updateFirstVisitClassicGate(). -->
                   <span
                     class="first-visit-gate-note hidden"
@@ -9110,9 +9093,6 @@ No console output yet. Generate a model to see output.</pre
               </div>
             </div>
           </fieldset>
-          <!-- U-19: the light-desktop-look / themes-only-in-Forge fact this
-               line used to carry now lives in CLASSIC_UI_GUIDE.md (the
-               Classic card's link). -->
           <p class="first-visit-compromise">
             On a desktop, you can switch between interfaces at any time with the
             button in the top right corner of the app.
@@ -9147,7 +9127,7 @@ No console output yet. Generate a model to see output.</pre
             >
           </p>
         </div>
-        <!-- UF-41 (U-39): the fold made visible. Zero-height, so it can never
+        <!-- The fold made visible. Zero-height, so it can never
              take space from the content it is reporting on; aria-hidden with
              no tab stop and nothing written to a live region, because a
              screen-reader user already knows the body scrolls. Shown only
@@ -9389,7 +9369,7 @@ No console output yet. Generate a model to see output.</pre
     />
     <!-- Drawer backdrop (for mobile off-canvas) -->
     <div class="drawer-backdrop" id="drawerBackdrop" aria-hidden="true"></div>
-    <!-- Toolbar Menu Modals (Phase 1) -->
+    <!-- Toolbar Menu Modals -->
     <div
       id="fileMenuModal"
       class="toolbar-menu-modal hidden"
@@ -9576,7 +9556,7 @@ No console output yet. Generate a model to see output.</pre
         </div>
       </div>
     </div>
-    <!-- ASCII City Walk game layer (CW-4). Empty shell: the controller
+    <!-- ASCII City Walk game layer. Empty shell: the controller
          (src/js/game/city-walk-controller.js) builds and tears down its
          contents around each session. -->
     <div id="cityWalkLayer" class="city-walk-layer" hidden></div>
