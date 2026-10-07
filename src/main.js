@@ -3682,7 +3682,7 @@ async function initApp() {
     // clearing `hidden` alone left the command doing nothing at all — and a
     // display:none summary cannot take focus, which dropped focus on <body>
     // as the menu closed. Route through the controller so its class and the
-    // Window menu's tick keep reading one state (D-41).
+    // Window menu's tick keep reading one state.
     const uiCtrl = getUIModeController();
     if (uiCtrl && !uiCtrl.isPanelShowing('libraries')) {
       uiCtrl.togglePanelVisibility('libraries');
@@ -3695,21 +3695,21 @@ async function initApp() {
 
   // ── Toolbar: File menu ──────────────────────────────────────────────────
   // Order, labels and separators transcribed from upstream MainWindow.ui at
-  // tag openscad-2026.01.01-TEST2 (Appendix U2). Omitted and documented:
-  // Save All and the Python submenu (D-24 — one document, no Python in the
-  // WASM build). Quit has no browser meaning, so its slot is dropped and the
-  // single Close carries the clearer name "Close Project" (D-27, owner
-  // 2026-08-08). "Open Local Folder…" is a Forge extra, kept beside Open File.
+  // tag openscad-2026.01.01-TEST2. Omitted: Save All and the Python submenu
+  // (one document, no Python in the WASM build). Quit has no browser
+  // meaning, so its slot is dropped and the single Close carries the clearer
+  // name "Close Project". "Open Local Folder…" is a Forge extra, kept beside
+  // Open File.
   getToolbarMenuController().registerMenuBuilder('file', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
     // state.stl is only set by a full Generate. Commands that act on WHAT IS
-    // ON SCREEN are available as soon as a preview has put a mesh there (P10).
+    // ON SCREEN are available as soon as a preview has put a mesh there.
     const hasViewportModel = hasRender || Boolean(previewManager?.mesh);
 
     // Recent Files submenu: entries this browser can still re-open, then
-    // Clear Recent. Unreachable entries stay listed but disabled (D-28).
+    // Clear Recent. Unreachable entries stay listed but disabled.
     const hasRecent = fileActionsController.recentFiles.length > 0;
     const recentItems = [
       ...(hasRecent
@@ -3741,10 +3741,9 @@ async function initApp() {
       },
     ];
 
-    // Export submenu, in upstream order (U2). POV is omitted and documented
-    // (D-24 -- the WASM build has no POV writer). Every entry renders on
-    // demand when the render in hand is not already that format, so no export
-    // is a dead end any more.
+    // Export submenu, in upstream order. POV is omitted: the WASM build has
+    // no POV writer. Every entry renders on demand when the render in hand is
+    // not already that format, so no export is a dead end.
     const exportFormats = [
       ['stl', 'Export as STL (ascii)\u2026', { stlBinary: false }],
       ['stl', 'Export as STL (binary)\u2026', { stlBinary: true }],
@@ -3752,7 +3751,7 @@ async function initApp() {
       ['off', 'Export as OFF\u2026', {}],
       ['wrl', 'Export as WRL\u2026', {}],
       ['amf', 'Export as AMF\u2026', {}],
-      // Measured 2026-08-08: this build's renderer traps on 3MF with
+      // This build's renderer traps on 3MF with
       // "function signature mismatch", so the item says so instead of
       // failing every time it is pressed.
       ['3mf', 'Export as 3MF\u2026', {}, THREEMF_UNAVAILABLE_REASON],
@@ -3782,8 +3781,7 @@ async function initApp() {
         label: 'Export as Image\u2026',
         shortcutAction: 'exportImage',
         // It photographs the canvas, so it needs something on screen and
-        // nothing else. It used to demand a full render while telling the
-        // user to "Load and preview a file first" -- which they had (P10).
+        // nothing else.
         enabled: hasViewportModel,
         tooltip: hasViewportModel
           ? 'Save the current viewport as a PNG image'
@@ -3918,10 +3916,9 @@ async function initApp() {
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
-      // UF-11: proxies the export-quality mode whose drawer select was
-      // retired; these labels are the retired select's options and this list
-      // is the setting's one home. Forge-only, like the other UF-11 menu
-      // homes - Classic's File menu keeps its audited upstream shape.
+      // The export-quality mode: this list is the setting's one home.
+      // Forge-only, like the other menu homes for drawer settings - Classic's
+      // File menu keeps its upstream shape.
       ...(document.body.dataset.uiMode !== 'classic'
         ? [
             {
@@ -3956,10 +3953,9 @@ async function initApp() {
   /**
    * Is there a code editor the user can see right now? ModeManager's expert
    * flag stays false in Classic even while the dock's Editor pane is mounted
-   * and visible (R3b-1), so the mode alone cannot answer this. The Edit-menu
-   * gates, the live font-size apply and jump-to-line all ask this one
-   * question — asking it three different ways is how the two below stayed
-   * dead in Classic while the menu items enabled (UF-10).
+   * and visible, so the mode alone cannot answer this. The Edit-menu gates,
+   * the live font-size apply and jump-to-line all ask this one question, so
+   * the three cannot disagree.
    */
   function isEditorOnScreen() {
     const box = document
@@ -3986,9 +3982,9 @@ async function initApp() {
       const modeManager = getModeManager();
       const editor = modeManager?.getEditorInstance?.();
       if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
-        // setFontSize, not updateOptions: the latter never existed on either
-        // editor, which is how this control once saved and announced sizes
-        // without changing anything on screen (R-IV).
+        // setFontSize, not updateOptions: the latter does not exist on either
+        // editor, and calling it would save and announce sizes without changing
+        // anything on screen.
         editor.setFontSize?.(size);
       }
     },
@@ -3996,10 +3992,10 @@ async function initApp() {
   editActionsController.init();
 
   // -- Toolbar: Edit menu --------------------------------------------------
-  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
-  // Omitted and documented: Show Next/Previous Tab (D-24 -- one document, no
-  // editor tabs). Preferences is relabelled honestly (D-29). Jump to previous
-  // error is a Forge extra, kept beside its upstream sibling.
+  // Order and labels transcribed from upstream MainWindow.ui. Omitted: Show
+  // Next/Previous Tab (one document, no editor tabs). Preferences is
+  // relabelled honestly. Jump to previous error is a Forge extra, kept
+  // beside its upstream sibling.
   getToolbarMenuController().registerMenuBuilder('edit', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -4129,7 +4125,7 @@ async function initApp() {
       {
         // Upstream has no menu entry for this — it is Alt+Ins only — but a
         // keyboard-only action that does nothing tells the user nothing.
-        // Disabled here so it can at least say why (D-43).
+        // Disabled here so it can at least say why.
         type: 'action',
         label: 'Insert Template',
         disabled: true,
@@ -4234,7 +4230,7 @@ async function initApp() {
               } else {
                 // No preview yet (the manager is created by the first
                 // geometry): persist the choice so the first paint honors
-                // it instead of silently dropping it (UF-15 P2).
+                // it instead of silently dropping it.
                 if (!VIEWPORT_SCHEMES.some((s) => s.id === id)) return;
                 writeScopedPref(STORAGE_KEY_VIEWPORT_SCHEME, id);
               }
@@ -4303,7 +4299,7 @@ async function initApp() {
                   : 'Zoom toward the mouse pointer, off'
               );
             },
-            // UF-14 (Q-40c): the grid is per-interface now, and Preferences
+            // The grid is per-interface, and Preferences
             // is Classic's home for its own copy. Reads fall back to the
             // scoped preference before any model exists (the facade's
             // Classic default is grid-off).
@@ -4351,7 +4347,7 @@ async function initApp() {
             onGridSizeChange: (value) => {
               // Drive the canonical control so the drawer's handler applies,
               // persists and reports the change exactly once — two controls,
-              // one code path (the D-24 lesson).
+              // one code path.
               const drawer = document.getElementById('gridPresetSelect');
               if (!drawer) return;
               drawer.value = value;
@@ -4390,11 +4386,11 @@ async function initApp() {
     'The CSG tree is not available in this browser build. Export as CSG saves the flattened CSG source instead.';
 
   // -- Toolbar: Design menu -------------------------------------------------
-  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
-  // Four items ship visibly disabled with a reason rather than absent, so the
-  // menu still tells the truth about what desktop OpenSCAD offers: 3D Print
-  // (D-26), Measure Distance / Angle (D-15) and the two CSG dumps (D-38).
-  // Cancel Render is a Forge extra, kept next to the render it cancels.
+  // Order and labels transcribed from upstream MainWindow.ui. Four items
+  // ship visibly disabled with a reason rather than absent, so the menu
+  // still tells the truth about what desktop OpenSCAD offers: 3D Print,
+  // Measure Distance / Angle and the two CSG dumps. Cancel Render is a
+  // Forge extra, kept next to the render it cancels.
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -4455,7 +4451,7 @@ async function initApp() {
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => {
           // Never the transformer button: with a cached full render its
-          // action is 'download', and Render must not mean download (U-8a).
+          // action is 'download', and Render must not mean download.
           const btn = document.getElementById('primaryActionBtn');
           if (btn && !btn.disabled) runFullRender();
         },
@@ -4518,7 +4514,7 @@ async function initApp() {
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
     // Center and View All fit the camera to previewManager.mesh, which a
-    // preview already provides; state.stl needs a full Generate (P10).
+    // preview already provides; state.stl needs a full Generate.
     const hasViewportModel =
       Boolean(state.stl) || Boolean(previewManager?.mesh);
     const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
@@ -4566,8 +4562,8 @@ async function initApp() {
         handler: () => displayOptionsController.toggle('axes'),
       },
       {
-        // Upstream label (U2). This app's mm tick overlay IS the scale-marker
-        // overlay; E3 already named the toolbar button the same way.
+        // Upstream's label. This app's mm tick overlay is the scale-marker
+        // overlay, and the toolbar button carries the same name.
         type: 'toggle',
         label: 'Show Scale Markers',
         checked: displayOptionsController.get('axisMarks'),
@@ -4580,10 +4576,8 @@ async function initApp() {
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
-      // UF-11: the grid, measurements and status-bar toggles moved here from
-      // the Preview Settings drawer. Forge-only: Classic's View menu keeps
-      // its audited desktop shape, and Classic never showed the drawer these
-      // came from.
+      // The grid, measurements and status-bar toggles. Forge-only: Classic's
+      // View menu keeps its desktop shape.
       ...(document.body.dataset.uiMode !== 'classic'
         ? [
             {
@@ -4675,9 +4669,8 @@ async function initApp() {
         shortcutAction: 'viewDiagonal',
         handler: cameraViewHandler('diagonal'),
       },
-      // Center, View All and Reset View are three different commands upstream
-      // and were two-thirds duplicates here: Center called a method that did
-      // not exist, and View All and Reset View both fitted the model (G4).
+      // Center, View All and Reset View are three different commands upstream,
+      // and three different commands here.
       {
         type: 'action',
         label: 'Center',
@@ -4771,7 +4764,7 @@ async function initApp() {
           }
         },
       },
-      // -- Per-toolbar hide toggles (U2's tail; Classic-only markup) --
+      // -- Per-toolbar hide toggles (Classic-only markup) --
       ...(document.body.dataset.uiMode === 'classic'
         ? [
             { type: 'separator' },
@@ -4784,7 +4777,7 @@ async function initApp() {
           ]
         : []),
       { type: 'separator' },
-      // -- Preview Quality (proxies #previewQualitySelect, C4) --
+      // -- Preview Quality (proxies #previewQualitySelect) --
       (() => {
         const select = document.getElementById('previewQualitySelect');
         const options = select ? Array.from(select.options) : [];
@@ -4805,9 +4798,8 @@ async function initApp() {
           })),
         };
       })(),
-      // UF-11: the edge budget moved here from the drawer select; the values
-      // are the retired select's options and this list is now their one home.
-      // setEdgeBudget persists, rebuilds the overlay and announces the stats.
+      // The edge budget: this list is the setting's one home. setEdgeBudget
+      // persists, rebuilds the overlay and announces the stats.
       ...(document.body.dataset.uiMode !== 'classic'
         ? [
             (() => {
@@ -4847,8 +4839,7 @@ async function initApp() {
               },
             },
             {
-              // The way back from any arrangement the title-bar menus can
-              // produce (B9). Label owner-approved 2026-08-07.
+              // The way back from any arrangement the title-bar menus can produce.
               label: 'Reset Panel Layout',
               handler: () => {
                 getClassicLayoutController()?.resetPanelLayout();
@@ -4871,10 +4862,8 @@ async function initApp() {
     const uiCtrl = getUIModeController();
     /**
      * The tick reads the DOM, not the Simplified-view preference: Classic's
-     * dock adopts the Console and shows it whatever that preference says, so
-     * the menu claimed the Console was off while it sat on screen. And
-     * togglePanelVisibility announces the change itself, so announcing here
-     * too said it twice.
+     * dock adopts the Console and shows it whatever that preference says. And
+     * togglePanelVisibility announces the change itself, so this does not.
      *
      * @param {string} panelId
      * @param {string} label
@@ -4895,8 +4884,8 @@ async function initApp() {
       document.body.dataset.uiMode === 'classic' && Boolean(classicLayout);
 
     /**
-     * A Forge panel that Classic keeps out of the Customizer column (P6, owner
-     * Q-4). classic.css hides the row while its <details> is closed, so `open`
+     * A Forge panel that Classic keeps out of the Customizer column.
+     * classic.css hides the row while its <details> is closed, so `open`
      * is both the visibility and the tick — one state, so the two cannot
      * disagree.
      *
@@ -4905,7 +4894,7 @@ async function initApp() {
      * WRAPPER div, so its tick would report a closed panel as showing and its
      * handler would flip a class the Classic rule does not read. Rather than
      * two helpers in one list for reasons a reader cannot see, all five of the
-     * Q-4 set go through this one.
+     * set go through this one.
      *
      * @param {string} selector - the row's <details>
      * @param {string} label - the panel's name, as the Window menu lists it
@@ -4934,16 +4923,14 @@ async function initApp() {
 
     // Upstream builds this menu from the docks themselves, so its order is the
     // dock order: Editor, Console, Customizer, Error-Log, Animate, Font List,
-    // Viewport-Control (U2). Next/Previous Window are omitted — one window
-    // (D-24).
+    // Viewport-Control. Next/Previous Window are omitted: one window.
     const editorAvailable = _isEnabled('expert_mode');
 
     return [
       {
         // Forge's tick asks the toggle button's own pressed state — the DOM
         // truth for "is the editor open". The registry's codeEditor entry
-        // tracks whether the BUTTON is shown, which is a different question
-        // and the one this tick wrongly answered before (UF-10).
+        // tracks whether the button is shown, which is a different question.
         type: 'toggle',
         label: 'Editor',
         shortcutAction: 'toggleCodeEditor',
@@ -4974,7 +4961,7 @@ async function initApp() {
       },
       // Error-Log gets a custom handler rather than a panelToggle: it is a
       // console tab in Forge and an always-present strip pane in Classic, so
-      // PANEL_REGISTRY's show/hide semantics fit neither host (F1).
+      // PANEL_REGISTRY's show/hide semantics fit neither host.
       {
         type: 'toggle',
         label: 'Error-Log',
@@ -4982,10 +4969,8 @@ async function initApp() {
         checked: isErrorLogShowing(),
         handler: () => toggleErrorLog(),
       },
-      // The three panels sub-plan F builds are Classic-only this round (D-32),
-      // so each is a real dock toggle in Classic and keeps its previous Forge
-      // behavior outside it. Viewport-Control used to be disabled in Classic
-      // with an apologetic tooltip; it is a real panel now (F4/F6).
+      // Three panels are Classic-only, so each is a real dock toggle in Classic
+      // and keeps its Forge behavior outside it.
       ...(inClassic
         ? [
             {
@@ -5006,8 +4991,8 @@ async function initApp() {
               checked: classicLayout.isViewportControlVisible(),
               handler: () => classicLayout.toggleViewportControl(),
             },
-            // The five Forge panels Classic keeps out of the Customizer column
-            // (P6, Q-4). Listed after the dock panels and in the column order
+            // The five Forge panels Classic keeps out of the Customizer column.
+            // Listed after the dock panels and in the column order
             // they had, so a user who knows where they used to be finds them
             // in that order here. Outside Classic these stay where they were,
             // in the web-only group at the foot of this menu.
@@ -5015,9 +5000,9 @@ async function initApp() {
             forgeExtraToggle('#measureSection', 'Image Measurement'),
             forgeExtraToggle('#overlaySection', 'Reference Image'),
             forgeExtraToggle('#libraryControls > details', 'Libraries'),
-            // UF-35 put a .forge-disclosure-row between the two, so this can
-            // no longer be a direct-child selector; the class is unique
-            // inside the wrapper either way.
+            // A .forge-disclosure-row sits between the two, so this cannot be a
+            // direct-child selector; the class is unique inside the wrapper either
+            // way.
             forgeExtraToggle(
               '#projectFilesControls .project-files-details',
               'Companion Files'
@@ -5062,7 +5047,7 @@ async function initApp() {
             type: 'action',
             label: target.label,
             handler: () => {
-              // Immediate, not debounced: MEASURED, a render reporting in
+              // Immediate, not debounced: a render reporting in
               // within 350ms cancels a pending announcement outright, so the
               // user hears nothing about the jump they just made.
               if (target.focus())
@@ -5072,11 +5057,9 @@ async function initApp() {
         };
       })(),
       // -- Web-only panel toggles --
-      // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
-      //
-      // Classic lists these above instead, as the Q-4 set keyed on each row's
-      // own [open]. Listing them here as well would put two items with the
-      // same name in one menu, which is what happened when P6 first added them.
+      // Classic lists these above instead, keyed on each row's own [open].
+      // Listing them here as well would put two items with the same name in
+      // one menu.
       ...(inClassic
         ? []
         : [
@@ -5085,11 +5068,8 @@ async function initApp() {
             panelToggle('companionFileManagement', 'Companion Files'),
             panelToggle('imageMeasurement', 'Image Measurement'),
             panelToggle('referenceOverlay', 'Reference Image'),
-            // Classic's Window menu has carried this since the Q-4 set; the
-            // Forge list simply never gained it although the section and its
-            // registry entry exist here too (UF-10). Same tail slot as
-            // Classic's; the announcement uses the registry label
-            // "Advanced Menu", the C-38 shape.
+            // The same tail slot as Classic's Window menu; the announcement uses the
+            // registry label "Advanced Menu".
             panelToggle('advancedMenu', 'Advanced'),
           ]),
     ];
@@ -5129,9 +5109,9 @@ async function initApp() {
             'noopener,noreferrer'
           ),
       },
-      // Both offline items keep U2's position and say why they cannot work
-      // rather than being hidden. Bundling either one is deferred out of this
-      // plan entirely (D-39) — nothing third-party is fetched or vendored here.
+      // Both offline items keep upstream's position and say why they cannot
+      // work rather than being hidden: nothing third-party is fetched or
+      // vendored here.
       {
         type: 'action',
         label: 'Offline Documentation',
@@ -5156,7 +5136,7 @@ async function initApp() {
         tooltip: OFFLINE_CHEAT_SHEET_REASON,
       },
       {
-        // U2's sentence case. It opens the guide's Libraries page; the live
+        // Upstream's sentence case. It opens the guide's Libraries page; the live
         // list of what is mounted is File > Show Library Folder.
         type: 'action',
         label: 'Library info',
@@ -5164,8 +5144,8 @@ async function initApp() {
       },
       { type: 'separator' },
       {
-        // Was the same target as Library info — the duplicate R11 exists to
-        // remove. It opens the guide at its Workflow page instead.
+        // Not the same target as Library info: it opens the guide at its
+        // Workflow page.
         type: 'action',
         label: 'Features Guide',
         handler: () => _openFeaturesTab('tab-workflow'),
@@ -5297,10 +5277,10 @@ async function initApp() {
   // Initialize high contrast toggle button
   const contrastBtn = document.getElementById('contrastToggle');
   if (contrastBtn) {
-    // D-60, the same defect as the theme button's: the label was written
-    // only inside this handler, so Ctrl+H and the City Walk's in-game
-    // toggle left it saying the opposite of the truth to the one group of
-    // people who cannot see the button change.
+    // The label is synced from the state, not written only inside this
+    // handler: Ctrl+H and the City Walk's in-game toggle change the contrast
+    // too, and the label must not say the opposite of the truth to the people
+    // who cannot see the button change.
     const syncContrastLabel = () => {
       const on = themeManager.highContrast;
       contrastBtn.setAttribute(
@@ -5333,7 +5313,7 @@ async function initApp() {
     shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
 
-  // ── The drawing editor takes the preview area (DP-19) ─────────────────
+  // ── The drawing editor takes the preview area ─────────────────────────
   // The editor says it is opening; what that means for the 3D canvas is the
   // preview's business, and this is the one place that knows both.
   // Looked up at the moment, not at boot: the preview's init() rebuilds its
@@ -5343,14 +5323,14 @@ async function initApp() {
     document.getElementById('drawingEditorSurface');
   window.addEventListener('drawing-editor:open', () => {
     previewManager?.showEditorSurface?.(drawingEditorSurface());
-    // DP-38 P2: cheaper previews for as long as the session lasts.
+    // Cheaper previews for as long as the session lasts.
     editorDraftQuality = true;
     applyPreviewQualityMode();
   });
   window.addEventListener('drawing-editor:close', () => {
     previewManager?.hideEditorSurface?.(drawingEditorSurface());
     editorDraftQuality = false;
-    // DP-53: whatever draft stood, the committed design comes back below.
+    // Whatever draft stood, the committed design comes back below.
     draftPreviewHash = null;
     applyPreviewQualityMode();
     // Changing the quality marks the preview stale, which is honest and, on
@@ -5364,12 +5344,12 @@ async function initApp() {
       }
     }
   });
-  // DP-53: a draft of the charm with the drawing as it is now, asked for from
+  // A draft of the charm with the drawing as it is now, asked for from
   // the editor's charm view. Drawn through the preview alone: the state, the
   // undo history and the project are not touched, so nothing is written
   // until Apply, and closing without it leaves the committed design standing
   // (the close handler above re-renders it, from the cache when it can).
-  // DP-62: a DXF chosen for a design parameter converts through the same
+  // A DXF chosen for a design parameter converts through the same
   // engine the standalone door uses. Asked at the moment of choosing, so a
   // control built before the controller exists still gets it.
   setDxfRenderProvider(() =>
@@ -5388,7 +5368,7 @@ async function initApp() {
     autoPreviewController.forcePreview(draft);
   });
 
-  // DP-38: the editor's Charm view is this preview, seen through an editor
+  // The editor's Charm view is this preview, seen through an editor
   // that has stopped painting over it.
   window.addEventListener('drawing-editor:view', (event) => {
     previewManager?.setEditorCharmVisible?.(
@@ -5400,7 +5380,7 @@ async function initApp() {
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
 
-  // ── Export the whole stencil set (DP-17) ──────────────────────────────
+  // ── Export the whole stencil set ──────────────────────────────────────
   // A six-colour stencil is seven printed parts, and the one thing that must
   // not go wrong is which plate is which. The button renders them in order and
   // hands back a zip whose names say what each file is.
@@ -5432,7 +5412,6 @@ async function initApp() {
     const pegs =
       params.registration === 'pegs' || params.registration === 'both';
     const parts = count + (pegs ? 1 : 0);
-    // STRINGS: owner review pending (DP-R2 text pack).
     stencilSetExportInfo.textContent = pegs
       ? `${count} plates and the jig base, plus the paint order.`
       : `${count} plates, plus the paint order.`;
@@ -5567,7 +5546,7 @@ async function initApp() {
               `${formatName} is a 2D format. See guidance below the format selector.`
             );
 
-            // UX-B: Show "What will be auto-adjusted" indicator
+            // Show "What will be auto-adjusted" indicator
             const state = stateManager.getState();
             const autoAdjustDiv = document.getElementById('format2dAutoAdjust');
             const autoAdjustList = document.getElementById(
@@ -5669,9 +5648,9 @@ async function initApp() {
     if (!renderController) {
       renderController = new RenderController();
 
-      // Q-45a: only parameters the user actually changed travel as -D.
+      // Only parameters the user actually changed travel as -D.
       // Everything else follows the SCAD source's own declarations, which is
-      // what lets an edited default take effect at all (U-30).
+      // what lets an edited default take effect at all.
       renderController.setWithheldDefineKeyResolver(() => {
         const defineState = stateManager.getState();
         return collectWithheldDefineKeys({
