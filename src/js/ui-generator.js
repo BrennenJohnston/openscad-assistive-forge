@@ -66,7 +66,7 @@ import {
 // Active fileId for the Customizer pane. Set when a project is loaded
 // so subsequent group toggles (including programmatic Expand/Collapse
 // All) can persist per-file state without every re-render call site
-// needing to know about it. F5.
+// needing to know about it.
 let _activeCustomizerFileId = null;
 
 /**
@@ -89,7 +89,7 @@ export function getCustomizerFileId() {
 
 // The starter subset a manifest declared, and the project it declared it for.
 // Keyed by file so it cannot survive into the next project somebody opens:
-// a starter list belongs to the design it came with. IR-9.
+// a starter list belongs to the design it came with.
 let _starterDeclaration = { names: [], fileKey: null };
 
 /**
@@ -237,7 +237,7 @@ const galleryListboxRefs = {};
 // Optional listener called when a user uploads an SVG via the file picker
 let fileUploadListener = null;
 let draftRenderer = null;
-// DP-54 (D-144): the box the model fits a design into, in mm, from its own
+// The box the model fits a design into, in mm, from its own
 // echo ("design fit box mm: w=... h=..."); null until a render has said it.
 // Each file control applies its design's aspect to it.
 let designFitBoxMm = null;
@@ -247,14 +247,14 @@ const fitBoxListeners = new Set();
 // so that reopening a project restores the exact preparation state.
 let svgPrepMetadataByFile = {};
 
-// DP-81 (D-175 b): the picture a traced drawing came from, keyed by the
-// drawing's name, IN MEMORY ONLY (a photo is megabytes; it never joins the
+// The picture a traced drawing came from, keyed by the
+// drawing's name, in memory only (a photo is megabytes; it never joins the
 // metadata a project saves). A file control rebuilt with that drawing
 // (a preset, an undo, a reset, a restored project) gets its pixels and its
 // ink settings back, so Convert again and Crop work as before the rebuild.
 let pictureByFile = {};
 
-/** DP-81: what a rebuilt control needs to convert its picture again. */
+/** What a rebuilt control needs to convert its picture again. */
 export function getStoredPicture(fileName) {
   return pictureByFile[fileName] || null;
 }
@@ -330,7 +330,7 @@ export function setFileUploadListener(fn) {
 }
 
 /**
- * DP-53: how the app draws a DRAFT of the charm with a drawing that has not
+ * How the app draws a draft of the charm with a drawing that has not
  * been applied. `(paramName, value, extra)` are exactly what `emitFileValue`
  * would hand `onChange` for the same drawing, and the app renders them
  * through the preview alone: no state change, no undo entry, no project flag.
@@ -341,7 +341,7 @@ export function setDraftRenderer(fn) {
 }
 
 /**
- * DP-62: the engine's render, for a DXF chosen for a design parameter. main.js
+ * The engine's render, for a DXF chosen for a design parameter. main.js
  * lends it as a provider rather than a function, because the controller that
  * renders is built after the first file controls are; asking at the moment of
  * choosing means the order they came up in does not matter.
@@ -352,7 +352,7 @@ export function setDxfRenderProvider(fn) {
 }
 
 /**
- * D-167: a prepared drawing whose paths hold no path data. `prepareSvg`
+ * A prepared drawing whose paths hold no path data. `prepareSvg`
  * writes one `<path d="...">` per pass; a pass that kept nothing writes
  * `d=""`, and a number anywhere in a `d` is a shape. A result with no path
  * element at all is not this case.
@@ -377,7 +377,7 @@ function fileExtensionOf(name) {
 }
 
 /**
- * DP-54 (D-144): what the model just said its design box is, in mm. The
+ * What the model just said its design box is, in mm. The
  * app reads it from the render's echo and hands it here; every file control
  * turns it into the width its own design prints at, and an open editor hears
  * the new width at once.
@@ -630,7 +630,7 @@ function findParamControl(paramName, labelHint = null) {
         .trim()
         .toLowerCase();
       // A hint can be the tile's label or the parameter name itself, because a
-      // labeled dial no longer shows its name anywhere.
+      // labeled dial does not show its name anywhere.
       const spacedName = name.replace(/_/g, ' ').toLowerCase();
       if ((lbl && lbl === hint) || spacedName === hint) {
         const byLabel = document.querySelector(
@@ -889,7 +889,6 @@ export function updateDependentParameters(changedParam, newValue) {
   });
 }
 
-// announceChange is now imported from ./announcer.js for centralized screen reader announcements
 
 /**
  * Apply dependency attributes and initial visibility to a parameter control
@@ -1087,7 +1086,7 @@ export function initParameterSearch() {
         `.param-group[data-group-id="${groupId}"]`
       );
       if (groupElement) {
-        // IR-9: the jump list offers every group, including ones the starter
+        // The jump list offers every group, including ones the starter
         // wall is hiding. Jumping to one has to bring it back, or the jump
         // lands on nothing.
         if (groupElement.classList.contains('starter-empty')) {
@@ -1130,7 +1129,7 @@ export function initParameterSearch() {
  * @param {string} query - Search query (lowercase)
  */
 function filterParameters(query) {
-  // IR-9: a search that cannot find a parameter the design HAS is a lie, and
+  // A search that cannot find a parameter the design HAS is a lie, and
   // the starter wall would make it one. Searching drops the wall and says so.
   // It stays down afterwards: raising it again under someone who just went
   // looking for something would be worse than leaving it open.
@@ -2085,10 +2084,10 @@ export function isAspectCompanionParam(name, parameters) {
 
 /**
  * Width over height of a layer file's viewBox: the shared canvas
- * normalizeLayerStack writes, which is what the model fits (D-163). The
- * content's own aspect was sent before, which is the canvas's for layer 1
- * and something else for a layer holding a few shapes: the owner's layer 2
- * came out at another size in another place.
+ * normalizeLayerStack writes, which is what the model fits. The content's
+ * own aspect would be the canvas's for layer 1 and something else for a
+ * layer holding a few shapes, so layer 2 would come out at another size
+ * in another place.
  *
  * @param {string} svg - A layer file
  * @returns {number|null}
@@ -2107,19 +2106,19 @@ export function layerCanvasAspect(svg) {
 }
 
 /**
- * The per-layer companions a layered tile declares (DP-7).
+ * The per-layer companions a layered tile declares.
  *
  * A file parameter named `design_file` looks for `design_layer_1`,
- * `design_layer_2`, `design_layer_3` and their `_aspect` companions - the
- * names the plan fixed. A tile that declares none is not a layered tile and
- * nothing below this ever runs for it.
+ * `design_layer_2`, `design_layer_3` and their `_aspect` companions. A
+ * tile that declares none is not a layered tile and nothing below this
+ * ever runs for it.
  *
  * @param {Object} param - The file parameter
  * @param {Object} parameters - All extracted parameters, keyed by name
  * @returns {Array<{file: Object, aspect: Object|null, layer: number}>}
  */
 /**
- * The stencil plates a layered tile declares (DP-12).
+ * The stencil plates a layered tile declares.
  *
  * A file parameter looks for `stencil_plate_1..3` beside it. A tile that
  * declares none is not a layered stencil and nothing below this runs for it.
@@ -2135,12 +2134,10 @@ export function findLaserParam(parameters) {
 /**
  * Everything that turns a drawing into stencil plates, loaded on demand.
  *
- * ★ IT IS A LAZY CHUNK BECAUSE IT DOES NOT FIT. The color model, the ring
- * geometry, the plate builder and the jig come to a little over 4 KB gzipped,
- * and the core bundle had 704 bytes left. MEASURED: in the core, 516,052 B
- * against a 512,000 budget; with the color model alone split out, 513,070,
- * still over; with the whole engine split out, 511,384 and passing. Most
- * people never open a stencil, so this is where it belongs anyway.
+ * It is a lazy chunk because it does not fit: the color model, the ring
+ * geometry, the plate builder and the jig come to a little over 4 KB
+ * gzipped, more than the core bundle's budget has room for. Most people
+ * never open a stencil, so this is where it belongs anyway.
  *
  * The load starts as soon as a tile with plate parameters builds its
  * controls, which is seconds before anybody can choose a file. If a drawing
@@ -2176,10 +2173,10 @@ function loadStencilEngine() {
 export function findPlateParams(parameters) {
   if (!parameters) return [];
   const out = [];
-  // Up to STENCIL_PLATE_CAP, which is NOT the charm engine's LAYER_EMIT_CAP:
-  // one is how many paint colors a stencil may have (eight, the owner's
-  // number) and the other is how many relief passes a tiered charm builds
-  // (three). Walking the wrong one capped a six-colour cat at three plates.
+  // Up to STENCIL_PLATE_CAP, which is not the charm engine's LAYER_EMIT_CAP:
+  // one is how many paint colors a stencil may have (eight) and the other
+  // is how many relief passes a tiered charm builds (three). Reading the
+  // wrong one would cap a six-colour cat at three plates.
   for (let n = 1; n <= STENCIL_PLATE_CAP; n++) {
     const file = parameters[`stencil_plate_${n}`];
     if (!file || file.uiType !== 'file') break;
@@ -2248,7 +2245,7 @@ function layerFileStem(name) {
 }
 
 /**
- * Where the hole warning is shown, if this model can have one (DP-11).
+ * Where the hole warning is shown, if this model can have one.
  *
  * One region for the whole model rather than one per control: the warning is
  * about a PLACE, and the three numbers that decide it (across, up, and the
@@ -2277,7 +2274,7 @@ function ensureHoleWarningRegion(container) {
 /**
  * Check the hole against the design's outline and say so, once.
  *
- * NOTHING IS MOVED and nothing is blocked: the person is told, with the
+ * Nothing is moved and nothing is blocked: the person is told, with the
  * numbers, and decides. Silently relocating a ring on a pendant shaped like
  * their own drawing would be a change they never made and never saw.
  *
@@ -2318,7 +2315,7 @@ export function reportHolePlacement(values, parameters) {
 /**
  * The bridge warning: a shape that will fall out when the sheet is cut.
  *
- * NOT DISMISSIBLE, on purpose. The failure is invisible until the material is
+ * Not dismissible, on purpose. The failure is invisible until the material is
  * cut and the piece is on the floor, so there is no moment at which hiding it
  * helps. It shares the one warning region, because a model is either a pendant
  * or a stencil and never both.
@@ -2386,7 +2383,7 @@ function createFileControl(
   fileInfo.className = 'file-info';
   // A default can be a string or a file OBJECT (the shape a saved plate
   // value travels in). The object's name is the honest text; anything
-  // else printed "[object Object]" to the person and the screen reader.
+  // else would print "[object Object]" to the person and the screen reader.
   const defaultFileLabel =
     typeof param.default === 'string'
       ? param.default
@@ -2428,7 +2425,7 @@ function createFileControl(
    * never be seen apart by the renderer or by undo.
    * @param {Object|null} value - File object {name, data, ...} or null
    */
-  // ── The ring engine, for the companions (D-132) ────────────────────────
+  // ── The ring engine, for the companions ────────────────────────────────
   // The editor keeps its own copy for its preview; the file control needs one
   // too, because the layer companions are built on every emit whether or not
   // anyone has opened the editor. Lazy, so clipper stays out of the core
@@ -2456,39 +2453,27 @@ function createFileControl(
   }
 
   /**
-   * The per-layer companion values for one design (DP-7).
+   * The per-layer companion values for one design.
    *
-   * Runs on the RAW svg, because by the time a value reaches emitFileValue it
+   * Runs on the raw svg, because by the time a value reaches emitFileValue it
    * is a single compound path and the element identities the layers are cut
    * from are gone.
    *
-   * Every layer param the model declares gets a value on every emit, INCLUDING
-   * null when there is nothing to build at that depth. Leaving a stale layer
-   * file behind would print the previous design's second pass on top of this
-   * one.
+   * Every layer param the model declares gets a value on every emit,
+   * including null when there is nothing to build at that depth. Leaving a
+   * stale layer file behind would print the previous design's second pass on
+   * top of this one.
    *
-   * ★ A STACK IS SOMETHING A PERSON BUILDS (D-135, the owner's answer at
-   * DP-Q44, 2026-09-13: "only when asked").
-   *
-   * This used to fall back to `suggestLayers(tree)` whenever nobody had
-   * assigned anything, so EVERY upload filled `design_layer_1` and
-   * `design_layer_2` from nesting depth alone - and the model's layers are
-   * ADDITIVE over the ordinary design, so the charm silently gained a pass
-   * nobody asked for. MEASURED with the pinned desktop OpenSCAD on a traced
-   * icon, reading each STL's own Z extent: the design alone tops out at
-   * 9.450 mm with 65,288 facets; with the companions this emitted by itself,
-   * 10.250 mm and 83,030 facets. 83,030 is exactly the triangle count the app's
-   * own preview reported, so that stack was what everyone was getting.
-   *
-   * The model says it plainly: "Leave every file empty to keep the charm
-   * exactly as it was; fill layer 1 in to turn the stack on." Nobody was
-   * filling them in. This was.
-   *
-   * D-142 (DP-51, 2026-09-16) finished the same job in the EDITOR, where the
-   * Layer column still arrived pre-filled from nesting depth: it now starts
-   * every shape on layer 1 and reports no stack at all until a person builds
-   * one, so this function's `assignments` is null on an untouched drawing and
-   * the two rules agree twice over.
+   * A stack is something a person builds. The model's layers are additive
+   * over the ordinary design, so filling `design_layer_1` and
+   * `design_layer_2` from nesting depth alone would give the charm a pass
+   * nobody asked for: on a traced icon the design alone tops out at 9.450 mm
+   * with 65,288 facets, and with self-filled companions at 10.250 mm and
+   * 83,030 facets. The model says it plainly: "Leave every file empty to keep
+   * the charm exactly as it was; fill layer 1 in to turn the stack on." The
+   * editor agrees: it starts every shape on layer 1 and reports no stack
+   * until a person builds one, so `assignments` is null on an untouched
+   * drawing.
    *
    * @param {Object|null} value - The file value being emitted
    * @param {Array<number>|null} assignments - The editor's Layer column, by
@@ -2513,26 +2498,24 @@ function createFileControl(
     let svgs = [];
     try {
       const elements = classifyElements(parseSvgElements(currentRawSvg));
-      // D-162: three layers whatever the drawing nests to.
+      // Three layers whatever the drawing nests to.
       const limit = LAYER_CAP;
       const layers = elements.map((_, i) => assignments[i] || 1);
       const meta = extractSvgMeta(currentRawSvg);
-      // ★ D-132: THIS is where the page froze. The stack was flattened with
-      // `flattenToCompoundPath`, the pairwise path-bool chain that D-120
-      // retired from the editor, over the whole drawing, on the main thread,
-      // on every emit. CPU-profiled on the activities icon at 1x: 18,905 ms of
-      // an 18,960 ms emit, while the trace that produced the drawing took
-      // 186 ms. The ring engine does the same work and is order-independent
-      // besides. MEASURED on the traced drawings, same stack, same layers:
+      // The ring engine, not `flattenToCompoundPath`: the pairwise path-bool
+      // chain over the whole drawing, on the main thread, on every emit, takes
+      // 18,905 ms of an 18,960 ms emit on the activities icon at 1x, while the
+      // trace that produced the drawing takes 186 ms. The ring engine does the
+      // same work and is order-independent besides. Same stack, same layers:
       //
       //   Bathroom icon   52 elements   3,693 ms -> 262 ms    (14.1x)
       //   activities icon 74 elements  22,131 ms -> 584 ms    (37.9x)
-      //   WATAP Paint     168 elements 37,936 ms -> 1,330 ms  (28.5x)
+      //   a photograph    168 elements 37,936 ms -> 1,330 ms  (28.5x)
       //
       // The engine arrives as an argument because it lives in the lazy chunk
-      // and this file is core. When it has not landed yet the old path still
-      // runs, so a stack is never silently dropped; `ensureRingEngine()` is
-      // awaited on every path that can, which is every path a person uses.
+      // and this file is core. When it has not landed yet the pairwise path
+      // still runs, so a stack is never silently dropped; `ensureRingEngine()`
+      // is awaited on every path that can, which is every path a person uses.
       svgs = flattenLayers(elements, layers, limit, meta, null, {
         flattenRegion: ringEngine
           ? (els, svgMeta, warnings) =>
@@ -2557,7 +2540,7 @@ function createFileControl(
         type: 'image/svg+xml',
       };
       if (aspect) {
-        // D-163: the model fits the layer file by its CANVAS, the shared one
+        // The model fits the layer file by its canvas, the shared one
         // every layer is written on, so the aspect it needs is the canvas's.
         out[aspect.name] = layerCanvasAspect(svg) ?? aspect.default ?? 1;
       }
@@ -2566,11 +2549,11 @@ function createFileControl(
   }
 
   /**
-   * The design's outline, for a model that can take its shape from it (DP-11).
+   * The design's outline, for a model that can take its shape from it.
    *
-   * Cut from the RAW svg for the same reason the layers are: by the time a
+   * Cut from the raw svg for the same reason the layers are: by the time a
    * value reaches emitFileValue it is one compound path. And from the raw
-   * GEOMETRY specifically - an outline drawn as a stroke would otherwise come
+   * geometry specifically - an outline drawn as a stroke would otherwise come
    * back as a thin band and the pendant would print as a hollow ring.
    *
    * @param {Object|null} value - The file value being emitted
@@ -2602,22 +2585,22 @@ function createFileControl(
   }
 
   /**
-   * The stencil plates, for a tile that builds them (DP-12, DP-17).
+   * The stencil plates, for a tile that builds them.
    *
-   * A CONTRACT with the shelved Stencil Maker's stencil_maker.scad (the
-   * branch shelf/stencil-maker-2026-09-18, DP-63): the
-   * plate size is read from `plate_width`, `plate_height` and `margin`, and
-   * the jig from `registration` and its five numbers, because the app writes
-   * plates that are already mm-true and the model is a dumb extruder. Change
-   * those names in the model and change them here.
+   * A contract with the Stencil Maker's stencil_maker.scad (the tile is
+   * shelved, and its model is not in this repository): the plate size is
+   * read from `plate_width`, `plate_height` and `margin`, and the jig from
+   * `registration` and its five numbers, because the app writes plates that
+   * are already mm-true and the model is a dumb extruder. Change those names
+   * in the model and change them here.
    *
-   * ★ A PLATE IS A COLOR NOW, not a nesting depth (DP-16). The regions of the
-   * drawing are found, given colors, put in a paint order, and each plate
-   * cuts what its rule says. Until the editor exists, a drawing with no
-   * colors of its own gets ONE color - the base coat - and therefore one
-   * plate cutting the whole silhouette. That is the honest answer to "what
-   * colors does this line drawing have", and it is an answer a person changes
-   * by painting regions rather than one the app guesses from nesting depth.
+   * A plate is a color, not a nesting depth. The regions of the drawing are
+   * found, given colors, put in a paint order, and each plate cuts what its
+   * rule says. A drawing with no colors of its own and no plan from the
+   * editor gets one color - the base coat - and therefore one plate cutting
+   * the whole silhouette. That is the honest answer to "what colors does
+   * this line drawing have", and it is an answer a person changes by
+   * painting regions rather than one the app guesses from nesting depth.
    *
    * @param {Object|null} value - The design being emitted
    * @param {Object} values - Current parameter values, for the plate size
@@ -2632,7 +2615,7 @@ function createFileControl(
     if (!stencilEngine) {
       // The chunk is still on its way. Emit nothing rather than half of it,
       // and do the whole emission again when it lands, so a plate is never in
-      // a different state update from the design it was cut from (D-108).
+      // a different state update from the design it was cut from.
       loadStencilEngine().then(() => {
         if (currentRawSvg) emitFileValue(value);
       });
@@ -2707,9 +2690,8 @@ function createFileControl(
       const cuts = platesFor(plan, regions, silhouette);
       const names = new Map(palette.map((c) => [c.id, c.name]));
 
-      // ONE content box for every plate and for the laser sheet, so the
-      // colors land on each other, and ONE fit from it onto the plate. That
-      // is the whole of D-122, said in two lines.
+      // One content box for every plate and for the laser sheet, so the
+      // colors land on each other, and one fit from it onto the plate.
       const contentBox = boundsOf(
         [...(silhouette || []), ...cuts.flatMap((c) => c.rings)].flat()
       );
@@ -2788,7 +2770,7 @@ function createFileControl(
   /**
    * The companions that ride with a design's value: the aspect, the layer
    * files, the silhouette, the plates. Built here for the emit AND for a
-   * draft render (DP-53), so a draft is drawn from exactly what Apply would
+   * draft render, so a draft is drawn from exactly what Apply would
    * emit.
    */
   function buildEmissionExtra(value, assignments = null, ringEngine = null) {
@@ -2808,7 +2790,7 @@ function createFileControl(
       // model's fallback stays deterministic.
       extra = { [aspectParam.name]: aspect ?? aspectParam.default ?? 1 };
     }
-    // D-108's law generalized: every layer file and every layer aspect rides
+    // Every layer file and every layer aspect rides
     // in the SAME state update as the design itself, so the renderer and undo
     // can never see a stack half-changed.
     if (layerParams.length > 0) {
@@ -2855,12 +2837,12 @@ function createFileControl(
   let inkControls = null;
   let inkSourceImageData = null;
   let inkSourceFileName = null;
-  // DP-49: the picture the pixels came from, for the crop view; what a crop
+  // The picture the pixels came from, for the crop view; what a crop
   // replaced, for one level of undo; and the crop itself, for the project.
   let inkSourceDataUrl = null;
   let cropUndo = null;
   let lastCrop = null;
-  // DP-49: set for the one analysis that follows a crop or its undo, so the
+  // Set for the one analysis that follows a crop or its undo, so the
   // editor reopens with that sentence whatever the analysis alone would do.
   let reopenSentence = null;
   // The name of the PICTURE the drawing came from, for the "converted from"
@@ -2868,24 +2850,21 @@ function createFileControl(
   let sourceFileLabel = null;
   let inkRetraceTimer = null;
 
-  // ── Start, the bar, and Cancel (DP-34) ─────────────────────────────────
-  // The conversion no longer begins by itself for anything but a picture small
+  // ── Start, the bar, and Cancel ─────────────────────────────────────────
+  // The conversion does not begin by itself for anything but a picture small
   // enough that it is over before a person could have pressed the button.
   // Everything else waits to be started, reports the stage it has reached,
   // and can be canceled at any moment.
   //
-  // The owner's number, signed at DP-Q32, and the rule around it live in
-  // conversion-start-rule.js (`startsBySelf`), because D-157 found the rule
-  // applied where a file is chosen and NOT where a setting changes: a change
-  // re-ran the conversion by itself on any picture at any speed. Start stays
-  // on screen either way, because re-running after a change is the common
-  // case, and the press is the person's when the picture is not quick.
+  // The size and the rule around it live in conversion-start-rule.js
+  // (`startsBySelf`). Start stays on screen either way, because re-running
+  // after a change is the common case, and the press is the person's when
+  // the picture is not quick.
   let runningStartedBy = 'self';
   let settingsNoteShown = false;
   // Whether this picture has been converted once: the waiting button and
-  // the waiting sentence say Start conversion until it has, Convert again
-  // after (a CI run pressed nothing because a change before the first run
-  // had relabeled Start as Convert again).
+  // the waiting sentence say Start conversion until it has, and Convert
+  // again after, even when a setting changes before the first run.
   let convertedOnce = false;
   const startLabel = () =>
     convertedOnce ? 'Convert again' : 'Start conversion';
@@ -2896,18 +2875,16 @@ function createFileControl(
   let currentQuickLook = null;
 
   /**
-   * D-157, then D-164: a setting changed on the ink panel never starts a
-   * conversion by itself. D-157 let a change run where a chosen picture
-   * would have (small and quick), and the owner's fifth walk met exactly
-   * that on the logo: Colors chosen after a render, a run they had not
-   * asked for, no dialog for its first second. The one self-start left is
-   * the small picture at the moment it is chosen (DP-Q32); a change is a
-   * decision, and the press is the person's.
+   * A setting changed on the ink panel never starts a conversion by itself,
+   * even on a small quick picture: Colors chosen after a render would start
+   * a run nobody asked for, with no dialog for its first second. The one
+   * self-start is the small picture at the moment it is chosen; a change is
+   * a decision, and the press is the person's.
    */
   function changeRunsBySelf() {
     return false;
   }
-  // DP-54 (D-144): the trace this drawing came from, if any, for the
+  // The trace this drawing came from, if any, for the
   // editor's whole-drawing advisory.
   let lastTrace = null;
 
@@ -2925,7 +2902,7 @@ function createFileControl(
   }
 
   /**
-   * DP-79: how wide THIS picture will print, before it is traced: the same
+   * How wide this picture will print, before it is traced: the same
    * arithmetic as knownDesignWidthMm from the picture's own pixels instead
    * of a drawing, and the editor's default width until a render has said
    * the fit box. It is what the worker's working resolution and speck floor
@@ -2952,7 +2929,7 @@ function createFileControl(
   const traceProgress = createTraceProgress({
     onStart: () =>
       startConversion({ announceResult: true, startedBy: 'person' }),
-    // DP-80: Crop first. The crop view on the picture itself, before (or
+    // Crop first. The crop view on the picture itself, before (or
     // after) any conversion; what follows a Save crop is a conversion of
     // the cropped pixels as a person's press.
     onCrop: () => {
@@ -2969,7 +2946,7 @@ function createFileControl(
     return traceRunner;
   }
 
-  // DP-52: one conversion job behind one dialog. Both are built on first use;
+  // One conversion job behind one dialog. Both are built on first use;
   // a project with no picture never pays for them.
   let conversionDialog = null;
   let conversionJob = null;
@@ -2997,7 +2974,7 @@ function createFileControl(
   // The editor's opening, held back by processSvgForOpenScad while a
   // conversion dialog stands in front of the page (see applyTracedImage).
   let deferredEditorOpen = null;
-  // DP-62: a drawing that arrived by a link asked for the editor.
+  // A drawing that arrived by a link asked for the editor.
   let linkAsksEditor = false;
   function takeDeferredEditorOpen() {
     const fn = deferredEditorOpen;
@@ -3005,8 +2982,8 @@ function createFileControl(
     return fn;
   }
 
-  // ── The drawing editor (DP-19) ─────────────────────────────────────────
-  // It lives in the PREVIEW AREA now, not in a block inside this control. The
+  // ── The drawing editor ─────────────────────────────────────────────────
+  // It lives in the preview area, not in a block inside this control. The
   // container below survives for the case where there is no preview area to
   // take - a unit test mounting this generator on its own - so the editing
   // still works and nothing has to know which it got.
@@ -3015,8 +2992,8 @@ function createFileControl(
 
   let workspace = null;
   // The color plan the person applied in the editor (stencil purpose), as
-  // `serialisePlan` wrote it. Session only until DP-20 saves it with the
-  // project; null means the plates follow the automatic first pass.
+  // `serialisePlan` wrote it, saved with the project; null means the plates
+  // follow the automatic first pass.
   let currentPlan = null;
 
   /**
@@ -3038,13 +3015,12 @@ function createFileControl(
         await import('./drawing-editor/surface.js');
       // Two uploads in quick succession can both be waiting on the chunk.
       if (workspace) return workspace;
-      // D-165: the surface element is one, and this control is not. The
-      // customizer is rendered again on a preset, an undo, a reset, a
-      // restored project, and every render is a new file control with no
-      // editor of its own; each one built a new editor INTO the same element
-      // beside the last, and the owner's screenshots showed three and four
-      // toolbars side by side. The editor bound to the element goes before
-      // another is built.
+      // The surface element is one, and this control is not. The customizer is
+      // rendered again on a preset, an undo, a reset, a restored project, and
+      // every render is a new file control with no editor of its own; each one
+      // would build a new editor into the same element beside the last, three
+      // and four toolbars side by side. The editor bound to the element goes
+      // before another is built.
       const previous = surfaceEl.__forgeDrawingEditor;
       if (previous && typeof previous.destroy === 'function') {
         try {
@@ -3087,18 +3063,17 @@ function createFileControl(
       purpose: plateParams.length > 0 ? 'stencil' : 'relief',
       onApply: handleEditorApply,
       onKeepOriginal: handleEditorKeep,
-      // D-149: Close leaves the design as it stands, applied or not.
+      // Close leaves the design as it stands, applied or not.
       onClose: handleEditorClose,
-      // DP-53: the charm view's Render preview, on a charm host with an app
+      // The charm view's Render preview, on a charm host with an app
       // behind it. A stencil tile makes plates, not a charm; the standalone
       // door has no app.
       ...(plateParams.length === 0 && draftRenderer
         ? { onDraftRender: handleEditorDraft }
         : {}),
-      // DP-54 (D-144): the trace's line widths and the width the design
-      // prints at, so the editor's advisory and its too-thin measure speak of
-      // the real size. Before this the charm host passed neither, and every
-      // sentence used the editor's own default width.
+      // The trace's line widths and the width the design prints at, so the
+      // editor's advisory and its too-thin measure speak of the real size
+      // rather than the editor's own default width.
       lineWidthPx: lastTrace
         ? ((lastTrace.creditRemoved
             ? lastTrace.summary?.lineWidthPxBody
@@ -3107,7 +3082,7 @@ function createFileControl(
       ...(knownDesignWidthMm() != null
         ? { designWidthMm: knownDesignWidthMm(), designWidthKnown: true }
         : { designWidthKnown: false }),
-      // DP-49: the crop, on the relief purpose; the host owns the operation
+      // The crop, on the relief purpose; the host owns the operation
       // and the one-level undo. A traced picture shows its own photograph in
       // the crop view; a drawing shows itself.
       ...(plateParams.length === 0 ? { onCrop: handleEditorCrop } : {}),
@@ -3118,21 +3093,21 @@ function createFileControl(
       sourceName: currentFileName,
       initialOverrides: storedMeta?.prepOverrides || null,
       initialOffsets: storedMeta?.prepOffsets || null,
-      // DP-4: restored BEFORE the roles above, because the editor reopens on
+      // Restored before the roles above, because the editor reopens on
       // the raw SVG and re-analyses it - so everything saved is expressed in
       // the ORIGINAL element indices, the only numbering a delete leaves
       // meaningful. Absent in older saved projects, which is exactly right:
       // nothing was deleted then.
       initialDeleted: storedMeta?.prepDeleted || null,
-      // DP-7. The column exists only for a tile that declares layer params.
+      // The column exists only for a tile that declares layer params.
       layersEnabled: layerParams.length > 0,
       initialLayers: storedMeta?.prepLayers || null,
-      // DP-20. The color plan a person applied, keyed by region (a property
+      // The color plan a person applied, keyed by region (a property
       // of the shape) so it survives the regions being found again. Absent
       // in older saves and in a drawing nobody has colored yet, which means
       // what it always did: the automatic first pass.
       initialPlan: currentPlan || storedMeta?.prepPlan || null,
-      // DP-81 (D-175): the result Apply stored and the key it is trusted by.
+      // The result Apply stored and the key it is trusted by.
       // The editor paints from it, with Apply ready at once, when the
       // choices it restores still match; otherwise it combines as ever.
       initialResult: storedMeta?.preparedSvg || null,
@@ -3171,8 +3146,8 @@ function createFileControl(
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'svg-prep-edit-btn btn btn-ghost';
-    // STRINGS: owner review pending (DP-R2 text pack). "Edit" did not say what
-    // it opened, and on a stencil tile what it opens is the whole task.
+    // Not just "Edit": the button says what it opens, and on a stencil tile
+    // what it opens is the whole task.
     editBtn.textContent = 'Open the drawing editor';
     editBtn.setAttribute('aria-label', 'Open the drawing editor');
     editBtn.addEventListener('click', () => {
@@ -3182,7 +3157,7 @@ function createFileControl(
   }
 
   /**
-   * DP-78 (D-172): the card for a trace with more shapes than the editor
+   * The card for a trace with more shapes than the editor
    * lists. No editor button: there is no drawing to open. The card is a
    * status region; the caller announces the sentence once.
    */
@@ -3202,7 +3177,7 @@ function createFileControl(
   }
 
   /**
-   * DP-78 (D-171): what a conversion's last prepare step writes (the card,
+   * What a conversion's last prepare step writes (the card,
    * the raw drawing, the analysis), taken before the run so a Cancel that
    * lands after that step can put it all back: a canceled conversion
    * changes nothing. The card's NODES are kept, not their markup, because
@@ -3252,14 +3227,14 @@ function createFileControl(
       statusCard.appendChild(badge);
       statusCard.appendChild(createStatusEditButton());
     } else if (analysis.recommendation === 'pass_through') {
-      // ★ D-124. "Using original, OpenSCAD merges these automatically" is
-      // true for a charm, where a merge is the whole answer, and it is the
-      // wrong sentence entirely for a stencil, where merging every shape into
-      // one is how the owner's cat came out as a single silhouette hole. On a
-      // tile that makes plates, the same drawing gets a sentence that says
-      // there is something to decide and a way to go and decide it.
-      // D-139: "SVG Ready" is for a drawing with a shape in it. An empty one
-      // says so, and offers no editor, because there is nothing to edit.
+      // "Using original, OpenSCAD merges these automatically" is true for a
+      // charm, where a merge is the whole answer, and the wrong sentence
+      // entirely for a stencil, where merging every shape into one turns a
+      // drawing into a single silhouette hole. On a tile that makes plates, the
+      // same drawing gets a sentence that says there is something to decide and
+      // a way to go and decide it.
+      // "SVG Ready" is for a drawing with a shape in it. An empty one says so,
+      // and offers no editor, because there is nothing to edit.
       if (count === 0) {
         badge.textContent = 'Nothing was kept from this picture.';
         badge.dataset.level = 'warn';
@@ -3282,15 +3257,13 @@ function createFileControl(
       statusCard.appendChild(createStatusEditButton());
     } else if (
       analysis.status === 'needs_review' ||
-      // ★ DP-3 (DP-Q33) sends a sound drawing to the editor when its combine
-      // would outrun the budget, and leaves the status at 'ready'. That
-      // pairing had no branch here. MEASURED on the owner's logo in Colors
-      // (DP-R5 session 4, the built app): the card was BLANK while the editor
-      // was open, and after Apply or Close there was no way back into it -
-      // Convert again did not reopen it either.
+      // A sound drawing whose combine would outrun the budget is sent to the
+      // editor with its status left at 'ready'. Without this branch the card
+      // would be blank while the editor is open, with no way back into it after
+      // Apply or Close.
       (analysis.status === 'ready' && analysis.recommendation === 'open_editor')
     ) {
-      // DP-Q40: the things in the list are shapes; "elements" is a code word.
+      // The things in the list are shapes; "elements" is a code word.
       badge.textContent = `Needs review (${count} shapes)`;
       badge.dataset.level = 'review';
       statusCard.appendChild(badge);
@@ -3343,7 +3316,6 @@ function createFileControl(
       summary.className = 'svg-prep-status-plan';
       const colours = currentPlan.palette.length;
       const plates = currentPlan.order.length;
-      // STRINGS: owner review pending (DP-R2 text pack).
       summary.textContent =
         `${colours} ${colours === 1 ? 'color' : 'colors'}, ` +
         `${plates} ${plates === 1 ? 'plate' : 'plates'}.`;
@@ -3363,7 +3335,7 @@ function createFileControl(
     const overrides = workspace ? workspace.getRoleOverrides() : null;
     const offsetOverrides = workspace ? workspace.getOffsetOverrides() : null;
     const deleted = workspace ? workspace.getDeletedIndices() : null;
-    // DP-7. The Layer column travels with the roles and offsets, in the same
+    // The Layer column travels with the roles and offsets, in the same
     // ORIGINAL-index numbering, so reopening the design finds the layers the
     // person set rather than re-suggesting over the top of them.
     const layerResult = workspace ? workspace.getLayerAssignments() : null;
@@ -3377,11 +3349,11 @@ function createFileControl(
         prepDeleted: deleted,
         prepLayers,
         prepPlan: currentPlan,
-        // DP-49: the crop this drawing went through, for the record. The
+        // The crop this drawing went through, for the record. The
         // drawing saved IS the cropped one, so nothing is re-clipped on the
         // way back in.
         prepCrop: lastCrop,
-        // DP-81 (D-175): the key the result above is trusted by on a
+        // The key the result above is trusted by on a
         // reopen; the editor compares it with the choices it restores.
         prepKey:
           workspace && typeof workspace.choicesKey === 'function'
@@ -3398,9 +3370,9 @@ function createFileControl(
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    // D-132: the same ring engine the editor's own preview used, so the layer
+    // The same ring engine the editor's own preview used, so the layer
     // files agree with what the person just looked at and cost what the
-    // preview cost rather than seconds of the retired pairwise flatten.
+    // preview cost rather than seconds of the pairwise flatten.
     const ringEngine =
       workspace && typeof workspace.getRingEngine === 'function'
         ? workspace.getRingEngine()
@@ -3411,20 +3383,20 @@ function createFileControl(
   }
 
   /**
-   * The editor was closed without Apply or Keep original (D-149). Nothing
+   * The editor was closed without Apply or Keep original. Nothing
    * about the design changes: the value the model holds is the value it keeps,
    * whether that is the original drawing or a version applied earlier. Only
    * the card is redrawn, so it says what the drawing is and offers the editor.
    */
   /**
-   * DP-53: the editor's charm view asked for a draft of the charm with the
+   * The editor's charm view asked for a draft of the charm with the
    * drawing as it is now. The file object and its companions are built as
    * Apply builds them, and the app draws them through the preview alone -
    * nothing is written, so Undo never steps through drafts and Close leaves
    * the committed design standing.
    */
   /**
-   * DP-49: crop the drawing's source to the rectangle the editor said, then
+   * Crop the drawing's source to the rectangle the editor said, then
    * show the result. A traced picture is cropped in its pixels and traced
    * again through the job and its dialog; a vector drawing is clipped (the
    * clip loads with the ring engine, on demand). One level of undo, this
@@ -3474,7 +3446,7 @@ function createFileControl(
     await showCroppedDrawing(clipped.svg, (n) => EDITOR_S.cropped(n), null);
   }
 
-  /** DP-49: put back what the last crop replaced. */
+  /** Put back what the last crop replaced. */
   async function handleUndoCrop() {
     if (!cropUndo) return;
     const before = cropUndo;
@@ -3493,7 +3465,7 @@ function createFileControl(
   }
 
   /**
-   * DP-80: the crop beside Start. "Crop first" before this picture has
+   * The crop beside Start. "Crop first" before this picture has
    * converted; "Crop" after, when it is the same crop the editor offers.
    */
   function offerCropButton() {
@@ -3506,12 +3478,12 @@ function createFileControl(
   }
 
   /**
-   * DP-80: Crop first. The editor opens on the picture itself, straight into
+   * Crop first. The editor opens on the picture itself, straight into
    * the crop view, with nothing converted: the person slides the four edges
    * onto the part that matters, and Save crop converts that part as their
    * own press. Cancel or Escape closes the editor with nothing converted and
    * puts focus back on the button. A conversion that started by itself
-   * (DP-Q32, a small quick picture) is stopped first: the crop's own
+   * (a small quick picture) is stopped first: the crop's own
    * conversion is the one the person wants, and it comes after.
    */
   async function openEditorOnPicture() {
@@ -3534,7 +3506,7 @@ function createFileControl(
     return true;
   }
 
-  /** DP-80: the picture cropped in its pixels, then converted as a press. */
+  /** The picture cropped in its pixels, then converted as a press. */
   async function handlePictureCrop(rect, insets) {
     if (!inkSourceImageData || !inkControls) return;
     const before = {
@@ -3563,15 +3535,15 @@ function createFileControl(
         startedBy: 'person',
       });
     } catch {
-      // applyTracedImage reports every failure itself and re-throws
-      // (D-119); nobody awaits a crop view's Save, so the rejection ends
+      // applyTracedImage reports every failure itself and re-throws;
+      // nobody awaits a crop view's Save, so the rejection ends
       // here rather than as an unhandled one.
     } finally {
       reopenSentence = null;
     }
   }
 
-  /** DP-80: the crop view left without a crop; the button gets focus back. */
+  /** The crop view left without a crop; the button gets focus back. */
   function handleCropFirstClose() {
     handleEditorClose();
     if (traceProgress.cropButton && !traceProgress.cropButton.hidden) {
@@ -3600,7 +3572,7 @@ function createFileControl(
       type: 'image/svg+xml',
       data: svgToDataUrl(processed),
     };
-    // D-132, as a chosen file does: the companions flatten with the ring
+    // As a chosen file does, the companions flatten with the ring
     // engine, so wait for it rather than fall back to the pairwise chain.
     if (layerParams.length > 0) await ensureRingEngine();
     emitFileValue(fileObj);
@@ -3685,7 +3657,7 @@ function createFileControl(
     inkControls = createInkControls({
       idPrefix: `ink-${param.name}`,
       announce: announceChange,
-      // D-156: the tile that declares plates is a stencil; every other host
+      // The tile that declares plates is a stencil; every other host
       // of this control is relief, and its words say so.
       purpose: plateParams.length > 0 ? 'stencil' : 'relief',
       runsBySelf: () =>
@@ -3694,13 +3666,11 @@ function createFileControl(
       onChange: (settings) => {
         clearTimeout(inkRetraceTimer);
         inkRetraceTimer = setTimeout(() => {
-          // D-157: a change re-runs by itself only where the picture would
-          // have started by itself when chosen (DP-Q32, one rule). Otherwise
-          // Convert again is offered and the press is the person's. A
-          // conversion already running is superseded either way (D-151): the
-          // person is waiting on it, and the newest settings are what they
-          // want; it keeps the standing it had, so a person-started run's
-          // dialog stays.
+          // A change never re-runs by itself: Convert again is offered
+          // and the press is the person's. A conversion already running
+          // is superseded either way: the person is waiting on it, and
+          // the newest settings are what they want; it keeps the
+          // standing it had, so a person-started run's dialog stays.
           const running = conversionJob && conversionJob.isRunning();
           if (!running && !changeRunsBySelf()) {
             traceProgress.offer(startLabel());
@@ -3708,7 +3678,7 @@ function createFileControl(
             settingsNoteShown = true;
             return;
           }
-          // applyTracedImage re-throws after reporting (D-119), and this call
+          // applyTracedImage re-throws after reporting, and this call
           // is a timer callback with nobody to await it. The catch exists only
           // so a re-trace failure cannot become an unhandled rejection - the
           // user has already been shown and told, in applyTracedImage itself.
@@ -3735,9 +3705,9 @@ function createFileControl(
   /**
    * Stop whatever conversion is running, and say so once.
    *
-   * DP-34. The page can do this at any moment because the work is in a worker:
-   * terminate() returns in a fraction of a millisecond and the next main-thread
-   * tick follows immediately. Before, there was no thread to run this on.
+   * The page can do this at any moment because the work is in a worker:
+   * terminate() returns in a fraction of a millisecond and the next
+   * main-thread tick follows immediately.
    */
   function cancelConversion() {
     if (!conversionJob || !conversionJob.isRunning()) return;
@@ -3749,7 +3719,7 @@ function createFileControl(
     fileInfo.removeAttribute('aria-busy');
     fileButton.disabled = false;
     if (inkControls) inkControls.setFailed('Conversion canceled');
-    // One action, one announcement (DP-32).
+    // One action, one announcement.
     announceChange('Conversion canceled');
   }
 
@@ -3794,7 +3764,7 @@ function createFileControl(
 
   /**
    * Trace the held pixels with the given ink settings and mount the result as
-   * this parameter's value: one job, behind one dialog (DP-52).
+   * this parameter's value: one job, behind one dialog.
    *
    * The dialog stands in front of the page from the moment a conversion is
    * under way until the charm has taken the result, with the stage the page
@@ -3808,7 +3778,7 @@ function createFileControl(
    * @param {boolean} [options.announceResult]
    * @param {'person'|'self'} [options.startedBy] - Who started it. A press on
    *   Start shows the dialog at once; a conversion that started by itself
-   *   (DP-Q32: a small picture the quick look called quick) shows it only if
+   *   (a small picture the quick look called quick) shows it only if
    *   the job is still running after the quick band, so a sub-second
    *   conversion never flashes a dialog at somebody who pressed nothing.
    */
@@ -3823,7 +3793,7 @@ function createFileControl(
     const focusBefore = document.activeElement;
     if (inkControls) inkControls.setBusy(true);
     traceProgress.show();
-    // DP-80: a conversion that started by itself keeps Crop first on offer;
+    // A conversion that started by itself keeps Crop first on offer;
     // a press on it ends this run and opens the crop (openEditorOnPicture).
     traceProgress.begin({ keepCrop: startedBy === 'self' });
     // The change the note announced is being converted now.
@@ -3849,7 +3819,7 @@ function createFileControl(
       }, COST_BANDS.quickMs);
     }
     let openEditorAfter = null;
-    // DP-78 (D-171): the first two prepare steps are pure; the third writes
+    // The first two prepare steps are pure; the third writes
     // the card and the drawing. Kept from before the run so a Cancel that
     // lands after the third step puts the control back exactly as it was.
     const before = snapshotDesign();
@@ -3858,14 +3828,15 @@ function createFileControl(
     try {
       const outcome = await job.run({
         imageData: inkSourceImageData,
-        // D-138. A two-color logo used to arrive as 553 shapes because the
-        // anti-aliased edge between the two colors was quantized into four
-        // colors of its own. They are folded back into the colors they sit
-        // between, RELIEF ONLY: a stencil is painted by hand, and a cat's
-        // green eyes at under a percent are the point of it.
+        // Unfolded, a two-color logo arrives as 553 shapes, because
+        // the anti-aliased edge between the two colors is quantized
+        // into four colors of its own. They are folded back into the
+        // colors they sit between, relief only: a stencil is painted
+        // by hand, and a cat's green eyes at under a percent are the
+        // point of it.
         settings: {
           ...settings,
-          // DP-79: what this picture is and how wide it prints, so the
+          // What this picture is and how wide it prints, so the
           // worker can work a camera picture at the print's cell and floor
           // its specks at the printed size. A file gets none of it: the
           // quick look's verdict is the gate, and its switches start off.
@@ -3875,13 +3846,12 @@ function createFileControl(
             ? { shareFloor: RELIEF_COLOUR_SHARE_FLOOR }
             : {}),
         },
-        // ★ DP-78 (D-172): a trace with more shapes than the editor lists
-        // is turned away HERE, the moment the worker is done, before the
-        // credit line or any parse. The count is a regex over the traced
-        // text, two milliseconds on a megabyte. MEASURED before this (DP-77
-        // P0a): the panel photo's Colors run, 3,939 shapes, was parsed for
-        // 5.1 s at 4x, refused by the analyzer under "Too complex", and
-        // EMITTED to the model anyway as a 1.89 MB design.
+        // A trace with more shapes than the editor lists is turned away here,
+        // the moment the worker is done, before the credit line or any parse.
+        // The count is a regex over the traced text, two milliseconds on a
+        // megabyte. Otherwise a 3,939-shape Colors run on a photograph would be
+        // parsed for 5.1 s at 4x, refused by the analyzer as too complex, and
+        // emitted to the model anyway as a 1.89 MB design.
         refuse: ({ svg: traced }) => {
           tracedCount = countTracedShapes(traced);
           return isOverListCap(tracedCount)
@@ -3889,7 +3859,7 @@ function createFileControl(
             : null;
         },
         // Preparing the drawing, in three steps with a checkpoint between
-        // each, so a Cancel lands inside the stage and not after it (D-171):
+        // each, so a Cancel lands inside the stage and not after it:
         // the credit line; the analysis, sliced inside; then the card, the
         // count and the panel. The editor's opening is held back (deferOpen)
         // until the dialog is gone.
@@ -3897,10 +3867,10 @@ function createFileControl(
           async ({ svg: traced, summary }, { checkpoint }) => {
             // A stock icon arrives with its attribution printed along the
             // bottom, and traced that is forty-odd shapes of unreadable
-            // specks rather than a caption. Taking it off is the default the
-            // owner signed (DP-Q31), and Undo below puts the whole drawing
-            // back exactly as it was traced. In slices: on a traced
-            // photograph this pass is one box per ring, hundreds of them.
+            // specks rather than a caption. Taking it off is the default, and
+            // Undo below puts the whole drawing back exactly as it was traced.
+            // In slices: on a traced photograph this pass is one box per ring,
+            // hundreds of them.
             const credit = await removeCreditLineAsync(
               traced,
               {},
@@ -3925,7 +3895,7 @@ function createFileControl(
             touched = true;
             const svg = credit.svg;
             currentFileName = inkSourceFileName;
-            // DP-81 (D-175 b): the picture this drawing came from, for a
+            // The picture this drawing came from, for a
             // control rebuilt with the drawing later. In memory only.
             pictureByFile[inkSourceFileName] = {
               dataUrl: inkSourceDataUrl,
@@ -3972,7 +3942,7 @@ function createFileControl(
         ],
         // Updating the charm: the emit.
         update: async ({ processedSvg, pathCount }, { checkpoint }) => {
-          // ★ D-139: A CONVERSION THAT KEPT NOTHING IS NOT A DESIGN. The file
+          // A conversion that kept nothing is not a design. The file
           // value stays as it was: the picture is still there, the settings
           // are still there, and Convert again is the next thing to press.
           if (pathCount === 0) return { pathCount, emitted: false };
@@ -3982,13 +3952,13 @@ function createFileControl(
             type: 'image/svg+xml',
             data: svgToDataUrl(processedSvg),
           };
-          // D-132: wait for the ring engine before emitting, so the layer
-          // companions are flattened by it rather than by the retired
+          // Wait for the ring engine before emitting, so the layer
+          // companions are flattened by it rather than by the
           // pairwise chain. The chunk is already on its way (started when
           // the file was chosen), so this costs nothing on the second
           // picture and a chunk fetch on the first.
           if (layerParams.length > 0) await ensureRingEngine();
-          // DP-78: the last moment a Cancel can land. The data URL is built
+          // The last moment a Cancel can land. The data URL is built
           // and nothing is written yet; after the emit there is nothing to
           // cancel, and the model has the drawing.
           await checkpoint();
@@ -4037,7 +4007,7 @@ function createFileControl(
       }
       fileInfo.removeAttribute('aria-busy');
       if (announceResult) {
-        // One action, one announcement (DP-32): the completion speaks, the
+        // One action, one announcement: the completion speaks, the
         // stages do not. The count is what a person actually wants to hear,
         // because it decides whether the drawing is workable at all.
         announceChange(
@@ -4048,12 +4018,12 @@ function createFileControl(
       if (openEditorAfter) openEditorAfter();
     } catch (err) {
       clearTimeout(graceTimer);
-      // D-151. Superseded by a newer conversion (a setting changed while this
+      // Superseded by a newer conversion (a setting changed while this
       // one ran): the newer one owns the panel and the dialog from here, so
       // this one leaves without touching either, and without a word.
       if (err instanceof TraceCancelled && err.reason === 'superseded') return;
       if (err instanceof TraceRefused) {
-        // DP-78 (D-172). Nothing was prepared and nothing was emitted: the
+        // Nothing was prepared and nothing was emitted: the
         // model keeps whatever design it had, the picture and its settings
         // stay, and Convert again is the next press. The card says what
         // happened and what to try, once; the panel still shows what the
@@ -4093,7 +4063,7 @@ function createFileControl(
       // announcement was already made by cancelConversion, which is the action
       // the person took.
       if (err instanceof TraceCancelled) {
-        // DP-78 (D-171): a Cancel that landed after the card was written
+        // A Cancel that landed after the card was written
         // (the third step, or the emit's own checkpoint) puts the control
         // back as it was. A canceled conversion changes nothing.
         if (touched) restoreDesign(before);
@@ -4108,14 +4078,11 @@ function createFileControl(
       if (inkControls) inkControls.setFailed(shown);
       announceChange(`Image conversion failed: ${err.message}`);
       console.error('[ImageImport] Conversion error:', err);
-      // D-119: this used to swallow the failure and return normally, so the
-      // awaiting caller ran on and OVERWROTE the message above with
-      // "<name>.svg (converted from <name>.png)". MEASURED with a 7.99 MP
-      // file against the 2 MP cap: the control claimed success while wearing
-      // the error class, the model parameter was left empty, the preview
-      // badge said "Preview ready" over the PREVIOUS design, and no visible
-      // alert appeared in 28 samples over 14 seconds. Re-throwing lets the
-      // caller's own catch do its job, which is what it was written for.
+      // Re-thrown, not swallowed: returning normally would let the awaiting
+      // caller run on and overwrite the message above with "<name>.svg
+      // (converted from <name>.png)" - the control claiming success while
+      // wearing the error class, the model parameter empty, and "Preview
+      // ready" over the previous design. The caller's own catch does its job.
       throw err;
     }
   }
@@ -4124,13 +4091,13 @@ function createFileControl(
     rawSvgText,
     { deferOpen = false, trace = null, analysis: given = null } = {}
   ) {
-    // DP-54 (D-144): the trace's line widths, when this drawing came from a
+    // The trace's line widths, when this drawing came from a
     // trace, so the editor's advisory can speak; a plain upload has none.
     lastTrace = trace;
-    // DP-78 P3: a host that has already analyzed this drawing (in slices,
+    // A host that has already analyzed this drawing (in slices,
     // behind the dialog, where a Cancel can land) hands the analysis in, so
     // the drawing is not parsed a second time here.
-    // DP-52: while a conversion dialog stands in front of the page, the
+    // While a conversion dialog stands in front of the page, the
     // editor's opening is handed back to the caller instead of started here,
     // so it opens once the page is live again.
     const requestOpen = (extra) => {
@@ -4160,7 +4127,7 @@ function createFileControl(
         // Always re-analyze: persisted analyses lose their DOM references
         // through JSON serialization and crash the editor on restore.
         currentSvgAnalysis = given || analyzeSvg(rawSvgText);
-        // DP-20. The plan the person applied comes back before the plates
+        // The plan the person applied comes back before the plates
         // are emitted, so a reopened project cuts what it cut when it was
         // saved and not the automatic first pass.
         currentPlan = stored.prepPlan || null;
@@ -4175,7 +4142,7 @@ function createFileControl(
       updateStatusCard(analysis);
       statusCard.style.display = '';
 
-      // DP-62: a drawing that arrived by a link opens the editor whatever the
+      // A drawing that arrived by a link opens the editor whatever the
       // analysis would have decided, because editing it is what the link was
       // for. A drawing with nothing in it is the one exception: there is
       // nothing to edit, and the status card says so.
@@ -4193,7 +4160,7 @@ function createFileControl(
         return rawSvgText;
       }
 
-      // DP-49: a crop, or its undo, reopens the editor on the result and says
+      // A crop, or its undo, reopens the editor on the result and says
       // so, whatever the analysis alone would have done with the drawing.
       const cropSentence = reopenSentence;
       reopenSentence = null;
@@ -4205,13 +4172,13 @@ function createFileControl(
       }
 
       if (analysis.recommendation === 'pass_through') {
-        // \u2605 D-124. For a charm there is nothing to decide about a plain
-        // drawing: OpenSCAD fills every shape it is given. On a tile that
-        // makes plates, a drawing with no colors of its own IS the task -
-        // every region is base coat until somebody says otherwise - so the
-        // editor opens on it, saying so. A drawing that brings its colors
-        // (a traced picture, a filled SVG) already has a first pass worth
-        // looking at, and the card's button is the way in.
+        // For a charm there is nothing to decide about a plain drawing:
+        // OpenSCAD fills every shape it is given. On a tile that makes plates,
+        // a drawing with no colors of its own is the task - every region is
+        // base coat until somebody says otherwise - so the editor opens on it,
+        // saying so. A drawing that brings its colors (a traced picture, a
+        // filled SVG) already has a first pass worth looking at, and the card's
+        // button is the way in.
         if (plateParams.length > 0 && !hasOwnColours(analysis)) {
           // The surface says what it found as it opens ("21 regions found,
           // no colors yet: every one starts as the base coat"), so there is
@@ -4241,12 +4208,11 @@ function createFileControl(
       const prepWarnings = [];
       const prepared = prepareSvg(rawSvgText, { warningsOut: prepWarnings });
 
-      // D-167: the automatic pass subtracts every cut-out from everything,
-      // and a drawing whose cut-outs cover its artwork comes out EMPTY. That
-      // used to be applied as the design under "Simplified N shapes for 3D
-      // printing", and the charm rendered bare. An empty design is nothing to
-      // apply: the card says so, and the editor opens on the drawing so the
-      // person can say what to keep.
+      // The automatic pass subtracts every cut-out from everything, and a
+      // drawing whose cut-outs cover its artwork comes out empty. An empty
+      // design is nothing to apply, and applying it under "Simplified N shapes
+      // for 3D printing" would render a bare charm: the card says so instead,
+      // and the editor opens on the drawing so the person can say what to keep.
       if (designIsEmpty(prepared)) {
         updateStatusCard(analysis, [
           ...prepWarnings,
@@ -4306,7 +4272,7 @@ function createFileControl(
   });
 
   /**
-   * DP-62: a DXF chosen for a design parameter is converted to SVG through
+   * A DXF chosen for a design parameter is converted to SVG through
    * the app's own engine, the way the standalone door converts one, and then
    * takes the SVG path under its own name with the extension changed. The
    * engine's warnings go to the console; the sentence says how long it took.
@@ -4341,7 +4307,7 @@ function createFileControl(
   }
 
   async function handleChosenFile(chosen) {
-    // DP-62: a drawing sent by a link asks for two things a hand-picked file
+    // A drawing sent by a link asks for two things a hand-picked file
     // does not: the conversion starts without a press (the flag the overlay's
     // "Use as design" already sets, read further down), and the editor opens
     // whatever the analysis would have decided. Read once and cleared, so it
@@ -4362,7 +4328,7 @@ function createFileControl(
       }
     }
 
-    // D-132: start the ring engine's chunk now, while the file is still being
+    // Start the ring engine's chunk now, while the file is still being
     // read and (for a picture) traced. By the time the companions are built it
     // has almost always landed, so the wait before the emit is nothing.
     if (layerParams.length > 0) ensureRingEngine();
@@ -4381,22 +4347,23 @@ function createFileControl(
         preview.alt = '';
       }
 
-      // A picture the param can take as SVG: read it, then OFFER to convert it.
-      // DP-34: choosing a file no longer starts the work. Reading the pixels is
-      // cheap and has to happen before anything can be said about the picture;
-      // the conversion itself waits for Start, except for a picture small
-      // enough to be over before a person could press it (DP-Q32).
+      // A picture the param can take as SVG: read it, then offer to
+      // convert it. Choosing a file does not start the work. Reading
+      // the pixels is cheap and has to happen before anything can be
+      // said about the picture; the conversion itself waits for
+      // Start, except for a picture small enough to be over before a
+      // person could press it.
       if (isRasterImageFile(file.name) && acceptsSvg) {
         try {
           fileInfo.textContent = 'Reading the picture\u2026';
           fileInfo.setAttribute('aria-busy', 'true');
           fileButton.disabled = true;
 
-          // Refuse a file that is not a readable picture before offering to
-          // convert it. The SIZE advisory that used to live here is now the
-          // quick look's job: it says the same thing in the same sentence as
-          // what the picture is and what it will cost, rather than as a
-          // separate warning about a number.
+          // Refuse a file that is not a readable picture before offering
+          // to convert it. The size advisory is the quick look's job: it
+          // says it in the same sentence as what the picture is and what
+          // it will cost, rather than as a separate warning about a
+          // number.
           const img = new Image();
           await new Promise((resolve, reject) => {
             img.onload = () =>
@@ -4420,35 +4387,34 @@ function createFileControl(
           clearButton.style.display = 'inline-block';
           traceProgress.show();
           traceProgress.offer('Start conversion');
-          // DP-80: and the crop, from the moment the pixels are read.
+          // And the crop, from the moment the pixels are read.
           offerCropButton();
 
-          // DP-35: one sentence about what this is and what it will cost HERE.
+          // One sentence about what this is and what it will cost here.
           // Never blocking, never a refusal. It costs a thumbnail pass and a
           // fixed calibration, measured in single-digit milliseconds.
           currentQuickLook = quickLook(inkSourceImageData);
           traceProgress.setNote(quickLookSentence(currentQuickLook));
-          // DP-79: a camera picture starts with the photo defaults on, a
+          // A camera picture starts with the photo defaults on, a
           // file with them off; the panel's help says which is which.
           inkControls.setPictureClass({ camera: currentQuickLook.camera });
 
           const pixelCount =
             inkSourceImageData.width * inkSourceImageData.height;
-          // ★ Somewhere else has already asked for this. The contract is
+          // Somewhere else has already asked for this. The contract is
           // `dataset.forgeStartConversion` on the input, set by the overlay
           // panel's "Use as design" button just before it dispatches the
-          // change. That button is not choosing a file - it is asking for the
-          // thing the conversion produces - so making the person press Start
-          // afterwards made it look broken. Read once and cleared, so it can
-          // never leak into the next file the person picks by hand.
+          // change. That button is not choosing a file - it is asking for
+          // the thing the conversion produces - so making the person press
+          // Start afterwards would make it look broken. Read once and
+          // cleared, so it can never leak into the next file the person
+          // picks by hand.
           const askedForElsewhere =
             fileInput.dataset.forgeStartConversion === '1';
           delete fileInput.dataset.forgeStartConversion;
 
-          // DP-Q32, the owner's rule: at most 0.5 MP AND the quick look calls
-          // it quick. Both, because a small picture on a very slow phone is not
-          // quick, and the whole point is not to start work nobody asked for on
-          // a device that cannot afford it.
+          // The start rule (conversion-start-rule.js): at most 0.5 MP, and the
+          // quick look calls it quick.
           if (
             startsBySelf({
               pixelCount,
@@ -4467,7 +4433,7 @@ function createFileControl(
             });
           } else {
             // The quick look's sentence already says the picture is large and
-            // will be scaled down, so the old size warning would repeat it.
+            // will be scaled down, so a size warning would repeat it.
             fileInfo.textContent = `${file.name} (${formatFileSize(file.size)}). Ready to convert.`;
             fileInfo.title = file.name;
           }
@@ -4513,7 +4479,7 @@ function createFileControl(
         currentSvgAnalysis = null;
         statusCard.style.display = 'none';
       }
-      // D-132, as in applyTracedImage: the companions flatten with the ring
+      // As in applyTracedImage, the companions flatten with the ring
       // engine, so wait for it rather than fall back to the pairwise chain.
       if (isSvgFile && layerParams.length > 0) await ensureRingEngine();
       emitFileValue(uploadedFileObj);
@@ -4533,7 +4499,7 @@ function createFileControl(
     if (currentFileName) setSvgPrepMetadata(currentFileName, null);
     // Clearing the file stops any conversion of it. Silently, because clearing
     // is the person's own action and already speaks for itself; announcing a
-    // cancel on top of it would be the second utterance DP-32 forbids.
+    // cancel on top of it would be a second announcement for one action.
     if (traceRunner && traceRunner.isRunning()) traceRunner.cancel();
     traceProgress.finish();
     traceProgress.hide();
@@ -4608,12 +4574,11 @@ function createFileControl(
   }
 
   /**
-   * DP-81 (D-175 b). The customizer is rendered again on a preset, an undo,
-   * a reset and a restored project, and every render is a NEW file control
-   * that knew only its file's name: no status card, no "Open the drawing
-   * editor", no Start, no ink panel, though the design stood in the state
-   * and the metadata store survived (MEASURED at DP-77 P0c, twice: the door
-   * was lost to the re-render). What the stores know comes back: the raw
+   * The customizer is rendered again on a preset, an undo, a reset and a
+   * restored project, and every render is a new file control that knows only
+   * its file's name: no status card, no "Open the drawing editor", no Start,
+   * no ink panel, though the design stands in the state and the metadata
+   * store survives. What the stores know comes back: the raw
    * drawing and its analysis (the card and the door), and for a traced
    * picture its pixels and the settings it was traced with (Convert again
    * and Crop). The info line is left as built, so the rebuild announces
@@ -4666,7 +4631,6 @@ function createFileControl(
   return container;
 }
 
-// formatFileSize is now imported from download.js
 
 /**
  * Create a vector parameter control with individual component inputs
@@ -4939,7 +4903,7 @@ function createRawControl(param, onChange) {
 /**
  * Render parameter UI from extracted parameters.
  *
- * F5 group-collapse semantics:
+ * Group-collapse semantics:
  *   1. If `options.openGroupIds` is supplied, those exact groups render
  *      expanded and everything else collapses. Pass an empty Set to
  *      force "all collapsed" explicitly.
@@ -4950,7 +4914,7 @@ function createRawControl(param, onChange) {
  *      (so a theme change / preset apply / dependency re-render keeps
  *      the user's expand/collapse choices intact).
  *   4. If none of the above yields any groups, the default is
- *      "all collapsed" (F5 spec, stakeholder feedback 2026-05-15).
+ *      "all collapsed".
  *
  * Group toggles are persisted automatically when an active fileId has
  * been set via {@link setCustomizerFileId}.
@@ -4972,7 +4936,7 @@ export function renderParameterUI(
   initialValues = null,
   options = {}
 ) {
-  // DP-54: the file controls of the UI being replaced listened for the fit box.
+  // The file controls of the UI being replaced listened for the fit box.
   fitBoxListeners.clear();
   const {
     openGroupIds = null,
@@ -4995,7 +4959,7 @@ export function renderParameterUI(
 
   const { groups, parameters } = extractedParams;
 
-  // DP-11. One warning region for the model, built only when this model can
+  // One warning region for the model, built only when this model can
   // take its shape from a design and therefore can have a hole in mid-air.
   resetHolePlacementRegion();
   if (
@@ -5091,7 +5055,7 @@ export function renderParameterUI(
     details.open = resolvedOpenIds.has(group.id);
     details.dataset.groupId = group.id;
 
-    // Persist per-file group state on every user toggle (F5). The
+    // Persist per-file group state on every user toggle. The
     // <details> 'toggle' event fires for both user clicks and our own
     // programmatic Expand/Collapse-All flips, so a single listener
     // covers both cases.
@@ -5118,13 +5082,12 @@ export function renderParameterUI(
     summaryLabel.textContent = group.label;
     summary.appendChild(summaryLabel);
 
-    // UF-35: the Hide button used to live inside this <summary>, which made
-    // it a control inside the disclosure's own control — axe's
-    // nested-interactive, once per group, so the count grew with the model.
-    // It moves to an actions layer stacked over the header, and a slot of the
-    // same size keeps this row's layout identical. Q-64 (owner, 2026-08-17):
-    // the layer comes first in source order, so Tab reaches Hide one stop
-    // before its header rather than behind every parameter in the group.
+    // The Hide button is not inside this <summary>: a control inside the
+    // disclosure's own control is axe's nested-interactive, once per group.
+    // It lives in an actions layer stacked over the header, and a slot of the
+    // same size keeps this row's layout identical. The layer comes first in
+    // source order, so Tab reaches Hide one stop before its header rather
+    // than behind every parameter in the group.
     const hideSlot = document.createElement('span');
     hideSlot.className = 'param-group-hide-slot';
     hideSlot.setAttribute('aria-hidden', 'true');
@@ -5139,9 +5102,9 @@ export function renderParameterUI(
     hideBtn.title = 'Hide this group';
     hideBtn.innerHTML = '&#x2715;'; // × character
     hideBtn.addEventListener('click', (e) => {
-      // The button sits outside the <summary> now, so it can no longer toggle
-      // the disclosure by bubbling; these keep the click from reaching any
-      // other listener on the way up.
+      // The button sits outside the <summary>, so it cannot toggle the
+      // disclosure by bubbling; these keep the click from reaching any other
+      // listener on the way up.
       e.stopPropagation();
       e.preventDefault();
       // Dispatch custom event so main.js can persist the hidden state
@@ -5172,7 +5135,7 @@ export function renderParameterUI(
         }
         // Update dependent parameters visibility
         updateDependentParameters(name, value);
-        // DP-11: a hole on a design-shaped body can land on a wingtip or on
+        // A hole on a design-shaped body can land on a wingtip or on
         // nothing at all, and neither shows in a preview.
         reportHolePlacement(currentValues, parameters);
         // Pass a shallow copy so callers (e.g. stateManager.setState) never
@@ -5236,7 +5199,7 @@ export function renderParameterUI(
     });
 
     // Actions layer first, so Tab reaches Hide immediately before the header
-    // it belongs to (Q-64). The row only stacks the two — .param-group keeps
+    // it belongs to. The row only stacks the two — .param-group keeps
     // every class, id and attribute the rest of the app matches on.
     const row = document.createElement('div');
     row.className = 'forge-disclosure-row';
@@ -5250,7 +5213,7 @@ export function renderParameterUI(
     container.appendChild(row);
   });
 
-  // IR-9: if this project declared a starter subset, show it and put the rest
+  // If this project declared a starter subset, show it and put the rest
   // one button away. Applied AFTER the groups exist, because it is a decision
   // about what is on screen, not about what is built.
   applyStarterView(container, extractedParams);
@@ -5393,13 +5356,12 @@ export function setStarterViewExpanded(container, expanded, options = {}) {
   }
 
   if (options.announce) {
-    // announceImmediate, not announceChange. MEASURED: a polite announcement
-    // is debounced 350 ms, and any other polite announcement inside that
-    // window CANCELS it - watching the live region through a reveal showed
-    // "Rendering preview..." arriving at 204 ms and this sentence never
-    // reaching the region at all. Pressing this button is a discrete action
-    // somebody took on purpose, which is exactly what announceImmediate is
-    // for.
+    // announceImmediate, not announceChange: a polite announcement is
+    // debounced 350 ms, and any other polite announcement inside that window
+    // cancels it - "Rendering preview..." arrives about 200 ms after a reveal
+    // and this sentence would never reach the region. Pressing this button is
+    // a discrete action somebody took on purpose, which is exactly what
+    // announceImmediate is for.
     announceImmediate(starterAnnouncement(expanded, shown, total));
   }
 }
