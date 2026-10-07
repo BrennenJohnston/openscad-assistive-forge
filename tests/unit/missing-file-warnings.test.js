@@ -5,7 +5,7 @@
  * the shared module the render worker uses — so these tests fail when the
  * production logic changes.
  *
- * Phase 4 (S-012): Synthetic missing-file warnings that match desktop
+ * Synthetic missing-file warnings that match desktop
  * OpenSCAD's "WARNING: Can't open include file ..." format.
  *
  * @license GPL-3.0-or-later
@@ -204,10 +204,10 @@ describe('generateMissingFileWarnings — quoted-path directives', () => {
   });
 });
 
-// D-198: OpenSCAD never reads a directive written inside a comment, so no
-// warning may come from one. The Plug Puller's single-file build explains
-// its old include order in comments and was warned about files it never uses.
-describe('generateMissingFileWarnings — comments (D-198)', () => {
+// OpenSCAD never reads a directive written inside a comment, so no
+// warning may come from one: the Plug Puller's single-file build explains
+// its include order in comments and uses none of those files.
+describe('generateMissingFileWarnings — comments', () => {
   const noFilesExist = () => false;
 
   it('ignores a directive in a line comment', () => {

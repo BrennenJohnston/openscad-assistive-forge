@@ -1,13 +1,12 @@
 /**
- * Regression tests for Phase 11: parameter panel first-open scroll.
+ * Tests for the parameter panel's first-open scroll.
  *
- * Root cause: after renderParameterUI(), main.js called firstInput.focus()
- * without { preventScroll: true }. On mobile (off-canvas drawer) and desktop
- * (collapsed panel), this advanced the panel's scroll position before the user
- * had opened the panel, causing the first-open view to skip the top of the list.
- *
- * Fix: firstInput.focus({ preventScroll: true }) so the panel's scrollTop stays
- * at 0 and the user always sees the top of the parameter list on first open.
+ * After renderParameterUI(), main.js focuses the first input with
+ * { preventScroll: true }. Without it, on mobile (off-canvas drawer) and
+ * desktop (collapsed panel), the focus would advance the panel's scroll
+ * position before the user had opened the panel, and the first-open view
+ * would skip the top of the list. With it, the panel's scrollTop stays at
+ * 0 and the user always sees the top of the parameter list on first open.
  *
  * @license GPL-3.0-or-later
  */

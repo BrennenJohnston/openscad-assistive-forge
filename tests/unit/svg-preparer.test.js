@@ -1,9 +1,9 @@
 /**
  * SVG Preparer — Unit tests
  *
- * Phase 1: PoC tests validating path-bool and svg-path-commander.
- * Phase 2: Module tests for parseSvgElements, classifyElements,
- *          flattenToCompoundPath, prepareSvg, needsPreparation.
+ * Proof-of-concept tests for path-bool and svg-path-commander, then module
+ * tests for parseSvgElements, classifyElements, flattenToCompoundPath,
+ * prepareSvg and needsPreparation.
  *
  * @license GPL-3.0-or-later
  */
@@ -70,7 +70,7 @@ const HEART_SVG = readFileSync(join(SVG_DIR, 'heart.svg'), 'utf-8');
 const STAR_SVG = readFileSync(join(SVG_DIR, 'star.svg'), 'utf-8');
 
 // ---------------------------------------------------------------------------
-// Phase 1 — svg-path-commander: shape-to-path conversion
+// svg-path-commander: shape-to-path conversion
 // ---------------------------------------------------------------------------
 
 describe('svg-path-commander shape-to-path conversion', () => {
@@ -126,7 +126,7 @@ describe('svg-path-commander shape-to-path conversion', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 1 — path-bool: boolean operations on SVG path data
+// path-bool: boolean operations on SVG path data
 // ---------------------------------------------------------------------------
 
 describe('path-bool boolean operations', () => {
@@ -176,7 +176,7 @@ describe('path-bool boolean operations', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 1 — Smiley PoC: full pipeline (face circle minus eye circles)
+// Smiley PoC: full pipeline (face circle minus eye circles)
 // ---------------------------------------------------------------------------
 
 describe('smiley.svg PoC pipeline', () => {
@@ -260,7 +260,7 @@ describe('smiley.svg PoC pipeline', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 1 — heart.svg: single-path SVG should not need preparation
+// heart.svg: single-path SVG should not need preparation
 // ---------------------------------------------------------------------------
 
 describe('heart.svg single-path pass-through', () => {
@@ -291,7 +291,7 @@ describe('heart.svg single-path pass-through', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 1 — Feature flag registration
+// Feature flag registration
 // ---------------------------------------------------------------------------
 
 describe('svg_preparer feature flag', () => {
@@ -314,7 +314,7 @@ describe('svg_preparer feature flag', () => {
 });
 
 // ===========================================================================
-// Phase 2 — parseSvgElements
+// parseSvgElements
 // ===========================================================================
 
 describe('parseSvgElements', () => {
@@ -465,7 +465,7 @@ describe('parseSvgElements', () => {
 });
 
 // ===========================================================================
-// Phase 2 — classifyElements
+// classifyElements
 // ===========================================================================
 
 describe('classifyElements', () => {
@@ -555,7 +555,7 @@ describe('classifyElements', () => {
 });
 
 // ===========================================================================
-// Phase 2 — strokeToFill
+// strokeToFill
 // ===========================================================================
 
 describe('strokeToFill', () => {
@@ -599,7 +599,7 @@ describe('strokeToFill', () => {
 });
 
 // ===========================================================================
-// Phase 2 — flattenToCompoundPath
+// flattenToCompoundPath
 // ===========================================================================
 
 describe('flattenToCompoundPath', () => {
@@ -696,7 +696,7 @@ describe('flattenToCompoundPath', () => {
 });
 
 // ===========================================================================
-// Phase 2 — needsPreparation
+// needsPreparation
 // ===========================================================================
 
 describe('needsPreparation', () => {
@@ -751,7 +751,7 @@ describe('needsPreparation', () => {
 });
 
 // ===========================================================================
-// Phase 2 — prepareSvg (orchestrator)
+// prepareSvg (orchestrator)
 // ===========================================================================
 
 describe('prepareSvg', () => {
@@ -822,7 +822,7 @@ describe('prepareSvg', () => {
 });
 
 // ===========================================================================
-// Phase 6 — parseSvgElements edge cases
+// parseSvgElements edge cases
 // ===========================================================================
 
 describe('parseSvgElements edge cases', () => {
@@ -860,7 +860,7 @@ describe('parseSvgElements edge cases', () => {
       '<circle cx="25" cy="25" r="20" fill="url(#p1)"/>' +
       '</svg>';
     const elements = parseSvgElements(svg);
-    // OBSERVED: querySelectorAll('*') finds the rect inside <pattern> too
+    // querySelectorAll('*') finds the rect inside <pattern> too
     expect(elements).toHaveLength(2);
     const circle = elements.find(
       (el) => el.element.tagName.toLowerCase() === 'circle'
@@ -936,7 +936,7 @@ describe('parseSvgElements edge cases', () => {
 });
 
 // ===========================================================================
-// Phase 6 — classifyElements edge cases
+// classifyElements edge cases
 // ===========================================================================
 
 describe('classifyElements edge cases', () => {
@@ -1030,7 +1030,7 @@ describe('classifyElements edge cases', () => {
 });
 
 // ===========================================================================
-// Phase 6 — flattenToCompoundPath edge cases
+// flattenToCompoundPath edge cases
 // ===========================================================================
 
 describe('flattenToCompoundPath edge cases', () => {
@@ -1123,7 +1123,7 @@ describe('flattenToCompoundPath edge cases', () => {
 });
 
 // ===========================================================================
-// Phase 6 — OpenSCAD output validation (compound path structure checks)
+// OpenSCAD output validation (compound path structure checks)
 // ===========================================================================
 
 describe('OpenSCAD output validation', () => {
@@ -1215,7 +1215,7 @@ describe('OpenSCAD output validation', () => {
 });
 
 // ===========================================================================
-// Phase 3 — Pipeline integration: base64 round-trip and idempotency
+// Pipeline integration: base64 round-trip and idempotency
 // ===========================================================================
 
 describe('pipeline integration (base64 round-trip)', () => {
@@ -1272,7 +1272,7 @@ describe('pipeline integration (base64 round-trip)', () => {
 });
 
 // ===========================================================================
-// Phase 1a — Blank square bug investigation and regression tests
+// Blank squares: the evenodd fill rule
 // ===========================================================================
 
 describe('blank square bug fix (fill-rule="evenodd")', () => {
@@ -1379,7 +1379,7 @@ describe('blank square bug fix (fill-rule="evenodd")', () => {
 });
 
 // ===========================================================================
-// Phase 1b — analyzeSvg() analysis model
+// analyzeSvg() analysis model
 // ===========================================================================
 
 describe('analyzeSvg', () => {
@@ -1841,12 +1841,12 @@ describe('analyzeSvg', () => {
 });
 
 // ===========================================================================
-// Phase 4 — applyPerPathOffsets
+// applyPerPathOffsets
 // ===========================================================================
 
 describe('applyPerPathOffsets', () => {
   const SQUARE = 'M10,10 L90,10 L90,90 L10,90 Z';
-  // DP-82: the offset reads the path's rings through the engine, so the
+  // The offset reads the path's rings through the engine, so the
   // engine is an argument; a call without one is a programming error.
   const widthsOf = (d) => {
     const rings = ringEngine.ringsFromPathData(d);
@@ -1858,17 +1858,16 @@ describe('applyPerPathOffsets', () => {
       .sort((a, b) => b - a);
   };
 
-  it('DP-82: refuses to run without the engine', () => {
+  it('refuses to run without the engine', () => {
     const elements = [{ pathData: SQUARE, role: 'foreground' }];
     expect(() => applyPerPathOffsets(elements, [5])).toThrow(/ring engine/);
   });
 
-  it('★ D-174: a drawn line, two rings in one path, THICKENS by twice the offset', () => {
-    // The plan's guard: a 10-unit square line on a 100-unit page at 14 mm,
-    // +0.3 mm (2.143 units) comes back 14.3 units wide; -0.3 mm, 5.7. On the
-    // build before this the whole path was sampled as ONE polygon and both
-    // rings grew by 2.14: the line 10 wide still, shifted outward (MEASURED
-    // at DP-R6 planning, `measure-offset.mjs`).
+  it('a drawn line, two rings in one path, thickens by twice the offset', () => {
+    // A 10-unit square line on a 100-unit page at 14 mm: +0.3 mm (2.143
+    // units) comes back 14.3 units wide; -0.3 mm, 5.7. Sampling the whole
+    // path as one polygon would grow both rings by 2.14, leaving the line 10
+    // wide still, shifted outward.
     const line = 'M0,0 L100,0 L100,100 L0,100 Z M10,10 L90,10 L90,90 L10,90 Z';
     const u = (0.3 * 100) / 14;
     const plus = applyPerPathOffsets(
@@ -1889,7 +1888,7 @@ describe('applyPerPathOffsets', () => {
     expect(Math.abs(innerMinus - 84.29)).toBeLessThan(0.15);
   });
 
-  it('★ a Cut out element under "+" shrinks: more ink means a smaller cut', () => {
+  it('a Cut out element under "+" shrinks: more ink means a smaller cut', () => {
     const out = applyPerPathOffsets(
       [{ pathData: SQUARE, role: 'hole' }],
       [5],
@@ -2322,16 +2321,15 @@ describe('measureSvgAspect', () => {
 });
 
 /**
- * DP-37 P3: the flatten budget signed at DP-Q33 (2026-09-13), which retires
- * DP-Q9's 50 and 200 counts and keeps its 1,000 as a LIST cap.
+ * The flatten budget, which keeps 1,000 as a list cap.
  *
- * The values are pinned as VALUES, not as "whatever the constant says",
- * because they are an owner signature against a measured bench and drifting
- * them silently is the whole risk. What changed is the unit: a count could
- * not carry this decision, because MEASURED with the ring engine the same
- * 200 shapes cost 77 ms as rectangles and 593 ms as curves.
+ * The values are pinned as values, not as "whatever the constant says",
+ * because they were chosen against a measured bench and drifting them
+ * silently is the whole risk. The unit is time, not a count: a count
+ * cannot carry this decision, because with the ring engine the same 200
+ * shapes cost 77 ms as rectangles and 593 ms as curves.
  */
-describe('the flatten budget (DP-Q33)', () => {
+describe('the flatten budget', () => {
   /** N filled rects, every 5th one a smaller white one nested in the last. */
   const syntheticSvg = (n) => {
     const parts = [];
@@ -2365,12 +2363,12 @@ describe('the flatten budget (DP-Q33)', () => {
   /**
    * The predictor against the bench that produced it.
    *
-   * MEASURED 2026-09-14, desktop Node, median of three, against the ring
-   * engine that ships. Each row is (shapes, ring points, real flatten), and
-   * what is checked is that the prediction lands within the spread the
-   * constant was chosen from, not that it hits a number, which it cannot:
-   * the cost per (shape x point) spans five-fold between classes of drawing,
-   * which is exactly why DP-Q33 signed a calibration as well.
+   * Measured on desktop Node, median of three, against the ring engine that
+   * ships. Each row is (shapes, ring points, real flatten), and what is
+   * checked is that the prediction lands within the spread the constant was
+   * chosen from, not that it hits a number, which it cannot: the cost per
+   * (shape x point) spans five-fold between classes of drawing, which is
+   * exactly why there is a calibration as well.
    */
   it.each([
     ['100 rects', 100, 400, 23.8],
@@ -2384,7 +2382,7 @@ describe('the flatten budget (DP-Q33)', () => {
     'predicts %s within the measured spread',
     (_label, shapes, points, realMs) => {
       const predicted = predictFlattenMs(shapes, points);
-      // Never UNDER: the default constant is the high end on purpose, so a
+      // Never under: the default constant is the high end on purpose, so a
       // drawing is never let through the gate having been called cheaper
       // than it turns out to be.
       expect(predicted).toBeGreaterThanOrEqual(realMs);
@@ -2394,8 +2392,8 @@ describe('the flatten budget (DP-Q33)', () => {
   );
 
   it('the prepped icons predict close to what they really cost', () => {
-    // Read in place from the owner's own folder when the bench ran; only the
-    // three numbers came back. activities: 9 shapes, 2,800 ring points,
+    // Two real drawings, measured where they live; only the numbers are kept
+    // here. activities: 9 shapes, 2,800 ring points,
     // 36.7 ms. Bathroom: 7 shapes, 863 points, 7.4 ms. Real artwork sits at
     // the high end of the constant, which is why the default is set there.
     expect(predictFlattenMs(9, 2800)).toBeCloseTo(37.8, 0);
@@ -2451,9 +2449,9 @@ describe('the flatten budget (DP-Q33)', () => {
     );
   });
 
-  it('RETURNS THE TABLE right up to the cap, instead of an empty refusal', () => {
-    // The old behaviour returned elements: [] for anything over 50, which is
-    // the exact inverse of being able to delete elements down to usable.
+  it('returns the table right up to the cap, instead of an empty refusal', () => {
+    // Returning elements: [] for anything over 50 would be the exact inverse
+    // of being able to delete elements down to usable.
     for (const count of [51, 200, 201, 600]) {
       const result = analyzeSvg(syntheticSvg(count));
       expect(result.elements.length, `${count} elements`).toBe(count);
@@ -2490,12 +2488,11 @@ describe('the flatten budget (DP-Q33)', () => {
     }
   });
 
-  it('the counts DP-Q9 refused are cheap, which is why they retired', () => {
-    // 51 of these rects were refused the automatic combine for being 51. They
-    // are 204 ring points between them and the combine is predicted at under
-    // 16 ms - MEASURED, 100 rects of this kind flatten in 23.8 ms. A count
-    // was answering the question in the wrong unit, and this is the drawing
-    // that shows it.
+  it('the counts a count cap would refuse are cheap', () => {
+    // A count would refuse these 51 rects the automatic combine for being 51.
+    // They are 204 ring points between them and the combine is predicted at
+    // under 16 ms (100 rects of this kind measure 23.8 ms). A count answers
+    // the question in the wrong unit, and this is the drawing that shows it.
     const small = analyzeSvg(syntheticSvg(51));
     expect(small.predictedFlattenMs).toBeLessThan(FLATTEN_BUDGET_MS);
     const was200 = analyzeSvg(syntheticSvg(200));
@@ -2520,14 +2517,14 @@ describe('the flatten budget (DP-Q33)', () => {
 });
 
 /**
- * D-118: paint declared in a <style> block by class.
+ * Paint declared in a <style> block by class.
  *
- * Every CAD and Illustrator export writes paint this way. Before this fix the
- * parser saw no fill at all, assumed the SVG default black, and turned a
- * stroke-only line drawing into a page of solid shapes - which is why the
- * owner's own artwork came out of the stencil as one hole.
+ * Every CAD and Illustrator export writes paint this way. A parser that saw
+ * no fill would assume the SVG default black and turn a stroke-only line
+ * drawing into a page of solid shapes - artwork that would come out of the
+ * stencil as one hole.
  */
-describe('paint declared in a <style> block (D-118)', () => {
+describe('paint declared in a <style> block', () => {
   const strokeOnly = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <defs><style>
       .cls-1, .cls-2 { fill: none; stroke: #000; stroke-width: .5px; }
@@ -2545,14 +2542,14 @@ describe('paint declared in a <style> block (D-118)', () => {
     }
   });
 
-  it('no longer assumes black fill for a stroke-only drawing', () => {
-    // The defect in one assertion: these used to classify as foreground with
-    // zero stroke conversions, i.e. as solid black shapes.
+  it('does not assume black fill for a stroke-only drawing', () => {
+    // The defect in one assertion: these must not classify as foreground
+    // with zero stroke conversions, i.e. as solid black shapes.
     const classified = classifyElements(parseSvgElements(strokeOnly));
     expect(classified.every((c) => c.strokeConverted)).toBe(true);
   });
 
-  it('the style ATTRIBUTE still outranks a class rule', () => {
+  it('the style attribute still outranks a class rule', () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
       .a { fill: #ff0000 }
     </style></defs><rect class="a" style="fill:#00ff00" width="10" height="10"/></svg>`;
@@ -2608,7 +2605,7 @@ describe('paint declared in a <style> block (D-118)', () => {
   });
 });
 
-// ── DP-7 P3: per-layer emission ──────────────────────────────────────────────
+// ── Per-layer emission ──────────────────────────────────────────────────────
 
 describe('flattenLayers - the stacked-mask law', () => {
   /** The `d` string out of an emitted layer SVG. */
@@ -2620,7 +2617,7 @@ describe('flattenLayers - the stacked-mask law', () => {
     return boundsOf(points);
   }
 
-  /** The DP-0 probe's own three squares, as one design. */
+  /** The probe's three squares, as one design. */
   const PROBE_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="40mm" ' +
     'viewBox="0 0 40 40">' +
@@ -2640,8 +2637,8 @@ describe('flattenLayers - the stacked-mask law', () => {
     );
   }
 
-  it('reproduces the DP-0 probe, layer for layer', () => {
-    // The probe stack was built and manifold-checked before this code existed.
+  it('reproduces the probe stack, layer for layer', () => {
+    // The probe stack was built and manifold-checked by hand.
     // Its layer files hold one square each; the stacked-mask law unions each
     // layer with everything deeper, and because the squares are NESTED that
     // union collapses back to the enclosing square. Same geometry, arrived at
@@ -2668,11 +2665,11 @@ describe('flattenLayers - the stacked-mask law', () => {
     });
   });
 
-  it('puts every layer on ONE normalized canvas, sized from layer 1', () => {
+  it('puts every layer on one normalized canvas, sized from layer 1', () => {
     // Three imports have to land in the same place at their true relative
-    // sizes. OpenSCAD's resize() fits the CONTENT box, so fitting each layer
+    // sizes. OpenSCAD's resize() fits the content box, so fitting each layer
     // separately would scale the innermost square up to the outermost's size.
-    // Instead every layer carries the SAME transform, computed from layer 1.
+    // Instead every layer carries the same transform, computed from layer 1.
     const out = emitProbe();
     const transforms = out.map((s) => /<g transform="([^"]*)"/.exec(s)[1]);
     expect(new Set(transforms).size).toBe(1);
@@ -2717,10 +2714,10 @@ describe('flattenLayers - the stacked-mask law', () => {
     expect(dOf(emitProbe()[2])).toBe('M16 16 H24 V24 H16 Z');
   });
 
-  it('STACKS: a shallower layer carries the deeper ones too', () => {
+  it('stacks: a shallower layer carries the deeper ones too', () => {
     // The nested fixture cannot show this, because a union of nested squares
     // collapses to the outer one either way. Two shapes side by side can:
-    // layer 1 must span BOTH, layer 2 only the second. (The assignment breaks
+    // layer 1 must span both, layer 2 only the second. (The assignment breaks
     // the containment law on purpose - the emitter's job is to emit, and the
     // law is enforced in the editor where a person can act on it.)
     const svg =
@@ -2785,9 +2782,9 @@ describe('flattenLayers - the stacked-mask law', () => {
   });
 });
 
-describe('countTracedShapes (DP-43)', () => {
-  // ★ The number a person hears after a conversion has to be the number the
-  // editor lists beside it. Counting <path> elements did not: imagetracerjs
+describe('countTracedShapes', () => {
+  // The number a person hears after a conversion has to be the number the
+  // editor lists beside it. Counting <path> elements would not: imagetracerjs
   // folds a shape's holes into that shape's element, and Potrace returns the
   // whole drawing as one. Both engines' output is checked here, against
   // analyzeSvg - the thing the editor's own table is built from.
@@ -2847,15 +2844,13 @@ describe('countTracedShapes (DP-43)', () => {
 });
 
 
-// ── D-137: what the Colours mode's wall becomes on a charm (DP-48 P1) ────────
+// ── What the Colours mode's wall becomes on a charm ─────────────────────────
 //
-// The owner's walk: a white logo on a navy ground came back as a black plate
-// with the logo cut out of it. The separation had marked the navy
-// data-background="true" and nothing read it; luminance alone decided, so the
-// dark wall was "Raised" and the light lettering was "Hole".
-//
-// The rule is signed (DP-Q53): the wall is left out, a patch of wall enclosed
-// by artwork is a hole, and every other color is raised.
+// A white logo on a navy ground must not come back as a black plate with
+// the logo cut out of it. The separation marks the navy
+// data-background="true", and the rule reads it: the wall is left out, a
+// patch of wall enclosed by artwork is a hole, and every other color is
+// raised.
 
 /** A drawing shaped exactly as `separateColours` writes one. */
 function separationSvg({ wallColor = '#4b2e83', inkColor = '#ffffff' } = {}) {
@@ -2875,7 +2870,10 @@ function separationSvg({ wallColor = '#4b2e83', inkColor = '#ffffff' } = {}) {
   );
 }
 
-/** A drawing shaped as the nine icons separate: ONE color, and it is "the wall". */
+/**
+ * A drawing shaped as the nine icons separate: one color, and it is
+ * "the wall".
+ */
 function oneColourSeparationSvg() {
   return (
     '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
@@ -2887,7 +2885,7 @@ function oneColourSeparationSvg() {
   );
 }
 
-describe('the wall on a charm (D-137, DP-Q53)', () => {
+describe('the wall on a charm', () => {
   it('leaves the wall out, cuts the counter, raises the artwork', () => {
     const analysis = analyzeSvg(separationSvg());
     const roles = analysis.elements.map((el) => el.autoRole);
@@ -2896,16 +2894,16 @@ describe('the wall on a charm (D-137, DP-Q53)', () => {
   });
 
   it('raises light artwork that luminance alone would have cut', () => {
-    // The whole defect in one assertion: white on navy. Before the rule, the
-    // white ring was a hole (luminance 255) and the navy wall was raised.
+    // The whole defect in one assertion: white on navy. By luminance alone
+    // the white ring would be a hole (255) and the navy wall raised.
     const analysis = analyzeSvg(separationSvg());
     const ring = analysis.elements[2];
     expect(ring.fill.toLowerCase()).toBe('#ffffff');
     expect(ring.autoRole).toBe('foreground');
   });
 
-  it('★ does NOTHING when the only color IS the wall (the nine icons)', () => {
-    // DP-48 P0, measured on all nine: a one-color drawing has the ARTWORK
+  it('does nothing when the only color is the wall (the nine icons)', () => {
+    // Measured on all nine icons: a one-color drawing has the artwork
     // flagged as the background, because pickBackground returns index 0 when
     // nothing polls better. A rule that fired here would empty them.
     const analysis = analyzeSvg(oneColourSeparationSvg());
@@ -2918,12 +2916,12 @@ describe('the wall on a charm (D-137, DP-Q53)', () => {
     );
   });
 
-  it('★ keeps a wall path whole: its inner rings are ITS holes, not shapes', () => {
-    // The bug this guard exists for, found by LOOKING at the render: a traced
-    // region is one path whose inner rings are its holes, and the navy wall's
-    // inner rings ARE the letters. Deciding ring by ring made those letter
-    // rings "Hole", and the lettering came out drawn in outline. A path's
-    // outermost ring says where the path sits and every ring of it follows.
+  it('keeps a wall path whole: its inner rings are its holes, not shapes', () => {
+    // What this guards, found by looking at the render: a traced region is
+    // one path whose inner rings are its holes, and the navy wall's inner
+    // rings are the letters. Deciding ring by ring would make those letter
+    // rings "Hole", and the lettering would come out drawn in outline. A
+    // path's outermost ring says where the path sits and every ring follows.
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">' +
       // One wall path: the canvas, with a letter-shaped ring cut out of it.
@@ -2935,9 +2933,9 @@ describe('the wall on a charm (D-137, DP-Q53)', () => {
       'data-colour-name="White" d="M20 20 L80 20 L80 80 L20 80 Z"/>' +
       '</svg>';
     const analysis = analyzeSvg(svg);
-    // D-159 went one step further: a traced region is ONE row, its outer
-    // ring, so the letter-shaped hole in the wall is not a row at all. Two
-    // rows: the canvas and the letter.
+    // One step further: a traced region is one row, its outer ring, so the
+    // letter-shaped hole in the wall is not a row at all. Two rows: the
+    // canvas and the letter.
     expect(analysis.elements).toHaveLength(2);
     const roles = analysis.elements.map((el) => el.autoRole);
     expect(roles[0]).toBe('ignore');
@@ -2964,7 +2962,7 @@ describe('the wall on a charm (D-137, DP-Q53)', () => {
   });
 });
 
-describe('the shape cap refusal (DP-78, D-172)', () => {
+describe('the shape cap refusal', () => {
   it('names the count and the cap with thousands separators, and what a charm host can try', () => {
     expect(shapeCapRefusal(3939)).toEqual({
       badge: 'Too many shapes to work with (3,939)',
@@ -2988,7 +2986,7 @@ describe('the shape cap refusal (DP-78, D-172)', () => {
   });
 });
 
-describe('parseSvgElementsAsync: the parse in slices (DP-78 P3, D-171)', () => {
+describe('parseSvgElementsAsync: the parse in slices', () => {
   // DOM elements from two parses are two objects; everything else must agree.
   const comparable = (list) =>
     list.map(({ element, ...rest }) => ({ ...rest, tag: element.tagName }));
@@ -2998,7 +2996,7 @@ describe('parseSvgElementsAsync: the parse in slices (DP-78 P3, D-171)', () => {
     '<path fill="#000" fill-rule="evenodd" d="M0 0 L100 0 L100 100 L0 100 Z ' +
     'M20 20 L80 20 L80 80 L20 80 Z M40 40 L60 40 L60 60 L40 60 Z ' +
     'M5 90 L10 90 L10 95 L5 95 Z"/></svg>';
-  // Two traced regions, one with a hole folded in (D-159).
+  // Two traced regions, one with a hole folded in.
   const colourRegions =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
     '<path fill="#fff" data-colour="#ffffff" d="M0 0 L100 0 L100 100 L0 100 Z ' +
@@ -3012,7 +3010,7 @@ describe('parseSvgElementsAsync: the parse in slices (DP-78 P3, D-171)', () => {
     '<circle cx="50" cy="50" r="10" fill="#fff"/>' +
     '<path d="M0 90 L90 90" fill="none" stroke="#000"/></g></svg>';
 
-  it('★ returns what parseSvgElements returns: rings, traced regions, transforms, the smiley, the separation', async () => {
+  it('returns what parseSvgElements returns: rings, traced regions, transforms, the smiley, the separation', async () => {
     for (const svg of [
       drawnRings,
       colourRegions,
@@ -3057,7 +3055,7 @@ describe('parseSvgElementsAsync: the parse in slices (DP-78 P3, D-171)', () => {
   });
 });
 
-describe('analyzeSvgAsync: the analysis in slices (DP-78 P3, D-171)', () => {
+describe('analyzeSvgAsync: the analysis in slices', () => {
   // DOM elements from two parses are two objects; everything else must agree.
   const comparable = (analysis) => ({
     ...analysis,
@@ -3075,7 +3073,7 @@ describe('analyzeSvgAsync: the analysis in slices (DP-78 P3, D-171)', () => {
     '<path fill="#000" d="M0 0 L100 0 L100 100 L0 100 Z"/>' +
     '<path fill="#fff" d="M40 40 L60 40 L60 60 L40 60 Z"/></svg>';
 
-  it('★ returns what analyzeSvg returns: the smiley, the separation, a plain drawing, a dark one', async () => {
+  it('returns what analyzeSvg returns: the smiley, the separation, a plain drawing, a dark one', async () => {
     for (const svg of [SMILEY_SVG, separationSvg(), plain, dark]) {
       const whole = analyzeSvg(svg);
       const sliced = await analyzeSvgAsync(svg);
@@ -3133,7 +3131,7 @@ describe('analyzeSvgAsync: the analysis in slices (DP-78 P3, D-171)', () => {
     expect(checkpoint).toHaveBeenCalledTimes(10);
   });
 
-  it('★ runs on what separateColours actually writes, not on a hand-made copy', () => {
+  it('runs on what separateColours actually writes, not on a hand-made copy', () => {
     // The contract between the two modules, checked end to end: a light mark
     // on a dark ground goes in as pixels and comes back as roles.
     const w = 60;

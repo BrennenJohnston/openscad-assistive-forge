@@ -215,7 +215,7 @@ describe('braille panel charm mode (multi-charm)', () => {
             'exactly as written (the characters above are ignored until the ' +
             'editor is cleared).'
         );
-        // The characters box no longer names what the editor makes
+        // The characters box does not name what the editor makes
         expect(getBrailleDownloadName()).toBe('Braille Charms');
       } finally {
         announce.mockRestore();
@@ -314,10 +314,10 @@ describe('braille panel charm mode (multi-charm)', () => {
     const next = document.getElementById('brailleNextCard');
     expect(pager.hidden).toBe(false);
     expect(status.textContent).toBe('Charm 1 of 2: h');
-    // D-231: the line is shown, not spoken; the announcer says each page once
+    // The line is shown, not spoken; the announcer says each page once
     expect(status.hasAttribute('aria-live')).toBe(false);
-    // D-228: an end button keeps focus and is marked unavailable instead of
-    // disabled, which dropped focus to the page
+    // An end button keeps focus and is marked unavailable instead of
+    // disabled, which would drop focus to the page
     expect(prev.getAttribute('aria-disabled')).toBe('true');
     expect(prev.disabled).toBe(false);
 

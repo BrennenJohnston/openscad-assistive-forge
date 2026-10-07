@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 /**
- * DP-34: the trace worker itself.
+ * The trace worker itself.
  *
  * The worker is a module that installs a handler on `self`, so the test
  * supplies a `self`, imports the module, and then drives the handler directly.
@@ -77,7 +77,7 @@ const stages = (messages) =>
 const done = (messages) => messages.find((m) => m.type === 'done')
 const failed = (messages) => messages.find((m) => m.type === 'error')
 
-describe('the trace worker (DP-34)', () => {
+describe('the trace worker', () => {
   beforeEach(() => {
     posted.length = 0
   })
@@ -93,7 +93,7 @@ describe('the trace worker (DP-34)', () => {
 
   it('traces a picture and reports its stages in order', async () => {
     // Engine named on purpose: the hand-off this checks is imagetracerjs's,
-    // where the caller still has a filtering step to do. DP-Q43 made Potrace
+    // where the caller still has a filtering step to do. Potrace is
     // the default, and its hand-off is pinned in "choosing an engine" below.
     const out = await run({
       id: 7,
@@ -120,10 +120,10 @@ describe('the trace worker (DP-34)', () => {
     for (const message of out) expect(message.id).toBe(42)
   })
 
-  it('★ applies the pixel cap before the expensive work', async () => {
-    // 1800 x 1200 = 2.16 MP, just over the cap. If the cap were skipped here
-    // the way it was on the main-thread path (D-131), this would be traced at
-    // full size and the reported factor would be a lie.
+  it('applies the pixel cap before the expensive work', async () => {
+    // 1800 x 1200 = 2.16 MP, just over the cap. If the cap were skipped here,
+    // this would be traced at full size and the reported factor would be a
+    // lie.
     const big = picture(1800, 1200)
     expect(1800 * 1200).toBeGreaterThan(IMAGE_IMPORT_LIMITS.maxPixels)
     const out = await run({ id: 1, image: big, ink: { mode: 'lineart' } })
@@ -158,7 +158,7 @@ describe('the trace worker (DP-34)', () => {
     expect(Array.isArray(result.summary.colours)).toBe(true)
   })
 
-  it('★ a failure is reported, never swallowed', async () => {
+  it('a failure is reported, never swallowed', async () => {
     // A buffer that cannot be the size the dimensions claim.
     const out = await run({
       id: 6,
@@ -173,13 +173,13 @@ describe('the trace worker (DP-34)', () => {
   })
 })
 
-describe('choosing an engine (DP-43)', () => {
+describe('choosing an engine', () => {
   beforeEach(() => {
     posted.length = 0
     potraceTrace.mockClear()
   })
 
-  it('★ uses Potrace when nobody chooses, as signed at DP-Q43', async () => {
+  it('uses Potrace when nobody chooses', async () => {
     const out = await run({
       id: 1,
       image: picture(40, 40),
@@ -200,7 +200,7 @@ describe('choosing an engine (DP-43)', () => {
     expect(potraceTrace).not.toHaveBeenCalled()
   })
 
-  it('★ hands Potrace the one-bit ink mask, not a picture of it', async () => {
+  it('hands Potrace the one-bit ink mask, not a picture of it', async () => {
     // The mask is what extractInk already computed. Painting it black on white
     // and reading the pixels back would be the same answer by a longer road,
     // and a lossier one.
@@ -239,7 +239,7 @@ describe('choosing an engine (DP-43)', () => {
     expect(reply.svg).toContain('width="40" height="40"')
   })
 
-  it('★ falls back for Standard, and says so instead of pretending', async () => {
+  it('falls back for Standard, and says so instead of pretending', async () => {
     // Standard keeps the picture's own colours and produces no mask. Potrace
     // draws in one colour and cannot answer that question at all.
     const out = await run({
@@ -264,8 +264,8 @@ describe('choosing an engine (DP-43)', () => {
     expect(done(out).engine).toBe('colours')
   })
 
-  it('★ applies the signed curve tolerance, and lets a caller beat it', async () => {
-    // DP-Q43 signed opttolerance 1.0 as what Forge asks Potrace for. It is
+  it('applies the default curve tolerance, and lets a caller beat it', async () => {
+    // Forge asks Potrace for opttolerance 1.0. It is
     // applied by default and overridden by name, in that order - a setting
     // nobody can override is a constant wearing a setting's clothes.
     await run({
@@ -305,12 +305,12 @@ describe('choosing an engine (DP-43)', () => {
   })
 })
 
-describe('Standard mode and see-through pictures (DP-36, audit 15)', () => {
+describe('Standard mode and see-through pictures', () => {
   beforeEach(() => {
     posted.length = 0
   })
 
-  it('★ says so when it put a see-through picture on white', async () => {
+  it('says so when it put a see-through picture on white', async () => {
     const out = await run({
       id: 1,
       image: seeThrough(40, 40),

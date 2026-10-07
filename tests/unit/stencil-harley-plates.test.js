@@ -1,12 +1,12 @@
 /**
- * The acceptance oracle, as a test: does Forge cut the shapes the owner cut?
+ * The acceptance oracle, as a test: does Forge cut the shapes a person cut
+ * by hand?
  *
- * The owner's six plates are in `tests/fixtures/harley/`. This builds six from
- * their drawing through the app's real modules and compares each with the
- * plate they made by hand, as intersection over union of the two cuts.
+ * Six hand-cut reference plates are in `tests/fixtures/harley/`. This builds
+ * six from their drawing through the app's real modules and compares each
+ * with the plate made by hand, as intersection over union of the two cuts.
  *
- * The numbers were MEASURED by DP-17 and shown to the owner at gate G1. The
- * bars below sit 0.05 under what was measured, so ordinary drift in the
+ * The bars below sit 0.05 under what was measured, so ordinary drift in the
  * boolean does not redden the lane and a real change does.
  *
  * @license GPL-3.0-or-later
@@ -45,7 +45,7 @@ const { parseSvgElements, classifyElements } = await import(
 const HARLEY = join('tests', 'fixtures', 'harley')
 const PLATE = { plateW: 60, plateH: 60, marginMm: 10.15, scalePercent: 100 }
 
-/** Everything the app does between the owner's drawing and six plate SVGs. */
+/** Everything the app does between the drawing and six plate SVGs. */
 function forgePlates({ absorb = true, rule = 'own' } = {}) {
   const elements = classifyElements(
     parseSvgElements(readFileSync(join(HARLEY, 'sketch4.svg'), 'utf8'))
@@ -94,7 +94,7 @@ const iouOf = (plateSvg, n) =>
     { flipY: true }
   )
 
-describe('the six plates, against the six the owner cut', () => {
+describe('the six plates, against the six cut by hand', () => {
   const { svgs, matched, plan } = forgePlates()
 
   it('finds every region the reference plan names', () => {
@@ -102,11 +102,11 @@ describe('the six plates, against the six the owner cut', () => {
     expect(svgs).toHaveLength(6)
   })
 
-  // Measured 2026-08-28 and shown to the owner at gate G1:
-  // 0.999, 0.998, 0.998, 0.998, 0.724, 0.997. Bars sit 0.05 under.
+  // Measured: 0.999, 0.998, 0.998, 0.998, 0.724, 0.997. Bars sit 0.05
+  // under.
   const BARS = [0.94, 0.94, 0.94, 0.94, 0.67, 0.94]
   for (let n = 1; n <= 4; n++) {
-    it(`cuts plate ${n} where the owner cut it`, () => {
+    it(`cuts plate ${n} where the reference cuts it`, () => {
       const r = iouOf(svgs[n - 1], n)
       expect(r.iou).toBeGreaterThan(BARS[n - 1])
       expect(r.cutsA).toBe(r.cutsB)
@@ -114,10 +114,11 @@ describe('the six plates, against the six the owner cut', () => {
     })
   }
 
-  it('★ cuts plate 5 smaller than the owner did, because they cut the rim too', () => {
-    // The reference's pupil cuts are 6.587 and 7.678 mm2 where the FACE of the
-    // pupil is nearer 4.5: the owner opened the pupil and the ring around it
-    // together. Same four cuts, same places, a different amount of them.
+  it('cuts plate 5 smaller than the reference, which cuts the rim too', () => {
+    // The reference's pupil cuts are 6.587 and 7.678 mm2 where the face of
+    // the pupil is nearer 4.5: the hand-cut plate opened the pupil and the
+    // ring around it together. Same four cuts, same places, a different
+    // amount of them.
     const r = iouOf(svgs[4], 5)
     expect(r.cutsA).toBe(4)
     expect(r.cutsB).toBe(4)
@@ -125,11 +126,10 @@ describe('the six plates, against the six the owner cut', () => {
     expect(r.iou).toBeLessThan(0.95)
   })
 
-  it('★ cuts plate 6 where the owner cut it, once they corrected it', () => {
-    // The plate first measured here repeated plate 5's two pupil cuts exactly,
-    // so it opened two colours at once, and the comparison came out at 0.026.
-    // The owner confirmed at G1 that this was a leftover from editing plate 5
-    // and supplied a corrected plate. It agrees at 0.997.
+  it('cuts plate 6 where the corrected reference cuts it', () => {
+    // The reference plate is the corrected one: an earlier copy repeated
+    // plate 5's two pupil cuts exactly (a leftover from editing plate 5) and
+    // compared at 0.026. The corrected plate agrees at 0.997.
     const r = iouOf(svgs[5], 6)
     expect(r.cutsA).toBe(2)
     expect(r.cutsB).toBe(2)
@@ -144,8 +144,8 @@ describe('the six plates, against the six the owner cut', () => {
 })
 
 describe('the two switches, measured against the same answer sheet', () => {
-  it('★ loses the eye plate when enclosed lines are left open', () => {
-    // The owner cut the eyes SOLID. Leaving the band between eye and pupil
+  it('loses the eye plate when enclosed lines are left open', () => {
+    // The reference cuts the eyes solid. Leaving the band between eye and pupil
     // uncut leaves an island there and halves the agreement on that plate.
     const open = forgePlates({ absorb: false })
     const closed = forgePlates({ absorb: true })
@@ -165,8 +165,8 @@ describe('the two switches, measured against the same answer sheet', () => {
 describe('fitRingsToPlate', () => {
   const { cuts, contentBox } = forgePlates()
 
-  it('★ fits the DESIGN, not each plate, so the colours land on each other', () => {
-    // Plate 6 is the nose and the tongue. Fitted against its OWN bounds it
+  it('fits the design, not each plate, so the colours land on each other', () => {
+    // Plate 6 is the nose and the tongue. Fitted against its own bounds it
     // would fill the sheet; against the design's it stays where the nose is.
     const shared = fitRingsToPlate(cuts[5].rings, contentBox, PLATE)
     const alone = fitRingsToPlate(

@@ -15,14 +15,14 @@ import {
 } from '../../../src/js/game/city-birds.js';
 
 /**
- * CW-58 (CW-Q54): birds where birds rest.
+ * Birds where birds rest.
  *
- * CW-57's picnic table was LOPSIDED and looked exactly like a picnic table -
- * only arithmetic saw it. So these guards assert the arithmetic: that a bird
+ * A lopsided picnic table can look exactly like a picnic table: only
+ * arithmetic sees it. So these guards assert the arithmetic: that a bird
  * is the size its citation claims, that nothing overhangs what it says it is,
  * and that a species only appears on a perch it would actually use.
  */
-describe('birds and their perches (CW-58)', () => {
+describe('birds and their perches', () => {
   const NAMES = Object.keys(BIRD_SPECIES);
 
   it('gives every species a well-formed cited size range', () => {
@@ -37,10 +37,10 @@ describe('birds and their perches (CW-58)', () => {
     }
   });
 
-  it('★ builds every species TRUE TO ITS CITED LENGTH', () => {
-    // The one thing this release is not allowed to do is inflate a bird so it
-    // can be seen. A built bird's nose-to-tail extent must be the cited body
-    // length, within the slop a boxy build costs.
+  it('builds every species true to its cited length', () => {
+    // The one thing a build must not do is inflate a bird so it can be seen.
+    // A built bird's nose-to-tail extent must be the cited body length, within
+    // the slop a boxy build costs.
     for (const name of NAMES) {
       for (const t of [0, 0.5, 1]) {
         const spec = birdSpec(name, t);
@@ -66,25 +66,24 @@ describe('birds and their perches (CW-58)', () => {
         expect(Math.abs(b.along), name).toBeLessThanOrEqual(spec.lengthM * 0.8);
         // Nothing sinks below the perch by more than the deliberate hair.
         expect(b.z - b.h / 2, name).toBeGreaterThanOrEqual(-PERCH_SINK_M * 2);
-        // ★ EVERY BOX IS CENTRED ON THE BIRD'S OWN LINE. CW-57's picnic
-        // table was lopsided from a missing pair of parentheses, hung a bench
-        // outside its own collision footprint, and looked exactly like a
-        // picnic table. A bird is symmetric about its length; assert it
-        // rather than trusting a photograph to notice.
+        // Every box is centred on the bird's own line. A missing pair of
+        // parentheses can make a lopsided build that still looks right in a
+        // picture; a bird is symmetric about its length, so assert it rather
+        // than trusting a photograph to notice.
         expect(b.across, `${name} across`).toBe(0);
       }
     }
   });
 
   it('sinks the bird a hair into its perch rather than touching it exactly', () => {
-    // ★ D-110: two faces at the same height z-fight in the surface-id buffer,
-    // and CW-52 found a quarter of a frame re-rolling its glyph vocabulary
-    // from exactly that. The sink is small, deliberate, and pinned.
+    // Two faces at the same height z-fight in the surface-id buffer, which can
+    // re-roll the glyph vocabulary of a quarter of a frame. The sink is small,
+    // deliberate, and pinned.
     expect(PERCH_SINK_M).toBeGreaterThan(0);
     expect(PERCH_SINK_M).toBeLessThan(0.05);
   });
 
-  it('★★ only puts a species on a perch it would actually use', () => {
+  it('only puts a species on a perch it would actually use', () => {
     // The honest half of the design. A roster alone would let a goose perch
     // on a bench back.
     for (const [name, perches] of Object.entries(SPECIES_PERCHES)) {
@@ -98,14 +97,11 @@ describe('birds and their perches (CW-58)', () => {
     for (const n of ['canada goose', 'greater roadrunner']) {
       for (const p of SPECIES_PERCHES[n]) expect(GROUND_KINDS, n).toContain(p);
     }
-    // ★★ THIS GUARD ONCE PINNED A CLAIM THE PROOF GATE REFUTED. It asserted
-    // the crow was never on the ground, and called that "a measured
-    // constraint, not a taste" - but nothing had measured it. When the gate
-    // did, swinging a bird across the WHOLE tier band moved the frame by
-    // nothing (0.02% either way on a lamp head), and the ground turned out to
-    // be the crow's BEST perch rather than its worst. A test that pins an
-    // untested inference is worse than no test: it makes the inference look
-    // settled. What is guarded now is the thing that is actually true.
+    // The crow may perch on the ground: swinging a bird across the whole tier
+    // band moves the frame by nothing (0.02% either way on a lamp head), and
+    // the ground is the crow's best perch rather than its worst. A test that
+    // pins an untested inference is worse than no test, because it makes the
+    // inference look settled; this guards what is measured.
     expect(SPECIES_PERCHES['american crow']).toContain('ground');
     // A goose stays lawn-only; a gull takes parkland but not pavement.
     expect(SPECIES_PERCHES['canada goose']).not.toContain('open-ground');
@@ -132,18 +128,16 @@ describe('birds and their perches (CW-58)', () => {
     expect(birdTableFor('burnaby')).toBe(CITY_BIRDS.burnaby);
   });
 
-  it('★ makes the desert city the odd one out, the way its flowers did', () => {
+  it('makes the desert city the odd one out, the way its flowers did', () => {
     // The argument for per-city rosters in one line: the roadrunner is
     // Albuquerque's own bird and no other city has anything like it.
     const road = Object.entries(CITY_BIRDS).filter(([, r]) =>
       r.includes('greater roadrunner')
     );
     expect(road.map(([c]) => c)).toEqual(['albuquerque']);
-    // ★ AND THE GUARD CORRECTED ME HERE. This first asserted Albuquerque had
-    // NOBODY for a parapet, which is false - a pigeon uses a parapet in every
-    // city, Albuquerque included. What is actually true, and is the better
-    // claim, is that it is the ONLY city whose roofline carries no corvid and
-    // no gull: its high perches are all pigeons.
+    // Albuquerque does have a bird for a parapet (a pigeon uses a parapet in
+    // every city); what sets it apart is that it is the only city whose
+    // roofline carries no corvid and no gull: its high perches are all pigeons.
     expect(speciesForPerch(CITY_BIRDS.albuquerque, 'parapet')).toEqual([
       'rock pigeon',
     ]);
@@ -154,7 +148,7 @@ describe('birds and their perches (CW-58)', () => {
         city
       ).toBe(true);
     }
-    // Its roster has nobody at all for a bench back, which IS a real empty.
+    // Its roster has nobody at all for a bench back, which is a real empty.
     expect(pickBird(CITY_BIRDS.albuquerque, 'bench-back', 0)).toBe(
       'house sparrow'
     );

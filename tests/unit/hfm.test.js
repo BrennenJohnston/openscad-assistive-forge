@@ -17,7 +17,7 @@ function createMockCanvasContext(opts = {}) {
     getImageData: vi.fn(() => ({
       data: new Uint8ClampedArray(4),
     })),
-    // CW-22: the composite path is now the default paint path, so every mock
+    // The composite path is the default paint path, so every mock
     // context must be able to hand out and receive a frame buffer.
     createImageData: vi.fn((w, h) => ({
       width: w,
@@ -229,8 +229,8 @@ describe('initAltView — integer paint destinations', () => {
 
     vi.spyOn(performance, 'now').mockReturnValue(10000)
     api.enable()
-    // Afterglow is what still paints cell by cell since CW-22 removed the
-    // size gate. Without it this loop finds no blits at all and passes while
+    // Afterglow is the one path that still paints cell by cell. Without it
+    // this loop finds no blits at all and passes while
     // asserting nothing — drive the blit path deliberately. Reduced motion
     // forces the fade back to 0, so state it explicitly rather than trusting
     // whatever the test environment reports for the media query.
@@ -265,8 +265,8 @@ describe('initAltView — integer paint destinations', () => {
     api.enable()
     api.render()
 
-    // CW-22: with afterglow off, no cell is painted by its own drawImage call
-    // at ANY character size — that per-call cost was the conversion's largest
+    // With afterglow off, no cell is painted by its own drawImage call at any
+    // character size: that per-call cost would be the conversion's largest
     // slice at the shipped default.
     const overlayCtx = allContexts.find((c) => c.putImageData.mock.calls.length)
     expect(overlayCtx).toBeDefined()
@@ -438,7 +438,7 @@ describe('initAltView — API surface', () => {
     expect(api.setContrastScale(99)).toBe(4.0)
     expect(api.setContrastScale(0)).toBe(0.5)
     expect(api.setFontScale(99)).toBe(2.5)
-    // CW-12: the instance floor is 0.05 so the City Walk can go tiny. The
+    // The instance floor is 0.05 so the City Walk can go tiny. The
     // preview's Alt View never sees it - hfm-controller.js clamps to 0.5
     // first (guarded by the next test).
     expect(api.setFontScale(0)).toBe(0.05)
@@ -446,8 +446,8 @@ describe('initAltView — API surface', () => {
     api.dispose()
   })
 
-  it('leaves the preview Alt View slider range at 0.5-2.5 (CW-12 scope)', () => {
-    // CW-12 opened the INSTANCE font-scale floor to 0.05 for the game. The
+  it('leaves the preview Alt View slider range at 0.5-2.5', () => {
+    // The instance font-scale floor is 0.05, for the game. The
     // preview's own control must keep refusing anything below 0.5, or the
     // main app silently gains sizes nobody benchmarked. _HFM_FONT_SCALE_RANGE
     // is module-private, so this guard reads the declaration itself.
@@ -461,8 +461,8 @@ describe('initAltView — API surface', () => {
   })
 })
 
-describe('initAltView — instance isolation (CW-1)', () => {
-  // Two instances from ONE module load (no resetModules between them): each
+describe('initAltView — instance isolation', () => {
+  // Two instances from one module load (no resetModules between them): each
   // must own its overlay, sampler, settings, and lifecycle. This is what
   // allows a second alt-rendered surface to coexist with the preview's.
   it('creates an independent overlay per container', async () => {

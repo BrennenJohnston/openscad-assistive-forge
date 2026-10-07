@@ -101,7 +101,7 @@ describe('the Library platforms', () => {
       const p = LIBRARY_PLATFORMS[i]
       expect(p.toH).toBeGreaterThan(p.fromH)
       if (i === 0) continue
-      // ★ THE GAPS ARE THE FOUR FLOWING PLANES. Contiguous bands would make a
+      // The gaps are the four flowing planes. Contiguous bands would make a
       // wedding cake of setbacks, which is the one shape the published
       // building is not, so a gap is a requirement and not a rounding.
       const gap = p.fromH - LIBRARY_PLATFORMS[i - 1].toH
@@ -142,37 +142,37 @@ describe('the Library platforms', () => {
   })
 
   it('draws a diagrid the character grid can actually resolve', () => {
-    // ★ A MEMBER THINNER THAN A CHARACTER CELL CANNOT MAKE A CELL DARK. The
-    // published members are ~0.3 m and photographed as nothing at all from
-    // 4th Avenue; the shipped width is a diagram at the resolution this
-    // medium has.
+    // A member thinner than a character cell cannot make a cell dark. The
+    // published members are ~0.3 m and photograph as nothing at all from 4th
+    // Avenue; the shipped width is a diagram at the resolution this medium
+    // has.
     //
-    // ★ THE HEIGHT HERE IS THE GAME VIEWPORT'S, NOT THE BROWSER'S, and the
+    // The height here is the game viewport's, not the browser's, and the
     // difference is not cosmetic. The camera is sized from
-    // `viewport.clientHeight`, and in the 1600 x 900 window the photograph
-    // gate used, the game viewport is 756 px - the header takes the rest, and
-    // the captured ASCII canvas measures 1600 x 756. Working from 900 makes
-    // every member look 19% wider than it is: the published 0.4 m member
-    // reads 3.46 px on that arithmetic and 2.91 px on the real one, which is
-    // 0.73 of a 4 px cell rather than 0.87.
+    // `viewport.clientHeight`, and in a 1600 x 900 window the game viewport is
+    // 756 px - the header takes the rest, and the captured ASCII canvas
+    // measures 1600 x 756. Working from 900 makes every member look 19% wider
+    // than it is: the published 0.4 m member reads 3.46 px on that arithmetic
+    // and 2.91 px on the real one, which is 0.73 of a 4 px cell rather than
+    // 0.87.
     const GAME_VIEWPORT_H = 756
     const PX_PER_M_AT_90M = GAME_VIEWPORT_H / (2 * 90 * Math.tan(Math.PI / 6))
     // Over two cells across, which is where the photographs put the floor.
     expect(LIBRARY_DIAGRID.memberM * PX_PER_M_AT_90M).toBeGreaterThan(8)
-    // ★ AND THE DIAMOND IS TALLER THAN IT IS WIDE, because the cell is 9 px
+    // And the diamond is taller than it is wide, because the cell is 9 px
     // tall against 4 px wide and the vertical axis is the starved one.
     expect(LIBRARY_DIAGRID.heightM / LIBRARY_DIAGRID.widthM).toBeGreaterThan(
       1.5
     )
-    // The glass is EXACT black and the steel is the bright thing (CW-40's
-    // law): a bright web wrapped around empty cells is what photographed, and
-    // dark members on lit glass photographed as a textured wall.
+    // The glass is exact black and the steel is the bright thing: a bright
+    // web wrapped around empty cells reads in a photograph, and dark members
+    // on lit glass read as a textured wall.
     expect(LIBRARY_DIAGRID.paneLevel).toEqual([0, 0])
     expect(LIBRARY_DIAGRID.memberLevel).toBeGreaterThan(200)
   })
 })
 
-describe('the node-keyed dressings (CW-78)', () => {
+describe('the node-keyed dressings', () => {
   it('is one named row, cited, and misses cleanly', () => {
     expect([...NODE_LANDMARK_DRESSINGS.keys()]).toEqual([WHEEL_NODE_ID])
     expect(nodeDressingFor(WHEEL_NODE_ID).body).toBe('great-wheel')
@@ -217,7 +217,7 @@ describe('the node-keyed dressings (CW-78)', () => {
     expect(NEEDLE_TOP.houseRadiusM).toBeLessThan(NEEDLE_TOP.haloRadiusM)
   })
 
-  it('flares OUT from the waist on the way up - the hourglass completed', () => {
+  it('flares out from the waist on the way up - the hourglass completed', () => {
     for (const bearing of NEEDLE_LEG_BEARINGS_RAD) {
       const start = needleFlarePoint(bearing, 0)
       expect(Math.hypot(start[0], start[1])).toBeCloseTo(
@@ -244,7 +244,7 @@ describe('the node-keyed dressings (CW-78)', () => {
 
 describe('the shipped Seattle extract, pinned', () => {
   it('still puts 4th Avenue where the platform offsets say it is', () => {
-    // ★ THE OFFSETS ARE MEANINGLESS IF THE BLOCK MOVES. A rebake that shifts
+    // The offsets are meaningless if the block moves. A rebake that shifts
     // or re-traces this block would silently point the cantilever at the
     // wrong street, and no photograph anyone takes afterwards would say so.
     const model = seattle()
@@ -280,11 +280,10 @@ describe('the shipped Seattle extract, pinned', () => {
   })
 
   it('still has the four roof planes the massing exists to replace', () => {
-    // ★ THE PROMPT, THE STATUS FILE AND THE R6 RECORD ALL SAID THIS BUILDING
-    // HAS NO `building:part` VOLUMES. It has four, every one of them tagged
-    // `building:part=roof` with no height, so each takes the parser default
-    // and stands as a slab inside the box. They are why the dressing
-    // REPLACES rather than adds - and if a rebake ever gives them real
+    // This building has four `building:part` volumes, every one of them
+    // tagged `building:part=roof` with no height, so each takes the parser
+    // default and stands as a slab inside the box. They are why the dressing
+    // replaces rather than adds - and if a rebake ever gives them real
     // heights, that decision is worth revisiting rather than inheriting.
     const lib = seattle().buildings.find((b) => b.id === LIBRARY_WAY_ID)
     expect(lib.parts).toHaveLength(4)
@@ -292,8 +291,8 @@ describe('the shipped Seattle extract, pinned', () => {
     for (const part of lib.parts) expect(part.minHeightM).toBe(0)
   })
 
-  it('still carries the Great Wheel node the CW-78 body is keyed to', () => {
-    // CW-78's extension of the pinned-id law to nodes: a rebake that drops
+  it('still carries the Great Wheel node its body is keyed to', () => {
+    // The pinned-id law, extended to nodes: a rebake that drops
     // or renumbers the attraction node fails here, not in a shorter legend.
     const wheel = seattle().attractions.find((a) => a.id === WHEEL_NODE_ID)
     expect(wheel).toBeTruthy()
@@ -346,8 +345,8 @@ describe('the one hook in the building path', () => {
     // 44 triangles. Five platforms of the same ring is 220, and each of the
     // four lofts is one quad per edge, 96 more. 316.
     //
-    // ★ THE THREE WAYS THIS CAN GO WRONG ALL LAND ON DIFFERENT NUMBERS. 44 is
-    // the dressing not firing; 360 is it ADDING instead of replacing, which
+    // The three ways this can go wrong all land on different numbers. 44 is
+    // the dressing not firing; 360 is it adding instead of replacing, which
     // would leave the box buried inside the platforms; 220 is the flowing
     // planes missing and the building back to a wedding cake.
     expect(buildingTriangles(cityWith(37056442))).toBe(316)
@@ -411,9 +410,9 @@ describe('the one hook in the building path', () => {
   })
 
   it("puts the Needle's top in the mast mesh, beside the tripod", () => {
-    // The real Seattle build: the Needle's dressing now feeds two meshes -
-    // the tripod stays in the buildings merge exactly as CW-63 shipped it,
-    // and the flare + saucer stack land in landmark-masts with the Wheel.
+    // The real Seattle build: the Needle's dressing feeds two meshes - the
+    // tripod stays in the buildings merge, and the flare + saucer stack land
+    // in landmark-masts with the Wheel.
     const { group, dispose } = buildCityGroup(seattle())
     const masts = group.children.filter((c) => c.name === 'landmark-masts')
     expect(masts).toHaveLength(1)
@@ -424,7 +423,7 @@ describe('the one hook in the building path', () => {
   })
 
   it('gives the whole of Seattle exactly one diagrid', () => {
-    // ★ THE FACADE FAMILY IS RESERVED, AND THIS IS WHAT SAYS SO. The diagrid
+    // The facade family is reserved, and this is what says so. The diagrid
     // sits after the nine archetypes in every array the buildings loop
     // indexes, and the generic hash divides by the nine, so no ordinary
     // building can land on it. Appending it to WINDOW_ARCHETYPES instead
@@ -438,10 +437,10 @@ describe('the one hook in the building path', () => {
     )
     // The dressing buckets come last, so the diagrid is the final mesh, and
     // it holds the Library's platforms and planes and nothing else.
-    // CW-79 moved this by exactly the Library's own SKIRT: the building
-    // stands on Fifth Avenue's grade now, and the 44 triangles that joined
-    // are its own footprint extruded down to close the downhill gap -
-    // still the Library's and nobody else's, which is this pin's law.
+    // The count includes the Library's own skirt: the building stands on
+    // Fifth Avenue's grade, and 44 of its triangles are its own footprint
+    // extruded down to close the downhill gap - still the Library's and
+    // nobody else's, which is this pin's law.
     expect(tris.at(-1)).toBe(360)
     // Every other family is a real share of the city, not a stray landmark.
     for (const n of tris.slice(0, -1)) expect(n).toBeGreaterThan(1000)

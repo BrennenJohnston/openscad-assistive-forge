@@ -14,24 +14,22 @@ import {
 import { SPACE_INDEX, FIRST_CHAR_CODE } from '../../src/js/_hfm-paint.js'
 
 /**
- * CW-93 (D-128): a cell draws from ITS OWN SURFACE'S vocabulary, in every
- * mode and on both converter paths.
+ * A cell draws from its own surface's vocabulary, in every mode and on both
+ * converter paths.
  *
- * The owner photographed a building's window pattern drawn onto the underside
- * of a street tree. The cause was one line: the GPU path was handed
- * `useClassVocabularies: !usePalette`, so in COLOUR mode every classified cell
- * searched the full 95-glyph atlas and a canopy and a facade were drawn with
- * the same alphabet. Measured at 69 % of the grid, Day and Night alike, with
- * the memory on and off - it was never a trail. The CPU path had always
- * applied the vocabularies in both modes, so the two implementations of the
- * same converter disagreed about what they drew, which is the one thing this
- * file exists to stop.
+ * Handing the GPU path `useClassVocabularies: !usePalette` would, in colour
+ * mode, let every classified cell search the full 95-glyph atlas, so a
+ * canopy and a facade would be drawn with the same alphabet: a building's
+ * window pattern on the underside of a street tree, on 69 % of the grid.
+ * The CPU path applies the vocabularies in both modes, so the two
+ * implementations of the same converter would disagree about what they
+ * draw, which is the one thing this file exists to stop.
  *
  * The shader cannot run here, so the guards are split the way `hfm-gpu.test.js`
  * splits them: the CPU path is exercised for real, the span arithmetic the
  * shader reads is exercised for real through `buildVocabSpans`, and the one
  * line that cannot be reached from either is pinned by reading the source.
- * The e2e board runs the real shader (ascii-city-walk-street.spec.js, CW-93).
+ * The e2e board runs the real shader (ascii-city-walk-street.spec.js).
  */
 
 const cpuSource = readFileSync(
@@ -42,7 +40,7 @@ const cpuSource = readFileSync(
 /**
  * The file with its line comments taken out.
  *
- * A source-text guard has to read the CODE. The comment above the fixed line
+ * A source-text guard has to read the code. The comment above the fixed line
  * quotes the broken one word for word - that is what makes it worth reading -
  * and a plain search would find the quotation and fail on a healthy file.
  */
@@ -116,7 +114,7 @@ function tally(probe) {
   return { a, b }
 }
 
-describe('CW-93 — a cell draws from its own surface vocabulary (CPU path)', () => {
+describe('a cell draws from its own surface vocabulary (CPU path)', () => {
   beforeEach(() => installCanvasMock())
   afterEach(() => {
     removeCanvasMock()
@@ -135,10 +133,10 @@ describe('CW-93 — a cell draws from its own surface vocabulary (CPU path)', ()
       const legalA = allowedIndices(VOCABULARIES[CLASS_A])
       const legalB = allowedIndices(VOCABULARIES[CLASS_B])
 
-      // ★ THE FIXTURE MUST CONTAIN THE THING IT GUARDS. A picture that drew
-      // one character everywhere would satisfy every subset assertion below
-      // and prove nothing - this round has already shipped a guard that passed
-      // with its subject deliberately broken because its fixture was empty.
+      // The fixture must contain the thing it guards. A picture that drew one
+      // character everywhere would satisfy every subset assertion below and
+      // prove nothing - a guard can pass with its subject deliberately broken
+      // because its fixture was empty.
       expect(a.size, 'characters drawn on class A').toBeGreaterThan(2)
       expect(b.size, 'characters drawn on class B').toBeGreaterThan(2)
       const nonSpaceA = [...a.keys()].filter((g) => g !== SPACE_INDEX)
@@ -161,7 +159,7 @@ describe('CW-93 — a cell draws from its own surface vocabulary (CPU path)', ()
   }
 })
 
-describe('CW-93 — the reverse atlas belongs to the intensity ladder (D-129)', () => {
+describe('the reverse atlas belongs to the intensity ladder', () => {
   beforeEach(() => installCanvasMock())
   afterEach(() => {
     removeCanvasMock()
@@ -169,12 +167,12 @@ describe('CW-93 — the reverse atlas belongs to the intensity ladder (D-129)', 
   })
 
   it('gives the ladder back, with reverse video, after a round trip through a palette', async () => {
-    // `reverseAtlasIndex` is an index INTO `intensityAtlases`, and palette mode
-    // has none - so CW-93 clears it there, which is what stops the GPU path
+    // `reverseAtlasIndex` is an index into `intensityAtlases`, and palette mode
+    // has none - so it is cleared there, which is what stops the GPU path
     // reversing bright colour cells with a threshold left over from mono. The
-    // risk in that change is the way back: a player who turns colour on and
-    // off again must get their solid highlights back. The e2e board holds the
-    // defect itself (it needs the real shader); this holds the round trip.
+    // risk is the way back: a player who turns colour on and off again must
+    // get their solid highlights back. The e2e board holds the defect itself
+    // (it needs the real shader); this holds the round trip.
     vi.resetModules()
     const { initAltView } = await import('../../src/js/_hfm.js')
     const pm = createMockPreviewManager()
@@ -221,7 +219,7 @@ describe('CW-93 — the reverse atlas belongs to the intensity ladder (D-129)', 
   })
 })
 
-describe('CW-93 — the span table the shader reads', () => {
+describe('the span table the shader reads', () => {
   const FULL = Array.from({ length: 95 }, (_, i) => i)
 
   it('gives each class its own span, and the full atlas to span 0', () => {
@@ -236,7 +234,7 @@ describe('CW-93 — the span table the shader reads', () => {
     expect(flat.slice(95)).toEqual([0, 7, 9])
   })
 
-  it('★ falls back to the FULL atlas for a class with no vocabulary', async () => {
+  it('falls back to the full atlas for a class with no vocabulary', async () => {
     // The shader searches `count` entries starting at `start`; a count of zero
     // means the loop never runs and the cell keeps glyph 0, the space. Every
     // span index must therefore name a real, non-empty list - SKY has no row
@@ -274,13 +272,13 @@ describe('CW-93 — the span table the shader reads', () => {
   })
 })
 
-describe('CW-93 — the GPU path is not excused from the vocabularies', () => {
+describe('the GPU path is not excused from the vocabularies', () => {
   it('does not gate useClassVocabularies on the palette', () => {
-    // The defect, in one line. `useClassVocabularies: !usePalette` shipped
-    // from CW-32 to CW-93 and switched the whole art direction off for every
-    // player in colour mode. The shader cannot be run here, so the call site
-    // is read instead - the same technique this file's sibling uses for the
-    // tap table and the contrast curves.
+    // The defect, in one line: `useClassVocabularies: !usePalette` would switch
+    // the whole art direction off for every player in colour mode. The shader
+    // cannot be run here, so the call site is read instead - the same
+    // technique this file's sibling uses for the tap table and the contrast
+    // curves.
     expect(cpuCode).toContain('useClassVocabularies: true')
     expect(cpuCode).not.toMatch(/useClassVocabularies:\s*!usePalette/)
   })
@@ -288,26 +286,24 @@ describe('CW-93 — the GPU path is not excused from the vocabularies', () => {
   it('binds the class texture in both modes', () => {
     // Without the texture there is no class id in the shader at all, so the
     // vocabulary could not apply even when it is asked for. This is the other
-    // half of the same line, and CW-68 already fixed it for the memory.
+    // half of the same line, already needed for the memory.
     expect(cpuCode).not.toMatch(/classTexture:\s*usePalette/)
   })
 })
 
-describe('CW-91 — the ink budget sees a real luminance on both tap branches', () => {
+describe('the ink budget sees a real luminance on both tap branches', () => {
   beforeEach(() => installCanvasMock())
   afterEach(() => {
     removeCanvasMock()
     vi.restoreAllMocks()
   })
 
-  it('does not blank the picture when the tap plan is off (CW-86 reported it)', async () => {
-    // CW-86 found this and left it: the tap-plan branch accumulates the cell's
-    // luminance when `wantsLum` says to, and the fallback branch asked
-    // `useIntensity` instead. In PALETTE mode with an ink budget the two
-    // disagree - `useIntensity` is false, `wantsLum` is true - so the fallback
-    // branch left `cellLum` at ZERO for every cell. Latent only because the
-    // shipped floor is 0; with any real floor that branch blanks the whole
-    // picture while the other one draws it.
+  it('does not blank the picture when the tap plan is off', async () => {
+    // The tap-plan branch accumulates the cell's luminance when `wantsLum`
+    // says to; a fallback branch that asked `useIntensity` instead would, in
+    // palette mode with an ink budget (`useIntensity` false, `wantsLum`
+    // true), leave `cellLum` at zero for every cell. With any real floor that
+    // branch would blank the whole picture while the other one draws it.
     //
     // `setBenchLegacy({ taps: true })` is what turns the tap plan off, which
     // is how this case reaches the branch at all.
@@ -344,8 +340,8 @@ describe('CW-91 — the ink budget sees a real luminance on both tap branches', 
   })
 })
 
-describe('CW-91 — the ladder table the shader indexes', () => {
-  it('holds glyph id PLUS ONE, so 0 can mean "no ladder for this class"', () => {
+describe('the ladder table the shader indexes', () => {
+  it('holds glyph id plus one, so 0 can mean "no ladder for this class"', () => {
     // The space is glyph 0, and a ground cell at the darkest step is entitled
     // to draw it. Storing the id raw would make "draw the space" and "this
     // class has no ladder" the same byte, and every such cell would silently
@@ -380,14 +376,13 @@ describe('CW-91 — the ladder table the shader indexes', () => {
   })
 })
 
-describe('CW-91 — anchoring no longer forces the CPU converter', () => {
+describe('anchoring does not force the CPU converter', () => {
   it('does not send the glyph path to the CPU when anchoring is on', () => {
-    // CW-86 shipped anchoring OFF for exactly one reason: `_gpuPathInForce`
-    // returned false whenever it was on, so the frame rate halved (59.6 to
-    // 29.6 fps). The shader reads the field byte itself now - out of the class
-    // texture's green channel, which the class pass has always written - so
-    // that line is gone. If it ever comes back, the release's whole premise is
-    // gone with it.
+    // Anchoring must not force the CPU converter: if `_gpuPathInForce`
+    // returned false whenever it was on, the frame rate would halve (59.6 to
+    // 29.6 fps). The shader reads the field byte itself - out of the class
+    // texture's green channel, which the class pass always writes - so no
+    // such line is needed, and this pins that it does not come back.
     const fn = cpuCode.slice(
       cpuCode.indexOf('function _gpuPathInForce'),
       cpuCode.indexOf('function _probeLumArray')

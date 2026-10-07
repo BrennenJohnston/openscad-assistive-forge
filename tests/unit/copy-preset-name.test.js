@@ -1,5 +1,5 @@
 /**
- * Tests for the F30 copy-preset-name helper.
+ * Tests for the copy-preset-name helper.
  *
  * The helper hides the clipboard fallback chain behind a single Promise
  * so the main.js click handler can stay a thin shim. Tests exercise

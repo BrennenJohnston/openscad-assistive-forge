@@ -3,7 +3,7 @@
  * buildDefineArgs numeric-coercion path (src/js/scad-param-formatter.js —
  * the shared implementation the worker imports).
  *
- * Phase 3: tests import the shared modules directly instead of maintaining
+ * The tests import the shared modules directly instead of maintaining
  * inlined copies of the logic.
  *
  * @license GPL-3.0-or-later
@@ -13,7 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { propose2DExportAdjustments } from '../../src/js/render-intent.js';
 import { getBuiltinManifest } from '../../src/js/project-manifest.js';
 
-// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// The deprecated resolve2DExportIntent wrapper is gone; this
 // local equivalent keeps the proposal-engine assertions exercising the
 // same behavior (unconditional application of the builtin rules).
 const resolve2DExportIntent = (parameters, schema, format) =>
@@ -330,7 +330,7 @@ describe('resolve2DExportParameters — schema with no enum', () => {
 // buildDefineArgs is the real shared implementation from
 // src/js/scad-param-formatter.js (imported above).
 
-describe('buildDefineArgs — numeric paramType coercion (Phase 1 regression)', () => {
+describe('buildDefineArgs — numeric paramType coercion', () => {
   it('emits unquoted integer when paramType is integer and value is a numeric string', () => {
     const args = buildDefineArgs({ generate: '1' }, { generate: 'integer' });
     expect(args).toContain('-D');

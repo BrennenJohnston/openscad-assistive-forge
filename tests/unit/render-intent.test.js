@@ -1,7 +1,7 @@
 /**
  * Unit tests for the shared render-intent resolver (src/js/render-intent.js).
  *
- * Coverage areas required by Phase 2:
+ * Coverage areas:
  *   - Generic 2D fixture (output_mode enum)
  *   - Keyguard-shaped parameters (generate + type_of_keyguard)
  *   - Unknown-project parameters (no 2D indicators at all)
@@ -219,7 +219,7 @@ describe('propose2DExportAdjustments — keyguard rules via builtin manifest', (
     );
   });
 
-  it('does NOT apply keyguard rules without the manifest (no hardcoding)', () => {
+  it('does not apply keyguard rules without the manifest (no hardcoding)', () => {
     const params = { generate: '0', type_of_keyguard: '0' };
     const result = propose2DExportAdjustments(params, KEYGUARD_SCHEMA, 'svg');
     // generate still flips via the generic 2D-enum rule; type_of_keyguard

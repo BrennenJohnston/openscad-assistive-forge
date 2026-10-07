@@ -85,10 +85,10 @@ describe('extractDependencies', () => {
   });
 });
 
-// D-201: OpenSCAD never reads a directive written inside a comment. My Plug
-// Puller explains its old include order in comments, and uploading it warned
-// about two companion files it does not use.
-describe('extractDependencies: comments (D-201)', () => {
+// OpenSCAD never reads a directive written inside a comment. The Plug
+// Puller explains its include order in comments, and must not be warned
+// about companion files it does not use.
+describe('extractDependencies: comments', () => {
   it('ignores a directive in a line comment', () => {
     const result = extractDependencies(
       '// `include <presets.scad>`. Include order matters.\ncube(1);'
@@ -275,7 +275,7 @@ describe('runPreflightCheck — single-file upload', () => {
     expect(result.totalMissing).toBe(0);
   });
 
-  it('returns success when the only directives are inside comments (D-201)', () => {
+  it('returns success when the only directives are inside comments', () => {
     const scad = [
       '// `include <presets.scad>`. Include order matters.',
       '// main SCAD must `include <fit_measured.scad>` BEFORE `include <presets.scad>`.',

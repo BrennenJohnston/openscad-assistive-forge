@@ -1,9 +1,9 @@
 /**
  * Color Contrast Tests
- * 
+ *
  * Automated testing of color contrast ratios to ensure WCAG 2.2 AA/AAA compliance.
  * Uses Color.js for accurate contrast calculations.
- * 
+ *
  * Requirements:
  * - Normal themes (light/dark/auto): WCAG AA (4.5:1 for normal text, 3:1 for large text and UI)
  * - High contrast mode: WCAG AAA (7:1 for text, 4.5:1 for large text)
@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import Color from 'colorjs.io';
 import { amber, green, red, slate, slateDark, teal, yellow } from '@radix-ui/colors';
 import { readFileSync } from 'fs';
-// CW-21: the guard drives the SAME function the renderer does, so a change to
+// The guard drives the same function the renderer does, so a change to
 // the drive maths is measured here rather than re-derived.
 import { driveColor } from '../../src/js/_hfm-paint.js';
 import { MONO_INTENSITY_LEVELS } from '../../src/js/game/hc-palettes.js';
@@ -431,7 +431,7 @@ describe('Button Variants - All Themes', () => {
     });
     
     it('reset button text meets WCAG AA in dark mode', () => {
-      // param-reset-btn now uses text-primary (fixed)
+      // param-reset-btn uses text-primary
       const ratio = getContrastRatio(textPrimary, bgTertiary);
       expect(ratio).toBeGreaterThanOrEqual(4.5);
       expect(meetsWCAG_AA(ratio)).toBe(true);
@@ -589,13 +589,13 @@ describe('Camera Drawer Arrow - Mobile All Themes', () => {
   });
 });
 
-describe('Tutorial Button Contrast - CRITICAL ACCESSIBILITY FIX', () => {
+describe('Tutorial Button Contrast', () => {
   /**
    * These tests verify the root cause fix for the Back button visibility issue.
-   * The Back button was invisible in dark theme because reset.css sets 
+   * The Back button was invisible in dark theme because reset.css sets
    * `button { background: none; }` and .tutorial-btn-back had no explicit colors.
-   * 
-   * Fix: Added explicit background: var(--color-bg-secondary) and 
+   *
+   * Fix: Added explicit background: var(--color-bg-secondary) and
    * color: var(--color-text-primary) to .tutorial-btn-back in components.css
    */
   
@@ -627,27 +627,27 @@ describe('Tutorial Button Contrast - CRITICAL ACCESSIBILITY FIX', () => {
     });
   });
   
-  describe('Dark Mode Tutorial Buttons - ROOT CAUSE OF BUG', () => {
+  describe('Dark Mode Tutorial Buttons', () => {
     const bgSecondary = slateDark.slate2; // dark mode Back button background
     const bgTertiary = slateDark.slate3;
     const textPrimary = slateDark.slate12; // light text in dark mode
     
-    it('Back button has sufficient contrast in dark theme (>= 4.5:1) - MUST PASS', () => {
-      // THIS IS THE CRITICAL TEST
-      // Back button was invisible because reset.css set background: none
-      // Fix: explicit background: var(--color-bg-secondary) or var(--color-bg-tertiary)
+    it('Back button has sufficient contrast in dark theme (>= 4.5:1)', () => {
+      // The Back button would be invisible on reset.css's background: none, so
+      // it needs an explicit background: var(--color-bg-secondary) or
+      // var(--color-bg-tertiary).
       const ratio = getContrastRatio(textPrimary, bgSecondary);
       expect(ratio).toBeGreaterThanOrEqual(4.5);
       expect(meetsWCAG_AA(ratio)).toBe(true);
     });
     
-    it('Back button text is NOT same color as background', () => {
+    it('Back button text is not the same color as background', () => {
       // Sanity check: text and background must be different
       expect(textPrimary).not.toBe(bgSecondary);
       expect(textPrimary.toLowerCase()).not.toBe(bgSecondary.toLowerCase());
     });
     
-    it('Back button background is NOT transparent in dark theme', () => {
+    it('Back button background is not transparent in dark theme', () => {
       // Verify the CSS fix applies a real background color
       // The actual value bgSecondary (slateDark.slate2) should be a real color
       expect(bgSecondary).not.toBe('transparent');
@@ -864,9 +864,9 @@ describe('Color Contrast - Mono Green Phosphor (Dark Theme)', () => {
     expect(meetsNonTextContrast(ratio)).toBe(true);
   });
 
-  // D-55 pattern, primary buttons: the generic mono hover repaints the
+  // The hover pair, primary buttons: the generic mono hover repaints the
   // surface with --color-hover-bg; variant.css completes the pair by
-  // flipping the label to the accent. This guards BOTH halves together.
+  // flipping the label to the accent. This guards both halves together.
   it('primary button label (accent) on hover-bg meets WCAG AA while hovered', () => {
     const hoverBg = monoGreen['--color-hover-bg'];
     const ratio = getContrastRatio(accent, hoverBg);
@@ -956,7 +956,7 @@ describe('Color Contrast - Mono Amber Phosphor (Light Theme)', () => {
     expect(meetsNonTextContrast(ratio)).toBe(true);
   });
 
-  // D-55 pattern, primary buttons: same pair guard as the green section.
+  // The hover pair, primary buttons: same pair guard as the green section.
   it('primary button label (accent) on hover-bg meets WCAG AA while hovered', () => {
     const hoverBg = monoAmber['--color-hover-bg'];
     const ratio = getContrastRatio(accent, hoverBg);
@@ -987,7 +987,7 @@ describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
   /**
    * APCA (Accessible Perceptual Contrast Algorithm) is the proposed method
    * for WCAG 3.0. We include informational tests here for future-proofing.
-   * 
+   *
    * Note: APCA is not yet standardized, but colorjs.io provides support.
    */
   
@@ -1000,7 +1000,7 @@ describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
     
     // APCA thresholds (informational):
     // 90+ = AAA equivalent
-    // 75+ = AA equivalent  
+    // 75+ = AA equivalent
     // 60+ = large text AA equivalent
     // 45+ = non-text / graphics
     
@@ -1009,10 +1009,10 @@ describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
   });
 });
 
-describe('City Walk high-contrast glyph palettes (CW-Q5 / CW-Q6)', () => {
-  // Owner-signed 2026-08-18. Multicolor glyphs exist ONLY under high
-  // contrast (CW-Q2); every entry must stay legible on the game's black
-  // background. Change a hex in hc-palettes.js and this guard measures it.
+describe('City Walk high-contrast glyph palettes', () => {
+  // Multicolor glyphs exist only under high contrast; every entry must stay
+  // legible on the game's black background. Change a hex in hc-palettes.js
+  // and this guard measures it.
   const black = '#000000';
 
   it('green-HC ANSI bright set: every entry >= 4.5:1 on black', async () => {
@@ -1037,17 +1037,17 @@ describe('City Walk high-contrast glyph palettes (CW-Q5 / CW-Q6)', () => {
     }
   });
 
-  // CW-Q16 made colour a toggle of its own, so a player can now turn it OFF
-  // while high contrast is ON, and land on a single phosphor. THAT is what
-  // has to stay legible, and it is a token in variant.css that somebody may
-  // one day retune -- so the phosphor is read from the same token the ASCII
-  // painter reads and measured, rather than trusted.
+  // Colour is a toggle of its own, so a player can turn it off while high
+  // contrast is on, and land on a single phosphor. That is what has to stay
+  // legible, and it is a token in variant.css that somebody may one day
+  // retune -- so the phosphor is read from the same token the ASCII painter
+  // reads and measured, rather than trusted.
   //
-  // Note on what is NOT asserted: "the phosphor beats every palette entry"
+  // Note on what is not asserted: "the phosphor beats every palette entry"
   // is false (cyan 16.75:1 and yellow 19.56:1 both beat green's 15.30:1),
-  // and "the phosphor beats the palette's worst entry" was tried and proved
-  // VACUOUS -- green is so luminous that brightening both of its dim entries
-  // still could not fail it. Only the 4.5:1 floor below can actually fire.
+  // and "the phosphor beats the palette's worst entry" is vacuous -- green
+  // is so luminous that brightening both of its dim entries still could not
+  // fail it. Only the 4.5:1 floor below can actually fire.
   it('the bare phosphor is legible on its own, colour or no colour', async () => {
     const { HC_PALETTE_GREEN, HC_PALETTE_AMBER } = await import(
       '../../src/js/game/hc-palettes.js'
@@ -1071,7 +1071,7 @@ describe('City Walk high-contrast glyph palettes (CW-Q5 / CW-Q6)', () => {
 });
 
 /**
- * CW-21 — the monochrome intensity levels.
+ * The monochrome intensity levels.
  *
  * The City Walk dims the darker half of its cells so a single-phosphor city
  * has depth instead of one flat tone. Dimming is exactly the direction that
@@ -1081,7 +1081,7 @@ describe('City Walk high-contrast glyph palettes (CW-Q5 / CW-Q6)', () => {
  * The 4.5:1 floor is what fixes 0.65 as the dimmest allowed drive: 0.55
  * measures 3.82:1 in amber and fails.
  */
-describe('Color Contrast - Mono intensity levels (CW-21)', () => {
+describe('Color Contrast - Mono intensity levels', () => {
   const black = '#000000';
   const phosphors = [
     { name: 'green (dark theme)', css: monoGreen['--color-accent'] },

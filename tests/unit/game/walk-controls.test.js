@@ -152,7 +152,7 @@ describe('stepWalk — movement math', () => {
     expect(state.headingRad).toBeCloseTo(tau - TURN_SPEED_RADPS * 0.1, 6)
   })
 
-  // CW-81: the acceleration ramp rides in through speedScale. Half scale is
+  // The acceleration ramp rides in through speedScale. Half scale is
   // half distance; zero scale is a stand-still that reports moved: false
   // (auto-walk's blocked-stop must not fire while the walker is merely
   // still ramping up from rest); turning is never scaled.
@@ -239,11 +239,11 @@ describe('buildCollisionGrid', () => {
   })
 
   it('ignores elevated parts the player can walk under', () => {
-    // CW-76: a skybridge is `building=bridge` in all four shipped extracts,
-    // and a canopy is the one thing allowed to hang over nothing. The old
-    // fixture used `building=yes` with a min_height to stand for one, which
-    // is a shape the extracts only ever carry on TOWERS - Hotel Andra,
-    // Cirrus, Burnaby Center - and those are now drawn down to the street.
+    // A skybridge is `building=bridge` in all four shipped extracts, and a
+    // canopy is the one thing allowed to hang over nothing. `building=yes`
+    // with a min_height is a shape the extracts only ever carry on towers -
+    // Hotel Andra, Cirrus, Burnaby Center - and those are drawn down to the
+    // street.
     const model = testModel([
       {
         type: 'way',
@@ -257,10 +257,10 @@ describe('buildCollisionGrid', () => {
     expect(grid.isBlocked(20, 0)).toBe(true) // grounded building still solid
   })
 
-  it('blocks a mass that CW-76 drew down to the pavement', () => {
+  it('blocks a mass drawn down to the pavement', () => {
     // The same footprint tagged as an ordinary building with nothing under
     // it: city-data closes the empty column, so the walker cannot walk
-    // through what is now drawn from the ground.
+    // through what is drawn from the ground.
     const model = testModel([
       {
         type: 'way',
@@ -314,11 +314,11 @@ describe('stepWalk — collision', () => {
     expect(slider.y).toBeGreaterThan(2) // slid north past the building corner
   })
 
-  // CW-81: Math.PI / 2 carries float dust in its cross component
-  // (Math.cos(Math.PI / 2) is 6e-17, not 0), and dust used to arm the slide
-  // branch: pressed against a wall the walker "slid" 1e-17 m per frame with
-  // moved: true, forever - so auto-walk's blocked stop never fired on an
-  // east, south or west bearing. Dust is not movement.
+  // Math.PI / 2 carries float dust in its cross component
+  // (Math.cos(Math.PI / 2) is 6e-17, not 0). If dust armed the slide
+  // branch, a walker pressed against a wall would "slide" 1e-17 m per frame
+  // with moved: true, forever, and auto-walk's blocked stop would never fire
+  // on an east, south or west bearing. Dust is not movement.
   it('reports moved: false against a wall on a near-cardinal bearing', () => {
     const model = testModel()
     const grid = buildCollisionGrid(model)
@@ -349,7 +349,7 @@ const wall = (id, cx, cy, halfX, halfY) => ({
   geometry: rectRing(cx, cy, halfX, halfY),
 })
 
-describe("findRoute — the tour's pathfinding (CW-87)", () => {
+describe("findRoute — the tour's pathfinding", () => {
   const legsClear = (grid, route) => {
     for (let i = 1; i < route.length; i++) {
       if (
@@ -387,7 +387,7 @@ describe("findRoute — the tour's pathfinding (CW-87)", () => {
     expect(Math.hypot(last.x, last.y - 20)).toBeLessThanOrEqual(1.4)
   })
 
-  it('★★ detours around a wall, every leg body-clear', () => {
+  it('detours around a wall, every leg body-clear', () => {
     // The testModel building spans x 15..25, y -5..5: dead across the
     // straight line from (0,0) to (40,0).
     const grid = buildCollisionGrid(testModel())
@@ -438,13 +438,13 @@ describe("findRoute — the tour's pathfinding (CW-87)", () => {
   })
 })
 
-describe("steerHeading — street-following's fan (CW-87)", () => {
+describe("steerHeading — street-following's fan", () => {
   it('holds a clear bearing exactly', () => {
     const grid = buildCollisionGrid(testModel())
     expect(steerHeading(grid, 0, -20, 0)).toBe(0)
   })
 
-  it('★★ steers along a wall instead of into it', () => {
+  it('steers along a wall instead of into it', () => {
     // Close to the building face at x=15, facing it square-on: ahead is
     // short, but the pavement runs on both sides.
     const grid = buildCollisionGrid(testModel())
@@ -465,7 +465,7 @@ describe("steerHeading — street-following's fan (CW-87)", () => {
     ).toBe(true)
   })
 
-  it('★★ returns null in a dead end, which is when auto-walk may stop', () => {
+  it('returns null in a dead end, which is when auto-walk may stop', () => {
     // A U of walls 1.4 m out on three sides; the opening is behind, where
     // the forward fan never looks.
     const model = parseCityExtract(
@@ -483,7 +483,7 @@ describe("steerHeading — street-following's fan (CW-87)", () => {
   })
 })
 
-describe('buildTerrain — the ground has height (CW-79)', () => {
+describe('buildTerrain — the ground has height', () => {
   const elevationOf = (samples, cols = 3, rows = 3, stepM = 10) =>
     parseElevation({
       originX: 0,
@@ -504,7 +504,7 @@ describe('buildTerrain — the ground has height (CW-79)', () => {
     expect(grid.heightAt(0, 0)).toBe(-CURB_HEIGHT_M)
   })
 
-  it('★★ reads exact heights at grid points and bilinear between them, datum-zeroed', () => {
+  it('reads exact heights at grid points and bilinear between them, datum-zeroed', () => {
     const t = buildTerrain(
       elevationOf([10, 20, 30, 10, 20, 30, 10, 20, 30])
     )
@@ -519,7 +519,7 @@ describe('buildTerrain — the ground has height (CW-79)', () => {
     expect(t.spanM).toBeCloseTo(20, 5)
   })
 
-  it('★★ fills a hole from its nearest answered ground, never with NaN or zero', () => {
+  it('fills a hole from its nearest answered ground, never with NaN or zero', () => {
     const t = buildTerrain(
       elevationOf([100, 100, 100, 100, null, 100, 100, 100, 42])
     )
@@ -532,12 +532,12 @@ describe('buildTerrain — the ground has height (CW-79)', () => {
     expect(h).toBeGreaterThanOrEqual(0)
   })
 
-  // CW-80: the spoken slope's arithmetic. Heading 90 degrees (east) on a
-  // grid that rises 10 m per 10 m eastward is a 100 percent grade uphill;
-  // about-face is the same figure downhill; a flat grid is zero; no
-  // terrain is null, never zero - a flat city must stay SILENT, and zero
-  // would read as 'Level.'.
-  it('★★ gradePercent signs uphill positive along the heading (CW-80)', () => {
+  // The spoken slope's arithmetic. Heading 90 degrees (east) on a grid that
+  // rises 10 m per 10 m eastward is a 100 percent grade uphill; about-face
+  // is the same figure downhill; a flat grid is zero; no terrain is null,
+  // never zero - a flat city must stay silent, and zero would read as
+  // 'Level.'.
+  it('gradePercent signs uphill positive along the heading', () => {
     const t = buildTerrain(
       elevationOf([10, 20, 30, 10, 20, 30, 10, 20, 30])
     )
@@ -556,7 +556,7 @@ describe('buildTerrain — the ground has height (CW-79)', () => {
     expect(t.heightAt(500, 10)).toBeCloseTo(20, 5)
   })
 
-  it('★★ the kerb cut rides ON the terrain in buildSurfaceGrid', () => {
+  it('the kerb cut rides on the terrain in buildSurfaceGrid', () => {
     const model = testModel()
     model.elevation = elevationOf(
       Array(9).fill(50),
@@ -583,8 +583,8 @@ describe('buildTerrain — the ground has height (CW-79)', () => {
   })
 })
 
-describe('walked, never driven (CW-95, CW-Q82)', () => {
-  it('★★ platform, corridor and construction ways are pavement, not roadways', () => {
+describe('walked, never driven', () => {
+  it('platform, corridor and construction ways are pavement, not roadways', () => {
     for (const kind of ['platform', 'corridor', 'construction']) {
       expect(isPavementWay({ kind }), kind).toBe(true)
       expect(isDrawnRoadway({ kind }), kind).toBe(false)
@@ -597,7 +597,7 @@ describe('walked, never driven (CW-95, CW-Q82)', () => {
   })
 })
 
-describe('segmentClear — the body-swept segment probe (CW-87)', () => {
+describe('segmentClear — the body-swept segment probe', () => {
   it('tells a clear leg from one through a wall', () => {
     const grid = buildCollisionGrid(testModel())
     expect(segmentClear(grid, 0, -20, 0, 20)).toBe(true)
@@ -635,7 +635,7 @@ describe('findSpawn', () => {
   })
 })
 
-describe('walking speed labels (CW-48, rebasing CW-Q8)', () => {
+describe('walking speed labels', () => {
   // The whole announced range, written out rather than re-derived: a table
   // that recomputes the curve it is checking would agree with any curve.
   const CURVE = [
@@ -659,8 +659,8 @@ describe('walking speed labels (CW-48, rebasing CW-Q8)', () => {
   })
 
   it('anchors the curve where the rebase put it', () => {
-    // The old game walked 1.6 m/s at its own 100%, so its 300% was 4.8 and
-    // its 500% would have been 8.0. Those two are this scale's 100 and 300.
+    // The earlier scale walked 1.6 m/s at its own 100%, so its 300% was 4.8
+    // and its 500% would be 8.0. Those two are this scale's 100 and 300.
     expect(speedForLabel(SPEED_LABEL_DEFAULT)).toBeCloseTo(4.8, 10)
     expect(speedForLabel(SPEED_LABEL_MAX)).toBeCloseTo(8.0, 10)
     expect(WALK_SPEED_MPS).toBe(4.8)
@@ -690,7 +690,7 @@ describe('walking speed labels (CW-48, rebasing CW-Q8)', () => {
     expect(at({})).toBeCloseTo(at({ speedLabel: SPEED_LABEL_DEFAULT }), 10)
   })
 
-  it('sprints faster than the walk at EVERY label, and caps', () => {
+  it('sprints faster than the walk at every label, and caps', () => {
     for (const [label] of CURVE) {
       const walked = createWalkState({ x: 0, y: 0, headingRad: 0 })
       stepWalk(walked, { forward: 1, speedLabel: label }, 0.1)
@@ -707,7 +707,7 @@ describe('walking speed labels (CW-48, rebasing CW-Q8)', () => {
     expect(SPRINT_MAX_MPS).toBeGreaterThan(speedForLabel(SPEED_LABEL_MAX))
   })
 
-  it('migrates a preference the pre-CW-48 game stored (UF-14)', () => {
+  it('migrates a preference the earlier speed scale stored', () => {
     // Old values were multipliers of a 1.6 m/s walk. old% - 200 is the new
     // label, so the old top of the range lands on the new default and
     // everything at or below the old 250% lands on the new floor.
@@ -731,17 +731,17 @@ describe('walking speed labels (CW-48, rebasing CW-Q8)', () => {
   it('leaves nobody stranded slower than they already walked', () => {
     // The floor is the one place the migration cannot be faithful: an old
     // 100% player walked 1.6 m/s and the slowest this scale offers is 2.4.
-    // It must round UP to that, never down into a slower walk than before.
+    // It must round up to that, never down into a slower walk than before.
     expect(speedForLabel(speedLabelFromStored('1'))).toBeCloseTo(2.4, 10)
     expect(speedForLabel(speedLabelFromStored('1'))).toBeGreaterThan(1.6)
   })
 })
 
-describe('collision integrity at the CW-48 top speed', () => {
-  // The hunt the speed rebase owes: three times the old speed means three
-  // times the ground per frame, and a frame that covers more ground than an
-  // obstacle is wide can step straight over it. stepWalk tests the ENDS of a
-  // step, so this watches the whole swept segment instead.
+describe('collision integrity at the top speed', () => {
+  // The faster scale walks three times the ground per frame, and a frame
+  // that covers more ground than an obstacle is wide can step straight over
+  // it. stepWalk tests the ends of a step, so this watches the whole swept
+  // segment instead.
   //
   // Worst case on purpose: dt is passed as 5 s so the integration clamp
   // supplies the longest frame the game will ever integrate, and the walker
@@ -801,14 +801,13 @@ describe('collision integrity at the CW-48 top speed', () => {
 
   /**
    * Walk `steps` frames and report every step that carried the walker's
-   * CENTRE through solid ground, which is what passing through a wall means:
+   * centre through solid ground, which is what passing through a wall means:
    * nothing the grid can hold is thinner than its 1 m cells, so a centre that
    * never enters one has never come out the far side. Sampling is 2 cm.
    *
    * The rim is watched separately. A body circle whose edge clips the corner
    * of a blocked cell mid-step has cut a corner, not walked through a wall,
-   * and the game has always allowed it — measured at the pre-CW-48 frame
-   * length too, so this is not the speed rebase's to fix.
+   * and the game has always allowed it, at the slower frame length too.
    */
   function sweepViolations(collision, start, input, steps) {
     const state = createWalkState(start)
@@ -851,7 +850,7 @@ describe('collision integrity at the CW-48 top speed', () => {
     const hits = []
     let approaches = 0
     // Every 5 degrees around the trunk, at lateral offsets across the whole
-    // blocked cell, AND at a range of starting distances. The distance sweep
+    // blocked cell, and at a range of starting distances. The distance sweep
     // is the part that matters: a fixed start makes every approach share one
     // along-track phase, and a walker whose stride happens to land inside the
     // cell stops there and proves nothing about the strides that skip it.
@@ -964,7 +963,7 @@ describe('collision integrity at the CW-48 top speed', () => {
   })
 })
 
-describe('map camera (CW-9)', () => {
+describe('map camera', () => {
   const bounds = { minX: -500, maxX: 500, minY: -400, maxY: 400 }
 
   it('starts framing the whole city, following the player', () => {
@@ -1046,11 +1045,11 @@ describe('fitOrthoToBounds', () => {
   })
 })
 
-describe('findClearHeading (CW-44)', () => {
+describe('findClearHeading', () => {
   it('faces down the open corridor, not into the near wall', () => {
     // Everything is wall except a strip running east. North is blocked half
-    // a metre out - exactly the CW-44 Seattle spawn shape that walked the
-    // player into a storefront.
+    // a metre out - the Seattle spawn shape that can walk the player into a
+    // storefront.
     const corridor = {
       isBlocked: (x, y) => !(Math.abs(y) <= 1 && x >= -1),
     }
@@ -1104,12 +1103,12 @@ describe('integration — the bundled Seattle extract', () => {
     expect(moved).toBe(true)
   })
 
-  it('spawns FACING somewhere worth walking (the CW-44 CI catch, pinned)', () => {
-    // The fixed north heading stood the 1,300 m Seattle player 2.5 m from
-    // a storefront; CI's software frames (dt-clamped, more ground per
-    // frame) hit it and the Fast-toggle spec went red on two browsers.
-    // The spawn heading must now buy a real run: five simulated seconds
-    // of walking must cover several times that wall distance.
+  it('spawns facing somewhere worth walking', () => {
+    // A fixed north heading stands the 1,300 m Seattle player 2.5 m from a
+    // storefront, which CI's software frames (dt-clamped, more ground per
+    // frame) walk straight into. The spawn heading must buy a real run: five
+    // simulated seconds of walking must cover several times that wall
+    // distance.
     const raw = JSON.parse(
       readFileSync(
         join(process.cwd(), 'public', 'examples', 'ascii-city', 'seattle.json'),
@@ -1128,7 +1127,7 @@ describe('integration — the bundled Seattle extract', () => {
   })
 })
 
-describe('character size (CW-12)', () => {
+describe('character size', () => {
   it('the range is the measured one: 10% to 100% in 10-point steps', () => {
     expect(CHAR_SCALE_MIN).toBe(0.1)
     expect(CHAR_SCALE_MAX).toBe(1)
@@ -1174,7 +1173,7 @@ describe('character size (CW-12)', () => {
     )
   })
 
-  describe('calibrated floor (CW-42, CW-Q39)', () => {
+  describe('calibrated floor', () => {
     it('raises the bottom of the range to the calibrated floor', () => {
       expect(clampCharScale(0.1, 0.3)).toBe(0.3)
       expect(clampCharScale(0.2, 0.3)).toBe(0.3)
@@ -1206,12 +1205,12 @@ describe('character size (CW-12)', () => {
     })
   })
 
-  describe('seed order (CW-72 for CW-Q75, amended CW-88 for CW-Q87)', () => {
+  describe('seed order', () => {
     it("prefers the player's own saved size", () => {
       expect(seedCharScale('0.7')).toBeCloseTo(0.7, 10)
     })
 
-    it('is the ONE default when nothing is saved', () => {
+    it('is the one default when nothing is saved', () => {
       expect(seedCharScale(null)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
       expect(seedCharScale(undefined)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
       expect(seedCharScale('')).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
@@ -1221,9 +1220,8 @@ describe('character size (CW-12)', () => {
       expect(seedCharScale('banana')).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
-    it('★★ HONOURS a saved size below this machine floor (CW-88)', () => {
-      // CW-72 raised it to the floor. The owner reversed that half of CW-Q68:
-      // the floor SEEDS somebody who has never chosen and does not clamp
+    it('honours a saved size below this machine floor', () => {
+      // The floor seeds somebody who has never chosen and does not clamp
       // somebody who has. A player who chose 30% on a fast machine keeps 30%
       // on a slow one, and is told what it costs rather than overruled.
       expect(seedCharScale('0.3', 0.5)).toBeCloseTo(0.3, 10)
@@ -1231,7 +1229,7 @@ describe('character size (CW-12)', () => {
       expect(seedCharScale('0.7', 0.4)).toBeCloseTo(0.7, 10)
     })
 
-    it('★★ a saved choice reaches the bottom of the range (CW-88)', () => {
+    it('a saved choice reaches the bottom of the range', () => {
       // The oracle for "10 % is reachable again": 10 % is a size a player may
       // choose and keep, on any floor. The red proof is the Math.max this
       // replaced - reinstate it and every line here fails.
@@ -1242,27 +1240,25 @@ describe('character size (CW-12)', () => {
       expect(seedCharScale('0.02', 0.3)).toBeCloseTo(CHAR_SCALE_MIN, 10)
     })
 
-    it('the floor still SEEDS a player who has never chosen', () => {
-      // The DEFAULT half of CW-Q68 stands, and this is the half CW-88 keeps.
+    it('the floor still seeds a player who has never chosen', () => {
       expect(seedCharScale(null, 0.3)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
       expect(seedCharScale(null, 0.4)).toBeCloseTo(0.4, 10)
       expect(seedCharScale(null, 0.5)).toBeCloseTo(0.5, 10)
-      // A floor below the default is not a thing this release can produce -
-      // decodeCalibration migrates CW-42's away - but the seed refuses it
-      // anyway, because ONE default is what CW-72 exists for.
+      // A floor below the default cannot be produced - decodeCalibration
+      // migrates the older ones away - but the seed refuses it anyway, because
+      // there is one default.
       expect(seedCharScale(null, 0.1)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
     it('does not read the main app Alt View preference at all', () => {
-      // It used to. A slider in the main app deciding how coarse the city
-      // looks is exactly the second size CW-72 exists to remove, so the
-      // function no longer has a parameter for it.
+      // A slider in the main app deciding how coarse the city looks would be a
+      // second size, so the function has no parameter for it.
       expect(seedCharScale.length).toBeLessThanOrEqual(2)
     })
   })
 })
 
-describe('looking around (CW-13)', () => {
+describe('looking around', () => {
   const DEG = Math.PI / 180
 
   describe('pitch on held keys', () => {
@@ -1295,7 +1291,7 @@ describe('looking around (CW-13)', () => {
       const state = createWalkState({ x: 0, y: 0 })
       for (let i = 0; i < 30; i++) stepWalk(state, { pitch: 1 }, 0.1)
       // A key still held at the limit must not keep marking the frame dirty:
-      // every pitched frame re-converts the whole screen (CW-12 bench).
+      // every pitched frame re-converts the whole screen.
       const held = stepWalk(state, { pitch: 1 }, 0.1)
       expect(held.pitched).toBe(false)
       expect(stepWalk(state, { pitch: -1 }, 0.1).pitched).toBe(true)
@@ -1366,7 +1362,7 @@ describe('looking around (CW-13)', () => {
       expect(Math.hypot(pose.target[0], pose.target[1])).toBeCloseTo(0.5, 10)
     })
 
-    it('treats a state with no pitchRad as level (pre-CW-13 shape)', () => {
+    it('treats a state with no pitchRad as level', () => {
       const pose = firstPersonPose({ x: 1, y: 2, headingRad: 0 })
       expect(pose.target).toEqual([1, 3, EYE_HEIGHT_M])
     })
@@ -1447,7 +1443,7 @@ describe('looking around (CW-13)', () => {
   })
 })
 
-describe('stampObstacles (CW-16)', () => {
+describe('stampObstacles', () => {
   function gridWithOneBuilding() {
     const model = parseCityExtract(
       {
@@ -1530,7 +1526,7 @@ describe('stampObstacles (CW-16)', () => {
   })
 })
 
-describe('the ground underfoot (CW-50)', () => {
+describe('the ground underfoot', () => {
   // A cross: an 8 m residential road along y=0 and another along x=0, in a
   // model whose bounds reach well past both.
   function crossModel() {
@@ -1584,7 +1580,7 @@ describe('the ground underfoot (CW-50)', () => {
   })
 
   it('treats a pedestrianised street as pavement, not as a roadway', () => {
-    // CW-Q64. Pike Place is pavement end to end; cutting a roadway down the
+    // Pike Place is pavement end to end; cutting a roadway down the
     // middle of it would invent a road that is not there.
     const model = parseCityExtract(
       {
@@ -1623,7 +1619,7 @@ describe('the ground underfoot (CW-50)', () => {
     expect(isPavementWay({ kind: 'service' })).toBe(false)
   })
 
-  it('gives unclassified the same width as residential (CW-Q62)', () => {
+  it('gives unclassified the same width as residential', () => {
     // The two are the same kind of street; reading two metres narrower than
     // an identical neighbour was an accident of the signed class list. A
     // living street stays narrow ON PURPOSE - that is its traffic calming.
@@ -1674,7 +1670,7 @@ describe('the ground underfoot (CW-50)', () => {
   })
 
   it('drops the eye into the roadway, and the pavement is unchanged', () => {
-    // Standing on a pavement is the ordinary case and it has to be EXACTLY
+    // Standing on a pavement is the ordinary case and it has to be exactly
     // the eye height the game always had; only stepping into the road moves.
     const onKerb = createWalkState({ x: 0, y: 0, headingRad: 0 })
     onKerb.groundZ = 0
@@ -1727,7 +1723,7 @@ describe('the ground underfoot (CW-50)', () => {
   })
 })
 
-describe('the road-ribbon index (CW-75)', () => {
+describe('the road-ribbon index', () => {
   // An 8 m residential street running east-west along y = 0, and a 12 m
   // secondary crossing it north-south at x = 40.
   const roads = [
@@ -1775,7 +1771,7 @@ describe('the road-ribbon index (CW-75)', () => {
     expect(index.insideRoadway(0, halfM + 0.2, -0.15)).toBeNull()
   })
 
-  it('reports the ribbon a point is DEEPEST inside where two overlap', () => {
+  it('reports the ribbon a point is deepest inside where two overlap', () => {
     const index = buildRoadwayIndex(roads)
     // In the junction, on the residential centreline and 1 m off the
     // secondary's: 4 m of residential over it, 5 m of secondary.
@@ -1794,11 +1790,10 @@ describe('the road-ribbon index (CW-75)', () => {
   })
 
   it('does not call a pedestrianised street or a pavement a roadway', () => {
-    // ★ The premise this release had to correct. The planning census counted
-    // pedestrian ways as roadways and reported 735 Seattle trunks standing in
-    // one; the scene draws a pedestrian street as pavement end to end
-    // (CW-Q64), and under the scene's own rule the count is 474. A third of
-    // the "trees in the road" were street trees on a pedestrian street.
+    // Counting pedestrian ways as roadways puts 735 Seattle trunks in a road;
+    // the scene draws a pedestrian street as pavement end to end, and under
+    // the scene's own rule the count is 474. A third of the "trees in the
+    // road" are street trees on a pedestrian street.
     expect(isDrawnRoadway({ kind: 'pedestrian', widthM: 8 })).toBe(false)
     expect(isDrawnRoadway({ kind: 'footway', sidewalk: true, widthM: 1.8 })).toBe(
       false
@@ -1825,7 +1820,7 @@ describe('the road-ribbon index (CW-75)', () => {
   })
 })
 
-describe('rectsOverlap (CW-75)', () => {
+describe('rectsOverlap', () => {
   const car = (x, y, rot = 0) => ({
     x,
     y,

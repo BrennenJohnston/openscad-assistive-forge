@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
- * D-131: the 2 MP cap was dead code on the ink path.
+ * The 2 MP cap reaches the ink path.
  *
  * `convertImageDataToSvg` computes a downscale into `pixels` when a picture is
- * over `IMAGE_IMPORT_LIMITS.maxPixels`, and then handed `extractInk` the
- * ORIGINAL `imageData` instead. Every ink mode - which is every mode an icon or
- * a photo goes through - therefore extracted and traced at full size, while the
+ * over `IMAGE_IMPORT_LIMITS.maxPixels`. Handing `extractInk` the original
+ * `imageData` instead would make every ink mode - which is every mode an
+ * icon or a photo goes through - extract and trace at full size, while the
  * summary reported that the picture had been scaled down.
  *
  * The mask the tracer eventually sees is `extractInk`'s output, so the pixel
@@ -20,7 +20,7 @@ const extractInk = vi.fn((imageData) => ({
 }))
 
 // Only extractInk is stood in for; the rest of the module is real, because
-// the photo defaults (DP-79, ink-prepare.js) reach it through the same door.
+// the photo defaults (ink-prepare.js) reach it through the same door.
 vi.mock('../../src/js/ink-extraction.js', async (importActual) => ({
   ...(await importActual()),
   extractInk: (...args) => extractInk(...args),
@@ -41,18 +41,17 @@ function picture(width, height) {
   return { width, height, data: new Uint8ClampedArray(width * height * 4) }
 }
 
-describe('the working resolution on the main-thread road, after the cap (DP-79)', () => {
+describe('the working resolution on the main-thread road, after the cap', () => {
   beforeEach(() => {
     extractInk.mockClear()
     imagedataToSVG.mockClear()
   })
 
-  it('★ a camera picture over the cap is worked at the print, and extractInk gets the worked pixels', async () => {
+  it('a camera picture over the cap is worked at the print, and extractInk gets the worked pixels', async () => {
     // 2000 x 1500 is 3 MP: capped by two to 1000 x 750, then worked at forty
     // pixels per printed millimeter of a 14 mm print: 560 x 420. The host's
     // mmPerPixel is for the source; the cap's factor is carried across so
-    // the print, not the cap, decides (the sharpie photograph said "1.9 mm"
-    // for a 7.6 mm print before this).
+    // the print, not the cap, decides.
     const { summary } = await convertImageDataToSvg(picture(2000, 1500), {
       ink: { mode: 'lineart', camera: true, mmPerPixel: 14 / 2000 },
     })
@@ -73,13 +72,13 @@ describe('the working resolution on the main-thread road, after the cap (DP-79)'
   })
 })
 
-describe('the pixel cap actually reaches the ink path (D-131)', () => {
+describe('the pixel cap actually reaches the ink path', () => {
   beforeEach(() => {
     extractInk.mockClear()
     imagedataToSVG.mockClear()
   })
 
-  it('hands extractInk the DOWNSCALED picture, not the original', async () => {
+  it('hands extractInk the downscaled picture, not the original', async () => {
     // 2000 x 1500 = 3 MP, comfortably over the 2 MP cap.
     const original = picture(2000, 1500)
     expect(original.width * original.height).toBeGreaterThan(
@@ -123,8 +122,8 @@ describe('the pixel cap actually reaches the ink path (D-131)', () => {
     const { summary } = await convertImageDataToSvg(picture(2000, 1500), {
       ink: { mode: 'lineart' },
     })
-    // The sentence a person reads has to stay true, and now it is: the factor
-    // it names is the factor that was actually applied.
+    // The sentence a person reads has to stay true: the factor it names is
+    // the factor that was actually applied.
     expect(summary.downscale).toBeTruthy()
     expect(summary.downscale.factor).toBe(2)
   })

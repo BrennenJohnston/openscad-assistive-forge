@@ -1,8 +1,8 @@
 /**
- * The conversion job (DP-52 P1): one conversion as stages a person can watch,
- * with a Cancel that lands between them; and since DP-78 a refusal before any
- * main-thread work, prepare as a list of checkpointed steps, a checkpoint the
- * host can call inside its own work, and a paint before each stage's work.
+ * The conversion job: one conversion as stages a person can watch, with a
+ * Cancel that lands between them; a refusal before any main-thread work,
+ * prepare as a list of checkpointed steps, a checkpoint the host can call
+ * inside its own work, and a paint before each stage's work.
  *
  * The runner is faked: `start` returns a promise the test settles, `cancel`
  * records the call and rejects the promise the way the real runner does.
@@ -69,7 +69,7 @@ async function releaseUntilSettled(pause, promise) {
   }
 }
 
-describe('the conversion job (DP-52)', () => {
+describe('the conversion job', () => {
   it("names five stages in order, the worker's three first", () => {
     expect(CONVERSION_STAGES).toEqual([
       'reading',
@@ -84,7 +84,7 @@ describe('the conversion job (DP-52)', () => {
     expect(() => createConversionJob({})).toThrow(/runner/);
   });
 
-  it('★ reports every stage as the page enters it, numbered across the whole job', async () => {
+  it('reports every stage as the page enters it, numbered across the whole job', async () => {
     const runner = fakeRunner();
     const stages = [];
     const job = createConversionJob({
@@ -132,7 +132,7 @@ describe('the conversion job (DP-52)', () => {
     expect(job.isRunning()).toBe(false);
   });
 
-  it('★ yields before each main-thread stage AND again after its label, so the label paints before the work (D-171)', async () => {
+  it('yields before each main-thread stage and again after its label, so the label paints before the work', async () => {
     const runner = fakeRunner();
     const pause = manualYield();
     const order = [];
@@ -161,10 +161,10 @@ describe('the conversion job (DP-52)', () => {
     expect(order).toEqual(['stage:reading']);
     pause.release();
     await flush();
-    // The label is reported, and the job yields AGAIN before the work: this
-    // is the wait that lets "Preparing the drawing" reach the screen. Before
-    // DP-78 the work ran in the same task as the label and the label was
-    // painted only when the work was over.
+    // The label is reported, and the job yields again before the work: this
+    // is the wait that lets "Preparing the drawing" reach the screen. Run in
+    // the same task as the label, the work would delay the label's paint
+    // until it was over.
     expect(order).toEqual(['stage:reading', 'stage:preparing']);
     expect(pause).toHaveBeenCalledTimes(2);
     pause.release();
@@ -227,7 +227,7 @@ describe('the conversion job (DP-52)', () => {
     ]);
   });
 
-  it('★ Cancel during the worker stops the worker and nothing after it runs', async () => {
+  it('Cancel during the worker stops the worker and nothing after it runs', async () => {
     const runner = fakeRunner();
     const prepare = vi.fn();
     const update = vi.fn();
@@ -242,7 +242,7 @@ describe('the conversion job (DP-52)', () => {
     expect(job.isRunning()).toBe(false);
   });
 
-  it('★ Cancel after the worker lands at the next checkpoint: the drawing is never emitted', async () => {
+  it('Cancel after the worker lands at the next checkpoint: the drawing is never emitted', async () => {
     const runner = fakeRunner();
     const pause = manualYield();
     const update = vi.fn();
@@ -299,7 +299,7 @@ describe('the conversion job (DP-52)', () => {
     expect(job.isRunning()).toBe(false);
   });
 
-  it('★ a second run supersedes the first: the first ends as superseded, the second runs (D-151)', async () => {
+  it('a second run supersedes the first: the first ends as superseded, the second runs', async () => {
     const runner = fakeRunner();
     const job = createConversionJob({ runner, yieldToPage: () => Promise.resolve() });
     const first = job.run({ imageData: {}, settings: { a: 1 }, prepare: () => 1, update: () => 1 });
@@ -326,8 +326,8 @@ describe('the conversion job (DP-52)', () => {
   });
 });
 
-describe('the refusal, the steps and the checkpoint inside (DP-78, D-171, D-172)', () => {
-  it('★ a refusal ends the job before any main-thread work: no prepare, no emit, and the sentence and the trace travel with it', async () => {
+describe('the refusal, the steps and the checkpoint inside', () => {
+  it('a refusal ends the job before any main-thread work: no prepare, no emit, and the sentence and the trace travel with it', async () => {
     const runner = fakeRunner();
     const stages = [];
     const prepare = vi.fn();
@@ -381,7 +381,7 @@ describe('the refusal, the steps and the checkpoint inside (DP-78, D-171, D-172)
     expect(refuse).toHaveBeenCalledWith({ svg: '<svg/>' });
   });
 
-  it("★ prepare may be a list of steps, each fed the last one's result, with a checkpoint between them where a Cancel lands", async () => {
+  it("prepare may be a list of steps, each fed the last one's result, with a checkpoint between them where a Cancel lands", async () => {
     const runner = fakeRunner();
     const pause = manualYield();
     const order = [];
@@ -411,8 +411,8 @@ describe('the refusal, the steps and the checkpoint inside (DP-78, D-171, D-172)
     await expect(result).rejects.toMatchObject({ name: 'TraceCancelled', reason: 'cancelled' });
     expect(order).toEqual(['a:S']);
     // The second step never ran: the checkpoint between the two took the
-    // Cancel. Before DP-78 prepare was one function and the Cancel waited
-    // for all of it.
+    // Cancel. As one function, prepare would make the Cancel wait for all of
+    // it.
     expect(stepB).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
@@ -434,7 +434,7 @@ describe('the refusal, the steps and the checkpoint inside (DP-78, D-171, D-172)
     await expect(result).resolves.toBe('S+a+b+c+emit');
   });
 
-  it('★ the update can ask for a checkpoint before its emit, and a Cancel pressed by then stops the emit', async () => {
+  it('the update can ask for a checkpoint before its emit, and a Cancel pressed by then stops the emit', async () => {
     const runner = fakeRunner();
     const pause = manualYield();
     const emit = vi.fn();

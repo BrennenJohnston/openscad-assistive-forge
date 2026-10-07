@@ -17,15 +17,15 @@ import {
 } from '../../../src/js/game/city-trees.js'
 
 /**
- * CW-56 (CW-Q55): each city's own street trees.
+ * Each city's own street trees.
  *
- * The tables are cited design data and are the owner's to veto row by row, so
- * what is guarded here is not WHICH species - that is an argument, not a bug -
- * but that the tables are well formed, that the forms they name exist, that
- * the crown obeys the law a walker depends on, and that the map's own
- * leaf_type actually steers the choice rather than decorating it.
+ * The tables are cited design data and a matter of taste row by row, so
+ * what is guarded here is not which species - that is an argument, not a
+ * bug - but that the tables are well formed, that the forms they name
+ * exist, that the crown obeys the law a walker depends on, and that the
+ * map's own leaf_type actually steers the choice rather than decorating it.
  */
-describe('per-city tree species and forms (CW-56)', () => {
+describe('per-city tree species and forms', () => {
   const CITIES = Object.keys(CITY_TREES)
 
   it('gives every city five well-formed rows naming forms that exist', () => {
@@ -67,9 +67,9 @@ describe('per-city tree species and forms (CW-56)', () => {
   })
 
   it('never starts a crown below the height a walker walks at', () => {
-    // CW-16's law, and the reason a conifer does not skirt to the ground
+    // The crown law, and the reason a conifer does not skirt to the ground
     // here: a crown at head height is a wall the collision grid knows
-    // nothing about. Checked at BOTH ends of every species' range, because
+    // nothing about. Checked at both ends of every species' range, because
     // baseShare is a fraction and the short end is where it bites.
     for (const city of CITIES) {
       for (const s of CITY_TREES[city]) {
@@ -97,7 +97,7 @@ describe('per-city tree species and forms (CW-56)', () => {
     expect(treeSpec(s, -3).topM).toBe(treeSpec(s, 0).topM)
   })
 
-  it('lets the MAP decide the leaf, and the table decide the species', () => {
+  it('lets the map decide the leaf, and the table decide the species', () => {
     const bby = treeTableFor('burnaby')
     // Burnaby names two conifers, so a needleleaved tree there gets one of
     // its own.
@@ -110,18 +110,18 @@ describe('per-city tree species and forms (CW-56)', () => {
       expect(pickSpecies(bby, draw, 'broadleaved').deciduous).toBe(true)
     }
 
-    // ★ Seattle's extract carries 34 needleleaved trees and its published
-    // composition names no conifer. Those are real, mapped conifers, and
-    // before this they would have been drawn as maples. The map is telling
-    // us a FORM; the table is telling us which species the city PLANTS.
-    // So the form wins and the name is left blank rather than invented.
+    // Seattle's extract carries 34 needleleaved trees and its published
+    // composition names no conifer. Those are real, mapped conifers, and the
+    // table alone would draw them as maples. The map tells us a form; the
+    // table tells us which species the city plants. So the form wins and the
+    // name is left blank rather than invented.
     const sea = treeTableFor('seattle')
     const fallback = pickSpecies(sea, 7, 'needleleaved')
     expect(fallback.deciduous).toBe(false)
     expect(fallback.form).toBe('cone')
     expect(fallback.name).toBe('conifer')
 
-    // With no leaf_type at all - which is EVERY tree in Albuquerque - the
+    // With no leaf_type at all - which is every tree in Albuquerque - the
     // hash draws from the whole table.
     const abq = treeTableFor('albuquerque')
     const drawn = new Set()
@@ -174,11 +174,11 @@ describe('per-city tree species and forms (CW-56)', () => {
   })
 })
 
-describe("the ring-branch system (CW-94, CW-Q94 - the owner's own laws)", () => {
+describe("the ring-branch system", () => {
   const oak = CITY_TREES.seattle.find((s) => s.name === 'oak')
   const fir = CITY_TREES.burnaby.find((s) => s.name === 'Douglas-fir')
 
-  it('stands trees at their FULL cited heights - the compression is retired', () => {
+  it('stands trees at their full cited heights, uncompressed', () => {
     // The squash halved the excess over 4 m; the ring system retires it.
     // An oak drawn at t=1 is the cited 25 m, not 14.5.
     expect(treeSpec(oak, 1).topM).toBe(25)
@@ -250,7 +250,7 @@ describe("the ring-branch system (CW-94, CW-Q94 - the owner's own laws)", () => 
   })
 })
 
-describe('the crown cluster (CW-97 - the canopy research, adapted)', () => {
+describe('the crown cluster', () => {
   const oak = CITY_TREES.seattle.find((s) => s.name === 'oak')
   const hawthorn = CITY_TREES.seattle.find((s) => s.name === 'hawthorn')
   const fir = CITY_TREES.burnaby.find((s) => s.name === 'Douglas-fir')
@@ -264,7 +264,7 @@ describe('the crown cluster (CW-97 - the canopy research, adapted)', () => {
   })
 
   it('fills the envelope and never leaves it', () => {
-    // The crown SHAPE is the species' own numbers: every box centre inside
+    // The crown shape is the species' own numbers: every box centre inside
     // the spec's ellipsoid (with the sink and jitter margin), z between the
     // crown's base and top. The envelope is cue four - a crown outline the
     // eye can name - and a box outside it is a defect, not variety.

@@ -623,7 +623,7 @@ describe('State Management', () => {
       expect(loaded).toBeNull()
     })
 
-    it('should load nested-array parameters from URL hash (ISSUE-006)', async () => {
+    it('should load nested-array parameters from URL hash', async () => {
       const tabletPositions = [[0, 0], [100, 200], [50, 150]]
       const params = { tabletPositions }
       window.location.hash = `#v=1&params=${encodeURIComponent(JSON.stringify(params))}`
@@ -1043,7 +1043,7 @@ describe('ParameterHistory (undo-stack model)', () => {
   })
 })
 
-describe('URL fragment discipline (IR-1)', () => {
+describe('URL fragment discipline', () => {
   const PAYLOAD = (obj) => `#v=1&params=${encodeURIComponent(JSON.stringify(obj))}`
   let state
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { sameStreet, describeJunction } from '../../../src/js/game/city-junction.js';
 
 /**
- * CW-61 (CW-Q58): naming the corner a traveler is about to land on.
+ * Naming the corner a traveler is about to land on.
  *
  * The sentence this feeds is accessibility-critical, and the two rules it
  * encodes were measured against the real Seattle road graph rather than
@@ -11,9 +11,9 @@ import { sameStreet, describeJunction } from '../../../src/js/game/city-junction
  */
 const RADII = { onM: 12, junctionM: 12 };
 
-describe('sameStreet (CW-61)', () => {
-  it('★★ catches the suffixes the map actually uses', () => {
-    // These pairs are REAL, from the Seattle extract. A cycletrack sits a
+describe('sameStreet', () => {
+  it('catches the suffixes the map actually uses', () => {
+    // These pairs are real, from the Seattle extract. A cycletrack sits a
     // metre from its own avenue and is a separately named way, so without
     // this the dialog would offer "4th Avenue and 4th Avenue Cycletrack" as
     // a corner.
@@ -27,7 +27,7 @@ describe('sameStreet (CW-61)', () => {
     expect(sameStreet('Pike Street', 'Pike Street')).toBe(true);
   });
 
-  it('★★ does NOT merge two streets that merely share a spelling', () => {
+  it('does not merge two streets that merely share a spelling', () => {
     // The reason this compares WORDS and not characters. "21st Avenue"
     // literally contains "1st Avenue", so a substring test would throw away
     // a genuine cross street at any numbered corner.
@@ -35,7 +35,7 @@ describe('sameStreet (CW-61)', () => {
     expect(sameStreet('9th Avenue', '29th Avenue')).toBe(false);
     expect(sameStreet('Pine Street', 'Pike Street')).toBe(false);
     expect(sameStreet('4th Avenue', 'Union Street')).toBe(false);
-    // A shared LAST word is not a shared street either.
+    // A shared last word is not a shared street either.
     expect(sameStreet('Madison Street', 'Union Street')).toBe(false);
   });
 
@@ -47,7 +47,7 @@ describe('sameStreet (CW-61)', () => {
   });
 });
 
-describe('describeJunction (CW-61)', () => {
+describe('describeJunction', () => {
   it('names both streets at a corner', () => {
     // Measured shape: at all 1,661 real crossings in the Seattle extract the
     // index put both streets first and second, at 0.0 m each.
@@ -62,11 +62,10 @@ describe('describeJunction (CW-61)', () => {
     ).toEqual({ primary: '4th Avenue', secondary: 'Union Street', on: true });
   });
 
-  it('★★ names ONE street mid-block, where there is no corner to name', () => {
+  it('names one street mid-block, where there is no corner to name', () => {
     // The runner-up's distance tracks how far you are from the junction, so
     // half a block along there is a second name in the list and it is not a
-    // corner. Inventing one is the thing this release is most able to get
-    // wrong.
+    // corner. Inventing one is the easiest way for this to go wrong.
     expect(
       describeJunction(
         [
@@ -78,7 +77,7 @@ describe('describeJunction (CW-61)', () => {
     ).toEqual({ primary: 'Western Avenue', secondary: null, on: true });
   });
 
-  it('★ never offers a street its own cycletrack as a cross street', () => {
+  it('never offers a street its own cycletrack as a cross street', () => {
     // Real: 4th Avenue at 7.6 m with its own cycletrack at 1.0 m. Both are
     // well inside the junction radius, and they are not a corner.
     expect(
@@ -92,7 +91,7 @@ describe('describeJunction (CW-61)', () => {
     ).toEqual({ primary: '4th Avenue', secondary: null, on: true });
   });
 
-  it('★ reaches PAST a same-street runner-up to a real cross street', () => {
+  it('reaches past a same-street runner-up to a real cross street', () => {
     // The rejected name must not consume the slot: at Cherry Street and 4th
     // Avenue the cycletrack sits between them in the ranking.
     expect(
@@ -107,7 +106,7 @@ describe('describeJunction (CW-61)', () => {
     ).toEqual({ primary: '4th Avenue', secondary: 'Cherry Street', on: true });
   });
 
-  it('says ON or NEAR with the game’s existing vocabulary', () => {
+  it('says "on" or "near" with the game’s existing vocabulary', () => {
     expect(describeJunction([{ name: 'Pike Street', distM: 11.9 }], RADII).on).toBe(
       true
     );

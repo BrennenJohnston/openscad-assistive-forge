@@ -1,15 +1,13 @@
 /**
- * Regression tests for Phase 12: preview settings drawer resize persistence.
+ * Tests for preview settings drawer resize persistence.
  *
- * Root cause: the window-resize handler in preview-settings-drawer.js called
- * expand() unconditionally whenever the viewport crossed from mobile to desktop
- * width, ignoring the user's saved collapsed preference in localStorage. The
- * initial-state logic correctly checked loadCollapsedState(), but the resize
- * handler did not.
- *
- * Fix: before calling expand() in the resize handler, re-read loadCollapsedState().
- * Only auto-expand if the returned value is not `true` (i.e. the user has not
- * explicitly chosen to keep the drawer collapsed).
+ * The window-resize handler in preview-settings-drawer.js must not call
+ * expand() unconditionally whenever the viewport crosses from mobile to
+ * desktop width: that would ignore the user's saved collapsed preference
+ * in localStorage. Before calling expand() it re-reads
+ * loadCollapsedState() and only auto-expands if the returned value is not
+ * `true` (i.e. the user has not explicitly chosen to keep the drawer
+ * collapsed).
  *
  * @license GPL-3.0-or-later
  */
@@ -54,7 +52,7 @@ describe('Preview settings drawer resize persistence', () => {
     vi.restoreAllMocks();
   });
 
-  it('does NOT auto-expand when user explicitly collapsed it and viewport widens to desktop', () => {
+  it('does not auto-expand when user explicitly collapsed it and viewport widens to desktop', () => {
     vi.useFakeTimers();
     try {
       buildDOM();

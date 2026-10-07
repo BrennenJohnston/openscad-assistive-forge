@@ -62,7 +62,7 @@ describe('ErrorLogPanel.parseLine — existing patterns', () => {
   });
 });
 
-describe('ErrorLogPanel.parseLine — new patterns (Phase 4)', () => {
+describe('ErrorLogPanel.parseLine — new patterns', () => {
   let panel;
 
   beforeEach(() => {
@@ -138,12 +138,11 @@ describe('ErrorLogPanel.parseLine — the manifold status line (P7)', () => {
     panel = new ErrorLogPanel({ container: null, badge: null });
   });
 
-  // The Geometry branch's regex was /^Mesh (is )?not|manifold/i. `|` binds
-  // looser than anything else in a regex, so that read as
-  // (^Mesh (is )?not) OR (manifold) — an UNANCHORED "manifold". Every line
-  // with the word in it became an ERROR, this one included, and the owner's
-  // deployed screenshot shows it as a red row while the Console read "No
-  // console output yet".
+  // A Geometry regex of /^Mesh (is )?not|manifold/i would be wrong: `|`
+  // binds looser than anything else in a regex, so that reads as
+  // (^Mesh (is )?not) OR (manifold), an unanchored "manifold". Every line
+  // with the word in it would become an ERROR, this one included, shown as
+  // a red row while the Console read "No console output yet".
   it('a healthy render status line is not an error at all', () => {
     expect(
       panel.parseLine('Top level object is a 3D object (manifold):')
@@ -179,11 +178,11 @@ describe('ErrorLogPanel.parseLine — the manifold status line (P7)', () => {
   });
 });
 
-// D-203: my two-sided Plug Puller previewed, and the page interrupted with
-// "Error: WARNING: [manifold] Minkowski failed with error, falling back to
-// Nef operation: CGAL ERROR: assertion violation!" and "Error: CGAL error:
-// assertion violation!". OpenSCAD had recovered; both lines were warnings.
-describe('ErrorLogPanel.parseLine: a warning that quotes an error (D-203)', () => {
+// A two-sided Plug Puller preview prints "Error: WARNING: [manifold]
+// Minkowski failed with error, falling back to Nef operation: CGAL ERROR:
+// assertion violation!" and "Error: CGAL error: assertion violation!".
+// OpenSCAD has recovered; both lines are warnings.
+describe('ErrorLogPanel.parseLine: a warning that quotes an error', () => {
   let panel;
 
   beforeEach(() => {
@@ -226,11 +225,11 @@ describe('ErrorLogPanel.parseLine: a warning that quotes an error (D-203)', () =
   });
 });
 
-// D-232: every sign render said "Error: Fontconfig error: Cannot load default
+// Every sign render says "Error: Fontconfig error: Cannot load default
 // config file: No such file: (null)". It is Fontconfig noting that the browser
 // engine has no config file; text still renders, and the desktop console shows
 // the line as plain output, not as an error.
-describe('ErrorLogPanel.parseLine: the Fontconfig config-file line (D-232)', () => {
+describe('ErrorLogPanel.parseLine: the Fontconfig config-file line', () => {
   let panel;
 
   beforeEach(() => {

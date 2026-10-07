@@ -15,7 +15,7 @@ function createMockCtx(canvasWidth = 100, canvasHeight = 80) {
     clearRect: vi.fn(),
     fillText: vi.fn(),
     drawImage: vi.fn(),
-    // CW-22: the composite path is now the default paint path, so the mock
+    // The composite path is the default paint path, so the mock
     // has to be able to hand out and receive a frame buffer.
     createImageData: vi.fn((w, h) => ({
       width: w,
@@ -37,8 +37,9 @@ function createMockCtx(canvasWidth = 100, canvasHeight = 80) {
  *
  * createMockAtlas paints each glyph cell as a solid block carrying its own
  * index in the red channel, so a painted frame can be read back as "which
- * glyph landed at which pixel" without a real canvas. This is what lets the
- * CW-22 tests assert the PIXELS a player sees instead of a drawImage call log.
+ * glyph landed at which pixel" without a real canvas. This is what lets
+ * the composite tests assert the pixels a player sees instead of a
+ * drawImage call log.
  */
 function paintedFrame(ctx) {
   const calls = ctx.putImageData.mock.calls
@@ -161,13 +162,13 @@ describe('buildGlyphAtlas', () => {
     return pixels
   }
 
-  it('restores brightness a tiny atlas lost to antialiasing (CW-12)', () => {
+  it('restores brightness a tiny atlas lost to antialiasing', () => {
     let pixels
     const orig = HTMLCanvasElement.prototype.getContext
     HTMLCanvasElement.prototype.getContext = function () {
       atlasCtx = createMockCtx()
       atlasCtx.canvas = this
-      pixels = stubAtlasPixels(164) // MEASURED: a 3 px atlas peaks at 164/255
+      pixels = stubAtlasPixels(164) // measured: a 3 px atlas peaks at 164/255
       return atlasCtx
     }
     buildGlyphAtlas({
@@ -219,7 +220,7 @@ describe('buildGlyphAtlas', () => {
     HTMLCanvasElement.prototype.getContext = function () {
       atlasCtx = createMockCtx()
       atlasCtx.canvas = this
-      stubAtlasPixels(120) // faint on purpose: it must STILL be left alone
+      stubAtlasPixels(120) // faint on purpose: it must still be left alone
       return atlasCtx
     }
     buildGlyphAtlas({
@@ -307,8 +308,8 @@ describe('paintFrame', () => {
 
     paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
-    // The whole frame reaches the canvas as ONE call, not one call per cell:
-    // that is the entire point of the composite path (CW-12, CW-22).
+    // The whole frame reaches the canvas as one call, not one call per cell:
+    // that is the entire point of the composite path.
     expect(ctx.putImageData).toHaveBeenCalledOnce()
     expect(ctx.drawImage).not.toHaveBeenCalled()
     const frame = paintedFrame(ctx)
@@ -337,7 +338,7 @@ describe('paintFrame', () => {
 
     paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
-    // Each cell carries the pixels of ITS OWN glyph, across the full cell.
+    // Each cell carries the pixels of its own glyph, across the full cell.
     const frame = paintedFrame(ctx)
     expect(frame.glyphAt(0, 0)).toBe(33)
     expect(frame.glyphAt(9, 11)).toBe(33)
@@ -376,10 +377,9 @@ describe('paintFrame', () => {
     expect(frame.glyphAt(20, 0)).toBe(2) // col 1 * charW 10 * dpr 2
   })
 
-  it('composites at large character cells too — CW-22 removed the size gate', () => {
-    // Until CW-22 a cell wider than 4 CSS px fell back to one drawImage per
-    // cell, which MEASURED 2-3x slower at every size from the 50% default up.
-    // Cell size no longer chooses the path; only afterglow does.
+  it('composites at large character cells too', () => {
+    // One drawImage per cell measures 2-3x slower at every size from the 50%
+    // default up, so cell size does not choose the path; only afterglow does.
     const cols = 3
     const rows = 2
     const atlas = createMockAtlas({ cellW: 20, cellH: 30 })
@@ -563,7 +563,7 @@ describe('resizeOverlay', () => {
   })
 })
 
-describe('reverse-video atlas (CW-21)', () => {
+describe('reverse-video atlas', () => {
   let origGetContext
   let ctxCalls
 
@@ -611,7 +611,7 @@ describe('reverse-video atlas (CW-21)', () => {
     build(true)
     const fills = ctxCalls.filter((c) => c[0] === 'fillRect')
     const texts = ctxCalls.filter((c) => c[0] === 'fillText')
-    // One solid fill, laid down BEFORE any glyph, in normal compositing.
+    // One solid fill, laid down before any glyph, in normal compositing.
     expect(fills).toHaveLength(1)
     expect(fills[0][1]).toBe('source-over')
     expect(ctxCalls.indexOf(fills[0])).toBeLessThan(ctxCalls.indexOf(texts[0]))
@@ -635,7 +635,7 @@ describe('reverse-video atlas (CW-21)', () => {
   })
 })
 
-describe('CRT decoration (CW-21 P4)', () => {
+describe('CRT decoration', () => {
   it('bloom asks the rasterizer for a halo, and only when requested', () => {
     const seen = []
     const orig = HTMLCanvasElement.prototype.getContext

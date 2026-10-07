@@ -132,7 +132,7 @@ shape = import("fixed.dxf");
     expect(names).toContain('helpers.scad')
   })
 
-  it('finds the default of a file parameter, which is how D-97 happened', () => {
+  it('finds the default of a file parameter', () => {
     const found = referencedFiles(scad, {}, [])
     const logo = found.find((r) => r.name === 'sample-logo.svg')
     expect(logo).toBeDefined()

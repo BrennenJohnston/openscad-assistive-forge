@@ -1,5 +1,5 @@
 /**
- * Tests for the welcome screen's linked-folders list (sub-plan H, phase H2).
+ * Tests for the welcome screen's linked-folders list.
  *
  * Everything the module touches is injected, so these run against fakes:
  * fake directory handles whose `isSameEntry` compares an id, fake project
@@ -58,7 +58,7 @@ describe('buildLinkedFolderModel (H2)', () => {
       'switch-mount',
       'braille-tags',
     ]);
-    // The record was renamed in the app; the row still names the FOLDER.
+    // The record was renamed in the app; the row still names the folder.
     expect(entries[0].projectName).toBe('Switch Mount v2');
     expect(entries[0].projectId).toBe('p1');
     expect(entries[0].isLegacy).toBe(false);

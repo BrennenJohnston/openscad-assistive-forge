@@ -14,14 +14,14 @@ import {
 } from '../../src/js/game/hc-palettes.js'
 
 /**
- * CW-71. Colour mode had no way to say "this cell is dim": the cell contrast
- * curve normalises every cell to full scale before its glyph is chosen, and a
- * palette entry is then put on whatever came out. So a dim grey wall arrives at
- * the match as (1, 1, 1) and takes WHITE, which is how more than half of every
- * frame came to be white.
+ * Without a budget, colour mode has no way to say "this cell is dim": the
+ * cell contrast curve normalises every cell to full scale before its glyph
+ * is chosen, and a palette entry is then put on whatever came out. So a dim
+ * grey wall arrives at the match as (1, 1, 1) and takes white, which is how
+ * more than half of every frame would be white.
  *
- * Every case below states the answer WITHOUT the budget beside the answer with
- * it, because the whole claim is that one particular cell changes hands.
+ * Every case below states the answer without the budget beside the answer
+ * with it, because the whole claim is that one particular cell changes hands.
  */
 
 const PALETTE = HC_PALETTE_GREEN.map((c) => normalizeChroma(parsePaletteColor(c)))
@@ -61,7 +61,7 @@ describe('the ink budget: the white gate', () => {
     expect(whiteAllowed(0.95, chroma, budget)).toBe(false)
   })
 
-  it('is exactly the old pick when there is no budget', () => {
+  it('is exactly the unbudgeted pick when there is no budget', () => {
     for (const lum of [0.1, 0.5, 0.7, 0.95]) {
       expect(whiteAllowed(lum, 0, null)).toBe(true)
       expect(pickPaletteIndex(lum, lum, lum, PALETTE, 1, -1)).toBe(WHITE_INDEX)
@@ -106,25 +106,22 @@ describe('the ink budget: configuration', () => {
     expect(normalizeInkBudget({ floor: -1 }).floor).toBe(DEFAULT_INK_BUDGET.floor)
   })
 
-  it('★ has NO floor, and keeps the white gate - the answer after PLAYING it', () => {
-    // The history matters. CW-71 shipped 0.5, which inks 3 % of a frame and
-    // leaves the city's lights floating in black. The owner answered CW-Q79
-    // with 0.3 at G1, from photographs, which inks 28 %. Playing the deployed
-    // build they said the darkness was the thing they hated, so the floor
-    // comes off entirely. Measured at the Seattle spawn, standing, 30 %:
+  it('has no floor, and keeps the white gate', () => {
+    // The floor is zero. Measured at the Seattle spawn, standing, 30 %:
     //
     //   floor 0.5   3.1 % inked
     //   floor 0.3  28.5 % inked
     //   floor 0    88.4 % inked, white share 0.00 %   <- shipped
     //
-    // ★ THE TWO HALVES DO DIFFERENT JOBS AND THAT IS WHY ONE CAN GO. The
-    // white gate ALONE takes white from 61.8 % to 0.01 % and changes nothing
-    // else, so the gate is what killed the flat white fields that made colour
-    // mode unreadable, and the floor is what made the city dark. The gate
-    // stays.
+    // A floor leaves the city's lights floating in black, and the darkness is
+    // what a player notices. The two halves do different jobs, which is why
+    // one can go: the white gate alone takes white from 61.8 % to 0.01 % and
+    // changes nothing else, so the gate is what removes the flat white fields
+    // that make colour mode unreadable, and the floor is what makes the city
+    // dark. The gate stays.
     expect(CITY_PALETTE_INK_BUDGET.floor).toBe(0)
     expect(CITY_PALETTE_INK_BUDGET.whiteLum).toBe(0.9)
-    // A floor of zero must NOT switch the whole budget off: the gate has to
+    // A floor of zero must not switch the whole budget off: the gate has to
     // survive it, and normalizeInkBudget only returns null when both are off.
     expect(normalizeInkBudget(CITY_PALETTE_INK_BUDGET)).toEqual({
       floor: 0,

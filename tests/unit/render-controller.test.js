@@ -14,7 +14,7 @@ describe('RenderController', () => {
     const params = { $fn: 100, $fa: 5, $fs: 0.5 }
     const adjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DRAFT)
 
-    // MANIFOLD OPTIMIZED: DRAFT: maxFn=32, minFa=12, minFs=2 (faster with Manifold)
+    // Manifold-optimized DRAFT: maxFn=32, minFa=12, minFs=2 (faster)
     expect(adjusted.$fn).toBe(32)
     expect(adjusted.$fa).toBe(12)
     expect(adjusted.$fs).toBe(2)
@@ -24,7 +24,7 @@ describe('RenderController', () => {
     const controller = new RenderController()
     const adjusted = controller.applyQualitySettings({}, RENDER_QUALITY.DRAFT)
 
-    // MANIFOLD OPTIMIZED: DRAFT no longer forces $fn (forceFn is false)
+    // Manifold-optimized: DRAFT does not force $fn (forceFn is false)
     // $fn should be undefined since it wasn't provided and forceFn is false
     expect(adjusted.$fn).toBeUndefined()
   })
@@ -181,7 +181,7 @@ describe('RenderController', () => {
     const onMemoryWarning = vi.fn()
     controller.setMemoryWarningCallback(onMemoryWarning)
     
-    // BR-4: warning is now driven by absolute usedMB (>= 819) rather than
+    // The warning is driven by absolute usedMB (>= 819) rather than
     // a fictional percent-of-limit value.
     const memoryInfo = {
       used: 850 * 1024 * 1024,
@@ -294,7 +294,7 @@ describe('RenderController', () => {
     const params = {}
     const adjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DRAFT)
     
-    // MANIFOLD OPTIMIZED: DRAFT minFa=12 (improved quality with Manifold)
+    // Manifold-optimized: DRAFT minFa=12 (improved quality with Manifold)
     expect(adjusted.$fa).toBe(12)
   })
 
@@ -303,7 +303,7 @@ describe('RenderController', () => {
     const params = {}
     const adjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DRAFT)
     
-    // MANIFOLD OPTIMIZED: DRAFT minFs=2 (improved quality with Manifold)
+    // Manifold-optimized: DRAFT minFs=2 (improved quality with Manifold)
     expect(adjusted.$fs).toBe(2)
   })
 
@@ -421,7 +421,8 @@ describe('RenderController', () => {
       }
       await renderPromise.catch(() => {})
 
-      // The watchdog must NOT have fired — hard cancel would break the new render
+      // The watchdog must not have fired: a hard cancel would break the new
+      // render.
       expect(hardCancelSpy).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -704,7 +705,7 @@ describe('callMain --help first-render corruption fix', () => {
     expect(controller._moduleUsed).toBe(true)
   })
 
-  it('does NOT set _moduleUsed after restart init (with cachedCapabilities)', () => {
+  it('does not set _moduleUsed after restart init (with cachedCapabilities)', () => {
     const controller = new RenderController()
     controller._moduleUsed = false
 
@@ -902,7 +903,7 @@ describe('Restart serialization', () => {
   })
 })
 
-describe('Geometry Fix Regression: callMain first-render corruption (Phase 1)', () => {
+describe('callMain first-render corruption', () => {
   it('first init without cachedCapabilities triggers restart before first render completes', async () => {
     const controller = new RenderController()
     controller._initUsedCachedCapabilities = false
@@ -953,7 +954,7 @@ describe('Geometry Fix Regression: callMain first-render corruption (Phase 1)', 
     await renderPromise
   })
 
-  it('restart init with cachedCapabilities does NOT trigger a second restart before render', async () => {
+  it('restart init with cachedCapabilities does not trigger a second restart before render', async () => {
     const controller = new RenderController()
     controller._initUsedCachedCapabilities = true
 
@@ -1025,7 +1026,7 @@ describe('Geometry Fix Regression: callMain first-render corruption (Phase 1)', 
   })
 })
 
-describe('Preview/Full Render Parity (Phase 5)', () => {
+describe('Preview/Full Render Parity', () => {
   it('renderPreview and renderFull both pass paramTypes to the worker', async () => {
     const controller = new RenderController()
     controller.worker = { postMessage: vi.fn() }

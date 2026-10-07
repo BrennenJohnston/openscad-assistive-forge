@@ -1,10 +1,9 @@
 /**
- * The words a person reads are American English (DP-Q49).
+ * The words a person reads are American English.
  *
- * `strings.js` has declared "US English" in its own header since it was
- * written, and shipped "Colours" fifty-four times anyway. A rule with nothing
- * enforcing it is the same story as the em dash the style guide banned and
- * thirteen strings kept using. This is that rule with a build behind it.
+ * `strings.js` declares "US English" in its own header, and a rule with
+ * nothing enforcing it drifts (a word like "Colours" can ship dozens of
+ * times). This is that rule with a build behind it.
  *
  * The reader lives in `scripts/us-english-scan.mjs`, which also prints the
  * list on its own (`node scripts/us-english-scan.mjs`) so a sweep can be done
@@ -17,7 +16,7 @@
 import { describe, it, expect } from 'vitest'
 import { scanAll, findings, jsTextRuns } from '../../scripts/us-english-scan.mjs'
 
-describe('American English in every word a person reads (DP-Q49)', () => {
+describe('American English in every word a person reads', () => {
   it('finds no British spelling in the app, the tiles or the papers', () => {
     const found = scanAll()
     const report =

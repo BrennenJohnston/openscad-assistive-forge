@@ -12,7 +12,7 @@ import { SURFACE_CLASS } from '../../../src/js/game/city-class-pass.js'
 import { FIRST_CHAR_CODE } from '../../../src/js/_hfm-paint.js'
 
 /**
- * CW-67. Every Round 8 verdict about motion is read off this arithmetic, so
+ * Every verdict about motion is read off this arithmetic, so
  * it is pinned against sequences whose answers were worked out by hand rather
  * than recorded from a run. A recorded expectation only proves the code did
  * not change; a hand-computed one proves it is right.
@@ -20,13 +20,13 @@ import { FIRST_CHAR_CODE } from '../../../src/js/_hfm-paint.js'
  * The synthetic sequence below is four cells over three frames and contains
  * one of everything the instrument claims to see:
  *
- *   cell 0  glyph A-B-A          - a FLIP, the fracture signature
+ *   cell 0  glyph A-B-A          - a flip, the fracture signature
  *   cell 1  one glyph throughout - the control, and the long run
- *   cell 2  class moves at f1    - the EDGE population
+ *   cell 2  class moves at f1    - the edge population
  *   cell 3  drive into reverse
  *           video and back       - a reverse toggle and a drive flip
  *
- * Three frames give two frame PAIRS and one frame TRIPLE, which is what the
+ * Three frames give two frame pairs and one frame triple, which is what the
  * change and flip denominators are, and the reason a flip can only be seen
  * from the third frame onwards.
  */
@@ -116,7 +116,7 @@ describe('seq-metrics: the mono fold', () => {
     expect(res.edge.lit).toBe(1)
   })
 
-  it('counts the SOLID layer separately from the ink', () => {
+  it('counts the solid layer separately from the ink', () => {
     // Cell 3 spends one frame in reverse video; nothing else ever does. The
     // size of the bright layer is a different question from how much of the
     // picture carries ink, and a class row has to answer both.
@@ -136,7 +136,7 @@ describe('seq-metrics: the mono fold', () => {
 
     // The same sequence with the edge cell's glyph held across the class
     // change - which is exactly what a hysteresis that forgets to reset on a
-    // class change would produce, and what CW-68 must not do.
+    // class change would produce, and what the hysteresis must not do.
     const ghosted = MONO_FRAMES.map((frame) => ({
       ...frame,
       glyphs: [...frame.glyphs],
@@ -149,7 +149,7 @@ describe('seq-metrics: the mono fold', () => {
 
   it('does not count a class move in a blank cell as a glyph decision', () => {
     // Two blank cells of different classes draw the same nothing. Counting
-    // those would put a large, immovable baseline under CW-68's ghost guard.
+    // those would put a large, immovable baseline under the ghost guard.
     const dark = MONO_FRAMES.map((frame) => ({
       ...frame,
       lum: [...frame.lum],
@@ -173,7 +173,7 @@ describe('seq-metrics: the mono fold', () => {
     expect(res.classChangedCells).toBe(0)
     expect(res.edge.cells).toBe(0)
     // An empty row reports 0, never NaN: a JSON summary with nulls in it
-    // reads as "measured zero" to the next session.
+    // reads as "measured zero" to the next reader.
     expect(res.edge.glyphChangePct).toBe(0)
     expect(res.edge.churnCellsPct).toBe(0)
   })
@@ -250,13 +250,12 @@ describe('seq-metrics: the labels come from the class pass', () => {
   })
 })
 
-describe('seq-metrics: the vocabulary-mismatch counter (CW-93, D-128)', () => {
+describe('seq-metrics: the vocabulary-mismatch counter', () => {
   /**
-   * ★ HAND-VERIFIED BEFORE IT IS BELIEVED, which is the release's own first
-   * step: a planted wall glyph on a tree cell MUST count, and a legal tree
-   * glyph MUST NOT. A counter nobody proved both ways is worth nothing - this
-   * round has already shipped a guard that passed with its subject broken
-   * because its fixture was empty.
+   * Hand-verified before it is believed: a planted wall glyph on a tree cell
+   * must count, and a legal tree glyph must not. A counter nobody proved both
+   * ways is worth nothing - a guard can pass with its subject broken because
+   * its fixture was empty.
    *
    * Atlas indices are `charCode - 32`. `|` is 92 and lives only in the wall
    * row; `o` is 79 and lives only in the tree row; `.` is 14 and is in both;
@@ -317,8 +316,8 @@ describe('seq-metrics: the vocabulary-mismatch counter (CW-93, D-128)', () => {
   })
 
   it('exempts a reverse-video cell, and says how many it exempted', () => {
-    // A cell above the reverse threshold is matched against the INVERTED
-    // shape and the FULL atlas on purpose, on both converter paths. Counting
+    // A cell above the reverse threshold is matched against the inverted
+    // shape and the full atlas on purpose, on both converter paths. Counting
     // those would report the brightest cells of every mono picture as a
     // defect forever, so they are exempt - and the exemption is reported
     // rather than hidden.
@@ -377,8 +376,8 @@ describe('seq-metrics: the vocabulary-mismatch counter (CW-93, D-128)', () => {
     expect(wall.mismatch).toBe(0)
   })
 
-  it('reports NOT MEASURED rather than a tidy zero with no vocabularies', () => {
-    // The failure this round keeps re-earning: a guard that reads zero because
+  it('reports "not measured" rather than a tidy zero with no vocabularies', () => {
+    // The classic failure: a guard that reads zero because
     // its fixture was empty. A caller that hands in no ladders gets null, and
     // the instrument refuses the run rather than printing a clean 0.
     const res = foldMono()
@@ -502,9 +501,9 @@ describe('seq-metrics: the red proof', () => {
   })
 })
 
-describe('seq-metrics: the face-flip row (CW-92, D-127)', () => {
+describe('seq-metrics: the face-flip row', () => {
   /**
-   * The owner's defect as a number: a cell still looking at the SAME surface
+   * The defect as a number: a cell still looking at the same surface
    * that changes colour index anyway. A cell that swept onto a different
    * surface is allowed to change colour and must not count, which is the whole
    * reason the row is conditioned on the class holding.

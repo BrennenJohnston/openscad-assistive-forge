@@ -1,16 +1,16 @@
 /**
- * The editor's colour schemes must stay readable (U-37 ¶2, Q-60a).
+ * The editor's colour schemes must stay readable.
  *
  * Modelled on tests/unit/preview-colors-contrast.test.js, which does the same
- * job for the 3D viewport. The policy signed as Q-60(a): the desktop's schemes
- * go in, but any value that measurably fails WCAG 1.4.3 is moved along its own
- * hue until it passes. This is what stops a later edit quietly putting the
- * failing original back.
+ * job for the 3D viewport. The policy: the desktop's schemes go in, but any
+ * value that measurably fails WCAG 1.4.3 is moved along its own hue until it
+ * passes. This is what stops a later edit quietly putting the failing
+ * original back.
  *
- * Every foreground is checked against BOTH the paper and the active-line
- * background. Checking only paper is what made the plan's own arithmetic
- * optimistic: `highlightActiveLine` defaults on, so any token can end up on
- * the caret line, and the caret line is always the worse of the two.
+ * Every foreground is checked against both the paper and the active-line
+ * background. Checking only paper would be optimistic: `highlightActiveLine`
+ * defaults on, so any token can end up on the caret line, and the caret
+ * line is always the worse of the two.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -120,7 +120,7 @@ describe('what was taken from the desktop verbatim', () => {
     expect(LIGHT_SCHEME.tokens.operator).toBe('#0000ff'); // Blue
   });
 
-  it('dark keeps the desktop paper and text, which are NOT the old #1E1E1E', () => {
+  it('dark keeps the desktop paper and text, which are not #1E1E1E', () => {
     expect(DARK_SCHEME.paper).toBe('#222222');
     expect(DARK_SCHEME.text).toBe('#e0e0e0');
     expect(DARK_SCHEME.caretLine).toBe('#303030');

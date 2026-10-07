@@ -1,5 +1,5 @@
 /**
- * The preview's post-load geometry work as pure functions (DP-52 P4, D-143).
+ * The preview's post-load geometry work as pure functions.
  * The classifier's two cases are the same arrays preview.test.js runs through
  * `_classifyInnerFaces`, so moving the arithmetic changed nothing.
  * @license GPL-3.0-or-later

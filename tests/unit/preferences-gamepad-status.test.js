@@ -1,10 +1,10 @@
 /**
- * The Axes tab's gamepad status line (U-15b, Q-32a).
+ * The Axes tab's gamepad status line.
  *
  * The formatter is pure so its three claims can be pinned without a DOM:
  * unsupported browsers, no device, and a named device with the fixed dead
- * zone. A wrong claim here is the false-reason shape R-IV removed from
- * these tabs — the line must never say more than the data supports.
+ * zone. A wrong claim here would be a false reason in these tabs: the line
+ * must never say more than the data supports.
  *
  * @license GPL-3.0-or-later
  */

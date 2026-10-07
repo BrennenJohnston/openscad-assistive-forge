@@ -9,14 +9,14 @@ import {
 } from './hfm-convert-fixture.js'
 
 /**
- * CW-32: the GPU glyph pass, and the promise that nothing depends on it.
+ * The GPU glyph pass, and the promise that nothing depends on it.
  *
  * The shader itself cannot run here - jsdom has no GPU - so what is guarded
  * is everything around it: that a machine without WebGL2 is told so rather
  * than crashing, that the converter still paints when the pass declines, and
  * that the constants ported into the shader still match the ones the CPU
- * uses. That last one is the drift this release could most easily grow: two
- * copies of the same tap layout and contrast maths, in two languages.
+ * uses. That last one is the easiest drift to grow: two copies of the same
+ * tap layout and contrast maths, in two languages.
  */
 
 const gpuSource = readFileSync(
@@ -28,7 +28,7 @@ const cpuSource = readFileSync(
   'utf8'
 )
 
-describe('CW-32 GPU pass — the fallback is not optional', () => {
+describe('GPU pass — the fallback is not optional', () => {
   it('reports itself unavailable, with a reason, when there is no WebGL2', () => {
     const pass = createGpuGlyphPass({ getContext: () => ({}) })
     expect(pass.available).toBe(false)
@@ -45,7 +45,7 @@ describe('CW-32 GPU pass — the fallback is not optional', () => {
   })
 })
 
-describe('CW-32 GPU pass — the shader and the CPU agree on the constants', () => {
+describe('GPU pass — the shader and the CPU agree on the constants', () => {
   it('uses the same luminance coefficients as _relLum01', () => {
     // _relLum01: (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
     for (const coefficient of ['0.2126', '0.7152', '0.0722']) {
@@ -110,7 +110,7 @@ describe('CW-32 GPU pass — the shader and the CPU agree on the constants', () 
   })
 })
 
-describe('CW-32 — the converter paints when the pass declines', () => {
+describe('the converter paints when the GPU pass declines', () => {
   beforeEach(() => installCanvasMock())
   afterEach(() => {
     removeCanvasMock()

@@ -1,5 +1,5 @@
 /**
- * A drawing sent by a link (DP-62): the link is read into what to fetch and
+ * A drawing sent by a link: the link is read into what to fetch and
  * what to call it, refused with a sentence when it cannot be, fetched with a
  * ceiling and a timeout, aimed at the first design parameter that takes its
  * kind, and delivered with the two flags the file control reads.

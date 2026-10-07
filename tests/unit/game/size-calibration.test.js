@@ -27,11 +27,10 @@ const holds = (scale) => ({ scale, avgMs: BAR - 5, samples: 20 })
 const fails = (scale) => ({ scale, avgMs: BAR + 20, samples: 20 })
 
 /**
- * CW-72 rewrote what this module is FOR. It used to pick a landing - the size
- * this machine would open at - from two candidates, one of which was below the
- * game's default, so two machines opened two different games. It now measures
- * a FLOOR: everybody starts at one size, and a machine that cannot hold it is
- * moved UP the ladder, never down, and only after two passes agree.
+ * This module measures a floor: everybody starts at one size, and a machine
+ * that cannot hold it is moved up the ladder, never down, and only after two
+ * passes agree. Picking a landing from candidates below the game's default
+ * would let two machines open two different games.
  */
 
 describe('calibration constants', () => {
@@ -48,7 +47,7 @@ describe('calibration constants', () => {
     for (const rung of CALIBRATION_FLOOR_LADDER) {
       expect(rung).toBeGreaterThanOrEqual(CITY_DEFAULT_CHAR_SCALE)
     }
-    // CW-41: 10% and 20% are the same 2x4 pixel cell (the 3 px font floor), so
+    // 10% and 20% are the same 2x4 pixel cell (the 3 px font floor), so
     // neither can be a rung - measuring both would measure one thing twice.
     expect(CALIBRATION_FLOOR_LADDER).not.toContain(0.1)
     expect(CALIBRATION_FLOOR_LADDER).not.toContain(0.2)
@@ -82,7 +81,7 @@ describe('nextProbeScale', () => {
     expect(nextProbeScale([fails(0.3), fails(0.4), fails(0.5)])).toBeNull()
   })
 
-  it('never asks for a rung a LARGER size already condemned', () => {
+  it('never asks for a rung a larger size already condemned', () => {
     // Cost falls as the cells get bigger, so a failure at 50% condemns 30%
     // and 40% without measuring them.
     expect(nextProbeScale([fails(0.5)])).toBeNull()
@@ -130,7 +129,7 @@ describe('chooseCalibratedSize', () => {
 
   it('parks at the top rung and says so when nothing held', () => {
     // `held: false` is the honest answer: this machine did not reach the bar
-    // at any size, and the record should say that rather than name a size
+    // at any size, and the result should say that rather than name a size
     // that worked.
     expect(chooseCalibratedSize([fails(0.3), fails(0.4), fails(0.5)])).toEqual({
       floorScale: 0.5,
@@ -157,9 +156,9 @@ describe('raiseFloor', () => {
   const stored = (floorScale, pending = 0) => ({ floorScale, pending })
 
   it('takes two agreeing passes to raise, and never raises on one', () => {
-    // The R6 ledger's floor-flapping item: a floor that moved on a single
-    // slow reading gave a player a different size every time they opened the
-    // game on a machine that was sometimes busy.
+    // Floor flapping: a floor that moved on a single slow reading would give
+    // a player a different size every time they opened the game on a machine
+    // that was sometimes busy.
     const first = raiseFloor(stored(0.3), 0.4)
     expect(first).toEqual({ floorScale: 0.3, pending: 1 })
     expect(raiseFloor(first, 0.4)).toEqual({ floorScale: 0.4, pending: 0 })
@@ -174,7 +173,7 @@ describe('raiseFloor', () => {
     expect(raiseFloor(contented, 0.4).floorScale).toBe(0.3)
   })
 
-  it('NEVER lowers a floor, however fast the machine measures', () => {
+  it('never lowers a floor, however fast the machine measures', () => {
     for (const measured of [0.1, 0.3, 0.4]) {
       expect(raiseFloor(stored(0.5), measured)).toEqual({
         floorScale: 0.5,
@@ -209,20 +208,20 @@ describe('isConclusive', () => {
     expect(isConclusive([holds(0.7)])).toBe(false)
   })
 
-  it('★★ a failing size ABOVE the ladder still condemns the range', () => {
+  it('a failing size above the ladder still condemns the range', () => {
     // The documented rule, and the half that always worked: cost falls as the
     // cells get bigger, so a machine that cannot hold 70 % cannot hold any of
     // 30/40/50 either.
     expect(isConclusive([fails(0.7)])).toBe(true)
   })
 
-  it('★★ a failing size BELOW the ladder decides nothing (CW-88)', () => {
-    // The direction test this function's docblock always claimed and did not
-    // have. Nothing could reach it until CW-88 unlocked 10 %: a manual entry
-    // is measured where it stands, and cost RISES as the cells get smaller,
-    // so 10 % failing says nothing about 30 %. Reading it as a verdict sent
-    // chooseCalibratedSize through to the TOP rung and stored a 50 % floor
-    // off one reading of a size the ladder does not contain.
+  it('a failing size below the ladder decides nothing', () => {
+    // The direction test this function's docblock claims. A manual entry at
+    // 10 % is measured where it stands, and cost rises as the cells get
+    // smaller, so 10 % failing says nothing about 30 %. Reading it as a
+    // verdict would send chooseCalibratedSize through to the top rung and
+    // store a 50 % floor off one reading of a size the ladder does not
+    // contain.
     expect(isConclusive([fails(0.1)])).toBe(false)
     expect(isConclusive([fails(0.2)])).toBe(false)
     // ...and a ladder reading beside it still decides, so the guard cannot
@@ -246,7 +245,7 @@ describe('stepProbePhase', () => {
     }
   }
 
-  it('settles, samples, and reports the average of ONLY the sampled span', () => {
+  it('settles, samples, and reports the average of only the sampled span', () => {
     const phase = createProbePhase(0.1, 10000)
     // First step only sights the counter; settle converts carry junk cost.
     expect(
@@ -356,10 +355,10 @@ describe('encodeCalibration / decodeCalibration', () => {
     })
   })
 
-  it('MIGRATES a CW-42 landing below the default up to it', () => {
-    // CW-42 could land a machine at 10%, and a stored 10% surviving as a
-    // floor would leave that machine with its own private game after this
-    // release. Both of CW-42's spellings migrate.
+  it('migrates an older landing below the default up to it', () => {
+    // An older build could land a machine at 10%, and a stored 10% surviving
+    // as a floor would leave that machine with its own private game. Both of
+    // the older build's spellings migrate.
     expect(decodeCalibration('0.1')).toEqual({
       floorScale: CITY_DEFAULT_CHAR_SCALE,
       pending: 0,
@@ -372,7 +371,7 @@ describe('encodeCalibration / decodeCalibration', () => {
     })
   })
 
-  it('honours a stored floor ABOVE the default as a floor', () => {
+  it('honours a stored floor above the default as a floor', () => {
     expect(decodeCalibration('0.5').floorScale).toBe(0.5)
     expect(decodeCalibration('0.5').migrated).toBe(false)
   })

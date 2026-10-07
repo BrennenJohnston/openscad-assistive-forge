@@ -1,7 +1,7 @@
 /**
- * DP-79: the pieces added to ink-extraction.js for the photo defaults: the
- * median rewritten without allocation, the close, and the floor helpers that
- * moved in from the color separation.
+ * The pieces of ink-extraction.js the photo defaults use: the median
+ * without allocation, the close, and the floor helpers shared with the
+ * color separation.
  *
  * @license GPL-3.0-or-later
  */
@@ -20,11 +20,10 @@ const makeImageData = (width, height) => ({
   data: new Uint8ClampedArray(width * height * 4),
 });
 
-describe('the median, rewritten without allocation (DP-79 P0b)', () => {
-  it("★ gives the old sort's answer byte for byte on a noisy picture", () => {
-    // The reference is the implementation this replaced: a slice and a sort
-    // per channel per pixel, 8,847 ms on a 1331 x 1200 photograph against
-    // 413 for the insertion sort, MEASURED.
+describe('the median, without allocation', () => {
+  it("gives the reference sort's answer byte for byte on a noisy picture", () => {
+    // The reference is a slice and a sort per channel per pixel: measured at
+    // 8,847 ms on a 1331 x 1200 photograph against 413 for the insertion sort.
     const reference = (imageData) => {
       const { width, height, data } = imageData;
       const out = makeImageData(width, height);
@@ -64,7 +63,7 @@ describe('the median, rewritten without allocation (DP-79 P0b)', () => {
   });
 });
 
-describe('closeMask (DP-79)', () => {
+describe('closeMask', () => {
   it('bridges a gap up to twice its radius and leaves the rest where it was', () => {
     // Two 4-wide blocks with a 2-pixel gap in a 12 x 6 mask.
     const w = 12;
@@ -89,7 +88,7 @@ describe('closeMask (DP-79)', () => {
     // element is four-connected (a diamond), so the bridge it builds across
     // a gap is shorter than the blocks by the gap, and the blocks have to be
     // taller than the gap plus twice the radius for it to survive the erosion.
-    // MEASURED here: radius 1 leaves it, radius 2 joins it.
+    // Measured here: radius 1 leaves it, radius 2 joins it.
     const w = 16;
     const h = 12;
     const mask = new Uint8Array(w * h);
@@ -108,7 +107,7 @@ describe('closeMask (DP-79)', () => {
   });
 });
 
-describe('the floor helpers live in ink-extraction.js now (DP-79)', () => {
+describe('the floor helpers live in ink-extraction.js', () => {
   it('and still where they were, the same functions', async () => {
     expect(floorPx(0.025)).toBeCloseTo(160, 6);
     expect(floorPx(0)).toBe(4);

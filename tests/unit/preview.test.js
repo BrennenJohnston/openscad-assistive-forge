@@ -73,28 +73,28 @@ describe('PreviewManager', () => {
       const manager = new PreviewManager(container)
       await manager.init()
 
-      // Light 0: {-1, +1, +1, 0} — GLView.cc line 308 (master) / line 335 (2021)
+      // Light 0: {-1, +1, +1, 0} — GLView.cc (master and 2021)
       expect(manager.directionalLight1.position.x).toBe(-1)
       expect(manager.directionalLight1.position.y).toBe(1)
       expect(manager.directionalLight1.position.z).toBe(1)
 
-      // Light 1: {+1, -1, -1, 0} — GLView.cc line 309 (master) / line 336 (2021)
+      // Light 1: {+1, -1, -1, 0} — GLView.cc (master and 2021)
       expect(manager.directionalLight2.position.x).toBe(1)
       expect(manager.directionalLight2.position.y).toBe(-1)
       expect(manager.directionalLight2.position.z).toBe(-1)
     })
 
     it('exports DESKTOP_SHININESS matching OpenSCAD GLView value (64)', () => {
-      // GLView.cc line 324 (master) / line 351 (2021):
-      // glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
+      // GLView.cc (master and 2021):
+      // glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64)
       expect(DESKTOP_SHININESS).toBe(64)
     })
 
-    it('pins the Q-30 calibrated light intensities (U-14)', async () => {
+    it('pins the calibrated light intensities', async () => {
       // Ambient 0.2π is the desktop rig π-cancelled; the directional pair
-      // carries the ×1.5 the owner chose from the P4 contact sheet against
-      // OpenSCAD 2021.01 at a pinned pose. A drift here silently un-does a
-      // by-eye calibration no functional test can see.
+      // carries a ×1.5 chosen by eye against OpenSCAD 2021.01 at a pinned pose.
+      // A drift here silently un-does a by-eye calibration no functional test
+      // can see.
       const manager = new PreviewManager(container)
       await manager.init()
 
@@ -740,10 +740,9 @@ describe('PreviewManager', () => {
     })
   })
 
-  // Center, View All and Reset View are three different commands upstream. They
-  // were two-thirds duplicates here: Center called a method that did not exist
-  // and the other two both fitted the model (G4). These assert what each one
-  // DOES to the camera, not merely that it ran.
+  // Center, View All and Reset View are three different commands upstream,
+  // and they must stay three here: duplicates would fit the model twice.
+  // These assert what each one does to the camera, not merely that it ran.
   describe('Camera commands: Center vs View All vs Reset View', () => {
     // A cube 10mm on a side, sitting 100mm along +X so "centered" is visible.
     const MODEL_CENTER = new Vector3(100, 0, 0)
@@ -793,7 +792,7 @@ describe('PreviewManager', () => {
       expect(after.distanceTo(before)).toBeCloseTo(MODEL_CENTER.length(), 6)
     })
 
-    it('viewAllCamera fits the model WITHOUT changing the viewing angle', () => {
+    it('viewAllCamera fits the model without changing the viewing angle', () => {
       const manager = makeManager()
       // Look from a non-default angle so "kept the angle" means something.
       manager.camera.position.set(0, 0, 400)
@@ -837,18 +836,18 @@ describe('PreviewManager', () => {
     })
   })
 
-  // D-48 (U-36). Every face view used to leave its own `camera.up` behind.
-  // OrbitControls reads camera.up ONCE, when it is constructed, so a later up
-  // never reaches the orbit maths — but the lookAt(target) that ends every
-  // frame's update does read it. Top and Bottom therefore left the picture
-  // rolled, and the roll grew with every drag (measured live: 25deg, 40deg,
-  // 45deg over three 25px drags) until the view was un-navigable.
+  // A face view must not leave its own `camera.up` behind. OrbitControls
+  // reads camera.up once, when it is constructed, so a later up never
+  // reaches the orbit maths - but the lookAt(target) that ends every
+  // frame's update does read it. Top and Bottom would leave the picture
+  // rolled, and the roll would grow with every drag (25deg, 40deg, 45deg
+  // over three 25px drags) until the view was un-navigable.
   //
-  // The invariant that fixes it, asserted here at the source: three's lookAt
-  // builds screen-right as normalize(up x forward), so screen-right is always
+  // The invariant, asserted here at the source: three's lookAt builds
+  // screen-right as normalize(up x forward), so screen-right is always
   // perpendicular to camera.up. With Z-up that means screenRight.z === 0 at
-  // every pose — which IS "no roll" in a Z-up world.
-  describe('setCameraView keeps the world Z-up (D-48)', () => {
+  // every pose - which is "no roll" in a Z-up world.
+  describe('setCameraView keeps the world Z-up', () => {
     const VIEW_NAMES = Object.keys(PreviewManager.CAMERA_VIEWS)
 
     function makeViewManager() {
@@ -3048,15 +3047,15 @@ describe('PreviewManager', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Phase 5 — Visual-Parity Cross-Phase Validation
+// Visual-parity cross-check
 //
-// Validates that all Phase 1–4 changes compose correctly: Cornfield gold
-// default color, desktop-matched lighting, aligned shininess, zero specular,
-// and post-load overlay refresh. This suite guards against regressions that
-// individual phase tests might miss by checking the full configuration in a
+// Validates that the visual-parity settings compose correctly: the default
+// model color, desktop-matched lighting, aligned shininess, zero specular,
+// and post-load overlay refresh. This suite guards against regressions
+// that individual tests might miss by checking the full configuration in a
 // single constructed PreviewManager instance.
 // ---------------------------------------------------------------------------
-describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
+describe('Visual Parity — desktop OpenSCAD alignment', () => {
   let container
   let manager
 
@@ -3081,11 +3080,11 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       expect(manager.ambientLight.intensity).toBeCloseTo(expected, 5)
     })
 
-    it('directional intensities are 1.5 * π (π-cancel × Q-30 calibration)', () => {
+    it('directional intensities are 1.5 * π (π-cancel × calibration)', () => {
       // 1.0*π cancels the BRDF_Lambert divisor (OpenGL diffuse {1,1,1,1});
-      // the further ×1.5 is the owner's Q-30 pick from A/B captures against
-      // desktop 2021.01 at a pinned pose (U-14, 2026-08-11) — with π-cancel
-      // alone the same mesh in the same baked colors rendered visibly darker.
+      // the further ×1.5 was picked from A/B captures against desktop 2021.01
+      // at a pinned pose - with π-cancel alone the same mesh in the same baked
+      // colors rendered visibly darker.
       const expected = 1.5 * Math.PI
       expect(manager.directionalLight1.intensity).toBeCloseTo(expected, 5)
       expect(manager.directionalLight2.intensity).toBeCloseTo(expected, 5)
@@ -3103,9 +3102,9 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
     })
   })
 
-  // The light theme used Cornfield gold #f9d72c until 2026-07; it measures
-  // 1.3:1 against the #f5f5f5 background and fails WCAG 2.2 SC 1.4.11, so
-  // it was darkened in the same hue (see preview-colors-contrast.test.js).
+  // Cornfield gold #f9d72c measures 1.3:1 against the light theme's #f5f5f5
+  // background and fails WCAG 2.2 SC 1.4.11, so the light theme darkens it
+  // in the same hue (see preview-colors-contrast.test.js).
   describe('light theme default model color (darkened Cornfield gold)', () => {
     it('light theme model color resolves to #9a8200', () => {
       manager.currentTheme = 'light'
@@ -3393,7 +3392,7 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
 
       const attr = geometry.getAttribute('aIsInner')
       expect(attr).toBeDefined()
-      // face 0: dot < 0 AND concaveEdgeCount >= 1 → baseline inner
+      // face 0: dot < 0 and concaveEdgeCount >= 1 → baseline inner
       expect(attr.getX(0)).toBe(1)
       // face 1: dot > 0 but promoted across concave edge (nDot = -1) from face 0
       expect(attr.getX(3)).toBe(1)
@@ -3535,15 +3534,15 @@ describe('loadOFF() heuristic skip — CSG color preprocessing', () => {
   })
 
   /**
-   * DP-5: which surface the reference overlay sits against.
+   * Which surface the reference overlay sits against.
    *
-   * The old control surface was a single number, -0.25, which says nothing to
-   * someone who wants to trace onto the top of a charm. These pin the presets
-   * as VALUES, and pin the two things that are easy to get wrong: that
-   * "top of the model" asks the model rather than remembering a height, and
-   * that it does not z-fight the face it is sitting on.
+   * A single number such as -0.25 says nothing to someone who wants to trace
+   * onto the top of a charm. These pin the presets as values, and pin the two
+   * things that are easy to get wrong: that "top of the model" asks the model
+   * rather than remembering a height, and that it does not z-fight the face
+   * it is sitting on.
    */
-  describe('reference overlay Z (DP-5)', () => {
+  describe('reference overlay Z', () => {
     it('starts under the plate, where it always was', () => {
       const manager = new PreviewManager(container)
       const config = manager.getOverlayConfig()
@@ -3576,7 +3575,7 @@ describe('loadOFF() heuristic skip — CSG color preprocessing', () => {
       expect(manager.getOverlayConfig().zPosition).toBe(0)
     })
 
-    it('reads the REAL model height, and sits just above the top face', () => {
+    it('reads the real model height, and sits just above the top face', () => {
       // Coincident planes z-fight, and the overlay is the thing being traced
       // against, so it has to win. A real mesh, not a mocked resolver: mocking
       // the function under test would only prove the mock.
@@ -3619,14 +3618,14 @@ describe('loadOFF() heuristic skip — CSG color preprocessing', () => {
 
 })
 
-// ── DP-52 P4 / D-143: a big mesh's extras are computed off the main thread ──
+// ── A big mesh's extras are computed off the main thread ────────────────────
 //
-// MEASURED on the built app: the cavity-tint classification and three.js'
-// edge geometry ran in ONE main-thread task after a mesh loaded - 6.4 s at 4x
-// CPU for the logo's Line art design (211,700 triangles). Above the threshold
-// both go to a worker; below it the classifier runs inline as it always did.
+// In one main-thread task after a mesh loads, the cavity-tint
+// classification and three.js' edge geometry would take 6.4 s at 4x CPU
+// for a 211,700-triangle design. Above the threshold both go to a worker;
+// below it the classifier runs inline.
 
-describe('mesh extras off the main thread (DP-52 P4, D-143)', () => {
+describe('mesh extras off the main thread', () => {
   let container
   let manager
   let realWorker
@@ -3698,7 +3697,7 @@ describe('mesh extras off the main thread (DP-52 P4, D-143)', () => {
     expect(FakeWorker.instances).toHaveLength(0)
   })
 
-  it('★ a big mesh goes to the worker: no tint yet, the answer applied when it comes, the listeners run again', () => {
+  it('a big mesh goes to the worker: no tint yet, the answer applied when it comes, the listeners run again', () => {
     const geometry = geometryOf(SYNC_MESH_EXTRAS_MAX_TRIANGLES + 1)
     manager.mesh = { geometry }
     const listener = vi.fn()
@@ -3769,16 +3768,15 @@ describe('mesh extras off the main thread (DP-52 P4, D-143)', () => {
   })
 })
 
-// ── D-152: the edges overlay follows the auto-bed ────────────────────────────
+// ── The edges overlay follows the auto-bed ───────────────────────────────────
 //
 // The overlay's segments are built from the mesh's positions: by the
-// geometry worker (a big mesh, D-143) from the centered soup, and by the
-// extras request from a copy taken at scheduling time. The auto-bed then
-// shifts the geometry up onto the build plate and the stored segments stayed
-// where they were, so the overlay drew below the model by the bed offset:
-// the charm's edges in a different place from the charm (REPORTED by the
-// owner's walk, 2026-09-17; every mesh over 10,000 triangles).
-describe('D-152: the edges overlay follows the auto-bed', () => {
+// geometry worker (a big mesh) from the centered soup, and by the extras
+// request from a copy taken at scheduling time. The auto-bed then shifts
+// the geometry up onto the build plate; segments left where they were
+// would draw the overlay below the model by the bed offset, the edges in a
+// different place from the charm (every mesh over 10,000 triangles).
+describe('the edges overlay follows the auto-bed', () => {
   let container
   beforeEach(() => {
     container = document.createElement('div')
@@ -3804,7 +3802,7 @@ describe('D-152: the edges overlay follows the auto-bed', () => {
     computeBoundingSphere() {},
   })
 
-  it('★ the auto-bed moves the stored edge segments with the geometry', () => {
+  it('the auto-bed moves the stored edge segments with the geometry', () => {
     const manager = new PreviewManager(container)
     const geometry = fakeGeometry()
     manager.applyAutoBed(geometry)
@@ -3826,7 +3824,7 @@ describe('D-152: the edges overlay follows the auto-bed', () => {
     expect(Array.from(geometry.userData.edgeSegments)).toEqual([0, 0, 0, 1, 0, 0])
   })
 
-  it('★ the extras are scheduled after the bed, so the worker gets bedded positions', async () => {
+  it('the extras are scheduled after the bed, so the worker gets bedded positions', async () => {
     const manager = new PreviewManager(container)
     manager.autoBedEnabled = true
     manager.scene = { add: vi.fn(), remove: vi.fn() }

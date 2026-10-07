@@ -1,11 +1,11 @@
 /**
- * Corner XYZ triad (UF-7 P3) — the showSmallaxes() transcription.
+ * Corner XYZ triad - the showSmallaxes() transcription.
  *
- * These tests run against the REAL three module: the triad builder imports
+ * These tests run against the real three module: the triad builder imports
  * three directly (it is consumed only by preview.js, which already does),
  * so there is no injected subset whose under-export a generous mock could
- * hide — the R-IV trap cannot exist here, and mocking would only weaken
- * the proof. Everything asserted is pure scene-graph work; no WebGL.
+ * hide, and mocking would only weaken the proof. Everything asserted is
+ * pure scene-graph work; no WebGL.
  *
  * @license GPL-3.0-or-later
  */
@@ -19,7 +19,7 @@ import {
 
 const byName = (root, name) => root.getObjectByName(name);
 
-describe('axis-triad-overlay (UF-7)', () => {
+describe('axis-triad-overlay', () => {
   it('builds three unit arms in the desktop RGB colors', () => {
     const triad = buildAxisTriadOverlay();
     const arms = byName(triad.scene, '__axisTriadArms');

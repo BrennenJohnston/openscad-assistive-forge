@@ -1,5 +1,5 @@
 /**
- * Cropping a reference image (DP-5).
+ * Cropping a reference image.
  *
  * The geometry is tested apart from the dialog because a wrong rectangle is
  * not something a screenshot reveals - it just quietly traces the wrong part
@@ -33,7 +33,7 @@ describe('croppedName', () => {
     expect(croppedName('.hidden')).toBe('.hidden-crop');
   });
 
-  it('only the LAST dot is the extension', () => {
+  it('only the last dot is the extension', () => {
     expect(croppedName('my.photo.v2.png')).toBe('my.photo.v2-crop.png');
   });
 
@@ -111,7 +111,7 @@ describe('fullImageRect', () => {
   });
 });
 
-// ── DP-49: the crop as pixels, before the trace ────────────────────────────
+// ── The crop as pixels, before the trace ───────────────────────────────────
 //
 // A traced picture is cropped in its pixels and traced again, so the crop
 // has to be a pure copy of a rectangle out of typed arrays: it runs on the
@@ -135,7 +135,7 @@ describe('cropImageDataRect', () => {
   const reds = (img) =>
     Array.from({ length: img.width * img.height }, (_, i) => img.data[i * 4]);
 
-  it('★ copies exactly the rectangle, row by row', () => {
+  it('copies exactly the rectangle, row by row', () => {
     const out = cropImageDataRect(picture(), {
       x: 1,
       y: 1,
@@ -173,13 +173,13 @@ describe('cropImageDataRect', () => {
   });
 });
 
-// ── DP-49: four insets to a rectangle ──────────────────────────────────────
+// ── Four insets to a rectangle ─────────────────────────────────────────────
 //
 // The crop view's rows are Top, Bottom, Left and Right, each a share of the
 // picture's height or width; both the picture crop (pixels) and the drawing
 // crop (viewBox units) start from the same rectangle.
 describe('insetRect', () => {
-  it('★ turns percentages into the kept rectangle, in the box\'s own units', () => {
+  it('turns percentages into the kept rectangle, in the box\'s own units', () => {
     const rect = insetRect(
       { x: 0, y: 0, width: 400, height: 300 },
       { top: 10, bottom: 20, left: 25, right: 0 }
@@ -222,7 +222,7 @@ describe('insetRect', () => {
   });
 });
 
-// ── DP-49: the box a drawing is cropped within, and pixels as a picture ────
+// ── The box a drawing is cropped within, and pixels as a picture ───────────
 describe('readDrawingBox', () => {
   const root = (s) =>
     new DOMParser().parseFromString(s, 'image/svg+xml').documentElement;

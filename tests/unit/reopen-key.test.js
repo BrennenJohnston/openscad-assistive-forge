@@ -1,5 +1,5 @@
 /**
- * The reopen key (DP-81, D-175): the same choices on the same drawing at the
+ * The reopen key: the same choices on the same drawing at the
  * same width give the same key; any one of them changing changes it.
  *
  * @license GPL-3.0-or-later
@@ -40,7 +40,7 @@ describe('hashText', () => {
 });
 
 describe('choicesKeyOf', () => {
-  it('★ is the same for the same choices, drawing and width', () => {
+  it('is the same for the same choices, drawing and width', () => {
     expect(choicesKeyOf(parts())).toBe(choicesKeyOf(parts()));
     // A copy with holes in the same places is the same choice.
     const roles = [];
@@ -49,7 +49,7 @@ describe('choicesKeyOf', () => {
     expect(choicesKeyOf(parts({ roles }))).toBe(choicesKeyOf(parts()));
   });
 
-  it('★ changes with a role, an offset, a deletion, a layer, the width or the drawing', () => {
+  it('changes with a role, an offset, a deletion, a layer, the width or the drawing', () => {
     const base = choicesKeyOf(parts());
     const roles = [];
     roles[0] = 'ignore';

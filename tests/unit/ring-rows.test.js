@@ -1,16 +1,16 @@
 /**
- * The rings of one path, as rows (DP-57, D-159).
+ * The rings of one path, as rows.
  *
- * `parseSvgElements` splits every compound path into its rings, one row each,
- * and the classifier judged each ring by its fill's luminance alone. So a
- * drawn letter O (one even-odd path, two rings) became two Raised rows and
- * the combined result FILLED its counter; and a traced region's inner ring,
- * where an island of another color sits, became a Raised disc on top of the
- * island's Hole, so the owner's click on the dot selected a disc no role
- * could change. MEASURED in session 4 on the CREATE logo's Colors trace:
- * "Path 75, Raised" over "Path 61, Hole" at the dot inside the figure's arm.
+ * `parseSvgElements` splits every compound path into its rings, one row each.
+ * Judged by fill luminance alone, a drawn letter O (one even-odd path, two
+ * rings) would become two Raised rows and the combined result would fill
+ * its counter; and a traced region's inner ring, where an island of another
+ * color sits, would become a Raised disc on top of the island's Hole, so a
+ * click on the dot would select a disc no role could change (in a traced
+ * logo, "Path 75, Raised" over "Path 61, Hole" at the dot inside the
+ * figure's arm).
  *
- * Two rules: a traced region (a path carrying data-colour) is ONE element,
+ * Two rules: a traced region (a path carrying data-colour) is one element,
  * its outer ring, because whatever sits inside it is its own element already;
  * and a drawn compound path's rings keep the drawing's meaning, a ring that
  * is a hole under the path's fill rule defaulting to Hole.
@@ -54,7 +54,7 @@ function filledAt(svg, x, y) {
   return inside % 2 === 1;
 }
 
-describe('a drawn compound path keeps the meaning of its rings (D-159)', () => {
+describe('a drawn compound path keeps the meaning of its rings', () => {
   it('an even-odd O keeps its counter: the inner ring is a Hole and the result has two rings', () => {
     const svg = wrap(
       '<path d="M0,0 H100 V100 H0 Z M25,25 V75 H75 V25 Z" fill="black" fill-rule="evenodd"/>'
@@ -156,7 +156,7 @@ describe('a drawn compound path keeps the meaning of its rings (D-159)', () => {
   });
 });
 
-describe('a traced region is one row, its outer ring (D-159)', () => {
+describe('a traced region is one row, its outer ring', () => {
   it('the logo trace has one row per region: 111, not 206', () => {
     const elements = parseSvgElements(LOGO);
     expect(elements.length).toBe(111);
@@ -201,7 +201,7 @@ describe('a traced region is one row, its outer ring (D-159)', () => {
     expect(atDot).toEqual([]);
 
     // The figure and the dot alone: the whole logo through the pairwise
-    // flatten is the retired chain D-132 measured in tens of seconds.
+    // flatten takes tens of seconds.
     const figureIndex = elements.findIndex((el) => {
       const { points } = polygonFromPathData(el.pathData);
       const xs = points.map((p) => p.x);

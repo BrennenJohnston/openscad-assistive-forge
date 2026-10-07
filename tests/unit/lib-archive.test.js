@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import JSZip from 'jszip'
 import { unpackLibraryArchive } from '../../src/worker/lib-archive.js'
 
-describe('unpackLibraryArchive (AF-12)', () => {
+describe('unpackLibraryArchive', () => {
   it('returns every file with its path and text, skipping directory entries', async () => {
     const zip = new JSZip()
     zip.file('top.scad', 'module top() {}')

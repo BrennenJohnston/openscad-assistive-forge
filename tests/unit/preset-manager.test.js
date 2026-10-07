@@ -750,7 +750,7 @@ describe('Preset Manager', () => {
       expect(parsed.parameterSets).toBeDefined()
       // 2 user presets + 1 "design default values" virtual preset
       expect(Object.keys(parsed.parameterSets)).toHaveLength(3)
-      // "design default values" should be FIRST key (desktop OpenSCAD parity)
+      // "design default values" should come first (desktop OpenSCAD parity)
       expect(Object.keys(parsed.parameterSets)[0]).toBe('design default values')
       expect(parsed.parameterSets['design default values']).toEqual({})
     })
@@ -1049,7 +1049,7 @@ describe('Preset Manager', () => {
       // "true"/"false" are unambiguously boolean literals
       expect(coerced.boolTrue).toBe(true)
       expect(coerced.boolFalse).toBe(false)
-      // "yes"/"no" are NOT converted to boolean without schema context
+      // "yes"/"no" are not converted to boolean without schema context
       // because they may be string dropdown values (e.g. expose_home_button = "yes"; //[yes,no])
       expect(coerced.yesValue).toBe('yes')
       expect(coerced.noValue).toBe('no')
@@ -1368,7 +1368,7 @@ describe('Preset Manager', () => {
   })
 
   // =========================================================================
-  // Keyguard-specific preset import tests (Stakeholder Validation Plan)
+  // Keyguard-specific preset import tests
   // =========================================================================
   describe('Keyguard Preset Import (Stakeholder)', () => {
     const KEYGUARD_JSON = JSON.stringify({
@@ -1495,7 +1495,7 @@ describe('Preset Manager', () => {
   })
 
   // =====================================================================
-  // CRITICAL: Boolean vs String "yes"/"no" Coercion Tests
+  // Boolean vs string "yes"/"no" coercion tests
   // These tests verify that coercePresetValues() correctly handles
   // "yes"/"no" string values based on the parameter schema type.
   // =====================================================================
@@ -1627,7 +1627,7 @@ describe('Preset Manager', () => {
       expect(result.expose_home_button).toBe('yes')
       expect(result.have_a_case).toBe('no')
       expect(result.expose_status_bar).toBe('yes')
-      // Verify they are NOT booleans
+      // Verify they are not booleans
       expect(typeof result.expose_home_button).toBe('string')
       expect(typeof result.have_a_case).toBe('string')
     })
@@ -1659,7 +1659,7 @@ describe('Preset Manager', () => {
 
       const result = coercePresetValues(presetValues, {})
 
-      // autoDetectType should NOT convert "yes"/"no" to boolean
+      // autoDetectType should not convert "yes"/"no" to boolean
       expect(result.expose_home_button).toBe('yes')
       expect(result.have_a_case).toBe('no')
       expect(typeof result.expose_home_button).toBe('string')
@@ -1753,7 +1753,7 @@ describe('Preset Manager', () => {
     })
   })
 
-  describe('Natural numeric preset sort (regression for QA parity Phase 6)', () => {
+  describe('Natural numeric preset sort', () => {
     it('should sort "iPad 7" before "iPad 10" in name-asc order', () => {
       const names = [
         'iPad 10 - Fintie - LWFL',
@@ -1829,7 +1829,7 @@ describe('Preset Manager', () => {
   })
 })
 
-describe('adoptLegacyModelKey (D-47)', () => {
+describe('adoptLegacyModelKey', () => {
   let manager
 
   beforeEach(() => {

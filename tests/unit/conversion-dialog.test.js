@@ -1,5 +1,5 @@
 /**
- * The conversion dialog (DP-52 P2): the markup, the names, the focus path,
+ * The conversion dialog: the markup, the names, the focus path,
  * the page made inert behind it, and the one sentence it speaks.
  * @license GPL-3.0-or-later
  */
@@ -9,7 +9,7 @@ import {
   CONVERSION_STAGE_TEXT,
 } from '../../src/js/conversion-dialog.js';
 
-describe('the conversion dialog (DP-52)', () => {
+describe('the conversion dialog', () => {
   let app;
   let trigger;
 
@@ -45,7 +45,7 @@ describe('the conversion dialog (DP-52)', () => {
     d.destroy();
   });
 
-  it('★ open: on screen, named for the file, focus on Cancel, the page behind inert, one sentence spoken', async () => {
+  it('open: on screen, named for the file, focus on Cancel, the page behind inert, one sentence spoken', async () => {
     const d = createConversionDialog({ onCancel: vi.fn() });
     d.open('logo.png');
     expect(d.isOpen()).toBe(true);
@@ -107,7 +107,7 @@ describe('the conversion dialog (DP-52)', () => {
     d.destroy();
   });
 
-  it('★ Cancel calls the host; a click on the overlay does not', () => {
+  it('Cancel calls the host; a click on the overlay does not', () => {
     const onCancel = vi.fn();
     const d = createConversionDialog({ onCancel });
     d.open('logo.png');
@@ -118,7 +118,7 @@ describe('the conversion dialog (DP-52)', () => {
     d.destroy();
   });
 
-  it('★ close: the page is live again, the dialog is hidden, and focus goes back where it was', () => {
+  it('close: the page is live again, the dialog is hidden, and focus goes back where it was', () => {
     const d = createConversionDialog({ onCancel: vi.fn() });
     d.open('logo.png');
     d.stage({ stage: 'tracing', index: 2, total: 5 });

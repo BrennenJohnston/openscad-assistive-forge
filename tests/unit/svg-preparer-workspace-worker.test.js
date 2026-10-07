@@ -1,12 +1,12 @@
 /**
- * The workspace's combine through a (faked) flatten worker (DP-53).
+ * The workspace's combine through a (faked) flatten worker.
  *
  * The other workspace file runs the combine inline, because jsdom has no
  * Worker. Here a Worker exists and the runner is a fake the test settles, so
- * what happens BETWEEN the start of a combine and its landing can be pinned:
- * DP-53 lets a person zoom the stand-in while the worker works, and PR #240's
- * board (Firefox 3/3, three of three) found the result landing with the
- * viewBox the pane held when the combine began, so two fingers did nothing.
+ * what happens between the start of a combine and its landing can be pinned:
+ * a person can zoom the stand-in while the worker works, and a result
+ * landing with the viewBox the pane held when the combine began would undo
+ * the zoom.
  * @license GPL-3.0-or-later
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -84,8 +84,8 @@ function makeAnalysis() {
 }
 
 /**
- * DP-82: a traced drawing, two rings of one path as two rows (the square
- * line of the plan's guard), on a 100-unit page.
+ * A traced drawing, two rings of one path as two rows (a square line), on
+ * a 100-unit page.
  */
 const LINE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
@@ -121,7 +121,7 @@ const RESULT =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">' +
   '<path d="M10,10h20v20h-20z" fill="#000"/></svg>';
 
-describe('the combine through a worker (DP-53)', () => {
+describe('the combine through a worker', () => {
   let container;
   let realWorker;
 
@@ -138,7 +138,7 @@ describe('the combine through a worker (DP-53)', () => {
     document.body.innerHTML = '';
   });
 
-  it('★ a zoom made while the worker works outlives the picture it was made on', async () => {
+  it('a zoom made while the worker works outlives the picture it was made on', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis());
     await ws.whenReady();
@@ -166,7 +166,7 @@ describe('the combine through a worker (DP-53)', () => {
     ws.destroy();
   });
 
-  it('★ DP-82: a compound drawing with no offset is concatenated here and never sent to the worker', async () => {
+  it('a compound drawing with no offset is concatenated here and never sent to the worker', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(LINE_SVG, makeCompoundAnalysis());
     await ws.whenReady();
@@ -177,7 +177,7 @@ describe('the combine through a worker (DP-53)', () => {
     ws.destroy();
   });
 
-  it('★ DP-82: an offset on a row sends the rows, with their offsets in svg units, down the compound road', async () => {
+  it('an offset on a row sends the rows, with their offsets in svg units, down the compound road', async () => {
     // The offset column is behind its flag; on for this case alone.
     isEnabled.mockImplementation((flag) => flag === 'svg_path_offset');
     const ws = createSvgPrepWorkspace(container);
@@ -200,7 +200,7 @@ describe('the combine through a worker (DP-53)', () => {
     isEnabled.mockImplementation(() => false);
   });
 
-  it('DP-82: the ring road names no road', async () => {
+  it('the ring road names no road', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis());
     await ws.whenReady();

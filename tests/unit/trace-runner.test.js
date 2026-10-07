@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
- * DP-34: the runner that owns the trace worker.
+ * The runner that owns the trace worker.
  *
  * The behaviour worth pinning is not that a trace returns an SVG. It is that a
  * person who presses Cancel gets the page back, that a fast slider never
  * delivers the answer to a question nobody is asking any more, and that the
- * pixels change owner instead of being copied.
+ * pixels are transferred instead of being copied.
  *
  * The worker is faked here so all of that can be driven deterministically; the
  * real one is exercised in tests/e2e/trace-start-cancel.spec.js.
@@ -71,7 +71,7 @@ const picture = (w = 4, h = 4) => ({
 
 const latest = () => FakeWorker.instances[FakeWorker.instances.length - 1]
 
-describe('the trace runner (DP-34)', () => {
+describe('the trace runner', () => {
   beforeEach(() => {
     FakeWorker.instances = []
     filterForegroundPaths.mockClear()
@@ -124,7 +124,7 @@ describe('the trace runner (DP-34)', () => {
     expect(filterForegroundPaths).not.toHaveBeenCalled()
   })
 
-  it('★ asks for the engine the caller chose, and says which one answered', async () => {
+  it('asks for the engine the caller chose, and says which one answered', async () => {
     // Potrace can only answer for the ink modes, so the worker is allowed to
     // fall back - but never silently. The engine in the reply is the engine
     // that ran, not the engine that was asked for.
@@ -145,7 +145,7 @@ describe('the trace runner (DP-34)', () => {
     await expect(promise).resolves.toMatchObject({ engine: 'imagetracer' })
   })
 
-  it('★ asks for Potrace when the caller does not choose (DP-Q43)', () => {
+  it('asks for Potrace when the caller does not choose', () => {
     const r = runner()
     const promise = r.start(picture(), { mode: 'lineart' })
     expect(latest().posted[0].engine).toBe('potrace')
@@ -169,7 +169,7 @@ describe('the trace runner (DP-34)', () => {
     expect(seen).toEqual(['reading', 'ink', 'tracing'])
   })
 
-  it('★ cancel terminates the worker and rejects, at any moment', async () => {
+  it('cancel terminates the worker and rejects, at any moment', async () => {
     const r = runner()
     const promise = r.start(picture(), { mode: 'lineart' })
     const w = latest()
@@ -190,7 +190,7 @@ describe('the trace runner (DP-34)', () => {
     expect(r.isRunning()).toBe(false)
   })
 
-  it('★ a new start supersedes the one in flight rather than queueing behind it', async () => {
+  it('a new start supersedes the one in flight rather than queueing behind it', async () => {
     const r = runner()
     const first = r.start(picture(), { mode: 'lineart' })
     const firstWorker = latest()
@@ -210,7 +210,7 @@ describe('the trace runner (DP-34)', () => {
     await expect(second).resolves.toMatchObject({ svg: 'filtered:<svg/>' })
   })
 
-  it('★ drops a reply from a job that is no longer the one in flight', async () => {
+  it('drops a reply from a job that is no longer the one in flight', async () => {
     const r = runner()
     const first = r.start(picture(), { mode: 'lineart' })
     const firstWorker = latest()
@@ -243,10 +243,10 @@ describe('the trace runner (DP-34)', () => {
     expect(w.posted[0].image.height).toBe(8)
   })
 
-  it("★ leaves the caller's own pixels intact, so a re-trace is possible", async () => {
+  it("leaves the caller's own pixels intact, so a re-trace is possible", async () => {
     // Transferring the caller's buffer detaches it. The file control keeps its
     // decoded pixels so that changing an ink setting re-traces the SAME
-    // picture; detaching them made every re-run fail with
+    // picture; detaching them would make every re-run fail with
     // "DataCloneError: ArrayBuffer at index 0 is already detached".
     const r = runner()
     const pic = picture(8, 8)

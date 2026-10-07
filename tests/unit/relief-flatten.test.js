@@ -1,12 +1,11 @@
 /**
- * D-120 (DP-26 P1): the relief flatten goes through the ring engine.
+ * The relief flatten goes through the ring engine.
  *
  * The fixture is the app's own logo: 139 stroke elements, all converted to
- * bands. MEASURED on the old pairwise path-bool flatten: it does not merely
- * corrupt this drawing - it exhausts an 8 GB node heap and dies, so there
- * is no before-number to print. The read-only reference (each element
- * interpreted even-odd on its own, all regions combined NonZero) reads
- * 1,280 rings covering 1,265 svg units squared, in seconds.
+ * bands. A pairwise path-bool flatten does not merely corrupt this drawing
+ * - it exhausts an 8 GB node heap and dies. The read-only reference (each
+ * element interpreted even-odd on its own, all regions combined NonZero)
+ * reads 1,280 rings covering 1,265 svg units squared, in seconds.
  *
  * @license GPL-3.0-or-later
  */
@@ -38,11 +37,11 @@ const areaOfOutput = (svgString) => {
   return engine.regionArea(engine.evenOddUnion(engine.ringsFromPathData(m[1])))
 }
 
-describe('the ring flatten (D-120)', () => {
+describe('the ring flatten', () => {
   const els = classifyElements(analyzeSvg(LOGO).elements)
 
   it(
-    '★ the logo survives whole: 139 converted strokes, one bounded pass',
+    'the logo survives whole: 139 converted strokes, one bounded pass',
     () => {
       expect(els).toHaveLength(139)
       expect(els.every((el) => el.strokeConverted)).toBe(true)
@@ -50,11 +49,10 @@ describe('the ring flatten (D-120)', () => {
       const out = flattenWithRings(engine, els, {})
       expect(out).toBeTruthy()
       const area = areaOfOutput(out)
-      // MEASURED at the fix: the true union of the logo's 139 band regions
-      // covers 1,118.6 svg units squared. (A one-shot NonZero union of all
-      // rings in a single list read 1,265 - winding sums across regions
-      // OVERCOUNT; the fold is the union of sets.) The band pins survival:
-      // neither gutted nor doubled.
+      // Measured: the true union of the logo's 139 band regions covers 1,118.6
+      // svg units squared. (A one-shot NonZero union of all rings in a single
+      // list reads 1,265 - winding sums across regions overcount; the fold is
+      // the union of sets.) The band pins survival: neither gutted nor doubled.
       expect(area).toBeGreaterThan(1000)
       expect(area).toBeLessThan(1400)
     },
@@ -62,22 +60,22 @@ describe('the ring flatten (D-120)', () => {
   )
 
   it(
-    '★ order cannot change the picture: reversed input, equal area',
+    'order cannot change the picture: reversed input, equal area',
     () => {
       const a = areaOfOutput(flattenWithRings(engine, els, {}))
       const b = areaOfOutput(flattenWithRings(engine, [...els].reverse(), {}))
       // The union of sets does not care about order; the integer scaling
-      // inside clipper leaves a rounding whisper between fold orders -
-      // MEASURED at 0.04 units squared in 1,118 (four parts in a hundred
-      // thousand). The pin holds the SEMANTIC equality with that whisper.
+      // inside clipper leaves a rounding whisper between fold orders, measured
+      // at 0.04 units squared in 1,118 (four parts in a hundred thousand). The
+      // pin holds the semantic equality with that whisper.
       expect(Math.abs(a - b)).toBeLessThan(a * 0.001)
     },
-    // Two full logo folds; MEASURED at 16 s under the full board's worker
+    // Two full logo folds; measured at 16 s under the full board's worker
     // contention, well inside the default alone.
     45000
   )
 
-  it('★ the bird does not cancel itself: regions fold one at a time', () => {
+  it('the bird does not cancel itself: regions fold one at a time', () => {
     // Six healthy foreground regions - and a one-shot NonZero union of all
     // their rings in a single subject returned EMPTY, because windings sum
     // across regions: a solid ring inside another region's counter counts

@@ -1,9 +1,9 @@
 /**
- * UI-Scoped Preferences Unit Tests (UF-14, U-25)
+ * UI-Scoped Preferences Unit Tests
  *
  * Proves the facade alone: namespace resolution at call time, the derived
  * scoped-key names (snapshot-pinned — a renamed scoped key orphans saved
- * data exactly like a renamed base key), the Q-40b seeding matrix, and the
+ * data exactly like a renamed base key), the seeding matrix, and the
  * desktop-default trio's per-namespace fallbacks.
  *
  * @license GPL-3.0-or-later
@@ -35,9 +35,9 @@ const AXIS_MARKS_KEY = getAppPrefKey('display-axisMarks');
 const EDGES_KEY = getAppPrefKey('display-edges');
 
 /**
- * Frozen snapshot of every base key the signed Q-40 table marks PER-UI.
- * DO NOT update casually — each row is an owner-signed contract, and each
- * derived `--forge` / `--classic` key is a user-data contract.
+ * Frozen snapshot of every base key the preference table scopes per
+ * interface. Do not update casually: each row is an agreed contract, and
+ * each derived `--forge` / `--classic` key is a user-data contract.
  */
 const EXPECTED_BASE_KEYS = [
   'openscad-forge-grid',
@@ -71,7 +71,7 @@ beforeEach(() => {
 });
 
 describe('scoped key names (snapshot)', () => {
-  it('the PER-UI base key list matches the signed Q-40 table exactly', () => {
+  it('the per-UI base key list matches the preference table exactly', () => {
     expect([...SCOPED_PREF_BASE_KEYS]).toEqual(EXPECTED_BASE_KEYS);
   });
 
@@ -121,7 +121,7 @@ describe('getActiveUiNamespace', () => {
   });
 });
 
-describe('ensureScopedPrefsSeeded (the Q-40b matrix)', () => {
+describe('ensureScopedPrefsSeeded (the seeding matrix)', () => {
   it('copies current merged values into forge, and into classic except the desktop trio', () => {
     localStorage.setItem(STORAGE_KEY_GRID, 'true');
     localStorage.setItem(AXES_KEY, 'false');
@@ -155,7 +155,7 @@ describe('ensureScopedPrefsSeeded (the Q-40b matrix)', () => {
     expect(
       localStorage.getItem(`${STORAGE_KEY_VIEWPORT_SCHEME}--classic`)
     ).toBe('nature');
-    // ...but NOT the desktop-default trio
+    // ...but not the desktop-default trio
     expect(localStorage.getItem(`${STORAGE_KEY_GRID}--classic`)).toBeNull();
     expect(localStorage.getItem(`${AXES_KEY}--classic`)).toBeNull();
     expect(localStorage.getItem(`${AXIS_MARKS_KEY}--classic`)).toBeNull();

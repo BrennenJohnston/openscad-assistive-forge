@@ -1,5 +1,5 @@
 /**
- * Crop first (DP-80): the crop view on a picture nothing has converted yet.
+ * Crop first: the crop view on a picture nothing has converted yet.
  *
  * The surface opens straight into the crop view with the photograph on it
  * and no drawing behind it: no workspace, no shape table, a status line that
@@ -31,7 +31,7 @@ const THREE =
   '<circle cx="130" cy="50" r="10" fill="black"/>' +
   '</svg>';
 
-describe("the crop panel's sentences (DP-80)", () => {
+describe("the crop panel's sentences", () => {
   let host;
   let say;
   let panel;
@@ -56,7 +56,7 @@ describe("the crop panel's sentences (DP-80)", () => {
     expect(say).toHaveBeenLastCalledWith(S.cropCanceled);
   });
 
-  it('★ says the sentences it is opened with, and forgets them on the next open', () => {
+  it('says the sentences it is opened with, and forgets them on the next open', () => {
     panel.open({
       box: BOX,
       previewHref: PICTURE,
@@ -72,7 +72,7 @@ describe("the crop panel's sentences (DP-80)", () => {
   });
 });
 
-describe('the surface opened on a picture (Crop first, DP-80)', () => {
+describe('the surface opened on a picture (Crop first)', () => {
   let surfaceEl;
   let announce;
 
@@ -113,7 +113,7 @@ describe('the surface opened on a picture (Crop first, DP-80)', () => {
     document.body.innerHTML = '';
   });
 
-  it('★ opens straight into the crop view with the picture on it, says so once, and keeps the drawing tools out of the way', () => {
+  it('opens straight into the crop view with the picture on it, says so once, and keeps the drawing tools out of the way', () => {
     const editor = make();
     openOnPicture(editor);
 
@@ -148,7 +148,7 @@ describe('the surface opened on a picture (Crop first, DP-80)', () => {
     );
   });
 
-  it('★ Save crop hands the rectangle and the insets to the host and closes the editor without a verdict', () => {
+  it('Save crop hands the rectangle and the insets to the host and closes the editor without a verdict', () => {
     const editor = make();
     const { onCrop, onClose, onKeepOriginal, onApply } = openOnPicture(editor);
     const bottom = view().querySelector(
@@ -174,7 +174,7 @@ describe('the surface opened on a picture (Crop first, DP-80)', () => {
     expect(root().dataset.crop).toBeUndefined();
   });
 
-  it('★ Cancel closes the editor, says nothing was converted, and tells the host it closed', () => {
+  it('Cancel closes the editor, says nothing was converted, and tells the host it closed', () => {
     const editor = make();
     const { onCrop, onClose } = openOnPicture(editor);
     view().querySelector('[data-action="cancel-crop"]').click();

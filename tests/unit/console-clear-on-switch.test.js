@@ -1,11 +1,12 @@
 /**
- * Regression test for Phase 3: console warnings must clear on project switch.
+ * Console warnings must clear on project switch.
  *
- * The bug: after loading a project that produces warnings (e.g. library-test),
- * switching to a different project left stale warnings visible in the Console
- * panel, the legacy console modal, and the toolbar badge. The root cause was
- * that handleFile's cleanup only cleared the echo drawer (updatePreviewDrawer)
- * but not the ConsolePanel entries, legacy lastConsoleOutput state, or badge.
+ * After loading a project that produces warnings (e.g. library-test),
+ * switching to a different project must not leave stale warnings visible
+ * in the Console panel, the legacy console modal, or the toolbar badge:
+ * handleFile's cleanup clears the ConsolePanel entries, the legacy
+ * lastConsoleOutput state and the badge, not only the echo drawer
+ * (updatePreviewDrawer).
  *
  * This test verifies that ConsolePanel.clear() resets all observable state and
  * that the clearConsoleState() pattern correctly wires through to all layers.

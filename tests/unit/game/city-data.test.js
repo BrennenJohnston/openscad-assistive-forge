@@ -383,7 +383,7 @@ describe('trimOverpassElement', () => {
   })
 
   it('returns null for elements the game cannot use', () => {
-    // CW-33: a landuse way is admitted only for the GREEN values the game
+    // A landuse way is admitted only for the green values the game
     // draws. Everything else in a downtown - commercial, retail, industrial -
     // is ground that is already drawn as ground, and admitting it would
     // multiply the extract for nothing.
@@ -406,7 +406,7 @@ describe('trimOverpassElement', () => {
     expect(trimOverpassElement({ type: 'node', id: 3 })).toBeNull()
   })
 
-  it('admits the green ways CW-33 draws, by their tag values', () => {
+  it('admits the green ways the game draws, by their tag values', () => {
     for (const tags of [
       { leisure: 'park' },
       { leisure: 'garden' },
@@ -430,7 +430,7 @@ describe('trimOverpassElement', () => {
     }
   })
 
-  it('keeps the ground and facade tags CW-33 rebaked for', () => {
+  it('keeps the ground and facade tags the game draws', () => {
     const trimmed = trimOverpassElement({
       type: 'way',
       id: 5,
@@ -480,7 +480,7 @@ describe('trimOverpassElement', () => {
   })
 })
 
-describe('extractLandmarks (CW-10)', () => {
+describe('extractLandmarks', () => {
   const buildingEl = (id, cx, tags, half = 10) => ({
     type: 'way',
     id,
@@ -537,7 +537,7 @@ describe('extractLandmarks (CW-10)', () => {
   })
 })
 
-describe('nearestLandmarkName (CW-10)', () => {
+describe('nearestLandmarkName', () => {
   const landmarks = [
     { name: 'Library', x: 0, y: 0, heightM: 20, score: 3 },
     { name: 'Tower', x: 200, y: 0, heightM: 100, score: 4 },
@@ -562,7 +562,7 @@ describe('nearestLandmarkName (CW-10)', () => {
   })
 })
 
-describe('trimOverpassElement — tree nodes (CW-16)', () => {
+describe('trimOverpassElement — tree nodes', () => {
   it('keeps a natural=tree node with rounded coordinates', () => {
     const trimmed = trimOverpassElement({
       type: 'node',
@@ -577,10 +577,9 @@ describe('trimOverpassElement — tree nodes (CW-16)', () => {
       },
     })
 
-    // CW-55 keeps the species: it is what the tree IS, and until this rebake
-    // it was thrown away at trim time even where a mapper had recorded it.
-    // addr:street is still dropped, which is the half of this case that has
-    // not changed - the gate keeps what the game reads and nothing else.
+    // The trim keeps the species: it is what the tree is, and a mapper may
+    // have recorded it. addr:street is dropped: the gate keeps what the game
+    // reads and nothing else.
     expect(trimmed).toEqual({
       type: 'node',
       id: 77,
@@ -615,9 +614,8 @@ describe('trimOverpassElement — tree nodes (CW-16)', () => {
     ).toBeNull()
   })
 
-  it('keeps shop and amenity nodes, which CW-34 chooses storefronts from', () => {
-    // Not drawn yet. They ride CW-33's rebake so that release does not have
-    // to ask Overpass for all four cities a second time.
+  it('keeps shop and amenity nodes, which storefronts are chosen from', () => {
+    // Ground-floor storefronts are chosen from these, so the trim keeps them.
     for (const tags of [{ shop: 'bakery' }, { amenity: 'cafe' }]) {
       const trimmed = trimOverpassElement({
         type: 'node',
@@ -632,7 +630,7 @@ describe('trimOverpassElement — tree nodes (CW-16)', () => {
   })
 })
 
-describe('parseCityExtract — trees (CW-16)', () => {
+describe('parseCityExtract — trees', () => {
   it('projects tree nodes into meter points and counts them', () => {
     const model = parseCityExtract(
       extractOf(
@@ -683,7 +681,7 @@ describe('parseCityExtract — trees (CW-16)', () => {
   })
 })
 
-describe('the visited set and the proximity hysteresis (CW-20)', () => {
+describe('the visited set and the proximity hysteresis', () => {
   let nearestLandmarkName
   beforeAll(async () => {
     ;({ nearestLandmarkName } =
@@ -760,7 +758,7 @@ describe('the visited set and the proximity hysteresis (CW-20)', () => {
   })
 })
 
-describe('the bake keeps what the silhouettes need (CW-26)', () => {
+describe('the bake keeps what the silhouettes need', () => {
   it('keeps building:part and the roof tags', async () => {
     const { trimOverpassElement } =
       await import('../../../src/js/game/city-data.js')
@@ -779,7 +777,7 @@ describe('the bake keeps what the silhouettes need (CW-26)', () => {
       },
     })
     // Whole-building roof:shape is nearly absent in US downtowns and the
-    // silhouettes live in building:part instead, so BOTH have to survive the
+    // silhouettes live in building:part instead, so both have to survive the
     // bake or one kind of city loses its shape.
     expect(el.tags['building:part']).toBe('yes')
     expect(el.tags['roof:shape']).toBe('gabled')
@@ -812,11 +810,11 @@ describe('the bake keeps what the silhouettes need (CW-26)', () => {
     expect(el.tags.note).toBeUndefined()
   })
 
-  it('CW-77 keeps wikidata and operator, which it used to throw away', () => {
-    // Both were dropped until CW-77, and both are now load-bearing: wikidata
-    // is the stable identity a landmark registry needs where a NAME is not
-    // one (CW-62), and operator is how a reader tells Seattle City Light's
-    // surveyed poles from OpenStreetMap's own lamps in the same file.
+  it('keeps wikidata and operator', () => {
+    // Both are load-bearing: wikidata is the stable identity a landmark
+    // registry needs where a name is not one, and operator is how a reader
+    // tells Seattle City Light's surveyed poles from OpenStreetMap's own lamps
+    // in the same file.
     const el = trimOverpassElement({
       type: 'node',
       id: 3,
@@ -837,7 +835,7 @@ describe('the bake keeps what the silhouettes need (CW-26)', () => {
   })
 })
 
-describe('building parts become the silhouette (CW-26)', () => {
+describe('building parts become the silhouette', () => {
   const CENTER = { lat: 47.6062, lon: -122.3321 }
   // A 40 m square outline with two parts inside it: a low wing and a tower.
   const ring = (dLat, dLon, sLat, sLon) => [
@@ -886,32 +884,27 @@ describe('building parts become the silhouette (CW-26)', () => {
     expect(host.parts.map((p) => p.heightM).sort((a, b) => a - b)).toEqual([
       12, 90,
     ])
-    // ★★ THE TOWER NOW STARTS AT 8, NOT AT 12, AND THAT IS CW-90 (D-126).
+    // The tower starts at 8, not at 12. Read the fixture: the wing spans
+    // 0.1-0.4 D of latitude and the tower 0.5-0.8 D, so they do not overlap
+    // anywhere. Starting at 12 the tower would hang over the outline's own
+    // 8 m mass with a 4 m gap beneath it.
     //
-    // This expectation used to be 12 and its comment said the tower "starts
-    // where the wing stops". Read the fixture: the wing spans 0.1-0.4 D of
-    // latitude and the tower 0.5-0.8 D. They do not overlap ANYWHERE. Nothing
-    // was under that tower at all - it hung 12 m up over the outline's own
-    // 8 m mass, with a 4 m gap, which is exactly the defect the owner
-    // photographed and CW-Q89 answered with "close every gap".
-    //
-    // 8 is the top of the mass beneath it, NOT the ground: the part is
-    // lowered to meet what holds it up and no further, which is the
-    // difference between the option the owner chose and the one they did not.
-    // The stepped silhouette CW-26 exists to recover is unaffected - it is
-    // the tower being 90 m tall over an 8 m wing, and it still is.
+    // 8 is the top of the mass beneath it, not the ground: the part is
+    // lowered to meet what holds it up and no further. The stepped silhouette
+    // is unaffected - it is the tower being 90 m tall over an 8 m wing, and it
+    // still is.
     const tower = host.parts.find((p) => p.heightM === 90)
     expect(tower.minHeightM).toBe(8)
   })
 
-  it('keeps the OUTLINE for collision, whatever the parts do', async () => {
+  it('keeps the outline for collision, whatever the parts do', async () => {
     const { parseCityExtract } =
       await import('../../../src/js/game/city-data.js')
     const { pointInRing } =
       await import('../../../src/js/game/walk-controls.js')
     const model = parseCityExtract(extract)
     const host = model.buildings[0]
-    // Find a spot inside the outline that is in NO part - the gap between
+    // Find a spot inside the outline that is in no part - the gap between
     // the wing and the tower. If collision ever read parts instead of the
     // outline, a player would walk into the middle of a solid building here.
     const xs = host.outer.map((pt) => pt[0])
@@ -969,7 +962,7 @@ describe('building parts become the silhouette (CW-26)', () => {
   })
 })
 
-describe('a turret does not delete its hall (CW-26)', () => {
+describe('a turret does not delete its hall', () => {
   const CENTER = { lat: 47.6062, lon: -122.3321 }
   const D = 0.00036
   const ring = (dLat, dLon, sLat, sLon) => [
@@ -1007,7 +1000,7 @@ describe('a turret does not delete its hall (CW-26)', () => {
     expect(host.partsAreMass).toBe(false)
   })
 
-  it('stands the outline down when the parts ARE the building', async () => {
+  it('stands the outline down when the parts are the building', async () => {
     // Two halves tiling the whole footprint - the well-mapped downtown shape.
     const model = await parse([
       outline,
@@ -1041,7 +1034,7 @@ describe('a turret does not delete its hall (CW-26)', () => {
   })
 })
 
-describe('roofs resolve from tags, or stay flat (CW-26)', () => {
+describe('roofs resolve from tags, or stay flat', () => {
   const load = () => import('../../../src/js/game/city-data.js')
 
   it('takes roof:height literally', async () => {
@@ -1088,7 +1081,7 @@ describe('roofs resolve from tags, or stay flat (CW-26)', () => {
     ).toBeNull()
   })
 
-  it('measures the roof against the BODY, not the ground', async () => {
+  it('measures the roof against the body, not the ground', async () => {
     const { resolveRoof } = await load()
     // An elevated volume 10 m tall starting at 30 m: the quarter share is of
     // the 10, not the 40, or a skybridge would grow a mountain.
@@ -1107,7 +1100,7 @@ describe('roofs resolve from tags, or stay flat (CW-26)', () => {
   })
 })
 
-describe('road names survive parsing (CW-27)', () => {
+describe('road names survive parsing', () => {
   it('carries a named way through to the road record', async () => {
     const { parseCityExtract } =
       await import('../../../src/js/game/city-data.js')
@@ -1136,14 +1129,14 @@ describe('road names survive parsing (CW-27)', () => {
       ],
     })
     expect(model.roads).toHaveLength(2)
-    // The bake kept this name all along; the parser used to drop it.
+    // The bake keeps this name, and the parser must not drop it.
     expect(model.roads[0].name).toBe('Pike Street')
     // An unnamed way stays unnamed rather than inheriting anything.
     expect(model.roads[1].name).toBeUndefined()
   })
 })
 
-describe('the street index answers where you are (CW-27)', () => {
+describe('the street index answers where you are', () => {
   const load = () => import('../../../src/js/game/city-data.js')
   // A cross: Main Street east-west along y=0, Cross Road north-south at x=0.
   const roads = [
@@ -1276,7 +1269,7 @@ describe('the street index answers where you are (CW-27)', () => {
   })
 })
 
-describe('CW-33 — the greenspace list is one list', () => {
+describe('the greenspace list is one list', () => {
   it('is the set the coverage table was measured against', () => {
     // Pinned by value. Adding one means re-measuring what it costs per city
     // and rebaking; it is not a free edit.
@@ -1312,7 +1305,7 @@ describe('CW-33 — the greenspace list is one list', () => {
   })
 })
 
-describe('CW-Q31 — the part-area floor', () => {
+describe('the part-area floor', () => {
   const center = { lat: 47.6, lon: -122.33 }
   /** A square of `m` metres on a side, as a closed lat/lon ring. */
   const square = (m) => {
@@ -1326,7 +1319,7 @@ describe('CW-Q31 — the part-area floor', () => {
     ]
   }
 
-  it('is the number the owner signed', () => {
+  it('is 10 square metres', () => {
     expect(MIN_PART_AREA_M2).toBe(10)
   })
 
@@ -1353,7 +1346,7 @@ describe('CW-Q31 — the part-area floor', () => {
   })
 })
 
-describe('CW-33 — pavements, surfaces and greens reach the model', () => {
+describe('pavements, surfaces and greens reach the model', () => {
   const road = (id, tags) => ({
     type: 'way',
     id,
@@ -1426,7 +1419,7 @@ describe('CW-33 — pavements, surfaces and greens reach the model', () => {
   })
 })
 
-describe('street furniture and wayfinding nodes (CW-43, CW-Q43)', () => {
+describe('street furniture and wayfinding nodes', () => {
   const nodeEl = (id, xM, yM, tags) => ({
     type: 'node',
     id,
@@ -1452,8 +1445,8 @@ describe('street furniture and wayfinding nodes (CW-43, CW-Q43)', () => {
   })
 
   it('trim admits every furniture node type and keeps its companions', () => {
-    // The gate lesson, third time: keeping a tag is not enough - the gate
-    // has to admit the element carrying it.
+    // Keeping a tag is not enough: the gate has to admit the element
+    // carrying it.
     const busStop = trimOverpassElement(
       nodeEl(1, 0, 0, {
         highway: 'bus_stop',
@@ -1552,8 +1545,8 @@ describe('street furniture and wayfinding nodes (CW-43, CW-Q43)', () => {
   })
 
   it('never lets a bench reach the storefront poi list', () => {
-    // The poi grid is what CW-34 dresses ground floors from; before CW-43 a
-    // bench node in an extract would have joined it as an "amenity".
+    // The poi grid is what ground floors are dressed from, so a bench node in
+    // an extract must not join it as an "amenity".
     const model = parseCityExtract(
       extractOf(
         nodeEl(1, 0, 0, { amenity: 'bench' }),
@@ -1586,7 +1579,7 @@ describe('street furniture and wayfinding nodes (CW-43, CW-Q43)', () => {
     expect(model.stats.wayfindingCount).toBe(3)
     const kinds = model.wayfinding.map((w) => w.kind).sort()
     expect(kinds).toEqual(['crossing', 'kerb', 'tactile_paving'])
-    // A crossing that carries kerb+tactile companions is ONE crossing, and
+    // A crossing that carries kerb+tactile companions is one crossing, and
     // the companions ride its tags rather than splitting into three points.
     const crossing = model.wayfinding.find((w) => w.kind === 'crossing')
     expect(crossing.tags['traffic_signals:sound']).toBe('yes')
@@ -1611,7 +1604,7 @@ describe('street furniture and wayfinding nodes (CW-43, CW-Q43)', () => {
   })
 })
 
-describe('attraction nodes join the landmarks (CW-43/CW-44, CW-Q44)', () => {
+describe('attraction nodes join the landmarks', () => {
   const nodeEl = (id, xM, yM, tags) => ({
     type: 'node',
     id,
@@ -1625,7 +1618,7 @@ describe('attraction nodes join the landmarks (CW-43/CW-44, CW-Q44)', () => {
     geometry: squareRing(cx, 0, half),
   })
 
-  it('parses only NAMED attraction nodes, with height when tagged', () => {
+  it('parses only named attraction nodes, with height when tagged', () => {
     const model = parseCityExtract(
       extractOf(
         nodeEl(1, 0, 0, {
@@ -1711,14 +1704,14 @@ describe('attraction nodes join the landmarks (CW-43/CW-44, CW-Q44)', () => {
 })
 
 /**
- * CW-55 (CW-Q55): one rebake carries the seeds CW-56/57 render.
+ * One bake carries the planting and resting seeds the city renders.
  *
- * Everything here is the gate lesson in its fourth costume. Keeping a tag is
- * not enough, and neither is querying for it: the node and way routing gates
- * each have to ADMIT the new class, or it arrives from Overpass, survives the
- * trim's tag filter, and dies two lines later with its tags intact.
+ * Keeping a tag is not enough, and neither is querying for it: the node and
+ * way routing gates each have to admit the new class, or it arrives from
+ * Overpass, survives the trim's tag filter, and dies two lines later with
+ * its tags intact.
  */
-describe('planting and resting seeds (CW-55, CW-Q55)', () => {
+describe('planting and resting seeds', () => {
   const nodeEl = (id, xM, yM, tags) => ({
     type: 'node',
     id,
@@ -1734,7 +1727,7 @@ describe('planting and resting seeds (CW-55, CW-Q55)', () => {
     expect(PICNIC_LEISURE_VALUES).toEqual(['picnic_table'])
   })
 
-  it('keeps what a tree IS, which the trim used to throw away', () => {
+  it('keeps what a tree is', () => {
     const trimmed = trimOverpassElement(
       nodeEl(400, 0, 0, {
         natural: 'tree',
@@ -1754,9 +1747,9 @@ describe('planting and resting seeds (CW-55, CW-Q55)', () => {
     })
   })
 
-  it('admits a planter node and a picnic table through the NODE gate', () => {
-    // Both would have died here before: man_made and leisure were not on the
-    // list of keys the gate accepts, whatever their tags said.
+  it('admits a planter node and a picnic table through the node gate', () => {
+    // Both need man_made and leisure on the list of keys the gate accepts;
+    // without them they would die here, whatever their tags said.
     const planter = trimOverpassElement(
       nodeEl(401, 0, 0, { man_made: 'planter' })
     )
@@ -1770,7 +1763,7 @@ describe('planting and resting seeds (CW-55, CW-Q55)', () => {
     expect(table.tags).toEqual({ leisure: 'picnic_table' })
   })
 
-  it('admits planter and flowerbed WAYS through the way gate', () => {
+  it('admits planter and flowerbed ways through the way gate', () => {
     for (const tags of [
       { man_made: 'planter' },
       { leisure: 'flowerbed' },
@@ -1815,7 +1808,7 @@ describe('planting and resting seeds (CW-55, CW-Q55)', () => {
       { center: CENTER }
     )
 
-    // A tree is a typed object now, and an untagged one still parses - the
+    // A tree is a typed object, and an untagged one still parses - the
     // fields are optional, so a city with no leaf_type at all (Albuquerque
     // has none) is not a city with no trees.
     expect(model.trees).toHaveLength(2)
@@ -1846,7 +1839,7 @@ describe('planting and resting seeds (CW-55, CW-Q55)', () => {
     expect(model.stats.picnicTableCount).toBe(1)
   })
 
-  it('keeps a flowerbed OUT of the greens, because it is dressed not drawn', () => {
+  it('keeps a flowerbed out of the greens, because it is dressed not drawn', () => {
     const model = parseCityExtract(
       extractOf(
         {

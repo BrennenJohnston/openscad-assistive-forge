@@ -369,13 +369,12 @@ describe('extractInk', () => {
     expect(summary.inkCoverage).toBeCloseTo(4 / 16, 5)
   })
 
-  it('★ turns a light drawing on a COLORED dark page the right way up (D-139)', () => {
-    // The owner's CREATE logo in miniature: white lettering on navy. The navy
-    // is dark AND saturated, so the chroma gate rejects it - and the old rule,
-    // which asked whether the finished mask covered more than half the
-    // picture, saw an empty mask and left the drawing inside out. MEASURED on
-    // the real logo before this: 0 shapes traced, 0 % ink, an 85-byte SVG
-    // emitted as the design.
+  it('turns a light drawing on a colored dark page the right way up', () => {
+    // A logo in miniature: white lettering on navy. The navy is dark and
+    // saturated, so the chroma gate rejects it - and a rule asking whether the
+    // finished mask covered more than half the picture would see an empty
+    // mask and leave the drawing inside out: 0 shapes traced, 0 % ink, an
+    // 85-byte SVG emitted as the design.
     const NAVY = [75, 46, 131];
     const img = imageFrom(['nnnn', 'nwwn', 'nwwn', 'nnnn'], {
       n: NAVY,
@@ -407,13 +406,13 @@ describe('extractInk', () => {
     expect(summary.inkCoverage).toBeCloseTo(4 / 16, 5);
   });
 
-  it('★ leaves a dark glyph on a dark COLORED field alone', () => {
+  it('leaves a dark glyph on a dark colored field alone', () => {
     // The measurement that shaped the rule. This is the AAC card: a blue
     // field with a dark glyph on it, and more than half of it is dark by
-    // lightness. An earlier version of the D-139 fix decided on lightness
-    // alone, turned this picture around, and threw away the glyph that is
-    // its whole point. What is special about the logo above is not that it
-    // is dark - it is that NOTHING survived both gates.
+    // lightness. Deciding on lightness alone would turn this picture around
+    // and throw away the glyph that is its whole point. What is special about
+    // the logo above is not that it is dark - it is that nothing survived
+    // both gates.
     const img = imageFrom(['bbbb', 'bkkb', 'bkkb', 'bbbb'], {
       b: BLUE,
       k: BLACK,
@@ -433,7 +432,7 @@ describe('extractInk', () => {
   it('never turns around a picture whose other side is the whole page', () => {
     // A blank page keeps nothing, and "nothing" is the honest answer: the
     // swap is taken only when it finds a drawing, and everything is not a
-    // drawing. This is what keeps an empty conversion empty (D-139).
+    // drawing. This is what keeps an empty conversion empty.
     const img = imageFrom(Array(6).fill('w'.repeat(6)), { w: WHITE });
     const { summary } = extractInk(img, {
       mode: 'lineart',
@@ -489,7 +488,7 @@ describe('extractInk', () => {
   })
 })
 
-describe('compositeOntoWhite (DP-36, audit 15)', () => {
+describe('compositeOntoWhite', () => {
   const PALETTE = {
     '#': [0, 0, 0, 255],
     '.': [255, 255, 255, 255],
@@ -498,11 +497,10 @@ describe('compositeOntoWhite (DP-36, audit 15)', () => {
     'r': [255, 0, 0, 0],
   }
 
-  it('★ a fully see-through pixel becomes white, not black', () => {
-    // The defect this fixes: Standard mode handed the tracer a picture with
-    // alpha and the tracer decided what a see-through pixel was. A logo saved
-    // on a transparent background came back with a field around it that nobody
-    // drew.
+  it('a fully see-through pixel becomes white, not black', () => {
+    // Handed a picture with alpha, the tracer would decide what a see-through
+    // pixel was, and a logo saved on a transparent background would come back
+    // with a field around it that nobody drew.
     const out = compositeOntoWhite(
       imageFrom(['#. ', ' .#'], PALETTE),
       makeImageData
@@ -517,7 +515,7 @@ describe('compositeOntoWhite (DP-36, audit 15)', () => {
     expect(px(0, 1)).toEqual([255, 255, 255, 255])
   })
 
-  it('★ a see-through RED pixel becomes white, not red', () => {
+  it('a see-through red pixel becomes white, not red', () => {
     // Alpha zero means the colour underneath it was never shown to anybody.
     // Keeping the colour and dropping the alpha would invent a pixel.
     const out = compositeOntoWhite(imageFrom(['r'], PALETTE), makeImageData)
@@ -534,9 +532,9 @@ describe('compositeOntoWhite (DP-36, audit 15)', () => {
     expect([r, g, b]).toEqual([127, 127, 127])
   })
 
-  it('★ a picture with no transparency is handed back untouched', () => {
+  it('a picture with no transparency is handed back untouched', () => {
     // Not a copy: the same object. Copying eight megabytes to change nothing
-    // is the kind of cost this round spent a release removing.
+    // is a cost worth avoiding.
     const opaque = imageFrom(['#.', '.#'], PALETTE)
     const out = compositeOntoWhite(opaque, makeImageData)
     expect(out.composited).toBe(false)
@@ -544,7 +542,7 @@ describe('compositeOntoWhite (DP-36, audit 15)', () => {
   })
 })
 
-describe('lineWidthPercentiles (DP-36 P3)', () => {
+describe('lineWidthPercentiles', () => {
   /** A mask of horizontal bands, each `thickness` rows of ink then paper. */
   function bands(width, height, thickness, period) {
     const mask = new Uint8Array(width * height)
@@ -556,13 +554,13 @@ describe('lineWidthPercentiles (DP-36 P3)', () => {
     return mask
   }
 
-  it('★ measures a stroke of known width', () => {
+  it('measures a stroke of known width', () => {
     // Three pixels across, read as three.
     expect(lineWidthPercentiles(bands(60, 60, 3, 20), 60, 60).p10).toBe(3)
     expect(lineWidthPercentiles(bands(60, 60, 9, 30), 60, 60).p10).toBe(9)
   })
 
-  it('★ never reads a line as THICKER than it is', () => {
+  it('never reads a line as thicker than it is', () => {
     // The direction matters: this number decides whether somebody is warned
     // that a line may not print. Reading thick would let a line that cannot
     // print go unmentioned, so the measure is exact on odd widths and one
@@ -579,9 +577,8 @@ describe('lineWidthPercentiles (DP-36 P3)', () => {
     // one that will not print, and it is the one worth saying.
     // Bands of 12 with paper between them, and one lone row in a gap. The
     // lone row has to sit clear of the bands or it merges with one and there
-    // is no thin stroke to find - which is what the first draft of this test
-    // did, and it is why the assertion is on the VALUE now and not just on the
-    // two percentiles differing.
+    // is no thin stroke to find, which is why the assertion is on the value
+    // and not just on the two percentiles differing.
     const mask = bands(120, 120, 12, 24)
     for (let y = 18; y < 120; y += 24) {
       for (let x = 0; x < 120; x++) mask[y * 120 + x] = 1

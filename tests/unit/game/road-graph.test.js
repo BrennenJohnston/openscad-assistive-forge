@@ -11,7 +11,7 @@ const road = (points, kind = 'residential', widthM = 6) => ({
   widthM,
 })
 
-describe('buildRoadGraph (CW-19)', () => {
+describe('buildRoadGraph', () => {
   it('joins chains that share an end into one node', () => {
     // Two ways meeting at (10, 0), the way OSM splits a street at a junction.
     const g = buildRoadGraph([
@@ -89,7 +89,7 @@ describe('buildRoadGraph (CW-19)', () => {
     expect(hub.x).toBe(0)
     expect(hub.y).toBe(0)
 
-    // A road merely continuing under a new name is NOT an intersection, or
+    // A road merely continuing under a new name is not an intersection, or
     // every street would sprout traffic lights along its length.
     const straight = buildRoadGraph([
       road([
@@ -170,7 +170,7 @@ describe('buildRoadGraph (CW-19)', () => {
   })
 })
 
-describe('trafficDensityFor (CW-19)', () => {
+describe('trafficDensityFor', () => {
   it('gives busier classes more cars per kilometre', () => {
     const motorway = trafficDensityFor({ kind: 'motorway' })
     const primary = trafficDensityFor({ kind: 'primary' })

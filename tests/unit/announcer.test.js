@@ -6,7 +6,7 @@
  * still in the region (it clears itself 1.5 s after a message), emptying it
  * and writing again one frame later is too quick for the browser's
  * accessibility tree to see a change: a six-key cell repeating the cell
- * before it went unsaid in NVDA (D-239).
+ * before it went unsaid in NVDA.
  *
  * @license GPL-3.0-or-later
  */
@@ -50,7 +50,7 @@ describe('announcer: a repeated message', () => {
     expect(region().textContent).toBe('dots 1');
   });
 
-  it('keeps the region empty for 100 ms before writing the same words again (D-239)', () => {
+  it('keeps the region empty for 100 ms before writing the same words again', () => {
     announceImmediate('dots 1');
     nextFrame();
     // The same cell 1.2 s later, while the region still holds it

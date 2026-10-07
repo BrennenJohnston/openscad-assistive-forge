@@ -1,12 +1,11 @@
 /**
- * Error-translation parity corpus (BR-5 safety net).
+ * Error-translation parity corpus.
  *
  * The render worker classifies raw stderr into { message, code, raw } via
  * ERROR_TRANSLATIONS (src/worker/error-translations.js); the main thread
  * turns errors into rich UI content via error-translator.js. This corpus
- * freezes the classification of representative raw stderr strings on BOTH
- * paths so the BR-5 consolidation (code-based lookup) cannot silently
- * change what users see.
+ * freezes the classification of representative raw stderr strings on both
+ * paths so the code-based lookup cannot silently change what users see.
  *
  * @license GPL-3.0-or-later
  */
@@ -22,8 +21,7 @@ import {
  * Corpus of representative raw stderr strings.
  * - workerCode: what the worker's classifier must return
  * - legacyTitle: what the main thread's regex path must return when given
- *   the RAW string (this is the pre-BR-5 behavior for raw text and must
- *   never regress)
+ *   the raw string (the behavior for raw text, which must never regress)
  */
 const CORPUS = [
   {
@@ -123,7 +121,7 @@ const CORPUS = [
   },
 ];
 
-describe('BR-5 parity corpus — worker classification of raw stderr', () => {
+describe('parity corpus — worker classification of raw stderr', () => {
   for (const { raw, workerCode } of CORPUS) {
     it(`classifies ${JSON.stringify(raw.slice(0, 50))} as ${workerCode}`, () => {
       const result = translateWorkerError(raw);
@@ -133,7 +131,7 @@ describe('BR-5 parity corpus — worker classification of raw stderr', () => {
   }
 });
 
-describe('BR-5 parity corpus — main-thread legacy regex path on raw stderr', () => {
+describe('parity corpus — main-thread legacy regex path on raw stderr', () => {
   for (const { raw, legacyTitle } of CORPUS) {
     it(`translates ${JSON.stringify(raw.slice(0, 50))} to "${legacyTitle}"`, () => {
       const result = translateError(raw);
@@ -143,7 +141,7 @@ describe('BR-5 parity corpus — main-thread legacy regex path on raw stderr', (
   }
 });
 
-describe('BR-5 — code-first translation honors the worker classification', () => {
+describe('code-first translation honors the worker classification', () => {
   it('resolves every corpus entry with a coded translation (no generic fallback)', () => {
     for (const { raw, workerCode } of CORPUS) {
       const result = translateError(raw, { code: workerCode });
@@ -162,9 +160,8 @@ describe('BR-5 — code-first translation honors the worker classification', () 
   });
 
   it('a worker-classified Parser error no longer renders as the generic fallback', () => {
-    // The exact BR-5 symptom from the audit: worker says SYNTAX_ERROR but
-    // the UI used to say "Something Went Wrong" when the prose didn't
-    // happen to match a legacy regex.
+    // The worker says SYNTAX_ERROR; the UI must not fall back to "Something
+    // Went Wrong" just because the prose does not match a legacy regex.
     const result = translateError('opaque worker text', {
       code: 'SYNTAX_ERROR',
     });

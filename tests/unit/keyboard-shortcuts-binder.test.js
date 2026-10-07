@@ -1,5 +1,5 @@
 /**
- * Keyboard Shortcuts Binder Unit Tests (MC-1)
+ * Keyboard Shortcuts Binder Unit Tests
  * @license GPL-3.0-or-later
  */
 

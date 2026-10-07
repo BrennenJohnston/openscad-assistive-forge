@@ -1,15 +1,15 @@
 /**
- * Unit tests for the axis tick + numeral overlay (UF-7 desktop
+ * Unit tests for the axis tick + numeral overlay (a desktop
  * transcription).
  *
  * The mock deliberately mirrors what getThreeModule() actually hands out —
- * never more. The pre-UF-7 suite injected Sprite/CanvasTexture classes the
- * app did not export, which is how 20 green tests sat on top of an overlay
- * that threw on every real attempt (the R-IV lesson).
+ * never more. A suite that injects Sprite/CanvasTexture classes the app
+ * does not export can stay green on top of an overlay that throws on every
+ * real attempt.
  *
  * Expected numbers are pinned at the two desktop reference poses
  * (distance 140 and 263.43, both `fov = 22.50` screenshots) so a drifted
- * formula fails loudly against the same ground truth the owner approved.
+ * formula fails loudly against the same ground truth.
  *
  * @license GPL-3.0-or-later
  */
@@ -89,7 +89,7 @@ function makeMockThree() {
   };
 }
 
-describe('axis-tick-overlay (UF-7 transcription)', () => {
+describe('axis-tick-overlay (desktop transcription)', () => {
   describe('parseCssColorToHex', () => {
     it('parses #rrggbb', () => {
       expect(__test.parseCssColorToHex('#abcdef')).toBe(0xabcdef);
@@ -157,7 +157,7 @@ describe('axis-tick-overlay (UF-7 transcription)', () => {
 
     it('classic resolves the transcribed Cornfield axes color, scheme-first', () => {
       // Even with a token present the scheme wins: the marks belong to the
-      // viewport scheme, not to the app theme underneath (U-13).
+      // viewport scheme, not to the app theme underneath.
       document.body.style.setProperty('--color-text-primary', '#ff5733');
       const result = resolveAxisMarkColor('classic', document);
       expect(result.hex).toBe(0x000000);
@@ -170,9 +170,9 @@ describe('axis-tick-overlay (UF-7 transcription)', () => {
       expect(result.hex).toBe(0xe5e5e5);
     });
 
-    it('prefers the body-scoped token over the html one (the U-13 shape)', () => {
+    it('prefers the body-scoped token over the html one', () => {
       // The dark theme writes its token on <html>; Classic's remap lives
-      // on <body>. Reading html is exactly the defect this fix removed.
+      // on <body>. Reading html would be the defect.
       document.documentElement.style.setProperty(
         '--color-text-primary',
         '#edeef0'
@@ -216,7 +216,7 @@ describe('axis-tick-overlay (UF-7 transcription)', () => {
     });
 
     it('absorbs the camera round-trip epsilon at a decade boundary', () => {
-      // MEASURED: typing 1000 into the Viewport-Control distance field lands
+      // Measured: typing 1000 into the Viewport-Control distance field lands
       // the camera at this value after the rotation-matrix round trip. A bare
       // floor(log10) read it as the 100 decade → 600 ticks instead of 60.
       expect(computeScale(999.9999999999992).tickStepMm).toBe(100);
@@ -392,8 +392,8 @@ describe('axis-tick-overlay (UF-7 transcription)', () => {
         '__axisTickLines',
         '__axisTickLinesNeg',
       ]);
-      // The pre-UF-7 overlay forced renderOrder=10 and killed depthTest on
-      // its labels; both were the U-11 defect. Nothing may reintroduce them.
+      // renderOrder=10 and a disabled depthTest on the labels are both defects
+      // here; nothing may reintroduce them.
       expect(result.group.renderOrder).toBe(0);
       for (const child of result.group.children) {
         expect(child.material.depthTest).toBeUndefined();

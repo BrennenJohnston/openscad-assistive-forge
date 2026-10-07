@@ -82,9 +82,9 @@ describe('Editor zoom shortcuts (editorOnly)', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
-  // --- Outside .cm-editor: shortcuts must NOT fire and must NOT steal default ---
+  // --- Outside .cm-editor: shortcuts neither fire nor steal default ---
 
-  it('does NOT fire increaseFontSize and does NOT preventDefault when Ctrl+= outside editor', () => {
+  it('does not fire increaseFontSize and does not preventDefault when Ctrl+= outside editor', () => {
     const div = document.createElement('div')
     document.body.appendChild(div)
     const event = makeKeydown('=', { ctrl: true })
@@ -93,7 +93,7 @@ describe('Editor zoom shortcuts (editorOnly)', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it('does NOT fire decreaseFontSize and does NOT preventDefault when Ctrl+- outside editor', () => {
+  it('does not fire decreaseFontSize and does not preventDefault when Ctrl+- outside editor', () => {
     const div = document.createElement('div')
     document.body.appendChild(div)
     const event = makeKeydown('-', { ctrl: true })
@@ -102,7 +102,7 @@ describe('Editor zoom shortcuts (editorOnly)', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it('does NOT fire zoom shortcuts when focus is in a plain INPUT field', () => {
+  it('does not fire zoom shortcuts when focus is in a plain INPUT field', () => {
     const input = document.createElement('input')
     document.body.appendChild(input)
     const event = makeKeydown('=', { ctrl: true })
@@ -111,7 +111,7 @@ describe('Editor zoom shortcuts (editorOnly)', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it('does NOT fire zoom shortcuts when focus is on document.body', () => {
+  it('does not fire zoom shortcuts when focus is on document.body', () => {
     const event = makeKeydown('=', { ctrl: true })
     document.body.dispatchEvent(event)
     expect(increaseSpy).not.toHaveBeenCalled()
@@ -158,7 +158,7 @@ describe('Editor zoom shortcuts (editorOnly)', () => {
     kb2.destroy()
   })
 
-  it('editorOnly is NOT written to localStorage', () => {
+  it('editorOnly is not written to localStorage', () => {
     kb.setShortcut('increaseFontSize', { key: '+', ctrl: true })
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
     expect(saved.increaseFontSize).not.toHaveProperty('editorOnly')
@@ -177,14 +177,14 @@ describe('Editor zoom shortcuts (editorOnly)', () => {
     const zoomSpy = vi.fn()
     kb2.on('increaseFontSize', zoomSpy)
 
-    // Standard .cm-editor should NOT trigger when editorSelector is custom
+    // Standard .cm-editor should not trigger when editorSelector is custom
     const { content } = makeCmEditor()
     const e1 = makeKeydown('=', { ctrl: true })
     content.dispatchEvent(e1)
     expect(zoomSpy).not.toHaveBeenCalled()
     expect(e1.defaultPrevented).toBe(false)
 
-    // Custom .my-custom-editor SHOULD trigger
+    // Custom .my-custom-editor should trigger
     const customEditor = document.createElement('div')
     customEditor.classList.add('my-custom-editor')
     document.body.appendChild(customEditor)

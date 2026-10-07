@@ -234,7 +234,7 @@ describe('validateManifest', () => {
     expect(validateManifest(data).valid).toBe(false)
   })
 
-  // -- defaults.starterParameters (IR-9) -----------------------------------
+  // -- defaults.starterParameters ------------------------------------------
 
   it('accepts a manifest with no starterParameters at all', () => {
     // The field is additive. Every manifest written before it existed has to
@@ -564,7 +564,7 @@ describe('validateManifest — files.bundle', () => {
 })
 
 // ---------------------------------------------------------------------------
-// loadManifest — project_presets flag (Phase 3)
+// loadManifest — project_presets flag
 // ---------------------------------------------------------------------------
 
 describe('loadManifest — projectPresets return field', () => {
@@ -894,7 +894,6 @@ describe('loadManifest — LFS pointer redirect', () => {
 
 // ---------------------------------------------------------------------------
 // fetchProjectBlob: the ?project= lane's download follows LFS pointers too
-// (IR-R2 A2, D-186)
 // ---------------------------------------------------------------------------
 
 describe('fetchProjectBlob', () => {

@@ -1,8 +1,8 @@
 /**
- * Bridge-less multi-layer stencil plates (DP-12).
+ * Bridge-less multi-layer stencil plates.
  *
- * The property that makes this method worth having is that NO CUT IS EVER A
- * RING, so nothing is ever left connected to nothing and no bridge has to
+ * The property that makes this method worth having is that no cut is ever a
+ * ring, so nothing is ever left connected to nothing and no bridge has to
  * cross the artwork. Most of these cases are about that, and about the plates
  * agreeing with each other well enough that the second colour lands on the
  * first.
@@ -60,8 +60,8 @@ function cutsFor(svgText, options = { solid: true }) {
 
 const dOf = (svg) => / d="([^"]*)"/.exec(svg)[1];
 
-describe('★★ the bridge-less property', () => {
-  it('every plate cuts ONE solid region, never a ring', () => {
+describe('the bridge-less property', () => {
+  it('every plate cuts one solid region, never a ring', () => {
     // This is the whole method. Plate 1 cuts the A INCLUDING where its
     // counter will be, because the counter belongs to a deeper layer and is
     // cut at layer 1 too. So the counter is not an island on plate 1, and
@@ -74,9 +74,9 @@ describe('★★ the bridge-less property', () => {
   });
 
   it('without solid mode the counter becomes a hole, and an island', () => {
-    // MEASURED, and the reason the option exists: honouring the hole role
+    // Measured, and the reason the option exists: honouring the hole role
     // gives the A two subpaths - a ring - and its counter would drop out.
-    // Layer 2 comes back NULL as well, because a compound path whose only
+    // Layer 2 comes back null as well, because a compound path whose only
     // element is a hole is nothing at all.
     const cuts = cutsFor(LETTER_A, {});
     expect((dOf(cuts[0]).match(/M/gi) || []).length).toBe(2);
@@ -84,7 +84,7 @@ describe('★★ the bridge-less property', () => {
   });
 
   it('a deeper plate cuts strictly less than the one before it', () => {
-    // Plate 2 protects layer 1 by NOT cutting it. If a later plate cut more
+    // Plate 2 protects layer 1 by not cutting it. If a later plate cut more
     // than an earlier one, the coat would spill onto paint it should protect.
     const cuts = cutsFor(LETTER_A).filter(Boolean);
     // Real area, not a count of path commands: two triangles have the same
@@ -140,7 +140,7 @@ describe('plateFit', () => {
     expect(f.dy + (f.scale * base.canvasHeight) / 2).toBeCloseTo(100, 6);
   });
 
-  it('★ gives EVERY plate the same fit, or the colours miss each other', () => {
+  it('gives every plate the same fit, or the colours miss each other', () => {
     // Two plates of the same design differ only in what they cut. If the fit
     // were computed from each cut's own extent, plate 2 would be scaled up to
     // the margin box and the second colour would land nowhere near the first.
@@ -174,7 +174,7 @@ describe('buildStencilPlate', () => {
     expect(svg).toContain('width="200mm"');
     expect(svg).toContain('viewBox="0 0 200 150"');
     expect(svg).toContain('fill-rule="evenodd"');
-    // ONE path: outline, then marks, then the cut with its fit BAKED IN.
+    // One path: outline, then marks, then the cut with its fit baked in.
     // Measured: two separate <path> elements are unioned on import, so a cut
     // in its own path cuts nothing.
     expect(svg).toContain('M 0 0 H 200 V 150 H 0 Z');
@@ -244,7 +244,7 @@ describe('stencilLayers - which shape is the paper', () => {
     };
   };
 
-  it('★ steps past a LIGHT full-bleed background', () => {
+  it('steps past a light full-bleed background', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
       '<rect width="40" height="40" fill="#efe9dc"/>' +
@@ -256,12 +256,12 @@ describe('stencilLayers - which shape is the paper', () => {
     expect(plateCount).toBe(1);
   });
 
-  it('★ steps past a DARK full-bleed background too', () => {
-    // COLOUR CANNOT ANSWER THIS. The owner's own traced mark has a dark
+  it('steps past a dark full-bleed background too', () => {
+    // Colour cannot answer this. A traced mark can have a dark
     // rgb(54,59,127) full-bleed rect that reads as foreground. Judged on
-    // colour, plate 1 cut a rectangle the size of the whole image - and the
-    // union of everything under it took 54.5 SECONDS to flatten against
-    // 228 ms once it was excluded.
+    // colour, plate 1 would cut a rectangle the size of the whole image - and
+    // the union of everything under it takes 54.5 seconds to flatten against
+    // 228 ms once it is excluded.
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
       '<rect width="40" height="40" fill="rgb(54,59,127)"/>' +
@@ -273,8 +273,8 @@ describe('stencilLayers - which shape is the paper', () => {
     expect(layers[1]).toBe(1);
   });
 
-  it('does NOT step past a large shape with nothing drawn on it', () => {
-    // A full-bleed shape that is the whole design IS the design.
+  it('does not step past a large shape with nothing drawn on it', () => {
+    // A full-bleed shape that is the whole design is the design.
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
       '<rect width="40" height="40" fill="#111"/></svg>';
@@ -344,8 +344,8 @@ describe('scaleTranslatePath', () => {
   });
 });
 
-describe('the backdrop rule measures against the CANVAS', () => {
-  it('★ does NOT eat a design whose outer shape merely is the largest', () => {
+describe('the backdrop rule measures against the canvas', () => {
+  it('does not eat a design whose outer shape merely is the largest', () => {
     // The first version compared a root's area with the LARGEST area in the
     // drawing. The outermost shape is always the largest, so every root with
     // children was called paper: three nested squares lost their outer square
@@ -385,7 +385,7 @@ describe('the backdrop rule measures against the CANVAS', () => {
   });
 });
 
-describe('cut and engrave arrive as separate colours (DP-13)', () => {
+describe('cut and engrave arrive as separate colours', () => {
   const args = {
     cutPathData: 'M 10 10 H 90 V 40 H 10 Z',
     canvasSpan: 100,
@@ -403,7 +403,7 @@ describe('cut and engrave arrive as separate colours (DP-13)', () => {
     expect(CUT_COLOR).toBe('#000000');
   });
 
-  it('★ an engraved label is a DIFFERENT colour, or it gets cut out', () => {
+  it('an engraved label is a different colour, or it gets cut out', () => {
     // Laser software decides what to do with a line by its colour. A label in
     // the cut colour is not a label: it is a hole in the shape of some words.
     const { svg } = buildStencilPlate({ ...args, engraveLabel: true });
@@ -426,7 +426,7 @@ describe('cut and engrave arrive as separate colours (DP-13)', () => {
   });
 });
 
-describe('buildLaserSheet - one sheet, cut once (DP-13)', () => {
+describe('buildLaserSheet - one sheet, cut once', () => {
   const base = {
     cutPathData: 'M 20 20 H 80 V 80 H 20 Z M 40 40 H 60 V 60 H 40 Z',
     canvasSpan: 100,
@@ -443,8 +443,8 @@ describe('buildLaserSheet - one sheet, cut once (DP-13)', () => {
     expect((svg.match(/<path/g) || []).length).toBe(1);
   });
 
-  it('★ a bridge puts material BACK into the cut', () => {
-    // MEASURED through the engine: 300 facets without ribs, 388 with two.
+  it('a bridge puts material back into the cut', () => {
+    // Measured through the engine: 300 facets without ribs, 388 with two.
     // Under even-odd a rib inside a cut cancels back to material, which is
     // exactly what a bridge is - the cut with a piece put back.
     const without = buildLaserSheet(base).svg;
@@ -456,7 +456,7 @@ describe('buildLaserSheet - one sheet, cut once (DP-13)', () => {
     expect(count(withRibs)).toBe(count(without) + 1);
   });
 
-  it('is TRUE SIZE: no kerf is taken out here', () => {
+  it('is true size: no kerf is taken out here', () => {
     // LightBurn, LaserGRBL, xTool and Glowforge all offset for kerf
     // themselves. Two corrections make the part undersized by a full kerf
     // with nothing on screen to show it.

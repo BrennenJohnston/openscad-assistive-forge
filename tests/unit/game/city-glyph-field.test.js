@@ -32,8 +32,8 @@ const solid = (w, h, v) => {
 const vectors = (coverages) =>
   coverages.map((c) => Float32Array.from([c, c, c, c, c, c]))
 
-describe('CW-86 the anchored class set', () => {
-  it('★★ every literal id IS the class it claims to be', () => {
+describe('the anchored class set', () => {
+  it('every literal id is the class it claims to be', () => {
     // city-glyph-field.js writes the ids as numbers to avoid closing an
     // import cycle with city-class-pass.js. This is the guard that makes that
     // safe: the test is outside the cycle, so it may import both.
@@ -47,17 +47,15 @@ describe('CW-86 the anchored class set', () => {
     ])
   })
 
-  it('★★ names only classes the scene can actually serve', () => {
+  it('names only classes the scene can actually serve', () => {
     expect(ANCHORED_CLASSES).not.toContain(SURFACE_CLASS.ROAD)
     expect(ANCHORED_CLASSES).not.toContain(SURFACE_CLASS.CURB)
     expect(ANCHORED_CLASSES).not.toContain(SURFACE_CLASS.SKY)
   })
 
-  it('★★★ ANCHORS the facade, which the owner chose and which costs steadiness', () => {
-    // CW-86 asserted the opposite here, and said in as many words that a later
-    // release re-anchoring the facade must move this line AND bring the table
-    // that justifies it. Here is the table, measured at the Seattle spawn on a
-    // 24-frame walk, 30 %, mono, GPU path both sides (CW-91):
+  it('anchors the facade, which costs steadiness', () => {
+    // Anchoring the facade costs steadiness, measured at the Seattle spawn on
+    // a 24-frame walk, 30 %, mono, GPU path both sides:
     //
     //   class        screen pick   anchored at 64
     //   ground       29.98 %       0.60 %
@@ -65,11 +63,10 @@ describe('CW-86 the anchored class set', () => {
     //   storefront    4.84 %       5.14 %
     //   wall          5.17 %       7.98 %
     //
-    // The wall is WORSE anchored, exactly as CW-86 measured, and the owner
-    // picked lattice 64 anyway (CW-Q90) because at 64 the windows read. It is
-    // a look decision taken on a photograph, not a steadiness one. Anyone
-    // tempted to coarsen the lattice to win the wall column back is undoing
-    // the choice the owner made with that picture in front of them.
+    // The wall is worse anchored, and the facade is anchored at lattice 64
+    // anyway, because at 64 the windows read. It is a look decision taken on
+    // a photograph, not a steadiness one: coarsening the lattice to win the
+    // wall column back would undo it. A change to this line brings a new table.
     expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.BUILDING_WALL)
     expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.BUILDING_ROOF)
     expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.STOREFRONT)
@@ -80,14 +77,14 @@ describe('CW-86 the anchored class set', () => {
     expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.SIDEWALK)
     expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.GREEN)
     expect(isAnchoredClass(SURFACE_CLASS.GROUND)).toBe(true)
-    // The road is the honest negative now: it carries neither a uv attribute
+    // The road is the honest negative: it carries neither a uv attribute
     // nor a map, so there is no surface coordinate to anchor it in.
     expect(isAnchoredClass(SURFACE_CLASS.ROAD)).toBe(false)
     expect(isAnchoredClass(SURFACE_CLASS.TREE)).toBe(false)
   })
 })
 
-describe('CW-86 the field arithmetic', () => {
+describe('the field arithmetic', () => {
   it('quantises a luminance to a ladder step, ends included', () => {
     expect(quantiseLevel(0, 8)).toBe(0)
     expect(quantiseLevel(0.0001, 8)).toBe(0)
@@ -97,7 +94,7 @@ describe('CW-86 the field arithmetic', () => {
     expect(quantiseLevel(-1, 8)).toBe(0)
   })
 
-  it('★ divides both axes by the SAME factor, so a bay keeps its shape', () => {
+  it('divides both axes by the same factor, so a bay keeps its shape', () => {
     const s = fieldSize(512, 576, 64)
     expect(s.factor).toBe(9)
     expect(s.w).toBe(56)
@@ -142,10 +139,10 @@ describe('CW-86 the field arithmetic', () => {
   })
 })
 
-describe('CW-86 the ladder', () => {
+describe('the ladder', () => {
   const glyphVectors = vectors([0, 0.1, 0.25, 0.5, 0.75, 1])
 
-  it('★★ matches a step to the glyph whose INK is nearest that tone', () => {
+  it('matches a step to the glyph whose ink is nearest that tone', () => {
     // A row with no ties in it, so this case is about the MATCHING and not
     // about how ties break. Four steps stand for 0.125, 0.375, 0.625, 0.875.
     const row = vectors([0, 0.1, 0.4, 0.6, 0.9])
@@ -156,7 +153,7 @@ describe('CW-86 the ladder', () => {
     expect(glyphCoverage(row[ladder[3]])).toBeCloseTo(0.9, 5)
   })
 
-  it('★ breaks a tie toward the LIGHTER glyph, and says so out loud', () => {
+  it('breaks a tie toward the lighter glyph, and says so out loud', () => {
     // 0.25 and 0.5 are equally far from step 1 of 4 (0.375). The search keeps
     // the first it saw and the row is walked light to dense, so the lighter
     // wins. A tie rule nobody states is a tie rule that changes when the loop
@@ -164,7 +161,7 @@ describe('CW-86 the ladder', () => {
     const ladder = buildLadder([0, 1, 2, 3, 4, 5], glyphVectors, 4)
     expect(glyphCoverage(glyphVectors[ladder[1]])).toBeCloseTo(0.25, 5)
   })
-  it('★ steps UP the tonal range: a darker step is never a heavier glyph', () => {
+  it('steps up the tonal range: a darker step is never a heavier glyph', () => {
     const ladder = buildLadder([0, 1, 2, 3, 4, 5], glyphVectors, 8)
     let last = -1
     for (const id of ladder) {
@@ -187,8 +184,8 @@ describe('CW-86 the ladder', () => {
     ])
     const ladders = buildLadders(lookups, glyphVectors, 4)
     expect(ladders.has(SURFACE_CLASS.GROUND)).toBe(true)
-    // The facade joined the set at CW-91; a tree never will - it has no
-    // surface texture worth reading and it is not in the owner's pick.
+    // The facade is in the set; a tree never will be: it has no surface
+    // texture worth reading.
     expect(ladders.has(SURFACE_CLASS.BUILDING_WALL)).toBe(true)
     expect(ladders.has(SURFACE_CLASS.TREE)).toBe(false)
   })
@@ -203,7 +200,7 @@ describe('CW-86 the ladder', () => {
   })
 })
 
-describe('CW-86 reading a glyph out of the field', () => {
+describe('reading a glyph out of the field', () => {
   const glyphVectors = vectors([0, 0.25, 0.5, 0.75, 1])
   const ladders = buildLadders(
     new Map([[SURFACE_CLASS.GROUND, { glyphIds: [0, 1, 2, 3, 4] }]]),
@@ -211,7 +208,7 @@ describe('CW-86 reading a glyph out of the field', () => {
     FIELD_LEVELS
   )
 
-  it('★★ byte 0 means NO FIELD, and the caller keeps its screen pick', () => {
+  it('byte 0 means no field, and the caller keeps its screen pick', () => {
     expect(anchoredGlyph(ladders, SURFACE_CLASS.GROUND, 0)).toBe(-1)
   })
 
@@ -220,7 +217,7 @@ describe('CW-86 reading a glyph out of the field', () => {
     expect(anchoredGlyph(null, SURFACE_CLASS.GROUND, 3)).toBe(-1)
   })
 
-  it('★ the same byte always gives the same glyph - that is the whole point', () => {
+  it('the same byte always gives the same glyph - that is the whole point', () => {
     const a = anchoredGlyph(ladders, SURFACE_CLASS.GROUND, 5)
     const b = anchoredGlyph(ladders, SURFACE_CLASS.GROUND, 5)
     expect(a).toBe(b)
@@ -233,15 +230,15 @@ describe('CW-86 reading a glyph out of the field', () => {
     expect(Number.isFinite(g)).toBe(true)
   })
 
-  it('★★★ NO HOLD: when the field slides one cell, the glyph slides with it', () => {
+  it('no hold: when the field slides one cell, the glyph slides with it', () => {
     // The oracle's own case. A lattice of field bytes moved by exactly one
     // cell between two frames must move the glyph lattice by exactly one cell.
     // A cell that kept its old glyph would be a hold, and a hold is the trail
-    // this release exists to avoid.
+    // anchoring exists to avoid.
     //
-    // RED PROOF (run by hand, CW-86): make anchoredGlyph ignore its byte and
-    // return a constant - this case then names the first cell that failed to
-    // move, and the non-empty assertion below is what makes that possible.
+    // To see this fail: make anchoredGlyph ignore its byte and return a
+    // constant. This case then names the first cell that failed to move; the
+    // non-empty assertion below is what makes that possible.
     const cols = 6
     const rows = 1
     const before = [1, 2, 3, 4, 5, 6]
@@ -255,21 +252,21 @@ describe('CW-86 reading a glyph out of the field', () => {
         g0[i - 1]
       )
     }
-    // And it is a REAL slide: a fixture whose glyphs were all the same would
+    // And it is a real slide: a fixture whose glyphs were all the same would
     // pass the loop above while proving nothing at all.
     expect(new Set(g0).size).toBeGreaterThan(1)
     expect(coherence(g0, g1, cols, rows, 1, 0).pct).toBe(100)
   })
 })
 
-describe('CW-86 coherence tells a slide from a re-roll', () => {
-  it('★★ a pure slide scores 100 %', () => {
+describe('coherence tells a slide from a re-roll', () => {
+  it('a pure slide scores 100 %', () => {
     const prev = [1, 2, 3, 4, 5, 6, 7, 8]
     const next = [9, 1, 2, 3, 4, 5, 6, 7]
     expect(coherence(prev, next, 8, 1, 1, 0)).toMatchObject({ pct: 100 })
   })
 
-  it('★★ a re-roll of the same cells scores nothing', () => {
+  it('a re-roll of the same cells scores nothing', () => {
     const prev = [1, 2, 3, 4, 5, 6, 7, 8]
     const next = [20, 21, 22, 23, 24, 25, 26, 27]
     expect(coherence(prev, next, 8, 1, 1, 0).pct).toBe(0)
@@ -282,10 +279,10 @@ describe('CW-86 coherence tells a slide from a re-roll', () => {
     expect(c.pct).toBe(0)
   })
 
-  it('counts only the cells that CHANGED, and only where it can judge', () => {
+  it('counts only the cells that changed, and only where it can judge', () => {
     // Four cells, sliding right by one:
     //   0: unchanged, and its source is off-grid anyway - not counted
-    //   1: took cell 0's old glyph - changed AND coherent
+    //   1: took cell 0's old glyph - changed and coherent
     //   2: took something cell 1 never held - changed and incoherent
     //   3: unchanged - not counted
     const prev = [1, 2, 3, 9]

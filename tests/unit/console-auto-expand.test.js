@@ -1,10 +1,10 @@
 /**
- * Unit tests for ConsolePanel auto-expand behavior (Phase 5).
+ * Unit tests for ConsolePanel auto-expand behavior.
  *
  * Verifies that:
- *   - ECHO-only messages do NOT trigger autoExpandPanel()
- *   - WARNING messages DO trigger autoExpandPanel()
- *   - ERROR messages DO trigger autoExpandPanel()
+ *   - ECHO-only messages do not trigger autoExpandPanel()
+ *   - WARNING messages do trigger autoExpandPanel()
+ *   - ERROR messages do trigger autoExpandPanel()
  *
  * @license GPL-3.0-or-later
  */
@@ -28,12 +28,12 @@ describe('ConsolePanel — auto-expand behavior', () => {
     vi.spyOn(panel, 'autoExpandPanel');
   });
 
-  it('does NOT call autoExpandPanel() for echo-only output', () => {
+  it('does not call autoExpandPanel() for echo-only output', () => {
     panel.addOutput('ECHO: "hello world"');
     expect(panel.autoExpandPanel).not.toHaveBeenCalled();
   });
 
-  it('does NOT call autoExpandPanel() when there are only echo messages', () => {
+  it('does not call autoExpandPanel() when there are only echo messages', () => {
     panel.addOutput('ECHO: "one"\nECHO: "two"\nECHO: "three"');
     expect(panel.autoExpandPanel).not.toHaveBeenCalled();
   });
@@ -58,13 +58,13 @@ describe('ConsolePanel — auto-expand behavior', () => {
     expect(panel.autoExpandPanel).toHaveBeenCalled();
   });
 
-  it('a user-collapsed panel is NOT reopened by WARNINGs (C9)', () => {
+  it('a user-collapsed panel is not reopened by WARNINGs', () => {
     panel._userCollapsed = true;
     panel.addOutput('WARNING: still the same problem');
     expect(mockConsolePanel.open).toBe(false);
   });
 
-  it('a user-collapsed panel IS reopened by ERRORs (C9)', () => {
+  it('a user-collapsed panel is reopened by ERRORs', () => {
     panel._userCollapsed = true;
     panel.addOutput('ERROR: hard failure');
     expect(mockConsolePanel.open).toBe(true);
@@ -86,7 +86,7 @@ describe('ConsolePanel — auto-expand behavior', () => {
     toggleHandler();
     expect(listeningPanel._userCollapsed).toBe(false);
 
-    // A real user close IS recorded
+    // A real user close is recorded
     mockConsolePanel.open = false;
     toggleHandler();
     expect(listeningPanel._userCollapsed).toBe(true);

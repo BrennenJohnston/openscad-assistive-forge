@@ -7,7 +7,7 @@ import {
 import { nextReverseLift } from '../../../src/js/_hfm-paint.js'
 
 /**
- * CW-70. Three treatments of the solid bright layer, built to be compared and
+ * Three treatments of the solid bright layer, built to be compared and
  * not to be guessed between. What can be pinned without a graphics card is the
  * arithmetic: where each treatment puts a lit shopfront relative to the cliff
  * that turns it into a slab, and how the share cap behaves over frames.
@@ -16,14 +16,11 @@ import { nextReverseLift } from '../../../src/js/_hfm-paint.js'
 /** The brightest paint in the shopfront art direction: #efefef. */
 const BRIGHTEST_PAINT = 0xef / 255
 
-describe('the luminance layer: what the owner chose, twice', () => {
-  it('★ draws CAPPED solid cells by default - the answer after PLAYING it', () => {
-    // CW-Q74 was answered `off` from still photographs at G1, and CW-72
-    // deleted the losing columns. Playing the deployed build, the owner called
-    // the result sad and asked for the solid cells back, capped. This is the
-    // second answer, and the reason it differs from the first is that a still
-    // is not a filmstrip - a lesson this round had already written down and
-    // then let a GATE question be answered from stills anyway.
+describe('the luminance layer', () => {
+  it('draws capped solid cells by default', () => {
+    // The default is the capped answer: a still photograph favours no solid
+    // cells at all, but played, that picture reads as sad, and a still is not
+    // a filmstrip. So the solid cells come back, capped.
     expect(LUMINANCE_LAYER_DEFAULT).toBe('calm')
     expect(LUMINANCE_LAYER.calm).toEqual({
       reverseAt: MONO_REVERSE_THRESHOLD,
@@ -38,9 +35,9 @@ describe('the luminance layer: what the owner chose, twice', () => {
       reverseAt: null,
       reverseShareCap: null,
       reverseLiftMax: 0,
-      // ★ THE PART NOBODY ASKED FOR. `off` was chosen as "no solid cells" and
-      // also dims every lit shopfront band by 17 %, because the treatments
-      // always moved both halves together.
+      // A side effect worth pinning: `off` means "no solid cells" and also dims
+      // every lit shopfront band by 17 %, because the treatments always moved
+      // both halves together.
       storefrontScale: 0.83,
     })
   })
@@ -62,13 +59,13 @@ describe('the luminance layer: what the owner chose, twice', () => {
     ])
   })
 
-  it('★ and NONE of them lights a single extra cell', () => {
+  it('and none of them lights a single extra cell', () => {
     // Measured at the Seattle spawn, standing, 30 %, mono: the lit share is
-    // 4.5 % under `off`, `calm` AND `stock`. This layer only decides whether
-    // an ALREADY-lit cell is drawn as a solid slab or as a character; it can
+    // 4.5 % under `off`, `calm` and `stock`. This layer only decides whether
+    // an already-lit cell is drawn as a solid slab or as a character; it can
     // never lift a dark one. So monochrome's darkness - 95 % of the screen
-    // blank - is structural and older than this round, and CW-Q74 is not what
-    // made the city dark. Colour mode's ink floor is (see hfm-ink-budget).
+    // blank - is structural, not this layer's doing. Colour mode's ink floor
+    // is (see hfm-ink-budget).
     const scales = Object.values(LUMINANCE_LAYER).map((m) => m.storefrontScale)
     expect(Math.min(...scales)).toBeGreaterThan(0.5)
   })
@@ -86,7 +83,7 @@ describe('the luminance layer: what the owner chose, twice', () => {
     expect(band('off')).toBeCloseTo(0.778, 3)
     // ...and still lit: above the converter blank floor of 0.5.
     expect(band('off')).toBeGreaterThan(0.5)
-    // Calm: over the cliff like stock, so the band CAN go solid, but the cap
+    // Calm: over the cliff like stock, so the band can go solid, but the cap
     // bounds how much of the frame does.
     expect(band('calm')).toBeGreaterThan(MONO_REVERSE_THRESHOLD)
     expect(band('calm')).toBeCloseTo(0.8716, 4)
@@ -113,7 +110,7 @@ describe('the luminance layer: the share cap controller', () => {
     expect(walk).toEqual([0.01, 0.02, 0.03, 0.04, 0.05])
   })
 
-  it('walks back down EIGHT times more slowly than it went up', () => {
+  it('walks back down eight times more slowly than it went up', () => {
     let lift = 0.05
     const down = []
     for (let frame = 0; frame < 4; frame++) {
@@ -124,11 +121,11 @@ describe('the luminance layer: the share cap controller', () => {
   })
 
   it('holds still anywhere between half the cap and the cap, so it cannot hunt', () => {
-    // MEASURED, not chosen: an earlier version relaxed at three quarters of
-    // the cap by half a step, and a standing pose in front of a row of lit
-    // shopfronts produced 13,999 reverse crossings over 24 frames where the
-    // uncapped picture produced none. One step up put the share under the
-    // relax line, the next frame relaxed, the frame after was over again.
+    // Measured, not chosen: relaxing at three quarters of the cap by half a
+    // step makes a standing pose in front of a row of lit shopfronts produce
+    // 13,999 reverse crossings over 24 frames where the uncapped picture
+    // produces none. One step up puts the share under the relax line, the
+    // next frame relaxes, the frame after is over again.
     for (const share of [0.0051, 0.007, 0.009, 0.00999]) {
       expect(nextReverseLift(share, CAP, 0.03)).toBe(0.03)
     }
@@ -162,10 +159,10 @@ describe('the luminance layer: the share cap controller', () => {
     expect(lift).toBe(0)
   })
 
-  it('is a CONTROLLER, not a clamp: it is always one frame behind', () => {
-    // Red proof for the claim the record makes. The first frame of a sweep is
-    // over the cap and the lift is still zero when it is drawn - the overshoot
-    // is real, and the instrument's per-frame share is where it is read.
+  it('is a controller, not a clamp: it is always one frame behind', () => {
+    // The first frame of a sweep is over the cap and the lift is still zero
+    // when it is drawn - the overshoot is real, and the instrument's
+    // per-frame share is where it is read.
     const lift = nextReverseLift(0.05, CAP, 0)
     expect(lift).toBeGreaterThan(0)
     // Five frames of a 5 % share are needed before the threshold has moved far

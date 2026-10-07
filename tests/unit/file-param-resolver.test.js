@@ -7,7 +7,7 @@
  * Note: vitest.config.js excludes src/worker/** from coverage.
  * This module lives under src/js/ and is fully covered by unit tests.
  * The worker's FS.writeFile call is an integration boundary tested via
- * the E2E suite (Phase 7) rather than mocked here.
+ * the E2E suite rather than mocked here.
  *
  * @license GPL-3.0-or-later
  */

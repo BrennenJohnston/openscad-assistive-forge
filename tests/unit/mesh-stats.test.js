@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/worker/mesh-stats.js (F-1: OFF triangle counting for
+ * Unit tests for src/worker/mesh-stats.js (OFF triangle counting for
  * buffer-delivered outputs).
  * @license GPL-3.0-or-later
  */

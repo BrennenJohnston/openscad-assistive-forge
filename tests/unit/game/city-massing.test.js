@@ -70,7 +70,7 @@ describe('taggedHeightM', () => {
   })
 
   it('returns null when nothing is tagged, where resolveBuildingHeight substitutes 8 m', () => {
-    // THE WHOLE POINT of this helper. Two thirds of the roof ways in the four
+    // The whole point of this helper. Two thirds of the roof ways in the four
     // shipped extracts carry no height at all, and resolveBuildingHeight
     // hands back the same 8 m it hands a tagged one.
     expect(taggedHeightM({ building: 'roof' })).toBeNull()
@@ -103,7 +103,7 @@ describe('resolveCanopy', () => {
     expect(c.source).toBe('covered')
   })
 
-  it('reads a tagged height as the SURFACE, so the slab hangs under it', () => {
+  it('reads a tagged height as the surface, so the slab hangs under it', () => {
     const c = resolveCanopy({ building: 'roof', 'building:levels': '1' })
     expect(c.topM).toBe(3)
     expect(c.baseM).toBeCloseTo(3 - CANOPY_THICKNESS_M, 6)
@@ -180,7 +180,7 @@ describe('resolveMassing - canopies', () => {
     expect(model.stats.canopyCovered).toBe(1)
   })
 
-  it('takes the TALLEST outline it stands inside, not the first', () => {
+  it('takes the tallest outline it stands inside, not the first', () => {
     const model = parseCityExtract(
       extractOf(
         way(20, { building: 'yes', height: '6' }, 0, 0, 30),
@@ -202,7 +202,7 @@ describe('resolveMassing - canopies', () => {
     expect(byId(model, 30).roof).toBeNull()
   })
 
-  it('lets a walker under a canopy that used to block the pavement', () => {
+  it('lets a walker under a canopy rather than blocking the pavement', () => {
     const model = parseCityExtract(
       extractOf(way(40, { building: 'roof' }, 0, 0, 10)),
       { center: CENTER }
@@ -292,7 +292,7 @@ describe('resolveMassing - the empty column', () => {
     expect(model.stats.floatingMass).toBe(0)
   })
 
-  it('CLOSES THE GAP rather than doubling what is already there', () => {
+  it('closes the gap rather than doubling what is already there', () => {
     // An 8 m podium with a slab starting at 14 m: the slab grows by 6 m, it
     // does not sprout a second copy of the podium.
     const model = parseCityExtract(
@@ -321,7 +321,7 @@ describe('resolveMassing - the empty column', () => {
     expect(model.stats.groundedVolumes).toBe(0)
   })
 
-  it('reads a STACK of orphan parts as one building standing on the street', () => {
+  it('reads a stack of orphan parts as one building standing on the street', () => {
     // Seattle's extract carries a stack running 8.2 -> 9.8 -> 15.8 -> 121.9 m
     // at one footprint, its outline outside the radius. A per-way test calls
     // every slice above the first floating; nothing here is.
@@ -356,7 +356,7 @@ describe('resolveMassing - the empty column', () => {
     ])
   })
 
-  it('fixes a stack BOTTOM UP, so four slabs become one building', () => {
+  it('fixes a stack bottom up, so four slabs become one building', () => {
     // Denver has four thin slabs at one footprint, 19 -> 19.5 -> 20 -> 20.5,
     // with nothing under any of them. Top-down would draw four nested boxes.
     const model = parseCityExtract(
@@ -392,22 +392,21 @@ describe('resolveMassing - the empty column', () => {
   })
 })
 
-describe('★★★ CW-90 (D-126): nothing hovers, and every gap is closed', () => {
-  // The owner photographed a building with a floating half hanging above its
-  // lower half. CW-76 already grounded floaters and could not see this one:
-  // it asked only about each building's LOWEST volume, and a part sitting
-  // above a lower part is not the lowest thing its building draws, so the
-  // pass walked straight past it. CW-Q89 answered "close every gap".
+describe('nothing hovers, and every gap is closed', () => {
+  // A building can have a floating half hanging above its lower half.
+  // Grounding only each building's lowest volume would miss it: a part
+  // sitting above a lower part is not the lowest thing its building draws.
+  // Every gap is closed instead.
 
-  it('★★★ a part hovering above a LOWER part is brought down to meet it', () => {
-    // The owner's picture, as a fixture: an outline 0-10 m with a part that
-    // starts at 25 m. Nothing else is anywhere near, so the only thing that
-    // could hold the part up is the building's own lower mass, 15 m below.
+  it('a part hovering above a lower part is brought down to meet it', () => {
+    // The picture as a fixture: an outline 0-10 m with a part that starts at
+    // 25 m. Nothing else is anywhere near, so the only thing that could hold
+    // the part up is the building's own lower mass, 15 m below.
     //
-    // RED PROOF (run by hand, CW-90): narrow the floaters loop back to each
-    // building's lowest volume and this case leaves the part at 25 m. Over the
-    // four shipped extracts the same revert leaves 65 volumes hanging
-    // (Seattle 34, Denver 28, Albuquerque 1, Burnaby 2) where CW-90 leaves 0.
+    // To see this fail: narrow the floaters loop back to each building's
+    // lowest volume and this case leaves the part at 25 m. Over the four
+    // shipped extracts the same change leaves 65 volumes hanging (Seattle 34,
+    // Denver 28, Albuquerque 1, Burnaby 2), where closing the gaps leaves 0.
     const model = parseCityExtract(
       extractOf(
         way(1, { building: 'yes', height: '10' }, 0, 0, 12),
@@ -425,7 +424,7 @@ describe('★★★ CW-90 (D-126): nothing hovers, and every gap is closed', () 
     // report zero floating masses while proving nothing at all.
     const volumes = model.buildings.flatMap((b) => drawn(b))
     expect(volumes.length).toBeGreaterThan(1)
-    // The part now starts where the mass below it ends, not 15 m above it.
+    // The part starts where the mass below it ends, not 15 m above it.
     const high = volumes.filter(([base]) => base > PART_GROUND_MAX_M)
     for (const [base] of high) {
       expect(base, `a volume still starts at ${base} m with nothing under it`)
@@ -433,10 +432,9 @@ describe('★★★ CW-90 (D-126): nothing hovers, and every gap is closed', () 
     }
   })
 
-  it('★★ leaves a part that ALREADY sits on something exactly where it is', () => {
+  it('leaves a part that already sits on something exactly where it is', () => {
     // The guard against over-correcting. A part starting at 10 m on top of a
-    // 10 m mass is supported, and CW-90 must not drag it to the ground - that
-    // would be the "drop it" option the owner did not choose.
+    // 10 m mass is supported, and must not be dragged to the ground.
     const model = parseCityExtract(
       extractOf(
         way(1, { building: 'yes', height: '10' }, 0, 0, 12),

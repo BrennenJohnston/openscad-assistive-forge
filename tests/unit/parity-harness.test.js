@@ -1,15 +1,9 @@
 /**
- * Phase 1 — Parity Harness
+ * Parity harness
  *
- * Regression fixtures that prove the generalized wiring gaps blocking
- * non-keyguard SVG/DXF export, generic color handling, and debug-modifier
- * parity with desktop OpenSCAD.
- *
- * Tests marked `.skip` cover gaps that later phases resolve:
- *   - Phase 2/3: render-intent resolution for generic schemas
- *   - Phase 6:   color passthrough and debug-modifier highlight
- *
- * Once later phases land, un-skip the corresponding tests to gate regressions.
+ * Regression fixtures for the generalized wiring that non-keyguard SVG/DXF
+ * export, generic color handling, and debug-modifier parity with desktop
+ * OpenSCAD depend on.
  *
  * @license GPL-3.0-or-later
  */
@@ -25,7 +19,7 @@ import {
 } from '../../src/js/render-intent.js';
 import { getBuiltinManifest } from '../../src/js/project-manifest.js';
 
-// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// The deprecated resolve2DExportIntent wrapper is gone; this
 // local equivalent keeps the proposal-engine assertions exercising the
 // same behavior (unconditional application of the builtin rules).
 const resolve2DExportIntent = (parameters, schema, format) =>
@@ -106,7 +100,7 @@ describe('Parity: resolve2DExportParameters — generic project schemas', () => 
     expect(result.type_of_keyguard).toBe('1');
   });
 
-  it('selects 2D entry from a generic "output_mode" enum for SVG format (Phase 2/3 resolved)', () => {
+  it('selects 2D entry from a generic "output_mode" enum for SVG format', () => {
     const result = resolve2DExportParameters(
       { ...GENERIC_2D_PARAMS },
       GENERIC_2D_SCHEMA,
@@ -115,7 +109,7 @@ describe('Parity: resolve2DExportParameters — generic project schemas', () => 
     expect(result.output_mode).toBe('2d_cut');
   });
 
-  it('selects 2D entry from a generic "output_mode" enum for DXF format (Phase 2/3 resolved)', () => {
+  it('selects 2D entry from a generic "output_mode" enum for DXF format', () => {
     const result = resolve2DExportParameters(
       { ...GENERIC_2D_PARAMS },
       GENERIC_2D_SCHEMA,
@@ -192,7 +186,7 @@ describe('Parity: resolvePreviewColor — generic color parameter handling', () 
     controller.setScadContent('cube(10);');
   });
 
-  it('uses first color param in declaration order regardless of box_color (Phase 3 resolved)', () => {
+  it('uses first color param in declaration order regardless of box_color', () => {
     controller.setColorParamNames(['model_color', 'box_color']);
     const color = controller.resolvePreviewColor({
       use_colors: 'yes',
@@ -202,7 +196,7 @@ describe('Parity: resolvePreviewColor — generic color parameter handling', () 
     expect(color).toBe('#00ff00');
   });
 
-  it('uses first available color param without box_color preference (Phase 3 resolved)', () => {
+  it('uses first available color param without box_color preference', () => {
     controller.setColorParamNames(['model_color', 'accent_color']);
     const color = controller.resolvePreviewColor({
       use_colors: 'yes',
@@ -234,13 +228,13 @@ describe('Parity: resolvePreviewColor — generic color parameter handling', () 
 // ─── 4. Debug modifier — # highlight color parity ──────────────────────────
 
 describe('Parity: # debug modifier highlight behavior', () => {
-  it('applies fixed highlight color for # debug modifier (Phase 6 gate)', () => {
+  it('applies fixed highlight color for # debug modifier', () => {
     expect(DEBUG_HIGHLIGHT_COLOR).toEqual({ r: 255, g: 81, b: 81, a: 128 });
     expect(DEBUG_HIGHLIGHT_HEX).toBe('#ff5151');
     expect(DEBUG_HIGHLIGHT_OPACITY).toBeCloseTo(128 / 255, 5);
   });
 
-  it('# modifier overrides user-defined color() (Phase 6 gate)', () => {
+  it('# modifier overrides user-defined color()', () => {
     // Desktop: `# color("blue") cube()` renders as highlight red, NOT blue.
     // scadUsesDebugModifier detects `#` in SCAD source; when active, loadOFF
     // creates a dual-render Group (normal mesh + pink overlay).
@@ -308,7 +302,7 @@ describe('Parity: _detectRenderState — generic project handling', () => {
   });
 });
 
-// ─── 6. Phase 6: scadUsesColor / scadUsesDebugModifier detection ────────────
+// ─── 6. scadUsesColor / scadUsesDebugModifier detection ─────────────────────
 
 describe('Parity: scadUsesColor — color() detection', () => {
   it('detects color("red") in source', () => {
@@ -412,7 +406,7 @@ describe('Parity: E2E stakeholder coverage acknowledgement', () => {
     //   5. keyguard-parser-smoke.spec.js
     //   6. keyguard-workflow.spec.js
     //
-    // Phase 1 adds generic-project-baseline.spec.js to balance coverage.
+    // generic-project-baseline.spec.js balances that coverage.
     const STAKEHOLDER_E2E_COUNT = 6;
     const TOTAL_E2E_COUNT = 21;
     expect(STAKEHOLDER_E2E_COUNT).toBe(6);

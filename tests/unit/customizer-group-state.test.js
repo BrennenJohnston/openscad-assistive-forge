@@ -1,5 +1,5 @@
 /**
- * Tests for the F5 per-file Customizer group state helper.
+ * Tests for the per-file Customizer group state helper.
  *
  * @license GPL-3.0-or-later
  */

@@ -1,17 +1,16 @@
 /**
- * D-122: the plate builder used to fit a cut against the wrong canvas.
+ * The plate builder fits a cut against the right canvas.
  *
  * `flattenLayers` writes each cut as `<svg viewBox="0 0 100 H"><g
  * transform="translate(..) scale(s)"><path d=RAW..>`. The path data is still
  * in the design's own units; the group transform is what puts it on the
- * 100-wide layer canvas. `buildPlateCompanions` read the viewBox for the
- * canvas and the raw `d` for the shape, so the fit scaled 119.81 units of the
- * owner's cat as if they were 100 - and 503 PIXELS of a raster trace as if
- * they were 100, which is the 285 mm cat on a 100 mm plate in the owner's own
- * export.
+ * 100-wide layer canvas. Reading the viewBox for the canvas and the raw `d`
+ * for the shape would scale 119.81 units of a cat drawing as if they were
+ * 100 - and 503 pixels of a raster trace as if they were 100, which puts a
+ * 285 mm cat on a 100 mm plate.
  *
  * Every test here does what the app does, through the same exported pieces,
- * and the last one REINSTATES the defect so the others cannot quietly go
+ * and the last one reinstates the defect so the others cannot quietly go
  * vacuous: a guard that has never been seen to fail carries no information.
  *
  * @license GPL-3.0-or-later
@@ -79,7 +78,7 @@ function cutBoxOf(plateSvg) {
 describe('readLayerFile', () => {
   const svg = readFileSync(join(FIXTURES, 'trace-503px.svg'), 'utf8')
 
-  it('hands back the canvas AND the transform onto it, not one without the other', () => {
+  it('hands back the canvas and the transform onto it, not one without the other', () => {
     const { first } = platesFor(svg)
     expect(first.canvasSpan).toBe(100)
     expect(first.canvasHeight).toBeGreaterThan(100)
@@ -169,12 +168,12 @@ describe('a plate built from a drawing whose units are pixels', () => {
     expect(box.maxX - box.minX).toBeCloseTo((70 * 425) / 590, 0)
   })
 
-  it('THE DEFECT, REINSTATED: dropping the transform puts the cut off the design box', () => {
+  it('the defect, reinstated: dropping the transform puts the cut off the design box', () => {
     const cut = readLayerFile(cuts[0])
     const { svg: plateSvg } = buildStencilPlate({
       cutPathData: cut.pathData,
-      // What the plate builder used to do: the canvas from the viewBox, the
-      // path data straight out of the file, and no transform between them.
+      // The defect: the canvas from the viewBox, the path data straight out of
+      // the file, and no transform between them.
       cutTransform: null,
       canvasSpan: first.canvasSpan,
       canvasHeight: first.canvasHeight,
@@ -192,7 +191,7 @@ describe('a plate built from a drawing whose units are pixels', () => {
   })
 })
 
-describe("the owner's own cat", () => {
+describe("the cat drawing", () => {
   const svg = readFileSync(join(FIXTURES, 'sketch4.svg'), 'utf8')
   const { cuts, plateCount, first } = platesFor(svg)
 

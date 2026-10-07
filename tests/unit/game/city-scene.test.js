@@ -79,9 +79,9 @@ function model() {
         {
           type: 'way',
           id: 2,
-          // CW-76: the skybridge this fixture has always meant, tagged the
-          // way all four extracts tag one. As `building=yes` it was a mass
-          // with an empty column under it and is now drawn to the street.
+          // The skybridge this fixture has always meant, tagged the way all
+          // four extracts tag one. As `building=yes` it would be a mass with an
+          // empty column under it; as a bridge it is drawn to the street.
           tags: { building: 'bridge', height: '10', min_height: '4' },
           geometry: squareRing(30, 0, 5),
         },
@@ -107,7 +107,7 @@ describe('buildCityGroup', () => {
     expect(names).toContain('roads')
     expect(stats.buildingTriangles).toBeGreaterThan(0)
     // One segment is two triangles of roadway plus two more for each of its
-    // pavement aprons (CW-50): every street carries a pavement now, not only
+    // pavement aprons: every street carries a pavement, not only
     // the ones OpenStreetMap maps a pavement for.
     expect(stats.roadTriangles).toBe(6)
 
@@ -147,15 +147,15 @@ describe('buildCityGroup', () => {
   })
 })
 
-describe('lampLayoutFor (CW-77)', () => {
-  it('★ lights an ordinary street every 18 m, which is HALF A SENTENCE more than 55', () => {
+describe('lampLayoutFor', () => {
+  it('lights an ordinary street every 18 m, not every 55', () => {
     // Seattle Streets Illustrated 3.6 in full: "street lights alternating
-    // every 180 ft, PEDESTRIAN LIGHTS BETWEEN THEM AT 60 FT". 55 m is the
+    // every 180 ft, pedestrian lights between them at 60 ft". 55 m is the
     // interval of one kind of lamp; 18 m is the interval at which a walker
     // meets one, and this game draws one kind of pole. Both checkable facts
     // agree: City Light's surveyed register measures a 16.7 m median, and at
-    // 55 m the CW-45 roadrunner pin starves (13 -> 5 against a 40 % lamp
-    // cut, where 18 m gives 23).
+    // 55 m the roadrunner pin starves (13 -> 5 against a 40 % lamp cut, where
+    // 18 m gives 23).
     for (const kind of ['residential', 'tertiary', 'secondary', 'primary']) {
       const l = lampLayoutFor({ kind, widthM: ROAD_WIDTHS_M[kind] })
       expect(l).toEqual({ spacingM: 18, paired: false })
@@ -174,12 +174,12 @@ describe('lampLayoutFor (CW-77)', () => {
     })
   })
 
-  it('★ pairs the sides on a street wider than 15.2 m - a rule NO CITY HERE REACHES', () => {
+  it('pairs the sides on a street wider than 15.2 m - a rule no city here reaches', () => {
     // 250 ft opposite pairs. The widest class this game lights is 14 m, and
-    // the two that would qualify - motorway and trunk - have been unlit since
-    // CW-18. So nothing in the four extracts exercises this, and without a
-    // synthetic road the rule would ship untested (CW-74's lesson: a guard
-    // that cannot fail is not a guard).
+    // the two that would qualify - motorway and trunk - are unlit. So
+    // nothing in the four extracts exercises this, and without a synthetic
+    // road the rule would ship untested (a guard that cannot fail is not a
+    // guard).
     expect(lampLayoutFor({ kind: 'primary', widthM: 18 })).toEqual({
       spacingM: 76,
       paired: true,
@@ -189,14 +189,14 @@ describe('lampLayoutFor (CW-77)', () => {
     ).toEqual(['motorway'])
   })
 
-  it('reads the WIDTH, not the class name', () => {
+  it('reads the width, not the class name', () => {
     // So a future width change reaches the rule without anyone remembering.
     expect(lampLayoutFor({ kind: 'residential', widthM: 20 }).paired).toBe(true)
     expect(lampLayoutFor({ kind: 'motorway', widthM: 9 }).paired).toBe(false)
   })
 })
 
-describe('buildStreetProps - mapped lamps (CW-77)', () => {
+describe('buildStreetProps - mapped lamps', () => {
   /** A straight secondary street, with mapped lamps placed against it. */
   function lampModel(lamps) {
     return parseCityExtract(
@@ -249,7 +249,7 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
     const m = lampModel([{ x: -50, y: 9 }])
     expect(m.lamps).toHaveLength(1)
     expect(m.stats.lampNodeCount).toBe(1)
-    // ★ CW-43's furniture counts are e2e-pinned; a lamp must not touch them.
+    // The furniture counts are e2e-pinned; a lamp must not touch them.
     expect(m.stats.furnitureByKind.street_lamp).toBeUndefined()
     expect(m.furniture.some((f) => f.kind === 'street_lamp')).toBe(false)
   })
@@ -317,17 +317,17 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
     )
   }
 
-  it('★ counts every bird by the perch it took, and the parts sum to the whole', () => {
-    // ★ A TOTAL CANNOT ANSWER A QUESTION ABOUT COMPETITION. Only one perch
+  it('counts every bird by the perch it took, and the parts sum to the whole', () => {
+    // A total cannot answer a question about competition. Only one perch
     // kind - a mapped lawn - is open to a goose, while a crow works parapets,
     // lamp heads and the open ground beside a pole as well. A guard written
-    // on the TOTALS therefore moves with the city's lamp count: CW-77 doubled
-    // Denver's lamps, the crow's total passed the goose's, and the goose had
-    // lost nothing at all (ground perch: goose 51, crow 8). `birdsByPerch` is
+    // on the totals therefore moves with the city's lamp count: doubling
+    // Denver's lamps puts the crow's total past the goose's while the goose
+    // loses nothing at all (ground perch: goose 51, crow 8). `birdsByPerch` is
     // what lets that question be asked where it can be answered.
     //
     // Nothing here pins a species to a perch - that is `city-birds.js`'s
-    // table and its own tests. This pins the ACCOUNTING: every bird the
+    // table and its own tests. This pins the accounting: every bird the
     // builder placed is counted once, under the pass that placed it.
     const props = propsOf(perchModel())
     const { birdsByPerch, birdsPlaced } = props.stats
@@ -357,7 +357,7 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
     expect(stats.lampsMappedInRoad).toBe(0)
   })
 
-  it('★ NUDGES a surveyed pole out of our ribbon rather than deleting it', () => {
+  it('nudges a surveyed pole out of our ribbon rather than deleting it', () => {
     // A 12 m secondary means a ribbon from -6 to +6. A pole at 5 m is one
     // metre inside it - which is what 572 of Seattle City Light's 3,679 poles
     // look like, and City Light does not stand poles in traffic lanes. Our
@@ -368,7 +368,7 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
     expect(stats.lampsMappedInRoad).toBe(0)
   })
 
-  it('...but DROPS one too deep to be a disagreement about a kerb', () => {
+  it('...but drops one too deep to be a disagreement about a kerb', () => {
     // A pole on the centre line is 6 m in. On the real freeway that is I-5
     // running below a flat 16 m band, and moving it 6 m would be inventing a
     // position, not correcting one.
@@ -379,7 +379,7 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
     expect(stats.lampsMappedInRoad).toBe(1)
   })
 
-  it('★ a mapped lamp CLAIMS its stretch, so nothing is invented beside it', () => {
+  it('a mapped lamp claims its stretch, so nothing is invented beside it', () => {
     // Two runs of the same street: one bare, one with lamps mapped every
     // 25 m along it. The mapped run must not end up with the procedural
     // lamps as well - that is the whole meaning of "seed".
@@ -413,7 +413,7 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
         { x: 50, y: 0 },
       ])
     )
-    // ★ OFFERED is not STOOD. Three lamps were offered, one stood, and the
+    // Offered is not stood. Three lamps were offered, one stood, and the
     // other two are accounted for by name rather than lost - a counter whose
     // label does not match what it counts is how a report comes to say "520
     // stood" beside "36 refused" out of 520 offered.
@@ -433,7 +433,7 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
   })
 })
 
-describe('buildCityGroup - canopy legs (CW-76)', () => {
+describe('buildCityGroup - canopy legs', () => {
   /** A canopy `cy` metres off an east-west secondary at y = 0. */
   function canopyModel(cy) {
     return parseCityExtract(
@@ -467,10 +467,10 @@ describe('buildCityGroup - canopy legs (CW-76)', () => {
   })
 
   it('refuses every leg that would stand in the road, and says so', () => {
-    // CW-75's law: nothing of the city stands in a roadway. A canopy across
-    // a street gets NO legs rather than a post in a traffic lane, and the
-    // count is the record of it - a canopy quietly left bare and one that
-    // could not legally be supported look identical without it.
+    // Nothing of the city stands in a roadway. A canopy across a street gets
+    // no legs rather than a post in a traffic lane, and the count is the
+    // record of it - a canopy quietly left bare and one that could not
+    // legally be supported look identical without it.
     const { stats, dispose } = buildCityGroup(canopyModel(0))
     expect(stats.canopyColumns).toBe(0)
     expect(stats.canopyColumnsRefused).toBe(4)
@@ -479,9 +479,8 @@ describe('buildCityGroup - canopy legs (CW-76)', () => {
   })
 
   it('thins the legs to a colonnade, not a fence', () => {
-    // ★ THE RED PROOF SAID THIS GUARD DID NOT EXIST. A four-corner square
-    // places a leg at every vertex with or without the spacing rule, so the
-    // first version of this suite proved nothing about it. A twelve-sided
+    // Not a square: a four-corner square places a leg at every vertex with or
+    // without the spacing rule, so it proves nothing about it. A twelve-sided
     // canopy has vertices 3.1 m apart, which is where the rule bites.
     const sides = 12
     const radiusM = 6
@@ -512,7 +511,7 @@ describe('buildCityGroup - canopy legs (CW-76)', () => {
   })
 
   it('gives a canopy sitting on a building no legs at all', () => {
-    // The building under it IS the support; posts through its roof would be
+    // The building under it is the support; posts through its roof would be
     // the invention.
     const model = parseCityExtract(
       {
@@ -541,7 +540,7 @@ describe('buildCityGroup - canopy legs (CW-76)', () => {
     dispose()
   })
 
-  it('draws the podium CW-76 put under a tower whose parts all float', () => {
+  it('draws the podium under a tower whose parts all float', () => {
     const model = parseCityExtract(
       {
         elements: [
@@ -572,7 +571,7 @@ describe('buildCityGroup - canopy legs (CW-76)', () => {
   })
 })
 
-describe('buildCityGroup — CW-8 distinctness', () => {
+describe('buildCityGroup — distinctness', () => {
   it('buildings carry a per-vertex color attribute and vertex-color material', () => {
     const { group, dispose } = buildCityGroup(model())
     const buildings = group.children.find((c) => c.name === 'buildings')
@@ -592,20 +591,19 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(storefronts).toBeDefined()
     expect(stats.storefrontTriangles).toBeGreaterThan(0)
 
-    // The strip starts at the ground and stops at the building's OWN
-    // ground-floor height - per building since CW-46, hash-drawn within
-    // the documented 3.2-5.0 m range (the directive's "same size first
-    // floor" complaint).
+    // The strip starts at the ground and stops at the building's own
+    // ground-floor height, per building, hash-drawn within the documented
+    // 3.2-5.0 m range so first floors are not all the same size.
     storefronts.geometry.computeBoundingBox()
     expect(storefronts.geometry.boundingBox.min.z).toBe(0)
     expect(storefronts.geometry.boundingBox.max.z).toBeGreaterThanOrEqual(3.2)
     expect(storefronts.geometry.boundingBox.max.z).toBeLessThanOrEqual(5.0)
 
-    // Exactly one of the two buildings qualifies, and WHICH one is the
+    // Exactly one of the two buildings qualifies, and which one is the
     // claim: the grounded building spans x -5..5 and the skybridge 25..35,
-    // so a strip that stopped short of 25 is the grounded one alone. CW-76
-    // put legs under the skybridge, which is why this no longer counts
-    // triangles against a whole-city total.
+    // so a strip that stopped short of 25 is the grounded one alone. The
+    // skybridge has legs, which is why this does not count triangles against
+    // a whole-city total.
     storefronts.geometry.computeBoundingBox()
     expect(storefronts.geometry.boundingBox.max.x).toBeLessThan(25)
     expect(stats.canopyColumns).toBeGreaterThan(0)
@@ -622,7 +620,7 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
     expect(curbs).toBeDefined()
     expect(curbs.visible).toBe(true)
-    // Each side of a roadway carries a curb TOP and a curb FACE (CW-50), so
+    // Each side of a roadway carries a curb top and a curb face, so
     // four ribbons' worth against the one roadway ribbon.
     expect(curbs.geometry.getAttribute('position').count).toBe(
       roads.geometry.getAttribute('position').count * 4
@@ -639,12 +637,12 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     dispose()
   })
 
-  // CW-79: the ground has height. The laws: a flat terrain block moves
-  // nothing and builds no skirt; a sloped one lifts the building rigidly
-  // to its centroid's ground and closes the downhill gap with a skirt of
-  // the building's own footprint; ribbons drape onto the ground under
-  // them; and a fixture with NO terrain is byte-identical to before.
-  it('★★ a sloped city lifts each building rigidly and skirts the downhill gap (CW-79)', () => {
+  // The ground has height. The laws: a flat terrain block moves nothing
+  // and builds no skirt; a sloped one lifts the building rigidly to its
+  // centroid's ground and closes the downhill gap with a skirt of the
+  // building's own footprint; ribbons drape onto the ground under them;
+  // and a fixture with no terrain is unaffected.
+  it('a sloped city lifts each building rigidly and skirts the downhill gap', () => {
     const slope = (m) => {
       m.elevation = parseElevation({
         originX: -100,
@@ -697,7 +695,7 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     disposeFlat()
   })
 
-  it('a FLAT terrain block builds no skirt and moves nothing (CW-79)', () => {
+  it('a flat terrain block builds no skirt and moves nothing', () => {
     const m = model()
     m.elevation = parseElevation({
       originX: -100,
@@ -719,11 +717,11 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     dispose()
   })
 
-  // CW-82: the far skyline. The laws that keep it cheap and honest: it is
-  // the SAME geometry object (one VBO, a second draw - never a copy of the
+  // The far skyline. The laws that keep it cheap and honest: it is the
+  // same geometry object (one VBO, a second draw - never a copy of the
   // city), it carries no window texture, and overhead - where the fog its
   // shader lives in is disabled - it hides.
-  it('★★ builds a windowless far-skyline mesh SHARING the buildings geometry (CW-82)', () => {
+  it('builds a windowless far-skyline mesh sharing the buildings geometry', () => {
     const { group, setMapView, dispose } = buildCityGroup(model())
     const near = group.children.filter((c) => c.name === 'buildings')
     const far = group.children.filter((c) => c.name === 'buildings-far')
@@ -742,7 +740,7 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     dispose()
   })
 
-  it('setCellRaster biases every textured facade material for the cell grid (CW-41)', () => {
+  it('setCellRaster biases every textured facade material for the cell grid', () => {
     // The shimmer fix: facade textures are filtered for the CELL raster,
     // so the bias is log2 of the cell height and follows the character
     // size. At a cell height of 1 the filtering is exactly stock (bias 0)
@@ -769,13 +767,13 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     dispose()
   })
 
-  it('drives the cell raster on every surface that opts into it (D-111)', () => {
+  it('drives the cell raster on every surface that opts into it', () => {
     // The test above can only see materials that already carry the uniform,
-    // and it never asks WHICH ones do. A material that opts into the filter
+    // and it never asks which ones do. A material that opts into the filter
     // and is then left out of the driven list carries a bias uniform nothing
     // ever writes: its shader says it is filtered for the cell grid while it
-    // renders at stock filtering at every character size. That is how the
-    // pavement shipped in CW-51, and only a check by NAME can see it.
+    // renders at stock filtering at every character size. Only a check by
+    // name can see that.
     const { group, setCellRaster, dispose } = buildCityGroup(model())
     const opted = []
     group.traverse((o) => {
@@ -859,13 +857,13 @@ describe('attachCityLighting', () => {
   })
 
   /**
-   * D-74. The drift used to be read straight off the session clock, so it
-   * only ran while it was raining and was wherever that clock had reached
-   * whenever it was next asked. Two things went wrong: a shower that ended on
-   * a murky night left the murk there for good, and the next shower snapped
-   * the fog to a thickness nothing had walked into.
+   * The fog drift is not read straight off the session clock: that would run
+   * it only while it was raining and leave it wherever the clock had reached
+   * whenever it was next asked. Two things would go wrong: a shower that ended
+   * on a murky night would leave the murk there for good, and the next shower
+   * would snap the fog to a thickness nothing had walked into.
    */
-  describe('fog drift (D-74)', () => {
+  describe('fog drift', () => {
     const lit = () => {
       const scene = new Scene()
       const lighting = attachCityLighting(scene, new PerspectiveCamera())
@@ -918,7 +916,7 @@ describe('attachCityLighting', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Street props (CW-16)
+// Street props
 // ---------------------------------------------------------------------------
 
 /**
@@ -983,7 +981,7 @@ function hasVertexInRect(group, name, minX, minY, maxX, maxY) {
   return false
 }
 
-describe('buildStreetProps (CW-16)', () => {
+describe('buildStreetProps', () => {
   it('plants the trees the map actually records', () => {
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
@@ -999,11 +997,10 @@ describe('buildStreetProps (CW-16)', () => {
   })
 
   it('walks under the leaves but not through the trunk', () => {
-    // CW-94: the blob crown became the ring-branch system, and the law this
-    // case holds did not move - CW-16's walk-under rule now binds the LEAF
-    // CUBES (constraint e): no cube's underside below CANOPY_BASE_MIN_M.
-    // Branches may pass lower, bare - a bare member is not a wall of leaves
-    // at head height - and only the trunk blocks a cane.
+    // The walk-under rule binds the leaf cubes of the ring-branch crown
+    // (constraint e): no cube's underside below CANOPY_BASE_MIN_M. Branches
+    // may pass lower, bare - a bare member is not a wall of leaves at head
+    // height - and only the trunk blocks a cane.
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
     const trunks = props.group.children.find((c) => c.name === 'tree-trunks')
@@ -1036,14 +1033,14 @@ describe('buildStreetProps (CW-16)', () => {
     }
     // Parked cars sit inside the curb ribbon, whose inner edge runs half a
     // road width in, less the 0.5 m ribbon. Derived from the width rather
-    // than written out, because CW-50 moved it and will not be the last to.
+    // than written out, because road widths change.
     // What this catches - a car turned across the road, or parked on the
     // pavement - stays the same whatever the class is worth.
     const curbInnerM = ROAD_WIDTHS_M.residential / 2 - 0.5
     expect(maxAbsY).toBeLessThanOrEqual(curbInnerM + 1e-3)
     expect(minAbsY).toBeGreaterThan(0.4)
-    // CW-46: parked cars are CLASSES now - the tallest (pickup/SUV) tops
-    // out at 1.9 m and nothing exceeds the class table.
+    // Parked cars are classes - the tallest (pickup/SUV) tops out at 1.9 m
+    // and nothing exceeds the class table.
     expect(maxZ).toBeGreaterThan(1.3)
     expect(maxZ).toBeLessThanOrEqual(1.9 + 1e-3)
 
@@ -1057,7 +1054,7 @@ describe('buildStreetProps (CW-16)', () => {
 
     for (const name of [
       'tree-trunks',
-      // CW-94: the blob crown's mesh became the ring system's two kinds.
+      // The ring-branch crown's two meshes.
       'tree-branches',
       'tree-leaves',
       'cars',
@@ -1089,7 +1086,7 @@ describe('buildStreetProps (CW-16)', () => {
     const withoutBlocker = buildStreetProps(clear, buildCollisionGrid(clear))
     const withBlocker = buildStreetProps(built, buildCollisionGrid(built))
 
-    // Not vacuous: that stretch of sidewalk IS furnished when it is empty.
+    // Not vacuous: that stretch of sidewalk is furnished when it is empty.
     expect(
       hasVertexInRect(withoutBlocker.group, 'tree-trunks', 6, 3, 14, 11)
     ).toBe(true)
@@ -1107,10 +1104,10 @@ describe('buildStreetProps (CW-16)', () => {
     const props = buildStreetProps(m, buildCollisionGrid(m))
 
     // Everything a walker would bump into is here: parked cars, tree trunks,
-    // lamp posts, and since CW-19 the signal posts and the standing figures.
-    // FROZEN TRAFFIC IS DELIBERATELY ABSENT — a car standing in a travel lane
-    // is scenery, and walling off the lanes would turn the street into a maze
-    // (decided and recorded in CW-19). This count is what proves that.
+    // lamp posts, signal posts and the standing figures. Frozen traffic is
+    // deliberately absent - a car standing in a travel lane is scenery, and
+    // walling off the lanes would turn the street into a maze. This count is
+    // what proves that.
     expect(props.obstacles).toHaveLength(
       props.stats.carCount +
         props.stats.treeCount +
@@ -1168,7 +1165,7 @@ describe('buildStreetProps (CW-16)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Street life, standing still (CW-18)
+// Street life, standing still
 // ---------------------------------------------------------------------------
 
 /** Every vertex of a named mesh, as [x, y, z] triples. */
@@ -1180,7 +1177,7 @@ function verticesOf(group, name) {
   return out
 }
 
-describe('buildStreetProps — streetlights (CW-18)', () => {
+describe('buildStreetProps — streetlights', () => {
   it('marches lamps down the street, alternating sides', () => {
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
@@ -1191,8 +1188,8 @@ describe('buildStreetProps — streetlights (CW-18)', () => {
 
     // The road runs along y = 0, so every pole stands 0.45 m beyond its edge
     // on one side or the other and nowhere in between (a vertex sits half the
-    // 0.15 m post off that line). Derived from the class width, which CW-50
-    // moved: the invariant is that poles line up on the pavement, not the
+    // 0.15 m post off that line). Derived from the class width, which can
+    // change: the invariant is that poles line up on the pavement, not the
     // particular metre they line up on.
     const poleLineM = ROAD_WIDTHS_M.residential / 2 + 0.45
     const sides = new Set()
@@ -1294,7 +1291,7 @@ function dressingModel() {
   return parseCityExtract({ elements }, { center: CENTER })
 }
 
-describe('buildCityGroup — signs and rooftop masts (CW-18)', () => {
+describe('buildCityGroup — signs and rooftop masts', () => {
   it('hangs signs on the outside of the wall, never inside the footprint', () => {
     const m = dressingModel()
     const { group, stats, dispose } = buildCityGroup(m)
@@ -1458,13 +1455,13 @@ describe('buildCityGroup — signs and rooftop masts (CW-18)', () => {
   })
 })
 
-describe('buildCityGroup — CW-24 the far city', () => {
+describe('buildCityGroup — the far city', () => {
   /**
-   * The fog fades to BLACK, and only exact black reads as an empty cell, so
-   * every tower past 260 m was being deleted from the picture rather than
-   * pushed into the distance. Buildings now keep a floor of their own tone at
-   * any range; everything else must still vanish, because a dim carpet across
-   * the lower half of the frame is the recorded round-1 failure.
+   * The fog fades to black, and only exact black reads as an empty cell, so
+   * without a floor every tower past 260 m would be deleted from the picture
+   * rather than pushed into the distance. Buildings keep a floor of their own
+   * tone at any range; everything else must still vanish, because a dim
+   * carpet across the lower half of the frame is a failure too.
    */
   const shaderFor = (material) => {
     const shader = {
@@ -1504,7 +1501,7 @@ describe('buildCityGroup — CW-24 the far city', () => {
     expect(shader.uniforms.uMaxFogFactor).toBeDefined()
     const max = shader.uniforms.uMaxFogFactor.value
     // Exactly 1 would be the stock fog: fully faded, i.e. exactly black,
-    // i.e. an empty cell — the whole defect this release exists to fix.
+    // i.e. an empty cell: the tower deleted from the picture.
     expect(max).toBeGreaterThan(0)
     expect(max).toBeLessThan(1)
     // The floor is a silhouette, not a haze: most of the fade must survive.
@@ -1512,7 +1509,7 @@ describe('buildCityGroup — CW-24 the far city', () => {
 
     expect(shader.fragmentShader).toContain('uniform float uMaxFogFactor;')
     expect(shader.fragmentShader).toContain('min( fogFactor, uMaxFogFactor )')
-    // The clamp has to come BEFORE the mix, or it changes nothing.
+    // The clamp has to come before the mix, or it changes nothing.
     expect(shader.fragmentShader.indexOf('min( fogFactor')).toBeLessThan(
       shader.fragmentShader.indexOf('mix( gl_FragColor.rgb, fogColor')
     )
@@ -1531,7 +1528,7 @@ describe('buildCityGroup — CW-24 the far city', () => {
   })
 })
 
-describe('buildCityGroup — CW-25 letter-family facades', () => {
+describe('buildCityGroup — letter-family facades', () => {
   it('splits the buildings into one mesh per facade family', () => {
     const { group, dispose } = buildCityGroup(model())
     const meshes = group.children.filter((c) => c.name === 'buildings')
@@ -1540,7 +1537,7 @@ describe('buildCityGroup — CW-25 letter-family facades', () => {
     // pass and the map-view swap both key on.
     expect(meshes.length).toBeGreaterThan(1)
     // Textures are painted on a canvas, which this environment does not have,
-    // so they all come back null here. What CAN be asserted without a canvas
+    // so they all come back null here. What can be asserted without a canvas
     // is that each family got its own material to hang a texture on.
     const materials = meshes.map((m) => m.material)
     expect(new Set(materials).size, 'two families share a material').toBe(
@@ -1592,7 +1589,7 @@ describe('buildCityGroup — CW-25 letter-family facades', () => {
   })
 })
 
-describe('trafficLightState (CW-19)', () => {
+describe('trafficLightState', () => {
   it('runs green, then amber, then red, and comes back round', () => {
     const seen = new Set()
     for (let t = 0; t < 20000; t += 100) seen.add(trafficLightState(t, 0))
@@ -1638,7 +1635,7 @@ describe('trafficLightState (CW-19)', () => {
   })
 })
 
-describe('buildRain (CW-20)', () => {
+describe('buildRain', () => {
   const drops = (rain) => rain.group.children.filter((m) => m.visible)
 
   it('starts dry, and shows more drops the heavier it gets', () => {
@@ -1707,7 +1704,7 @@ describe('buildRain (CW-20)', () => {
   })
 })
 
-describe('street furniture props (CW-43)', () => {
+describe('street furniture props', () => {
   // Nodes stand a pavement's width off the E-W residential road at y=0.
   const furnitureModel = (extra = []) =>
     propsModel([
@@ -1823,7 +1820,7 @@ describe('street furniture props (CW-43)', () => {
 
     const near = (x, y) =>
       props.obstacles.filter((o) => Math.hypot(o.x - x, o.y - y) < 1.6)
-    // The stop contributes its pole AND its shelter.
+    // The stop contributes its pole and its shelter.
     expect(near(15, 6).length).toBeGreaterThanOrEqual(2)
     expect(near(-15, 6).length).toBeGreaterThanOrEqual(1) // bench
     expect(near(0, 7).length).toBeGreaterThanOrEqual(1) // basket
@@ -1859,7 +1856,7 @@ describe('street furniture props (CW-43)', () => {
   })
 })
 
-describe('cars are cars (CW-46, CW-Q46)', () => {
+describe('cars are cars', () => {
   it('ships the signed class table exactly, weights summing to 100', async () => {
     const { CAR_CLASSES } = await import('../../../src/js/game/city-scene.js')
     expect(CAR_CLASSES.map((c) => [c.kind, c.lenM, c.widM, c.hM])).toEqual([
@@ -1901,7 +1898,7 @@ describe('cars are cars (CW-46, CW-Q46)', () => {
       )
     }
     // Along the (x-axis) road, successive parked footprints keep clear of
-    // one another - a 5.8 m pickup in the old 6 m slots would not have.
+    // one another - a 5.8 m pickup in 6 m slots would not.
     const sameSide = (side) =>
       cars
         .filter((o) => Math.sign(o.y) === side && Math.abs(o.rotationRad) < 0.1)
@@ -1921,12 +1918,12 @@ describe('cars are cars (CW-46, CW-Q46)', () => {
   })
 })
 
-describe('figure tones follow the colour scheme (CW-49)', () => {
+describe('figure tones follow the colour scheme', () => {
   // sRGB luma, the same weights tintOf balances against.
   const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b
   const HUES = [0, 30, 60, 120, 180, 270, 300, 330]
 
-  it('keeps a tone at its tier for EVERY hue, which is what mono reads', () => {
+  it('keeps a tone at its tier for every hue, which is what mono reads', () => {
     // tintOf holds luminance at the tier by moving channels apart, but it
     // clamps, and a clamped channel silently breaks that. The monochrome
     // schemes have only luminance to go on, so a tone that drifts off its
@@ -1974,7 +1971,7 @@ describe('figure tones follow the colour scheme (CW-49)', () => {
   })
 })
 
-describe('road lines (CW-51)', () => {
+describe('road lines', () => {
   /** A long arterial and a long residential, on one model. */
   function linesModel() {
     return parseCityExtract(
@@ -2055,22 +2052,22 @@ describe('road lines (CW-51)', () => {
     const { group, dispose } = buildCityGroup(linesModel())
     const a = lineMesh(group).geometry.getAttribute('position').array
     for (let i = 2; i < a.length; i += 3) {
-      // Paint is on the road, which CW-50 cut a curb's depth below pavement.
+      // Paint is on the road, which sits a curb's depth below pavement.
       expect(a[i]).toBeLessThan(0)
     }
     dispose()
   })
 })
 
-describe('per-city paving (CW-51, CW-Q51)', () => {
+describe('per-city paving', () => {
   it('gives each city the finish its own municipality specifies', () => {
-    // Two of these are the owner's words and two were fetched from the
-    // cities' own standards. Denver and Burnaby SHARE a finish because they
-    // genuinely specify the same one - Denver Parks and Recreation requires a
-    // broom finish on all concrete walkways, and Burnaby's Supplementary
-    // Specifications adopt MMCD 03 30 20, which specifies broom finish too.
-    // Inventing a difference so four cities looked four ways would have been
-    // the dishonest option, so this pins the sharing on purpose.
+    // Two of these come from the cities' own standards, and Denver and
+    // Burnaby share a finish because they genuinely specify the same one:
+    // Denver Parks and Recreation requires a broom finish on all concrete
+    // walkways, and Burnaby's Supplementary Specifications adopt MMCD
+    // 03 30 20, which specifies broom finish too. Inventing a difference so
+    // four cities looked four ways would be the dishonest option, so this
+    // pins the sharing on purpose.
     expect(CITY_PAVING.seattle).toBe('aggregate')
     expect(CITY_PAVING.albuquerque).toBe('cracked')
     expect(CITY_PAVING.denver).toBe('broom')
@@ -2111,14 +2108,14 @@ describe('per-city paving (CW-51, CW-Q51)', () => {
 
 
 /**
- * CW-53: twenty ground floors instead of five, and the map data decides which
+ * Twenty ground floors, and the map data decides which
  * one a corner wears wherever the map knows.
  *
  * The band index is baked into every storefront's UVs, so it can be read back
  * out of the built geometry - which is what these cases do rather than
  * trusting the table they are meant to be guarding.
  */
-describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
+describe('buildCityGroup — twenty storefront bands', () => {
   const STOREFRONT_HEIGHT_M = 3.5
 
   /** One building, optionally with a POI node beside it and its own tags. */
@@ -2172,7 +2169,7 @@ describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
   }
 
   it('names its twenty bands, in the order their indices mean', () => {
-    // Design data the owner can veto row by row. The index is baked into
+    // Design data, decided row by row. The index is baked into
     // shipped UVs, so a reordering is not a cosmetic change.
     expect(STOREFRONT_BAND_NAMES).toEqual([
       'glass',
@@ -2288,7 +2285,7 @@ describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
   })
 
   it('is deterministic, and a building with no POI still varies', () => {
-    // THE SEED LAW: the hash draw is the same draw it has always been, so the
+    // The seed law: the hash draw is the same draw it has always been, so the
     // same city dresses the same way twice.
     const plain = () => bandOf(oneBuilding())
     const first = plain()
@@ -2300,14 +2297,14 @@ describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
 
 
 /**
- * CW-54: cars have wheels and the driving ones have their lights on.
+ * Cars have wheels and the driving ones have their lights on.
  *
  * The lamp numbers are decided by the luminance ladder, not by taste, so what
- * has to be guarded is that they still SIT on it after tintOf has had its way
+ * has to be guarded is that they still sit on it after tintOf has had its way
  * with them - and that a converter in colour mode still reads the hue out of a
  * tint whose chroma had to be cut to almost nothing to stay in gamut.
  */
-describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
+describe('buildStreetProps — car anatomy and lamps', () => {
   const LUM = [0.2126, 0.7152, 0.0722]
   const luminance = (t) => t[0] * LUM[0] + t[1] * LUM[1] + t[2] * LUM[2]
 
@@ -2319,7 +2316,7 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     // invade it; a tail lamp is dimmer because a tail light is.
     expect(luminance(CAR_HEADLAMP_TINT)).toBeCloseTo(0.92, 4)
     expect(luminance(CAR_TAILLAMP_TINT)).toBeCloseTo(0.82, 4)
-    // The tail lamp also has a CEILING, which is the whole of D-112: past
+    // The tail lamp also has a ceiling: past
     // about 0.837 its in-gamut red is so pale that the encoded canvas reads it
     // as white. 0.82 is the middle of the window between that and the 0.80
     // floor below.
@@ -2339,20 +2336,20 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     expect(luminance(CAR_HEADLAMP_TINT)).toBeLessThan(0.93)
   })
 
-  it('still lands the colour each lamp is meant to be, ENCODED (D-112)', () => {
+  it('still lands the colour each lamp is meant to be, encoded', () => {
     // The tail lamp's chroma had to fall from the 0.75 asked for to about 0.18
     // to keep its luminance where the ladder wants it - a saturated red simply
     // is not that bright - and what survives is a pale pink. Whether a
-    // converter can still read RED out of that depends entirely on WHICH
-    // NUMBERS IT IS HANDED.
+    // converter can still read red out of that depends entirely on which
+    // numbers it is handed.
     //
-    // This is D-112. The tint is linear light; the canvas the converter samples
-    // has been through the renderer's output encoding, and sRGB's toe lifts the
-    // green and blue channels much closer to the red one. Handed the linear
-    // tint, pickPaletteIndex says red at every tier this lamp could plausibly
-    // take, which is why the first version of this guard was green while a
-    // photograph of the same lamp came back white. Encode first, and the guard
-    // has an opinion: at 0.85 it says #ffffff, at 0.82 it says #ff3333.
+    // The tint is linear light; the canvas the converter samples has been
+    // through the renderer's output encoding, and sRGB's toe lifts the green
+    // and blue channels much closer to the red one. Handed the linear tint,
+    // pickPaletteIndex says red at every tier this lamp could plausibly take,
+    // while a photograph of the same lamp comes back white. Encode first, and
+    // the guard has an opinion: at 0.85 it says #ffffff, at 0.82 it says
+    // #ff3333.
     const encode = (c) =>
       c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
     const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
@@ -2369,13 +2366,13 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ffffff')
   })
 
-  it('glazes every car the same cool colour without moving mono (CW-54)', () => {
-    // The cabin used to take the car's own paint hue, so a red car had red
-    // windows. It takes one fixed cool tint now - and the whole point of the
-    // exercise is that a MONOCHROME screen cannot tell, because luminance
-    // alone is what it reads. That promise only holds while nothing clamps,
-    // which is why glassTint goes through inGamutChroma: pin the four cabin
-    // luminances exactly, and the promise is a fact rather than an intention.
+  it('glazes every car the same cool colour without moving mono', () => {
+    // The cabin takes one fixed cool tint, not the car's own paint hue (a red
+    // car with red windows) - and the whole point of the exercise is that a
+    // monochrome screen cannot tell, because luminance alone is what it
+    // reads. That promise only holds while nothing clamps, which is why
+    // glassTint goes through inGamutChroma: pin the four cabin luminances
+    // exactly, and the promise is a fact rather than an intention.
     const cabins = CAR_TIERS.map((t) => Math.min(1, t + CAR_CABIN_LIFT))
     const tints = CAR_TIERS.map((t) => glassTint(t))
     tints.forEach((tint, i) => {
@@ -2384,7 +2381,7 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
       expect(tint[2]).toBeGreaterThan(tint[1])
       expect(tint[1]).toBeGreaterThan(tint[0])
     })
-    // ENCODED (D-112), the three lower cabins read cool and the brightest one
+    // Encoded, the three lower cabins read cool and the brightest one
     // cannot: at 0.92 the gamut caps the chroma at 0.204, under the 0.235 it
     // would need. That is the ladder's arithmetic, not a tuning choice, and it
     // is pinned so a later change to the tiers cannot quietly whiten the rest.
@@ -2425,18 +2422,17 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     // A parked car is parked. Lighting the kerbside rows would also string
     // bright points down every street, which is the carpet law's territory.
     //
-    // Asked as "does this mesh CONTAIN a lamp tint", not "which mesh is
-    // brighter" - the first form of this compared brightest luminances and
-    // failed, because a top-tier parked cabin is already 0.92 and the lamps
-    // sit in the same neighbourhood on purpose. Presence is the fact; the
-    // brightness ordering never was one.
+    // Asked as "does this mesh contain a lamp tint", not "which mesh is
+    // brighter": comparing brightest luminances fails, because a top-tier
+    // parked cabin is already 0.92 and the lamps sit in the same
+    // neighbourhood on purpose. Presence is the fact; the brightness ordering
+    // never was one.
     // The plain fixture's road is 100 m of residential, which is 0.8 traffic
-    // cars and therefore none - and the first form of this case guarded the
-    // traffic half with `if (traffic)`, so it passed happily with the lamps
-    // removed entirely.
+    // cars and therefore none - guarding the traffic half with `if (traffic)`
+    // would pass happily with the lamps removed entirely.
     //
-    // The road added here is 120 m of secondary and it is INSIDE THE MODEL
-    // BOUNDS, which the buildings set at plus or minus 66 m. Props are placed
+    // The road added here is 120 m of secondary and it is inside the model
+    // bounds, which the buildings set at plus or minus 66 m. Props are placed
     // only within those bounds, so a longer road laid across them grows no
     // traffic at all - measured: 400 m at y=40 gives zero, 120 m at y=25
     // gives five.
@@ -2478,14 +2474,14 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
   })
 
   it('stands every car on its wheels, with the body lifted clear', () => {
-    // The body used to sit flush on the ground, which is why a parked row read
-    // as a low dotted mass.
+    // A body flush on the ground makes a parked row read as a low dotted
+    // mass.
     //
-    // The tell is not how MANY vertices reach the ground - four wheel boxes
-    // put more there than one flush body did, measured 0.30 against 0.19, so
+    // The tell is not how many vertices reach the ground - four wheel boxes
+    // put more there than one flush body does, measured 0.30 against 0.19, so
     // that ratio moves the wrong way. It is that a box has vertices only at
     // its two ends in z, so a car whose body starts at a ride height has
-    // vertices AT that ride height and a flush one has none. Both clearances
+    // vertices at that ride height and a flush one has none. Both clearances
     // in the table are checked because both classes park here.
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
@@ -2512,15 +2508,15 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
 })
 
 /**
- * CW-56 (CW-Q55): the species reach the city, and the map's own leaf gets a
+ * The species reach the city, and the map's own leaf gets a
  * say.
  *
  * The table guards live in city-trees.test.js, where they belong. What has to
- * be guarded HERE is the wiring - because a perfect species table that nothing
+ * be guarded here is the wiring - because a perfect species table that nothing
  * calls looks exactly like a perfect species table that everything calls, and
  * the seed law is the alarm that would otherwise go unheard.
  */
-describe('buildStreetProps — species trees (CW-56)', () => {
+describe('buildStreetProps — species trees', () => {
   it('plants more than one kind of tree, and counts what it planted', () => {
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
@@ -2529,12 +2525,12 @@ describe('buildStreetProps — species trees (CW-56)', () => {
     const total = Object.values(planted).reduce((a, b) => a + b, 0)
     expect(total).toBe(props.stats.treeCount)
     // A table nobody uses and a table everybody uses look identical inside a
-    // merged mesh (CW-53's lesson), so the build counts its own.
+    // merged mesh, so the build counts its own.
     expect(Object.keys(planted).length).toBeGreaterThan(1)
     props.dispose()
   })
 
-  it('lets a needleleaved tree in the DATA become a conifer', () => {
+  it('lets a needleleaved tree in the data become a conifer', () => {
     // The wiring guard. Two models identical but for one tag, so what is
     // being measured is the tag and nothing else: a mapped needleleaved tree
     // must come out as a cone, which is three stacked crowns rather than one
@@ -2581,15 +2577,14 @@ describe('buildStreetProps — species trees (CW-56)', () => {
 })
 
 /**
- * CW-57 (CW-Q55): plantings and picnic tables in the city.
+ * Plantings and picnic tables in the city.
  *
- * The shapes are guarded in city-planting.test.js. What has to be guarded HERE
- * is the law the CW-43 record set and this release could most easily break:
- * REAL DATA WINS. A fallback that fires where the map already answered would
- * be decorative scatter standing on top of a real position, which is exactly
- * what the owner's mission sentence forbids.
+ * The shapes are guarded in city-planting.test.js. What has to be guarded
+ * here is the law that is easiest to break: real data wins. A fallback that
+ * fires where the map already answered would be decorative scatter standing
+ * on top of a real position.
  */
-describe('buildStreetProps — plantings (CW-57)', () => {
+describe('buildStreetProps — plantings', () => {
   const plantingModel = (extra = []) =>
     propsModel([
       { type: 'way', id: 80, tags: { leisure: 'park' }, geometry: squareRing(35, 0, 25) },
@@ -2602,7 +2597,7 @@ describe('buildStreetProps — plantings (CW-57)', () => {
     ])
     const props = buildStreetProps(m, buildCollisionGrid(m))
     expect(props.stats.plantingPlaced.planter).toBeGreaterThan(0)
-    // ★ REAL DATA WINS: a city with a mapped planter never reaches the
+    // Real data wins: a city with a mapped planter never reaches the
     // fallback, so nothing invented stands beside something real.
     expect(
       props.stats.fallbackPlanters,
@@ -2612,11 +2607,11 @@ describe('buildStreetProps — plantings (CW-57)', () => {
     props.dispose()
   })
 
-  it('fills a city that has NO planters, and says that it did', () => {
+  it('fills a city that has no planters, and says that it did', () => {
     // Denver and Albuquerque have zero mapped planters and zero flowerbeds -
-    // measured in CW-55's rebake, not assumed. The directive licenses filling
-    // that gap; what this pins is that the count is reported SEPARATELY, so a
-    // reader can always tell design from data.
+    // measured in the bake, not assumed. The fallback fills that gap; what
+    // this pins is that the count is reported separately, so a reader can
+    // always tell design from data.
     const m = plantingModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
     expect(props.stats.fallbackPlanters).toBeGreaterThan(0)
@@ -2636,8 +2631,7 @@ describe('buildStreetProps — plantings (CW-57)', () => {
       (o) => Math.hypot(o.x + 25, o.y - 5) < 0.5 && o.halfLengthM > 0.8
     )
     expect(stamped, 'a picnic table nobody can walk into').toHaveLength(1)
-    // Sitters are bench-only. That is CW-45's settled law and no signed
-    // question has extended it, so picnic tables ship unoccupied.
+    // Sitters are bench-only, so picnic tables ship unoccupied.
     expect(props.stats.sitterCount).toBe(0)
     props.dispose()
   })
@@ -2663,25 +2657,24 @@ describe('buildStreetProps — plantings (CW-57)', () => {
 })
 
 /**
- * CW-65 (CW-Q60): what the traveler is actually identified BY.
+ * What the traveler is actually identified by.
  *
- * ★★ THE ANSWER IS SHAPE, NOT COLOUR, AND THE MEASUREMENT OVERTURNED MY OWN
- * ASSUMPTION. The high-visibility jacket sits at tier 0.92 against the
- * brightest ordinary torso's 0.8, and photographed at 8 m that is a real
- * +55% in mean luminance. But in COLOUR mode the palette quantizes both to the
- * SAME entry, and the green set has only six entries which ordinary figures
- * reach ALL SIX of - 3,029 figures saturate it. So no colour anywhere in that
- * palette belongs to the traveler alone, the jacket included.
+ * The answer is shape, not colour. The high-visibility jacket sits at tier
+ * 0.92 against the brightest ordinary torso's 0.8, and photographed at 8 m
+ * that is a real +55% in mean luminance. But in colour mode the palette
+ * quantizes both to the same entry, and the green set has only six entries
+ * which ordinary figures reach all six of - 3,029 figures saturate it. So
+ * no colour anywhere in that palette belongs to the traveler alone, the
+ * jacket included.
  *
- * What is left, and what CW-Q60 signed from the start, is the CANE: a bright
- * diagonal reaching the ground, which no other figure in the city has. These
- * assertions pin the claims that survive rather than the one that did not.
+ * What is left is the cane: a bright diagonal reaching the ground, which no
+ * other figure in the city has. These assertions pin the claims that hold.
  */
-describe('the traveler is identified by shape, not by colour (CW-65)', () => {
+describe('the traveler is identified by shape, not by colour', () => {
   const encode = (c) =>
     c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
   const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
-  // D-112: the converter reads the frame AFTER the renderer's output
+  // The converter reads the frame after the renderer's output
   // encoding, so a palette claim tested on the linear tint is a claim about
   // numbers nobody ever sees.
   const landsOn = (tint, palette) => {
@@ -2705,13 +2698,13 @@ describe('the traveler is identified by shape, not by colour (CW-65)', () => {
     // does not beat those is another bright shirt. This is the claim that
     // carries in MONO, which is the default and the high-contrast mode.
     expect(TRAVELER_LOOK.jacketTier).toBeGreaterThan(0.82)
-    // inGamutChroma, because tintOf CLAMPS and a clamped channel silently
-    // voids the luminance promise the mono schemes read (CW-49).
+    // inGamutChroma, because tintOf clamps and a clamped channel silently
+    // voids the luminance promise the mono schemes read.
     expect(lumOf(jacket())).toBeCloseTo(TRAVELER_LOOK.jacketTier, 3)
   })
 
-  it('cannot be told from the crowd by COLOUR, and the record says so', () => {
-    // Not a wish - a measurement, kept here so a future release that "fixes"
+  it('cannot be told from the crowd by colour', () => {
+    // Not a wish - a measurement, kept here so a future change that "fixes"
     // the jacket's hue knows what it is up against. Ordinary figures draw
     // from eight hues over three tiers; between them they reach every entry
     // the green set has.
@@ -2731,16 +2724,16 @@ describe('the traveler is identified by shape, not by colour (CW-65)', () => {
   })
 
   it('lands a real yellow in both sets rather than clipping to white', () => {
-    // The one thing the hue choice DOES buy: high-visibility yellow is the
+    // The one thing the hue choice does buy: high-visibility yellow is the
     // colour the thing is in life, and at 0.92 it survives the gamut cap.
     expect(landsOn(jacket(), HC_PALETTE_GREEN)).toBe('#ffff00')
     expect(landsOn(jacket(), HC_PALETTE_AMBER)).toBe('#aaff00')
   })
 
   it('draws the glasses in the one true dark this medium has', () => {
-    // Exact black is rendered as an EMPTY CELL (CW-5). These palettes carry no
-    // dark neutral at all (CW-58), so a band drawn "dark" would land on a
-    // colour that is not dark.
+    // Exact black is rendered as an empty cell. These palettes carry no dark
+    // neutral at all, so a band drawn "dark" would land on a colour that is
+    // not dark.
     const t = buildTraveler('seattle')
     t.place(0, 0, 0)
     const mesh = t.group.children.find((c) => c.isMesh)
@@ -2756,9 +2749,9 @@ describe('the traveler is identified by shape, not by colour (CW-65)', () => {
   })
 
   it('is one mesh, named so the class pass can find it', () => {
-    // A name on the GROUP dresses nothing: the class pass traverses with
-    // `if (!obj.isMesh) return` and reads obj.name. That is D-115, and it is
-    // why this asserts the MESH.
+    // A name on the group dresses nothing: the class pass traverses with
+    // `if (!obj.isMesh) return` and reads obj.name, which is why this asserts
+    // the mesh.
     const t = buildTraveler('seattle')
     expect(t.isPlaced()).toBe(false)
     t.place(12, -3, 1)
@@ -2782,17 +2775,16 @@ describe('the traveler is identified by shape, not by colour (CW-65)', () => {
 })
 
 /**
- * CW-65: where the traveler stands.
+ * Where the traveler stands.
  *
- * ★★ THESE EXIST BECAUSE THE E2E COULD NOT SEE THE MECHANISM. The e2e asserts
- * that Seattle's traveler is more than 150 m from the spawn, and that is TRUE
- * WITH THE FLOOR DELETED - the busiest pavement in Seattle happens to be 358 m
- * away regardless. Red-proven: removing the floor outright left that case
- * green. An outcome that holds by luck is not a guard, so the floor, the
- * determinism and the never-null fallback are tested on the pure function
- * where a defect has nowhere to hide.
+ * The e2e cannot see the mechanism: it asserts that Seattle's traveler is
+ * more than 150 m from the spawn, and that holds with the floor deleted -
+ * the busiest pavement in Seattle happens to be 358 m away regardless. An
+ * outcome that holds by luck is not a guard, so the floor, the determinism
+ * and the never-null fallback are tested on the pure function where a
+ * defect has nowhere to hide.
  */
-describe('pickTravelerSpot (CW-65)', () => {
+describe('pickTravelerSpot', () => {
   const walkers = (list) =>
     list.map(([x, y]) => ({ x, y, pose: 'walking', facing: 0 }))
 
@@ -2811,11 +2803,10 @@ describe('pickTravelerSpot (CW-65)', () => {
   })
 
   it('prefers the busier pavement when both are far enough away', () => {
-    // ★★ THE FIRST VERSION OF THIS PASSED WITH THE DENSITY SORT DELETED, by
-    // luck: it asserted the pick was near the crowd, and the hash happened to
-    // land there anyway. Asserting the pick is AS BUSY AS ANYTHING AVAILABLE
-    // is the claim the sort actually makes, and it cannot be satisfied by
-    // accident.
+    // Asserting the pick is near the crowd would pass with the density sort
+    // deleted, by luck: the hash happens to land there anyway. Asserting the
+    // pick is as busy as anything available is the claim the sort actually
+    // makes, and it cannot be satisfied by accident.
     const busy = []
     for (let i = 0; i < 30; i++)
       busy.push([500 + (i % 5), 500 + Math.floor(i / 5)])
@@ -2846,7 +2837,7 @@ describe('pickTravelerSpot (CW-65)', () => {
   })
 
   it('never strands a city that has people, even with nowhere far enough', () => {
-    // ★ The DISTANCE is what gives way, not the traveler. A small extract, or
+    // The distance is what gives way, not the traveler. A small extract, or
     // a spawn in the middle of everything, must still get one.
     const spots = walkers([
       [1, 1],
@@ -2858,12 +2849,12 @@ describe('pickTravelerSpot (CW-65)', () => {
     expect(Number.isFinite(got.x)).toBe(true)
   })
 
-  it('never strands a city whose only figures are SITTING', () => {
-    // ★★ THE LAST-RESORT FALLBACK HAD NO TEST AT ALL, and deleting it left
-    // every case green: the case above is rescued by the FIRST fallback (drop
-    // the distance rule) and never reaches the second. Only a city where every
-    // figure is on a bench exercises it - and a city with people in it must
-    // never come back empty-handed.
+  it('never strands a city whose only figures are sitting', () => {
+    // The last-resort fallback needs a case of its own: the case above is
+    // rescued by the first fallback (drop the distance rule) and never
+    // reaches the second. Only a city where every figure is on a bench
+    // exercises it - and a city with people in it must never come back
+    // empty-handed.
     const spots = [
       { x: 1, y: 1, pose: 'sitting', facing: 0 },
       { x: 2, y: 2, pose: 'sitting', facing: 0 },
@@ -2888,7 +2879,7 @@ describe('pickTravelerSpot (CW-65)', () => {
   })
 })
 
-describe('nothing stands in the road (CW-75)', () => {
+describe('nothing stands in the road', () => {
   // An 8 m residential street east-west along y = 0, crossed by a 12 m
   // secondary north-south at x = 40, with buildings far enough away that
   // the collision grid never decides anything on its own.
@@ -2988,7 +2979,7 @@ describe('nothing stands in the road (CW-75)', () => {
       expect(roadways.insideRoadway(o.x, o.y, -side / 2)).toBeNull()
     }
     // The junction is where the streams cross, so it has to have refused
-    // something - a guard that never fires proves nothing (CW-73).
+    // something - a guard that never fires proves nothing.
     expect(
       props.stats.treesSkippedInRoad + props.stats.lampsSkippedInRoad
     ).toBeGreaterThan(0)
@@ -3088,7 +3079,7 @@ describe('nothing stands in the road (CW-75)', () => {
     props.dispose()
   })
 
-  it('lets somebody stand in the road where a crossing IS mapped', () => {
+  it('lets somebody stand in the road where a crossing is mapped', () => {
     const plain = crossroadsModel()
     const withCrossing = crossroadsModel([
       { type: 'node', id: 92, tags: { highway: 'crossing' }, ...pt(40, 0) },
@@ -3110,11 +3101,11 @@ describe('nothing stands in the road (CW-75)', () => {
   })
 })
 
-describe('a side street sharing a corridor with an arterial (CW-75)', () => {
-  // ★ The shape the census found 373 Seattle lamp poles standing in: two
+describe('a side street sharing a corridor with an arterial', () => {
+  // The shape the census found 373 Seattle lamp poles standing in: two
   // ways whose ribbons overlap end to end, most of them along the I-5
-  // trench. A lamp planted 0.45 m outside ITS road's kerb is metres inside
-  // the next one's, and a parked slot measured off ITS kerb is somebody
+  // trench. A lamp planted 0.45 m outside its road's kerb is metres inside
+  // the next one's, and a parked slot measured off its kerb is somebody
   // else's travel lane. One crossing at a junction cannot show either; a
   // shared corridor shows both on every metre of it.
   function corridorModel(mainTags, sideY) {

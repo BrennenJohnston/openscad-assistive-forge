@@ -1,15 +1,13 @@
 /**
  * Unit tests for the header Classic toggle's viewport gate.
  *
- * U-10 (UF-5) made the button disabled-with-reason while the viewport was
- * mobile-shaped and it pointed INTO Classic. U-46 (UF-42) changed what that
- * looks like on the owner's order: the button is REMOVED there instead of
- * greyed out. Q-73c settled the boundary as one predicate — the same one the
- * gate always used — so the button is present exactly when pressing it would
- * work, and absent otherwise.
+ * While the viewport is mobile-shaped the button that points into Classic
+ * is removed rather than greyed out. The boundary is one predicate - the
+ * same one the gate always used - so the button is present exactly when
+ * pressing it would work, and absent otherwise.
  *
- * The half U-46 did not touch: the way OUT of Classic is never gated, so a
- * live Classic session keeps its button at any viewport shape.
+ * The way out of Classic is never gated, so a live Classic session keeps
+ * its button at any viewport shape.
  *
  * classic-availability.js keeps listeners and a last-notified value at
  * module scope, so each test imports a fresh controller module tree.
@@ -87,7 +85,7 @@ describe('Classic toggle viewport gate', () => {
     controller.init();
 
     expect(btn.classList.contains('hidden')).toBe(true);
-    // The old contract's attributes must be gone, not merely unread: an
+    // The disabled-with-reason attributes must be gone, not merely unread: an
     // aria-describedby left on a removed control is an orphan pointing at
     // text nothing can reach.
     expect(btn.hasAttribute('aria-disabled')).toBe(false);
@@ -159,13 +157,12 @@ describe('Classic toggle viewport gate', () => {
     controller.init();
     const modeBefore = controller.getMode();
 
-    // The refusal used to key off aria-disabled, which Q-73c made unreachable
-    // — and switchMode's own refusal is silent, so keying off the attribute
-    // would have dropped a spoken message U-10 shipped. The handler asks the
-    // GATE now, so the announcement survives however the click arrives: a
-    // script, a ?uiMode= deep link, or a future change that puts the button
-    // back on screen while entry is closed. No attribute is set here, on
-    // purpose — that is the whole point of the change.
+    // The refusal asks the gate, not aria-disabled: the attribute is never
+    // set while the button is removed, and switchMode's own refusal is
+    // silent, so keying off the attribute would drop the spoken message. The
+    // announcement survives however the click arrives: a script, a ?uiMode=
+    // deep link, or a future change that puts the button back on screen while
+    // entry is closed. No attribute is set here, on purpose.
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     expect(controller.getMode()).toBe(modeBefore);
@@ -186,7 +183,7 @@ describe('Classic toggle viewport gate', () => {
     const controller = new UIModeController();
     controller.init();
 
-    // AF-D56 proposed a boot race here. There is no window for one: the
+    // A boot race is not possible here: the
     // viewport is consulted synchronously in the constructor, before anything
     // mounts, so a phone boot can only ever land in a custom mode.
     expect(controller.getMode()).toBe('standard');

@@ -218,7 +218,7 @@ describe('postProcessDXF — LWPOLYLINE to LINE conversion', () => {
     const lineMatches = output.match(/^\s*0\s*\nLINE/gm) || [];
     expect(lineMatches.length).toBe(4);
 
-    // Should NOT contain LWPOLYLINE
+    // Should not contain LWPOLYLINE
     expect(output).not.toMatch(/LWPOLYLINE/);
   });
 
@@ -241,7 +241,7 @@ describe('postProcessDXF — LWPOLYLINE to LINE conversion', () => {
   });
 });
 
-describe('postProcessDXF — Coordinate precision (BUG-D fix)', () => {
+describe('postProcessDXF — Coordinate precision', () => {
   it('rounds coordinates to 6 decimal places', () => {
     const output = decodeDXF(postProcessDXF(encodeDXF(IMPRECISE_COORDS_DXF)));
 
@@ -273,7 +273,7 @@ describe('postProcessDXF — Coordinate precision (BUG-D fix)', () => {
   });
 });
 
-describe('postProcessDXF — Duplicate line deduplication (BUG-D fix)', () => {
+describe('postProcessDXF — Duplicate line deduplication', () => {
   it('removes duplicate LINE segments from identical LWPOLYLINE entities', () => {
     const output = decodeDXF(postProcessDXF(encodeDXF(DUPLICATE_SEGMENTS_DXF)));
 

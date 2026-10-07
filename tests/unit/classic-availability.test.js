@@ -1,7 +1,7 @@
 /**
- * Unit tests for the U-10 viewport gate (UF-5 P1).
+ * Unit tests for the Classic viewport gate.
  *
- * The predicate: desktop-shaped means width >= 1024 AND not portrait
+ * The predicate: desktop-shaped means width >= 1024 and not portrait
  * (height <= width). Tested at the real breakpoints (1024/1023), in both
  * orientations, and through the debounced resize/orientationchange
  * subscription. The module holds window listeners and a last-notified
@@ -43,7 +43,7 @@ describe('classic-availability predicate', () => {
     expect(mod.isViewportDesktopShaped()).toBe(false);
   });
 
-  it('rejects a portrait viewport even when it is wide enough (the Q-25 trade)', async () => {
+  it('rejects a portrait viewport even when it is wide enough', async () => {
     setViewport(1080, 1920);
     const mod = await freshModule();
     expect(mod.isViewportDesktopShaped()).toBe(false);

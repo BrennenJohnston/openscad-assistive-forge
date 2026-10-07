@@ -44,9 +44,8 @@ function cityModel(slug) {
 }
 
 describe('the four curated tables, pinned against the shipped extracts', () => {
-  // ★ THE PIN CW-63 WROTE FOR TWO DRESSINGS, EXTENDED TO EVERY ROW: a rebake
-  // that retires any keyed id fails here, loudly, instead of quietly
-  // shrinking a legend.
+  // The dressings' id pin, extended to every row: a rebake that retires
+  // any keyed id fails here, loudly, instead of quietly shrinking a legend.
   for (const slug of CITY_SLUGS) {
     it(`resolves all seven ${slug} rows, in table order`, () => {
       const entry = registryFor(slug)
@@ -57,8 +56,8 @@ describe('the four curated tables, pinned against the shipped extracts', () => {
         expect(Number.isFinite(r.x)).toBe(true)
         expect(Number.isFinite(r.y)).toBe(true)
       }
-      // Every row carries its register citation and its one-line case - the
-      // auditability the CW-Q70 signing is about.
+      // Every row carries its register citation and its one-line case, so
+      // every row can be audited.
       for (const row of entry.rows) {
         expect(row.cite?.length).toBeGreaterThan(10)
         expect(row.reason?.length).toBeGreaterThan(10)
@@ -69,22 +68,22 @@ describe('the four curated tables, pinned against the shipped extracts', () => {
     })
   }
 
-  it('fails LOUDLY on a row that matches nothing - a way id', () => {
+  it('fails loudly on a row that matches nothing - a way id', () => {
     const rows = [{ name: 'Nowhere Hall', wayId: 1, cite: 'x', reason: 'x' }]
     expect(() => resolveRegistryRows(cityModel('seattle'), rows)).toThrow(
       /Nowhere Hall.*matches nothing/
     )
   })
 
-  it('fails LOUDLY on a row that matches nothing - a node id', () => {
+  it('fails loudly on a row that matches nothing - a node id', () => {
     const rows = [{ name: 'Ghost Wheel', nodeId: 1, cite: 'x', reason: 'x' }]
     expect(() => resolveRegistryRows(cityModel('seattle'), rows)).toThrow(
       /Ghost Wheel.*matches nothing/
     )
   })
 
-  it('keys the Great Wheel by its NODE and Central Park by its GREEN way', () => {
-    // The two kinds of element the CW-63 way-keyed world could not reach.
+  it('keys the Great Wheel by its node and Central Park by its green way', () => {
+    // The two kinds of element a way-keyed registry could not reach.
     const seattle = resolveRegistryRows(
       cityModel('seattle'),
       registryFor('seattle').rows
@@ -114,7 +113,7 @@ describe('the four curated tables, pinned against the shipped extracts', () => {
   })
 })
 
-describe('the no-table fallback (CW-Q70: wikidata is the tiebreaker)', () => {
+describe('the no-table fallback: wikidata is the tiebreaker', () => {
   const CENTER = { lat: 40, lon: -100 }
   const COS = Math.cos((CENTER.lat * Math.PI) / 180)
   const pt = (xM, yM) => ({
@@ -140,7 +139,7 @@ describe('the no-table fallback (CW-Q70: wikidata is the tiebreaker)', () => {
       {
         elements: [
           // Both reach score 2 through height alone (>= 60). The taller one
-          // would win on the old arithmetic; wikidata on the shorter flips it.
+          // would win on height alone; wikidata on the shorter flips it.
           tower(1, -100, 'Tall Silent Tower', 90),
           tower(
             2,
@@ -164,8 +163,8 @@ describe('the no-table fallback (CW-Q70: wikidata is the tiebreaker)', () => {
   })
 
   it('falls back to the height arithmetic when both are silent', () => {
-    // The red proof for the tiebreak above: same city, wikidata removed,
-    // and the old order comes back.
+    // The other side of the tiebreak above: same city, wikidata removed, and
+    // the height order comes back.
     const names = cityLandmarks(
       syntheticCity({ withWikidata: false }),
       'nowhere'
@@ -174,7 +173,7 @@ describe('the no-table fallback (CW-Q70: wikidata is the tiebreaker)', () => {
   })
 })
 
-describe('the waypoint spots (CW-Q71)', () => {
+describe('the waypoint spots', () => {
   // These two walk the real 9,148-way Seattle model seven times over; under
   // a loaded board they cross vitest's 10 s default without being stuck.
   it('stands every Seattle landmark on clear public pavement', { timeout: 40000 }, () => {
@@ -188,7 +187,7 @@ describe('the waypoint spots (CW-Q71)', () => {
       expect(spot.placement, lm.name).toBe('pavement')
       // The surface grid's own definition of pavement, and a clear cell -
       // the same two tests the placement makes, re-asked from outside.
-      // CW-79: the pavement question by name - heightAt carries terrain now.
+      // The pavement question by name, because heightAt carries terrain.
       expect(surface.isPavement(spot.x, spot.y), lm.name).toBe(true)
       expect(collision.isBlocked(spot.x, spot.y), lm.name).toBe(false)
       expect(Math.hypot(spot.x - lm.x, spot.y - lm.y), lm.name).toBeLessThan(120)
@@ -213,15 +212,15 @@ describe('the waypoint spots (CW-Q71)', () => {
   })
 
   it('sizes the mark for the character grid, not for taste', () => {
-    // CW-Q71's floor: at least five character rows at 40 m at the default
-    // size. Game viewport 756 px over a 60 degree field; the 30% cell is
-    // 3 x 6 px (T41: the ladder is 10/30/40/50 and 30% is the default).
+    // The floor: at least five character rows at 40 m at the default size.
+    // Game viewport 756 px over a 60 degree field; the 30% cell is 3 x 6 px
+    // (the ladder is 10/30/40/50 and 30% is the default).
     const GAME_VIEWPORT_H = 756
     const pxPerM = GAME_VIEWPORT_H / (2 * 40 * Math.tan(Math.PI / 6))
     const CELL_H_PX = 6
     expect((WAYPOINT_MARK.manHeightM * pxPerM) / CELL_H_PX).toBeGreaterThan(5)
-    // The core must be able to CONTAIN the figure - a man poking out of the
-    // hole would bridge the ring and the CW-40 footprint would be gone.
+    // The core must be able to contain the figure - a man poking out of the
+    // hole would bridge the ring and the ring's footprint would be gone.
     expect(WAYPOINT_MARK.manHeightM / 2).toBeLessThan(WAYPOINT_MARK.ringInnerM)
     expect(WAYPOINT_MARK.ringInnerM).toBeLessThan(WAYPOINT_MARK.ringOuterM)
     // Touch must be reachable: a walker stops about plinth-half + body
@@ -233,7 +232,7 @@ describe('the waypoint spots (CW-Q71)', () => {
   })
 })
 
-describe("CW-78's spawn rule", () => {
+describe("the spawn rule", () => {
   it('spawns Seattle within 200 m of the Great Wheel, outside 60 m', () => {
     const model = cityModel('seattle')
     const collision = buildCollisionGrid(model)
@@ -250,8 +249,8 @@ describe("CW-78's spawn rule", () => {
   })
 
   it('keeps the centre rule when no anchor is given', () => {
-    // The pre-CW-78 behaviour, unchanged for a synthetic city or a caller
-    // with no registry: nearest clear road vertex to the extract centre.
+    // Without a registry (a synthetic city, or a caller with none): the
+    // nearest clear road vertex to the extract centre.
     const model = cityModel('seattle')
     const collision = buildCollisionGrid(model)
     const spawn = findSpawn(model, collision)
@@ -263,8 +262,8 @@ describe('the registry names its own gaps', () => {
   it('records the register rows the extracts cannot key', () => {
     // Union Station is outside Denver's circle; Burnaby's stadium, gate,
     // mall and tallest tower are unmapped as named elements. The module's
-    // own comment is the record - this pins that no row quietly PRETENDS to
-    // be one of them under another id.
+    // own comment says so; this pins that no row quietly pretends to be one
+    // of them under another id.
     for (const slug of CITY_SLUGS) {
       for (const row of LANDMARK_REGISTRY[slug].rows) {
         expect(row.name).not.toMatch(/union station|swangard|sovereign/i)

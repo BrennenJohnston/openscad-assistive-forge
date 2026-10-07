@@ -8,7 +8,7 @@ import {
 } from '../../src/js/_hfm-paint.js'
 
 /**
- * Palette-mode (CW-6) tests.
+ * Palette-mode tests.
  *
  * The canvas mock is richer than hfm.test.js's: atlas canvases report an
  * alpha ramp along x (so glyph shape vectors are distinct and bright cells
@@ -29,8 +29,8 @@ function installCanvasMock() {
       _isSampler: false,
       // A distinct non-zero tag per context, written into the red channel of
       // that atlas's pixels so the painted frame carries the identity of the
-      // atlas each cell was drawn from (CW-22: cells are composited, not
-      // blitted, so the drawImage call log no longer records the source).
+      // atlas each cell was drawn from (cells are composited, not blitted, so
+      // the drawImage call log does not record the source).
       _ctxId: (allContexts.length % 200) + 1,
       font: '',
       textAlign: '',
@@ -122,8 +122,8 @@ function createMockPreviewManager() {
 /**
  * Which atlases the painted frame actually drew from.
  *
- * Before CW-22 this read the 9-arg drawImage call log. The composite path
- * paints every cell into one buffer instead, so the source is recovered from
+ * The composite path paints every cell into one buffer, not through a
+ * drawImage call log, so the source is recovered from
  * the pixels themselves: each atlas stamps its own _ctxId into the red
  * channel, and a painted cell carries that tag through untouched.
  */
@@ -177,7 +177,7 @@ describe('palette math helpers', () => {
 
     // Saturated red → the red-family entry (#ff5555)
     expect(pickPaletteIndex(1, 0.1, 0.1, normalized)).toBe(4)
-    // The SAME hue fog-dimmed to 10% → still the red entry
+    // The same hue fog-dimmed to 10% → still the red entry
     expect(pickPaletteIndex(0.1, 0.01, 0.01, normalized)).toBe(4)
     // Cyan → cyan
     expect(pickPaletteIndex(0.05, 0.9, 0.9, normalized)).toBe(1)
@@ -220,7 +220,7 @@ describe('initAltView palette mode', () => {
     api.render()
 
     const sources = paintedAtlasIds()
-    // The red-left/cyan-right frame must route to BOTH palette atlases.
+    // The red-left/cyan-right frame must route to both palette atlases.
     expect(sources.size).toBeGreaterThanOrEqual(2)
 
     api.dispose()
@@ -257,7 +257,7 @@ describe('initAltView palette mode', () => {
   })
 })
 
-describe('phosphor drive levels (CW-21)', () => {
+describe('phosphor drive levels', () => {
   it('full drive returns the phosphor unchanged', () => {
     expect(driveColor('#00ff00', 1)).toBe('#00ff00')
     expect(driveColor('#ffb000', 1)).toBe('#ffb000')
@@ -292,7 +292,7 @@ describe('phosphor drive levels (CW-21)', () => {
   })
 })
 
-describe('intensity selection (CW-21)', () => {
+describe('intensity selection', () => {
   it('splits the luminance range evenly, brightest cells last', () => {
     // Two levels is the hardware's single intensity bit.
     expect(pickIntensityIndex(0, 2)).toBe(0)

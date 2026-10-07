@@ -57,11 +57,11 @@ describe('the registry is the one source the loader reads', () => {
   })
 })
 
-describe('every file a tile names is really there (D-97)', () => {
-  // The defect this registry exists to end: logo-plate's own manifest.json
-  // declared sample-logo.svg, the file was on disk, and the loader read a
-  // different list that omitted it. The first preview errored with "Can't open
-  // file '/tmp/sample-logo.svg'" while the status said "Preview ready".
+describe('every file a tile names is really there', () => {
+  // What this registry prevents: a manifest that declares a file the loader
+  // does not read. With sample-logo.svg on disk but missing from the list
+  // the loader used, the first preview would fail with "Can't open file
+  // '/tmp/sample-logo.svg'" while the status said "Preview ready".
   for (const [key, entry] of Object.entries(EXAMPLES)) {
     it(`${key}: its main file and companions exist on disk`, () => {
       const onDisk = (webPath) => path.join(PUBLIC, webPath.replace(/^\//, ''))
@@ -81,8 +81,7 @@ describe('every file a tile names is really there (D-97)', () => {
 })
 
 describe('a manifest and the registry cannot drift in silence', () => {
-  // This is the check that would have caught D-97, and it is the shape IR-8's
-  // validator takes for a contributed tile.
+  // This is the check a contributed tile's validator takes the shape of.
   for (const [key, entry] of Object.entries(EXAMPLES)) {
     if (!entry.manifest) continue
     it(`${key}: everything manifest.json declares, the registry carries`, () => {
@@ -108,7 +107,7 @@ describe('a manifest and the registry cannot drift in silence', () => {
   }
 })
 
-describe('every shipped SVG is one a browser can actually parse (D-105)', () => {
+describe('every shipped SVG is one a browser can actually parse', () => {
   // sample-logo.svg carried byte 0x14 in a comment - a control character XML
   // does not allow. OpenSCAD's importer ignored it; the browser's parser
   // refused the whole document, so the reference overlay failed to load the

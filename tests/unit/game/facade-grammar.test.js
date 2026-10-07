@@ -19,18 +19,16 @@ import {
 } from '../../../src/js/game/city-scene.js'
 
 /**
- * CW-73. A facade used to be `hash % 9` laid onto the wall in world metres.
- * These are the two halves of what replaced it: a TABLE that reads the map
- * data's building type, and a FIT that makes the grid land on the wall
- * instead of on the world.
+ * A facade is not `hash % 9` laid onto the wall in world metres. These are
+ * its two halves: a table that reads the map data's building type, and a
+ * fit that makes the grid land on the wall instead of on the world.
  */
 
 /**
- * Every distinct `building` value in the four shipped extracts, counted at
- * HEAD on 2026-08-29. This list is the reason the table can be called
- * exhaustive, and it is written out rather than derived so that a rebake
- * bringing a new value reddens this file instead of quietly taking the
- * default.
+ * Every distinct `building` value in the four shipped extracts. This list
+ * is the reason the table can be called exhaustive, and it is written out
+ * rather than derived so that a rebake bringing a new value reddens this
+ * file instead of quietly taking the default.
  */
 const CENSUS = [
   'yes',
@@ -102,7 +100,7 @@ describe('the family table', () => {
     }
   })
 
-  it('★ is exhaustive over the census, and the default is ALL NINE', () => {
+  it('is exhaustive over the census, and the default is all nine', () => {
     for (const type of CENSUS) {
       const family = facadeFamilyFor(type)
       expect(FACADE_FAMILIES[family], `${type} -> ${family}`).toBeDefined()
@@ -137,7 +135,7 @@ describe('the family table', () => {
   })
 
   it('tells an apartment block from an office block', () => {
-    // The whole point of the release, stated as an assertion: the two
+    // The whole point of the grammar, stated as an assertion: the two
     // shortlists must not overlap, or the ASCII cannot separate them.
     const flats = FACADE_FAMILIES[facadeFamilyFor('apartments')].archetypes
     const offices = FACADE_FAMILIES[facadeFamilyFor('office')].archetypes
@@ -155,7 +153,7 @@ describe('facadeCandidates', () => {
     expect(facadeCandidates('office', ['band', 'narrow'])).toEqual(['band'])
   })
 
-  it('★ lets the MATERIAL win where they do not', () => {
+  it('lets the material win where they do not', () => {
     // A glass-walled block of flats has a curtain wall whatever the flats
     // inside it are for.
     expect(facadeCandidates('apartments', ['stripes', 'band'])).toEqual([
@@ -170,16 +168,16 @@ describe('facadeCandidates', () => {
 })
 
 describe('fitRows', () => {
-  it('★ leaves no partial row at the top', () => {
+  it('leaves no partial row at the top', () => {
     // The oracle's own case: 23.5 m at a 3.2 m pitch.
     const fit = fitRows({ heightM: 23.5, levelM: 3.2 })
     expect(fit.rows).toBe(7)
     expect(fit.rows * fit.rowHeightM).toBeCloseTo(23.5, 9)
-    // 23.5 / 3.2 is 7.34: the eighth row is the one that used to be cut.
+    // 23.5 / 3.2 is 7.34: a fixed pitch would cut the eighth row.
     expect(fit.rowHeightM).toBeCloseTo(23.5 / 7, 9)
   })
 
-  it('★ takes building:levels over the height, whatever the height', () => {
+  it('takes building:levels over the height, whatever the height', () => {
     for (const heightM of [12, 25, 60]) {
       expect(fitRows({ heightM, levels: 6, levelM: 3.2 }).rows).toBe(6)
     }
@@ -204,7 +202,7 @@ describe('fitRows', () => {
     expect(fitRows({ heightM: 2, levels: 0.4 }).rows).toBe(1)
   })
 
-  it('★ REPORTS a wall too short for a storey, which nothing acts on', () => {
+  it('reports a wall too short for a storey, which nothing acts on', () => {
     // Found in the fit sample on real data: the Space Needle's thirteen parts
     // include 0.9 m and 1.2 m bands between volumes, each given a whole row of
     // windows squashed into it. Blanking them was measured on all four cities
@@ -241,7 +239,7 @@ describe('fitRows', () => {
 })
 
 describe('fitBays', () => {
-  it('★ cuts no bay at a corner: the bays share the wall exactly', () => {
+  it('cuts no bay at a corner: the bays share the wall exactly', () => {
     // The oracle's own case: 17.3 m at a 4 m pitch.
     const fit = fitBays({ widthM: 17.3, pitchM: 4 })
     expect(fit.bays).toBe(4)
@@ -254,7 +252,7 @@ describe('fitBays', () => {
     expect(fitBays({ widthM: 18.4, pitchM: 4 }).bays).toBe(5)
   })
 
-  it('★ leaves a wall too narrow for one bay BLANK', () => {
+  it('leaves a wall too narrow for one bay blank', () => {
     // A stretched bay on a 2 m return is a window wider than the wall.
     expect(fitBays({ widthM: 2, pitchM: 4 })).toEqual({
       bays: 0,
@@ -278,7 +276,7 @@ describe('groupWallRuns', () => {
     [bx, by],
   ]
 
-  it('★ joins a straight wall the data happened to split', () => {
+  it('joins a straight wall the data happened to split', () => {
     const runs = groupWallRuns([seg(0, 0, 6, 0), seg(6, 0, 16, 0)])
     expect(runs).toHaveLength(1)
     expect(runs[0]).toEqual({ start: 0, count: 2, lengthM: 16 })
@@ -352,7 +350,7 @@ describe('fitFacadeUv', () => {
   /** The side group is the second one; the first is the caps. */
   const sideRange = (geom) => geom.groups.find((g) => g.materialIndex === 1)
 
-  it('★ lands the top of the wall on a whole row', () => {
+  it('lands the top of the wall on a whole row', () => {
     const geom = extrude(rect(10, 6), 12)
     const out = fitFacadeUv(geom, FIT)
     expect(out.blank).toBe(0)
@@ -364,7 +362,7 @@ describe('fitFacadeUv', () => {
     let topSeen = 0
     for (let i = side.start; i < side.start + side.count; i++) {
       // The texture's own offset makes (1 - v) / bayHM the row number, so an
-      // integer here IS "the wall finishes on a row boundary".
+      // integer here is "the wall finishes on a row boundary".
       const rowsBelow = (1 - uv.getY(i)) / FIT.bayHM
       expect(Number.isInteger(Math.round(rowsBelow * 1e6) / 1e6)).toBe(
         pos.getZ(i) === 0 || pos.getZ(i) === 12
@@ -376,7 +374,7 @@ describe('fitFacadeUv', () => {
     expect(topSeen).toBe(12)
   })
 
-  it('★ lands a wall of any width on a whole number of bays', () => {
+  it('lands a wall of any width on a whole number of bays', () => {
     const geom = extrude(rect(10, 6), 12)
     fitFacadeUv(geom, FIT)
     const uv = geom.getAttribute('uv')
@@ -392,10 +390,10 @@ describe('fitFacadeUv', () => {
     expect(v1 - v0).toBeCloseTo(2 * FIT.bayWM, 9)
   })
 
-  it('★ fits a straight wall the data split at a node as ONE wall', () => {
-    // The red proof for the run merging IN THE MESH. Breaking `groupWallRuns`
-    // out of fitFacadeUv leaves every other case in this file green, because
-    // a plain rectangle has no split wall in it to notice.
+  it('fits a straight wall the data split at a node as one wall', () => {
+    // The case that fails if run merging leaves the mesh: breaking
+    // `groupWallRuns` out of fitFacadeUv leaves every other case in this file
+    // green, because a plain rectangle has no split wall in it to notice.
     const split = new Shape([
       new Vector2(0, 0),
       new Vector2(6, 0),
@@ -411,7 +409,7 @@ describe('fitFacadeUv', () => {
     const uv = geom.getAttribute('uv')
     const side = sideRange(geom)
     const uAt = (chunk, k) => uv.getX(side.start + chunk * 6 + k)
-    // The two halves of the bottom wall carry ONE bay layout: the second
+    // The two halves of the bottom wall carry one bay layout: the second
     // starts where the first ends, and the pair spans a whole number of bays
     // across the 10 m the wall really is (round(10 / 4) = 3).
     expect(uAt(1, 0)).toBeCloseTo(uAt(0, 1), 9)
@@ -420,7 +418,7 @@ describe('fitFacadeUv', () => {
     expect(uAt(0, 1) - uAt(0, 0)).not.toBeCloseTo(2 * FIT.bayWM, 6)
   })
 
-  it('★ pins a wall too narrow for a bay to the tile corner, and counts it', () => {
+  it('pins a wall too narrow for a bay to the tile corner, and counts it', () => {
     // A 2 m return at a 4 m pitch: blank, not squeezed.
     const geom = extrude(rect(10, 2), 12)
     const out = fitFacadeUv(geom, FIT)

@@ -388,17 +388,16 @@ describe('Error Translator', () => {
   });
 
   /**
-   * UF-24 / D-42. A model whose library cannot be resolved used to fall all
-   * the way through to the generic "Something Went Wrong ... try resetting
-   * parameters to defaults", which points at the one thing that is not the
-   * cause. Two library patterns already existed above, but they were written
-   * against a guessed wording (`use <Lib/x.scad>`) and never match what
-   * OpenSCAD actually prints.
+   * A model whose library cannot be resolved must not fall through to the
+   * generic "Something Went Wrong ... try resetting parameters to defaults",
+   * which points at the one thing that is not the cause. The library
+   * patterns match what OpenSCAD actually prints, not a guessed wording
+   * such as `use <Lib/x.scad>`.
    *
    * The message below is the real one, captured live by unticking MCAD on the
    * bundled library-test example.
    */
-  describe('missing library (D-42)', () => {
+  describe('missing library', () => {
     const REAL_MESSAGE = [
       'OpenSCAD compilation failed with exit code 1. Output:',
       "WARNING: Can't open include file 'MCAD/boxes.scad', import file 'MCAD/boxes.scad'.",
@@ -437,7 +436,7 @@ describe('Error Translator', () => {
       expect(result.technical).toBe(REAL_MESSAGE);
     });
 
-    test('does not claim a switched-ON library is switched off', () => {
+    test('does not claim a switched-on library is switched off', () => {
       libraryManager.enable('MCAD');
       const result = translateError(REAL_MESSAGE);
 
@@ -456,9 +455,9 @@ describe('Error Translator', () => {
 
     test('finds the cause in details when the worker has classified it away', () => {
       // The real shape on the main thread: the worker matched "Ignoring
-      // unknown module" first, so error.message is prose that no longer
-      // contains the failing path, and error.code is UNKNOWN_MODULE. Only
-      // error.details still carries the OpenSCAD output.
+      // unknown module" first, so error.message is prose without the failing
+      // path, and error.code is UNKNOWN_MODULE. Only error.details still
+      // carries the OpenSCAD output.
       const result = translateError(
         'Your model uses a module that could not be found. Check include/use statements and ensure library files are loaded.',
         { code: 'UNKNOWN_MODULE', details: REAL_MESSAGE }
@@ -481,13 +480,13 @@ describe('Error Translator', () => {
   });
 
   /**
-   * D-224. When one of a model's own checks (OpenSCAD's assert()) stopped
-   * it, the render handler reported the consequence, empty geometry, and
-   * sent people looking for an option. The lines below are what OpenSCAD
-   * 2026.01.03 prints, the first from the Braille Sign with its dot base
-   * typed as 1.4 mm.
+   * When one of a model's own checks (OpenSCAD's assert()) stops it, the
+   * render handler must report the check, not the consequence (empty
+   * geometry), which would send people looking for an option. The lines
+   * below are what OpenSCAD 2026.01.03 prints, the first from the Braille
+   * Sign with its dot base typed as 1.4 mm.
    */
-  describe('a check that stops the model (D-224)', () => {
+  describe('a check that stops the model', () => {
     const SIGN_LINE =
       "ERROR: Assertion 'in_range(rounded_dot_base_diameter, ADA_DOT_BASE_MM)' failed: " +
       '"rounded_dot_base_diameter must be 1.5 to 1.6 mm (ADA 703.3.1)." in file /tmp/input.scad, line 671';

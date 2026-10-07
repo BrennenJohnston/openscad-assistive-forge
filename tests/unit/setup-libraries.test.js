@@ -92,7 +92,7 @@ describe('setup-libraries', () => {
     })
   })
 
-  describe('manifestsEquivalent (F-3: no tracked-file churn)', () => {
+  describe('manifestsEquivalent (no tracked-file churn)', () => {
     const base = () => ({
       generated: '2026-08-01T00:00:00.000Z',
       libraries: {

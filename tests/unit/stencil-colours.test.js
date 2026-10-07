@@ -2,8 +2,8 @@
  * The Harley law, pinned against the drawing that taught it.
  *
  * The counts here were measured by extracting the faces, rendering them as a
- * numbered map and LOOKING at it beside the owner's six plates, not guessed
- * from the file. Every reference region the owner painted is one of the faces
+ * numbered map and looking at it beside the six hand-cut plates, not guessed
+ * from the file. Every region painted on the reference is one of the faces
  * this module finds, and the numbers below say which.
  *
  * @license GPL-3.0-or-later
@@ -93,7 +93,7 @@ function referencePlanOn(regions) {
 }
 
 describe('detectLineArt', () => {
-  it("reads the owner's cat as lines between regions", () => {
+  it("reads the cat drawing as lines between regions", () => {
     const d = detectLineArt(CAT)
     expect(d.isLineArt).toBe(true)
     expect(d.allInk).toBe(true)
@@ -171,7 +171,7 @@ describe('buildRegions on the cat', () => {
     expect(new Set(built.regions.map((r) => r.key)).size).toBe(21)
   })
 
-  it('holds every one of the sixteen regions the owner painted', () => {
+  it('holds every one of the sixteen painted regions', () => {
     const { missed } = referencePlanOn(built.regions)
     expect(missed).toEqual([])
   })
@@ -180,7 +180,7 @@ describe('buildRegions on the cat', () => {
 describe('regionAt', () => {
   const { regions } = buildRegions(CAT)
 
-  it('★ answers the pupil, not the eye that contains it', () => {
+  it('answers the pupil, not the eye that contains it', () => {
     // The right pupil's own point. Its face is nested three deep inside the
     // eye, and the eye's ring contains it too.
     const pupil = regionAt(regions, { x: 97.702, y: 91.985 })
@@ -224,12 +224,10 @@ describe('the palette', () => {
     expect(colourLabel('nonsense')).toBe('Color')
   })
 
-  it('★ the muted cat colours get their own honest names now (G0, DP-25)', () => {
-    // The predecessor of this pin held both of these at "Gray" and said the
-    // day that changed would be a decision and not a surprise. The owner
-    // made the decision at G0 on 2026-09-01: add the muted anchors. The
-    // sage-green eyes and the dusty-pink nose stop sharing a name with each
-    // other and with the muzzle, and a true gray still reads Gray.
+  it('the muted cat colours get their own honest names', () => {
+    // The muted anchors give the sage-green eyes and the dusty-pink nose
+    // names of their own, not shared with each other or with the muzzle, and
+    // a true gray still reads Gray.
     expect(colourLabel('#8b9770')).toBe('Sage')
     expect(colourLabel('#b0767d')).toBe('Dusty pink')
     expect(colourLabel('#808080')).toBe('Gray')
@@ -307,7 +305,7 @@ describe('defaultOrder', () => {
   })
 })
 
-describe("the reference plan, on the owner's own drawing", () => {
+describe("the reference plan, on the reference drawing", () => {
   const { regions, silhouette } = buildRegions(CAT)
   const { plan } = referencePlanOn(regions)
 
@@ -319,7 +317,7 @@ describe("the reference plan, on the owner's own drawing", () => {
     }
   })
 
-  it('★ cuts exactly the four brown patches on plate 2 under the own rule', () => {
+  it('cuts exactly the four brown patches on plate 2 under the own rule', () => {
     const plates = platesFor({ ...plan, rule: 'own' }, regions, silhouette)
     expect(plates[1].colourId).toBe('brown')
     expect(plates[1].regionKeys).toHaveLength(4)
@@ -341,10 +339,10 @@ describe("the reference plan, on the owner's own drawing", () => {
     }
   })
 
-  it('★ leaves islands the stacked rule was supposed to make impossible', () => {
-    // The plan said the stacked mask is "always solid, never a ring". It
-    // removes every island caused by a nested REGION and cannot remove one
-    // caused by a LINE between two regions that are both cut: the band
+  it('leaves islands the stacked rule was supposed to make impossible', () => {
+    // The stacked mask is said to be "always solid, never a ring". It
+    // removes every island caused by a nested region and cannot remove one
+    // caused by a line between two regions that are both cut: the band
     // between an eye and its pupil, 109.4 and 94.3 units, on three plates.
     const plates = platesFor({ ...plan, rule: 'stacked' }, regions, silhouette)
     const counts = plates.map((p) => islandsOf(p.rings, regions).length)
@@ -360,8 +358,8 @@ describe("the reference plan, on the owner's own drawing", () => {
     ])
   })
 
-  it('★ reproduces the area of the reference eye plate when lines are closed', () => {
-    // The owner cut the eyes SOLID, band and all. With the lines closed,
+  it('reproduces the area of the reference eye plate when lines are closed', () => {
+    // The reference cuts the eyes solid, band and all. With the lines closed,
     // plate 4 is 437.4 units, and 0.264525 mm per unit squared makes that
     // 30.60 mm against the reference plate's 30.64.
     const plates = platesFor({ ...plan, rule: 'own' }, regions, silhouette, {
@@ -474,7 +472,7 @@ describe('a saved plan', () => {
   })
 })
 
-describe('a saved plan laid back over regions found again (DP-19)', () => {
+describe('a saved plan laid back over regions found again', () => {
   it('lands on the same faces by key, and keeps the order and the rule', () => {
     const { regions } = buildRegions(CAT)
     const { plan } = referencePlanOn(regions)

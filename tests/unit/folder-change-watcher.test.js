@@ -1,8 +1,8 @@
 /**
- * Unit tests for the folder change watcher (C5.2) and write-back (C5.3).
+ * Unit tests for the folder change watcher and write-back.
  *
  * The critical contract under test: write-back must update the watcher
- * BEFORE writing so the app's own writes never re-trigger a render
+ * before writing so the app's own writes never re-trigger a render
  * (self-trigger loop prevention).
  *
  * @license GPL-3.0-or-later
@@ -152,7 +152,7 @@ describe('FolderChangeWatcher', () => {
       await watcher.tick();
       expect(onChange).not.toHaveBeenCalled();
 
-      // A REAL external edit after that is still detected
+      // A real external edit after that is still detected
       files.set('MyProject/design.json', makeFile(9000, 42));
       await watcher.tick();
       expect(onChange).toHaveBeenCalledTimes(1);

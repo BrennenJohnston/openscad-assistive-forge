@@ -60,9 +60,9 @@ describe('booleans', () => {
     expect(area(out)).toBeCloseTo(175, 3)
   })
 
-  it('★ reads the same two squares as a ring with a HOLE under even-odd', () => {
+  it('reads the same two squares as a ring with a hole under even-odd', () => {
     // Not a union, and the whole reason the two are separate functions: a
-    // point covered twice is OUTSIDE under even-odd. Right for reading a
+    // point covered twice is outside under even-odd. Right for reading a
     // drawing, wrong for combining two regions.
     const out = evenOddUnion([square(0, 0, 10, 10), square(5, 5, 15, 15)])
     expect(out).toHaveLength(2)
@@ -83,7 +83,7 @@ describe('booleans', () => {
 
   it('does not care what order the shapes arrive in', () => {
     // The reason this layer exists: the EvenOdd union path-bool performs is
-    // order-DEPENDENT once shapes overlap (D-120), and a drawing of overlapping
+    // order-dependent once shapes overlap, and a drawing of overlapping
     // stroke bands corrupts quietly.
     const a = union([square(0, 0, 10, 10), square(5, 5, 15, 15), square(8, 0, 12, 20)])
     const b = union([square(8, 0, 12, 20), square(0, 0, 10, 10), square(5, 5, 15, 15)])
@@ -147,7 +147,7 @@ describe('buildRingTree', () => {
     expect(tree.nodes.find((n) => n.depth === 2).isHole).toBe(false)
   })
 
-  it('gives a ring the SMALLEST ring around it as its parent', () => {
+  it('gives a ring the smallest ring around it as its parent', () => {
     const tree = buildRingTree([
       square(0, 0, 40, 40),
       square(5, 5, 35, 35),
@@ -218,7 +218,7 @@ describe('the clipper2-js trap', () => {
   /**
    * clipper2-js@1.2.4 has three entry points that are broken, and this module
    * is the only place in the app that may touch the library at all, so the
-   * guard belongs here. PROVEN ABLE TO FAIL: adding
+   * guard belongs here. It can fail: adding
    * `const x = Clipper.pointInPolygon` to ring-geometry.js reddens it.
    */
   const codeOf = (file) =>
@@ -271,7 +271,7 @@ describe('the clipper2-js trap', () => {
   })
 })
 
-describe('nestingOf: containment on the rings as given (DP-82)', () => {
+describe('nestingOf: containment on the rings as given', () => {
   it('reads four nested squares as a chain, by index', () => {
     const rings = [
       square(0, 0, 100, 100),
@@ -287,7 +287,7 @@ describe('nestingOf: containment on the rings as given (DP-82)', () => {
     ])
   })
 
-  it('★ keeps identity: the answer at i is about the ring at i, whatever the order', () => {
+  it('keeps identity: the answer at i is about the ring at i, whatever the order', () => {
     // buildRingTree unions first and loses which input ring became which
     // node; here the smaller ring listed first must still be the child.
     const rings = [square(30, 30, 70, 70), square(0, 0, 100, 100)]

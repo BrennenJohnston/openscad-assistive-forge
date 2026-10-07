@@ -12,20 +12,20 @@ import {
 } from '../hfm-convert-fixture.js'
 
 /**
- * CW-92 (D-127, CW-Q96): what colour each surface is.
+ * What colour each surface is.
  *
- * The release was briefed to take the family from each surface's own material
- * colour. It cannot: measured over all 60 materials in a Seattle session, 51
- * land on the palette's WHITE entry, because every material is white or
- * neutral grey, both scene lights are pure white and the fog is pure black.
- * There is no surface colour to read, so the owner asked for an authored table
- * instead (CW-Q96). These are the rules that table has to keep.
+ * The family cannot be taken from each surface's own material colour:
+ * measured over all 60 materials in a Seattle session, 51 land on the
+ * palette's white entry, because every material is white or neutral grey,
+ * both scene lights are pure white and the fog is pure black. There is no
+ * surface colour to read, so the families are an authored table. These are
+ * the rules that table has to keep.
  */
 
 const PALETTES = { green: HC_PALETTE_GREEN, amber: HC_PALETTE_AMBER }
 
-describe('CW-92 the authored ink table', () => {
-  it('★★ names only real surface classes, and never the sky', () => {
+describe('the authored ink table', () => {
+  it('names only real surface classes, and never the sky', () => {
     // The ids are literals in hc-palettes.js to avoid closing an import cycle,
     // exactly as ANCHORED_CLASSES and CITY_BACKING_EXEMPT_CLASS_IDS are. This
     // is the guard that makes that safe: the test is outside the cycle.
@@ -40,10 +40,10 @@ describe('CW-92 the authored ink table', () => {
     }
   })
 
-  it('★★ covers every surface class the class pass can emit', () => {
-    // A class with no family falls back to the screen pick, which is the
-    // defect this release exists to remove. A new class added to the pass has
-    // to be given a colour here, and this is what says so.
+  it('covers every surface class the class pass can emit', () => {
+    // A class with no family falls back to the screen pick, which is what the
+    // table exists to prevent. A new class added to the pass has to be given a
+    // colour here, and this is what says so.
     const surfaces = Object.values(SURFACE_CLASS).filter(
       (id) => id !== SURFACE_CLASS.SKY
     )
@@ -54,8 +54,8 @@ describe('CW-92 the authored ink table', () => {
     }
   })
 
-  it('★★★ never gives a surface the WHITE entry, which is CW-71 correctness', () => {
-    // CW-71's ink budget gates the white entry on luminance and chroma, and
+  it('never gives a surface the white entry, which the ink budget relies on', () => {
+    // The ink budget gates the white entry on luminance and chroma, and
     // its guard rests on a surface family never being white. A white family
     // would walk straight past that gate. White belongs to the sky and to
     // anything the class pass could not name.
@@ -69,10 +69,10 @@ describe('CW-92 the authored ink table', () => {
     }
   })
 
-  it('★★ every family names an entry its own palette actually has', () => {
-    // The two sets are different lengths - amber has seven entries because
-    // CW-Q11 minted a foliage green - so a table copied between them would
-    // index past the end.
+  it('every family names an entry its own palette actually has', () => {
+    // The two sets are different lengths - amber has seven entries because it
+    // carries a foliage green - so a table copied between them would index
+    // past the end.
     for (const [name, table] of Object.entries(CITY_INK_FAMILY)) {
       for (const [cls, index] of Object.entries(table)) {
         expect(index, `${name} class ${cls}`).toBeGreaterThanOrEqual(0)
@@ -81,7 +81,7 @@ describe('CW-92 the authored ink table', () => {
     }
   })
 
-  it('★ puts foliage on the entry CW-Q11 minted for it', () => {
+  it('puts foliage on the entry made for it', () => {
     // Amber gained #39ff5e precisely because a tree canopy and a yellow-green
     // building both fell to lime. Using it for anything else would waste the
     // entry that answer bought.
@@ -89,13 +89,13 @@ describe('CW-92 the authored ink table', () => {
     expect(foliage).toBeGreaterThanOrEqual(0)
     expect(CITY_INK_FAMILY.amber[SURFACE_CLASS.TREE]).toBe(foliage)
     expect(CITY_INK_FAMILY.amber[SURFACE_CLASS.GREEN]).toBe(foliage)
-    // And a building does NOT share it there, which is the whole point.
+    // And a building does not share it there, which is the whole point.
     expect(CITY_INK_FAMILY.amber[SURFACE_CLASS.BUILDING_WALL]).not.toBe(foliage)
   })
 
-  it('★ separates the carriageway from the pavement beside it, in both sets', () => {
+  it('separates the carriageway from the pavement beside it, in both sets', () => {
     // A walker has to be able to tell where they may walk. Shape does most of
-    // that work since CW-23; the two floors are the case where colour is worth
+    // that work; the two floors are the case where colour is worth
     // spending on as well.
     for (const [name, table] of Object.entries(CITY_INK_FAMILY)) {
       expect(
@@ -106,14 +106,14 @@ describe('CW-92 the authored ink table', () => {
   })
 })
 
-describe('CW-92 the converter takes the family', () => {
+describe('the converter takes the family', () => {
   beforeEach(() => installCanvasMock())
   afterEach(() => {
     removeCanvasMock()
     vi.restoreAllMocks()
   })
 
-  it('★★★ a classified cell takes its family, and the sky keeps the screen pick', async () => {
+  it('a classified cell takes its family, and the sky keeps the screen pick', async () => {
     vi.resetModules()
     const { initAltView } = await import('../../../src/js/_hfm.js')
     const pm = createMockPreviewManager()
