@@ -1,5 +1,5 @@
 /**
- * Tests for the F35 Phase A folder-sync controller.
+ * Tests for the folder-sync controller.
  *
  * The controller is a thin orchestrator over four pluggable seams
  * (`showDirectoryPicker`, `getStoredHandle`, `persistHandle`,
@@ -37,7 +37,7 @@ function makeFakeHandle({ name = 'project', perm = 'granted' } = {}) {
   };
 }
 
-describe('FolderSyncController (F35 Phase A)', () => {
+describe('FolderSyncController', () => {
   beforeEach(() => {
     resetFolderSyncController();
   });
@@ -246,7 +246,7 @@ describe('FolderSyncController (F35 Phase A)', () => {
       expect(ctrl.getHandle()).toBe(stored);
     });
 
-    it('does NOT call requestPermission during hydration', async () => {
+    it('does not call requestPermission during hydration', async () => {
       const stored = makeFakeHandle({ name: 'restored' });
       const ctrl = new FolderSyncController({
         showDirectoryPicker: vi.fn(),

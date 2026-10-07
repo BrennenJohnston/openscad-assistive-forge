@@ -1,10 +1,10 @@
 /**
- * Regression tests for the handleFile extension guard.
+ * Tests for the handleFile extension guard.
  *
- * The guard was previously placed outside the `isActualFileUpload` block,
- * causing saved manifest projects (whose `originalName` is a display name
- * like "My Tablet Keyguard Designer" with no .scad/.zip extension) to trigger
- * an alert and silently return instead of loading.
+ * The guard sits inside the `isActualFileUpload` block. Outside it, saved
+ * manifest projects (whose `originalName` is a display name like "My Tablet
+ * Keyguard Designer" with no .scad/.zip extension) would trigger an alert
+ * and silently return instead of loading.
  *
  * Imports the real shouldProcessFile helper from file-handler.js — the
  * function handleFile actually calls — so these tests fail if the guard
@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest'
 import { shouldProcessFile } from '../../src/js/file-handler.js'
 
 describe('handleFile extension guard — saved manifest project reload', () => {
-  it('does NOT block a saved manifest project whose originalName has no extension', () => {
+  it('does not block a saved manifest project whose originalName has no extension', () => {
     // Simulates: loadSavedProject → handleFile({ name: 'My Tablet Keyguard Designer' }, content, ...)
     const result = shouldProcessFile(
       { name: 'My Tablet Keyguard Designer' }, // plain object, not File

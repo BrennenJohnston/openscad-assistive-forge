@@ -91,7 +91,7 @@ describe('ClassicLayoutController pane visibility (B3)', () => {
   });
 
   it('hydrates a preference written before the optional panes existed', () => {
-    // Exactly what R2a inherits from an existing user's browser
+    // Exactly what an existing user's browser holds
     localStorage.setItem(
       PANES_KEY,
       JSON.stringify({
@@ -119,7 +119,7 @@ describe('ClassicLayoutController pane visibility (B3)', () => {
     expect(controller.isViewportControlVisible()).toBe(false);
   });
 
-  it('treats Viewport-Control as hidden in Simplified without clearing the preference (D-7)', () => {
+  it('treats Viewport-Control as hidden in Simplified without clearing the preference', () => {
     const controller = new ClassicLayoutController();
     controller.toggleViewportControl();
     expect(document.body.dataset.classicFieldRightBottom).toBe('occupied');
@@ -154,7 +154,7 @@ describe('ClassicLayoutController pane visibility (B3)', () => {
   });
 });
 
-describe('ClassicLayoutController field stow (UF-2a, U-6/Q-20)', () => {
+describe('ClassicLayoutController field stow', () => {
   beforeEach(() => {
     density = 'standard';
     announceImmediate.mockClear();
@@ -186,7 +186,7 @@ describe('ClassicLayoutController field stow (UF-2a, U-6/Q-20)', () => {
     expect(controller.toggleFieldStowed('left')).toBe(true);
 
     // 'empty' hands the field's tracks to the 3D view and display:nones its
-    // container — the R-III keyboard-trap fix comes with it.
+    // container, which also keeps its content out of the tab order.
     expect(document.body.dataset.classicFieldLeft).toBe('empty');
     expect(document.body.dataset.classicStowLeft).toBe('true');
     expect(announceImmediate).toHaveBeenCalledWith('Left column stowed');
@@ -237,7 +237,7 @@ describe('ClassicLayoutController field stow (UF-2a, U-6/Q-20)', () => {
     expect(localStorage.getItem(PANES_KEY)).toBeNull();
   });
 
-  it('the bottom stow rides the historical consoleCollapsed key (UF-2b, Q-20c)', () => {
+  it('the bottom stow rides the historical consoleCollapsed key', () => {
     const controller = new ClassicLayoutController();
 
     expect(controller.toggleFieldStowed('bottom')).toBe(true);
@@ -260,7 +260,7 @@ describe('ClassicLayoutController field stow (UF-2a, U-6/Q-20)', () => {
     expect(announceImmediate).not.toHaveBeenCalled();
   });
 
-  it('a pre-UF-2 folded preference hydrates as the bottom stow', () => {
+  it('an older folded preference hydrates as the bottom stow', () => {
     localStorage.setItem(
       PANES_KEY,
       JSON.stringify({ consoleCollapsed: true })

@@ -1,10 +1,10 @@
 /**
- * Axis lines overlay (P12) — both halves of each axis, negatives dashed;
- * zoom-length arms since UF-7.
+ * Axis lines overlay - both halves of each axis, negatives dashed, with
+ * zoom-length arms.
  *
- * The mock deliberately mirrors what getThreeModule() actually hands out —
+ * The mock deliberately mirrors what getThreeModule() actually hands out -
  * never more. A mock more generous than production is a mock that proves
- * nothing (the R-IV lesson; the tick overlay's pre-UF-7 suite showed it).
+ * nothing.
  *
  * @license GPL-3.0-or-later
  */
@@ -161,7 +161,7 @@ describe('buildAxisLinesOverlay', () => {
     }
   });
 
-  it('draws every arm in the one theme-resolved colour (Q-22)', () => {
+  it('draws every arm in the one theme-resolved colour', () => {
     // Upstream's axes are black; ours resolve --color-text-primary like the
     // tick overlay, so lines and ticks always match. In jsdom the token is
     // absent and the theme fallbacks apply: near-black light, light dark.

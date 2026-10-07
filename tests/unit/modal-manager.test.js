@@ -181,7 +181,7 @@ describe('Modal Manager', () => {
 
     closeModal(modal)
 
-    // Focus must NOT be inside the modal when aria-hidden=true is applied
+    // Focus must not be inside the modal when aria-hidden=true is applied
     expect(activeFocusWhenAriaHiddenSet).toBeDefined()
     expect(modal.contains(activeFocusWhenAriaHiddenSet)).toBe(false)
     expect(document.activeElement).toBe(trigger)

@@ -1,8 +1,8 @@
 /**
- * Unit tests for the persisted-classic phone boot (U-10, UF-5 P4, Q-24a).
+ * Unit tests for the persisted-classic phone boot.
  *
  * A saved Classic preference on a mobile-shaped viewport boots Forge
- * Standard, marks the deferral, and PRESERVES the stored preference:
+ * Standard, marks the deferral, and preserves the stored preference:
  * incidental writes (density flips) keep mode 'classic' in storage, while
  * an explicit real mode switch clears the deferral and wins. Entry via
  * switchMode('classic') is refused while mobile-shaped.

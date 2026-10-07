@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { buildProjectManifest } from '../../src/js/publish-manifest.js'
 import { validateManifest } from '../../src/js/manifest-loader.js'
 
-// The oracle is the loader's own validator. If these two ever drift apart, the
-// Publish dialog starts handing out manifests the app refuses to load - which
-// is exactly what D-95 was.
+// The oracle is the loader's own validator. If these two ever drift apart,
+// the Publish dialog starts handing out manifests the app refuses to load.
 const expectValid = (manifest) => {
   const result = validateManifest(manifest)
   expect(result.errors).toEqual([])
@@ -19,7 +18,7 @@ const zipProject = () =>
   ])
 
 describe('buildProjectManifest', () => {
-  describe('a ZIP project (D-95)', () => {
+  describe('a ZIP project', () => {
     const build = () =>
       buildProjectManifest({
         uploadName: 'multi-file-box.zip',

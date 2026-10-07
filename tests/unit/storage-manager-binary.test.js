@@ -5,11 +5,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// B16 regression guard: File.text() never throws on binary input — it
-// lossily decodes as UTF-8 — so the old read-everything-as-text import
-// silently corrupted every .png/.stl companion. Binary companions must
-// round-trip byte-identically (images as data URLs, matching the zip
-// import path) or be skipped, never stored as garbage text.
+// File.text() never throws on binary input - it lossily decodes as UTF-8 -
+// so reading everything as text would silently corrupt every .png/.stl
+// companion. Binary companions must round-trip byte-identically (images as
+// data URLs, matching the zip import path) or be skipped, never stored as
+// garbage text.
 
 function makeFile(name, relPath, content) {
   const bytes =

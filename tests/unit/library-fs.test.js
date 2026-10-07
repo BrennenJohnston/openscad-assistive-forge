@@ -1,14 +1,13 @@
 /**
- * UF-24 — a library bundle's files must ALL reach the virtual filesystem.
+ * A library bundle's files must all reach the virtual filesystem.
  *
- * Measured on the release base with the four shipped bundles: MCAD lost 5 of
- * 42 files, BOSL2 9 of 67, NopSCADlib 380 of 389 and dotSCAD 692 of 695. The
- * losses were exactly (files in subfolders) minus (number of subfolders) in
- * every case, because each bundle file created its own folders and only the
- * first file in a folder found that folder missing.
+ * With each bundle file creating its own folders, only the first file in a
+ * folder finds that folder missing, and the shipped bundles lose exactly
+ * (files in subfolders) minus (number of subfolders): MCAD 5 of 42 files,
+ * BOSL2 9 of 67, NopSCADlib 380 of 389 and dotSCAD 692 of 695.
  *
  * The fake FS below is the important part: Emscripten's FS.ErrnoError carries
- * `errno`, NOT the Node-style `code` an EEXIST check looks for, so a guard
+ * `errno`, not the Node-style `code` an EEXIST check looks for, so a guard
  * written as `if (error.code !== 'EEXIST') throw` rethrows every time.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -20,7 +19,7 @@ function makeFakeFS() {
   const files = new Map()
 
   const errnoError = (message) => {
-    // Deliberately NOT a Node error: no `code` property, just `errno`.
+    // Deliberately not a Node error: no `code` property, just `errno`.
     const err = new Error(message)
     err.name = 'ErrnoError'
     err.errno = 20 // Emscripten's EEXIST

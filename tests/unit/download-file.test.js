@@ -1,17 +1,16 @@
 /**
- * D-169: the build's downloader never opens the file it is about to delete.
+ * The build's downloader never opens the file it is about to delete.
  *
- * The old downloader opened the write stream before the response and, on a
- * redirect, deleted the destination without waiting and recursed at once, so
- * the recursion's own stream raced that delete. On the Linux runners the
- * delete could land second, the redirected download wrote into a deleted
- * file, and the script said "Downloaded font archive" over a file that was
- * not there (#263's Build Check, 2026-09-18). The fonts' release URL always
- * redirects.
+ * Opening the write stream before the response and, on a redirect,
+ * deleting the destination without waiting and recursing at once would
+ * let the recursion's own stream race that delete. On the Linux runners
+ * the delete could land second, the redirected download would write into
+ * a deleted file, and the script would say "Downloaded font archive" over
+ * a file that was not there. The fonts' release URL always redirects.
  *
  * The guard counts the files opened through a redirect: one, for the final
- * 200, and none for the hops. Counting is deterministic where the race was
- * not; the old code opened one per hop.
+ * 200, and none for the hops. Counting is deterministic where the race is
+ * not.
  *
  * @license GPL-3.0-or-later
  */
@@ -63,7 +62,7 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe('D-169: a redirect never opens the file it is about to delete', () => {
+describe('a redirect never opens the file it is about to delete', () => {
   it('follows two redirects and opens the file once, for the final 200', async () => {
     const dest = join(dir, 'a.bin');
     let opened = 0;

@@ -1,5 +1,5 @@
 /**
- * UF-28 wrap marks: the arrow placement arithmetic, and the two numbers this
+ * Wrap marks: the arrow placement arithmetic, and the two numbers this
  * feature borrows from somewhere else.
  *
  * The indent itself is CSS and is proven in the browser
@@ -30,8 +30,8 @@ const place = (lines) =>
 describe('wrapArrowPlacements', () => {
   it('marks every row of a wrapped line except the last', () => {
     // Four rows continue three times: this is the whole rule, and it is what
-    // the desktop draws (measured on the owner's screenshot, line 174 of the
-    // universal-cuff file: four rows, three arrows).
+    // the desktop draws (measured on a desktop screenshot of a four-row line
+    // in the universal-cuff file: four rows, three arrows).
     const marks = place([{ top: 100, rows: 4 }]);
     expect(marks).toHaveLength(3);
     expect(marks.map((m) => m.top)).toEqual([100, 120, 140]);

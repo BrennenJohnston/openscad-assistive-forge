@@ -1,5 +1,5 @@
 /**
- * Unit tests for what the Error Log says aloud (D-203).
+ * Unit tests for what the Error Log says aloud.
  *
  * A warning goes to the polite announcer with the label "Warning:". Only an
  * error interrupts, with "Error:".
@@ -23,7 +23,7 @@ import {
 const FALLBACK =
   'WARNING: [manifold] Minkowski failed with error, falling back to Nef operation: CGAL ERROR: assertion violation!';
 
-describe('ErrorLogPanel: what a recovered engine warning says (D-203)', () => {
+describe('ErrorLogPanel: what a recovered engine warning says', () => {
   let panel;
 
   beforeEach(() => {

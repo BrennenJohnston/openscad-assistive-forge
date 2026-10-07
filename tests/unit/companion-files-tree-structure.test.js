@@ -1,16 +1,17 @@
 /**
- * D-38 — the companion file tree must be a valid list.
+ * The companion file tree must be a valid list.
  *
- * MEASURED on the release base (develop@2f89c48), in both interfaces, with
- * axe scoped to #projectFilesControls:
+ * With axe scoped to #projectFilesControls, a tree that nests other roles
+ * in the list fails:
  *
  *   aria-required-children (critical) on #projectFilesList
  *   "Element has children which are not allowed: nav[aria-label], [role=list]"
  *
- * index.html declares #projectFilesList a role="list", and the renderer then
- * writes a <nav> breadcrumb bar and a second role="list" wrapper into it, with
- * the folder rows carrying role="button" inside that wrapper. A list may own
- * only listitems, so none of those three are allowed children.
+ * index.html declares #projectFilesList a role="list". A renderer that
+ * writes a <nav> breadcrumb bar and a second role="list" wrapper into it,
+ * with the folder rows carrying role="button" inside that wrapper, breaks
+ * it: a list may own only listitems, so none of those three are allowed
+ * children.
  *
  * The e2e axe scan of the panel is the end-to-end proof, but it needs a real
  * multi-file project and so needs WASM, which is why every companion spec
@@ -80,7 +81,7 @@ const makeController = () =>
 /** The role of an element, explicit or implicit for the tags used here. */
 const roleOf = (el) => el.getAttribute('role') || `(implicit:${el.tagName.toLowerCase()})`;
 
-describe('D-38 — #projectFilesList is a valid list', () => {
+describe('#projectFilesList is a valid list', () => {
   beforeEach(() => {
     document.body.innerHTML = PANEL_HTML;
     stateManager.setState({
@@ -150,10 +151,10 @@ describe('D-38 — #projectFilesList is a valid list', () => {
     ).not.toBeNull();
   });
 
-  it('keeps the Q-53a focus-return lookup working after the redraw', () => {
+  it('keeps the focus-return lookup working after the redraw', () => {
     // restoreFocusToFileRow re-finds button[data-action="edit"] by dataset.path
-    // INSIDE #projectFilesList. The structural repair must not move those
-    // buttons out of it, or UF-23's dead-end returns.
+    // inside #projectFilesList. The list structure must not move those
+    // buttons out of it, or focus has nowhere to return to.
     controller.renderProjectFilesList(FILES, 'main.scad', null);
     document.querySelector('[data-folder-enter="utils"]').click();
 

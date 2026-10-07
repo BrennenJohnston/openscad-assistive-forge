@@ -1,5 +1,5 @@
 /**
- * Persistent Tutorial Registry Unit Tests (UF-16)
+ * Persistent Tutorial Registry Unit Tests
  *
  * The registry is the app's only durable answer to "was this tutorial ever
  * opened or completed?" — sessionStorage step progress is erased on
@@ -60,7 +60,7 @@ describe('registry writes', () => {
     expect(state.completed).toBeTypeOf('number');
   });
 
-  it('both variants write ONE family record (the U-23 family rule)', () => {
+  it('both variants write one family record', () => {
     recordTutorialOpened('classic-intro');
     recordTutorialCompleted('intro');
 
@@ -70,7 +70,7 @@ describe('registry writes', () => {
     expect(state.completed).toBeTypeOf('number');
   });
 
-  it('records the Q-43a permanent dismissal', () => {
+  it('records the permanent dismissal', () => {
     recordTutorialSpotlightDismissed('intro');
 
     expect(getTutorialFamilyState('intro').dismissed).toBeTypeOf('number');

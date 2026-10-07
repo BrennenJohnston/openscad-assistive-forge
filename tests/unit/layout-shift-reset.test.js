@@ -1,15 +1,14 @@
 /**
- * Regression test: layout shift on project reload (Phase 1).
+ * Layout shift on project reload.
  *
- * Root cause: when a user loaded a project with warnings, navigated back to the
- * welcome screen, and loaded another project, the echo drawer remained visible
- * and expanded with stale warnings.  Scroll positions on ancestor containers
- * were also not reset.  Together these produced a blank white region at the
- * bottom of the viewport and an upward layout shift that hid the app header.
- *
- * Fix: handleFile() now calls updatePreviewDrawer([]) and resets scrollTop on
- * #app, #main-content, and .preview-content before rendering the new project.
- * The clearFileBtn handler also resets the echo drawer.
+ * When a user loads a project with warnings, goes back to the welcome
+ * screen and loads another project, the echo drawer must not stay visible
+ * and expanded with stale warnings, and scroll positions on ancestor
+ * containers must reset; otherwise a blank white region appears at the
+ * bottom of the viewport and an upward layout shift hides the app header.
+ * handleFile() calls updatePreviewDrawer([]) and resets scrollTop on #app,
+ * #main-content, and .preview-content before rendering the new project,
+ * and the clearFileBtn handler also resets the echo drawer.
  *
  * These tests verify the DOM-level invariants that the fix relies on:
  *   1. An empty-message call collapses and hides the echo drawer.

@@ -1,5 +1,5 @@
 /**
- * Unit tests for S-013: Image companion file mounting in the worker FS.
+ * Unit tests for image companion file mounting in the worker FS.
  *
  * Image files (PNG, JPEG) arrive as base64 data-URL strings from the browser
  * (via FileReader.readAsDataURL or ZIP extraction). The worker's mountFiles()

@@ -67,7 +67,7 @@ describe('injectSwVersion', () => {
 });
 
 describe('injectBuildStamp', () => {
-  // Audit 19. The capability index is copied from public/ verbatim, the same
+  // The capability index is copied from public/ verbatim, the same
   // as sw.js, so a Vite `define` cannot reach it and the value is written
   // here instead. It throws on a miss for the same reason its neighbour
   // does: an index that silently ships the literal token is worse than a

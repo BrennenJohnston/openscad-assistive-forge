@@ -116,7 +116,7 @@ describe('Animate panel (F5)', () => {
       await vi.waitFor(() => expect(panel.playing).toBe(false));
     });
 
-    it('pauses for an external render and does NOT resume on its own', async () => {
+    it('pauses for an external render and does not resume on its own', async () => {
       const panel = makePanel();
       panel.play();
       expect(panel.playing).toBe(true);

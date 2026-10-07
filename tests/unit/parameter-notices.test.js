@@ -81,7 +81,7 @@ describe('describeAdjustments', () => {
   })
 })
 
-describe('describeMissingPreset (D-195)', () => {
+describe('describeMissingPreset', () => {
   it('names the preset, says none was applied, and says where to choose one', () => {
     const notice = describeMissingPreset('No Such Preset')
     expect(notice.title).toBe(
@@ -173,7 +173,7 @@ describe('createParameterNotices', () => {
     expect(() => notices.clear()).not.toThrow()
   })
 
-  // D-195: a link can have two things to say. A missing preset is found after
+  // A link can have two things to say. A missing preset is found after
   // a changed value or an unknown starter setting was reported, and saying it
   // must not erase them.
   const missing = describeMissingPreset('No Such Preset')

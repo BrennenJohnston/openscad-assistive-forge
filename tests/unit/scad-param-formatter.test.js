@@ -4,9 +4,9 @@ import {
   buildDefineArgs,
 } from '../../src/js/scad-param-formatter.js'
 
-// A3 regression guard: the hex-color branch used to run for EVERY string,
-// so any 6-hex-char word ("decade", "facade", "beaded") silently became an
-// RGB vector regardless of its declared type — corrupting text parameters.
+// The hex-color branch must not run for every string: any 6-hex-char word
+// ("decade", "facade", "beaded") would silently become an RGB vector
+// regardless of its declared type, corrupting text parameters.
 describe('formatScadValue — hex coercion is color-type-only', () => {
   it('keeps untyped 6-hex-char words as quoted strings', () => {
     expect(formatScadValue('word', 'decade', {})).toBe('"decade"')

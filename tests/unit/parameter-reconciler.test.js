@@ -1,11 +1,11 @@
 /**
- * The Q-45a reconciliation rule, tested without a browser.
+ * The parameter reconciliation rule, tested without a browser.
  *
- * U-30: every render passed `-D` for every parameter in a schema parsed once
- * at load, so editing a default in the code changed the source the worker
- * compiled but not the value that overrode it. These pin the rule that
- * replaced it: user-modified values survive a code edit and are the only ones
- * passed as `-D`; untouched values follow the code.
+ * Passing `-D` for every parameter in a schema parsed once at load would
+ * make editing a default in the code change the source the worker compiles
+ * but not the value that overrides it. The rule: user-modified values
+ * survive a code edit and are the only ones passed as `-D`; untouched
+ * values follow the code.
  *
  * @license GPL-3.0-or-later
  */
@@ -103,7 +103,7 @@ describe('collectWithheldDefineKeys', () => {
 
 describe('reconcileParameters', () => {
   it('moves an untouched parameter to the edited code’s default', () => {
-    // The exact U-30 case: size = 10 becomes size = 40 in the editor.
+    // The case in point: size = 10 becomes size = 40 in the editor.
     const result = reconcileParameters({
       previousSchema: schemaOf({ size: 10 }),
       nextSchema: schemaOf({ size: 40 }),
