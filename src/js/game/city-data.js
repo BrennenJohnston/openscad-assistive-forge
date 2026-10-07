@@ -1841,10 +1841,10 @@ const NODE_SNAP_M = 1.5;
  * is and how many lanes it has, and how busy a street looks follows from that
  * closely enough for a frozen scene.
  *
- * Lane counts are not in the extract today — the bake keeps a fixed tag list
- * and `lanes` is not on it — so this reads road class alone and multiplies by
- * a lane factor when a road record ever carries one. That is the seam a
- * future live source, or a re-bake that keeps `lanes`, plugs into: one
+ * The bake keeps the `lanes` tag, but the road records the parser builds do
+ * not carry it yet, so this reads road class alone and multiplies by a lane
+ * factor when a road record ever carries one. That is the seam a future
+ * live source, or a parser that passes `lanes` through, plugs into: one
  * function, one call site.
  *
  * @param {{kind: string, lanes?: number}} road
