@@ -1,16 +1,16 @@
 /**
  * Edit an image or SVG, with no OpenSCAD project behind it.
  *
- * Forge's SVG Preparation Editor already does the hard part: it shows every
- * shape in a drawing as a list item with Foreground / Hole / Ignore radios, so
- * someone working by keyboard and screen reader alone can strip the interior
- * detail a laser cutter or a tactile printer can never show. Until now the only
- * way in was through a model's file parameter, and there was no way out at all:
- * the cleaned SVG lived in memory as a parameter's value.
+ * Forge's SVG Preparation Editor does the hard part: it shows every shape
+ * in a drawing as a list item with Foreground / Hole / Ignore radios, so
+ * someone working by keyboard and screen reader alone can strip the
+ * interior detail a laser cutter or a tactile printer can never show.
+ * Through a model's file parameter, the cleaned SVG lives in memory as the
+ * parameter's value and has no way out.
  *
- * This module is the other two halves - a door with no project behind it, and a
- * file at the end. It does not fork the editor; it hosts the existing one and
- * gives its Save action somewhere to go.
+ * This module is the other two halves - a door with no project behind it,
+ * and a file at the end. It does not fork the editor; it hosts the existing
+ * one and gives its Save action somewhere to go.
  *
  * @license GPL-3.0-or-later
  */
@@ -31,11 +31,11 @@ import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
 import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
 import { DEFAULT_DESIGN_WIDTH_MM } from './svg-preparer-workspace.js';
 
-// DP-34: the door's FIRST trace, the one that happens while the editor is
-// still being opened. It runs in the worker like every other trace, so a big
-// picture at this door no longer blocks the page while it converts. One runner
-// for the module, because svgTextForFile is a free function and there is only
-// ever one door open.
+// The door's first trace, the one that happens while the editor is still
+// being opened. It runs in the worker like every other trace, so a big
+// picture at this door does not block the page while it converts. One
+// runner for the module, because svgTextForFile is a free function and
+// there is only ever one door open.
 let doorRunner = null;
 
 /** Extensions the standalone door accepts. */
@@ -148,7 +148,7 @@ export async function svgTextForFile(
       traced: false,
       converted: true,
       ms,
-      // D-123: the engine's WARNING lines, carried to the editor's own
+      // The engine's WARNING lines, carried to the editor's own
       // warnings list instead of being swallowed at this door.
       warnings: warnings || [],
       // Kept so a saved file can be measured against what was opened.
@@ -161,7 +161,7 @@ export async function svgTextForFile(
   if (RASTER_EXTENSIONS.includes(fileExtension(file.name))) {
     const dataUrl = await readAsDataUrl(file);
     const imageData = await loadImageData(dataUrl);
-    // A picture past IMAGE_IMPORT_LIMITS.maxPixels is SCALED DOWN rather than
+    // A picture past IMAGE_IMPORT_LIMITS.maxPixels is scaled down rather than
     // refused, and the worker says by how much in its summary.
     if (!doorRunner) doorRunner = createTraceRunner();
     const { svg, summary } = await doorRunner.start(imageData, ink || null);
@@ -183,18 +183,14 @@ export async function svgTextForFile(
  * @returns {{ openFile: Function, isOpen: Function, destroy: Function }}
  */
 export function createSvgEditEntry({ announce, onError, render } = {}) {
-  // DP-34: the door's traces run in the worker too, so opening a big picture
-  // here does not freeze the page either. The door has no Start button yet -
-  // the person already chose Edit Drawing, which IS the deliberate action -
-  // and no Cancel surface, because there is nothing on screen to put one on
-  // until the editor exists. DP-37 gives this door a picture first, and the
-  // bar and Cancel belong with it.
+  // The door's traces run in the worker too, so opening a big picture here
+  // does not freeze the page either. The door has no Start button: the
+  // person already chose Edit Drawing, which is the deliberate action.
   let traceRunner = null;
-  // DP-52: the door's traces run through the same job and dialog as the
-  // charm host's. The dialog closes BEFORE the editor opens: the editor traps
-  // focus itself and says it has opened, neither of which can happen behind an
-  // inert page. So its last stage is not shown here, and the sentence for it
-  // stays proposed.
+  // The door's traces run through the same job and dialog as the charm
+  // host's. The dialog closes before the editor opens: the editor traps
+  // focus itself and says it has opened, neither of which can happen behind
+  // an inert page. So its last stage is not shown here.
   let conversionDialog = null;
   let conversionJob = null;
   const ensureConversion = () => {
@@ -232,17 +228,16 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         if (job.isRunning()) show();
       }, COST_BANDS.quickMs);
     }
-    // D-151. A run superseded by a newer one (a slider moved while it ran)
+    // A run superseded by a newer one (a slider moved while it ran)
     // leaves the dialog to that newer run.
     let superseded = false;
     try {
       return await job.run({
         imageData,
         settings: ink,
-        // DP-78 (D-172): a trace with more shapes than the editor lists is
-        // turned away here, the moment the worker is done. It used to reach
-        // showSvg, be parsed for seconds, and be refused there with a vector
-        // editor's advice for a photograph.
+        // A trace with more shapes than the editor lists is turned away here, the
+        // moment the worker is done, rather than parsed for seconds in showSvg
+        // and refused there with a vector editor's advice for a photograph.
         refuse: ({ svg }) => {
           const count = countTracedShapes(svg);
           return isOverListCap(count)
@@ -268,7 +263,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
   // the file, so the slider answers in about a tenth of a second.
   let currentImageData = null;
   let currentFileName = null;
-  // DP-79: the quick look's verdict on the picture in hand. A camera picture
+  // The quick look's verdict on the picture in hand. A camera picture
   // is worked at the print's cell and starts with the photo defaults on;
   // this door has no charm to size to, so the editor's default width is the
   // printed width it works at.
@@ -281,7 +276,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
           mmPerPixel: DEFAULT_DESIGN_WIDTH_MM / currentImageData.width,
         }
       : settings;
-  // DP-49: the picture the pixels came from (for the crop view), the drawing
+  // The picture the pixels came from (for the crop view), the drawing
   // as last shown (what a crop clips), and what a crop replaced (one undo).
   let currentSourceDataUrl = null;
   let currentShown = null;
@@ -308,7 +303,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
   /**
    * The editor surface, hosted over the whole page. With no model behind it
    * there is nothing for a person to Tab out to, so this is the one host that
-   * traps focus, and Escape is the way out (DP-19).
+   * traps focus, and Escape is the way out.
    */
   async function ensureWorkspace() {
     if (workspace) return workspace;
@@ -357,7 +352,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     let analysis;
     try {
       analysis = analyzeSvg(shown);
-      // D-123: the DXF converter's engine warnings join the analysis's own,
+      // The DXF converter's engine warnings join the analysis's own,
       // so the editor's warnings list shows what the engine said instead of
       // this door swallowing it.
       if (Array.isArray(extraWarnings) && extraWarnings.length > 0) {
@@ -375,18 +370,17 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
 
     const shapeCount = analysis.elements ? analysis.elements.length : 0;
     if (shapeCount === 0) {
-      // D-117: analyzeSvg returns an empty table for two different reasons,
-      // and this used to tell the user the wrong one. When a drawing is over
-      // the cap, the analyzer has already written the honest sentence - the
-      // real count and the real cap - and throwing it away to say "no shapes
-      // ... a photo needs dark lines" gave photo advice for a vector file and
-      // named a cause that was not the cause. MEASURED before the fix on both
-      // of the owner's SVGs and on Forge's own logo.
-      // D-139: a picture that was just traced gets the sentence for THAT, not
-      // the vector-file one. "A photo needs dark lines on a light background"
-      // was also the wrong advice as of this release: a light drawing on a
-      // dark ground is turned around and traced, so what is left to say is
-      // which lever to move.
+      // analyzeSvg returns an empty table for two different reasons, and the
+      // person must be told the right one. When a drawing is over the cap, the
+      // analyzer has already written the honest sentence - the real count and
+      // the real cap - and replacing it with "no shapes ... a photo needs dark
+      // lines" would give photo advice for a vector file and name a cause that
+      // is not the cause.
+      //
+      // A picture that was just traced gets the sentence for that, not the
+      // vector-file one. "A photo needs dark lines on a light background" is
+      // the wrong advice too: a light drawing on a dark ground is turned around
+      // and traced, so what is left to say is which lever to move.
       const reason =
         analysis.warnings && analysis.warnings.length > 0
           ? analysis.warnings[0]
@@ -416,7 +410,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         summary && (creditLine ? summary.lineWidthPxBody : summary.lineWidthPx),
       designWidthKnown: false,
       tools: inkControls ? inkControls.element : null,
-      // DP-49: the crop. The door owns the pixels and the drawing, so it owns
+      // The crop. The door owns the pixels and the drawing, so it owns
       // the operation; the editor says the rectangle.
       onCrop: handleCrop,
       ...(cropUndo ? { onUndoCrop: handleUndoCrop, cropUndoable: true } : {}),
@@ -445,7 +439,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
   }
 
   /**
-   * DP-49: crop the source to the rectangle the editor said and show the
+   * Crop the source to the rectangle the editor said and show the
    * result. A picture is cropped in its pixels and traced again, through the
    * same dialog as the first trace; a drawing is clipped, the clip loading
    * with the ring engine on demand. One level of undo, this session.
@@ -484,9 +478,8 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         currentSourceDataUrl = before.sourceDataUrl;
         if (error instanceof TraceCancelled) return;
         if (error instanceof TraceRefused) {
-          // DP-78: the crop traced into more than the editor lists. The
-          // sentence is the whole report; the waiting line in the panel
-          // would otherwise stand (D-119).
+          // The crop traced into more than the editor lists. The sentence is the
+          // whole report; the waiting line in the panel would otherwise stand.
           fail(error.sentence);
           if (inkControls) inkControls.setFailed(error.sentence);
           return;
@@ -517,7 +510,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     });
   }
 
-  /** DP-49: put back what the last crop replaced. */
+  /** Put back what the last crop replaced. */
   async function handleUndoCrop() {
     if (!cropUndo) return;
     const before = cropUndo;
@@ -556,9 +549,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       URL.revokeObjectURL(url);
 
       // Say the size out loud. This is a file someone will cut, and a round
-      // trip through the editor's flatten is not exact: MEASURED on a 40 by
-      // 25 mm drawing, the saved file came back 40.3 by 25.4. Small, and far
-      // too important to leave for them to discover at the machine.
+      // trip through the editor's flatten is not exact: a 40 by 25 mm drawing
+      // can come back 40.3 by 25.4. Small, and far too important to leave for
+      // them to discover at the machine.
       const saved = dxfSize(dxf);
       const mm = (n) => Number(n.toFixed(2));
       let sentence = `${name} saved. Your original file is untouched.`;
@@ -595,9 +588,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       // failure and must not be reported as one.
       if (error instanceof TraceCancelled) return;
       if (error instanceof TraceRefused) {
-        // DP-78: this setting traced into more than the editor lists. The
-        // drawing on show stays the one from before; the sentence says what
-        // to try, and replaces the waiting line (D-119).
+        // This setting traced into more than the editor lists. The drawing on
+        // show stays the one from before; the sentence says what to try, and
+        // replaces the waiting line.
         fail(error.sentence);
         if (inkControls) inkControls.setFailed(error.sentence);
         return;
@@ -615,7 +608,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    */
   async function openFile(file) {
     let prepared;
-    // DP-80: the pixels in hand, kept outside the try so a refused trace can
+    // The pixels in hand, kept outside the try so a refused trace can
     // still offer the crop on them.
     let picture = null;
     try {
@@ -631,7 +624,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
         cropUndo = null;
         const imageData = await loadImageData(dataUrl);
         picture = { imageData, dataUrl };
-        // DP-79: the first trace already knows what the picture is. A camera
+        // The first trace already knows what the picture is. A camera
         // picture gets the photo defaults from the start; the panel built
         // below starts with the same switches on.
         currentCamera = !!quickLook(imageData).camera;
@@ -647,12 +640,12 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     } catch (error) {
       // The person stopped it; the dialog's own Cancel has already said so.
       if (error instanceof TraceCancelled) return false;
-      // A refusal (DP-78, a trace over the cap) carries its sentence as its
+      // A refusal (a trace over the cap) carries its sentence as its
       // message, and the toast is the door's one place to say it.
       fail(error.message);
-      // DP-80: that sentence says "a closer crop", and this door had no way
-      // to take one before the trace. The crop view opens on the picture
-      // itself; Save crop traces the part that is kept.
+      // That sentence says "a closer crop", and a crop has to be possible
+      // before any trace. The crop view opens on the picture itself; Save crop
+      // traces the part that is kept.
       if (error instanceof TraceRefused && picture) {
         await openCropOnPicture(picture.imageData, picture.dataUrl, file.name);
       }
@@ -663,7 +656,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
 
   /**
    * The first trace's settings for a picture on this door: Line art, with
-   * the photo defaults by the quick look's verdict (DP-79), at the editor's
+   * the photo defaults by the quick look's verdict, at the editor's
    * default width.
    */
   const pictureSettings = (imageData) => ({
@@ -675,7 +668,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
   });
 
   /**
-   * DP-80: the crop view on a picture nothing has traced, on this door. The
+   * The crop view on a picture nothing has traced, on this door. The
    * editor opens straight into it (no drawing behind it); Save crop traces
    * the part that is kept, Cancel or Escape closes the editor with nothing
    * traced.
@@ -706,7 +699,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     open = true;
   }
 
-  /** DP-80: the picture cropped in its pixels, then traced as a press. */
+  /** The picture cropped in its pixels, then traced as a press. */
   async function handleCropBeforeTrace(rect) {
     if (!currentImageData) return;
     const cropped = cropImageDataRect(currentImageData, rect);

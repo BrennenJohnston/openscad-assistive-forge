@@ -4,16 +4,16 @@
  * Polygon offset for SVG path strings, with clipper2-js used for boolean
  * cleanup only.
  *
- * D-107: clipper2-js@1.2.4's ClipperOffset is defective and offsetPath no
- * longer routes through it. MEASURED on an 80×80 square (see
- * svg-offset.test.js): outsets landed at 92–95% of the requested delta
- * and lopsided (one side exact, the other short), and insets delivered
- * only 9–15% — a requested −5 shrank each side by 0.47 units. The error
- * varies with scale, so no wrapper factor can correct it. The offset
- * outline is now built here (parallel edge segments, round-join arcs at
- * opening corners, a raw-vertex detour at overlap corners so overshoot
- * debris winds negative) and cleaned with a Positive-fill union — the
- * port's flat boolean ops are correct and stay in use.
+ * clipper2-js@1.2.4's ClipperOffset is defective, so offsetPath does not
+ * route through it. On an 80×80 square (see svg-offset.test.js) its outsets
+ * land at 92–95% of the requested delta and lopsided (one side exact, the
+ * other short), and its insets deliver only 9–15% — a requested −5 shrinks
+ * each side by 0.47 units. The error varies with scale, so no wrapper factor
+ * can correct it. The offset outline is built here instead (parallel edge
+ * segments, round-join arcs at opening corners, a raw-vertex detour at
+ * overlap corners so overshoot debris winds negative) and cleaned with a
+ * Positive-fill union — the port's flat boolean ops are correct and stay in
+ * use.
  *
  * @license GPL-3.0-or-later
  */
@@ -109,16 +109,15 @@ export function chaikinSmooth(points, iterations = 2) {
 }
 
 /**
- * The ring's points spaced evenly along its perimeter, `count` of them
- * (DP-82, D-180).
+ * The ring's points spaced evenly along its perimeter, `count` of them.
  *
  * Clipper writes a union with whatever vertices the outline's overlaps
- * left: MEASURED on an inset square, 417 points along the first edge and
- * the bare corner on each of the other three. Chaikin's corner cutting
- * works on vertices, not lengths, so a bare corner between two 70-unit
- * edges was cut by a quarter of each, and the inset came back with its
- * corners 5 to 10 units inside a 100-unit page (the magnitude tests never
- * saw it: they measure with the smoothing off). Spaced evenly first, the
+ * left: on an inset square, 417 points along the first edge and the bare
+ * corner on each of the other three. Chaikin's corner cutting works on
+ * vertices, not lengths, so a bare corner between two 70-unit edges would
+ * be cut by a quarter of each, and the inset would come back with its
+ * corners 5 to 10 units inside a 100-unit page (the magnitude tests measure
+ * with the smoothing off, so they cannot see it). Spaced evenly first, the
  * smoothing rounds every corner by about one sample, which is the mild
  * rounding the smoothing is for.
  *
@@ -267,13 +266,12 @@ function buildOffsetOutline(ring, delta, arcTolerance) {
 }
 
 /**
- * Offset ONE closed ring, given as points, by delta along its own boundary:
+ * Offset one closed ring, given as points, by delta along its own boundary:
  * positive moves the boundary outward from the ring's interior, negative
  * inward, whichever way the ring was wound (the outline builder normalizes
- * the winding first). This is the per-ring half of `offsetPath`, split out
- * for DP-82 (D-174): a drawn line is two rings with opposite meanings, and
- * the callers that know which is which offset them one at a time with their
- * own sign.
+ * the winding first). This is the per-ring half of `offsetPath`: a drawn
+ * line is two rings with opposite meanings, and the callers that know which
+ * is which offset them one at a time with their own sign.
  *
  * @param {Array<{x: number, y: number}>} ring - Closed ring, >= 3 points
  * @param {number} delta - Offset in the ring's units
@@ -339,7 +337,7 @@ export function offsetRing(ring, delta, options = {}) {
  * @param {object} [options]
  * @param {number} [options.sampleCount] - Polygon sampling density (adaptive if omitted)
  * @param {number} [options.miterLimit=2] - Accepted for API compatibility;
- *   joins are always round since the D-107 rewrite, so it has no effect
+ *   joins are always round, so it has no effect
  * @param {number} [options.arcTolerance=0.25] - Max chord deviation on
  *   round join arcs, in SVG units
  * @param {boolean} [options.smooth=true] - Apply Chaikin smoothing to output
