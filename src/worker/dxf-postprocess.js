@@ -15,7 +15,8 @@
  * This hybrid format is rejected by most CAD software (AutoCAD, CorelDRAW, Adobe Illustrator,
  * Xometry, SendCutSend, LibreCAD, NanoCAD, SketchUp -- see issue #4268).
  *
- * Simply changing the version number is NOT enough (confirmed by multiple users in #4268).
+ * Simply changing the version number is not enough (confirmed by multiple
+ * users in #4268).
  * The only universally compatible approach is to convert LWPOLYLINE entities back to
  * individual LINE segments -- the format used by the working 2021.01 stable release.
  *
@@ -166,7 +167,7 @@ export function postProcessDXF(outputBuffer) {
   const out = [];
 
   // Helper: round a coordinate to 6 decimal places to avoid floating-point noise
-  // in downstream tools (LibreCAD, Inkscape, etc.).  BUG-D fix.
+  // in downstream tools (LibreCAD, Inkscape, etc.).
   function roundCoord(v) {
     const n = parseFloat(v);
     if (!Number.isFinite(n)) return v;

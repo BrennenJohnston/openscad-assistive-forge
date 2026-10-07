@@ -1,11 +1,11 @@
 /**
- * AF-12: unpack a library archive into { path, text } entries.
+ * Unpack a library archive into { path, text } entries.
  *
- * Turning a library on used to fetch every file it has - 695 sequential
- * requests for dotSCAD on a slow connection. Each library now ships a
- * single archive.zip built by scripts/setup-libraries.js; this module is
- * the worker-side half. Kept pure (bytes in, entries out) so the unit
- * suite can prove it without a worker or a network.
+ * Each library ships a single archive.zip built by
+ * scripts/setup-libraries.js, rather than one request per file (695 for
+ * dotSCAD); this module is the worker-side half. Kept pure (bytes in,
+ * entries out) so the unit suite can prove it without a worker or a
+ * network.
  *
  * @license GPL-3.0-or-later
  */

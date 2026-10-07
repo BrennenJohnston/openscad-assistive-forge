@@ -361,11 +361,10 @@ export function initThemeToggle(buttonId, onToggle = null) {
     return;
   }
 
-  // D-60: the label used to be written only inside this button's own click
-  // handler, so every other route left it lying - Ctrl+T, a City Walk
-  // in-game toggle, and, under 'auto', the system simply changing scheme
-  // with nobody touching anything at all. Subscribing to the manager means
-  // the button describes the state it is actually in, whoever changed it.
+  // Synced from the manager, not written only inside this button's own
+  // click handler: Ctrl+T, a City Walk in-game toggle and, under 'auto',
+  // the system changing scheme all change the theme too, and the button
+  // has to describe the state it is actually in, whoever changed it.
   const syncLabel = () => {
     button.setAttribute(
       'aria-label',

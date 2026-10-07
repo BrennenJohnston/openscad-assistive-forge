@@ -2,10 +2,10 @@
  * Worker-side error classification — pure logic shared by the render worker
  * and tests.
  *
- * Extracted from openscad-worker.js so the parity corpus test exercises the
- * real classification table (BR-5).
+ * Kept separate from openscad-worker.js so the parity corpus test
+ * exercises the real classification table.
  *
- * NOTE (BR-5): the main thread translates errors to rich UI content by
+ * The main thread translates errors to rich UI content by
  * `code` (see error-translator.js TRANSLATIONS_BY_CODE). The `message`
  * prose here is retained because the posted message doubles as
  * machine-readable content for guards on the main thread (e.g.
@@ -17,9 +17,8 @@
  */
 
 /**
- * Guidance for MODEL_NOT_2D — single source for a string that was
- * previously copy-pasted here, in openscad-worker.js, and in the
- * main-thread error-translator.js.
+ * Guidance for MODEL_NOT_2D: the single source for a string this file,
+ * openscad-worker.js and the main-thread error-translator.js all use.
  */
 export const MODEL_NOT_2D_SUGGESTION =
   'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
@@ -87,7 +86,7 @@ export const ERROR_TRANSLATIONS = [
     code: 'NO_GEOMETRY',
   },
   {
-    // IMPORTANT: Detect empty geometry from OpenSCAD console output
+    // Detect empty geometry from OpenSCAD console output
     pattern: /Current top[ -]?level object is empty/i,
     message:
       'This configuration produces no geometry. Check that the selected options are compatible — some parameter combinations may result in empty output.',

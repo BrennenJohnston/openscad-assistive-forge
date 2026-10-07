@@ -580,7 +580,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
 
     // Sibling tie — filter by extra-segment token matching.
     // Compute the common ancestor directory of all tied candidates, then
-    // keep only those whose extra folder words ALL appear in the preset tokens.
+    // keep only those whose extra folder words all appear in the preset tokens.
     const dirs = tied.map((s) =>
       s.path.substring(0, s.path.lastIndexOf('/')).split('/')
     );
@@ -771,9 +771,8 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         resolution: entryResolution,
       });
     } else {
-      // LEGACY-ONLY COMPATIBILITY PATH:
-      // Keep keyguard-shaped fallback mapping for stakeholder archives that do
-      // not expose explicit companion metadata yet.
+      // Legacy-only compatibility path: keyguard-shaped fallback mapping for
+      // archives that do not expose explicit companion metadata.
       let openingsPath = null;
       let entryResolution = 'unique';
       const openingsCandidates = aliasableBasenames.get(
@@ -907,12 +906,11 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
     return result;
   }
 
-  // LEGACY-ONLY COMPATIBILITY PATH:
-  // Keyguard-shaped mapping copies preset-specific content to
-  // hardcoded root-level keys "openings_and_additions.txt" / "default.svg".
-  // Guard: only CREATE a missing root key — replacing an existing root key
-  // would change the content SCAD include/import directives resolve to,
-  // producing wrong geometry (KI-012 Bug A/B).
+  // Legacy-only compatibility path: keyguard-shaped mapping copies
+  // preset-specific content to hardcoded root-level keys
+  // "openings_and_additions.txt" / "default.svg". Guard: only create a
+  // missing root key; replacing an existing one would change the content
+  // SCAD include/import directives resolve to, producing wrong geometry.
   if (
     companionMapping.openingsPath &&
     result.has(companionMapping.openingsPath) &&
@@ -942,7 +940,7 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
 
 /**
  * Extract the SVG overlay alias target from a companion mapping.
- * Works with both generic (Phase 5+) and legacy mapping formats.
+ * Works with both generic and legacy mapping formats.
  *
  * @param {{ aliases?: Object, svgAliasTarget?: string|null, svgPath?: string|null }|null} companionMapping
  * @returns {string|null} The file key to use for loading the overlay SVG
@@ -956,7 +954,7 @@ export function getOverlaySvgTarget(companionMapping) {
     }
     return null;
   }
-  // Legacy compatibility target for stakeholder keyguard packages.
+  // Legacy compatibility target for keyguard packages.
   if (companionMapping.svgPath) return 'default.svg';
   return null;
 }

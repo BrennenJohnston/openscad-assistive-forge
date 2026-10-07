@@ -59,7 +59,7 @@ export function normalizeUiMode(value) {
  */
 
 // Storage key for UI mode preference (follows openscad-forge-{feature}
-// convention; the string lives in storage-keys.js since UF-14 so
+// convention; the string lives in storage-keys.js so
 // ui-scoped-prefs.js can share it)
 const UI_MODE_STORAGE_KEY = STORAGE_KEY_UI_MODE;
 
@@ -69,7 +69,7 @@ const HIDDEN_CLASS = 'ui-mode-hidden';
 /**
  * Registry of panels controlled by Simplified mode.
  * Selectors are verified against the current index.html DOM structure.
- * CRITICAL: Never target .param-group or .param-control elements here —
+ * Never target .param-group or .param-control elements here —
  * those are independently controlled by isSimpleGroup() and data-settings-level.
  *
  * @type {PanelDefinition[]}
@@ -81,10 +81,10 @@ const PANEL_REGISTRY = [
     selector: '#consolePanel',
     defaultHiddenInBasic: true,
   },
-  // fileActions panel removed — now in File toolbar menu
+  // No fileActions panel: those actions live in the File toolbar menu
   {
     id: 'codeEditor',
-    // C-38, owner-signed 2026-08-19: the menu item says "Editor", so what
+    // The menu item says "Editor", so what
     // you hear says "Editor" - one word everywhere this label reaches
     // (density list, hide/toggle names, opened/closed, Jump To).
     label: 'Editor',
@@ -209,7 +209,7 @@ export class UIModeController {
     this._projectHiddenPanels = null;
 
     /**
-     * @type {boolean} U-10: a saved Classic preference was deferred at
+     * @type {boolean} A saved Classic preference was deferred at
      * boot because the viewport is mobile-shaped. While true, preference
      * writes keep the stored 'classic' so the next desktop visit boots
      * Classic; an explicit mode switch clears it (the user's new choice
@@ -230,9 +230,9 @@ export class UIModeController {
   }
 
   /**
-   * Check if Classic mode can be ENTERED right now: the classic_mode
-   * feature flag AND a desktop-shaped viewport (U-10, Q-24a — the gate
-   * governs entry only; a live Classic session is never ejected). The
+   * Check if Classic mode can be entered right now: the classic_mode
+   * feature flag and a desktop-shaped viewport (the gate governs entry
+   * only; a live Classic session is never ejected). The
    * flag decides whether Classic exists at all; the viewport decides
    * whether entry is open. Callers needing the flag alone (header button
    * visibility) use isEnabled('classic_mode') directly.
@@ -244,7 +244,7 @@ export class UIModeController {
 
   /**
    * True when this boot found a saved Classic preference but the viewport
-   * gate deferred it (U-10): the session runs a custom mode, the saved
+   * gate deferred it: the session runs a custom mode, the saved
    * preference is preserved, and the one-time notice should show.
    * @returns {boolean}
    */
@@ -313,7 +313,7 @@ export class UIModeController {
     );
 
     // A real mode switch is a new choice: stop protecting the deferred
-    // Classic preference (U-10) — the switch below persists targetMode.
+    // Classic preference: the switch below persists targetMode.
     this._classicDeferredByViewport = false;
 
     if (previousMode !== 'classic') {
@@ -370,7 +370,7 @@ export class UIModeController {
    * Apply panel visibility for the given mode.
    * Adds/removes HIDDEN_CLASS on panel elements.
    *
-   * CRITICAL: Never hides .param-group or .param-control elements.
+   * Never hides .param-group or .param-control elements.
    * Parameter group visibility is independently controlled by isSimpleGroup()
    * and data-settings-level attributes — those mechanisms are separate.
    *
@@ -710,12 +710,6 @@ export class UIModeController {
    * @param {number} direction - 1 for next, -1 for previous
    */
   /**
-   * The disclosure panels a user can move focus to right now, in registry
-   * order. Window ▸ Jump To… and panel cycling share this list, so the two
-   * cannot disagree about what counts as a panel.
-   * @returns {{id: string, label: string, el: HTMLElement}[]}
-   */
-  /**
    * Is a registered panel on screen right now? This asks the DOM rather than
    * the Simplified-view preference, because Classic's dock adopts some of
    * these panels and shows them whatever that preference says.
@@ -730,6 +724,12 @@ export class UIModeController {
     return el.tagName === 'DETAILS' ? el.open : true;
   }
 
+  /**
+   * The disclosure panels a user can move focus to right now, in registry
+   * order. Window ▸ Jump To… and panel cycling share this list, so the two
+   * cannot disagree about what counts as a panel.
+   * @returns {{id: string, label: string, el: HTMLElement}[]}
+   */
   listFocusablePanels() {
     return PANEL_REGISTRY.map((p) => {
       const el = document.querySelector(p.selector.split(',')[0].trim());
@@ -781,27 +781,25 @@ export class UIModeController {
     // already in place, not only once a project finishes loading.
     this.applyMode(this.currentMode);
 
-    // Header Classic toggle: wired BEFORE the basic_advanced_mode early
+    // Header Classic toggle: wired before the basic_advanced_mode early
     // return below — that flag gates the Simplified/Standard switch only
     // and must never take the Classic entry point down with it.
     //
-    // Visibility composes the FLAG and the VIEWPORT (U-10, amended by U-46
-    // and Q-73c): _updateClassicToggleButton is the single owner of both,
-    // so there is exactly one place that decides whether the button is on
-    // screen. The viewport half rides the same subscribeViewportShape
-    // subscription that has always driven the gate.
+    // Visibility composes the flag and the viewport:
+    // _updateClassicToggleButton is the single owner of both, so there is
+    // exactly one place that decides whether the button is on screen. The
+    // viewport half rides the same subscribeViewportShape subscription that
+    // drives the gate.
     const classicBtn = document.getElementById('classicModeToggle');
     if (classicBtn) {
       if (isEnabled('classic_mode')) {
         classicBtn.addEventListener('click', (event) => {
           // A click that arrives while Classic cannot be entered is refused
-          // OUT LOUD. It used to key off aria-disabled, which Q-73c made
-          // unreachable — and switchMode's own refusal is silent, so keying
-          // off the attribute would have quietly dropped the announcement
-          // that U-10 shipped. The condition is the gate itself instead, so
-          // the refusal survives however the click got here: a script, a
-          // deep link, or a future change that puts the button back on
-          // screen while entry is closed.
+          // out loud. switchMode's own refusal is silent, and the button is
+          // never aria-disabled, so the condition is the gate itself: the
+          // refusal survives however the click got here, whether a script, a
+          // deep link, or a future change that puts the button back on screen
+          // while entry is closed.
           //
           // Leaving Classic is never gated, so a live Classic session is
           // never refused — that is the same boundary as the visibility rule
@@ -961,7 +959,7 @@ export class UIModeController {
 
     const isClassic = this.currentMode === 'classic';
     btn.setAttribute('aria-pressed', String(isClassic));
-    // The button names what pressing it DOES, like the theme toggles (U-7):
+    // The button names what pressing it does, like the theme toggles:
     // inside Classic it is the way back to the Assistive Forge interface,
     // and the visible label says so rather than only changing color.
     const label = isClassic
@@ -973,19 +971,13 @@ export class UIModeController {
       visibleLabel.textContent = isClassic ? 'A. Forge' : 'Classic';
     }
 
-    // U-10 said the button locks only while it points INTO Classic on a
-    // mobile-shaped viewport, and never on the way OUT. U-46 keeps that
-    // boundary exactly and changes what "locked" looks like: the owner's
-    // 2026-08-21 order removes the button on mobile rather than greying it,
-    // "since we will not be offering classic theme on mobile at this time".
-    // Q-73c settled the boundary as ONE predicate — the button is on screen
-    // when pressing it would work, and absent otherwise — so that the app
-    // never carries a second definition of "mobile" (the reason UF-41's
-    // modal rides this same predicate instead of a media query).
-    //
-    // The INFORMATION the reason span used to carry survives on the
-    // first-visit modal's gate note (#firstVisitClassicGate), which shows
-    // on exactly this predicate.
+    // The button is gated only while it points into Classic on a
+    // mobile-shaped viewport, never on the way out, and gated means absent
+    // rather than greyed: one predicate, so the button is on screen when
+    // pressing it would work and absent otherwise, and the app never carries
+    // a second definition of "mobile" (the first-visit modal rides the same
+    // predicate). The reason is shown on the first-visit modal's gate note
+    // (#firstVisitClassicGate), which appears on exactly this predicate.
     const gated = !isClassic && !isViewportDesktopShaped();
     btn.classList.toggle('hidden', !isEnabled('classic_mode') || gated);
     // Nothing visible is ever aria-disabled now, so no live control points
@@ -997,7 +989,7 @@ export class UIModeController {
   }
 
   /**
-   * Say why the Classic toggle refuses right now (the U-10 viewport gate),
+   * Say why the Classic toggle refuses right now (the viewport gate),
    * composing the control's name with its reason text the same way the
    * Classic editor toolbar announces its gated buttons.
    * @private
@@ -1080,7 +1072,7 @@ export class UIModeController {
   /**
    * Classic renders one fixed desktop appearance, so a dark or high-contrast
    * preference does not apply there. Say so instead of letting the setting
-   * silently stop working (owner decision 2026-08-05).
+   * silently stop working.
    * @returns {string} Sentence to append, or '' when nothing is suspended
    * @private
    */
@@ -1112,7 +1104,7 @@ export class UIModeController {
         if (normalized) {
           if (normalized === 'classic' && !this.isClassicAvailable()) {
             this.currentMode = 'standard';
-            // Only the viewport gate is a deferral (U-10): the choice
+            // Only the viewport gate is a deferral: the choice
             // stays saved and the boot notice shows. A disabled flag is
             // the pre-existing silent fallback, unchanged.
             this._classicDeferredByViewport =
@@ -1145,7 +1137,7 @@ export class UIModeController {
         mode: this.currentMode,
         lastCustomMode: this._lastCustomMode,
       };
-      // U-10: while a saved Classic sits deferred behind the viewport
+      // While a saved Classic sits deferred behind the viewport
       // gate, incidental writes (a density flip, hidden-panel edits) must
       // not overwrite it — the next desktop visit still boots Classic.
       // switchMode clears the deferral first, so explicit choices win.

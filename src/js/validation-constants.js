@@ -4,7 +4,7 @@
  */
 
 // File upload size limits (in bytes).
-// Storage caps were raised (owner-approved) because IndexedDB stores
+// Storage caps are generous because IndexedDB stores
 // binary companions on disk, not in RAM; the real render-memory
 // constraint is the WASM mount budget below, which is enforced
 // separately (see mount-filter.js).

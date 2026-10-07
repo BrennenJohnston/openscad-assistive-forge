@@ -1,7 +1,6 @@
 /**
- * Viewport-Control panel (F4) — Classic's equivalent of desktop OpenSCAD's
- * Viewport-Control dock, transcribed from upstream ViewportControl.ui
- * (Appendix U6).
+ * Viewport-Control panel — Classic's equivalent of desktop OpenSCAD's
+ * Viewport-Control dock, transcribed from upstream ViewportControl.ui.
  *
  * It is a numeric read/write surface onto the camera: where it is looking
  * (translation), how it is oriented (rotation), how far away it is, and its
@@ -10,25 +9,24 @@
  *
  * Two adaptations of upstream, both forced by the browser:
  *
- *   Width / Height   READ-ONLY. Upstream sets a fixed render size; our canvas
+ *   Width / Height   Read-only. Upstream sets a fixed render size; our canvas
  *                    is responsive and sized by its container, so these report
  *                    the live pixel size instead of setting it.
- *   Lock             DISABLED. It locks upstream's aspect ratio while you type
+ *   Lock             Disabled. It locks upstream's aspect ratio while you type
  *                    a size; with no settable size there is nothing to lock.
  *
  * ## Why the update path looks the way it does
  *
- * Measured before this panel was written (the plan required the spike, since
- * nothing else in this repo listens to OrbitControls): a single mouse drag
- * emits **118 'change' events**, median gap **16.5 ms**, and they keep coming
- * for **~1.8 s after the mouse is released** because damping is on
- * (preview.js). So:
+ * Measured, since nothing else in this repo listens to OrbitControls: a
+ * single mouse drag emits **118 'change' events**, median gap **16.5 ms**,
+ * and they keep coming for **~1.8 s after the mouse is released** because
+ * damping is on (preview.js). So:
  *
  *   - reads are throttled to UPDATE_THROTTLE_MS; unthrottled this would be six
  *     DOM writes per field per frame,
  *   - a field the user is typing in is never overwritten — the camera moving
  *     under their cursor would eat the digits,
- *   - and there is NO aria-live anywhere on this panel. A live region on
+ *   - and there is no aria-live anywhere on this panel. A live region on
  *     camera motion would fire a hundred times per drag; that is not a feature
  *     for a screen-reader user, it is a denial of service.
  *
@@ -38,7 +36,7 @@
  * @license GPL-3.0-or-later
  */
 
-/** The spike measured ~60 Hz; a tenth of a second is plenty for readouts. */
+/** Changes arrive at ~60 Hz; a tenth of a second is plenty for readouts. */
 export const UPDATE_THROTTLE_MS = 100;
 
 /** Degrees per radian, kept once so the two conversions cannot disagree. */
@@ -219,7 +217,7 @@ export class ViewportControlPanel {
     const size = this._refreshCanvasSize();
     if (!pose) return;
 
-    // The Classic status bar shows the same pose (P8). It listens here rather
+    // The Classic status bar shows the same pose. It listens here rather
     // than subscribing to controls itself: this panel is connected whether or
     // not it is on screen, and it already owns the only throttle in front of a
     // feed that fires ~118 times per drag. Two subscribers would mean two
@@ -239,8 +237,8 @@ export class ViewportControlPanel {
     this._set('vpDistance', pose.distance);
 
     // An orthographic camera has no field of view, so the control is disabled
-    // rather than left showing a number that means nothing (D-15's principle:
-    // no control that quietly does nothing).
+    // rather than left showing a number that means nothing: no control
+    // quietly does nothing.
     const fov = this.fields.vpFov;
     if (fov) {
       fov.disabled = pose.orthographic;
