@@ -1,5 +1,5 @@
 /**
- * Folder-handle persistence layer (F35 Phase A).
+ * Folder-handle persistence layer.
  *
  * Wraps IndexedDB so a single FileSystemDirectoryHandle can be saved,
  * restored across page reloads, and forgotten on demand. The
@@ -28,7 +28,7 @@ export const ROOT_KEY = 'root';
 
 /**
  * @returns {boolean} True when both IDB and FSA are present in the
- *   current realm. Phase A is dark on browsers that lack either.
+ *   current realm. Folder sync stays off on browsers that lack either.
  */
 export function isFolderHandleStorageSupported(globalRef = globalThis) {
   return !!(globalRef?.indexedDB && globalRef?.showDirectoryPicker);
@@ -78,7 +78,7 @@ function tx(db, mode, fn) {
 
 /**
  * Like {@link tx}, but for a step that needs more than one request inside
- * the SAME transaction. Enumeration reads keys and values as two requests;
+ * the same transaction. Enumeration reads keys and values as two requests;
  * running them in separate transactions would let a concurrent write land
  * between them and pair key *i* with the handle *i* of a different read.
  *
@@ -145,7 +145,7 @@ export async function loadFolderHandle(deps = {}) {
 
 /**
  * Enumerate every stored directory handle, root slot included. Like
- * {@link loadFolderHandle} this does NOT touch permissions — `handle.name`
+ * {@link loadFolderHandle} this does not touch permissions — `handle.name`
  * is readable without a re-grant, which is what lets the welcome screen
  * list folders the user has not re-authorised yet.
  *

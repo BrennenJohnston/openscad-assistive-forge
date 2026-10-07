@@ -14,7 +14,7 @@
  * Every setting here is backed by a real CodeMirror facility (a theme for
  * the font size, the indentUnit and tabSize facets, the lineWrapping
  * extension, highlightActiveLine). Settings the desktop offers that this
- * build has no facility for are NOT represented here — they ship visibly
+ * build has no facility for are not represented here — they ship visibly
  * disabled with a reason instead.
  *
  * @license GPL-3.0-or-later

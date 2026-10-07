@@ -46,13 +46,13 @@ const RADIO_GROUP_LABELS = {
 };
 
 /**
- * Access keys, transcribed from upstream's menu tree (Appendix U2) where `&`
+ * Access keys, transcribed from upstream's menu tree where `&`
  * marks the underlined letter. Each entry is this app's own label with the
  * ampersand placed on the letter upstream marks; labels this app adapted keep
  * the same letter where it survives, and items upstream does not have get no
  * access key rather than an invented one.
  *
- * DISPLAY ONLY — there is no Alt+letter activation (D-30). Alt+F and Alt+D
+ * Display only: there is no Alt+letter activation. Alt+F and Alt+D
  * open the browser's own menus, so coverage would differ per browser and a
  * user could not rely on any of it. Arrow and first-letter navigation inside
  * a menu are unchanged.
@@ -626,7 +626,7 @@ export class ToolbarMenuController {
 
   /**
    * Get all navigable (non-disabled) menu items within a menu list.
-   * Includes items inside nested role="group" containers but NOT items
+   * Includes items inside nested role="group" containers but not items
    * inside nested role="menu" submenus (those get their own handler).
    * @param {HTMLElement} listEl - The <ul role="menu"> element
    * @returns {HTMLElement[]}
@@ -881,15 +881,15 @@ export class ToolbarMenuController {
     }
 
     li.appendChild(btn);
-    // The reason lives OUTSIDE the button. Inside it, it joined the item's
-    // accessible NAME as well as being its description, so a screen reader
-    // read every disabled item's reason twice (D-14).
+    // The reason lives outside the button: inside it, it would join the
+    // item's accessible name as well as being its description, so a screen
+    // reader would read every disabled item's reason twice.
     if (tooltipSpan) li.appendChild(tooltipSpan);
     return li;
   }
 
   /**
-   * A menu item's label span, with U2's access key underlined where upstream
+   * A menu item's label span, with its access key underlined where upstream
    * marks one. Splitting the text into child spans does not change the text
    * content, so the accessible name is exactly the label either way.
    * @param {string} [label]
@@ -1026,8 +1026,8 @@ export class ToolbarMenuController {
 
     btn.appendChild(this._buildLabelSpan(item.label));
 
-    // A submenu trigger can have a shortcut too \u2014 Window \u25B8 Jump To\u2026 is
-    // Ctrl+J \u2014 and this never showed one, so the key was undiscoverable.
+    // A submenu trigger can have a shortcut too (Window ▸ Jump To… is
+    // Ctrl+J), so its key is shown here like any other item's.
     if (item.shortcutAction) {
       const shortcutDef = keyboardConfig.getShortcut(item.shortcutAction);
       if (shortcutDef) {
@@ -1059,10 +1059,9 @@ export class ToolbarMenuController {
 
       // Radio runs collapse through _buildRadioGroup exactly as the
       // top-level renderer does. _buildMenuItem has no radio branch: children
-      // of type 'radio' fell through to plain menuitems with no aria-checked
-      // and no click listener (radios carry onChange, not handler), so every
-      // radio submenu — Preview Quality included — rendered inert (UF-11,
-      // defect D-24).
+      // of type 'radio' would fall through to plain menuitems with no
+      // aria-checked and no click listener (radios carry onChange, not
+      // handler), so every radio submenu would render inert.
       const childItems = Array.isArray(item.items) ? item.items : [];
       let ci = 0;
       while (ci < childItems.length) {

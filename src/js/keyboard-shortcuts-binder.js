@@ -1,5 +1,5 @@
 /**
- * Keyboard Shortcuts Binder (MC-1)
+ * Keyboard Shortcuts Binder
  *
  * Advertises keyboard shortcuts to assistive technology by applying
  * aria-keyshortcuts to the DOM elements that activate each action.

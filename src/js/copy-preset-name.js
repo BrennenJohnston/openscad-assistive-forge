@@ -1,5 +1,5 @@
 /**
- * Copy-preset-name helper (F30).
+ * Copy-preset-name helper.
  *
  * Encapsulates the clipboard fallback chain so the main.js wiring stays
  * a thin event listener and the behavior is unit-testable without
@@ -53,7 +53,7 @@ export async function copyPresetName(name, deps = {}) {
     } catch (error) {
       // Fall through to the textarea path below; some browsers reject
       // when not in a secure context or when the document is unfocused.
-      // We deliberately do NOT log here — the caller decides UX.
+      // We deliberately do not log here — the caller decides UX.
       const apiError = /** @type {Error} */ (error);
       const fallback = _legacyCopy(name, docRef);
       if (fallback.ok) return fallback;

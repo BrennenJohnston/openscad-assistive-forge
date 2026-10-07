@@ -1,21 +1,20 @@
 /**
- * The desktop's editor color schemes (U-37 ¶2, Q-60a).
+ * The desktop's editor color schemes.
  *
  * Transcribed from OpenSCAD 2021.01's own
  * `color-schemes/editor/light-background.json` and `dark-background.json`.
  * Qt resolves the named colors in those files through the SVG keyword list,
  * so "Green" is #008000 rather than #00ff00, "DarkCyan" is #008b8b, and so on.
  *
- * POLICY, signed as Q-60(a) and matching the Q-10 / Q-42a precedent already
- * used for the 3D preview: backgrounds and passing foregrounds go in verbatim;
- * the ones that measurably fail WCAG 1.4.3 are moved along their OWN hue until
- * they pass, and no further. `tests/unit/editor-colors-contrast.test.js` locks
- * every pair, so a future edit cannot quietly undo it.
+ * Policy, the same as for the 3D preview: backgrounds and passing
+ * foregrounds go in verbatim; the ones that measurably fail WCAG 1.4.3 are
+ * moved along their own hue until they pass, and no further.
+ * `tests/unit/editor-colors-contrast.test.js` locks every pair, so a future
+ * edit cannot quietly undo it.
  *
  * Each tuned value carries the measurement that forced it. Ratios are the
- * worst case of paper AND the active-line background, because the active line
- * is on by default and is where the cursor spends its time — the plan's
- * arithmetic only checked paper, which is why its estimates were optimistic.
+ * worst case of paper and the active-line background, because the active
+ * line is on by default and is where the cursor spends its time.
  *
  * @license GPL-3.0-or-later
  */
@@ -66,8 +65,7 @@ export const LIGHT_SCHEME = Object.freeze({
 
 /** @type {EditorScheme} */
 export const DARK_SCHEME = Object.freeze({
-  // Verbatim, and NOT the #1E1E1E this editor used before: the desktop's dark
-  // paper is #222222 and its text #e0e0e0.
+  // Verbatim: the desktop's dark paper is #222222 and its text #e0e0e0.
   paper: '#222222',
   text: '#e0e0e0', // verbatim, 12.05:1
   caretLine: '#303030', // verbatim

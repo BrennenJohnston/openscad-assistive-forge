@@ -2,7 +2,7 @@
  * Mount-content resolution — pure logic shared by the render worker and
  * tests.
  *
- * S-013: Image companion files arrive as base64 data-URL strings from the
+ * Image companion files arrive as base64 data-URL strings from the
  * browser (FileReader.readAsDataURL or ZIP extraction). Writing the literal
  * text to the Emscripten FS would hand OpenSCAD surface()/import() a text
  * file instead of binary image data, so data URLs must be decoded to

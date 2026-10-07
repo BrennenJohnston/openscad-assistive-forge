@@ -6,14 +6,14 @@
  * current parameter values — works against any project schema, not just
  * keyguard-shaped names.
  *
- * 2D-export parameter adjustments are PROPOSED, never applied silently:
+ * 2D-export parameter adjustments are proposed, never applied silently:
  * propose2DExportAdjustments() returns a change list the UI presents for
  * user consent. Project-specific heuristics (e.g. the keyguard family's
  * type_of_keyguard / laser-cutting toggles) arrive as data via the
  * export2D section of forge.project.json (see project-manifest.js) instead
  * of being hardcoded here.
  *
- * This module is a leaf dependency: it must NOT import from main.js or
+ * This module is a leaf dependency: it must not import from main.js or
  * auto-preview-controller.js.
  *
  * @license GPL-3.0-or-later
@@ -210,7 +210,7 @@ export function propose2DExportAdjustments(
  * Settings") that produce no renderable geometry at all.
  *
  * 2D-export generate modes (e.g. "first layer for SVG/DXF file") are
- * NOT non-previewable: the SCAD code still produces a thin 3D slice
+ * not non-previewable: the SCAD code still produces a thin 3D slice
  * that serves as a visual preview of the shape to be cut.  The actual
  * 2D flattening happens at export time via projection().
  *

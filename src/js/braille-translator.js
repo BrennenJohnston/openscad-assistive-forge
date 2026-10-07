@@ -111,7 +111,7 @@ export function stripUnsupportedChars(text) {
  * Make every whitespace character an ordinary space. liblouis hands a
  * no-break space or a tab back as itself rather than as a blank cell; the
  * word layout already splits on these same characters, so a line translated
- * whole now agrees with it. The length does not change.
+ * whole agrees with it. The length does not change.
  * @param {string} text
  * @returns {string}
  */

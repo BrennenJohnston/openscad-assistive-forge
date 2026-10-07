@@ -1,30 +1,30 @@
 /**
- * The browser Back button, made answerable (U-41, UF-39).
+ * The browser Back button, made answerable.
  *
- * A person stuck mid-tutorial on a phone pressed Back and the app closed
- * entirely. Nothing in the app had ever put an entry on the history stack, so
- * the first Back press was always a navigation away from the document: no
- * popstate, no chance to ask, no way back in except retyping the address.
+ * Without a history entry of its own, the app's first Back press is a
+ * navigation away from the document: no popstate, no chance to ask, no way
+ * back in except retyping the address. On a phone mid-tutorial, that closes
+ * the app entirely.
  *
- * The fix is one sentinel entry. When a project opens, this module pushes a
+ * The answer is one sentinel entry. When a project opens, this module pushes a
  * single history entry with the same URL. The next Back press consumes that
  * entry instead of the document, which turns a departure into a popstate the
  * app can answer with a dialog. "Stay in the app" steps back onto the sentinel,
  * so the guard is not a one-shot; "Leave" goes back past it and really leaves
- * (Q-72, owner, 2026-08-22: warn only, no in-app routing).
+ * (warn only, no in-app routing).
  *
- * Q-85 (owner, 2026-08-22) scopes it to the project surface. The guard arms on
+ * It is scoped to the project surface. The guard arms on
  * the flip to 'project' and retracts its own entry on the flip back to
  * 'welcome', so the Main Page keeps the browser's own one-press behavior and
  * no stale entry is left behind.
  *
- * WHAT THIS DOES NOT DO. beforeunload cannot carry custom text, needs sticky
- * activation and does not fire at all when a phone app-switches away, so it is
- * not the mechanism here; the existing dirty-buffer beforeunload guard stays
- * where it is, as the unload-time backstop. The Navigation API would express
- * this more directly but only became Baseline in 2026, so it is not the
- * primary path. If a browser ever refuses to hand back the sentinel, Back
- * behaves exactly as it did before this module existed.
+ * Why not beforeunload: it cannot carry custom text, needs sticky
+ * activation and does not fire at all when a phone app-switches away; the
+ * existing dirty-buffer beforeunload guard stays where it is, as the
+ * unload-time backstop. The Navigation API would express this more
+ * directly but only became Baseline in 2026, so it is not the primary
+ * path. If a browser ever refuses to hand back the sentinel, Back behaves
+ * exactly as it would without this module.
  *
  * @license GPL-3.0-or-later
  */
@@ -32,7 +32,7 @@
 import { showConfirmDialog } from './dialogs.js';
 import { onAppSurfaceChange } from './app-surface.js';
 
-/** Owner-approved 2026-08-22 (pack §7). Accessibility-critical: D-35 review. */
+/** The leave dialog's wording, which is accessibility-critical text. */
 const LEAVE_TITLE = 'Leave the app?';
 const LEAVE_BODY =
   "The browser's Back button closes this app. It does not go back to the " +
@@ -41,10 +41,10 @@ const LEAVE_LABEL = 'Leave';
 const STAY_LABEL = 'Stay in the app';
 
 /**
- * Informational only. Do NOT build logic on reading this back: the deep-link
+ * Informational only. Do not build logic on reading this back: the deep-link
  * doors call `replaceState(null, ...)` on whatever entry is current, which is
  * the sentinel while a project is open, so the marker is gone by the time
- * anyone would want it. MEASURED, after trying exactly that.
+ * anyone would want it.
  */
 const SENTINEL_STATE = { forgeBackGuard: true };
 
@@ -74,10 +74,8 @@ let isComparisonMode = () => false;
 /**
  * Did the app itself answer the Back press currently being dispatched?
  *
- * Read by the tutorial engine, whose own popstate listener predates this
- * module and closed the tour on any Back press because a Back press always
- * meant the document was leaving. It does not any more (Q-86, owner,
- * 2026-08-22: a tour survives "Stay in the app").
+ * Read by the tutorial engine's own popstate listener, so a tour survives
+ * "Stay in the app" instead of closing on every Back press.
  *
  * @returns {boolean}
  */
@@ -94,8 +92,8 @@ function arm() {
 /**
  * Put the sentinel back after the user chose to stay.
  *
- * MEASURED: pushing a fresh entry here loses the address bar. The deep-link
- * doors (?example=, ?manifest=) clean their URLs with replaceState AFTER the
+ * Pushing a fresh entry here loses the address bar. The deep-link
+ * doors (?example=, ?manifest=) clean their URLs with replaceState after the
  * project surface appears, so the cleaned URL belongs to the sentinel entry
  * and the entry underneath still carries the raw link. The pop just restored
  * that raw link, and pushing from there would keep it. The sentinel itself is
@@ -119,9 +117,9 @@ function standDown() {
   retracting = true;
   // Going back consumes our own entry, and the URL of the entry underneath
   // comes back with it: the deep-link doors clean their URLs with
-  // replaceState AFTER the surface flips, which edits the sentinel rather than
+  // replaceState after the surface flips, which edits the sentinel rather than
   // the entry below it. Record the address bar here and restore it in the
-  // popstate, which is the moment it has actually changed. MEASURED: doing it
+  // popstate, which is the moment it has actually changed. Doing it
   // on a timer instead is a race that Chromium happens to win and Firefox
   // loses, and losing it puts a stale ?example= back on the Main Page.
   restoreHref = window.location.href;
@@ -159,21 +157,20 @@ async function ask() {
 /**
  * Leave the document, stepping past any entries of our own on the way.
  *
- * One `history.back()` is not enough, and only measuring shows why. A reload
- * leaves the tab standing ON a sentinel; the app boots to the
- * Main Page and knows nothing about it, and opening a project pushes a second
- * one. "Leave" then went back exactly one step and landed on the app's own
- * earlier entry, so the app was still there and the URL had jumped back to
- * `?example=simple-box`. Reading the entry's state to recognize it does not
- * work either: the deep-link cleanup calls `replaceState(null, ...)` and wipes
- * the marker.
+ * One `history.back()` is not enough. A reload leaves the tab standing on a
+ * sentinel; the app boots to the Main Page and knows nothing about it, and
+ * opening a project pushes a second one. One step back would then land on
+ * the app's own earlier entry, so the app would still be there and the URL
+ * would jump back to `?example=simple-box`. Reading the entry's state to
+ * recognize it does not work either: the deep-link cleanup calls
+ * `replaceState(null, ...)` and wipes the marker.
  *
- * So this asks the simpler question. Leaving means leaving the DOCUMENT, and
- * nothing in this app pushes history except this module, so every entry that
- * keeps us alive is one of ours to step past. Each step that reaches a real
- * earlier document ends the walk by ending the document; if the app is the
- * first entry in the tab there is nothing to reach, the walk runs out, and
- * Back behaves as it did before this module existed.
+ * So this asks the simpler question. Leaving means leaving the document,
+ * and nothing in this app pushes history except this module, so every
+ * entry that keeps us alive is one of ours to step past. Each step that
+ * reaches a real earlier document ends the walk by ending the document; if
+ * the app is the first entry in the tab there is nothing to reach, the
+ * walk runs out, and Back behaves as it would without this module.
  */
 function walkOut() {
   if (walking) return;
@@ -195,8 +192,8 @@ function walkOut() {
 /**
  * Say, for the length of this dispatch, that the document is staying put.
  *
- * MEASURED: without this on the bookkeeping branches too, the tour died on
- * "Stay in the app" rather than on the Back press. Retracting and re-advancing
+ * The bookkeeping branches need this too, or the tour would close on "Stay
+ * in the app" rather than on the Back press: retracting and re-advancing
  * the sentinel are history traversals like any other, and every popstate
  * listener in the app sees them.
  */
@@ -228,7 +225,7 @@ function handlePopState() {
   }
   if (!armed) {
     // Nothing of ours was armed, yet the document is still here, so the entry
-    // just consumed was a leftover of ours from before a reload. Q-85 says the
+    // just consumed was a leftover of ours from before a reload. The
     // Main Page keeps the browser's own behavior, and the browser's own
     // behavior is to leave, so carry on out rather than swallowing the press.
     walkOut();

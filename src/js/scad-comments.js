@@ -8,7 +8,7 @@
 
 /**
  * Blank out // and block comments, which OpenSCAD never reads directives
- * from (D-198, D-201). String literals are copied whole, so a // or /* inside
+ * from. String literals are copied whole, so a // or /* inside
  * one starts no comment, and a quoted directive path is still found.
  *
  * @param {string} scadContent

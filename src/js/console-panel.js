@@ -1,5 +1,5 @@
 /**
- * Console Panel - Unified OpenSCAD output display (S-010 desktop parity)
+ * Console Panel - Unified OpenSCAD output display (desktop parity)
  *
  * Single panel with two views:
  *   - Log: chronological ECHO/WARNING/ERROR/DEPRECATED/TRACE messages
@@ -85,7 +85,7 @@ export class ConsolePanel {
     this.renderSection = 1;
     this._pendingSeparator = false;
 
-    // Auto-expand etiquette (C9): a panel the user closed stays closed for
+    // Auto-expand etiquette: a panel the user closed stays closed for
     // WARNINGs; only ERRORs force it back open. _programmaticOpen keeps our
     // own open from being misread as a user action.
     this._userCollapsed = false;
@@ -127,12 +127,12 @@ export class ConsolePanel {
       // Only a reader moving inside a box that is the shape we last left it
       // means "stop following". Resizing the window fires a scroll event of
       // its own, with the log at a completely different offset because the box
-      // is a different height and the lines have re-wrapped — MEASURED in
-      // Classic, 1400 to 1024: scrollTop 1002 to 1945, clientHeight 132 to 46,
-      // scrollHeight 1134 to 2309. Reading that as a reader scrolling up
-      // turned following off for good, and no later output brought it back.
+      // is a different height and the lines have re-wrapped (in Classic, 1400
+      // to 1024 wide: scrollTop 1002 to 1945, clientHeight 132 to 46,
+      // scrollHeight 1134 to 2309). Reading that as a reader scrolling up would
+      // turn following off for good.
       //
-      // The comparison is against the shape at OUR last write, not at the last
+      // The comparison is against the shape at our last write, not at the last
       // scroll event, so growing the log with new output while a reader is
       // paused cannot make their next real scroll look like a resize.
       const { scrollHeight, clientHeight } = this.container;
@@ -148,8 +148,8 @@ export class ConsolePanel {
     });
 
     // Docking into Classic resizes the log from 400px to the height of its
-    // pane, which leaves a scrollTop that used to be the bottom parked in the
-    // middle of the log. Re-pin on resize, but only while following.
+    // pane, which parks a scrollTop that was the bottom in the middle of the
+    // log. Re-pin on resize, but only while following.
     if (typeof ResizeObserver === 'function') {
       this._resizeObserver = new ResizeObserver(() => {
         if (this._followTail) this.scrollToTail();
@@ -307,13 +307,9 @@ export class ConsolePanel {
       type = CONSOLE_ENTRY_TYPE.TRACE;
     } else {
       // Everything else OpenSCAD prints is status, and status belongs in the
-      // console. Previously only "Compiling"/"Rendering" lines were kept and
-      // the rest were dropped, so a clean render left the panel reading "No
-      // console output yet" while the desktop's console showed nine lines —
-      // cache sizes, "Normalized tree has 31 elements!", the render time. Worse,
-      // one of the dropped lines ("Top level object is a 3D object
-      // (manifold):") was being classified as an ERROR by the Error-Log, so the
-      // only trace of a healthy render was a red row.
+      // console, as on the desktop: cache sizes, "Normalized tree has 31
+      // elements!", the render time. Dropping it would leave a clean render
+      // reading "No console output yet".
       type = CONSOLE_ENTRY_TYPE.INFO;
     }
 
@@ -623,11 +619,8 @@ export class ConsolePanel {
 
     const safeMessage = escapeHtml(entry.message);
 
-    // No role at all for ordinary lines. They used to carry role="listitem",
-    // which requires a list parent and never had one — #console-output is
-    // role="log". axe never reported it because a clean render produced no
-    // lines to report; P7 gave the log its status output back and twenty
-    // aria-required-parent nodes appeared with it. role="log" already says
+    // No role at all for ordinary lines: role="listitem" would need a list
+    // parent, and #console-output is role="log". role="log" already says
     // "messages, newest last", so the entries need nothing of their own.
     const entryRole =
       entry.type === 'warning' || entry.type === 'error' ? 'alert' : null;

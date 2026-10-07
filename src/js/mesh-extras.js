@@ -1,18 +1,17 @@
 /**
  * The two pieces of geometry work the charm preview does after a mesh loads,
- * as pure functions of typed arrays, so they can run in a worker (DP-52 P4,
- * D-143).
+ * as pure functions of typed arrays, so they can run in a worker.
  *
- * MEASURED on the built app with the logo's Line art design (211,700
- * triangles): the cavity-tint classification and three.js' EdgesGeometry ran
- * on the main thread in ONE task after the mesh loaded - 1.3 s at 1x and
- * 6.4 s at 4x CPU - and the page answered nothing for that long. Neither
- * touches the DOM, three.js objects or the GPU: they read positions and
- * normals and produce a per-vertex flag and a list of segments. That is work
- * for a worker, and the main thread applies the answers when they arrive.
+ * On the main thread, the cavity-tint classification and three.js'
+ * EdgesGeometry run in one task after the mesh loads: for a 211,700-triangle
+ * design that is 1.3 s at 1x and 6.4 s at 4x CPU, with the page answering
+ * nothing for that long. Neither touches the DOM, three.js objects or the
+ * GPU: they read positions and normals and produce a per-vertex flag and a
+ * list of segments. That is work for a worker, and the main thread applies
+ * the answers when they arrive.
  *
- * The classifier is `PreviewManager._classifyInnerFaces` moved here without a
- * change to its arithmetic; the edge builder is three.js' EdgesGeometry
+ * The classifier is the one `PreviewManager._classifyInnerFaces` calls; the
+ * edge builder is three.js' EdgesGeometry
  * algorithm (edges hashed on positions rounded to four decimals, kept when
  * the faces either side meet at more than the threshold angle or the edge has
  * one face) with the display options' longest-segments budget clip, so a
@@ -380,9 +379,8 @@ export function offFaceCount(text) {
 }
 
 /**
- * Parse an OFF or COFF text into a triangle soup, as the preview always did
- * (moved out of `PreviewManager.loadOFF` unchanged in what it accepts and
- * produces, so the same parser runs in the worker for a big file).
+ * Parse an OFF or COFF text into a triangle soup. `PreviewManager.loadOFF`
+ * and the worker share this parser, so a big file is read the same way.
  *
  * OpenSCAD's export_off.cc writes colors inline after each face's vertex
  * indices under an "OFF" header, as integers 0-255; COFF files from other
@@ -588,9 +586,9 @@ export function centerPositions(pos) {
 }
 
 /**
- * Everything the page used to do on its own thread when an OFF arrived,
- * done once here for a worker: parse, center, flat normals, then the cavity
- * tint (unless the file brought colors of its own) and the edge segments.
+ * Everything a big OFF needs, done once here for a worker: parse, center,
+ * flat normals, then the cavity tint (unless the file brought colors of its
+ * own) and the edge segments.
  *
  * @param {string} text
  * @param {{wantEdges?: boolean, thresholdDeg?: number, edgeBudget?: number}} [options]

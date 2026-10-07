@@ -1,10 +1,10 @@
 /**
- * Folder-sync controller (F35 Phase A).
+ * Folder-sync controller.
  *
  * Owns the "is the user connected to a folder on disk?" state and the
- * UX flow that gets / restores / drops that connection. Phase A only
- * handles connect / restore / disconnect plus the initial file load
- * — Phase B adds the polling watcher and Phase C adds write-back.
+ * UX flow that gets / restores / drops that connection: connect, restore,
+ * disconnect and the initial file load. The polling watcher and the
+ * write-back live in their own modules.
  *
  * Architecture intent:
  *   - This module is feature-flag gated (`local_folder_sync`) and
@@ -12,9 +12,9 @@
  *     does literally nothing on Firefox / Safari.
  *   - It re-uses the existing `collectFilesFromDir` walker and
  *     `handleFolderImport` snapshot loader from `file-handler.js`.
- *     Phase A intentionally does NOT change how files are loaded —
- *     only the persistence of the root directory handle.
- *   - Permission-grant calls (`requestPermission`) MUST happen inside
+ *     It does not change how files are loaded; it only adds persistence
+ *     of the root directory handle.
+ *   - Permission-grant calls (`requestPermission`) must happen inside
  *     a user-gesture event handler. The connect / restore methods are
  *     therefore designed to be called directly from `click` listeners.
  *
@@ -72,7 +72,7 @@ export class FolderSyncController {
 
   /**
    * @returns {boolean} True iff the runtime supports the API surface
-   *   Phase A relies on. Callers should hide UI when false.
+   *   folder sync relies on. Callers should hide UI when false.
    */
   isSupported() {
     return isFolderHandleStorageSupported();
@@ -112,7 +112,7 @@ export class FolderSyncController {
   }
 
   /**
-   * Probe IndexedDB for a previously-stored handle. Does NOT request
+   * Probe IndexedDB for a previously-stored handle. Does not request
    * permission — that requires a user gesture, see
    * {@link restoreFromStored}.
    *
@@ -133,7 +133,7 @@ export class FolderSyncController {
   }
 
   /**
-   * Open the directory picker and persist the resulting handle. MUST
+   * Open the directory picker and persist the resulting handle. Must
    * be called from inside a user gesture (e.g. button click), per the
    * File System Access API contract.
    *

@@ -14,7 +14,7 @@ import {
 
 /**
  * Whether the user has enabled performance metric collection
- * (KI-012 developer toggle).
+ * (a developer toggle).
  * @returns {boolean}
  */
 export function isPerfMetricsEnabled() {

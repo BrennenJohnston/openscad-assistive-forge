@@ -169,7 +169,7 @@ export function downloadSTL(arrayBuffer, filename) {
 /**
  * Format file size for display
  *
- * NOT interchangeable with storage-manager.js formatBytes: this one always
+ * Not interchangeable with storage-manager.js formatBytes: this one always
  * shows one decimal ("1.0 KB"), tops out at MB, and does no input
  * validation; formatBytes strips trailing zeros ("1 KB"), scales to YB,
  * and returns "Unknown" for invalid input. Callers rely on each display

@@ -30,10 +30,8 @@ const PREF_PREFIX = 'display-';
  * Forge defaults. Classic's differ for axes and axisMarks (the desktop's
  * out-of-the-box look: black axes with tick marks on) — those live in
  * ui-scoped-prefs.js NAMESPACE_DEFAULTS, which readScopedPref serves when
- * the Classic namespace has no saved value. UF-14 replaced the old
- * first-entry stamp (classic-view-defaults-v2) with that per-namespace
- * fallback, so each interface keeps its own saved copy of every toggle
- * and neither can overwrite the other's again (U-25).
+ * the Classic namespace has no saved value, so each interface keeps its
+ * own saved copy of every toggle and neither can overwrite the other's.
  */
 const DEFAULTS = {
   axes: false,
@@ -103,7 +101,7 @@ export class DisplayOptionsController {
     this._edgesOverlay = null;
     /** @type {Object|null} Three.js Group for crosshair lines */
     this._crosshairGroup = null;
-    /** @type {{ group: Object, dispose: () => void }|null} Axis tick overlay (F20) */
+    /** @type {{ group: Object, dispose: () => void }|null} Axis tick overlay */
     this._axisTickOverlay = null;
   }
 
@@ -112,7 +110,7 @@ export class DisplayOptionsController {
     this._wireControls();
     this._syncControls();
 
-    // The live swap (UF-14 P3): entering or leaving Classic crosses a
+    // The live swap: entering or leaving Classic crosses a
     // preference-namespace boundary, so the controller drops the old
     // interface's state and picks up the target's own saved copy.
     // Simplified<->Standard flips share the forge namespace and change
@@ -136,10 +134,10 @@ export class DisplayOptionsController {
    * Re-read every display option from the (new) active namespace and apply
    * only what actually changed — scene overlays, checkboxes, and one
    * display-option-change event per changed option so the View menu, the
-   * Classic camera bar and the drawer all agree (the D-24 lesson: surfaces
-   * that only learn about their own clicks lie). Deliberately silent, like
-   * the old Classic first-entry stamp: the mode switch already announces
-   * itself, and two or three toggle announcements would talk over it.
+   * Classic camera bar and the drawer all agree (a surface that only learns
+   * about its own clicks would lie). Deliberately silent: the mode switch
+   * already announces itself, and two or three toggle announcements would
+   * talk over it.
    */
   reloadForNamespace() {
     const before = { ...this.state };
@@ -166,7 +164,7 @@ export class DisplayOptionsController {
   /**
    * Subscribe to the PreviewManager's post-load event so overlays (edges,
    * wireframe) are rebuilt whenever a model is loaded, and to its theme
-   * change event so the axis tick overlay (F20) and the edges overlay pick
+   * change event so the axis tick overlay and the edges overlay pick
    * up new theme colors.
    *
    * Idempotent and safe to call at any time: the PreviewManager is created
@@ -195,7 +193,7 @@ export class DisplayOptionsController {
         }
         pm.addThemeChangeListener(this._boundThemeRefresh);
       }
-      // The axis overlays are functions of the camera distance (UF-7:
+      // The axis overlays are functions of the camera distance (the
       // desktop's showScalemarkers rebuilds per frame; ours rebuild when
       // the zoom actually moves). Orbit and pan keep the target distance,
       // so this only fires real rebuilds while zooming.
@@ -229,7 +227,7 @@ export class DisplayOptionsController {
 
   /**
    * Camera distance to the orbit target — desktop `Camera::zoomValue()`,
-   * the number every UF-7 overlay dimension derives from.
+   * the number every axis overlay dimension derives from.
    * @param {Object} pm
    * @returns {number|null}
    * @private
@@ -345,10 +343,10 @@ export class DisplayOptionsController {
     if (this.connectPreviewManager()) return;
     this._apply('edges');
     this._apply('wireframe');
-    // U-3 hardening: any path that replaces or clears scene content lost
-    // axes and ticks with nothing to restore them — this list re-applied
-    // only what a mesh swap invalidates. Both are idempotent re-adds
-    // (getObjectByName guards), so the common case costs nothing.
+    // Any path that replaces or clears scene content loses axes and ticks,
+    // so they are re-applied here along with what a mesh swap invalidates.
+    // Both are idempotent re-adds (getObjectByName guards), so the common
+    // case costs nothing.
     this._apply('axes');
     this._apply('axisMarks');
   }
@@ -391,7 +389,7 @@ export class DisplayOptionsController {
       this._apply('axisMarks');
     }
     if (this.state.axes) {
-      // The axis lines resolve the same theme color as the ticks (Q-22),
+      // The axis lines resolve the same theme color as the ticks,
       // so they rebuild on the same events.
       this._tearDownAxesOverlay();
       this._apply('axes');
@@ -547,21 +545,20 @@ export class DisplayOptionsController {
             distanceMm: this._cameraDistanceMm(pm) ?? undefined,
           });
         } catch (err) {
-          // Do NOT just log and return. That is what hid this for a whole
-          // release: the option read as on, the camera-bar button read as
-          // pressed, and nothing was ever drawn. If the overlay cannot be
-          // built, the control has to stop claiming otherwise.
+          // Not just log and return: then the option would read as on, the
+          // camera-bar button as pressed, and nothing would be drawn. If the
+          // overlay cannot be built, the control has to stop claiming
+          // otherwise.
           console.error(
             '[DisplayOptions] Failed to build axis tick overlay:',
             err
           );
           this.state.axisMarks = false;
-          // Deliberately NOT persisted (U-3): writing the preference off
-          // here is what poisoned profiles permanently — every pre-#59
-          // session did it, and the once-ever defaults marker meant nothing
-          // ever turned it back on. In-memory off keeps the controls honest
-          // for this session; the saved preference stays intact so the next
-          // session (or a manual re-toggle) retries the build.
+          // Deliberately not persisted: writing the preference off here would
+          // turn the overlay off for good after one failed build. In-memory
+          // off keeps the controls honest for this session; the saved
+          // preference stays intact so the next session (or a manual
+          // re-toggle) retries the build.
           this._syncCheckbox('axisMarks');
           document.dispatchEvent(
             new CustomEvent('display-option-change', {
@@ -628,7 +625,7 @@ export class DisplayOptionsController {
 
   /**
    * The corner triad follows the Axes toggle exactly as the desktop's
-   * smallaxes follow Show Axes (UF-7 P3), and its letters wear the same
+   * smallaxes follow Show Axes, and its letters wear the same
    * scheme-resolved color as the axis lines and ticks.
    * @param {Object} pm
    * @private
@@ -657,9 +654,8 @@ export class DisplayOptionsController {
       this._edgesOverlay = new T.LineSegments(edgesGeo, mat);
       this._edgesOverlay.name = '__displayEdges';
       // Parented to the mesh so it inherits every transform (recenter,
-      // auto-bed, rotation centering). It was previously scene-parented
-      // with a one-time copied transform and desynced whenever the mesh
-      // moved afterwards.
+      // auto-bed, rotation centering); a scene-parented copy of the transform
+      // would desync whenever the mesh moved afterwards.
       pm.mesh.add(this._edgesOverlay);
     }
 
@@ -680,10 +676,10 @@ export class DisplayOptionsController {
    * @private
    */
   _buildEdgeGeometry(T, sourceGeometry) {
-    // D-143 (DP-52 P4): a big mesh's segments are computed in the preview's
+    // A big mesh's segments are computed in the preview's
     // worker and arrive on `userData`; until they do, the overlay is empty
     // rather than the page held for seconds. A small mesh takes three.js'
-    // own EdgesGeometry here, as it always did.
+    // own EdgesGeometry here.
     const ready = sourceGeometry?.userData?.edgeSegments;
     if (ready) {
       const geo = new T.BufferGeometry();

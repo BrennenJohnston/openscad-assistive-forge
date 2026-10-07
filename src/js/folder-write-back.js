@@ -1,12 +1,12 @@
 /**
- * Folder Write-Back (F35 Phase C / C5.3, flag: folder_sync_writeback)
+ * Folder Write-Back (flag: folder_sync_writeback)
  *
  * Writes files into the connected local folder via the File System
  * Access API. The connected folder is the source of truth; IndexedDB
  * remains a cache.
  *
  * Self-trigger prevention contract (unit-tested): the watcher is told
- * about our own write BEFORE any bytes hit disk (beginSelfWrite), and
+ * about our own write before any bytes hit disk (beginSelfWrite), and
  * gets the post-write stats afterwards (endSelfWrite) — so the change
  * watcher can never observe a Forge write as an external change and
  * loop the render.

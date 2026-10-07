@@ -159,7 +159,7 @@ export async function checkStorageQuota(bytesToSave = 0) {
 /**
  * Format bytes to human-readable string
  *
- * NOT interchangeable with download.js formatFileSize — see the note there
+ * Not interchangeable with download.js formatFileSize — see the note there
  * (different rounding display, unit range, and invalid-input handling).
  *
  * @param {number} bytes
@@ -627,9 +627,9 @@ export async function getDetailedStorageInfo() {
 // Companion handling mirrors zip-handler.js so every import path stores
 // one shape: text formats as strings, images as base64 data URLs, and
 // binary formats the renderer cannot use (e.g. .stl) skipped with a log.
-// File.text() never throws on binary input — it lossily decodes as UTF-8 —
-// so the old read-as-text-with-empty-catch approach silently CORRUPTED
-// every imported .png and .stl companion.
+// File.text() never throws on binary input (it lossily decodes as UTF-8),
+// so reading every companion as text would silently corrupt every
+// imported .png and .stl.
 
 /** Companion extensions stored as text (matches zip-handler's text path) */
 const FOLDER_IMPORT_TEXT_EXTS = new Set([
@@ -922,7 +922,7 @@ export async function exportProjectsBackup() {
       }
 
       // Prefer uiPreferences from the project record (authoritative); fall back
-      // to the legacy localStorage key for projects saved before this change.
+      // to the legacy localStorage key for older projects.
       let uiPreferences = project.uiPreferences ?? null;
       if (uiPreferences === null) {
         try {
@@ -1040,7 +1040,7 @@ export async function exportSingleProject(projectId) {
     }
 
     // Prefer uiPreferences from the project record (authoritative); fall back
-    // to the legacy localStorage key for projects saved before this change.
+    // to the legacy localStorage key for older projects.
     let uiPreferences = project.uiPreferences ?? null;
     if (uiPreferences === null) {
       try {

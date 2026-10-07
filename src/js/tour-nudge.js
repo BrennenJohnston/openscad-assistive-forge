@@ -1,27 +1,23 @@
 /**
- * Welcome tour nudge (U-27, UF-22) — the app asks, once per load, whether
+ * Welcome tour nudge — the app asks, once per load, whether
  * the user would like the Main Page Tour, and shows them where the tour
  * starts from.
  *
- * The report behind it: the welcome card's tip "is still not highlighted well
- * enough". MEASURED at P0 and that is exactly right — at 1400x1024 in Forge
- * the card's Start button sits at y=1026 inside a 1024px window, below the
- * fold, so the tip decorates something nobody has scrolled to. This module
- * brings the tutorial menu onto the screen first, lights it through a dimmed
- * page, outlines the Start button, and asks in a centered dialog.
+ * At 1400x1024 in Forge the card's Start button sits at y=1026 inside a
+ * 1024px window, below the fold, so a tip alone would decorate something
+ * nobody has scrolled to. This module brings the tutorial menu onto the
+ * screen first, lights it through a dimmed page, outlines the Start button,
+ * and asks in a centered dialog.
  *
- * Q-52 (owner, 2026-08-15, with the mock on screen):
- *  (a) it shows while the welcome family is NOT completed and not suppressed.
- *      Started-but-unfinished still nudges, which is the owner's "until it
- *      registers as completed" read literally.
+ * The rules:
+ *  (a) it shows while the welcome family is not completed and not
+ *      suppressed; started-but-unfinished still nudges.
  *  (b) once per app load, not once per arrival at the welcome page.
- *  (c) the modal is the attention device while it is armed, so the card wears
- *      no tip underneath it; the tip takes over the moment the modal is
- *      dismissed. Pressing "Dismiss tip" on the card counts as a no and stops
- *      the modal for good. Completion still hands the tip to Beginners Start
- *      Here (the Q-44a chain, untouched). THIS SUPERSEDES Q-44a's rule that
- *      the welcome card wears the tip first.
- *  (d) the copy below, approved verbatim.
+ *  (c) the modal is the attention device while it is armed, so the card
+ *      wears no tip underneath it; the tip takes over the moment the modal
+ *      is dismissed. Pressing "Dismiss tip" on the card counts as a no and
+ *      stops the modal for good. Completion still hands the tip to
+ *      Beginners Start Here.
  *
  * Sequencing: like the spotlight, this waits on the first-visit gate. Inside
  * the inert, aria-hidden #app the dialog would be unreachable and its focus
@@ -42,16 +38,15 @@ const WELCOME_FAMILY = 'welcome';
 const SCROLL_MARGIN = 16;
 
 // Everything that paints above a z:1000 dialog, or would be a second dialog.
-// The first version of this release shipped without the wait and it showed:
-// the WASM loading overlay (z:10000) sat on top of the nudge with "Loading
-// OpenSCAD Engine" printed across its buttons. That is the same hazard the
-// FIRST-VISIT GATE comment block in main.js documents. Both overlays are
-// created and removed rather than toggled, and both are removed on the
-// failure path too, so waiting for them cannot hang on a broken engine.
+// Without the wait, the WASM loading overlay (z:10000) would sit on top
+// of the nudge with "Loading OpenSCAD Engine" printed across its buttons,
+// the same hazard the first-visit gate comment block in main.js
+// documents. Both overlays are created and removed rather than toggled,
+// and both are removed on the failure path too, so waiting for them
+// cannot hang on a broken engine.
 const COVERING_SELECTOR =
   '#wasmLoadingOverlay, #processingOverlay, .friendly-error-modal';
 
-// D-35: every string owner-approved verbatim 2026-08-15 (Q-52d, pack A).
 const COPY = {
   title: 'Take a quick tour of this page?',
   body: 'There is more on this page than it first looks. The Main Page Tour walks you through it in about two minutes, and you can leave it at any time.',
@@ -73,7 +68,7 @@ function suppressTourNudge() {
 }
 
 /**
- * Q-52a/c: the welcome tour is unfinished, no explicit no has been given, the
+ * The welcome tour is unfinished, no explicit no has been given, the
  * welcome surface is what is on screen, and no tour is already running.
  * `dismissed` is the registry field the card's own "Dismiss tip" writes.
  *
@@ -125,7 +120,7 @@ function waitForClearScreen() {
 }
 
 /**
- * Bring the tutorial menu onto the screen. MEASURED at P0: without this the
+ * Bring the tutorial menu onto the screen. Without this the
  * Start button is below the fold at the most ordinary desktop size, so the
  * modal would point at something the user cannot see. The welcome screen is
  * its own scroll container, not the document.
@@ -147,22 +142,17 @@ function scrollMenuIntoView(card) {
  * Put the page back where the user was before the nudge scrolled it, and
  * land them on the Main Page heading.
  *
- * Q-52c (owner, 2026-08-15) signed "Not now hands over to the card tip,
- * keeps focus [on the tour Start button]". The owner's directive of
- * 2026-08-27 (line 3) SUPERSEDES the landing half of that: scrollMenuIntoView
- * runs before the dialog opens, so answering "no" used to leave the visitor
- * looking at the tour cards with "Open or start a project" and Saved Projects
- * scrolled off the top - MEASURED at 1400x1024 before this change:
- * #welcomeScreen.scrollTop 683, #features-heading at -486px, Saved Projects
- * at -359px. Q-52's other parts (ask until finished, once per load,
- * dialog-first, Dismiss-tip counts as a no, the D-35 pack-A copy) stand.
+ * "Not now" hands over to the card tip. scrollMenuIntoView runs before the
+ * dialog opens, so without this, answering "no" would leave the visitor
+ * looking at the tour cards with "Open or start a project" and Saved
+ * Projects scrolled off the top (at 1400x1024, #welcomeScreen.scrollTop
+ * 683, #features-heading at -486px, Saved Projects at -359px).
  *
- * There is deliberately NO live-region announcement here. The heading is
- * focusable and its accessible name is "Main Page", so moving focus to it IS
- * the announcement, in semantic HTML rather than ARIA. Adding a second voice
- * would land inside the welcome spotlight's own polite announcement and one
- * would cancel the other (the IR-9 debounce lesson) - measured on the live
- * region across the whole dismissal, the spotlight's tip is the message that
+ * There is deliberately no live-region announcement here. The heading is
+ * focusable and its accessible name is "Main Page", so moving focus to it
+ * is the announcement, in semantic HTML rather than ARIA. A second voice
+ * would land inside the welcome spotlight's own polite announcement and
+ * one would cancel the other; the spotlight's tip is the message that
  * needs the air.
  */
 function returnToTopOfMainPage() {
@@ -233,8 +223,8 @@ function buildModal() {
  *
  * @param {(id: string, options?: Object) => void} startTutorial
  * @returns {Promise<{startedTour: boolean}>} Resolves after the dialog is
- *   gone, so the welcome spotlight knows when it may decorate the card
- *   (Q-52c). The outcome is reported explicitly rather than read back from
+ *   gone, so the welcome spotlight knows when it may decorate the card.
+ *   The outcome is reported explicitly rather than read back from
  *   the registry, because startTutorial is async and can stop to ask its own
  *   questions before it records the tour as opened.
  */
@@ -279,7 +269,7 @@ function showNudge(startTutorial) {
       // "Yes" lands on the button the outline was pointing at; "no" - the
       // Not now button, Escape and a backdrop click, which are one gesture
       // with one meaning - goes back to the top of the Main Page instead
-      // (directive line 3; see returnToTopOfMainPage). Never <body> either way.
+      // (see returnToTopOfMainPage). Never <body> either way.
       if (startRequested || !returnToTopOfMainPage()) {
         tourBtn.focus();
       }

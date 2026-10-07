@@ -1,7 +1,6 @@
 /**
- * Axis tick + numeral overlay — a transcription of desktop OpenSCAD
- * 2021.01's scale markers (U-11, UF-7; owner-approved feature table +
- * Amendment 1, 2026-08-11).
+ * Axis tick + numeral overlay: a transcription of desktop OpenSCAD
+ * 2021.01's scale markers.
  *
  * Source of truth: GLView.cc `showScalemarkers()` + `decodeMarkerValue()`
  * (reference checkout `openscad-openscad-2021.01`). Everything scales from
@@ -13,7 +12,7 @@
  *   - a number on every 10th tick, plus one every 2nd tick while
  *     l / 10^floor(log10(l)) < 3 (the "few majors visible" rule)
  *   - minor tick length l/60, major l/30 — one-sided arms: X ticks extend
- *     toward −Y, Y and Z ticks toward −X; numbers sit on the OPPOSITE side
+ *     toward −Y, Y and Z ticks toward −X; numbers sit on the opposite side
  *   - digits are line-segment glyphs (a pseudo-7-segment vector font, the
  *     `decodeMarkerValue` vertex tables verbatim): glyph height l/60 in a
  *     1.25·(l/60) box, width l/120, offset l/240 off the axis, char pitch
@@ -21,14 +20,13 @@
  *     (mirrored); Z numbers in XZ, digits rotated and stacked along the
  *     axis. There are no textures and no billboards: the numerals live in
  *     the world, foreshorten with the view, and depth-test behind solid
- *     geometry exactly like the ticks (the U-11 order).
+ *     geometry exactly like the ticks.
  *
- * Colors are resolved scheme-first (U-13): a Classic viewport scheme
- * paints with its own transcribed desktop `axes` color from
- * PREVIEW_COLORS; app themes fall back to `--color-text-primary` read
- * from BODY at build time (Classic's token remap is body-scoped while the
- * theme attribute sits on <html> — an html-level read was the U-13
- * defect).
+ * Colors are resolved scheme-first: a Classic viewport scheme paints with
+ * its own transcribed desktop `axes` color from PREVIEW_COLORS; app themes
+ * fall back to `--color-text-primary` read from <body> at build time
+ * (Classic's token remap is body-scoped while the theme attribute sits on
+ * <html>, so an html-level read would miss it).
  *
  * The one deliberate deviation from desktop: XY-plane content is lifted
  * +0.05 mm because our scene can show a ground grid at z=0 (desktop has
@@ -63,7 +61,7 @@ const FALLBACK_DARK_HEX = 0xdddddd;
  *
  * Scheme-first: when `themeKey` is a Classic viewport scheme, the scheme's
  * own transcribed `axes` color wins — the marks belong to the scheme, not
- * to the app theme (U-13). A scheme entry without a transcribed value
+ * to the app theme. A scheme entry without a transcribed value
  * falls through to the token read below (recorded gap; none today).
  *
  * @param {string} themeKey         Current preview theme (e.g. 'dark', 'classic').
@@ -86,7 +84,7 @@ export function resolveAxisMarkColor(themeKey, docRef) {
 
   // Read the token off <body>, not <html>: theme tokens on <html> inherit
   // down into <body>, so the value is the same for the app themes — but
-  // Classic's remap is body-scoped and only exists there (U-13). Body can
+  // Classic's remap is body-scoped and only exists there. Body can
   // be briefly null while <head> is still parsing; fall back to <html>.
   const el = doc?.body ?? doc?.documentElement;
   if (!el?.ownerDocument?.defaultView?.getComputedStyle) {
@@ -120,7 +118,7 @@ export function computeScale(distanceMm) {
   // Viewport-Control panel re-derives the position through a rotation
   // matrix, so a typed 1000 arrives as 999.9999999999992 and a bare
   // floor(log10) would drop a whole decade (600 ticks instead of 60 —
-  // caught by the UF-7 e2e zoom probe). Desktop C++ never sees this
+  // caught by the e2e zoom probe). Desktop C++ never sees this
   // because its viewer_distance stays a clean scalar.
   const lAdjusted = Math.pow(10, Math.floor(Math.log10(l) + 1e-9));
   return {
@@ -164,8 +162,8 @@ export function buildAxisTickOverlay(three, opts = {}) {
 
   const group = new three.Group();
   group.name = '__axisTickOverlay';
-  // Deliberately NO renderOrder and no depth opt-outs anywhere below:
-  // marks hidden behind solid geometry are the feature (U-11).
+  // Deliberately no renderOrder and no depth opt-outs anywhere below:
+  // marks hidden behind solid geometry are the feature.
 
   const lineMat = new three.LineBasicMaterial({ color: colorHex });
   const dashMat = new three.LineDashedMaterial({
@@ -192,7 +190,7 @@ export function buildAxisTickOverlay(three, opts = {}) {
     '__axisTickLinesNeg'
   );
   // Dashes are computed from per-vertex distances; without this the
-  // dashed material renders solid (the R-IV lesson).
+  // dashed material renders solid.
   dashed.segments.computeLineDistances();
   const digits = makeSegments(marker.digits, lineMat, '__axisTickDigits');
 

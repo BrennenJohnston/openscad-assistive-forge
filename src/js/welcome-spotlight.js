@@ -1,22 +1,20 @@
 /**
- * Welcome spotlight (U-23 UF-16, U-24 UF-17) — a passive attention
- * affordance on ONE welcome card at a time, while its tutorial family was
+ * Welcome spotlight — a passive attention
+ * affordance on one welcome card at a time, while its tutorial family was
  * never opened, never completed, and never dismissed.
  *
- * Precedence (Q-44a): the Main Page Tour card wears the tip first.
+ * Precedence: the Main Page Tour card wears the tip first.
  * Completing that tour hands the spotlight to the Beginners Start Here
- * card immediately (the U-24 chain, once); opening it without finishing
+ * card immediately (the completion chain, once); opening it without finishing
  * or dismissing the tip hands over on the next visit instead. Once the
  * welcome family carries any record, the Beginners card wears the tip
  * while the intro family is untouched.
  *
- * REVISED by Q-52c (UF-22): while the tour nudge is on screen the welcome
- * card wears no tip, because the dialog is already asking the same question
- * over the top of it. The tip appears when the dialog is answered. Q-44a's
- * "the welcome card wears the tip first" is superseded to that extent and
- * holds unchanged everywhere else, including the completion chain.
+ * While the tour nudge is on screen the welcome card wears no tip, because
+ * the dialog is already asking the same question over the top of it. The
+ * tip appears when the dialog is answered.
  *
- * Deliberately NOT a tour: no veil, no focus trap, no scroll change, no
+ * Deliberately not a tour: no veil, no focus trap, no scroll change, no
  * step machinery. The whole treatment is a halo on the existing card plus
  * a tag strip holding a dismiss button, and one polite announcement. The
  * same cards serve both interfaces' welcome surfaces, so decorating one
@@ -39,10 +37,7 @@ import { announce } from './announcer.js';
 const WELCOME_FAMILY = 'welcome';
 const INTRO_FAMILY = 'intro';
 
-// D-35: tag, dismiss and the Beginners announcement owner-approved
-// verbatim 2026-08-13 (UF-16 Q-43); the welcome announcement approved
-// 2026-08-13 (UF-17 Q-44). The tag is shared — only one card wears it
-// at a time.
+// The tag is shared: only one card wears it at a time.
 const TAG_TEXT = 'New here? Start with this tour';
 const DISMISS_LABEL = 'Dismiss tip';
 const ANNOUNCEMENT_WELCOME =
@@ -116,13 +111,13 @@ function decorateCard(familyId, tutorialId, announcement) {
 
 /**
  * Decorate the right card once the first-visit gate has resolved, and arm
- * the U-24 completion chain.
+ * the completion chain.
  *
  * @param {Object} options
  * @param {() => Promise<void>} options.waitForFirstVisitAcceptance - The
  *   main.js gate; resolves immediately on ordinary boots.
  * @param {() => Promise<{startedTour: boolean}|void>} [options.waitForTourNudge]
- *   Q-52c: resolves once the UF-22 nudge has been answered, or immediately
+ *   Resolves once the tour nudge has been answered, or immediately
  *   when it never showed. Optional so the module still stands alone.
  */
 export async function initWelcomeSpotlight({
@@ -134,7 +129,7 @@ export async function initWelcomeSpotlight({
   await waitForFirstVisitAcceptance();
   const nudge = waitForTourNudge ? await waitForTourNudge() : null;
 
-  // Q-44a still says a tour merely OPENED hands the tip over on the next
+  // A tour merely opened hands the tip over on the next
   // visit, not on this one. Starting the tour from the nudge opens it during
   // this very load, so neither card is decorated underneath the running tour.
   // The chain below is armed either way, so finishing still hands over.
@@ -146,7 +141,7 @@ export async function initWelcomeSpotlight({
     }
   }
 
-  // The U-24 chain, armed independently of the decoration: the 'opened'
+  // The completion chain, armed independently of the decoration: the 'opened'
   // write at tour start already stripped the welcome card's tag (and its
   // listener) long before 'completed' can arrive. Fires at most once;
   // the intro check happens at fire time so a user already inside the

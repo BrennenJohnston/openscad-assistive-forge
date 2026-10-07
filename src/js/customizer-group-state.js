@@ -1,12 +1,11 @@
 /**
- * Per-file Customizer group expand/collapse state (F5).
+ * Per-file Customizer group expand/collapse state.
  *
- * Default behavior for a freshly-loaded file is "all groups collapsed"
- * — matches the OpenSCAD desktop-style collapsed Customizer the
- * stakeholder asked for in the 2026-05-15 Volkswitch feedback. After
- * the user has expanded one or more groups, the set of open group IDs
- * is persisted in localStorage keyed by the file identifier so a
- * reload restores their work-in-progress focus.
+ * Default behavior for a freshly-loaded file is "all groups collapsed",
+ * matching the desktop OpenSCAD Customizer. After the user has expanded
+ * one or more groups, the set of open group IDs is persisted in
+ * localStorage keyed by the file identifier so a reload restores their
+ * work-in-progress focus.
  *
  * Storage key shape: `openscad-forge-customizer-groups-{fileId}`
  * Stored value: `{"open":["groupId1","groupId2",...]}` or `null`.
@@ -53,7 +52,7 @@ function sanitiseFileId(fileId) {
 /**
  * Load the set of open group IDs for a given file. Returns `null` when
  * no preference has been saved yet — callers should treat that as "use
- * the F5 default of all-collapsed".
+ * the default of all-collapsed".
  *
  * @param {string} fileId
  * @returns {Set<string>|null}

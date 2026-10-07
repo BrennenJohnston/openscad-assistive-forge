@@ -110,7 +110,7 @@ export function initCameraPanelController(options = {}) {
   function setupCameraControlButtons() {
     const rotationSpeed = 0.1;
     const panSpeed = 6;
-    // Same step as the 3D view toolbar and the View menu (D-19)
+    // Same step as the 3D view toolbar and the View menu
     const zoomSpeed = CAMERA_ZOOM_STEP;
 
     // Helper to get the current preview manager
@@ -238,8 +238,8 @@ export function initCameraPanelController(options = {}) {
     });
 
     // Desktop reset view button. Restores the default pose rather than fitting
-    // the model, so the announcement it already made is now true and the
-    // control means the same thing as View ▸ Reset View everywhere (G4).
+    // the model, so its announcement is true and the control means the same
+    // thing as View ▸ Reset View everywhere.
     document
       .getElementById('cameraResetView')
       ?.addEventListener('click', () => {

@@ -53,7 +53,7 @@ export const DEFAULT_SHORTCUTS = {
     key: 'd',
     description: 'Download the rendered model',
   },
-  // Editor (C-38)
+  // Editor
   toggleExpertMode: {
     key: 'e',
     ctrl: true,
@@ -124,10 +124,10 @@ export const DEFAULT_SHORTCUTS = {
 
   // Parameter controls
   //
-  // Undo/redo and the three below used to live in a separate keydown listener
-  // in main.js that this registry knew nothing about, so they could not be
-  // seen in the shortcuts modal, could not be rebound, and Ctrl+Z fired the
-  // parameter undo even while the user was typing in the code editor (G7).
+  // Undo/redo and the three below live in this registry, not in a separate
+  // keydown listener, so they show in the shortcuts modal, can be rebound,
+  // and Ctrl+Z does not fire the parameter undo while the user is typing in
+  // the code editor.
   undo: {
     key: 'z',
     ctrl: true,

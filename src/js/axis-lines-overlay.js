@@ -1,10 +1,10 @@
 /**
- * Axis lines overlay (P12, zoom-length since UF-7).
+ * Axis lines overlay.
  *
- * Desktop OpenSCAD draws each axis through the origin in BOTH directions,
+ * Desktop OpenSCAD draws each axis through the origin in both directions,
  * with the negative half dashed so you can tell which way is which at a
- * glance (OpenSCAD_1.png). three.js's AxesHelper draws the positive halves
- * only, so the negative halves were not merely undashed — they were absent.
+ * glance. three.js's AxesHelper draws the positive halves only, which is
+ * why this overlay exists.
  *
  * Arm length is the camera distance `l` (GLView.cc `showAxes()`:
  * `auto l = cam.zoomValue()`), so at any zoom the axes span the view and
@@ -13,13 +13,13 @@
  * scales with `l` for the same reason the ticks' does: desktop stipples in
  * screen pixels, and a fixed world-unit dash vanishes at far zoom.
  *
- * Color follows the tick overlay's theme resolution (Q-22, owner decision
- * 2026-08-09): upstream's axes are black, and AxesHelper's red/green/blue
- * failed contrast — pure green measured 1.36:1 against the Cornfield
- * background where SC 1.4.11 wants 3:1. Resolving --color-text-primary gives
- * near-black on light themes (the desktop look) while dark themes keep
- * visible axes, and lines and ticks always match. Orientation reads from
- * the dashing (negative halves) and the corner triad's letters.
+ * Color follows the tick overlay's theme resolution: upstream's axes are
+ * black, and AxesHelper's red/green/blue fail contrast (pure green
+ * measures 1.36:1 against the Cornfield background where SC 1.4.11 wants
+ * 3:1). Resolving --color-text-primary gives near-black on light themes
+ * (the desktop look) while dark themes keep visible axes, and lines and
+ * ticks always match. Orientation reads from the dashing (negative halves)
+ * and the corner triad's letters.
  *
  * @license GPL-3.0-or-later
  */

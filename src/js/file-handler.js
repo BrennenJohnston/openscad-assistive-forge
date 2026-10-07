@@ -184,8 +184,8 @@ export const PROGRAM_DEFINITIONS = programDefinitions();
  * content — are extension-checked. Saved projects and manifest loads pass
  * synthetic { name } objects (whose name can be a display name like
  * "My Tablet Keyguard Designer" with no extension) or pre-loaded content,
- * and must never be blocked. Regression guard for the bug where this
- * check sat outside the isActualFileUpload branch.
+ * and must never be blocked, which is why the check sits inside the
+ * isActualFileUpload branch.
  *
  * Exported for unit testing.
  *
@@ -205,11 +205,11 @@ export function shouldProcessFile(file, content, fileName) {
 /**
  * Show a full-screen processing overlay for long operations.
  *
- * IMPORTANT: This overlay renders at z-index 10000, which is ABOVE all
- * modals (z-index 1000). Callers MUST ensure no blocking modal (especially
- * the first-visit disclosure) is open when invoking this function, or the
- * modal's buttons will be unreachable. Always await
- * waitForFirstVisitAcceptance() before calling this.
+ * This overlay renders at z-index 10000, above all modals (z-index 1000).
+ * Callers must ensure no blocking modal (especially the first-visit
+ * disclosure) is open when invoking this function, or the modal's buttons
+ * will be unreachable. Always await waitForFirstVisitAcceptance() before
+ * calling this.
  *
  * @param {string} message - Primary message
  * @param {Object} [opts]
@@ -571,7 +571,7 @@ export function initFileHandler({
       typeof file?.name === 'string' && file.name.trim().length > 0
         ? file.name
         : '';
-    // D-199: a manifest link or Reload passes content with no file object,
+    // A manifest link or Reload passes content with no file object,
     // but it does name the main file, which is what a ZIP goes by as well.
     let fileName = rawFileName || mainFilePathArg || 'example.scad';
     let fileContent = content;
@@ -1000,10 +1000,10 @@ export function initFileHandler({
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
-      // F5: tell the Customizer pane which file is active so per-file
+      // Tell the Customizer pane which file is active so per-file
       // expand/collapse state persists across reloads. The first render
       // pulls that state from localStorage; if none exists, all groups
-      // start collapsed (matches the stakeholder spec).
+      // start collapsed (as on the desktop).
       setCustomizerFileId(fileName);
       const currentValues = renderParameterUI(
         extracted,
@@ -1318,10 +1318,10 @@ export function initFileHandler({
           `Ready - ${paramCount} parameters loaded (${Object.keys(urlParams).length} from URL)`
         );
 
-        // A NOTICE, not a status (IR-Q16). D-98 made this sentence reachable;
-        // measured, it then stood for about 660 ms before the render replaced
-        // it, so someone who looked up late never learned their number had
-        // changed. The notice stays until dismissed.
+        // A notice, not a status: a status line stands for about 660 ms
+        // before the render replaces it, so someone who looked up late
+        // would never learn their number had changed. The notice stays until
+        // dismissed.
         if (Object.keys(adjustments).length > 0) {
           const { createParameterNotices, describeAdjustments } =
             await import('./parameter-notices.js');
@@ -1391,7 +1391,7 @@ export function initFileHandler({
         }
       }
 
-      // D-200: a link that applies a preset next asks for the first preview
+      // A link that applies a preset next asks for the first preview
       // itself; one started here would render values it is about to replace.
       if (autoPreviewController && !deferInitialPreview) {
         if (getAutoPreviewEnabled()) {
@@ -1649,10 +1649,10 @@ export function initFileHandler({
   });
 
   /**
-   * Put a project's saved reference-overlay placement back (DP-5).
+   * Put a project's saved reference-overlay placement back.
    *
    * A project with no settings file is the ordinary case and is left alone:
-   * the app-level overlay preferences still apply, exactly as before.
+   * the app-level overlay preferences apply.
    *
    * @param {string} projectId
    */
@@ -1833,7 +1833,7 @@ export function initFileHandler({
 
       getOverlayGridCtrl().connectPreviewManager(previewManager);
       getDisplayOptionsCtrl().connectPreviewManager(previewManager);
-      // Classic's Viewport-Control panel reads and writes this camera (F4).
+      // Classic's Viewport-Control panel reads and writes this camera.
       getViewportControlPanel()?.connectPreviewManager(previewManager);
 
       const autoBedToggle = document.getElementById('autoBedToggle');
@@ -1874,7 +1874,7 @@ export function initFileHandler({
           const hasSavedColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
           if (modelColorPicker && !hasSavedColor) {
             const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-            // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
+            // Match PREVIEW_COLORS from preview.js (Cornfield gold)
             const PREVIEW_COLORS = {
               light: 0xf9d72c,
               dark: 0x4d9fff,
@@ -1903,7 +1903,7 @@ export function initFileHandler({
   // Public API
   // ------------------------------------------------------------------
 
-  // DP-5: this module is the layer that knows which project is open, so it is
+  // This module is the layer that knows which project is open, so it is
   // the one that tells overlay-settings where to write. Registering here
   // rather than importing file-handler from the overlay controller keeps the
   // two from depending on each other.

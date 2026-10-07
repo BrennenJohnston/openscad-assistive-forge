@@ -64,7 +64,7 @@ export function closeModal(modal) {
   const state = modalStates.get(modal);
 
   if (state) {
-    // Release focus trap and restore focus BEFORE setting aria-hidden.
+    // Release focus trap and restore focus before setting aria-hidden.
     // Keeping a focused element inside an aria-hidden container violates
     // WCAG 4.1.2 and the APG modal dialog pattern.
     state.focusTrap.deactivate();

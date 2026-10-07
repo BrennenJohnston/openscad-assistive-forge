@@ -115,7 +115,7 @@ let wasmInitDurationMs = 0;
  */
 async function ensureOpenSCADModule() {
   if (openscadModule) return openscadModule;
-  // With official WASM, openscadInstance IS the module after ready resolves
+  // With official WASM, openscadInstance is the module after ready resolves
   if (openscadInstance) {
     openscadModule = openscadInstance;
   }
@@ -159,9 +159,9 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
 
     // Integrity check: verify WASM artifacts match the vendored manifest.
     // Guards against corrupted or tampered files before they produce silent
-    // wrong results. Verifies byte size AND the SHA-256 recorded in
-    // INTEGRITY.json (previously only content-length was compared, which
-    // cannot detect same-size tampering). The fetch hits the HTTP/SW cache
+    // wrong results. Verifies byte size and the SHA-256 recorded in
+    // INTEGRITY.json (content length alone cannot detect same-size
+    // tampering). The fetch hits the HTTP/SW cache
     // and the 10.7 MB digest takes milliseconds.
     let integrityData = null;
     try {
@@ -390,7 +390,7 @@ async function mountFonts() {
 
   // Create the font directory structure, one level at a time. Derived from the
   // manifest's mount path so the directory the fonts land in and the path the
-  // UI reports cannot drift apart (F2).
+  // UI reports cannot drift apart.
   const fontPath = FONT_MOUNT_DIR;
   let built = '';
   for (const segment of fontPath.split('/').filter(Boolean)) {
@@ -680,7 +680,7 @@ async function mountFiles(files, options = {}) {
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
 
     try {
-      // S-013: data-URL companion files (images) are decoded to binary
+      // Data-URL companion files (images) are decoded to binary
       // before mounting — see ./mount-content.js (shared with unit tests).
       const fsContent = resolveMountContent(content, {
         onDecodeError: (decodeErr) =>
@@ -808,7 +808,7 @@ async function mountLibraries(libraries) {
 
   ensureDir(baseRoot);
 
-  // D-42 leftovers: this module lives for the whole page, so a library
+  // Leftovers: this module lives for the whole page, so a library
   // mounted for an earlier render stays in the filesystem after the user
   // switches it off - and the next render would resolve its includes from
   // the leftovers and silently succeed instead of naming the cause. Remove
@@ -847,8 +847,7 @@ async function mountLibraries(libraries) {
       if (import.meta.env.DEV)
         console.log(`[Worker FS] Mounting library: ${lib.id} from ${lib.path}`);
 
-      // Fetch library file list from manifest or directory listing
-      // For now, we'll try to mount the library directory recursively
+      // The library's file list comes from its manifest.
       const manifestUrl = `${assetBaseUrl}${lib.path}/manifest.json`;
       const response = await fetch(manifestUrl).catch(() => {
         return null;
@@ -871,10 +870,10 @@ async function mountLibraries(libraries) {
 
         ensureDir(libRoot);
 
-        // AF-12: one archive instead of one request per file (695 for
-        // dotSCAD). Anything wrong on this path - missing archive, corrupt
-        // bytes - is SAID and then the per-file loop below takes over, so
-        // an old deployment without archives keeps working.
+        // One archive instead of one request per file (695 for dotSCAD).
+        // Anything wrong on this path (missing archive, corrupt bytes) is said
+        // and then the per-file loop below takes over, so an old deployment
+        // without archives keeps working.
         let mountedFromArchive = false;
         if (manifest.archive) {
           try {
@@ -1231,7 +1230,8 @@ async function renderWithCallMain(
 
     // Pre-render guard: scan SCAD source for known-crashy functions
     // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)
-    // We emit a WARNING but do NOT block — some uses work; the guard is informational.
+    // We emit a WARNING but do not block: some uses work, so the guard is
+    // informational.
     const riskyFunctions = [];
     if (/\broof\s*\(/m.test(scadContent)) {
       riskyFunctions.push('roof()');
@@ -1279,7 +1279,7 @@ async function renderWithCallMain(
     // Clear accumulated console output for this render
     openscadConsoleOutput = '';
 
-    // S-012: Synthetic missing-file warnings. Scan for include/use directives
+    // Synthetic missing-file warnings. Scan for include/use directives
     // and inject desktop-format warnings for files not found in the virtual FS.
     const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
     const fsSearchPaths = [inputDir, WORK_DIR, '/libraries'].filter(Boolean);
@@ -1636,7 +1636,7 @@ async function render(payload) {
 
     // Mount libraries if provided. An EMPTY list still goes through:
     // mountLibraries also unmounts leftovers from earlier renders, and a
-    // render with every library switched off needs that cleanup most (D-42).
+    // render with every library switched off needs that cleanup most.
     if (Array.isArray(libraries)) {
       if (libraries.length > 0) {
         self.postMessage({
@@ -1681,8 +1681,8 @@ async function render(payload) {
 
     // Always clear previously mounted files before each render to prevent stale
     // file residue across preset switches, even when no new files are provided.
-    // BUG-A fix: conditional cleanup only ran when files were provided, leaving
-    // old companion file aliases mounted across preset changes.
+    // Cleaning up only when files are provided would leave old companion
+    // file aliases mounted across preset changes.
     const _fsClearStart = Date.now();
     clearMountedFiles();
     const _fsClearMs = Date.now() - _fsClearStart;
@@ -1897,7 +1897,7 @@ async function render(payload) {
         triangleCount = parseOffTriangleCount(outputData);
       }
     } else if (outputData instanceof Uint8Array) {
-      // CRITICAL FIX: Uint8Array's .buffer property returns the underlying ArrayBuffer
+      // Uint8Array's .buffer property returns the underlying ArrayBuffer
       // which might be the WASM heap or a larger pre-allocated buffer.
       // We must slice to get only the actual file content.
       outputBuffer = outputData.buffer.slice(
@@ -2021,7 +2021,7 @@ async function render(payload) {
     console.error('[Worker] Render failed:', error);
 
     // Translate error to user-friendly message
-    // Pass the entire error object to translateError which now handles all types
+    // Pass the entire error object to translateError which handles all types
     const translated = translateWorkerError(error);
 
     // Include captured OpenSCAD console output in details so the UI can provide
@@ -2146,12 +2146,11 @@ function getMemoryUsage() {
     };
   }
 
-  // IMPORTANT: heapTotalBytes is the ALLOCATED heap-buffer size, not actual
-  // used bytes. WASM linear memory grows in 64KB pages; once grown it never
+  // heapTotalBytes is the allocated heap-buffer size, not the bytes in
+  // use. WASM linear memory grows in 64KB pages; once grown it never
   // shrinks. There is no `limit` value available from the WASM runtime, so
-  // we deliberately do NOT publish a percent/limit (BR-4: drop the
-  // fictional memory percentage). Consumers should use the absolute
-  // `usedMB` and the worker's own HIGH_MEMORY warning instead.
+  // this deliberately publishes no percent or limit. Consumers should use
+  // the absolute `usedMB` and the worker's own HIGH_MEMORY warning instead.
   const heapTotalBytes = openscadModule.HEAP8.length;
   const heapTotalMB = Math.round(heapTotalBytes / 1024 / 1024);
 

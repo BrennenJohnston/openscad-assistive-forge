@@ -1,12 +1,12 @@
 /**
- * The key a reopened editor trusts a stored result by (DP-81, D-175).
+ * The key a reopened editor trusts a stored result by.
  *
  * Apply stores the combined drawing beside the choices it was made from. On
  * a reopen the workspace restores the choices and asks whether the stored
- * drawing is still THEIR result: the same roles, offsets, deletions and
+ * drawing is still their result: the same roles, offsets, deletions and
  * layers, at the same design width, on the same raw drawing. When it is,
  * the drawing is painted from the store and Apply is ready at once; when
- * anything differs, the shapes are combined again as they always were.
+ * anything differs, the shapes are combined again.
  *
  * The key is a string so it can be saved with a project and compared with
  * one equality; nothing is ever decoded from it.
@@ -27,11 +27,11 @@ export function hashText(text) {
 
 /**
  * @param {object} parts
- * @param {Array} parts.roles - Role per ORIGINAL index (a sparse array)
- * @param {Array} parts.offsets - Offset in mm per ORIGINAL index (sparse)
+ * @param {Array} parts.roles - Role per original index (a sparse array)
+ * @param {Array} parts.offsets - Offset in mm per original index (sparse)
  * @param {number[]} parts.deleted - Original indices removed from the list
- * @param {Array|null} parts.layers - Layer per ORIGINAL index, or null when
- *   no stack was built (D-142: a column of ones is not a stack)
+ * @param {Array|null} parts.layers - Layer per original index, or null when
+ *   no stack was built (a column of ones is not a stack)
  * @param {number} parts.designWidthMm - The width the editor measures at
  * @param {string} parts.svg - The raw drawing the choices belong to
  * @returns {string}

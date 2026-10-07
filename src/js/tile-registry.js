@@ -1,26 +1,24 @@
 /**
  * The tile registry: what Forge ships on its welcome screen, as data.
  *
- * Adding an example used to mean editing several places that had no way of
- * knowing about each other, and they drifted: `logo-plate`'s own
- * `manifest.json` declared `sample-logo.svg`, the file sat on disk, and the
- * loader never fetched it because the loader reads THIS list. The first
- * preview errored with "Can't open file '/tmp/sample-logo.svg'" while the
- * status line said "Preview ready" (D-97). Two sources of truth, one of them
- * silently ignored.
+ * Several places that cannot know about each other drift: an example's
+ * own `manifest.json` can declare a file that sits on disk and still never
+ * be fetched, because the loader reads this list, so the first preview
+ * errors with "Can't open file ..." while the status line says "Preview
+ * ready".
  *
- * THE DECISION, recorded so it can be reversed: this module is the single
- * source of truth AT RUNTIME. A per-example `manifest.json` remains the
- * authoring surface - it is what a contributor writes and what IR-8's
- * validator reads - but nothing loads from it directly. The validator's job is
- * to prove the two agree, which turns a silent drift into a failing check.
- * Reversal: make the loader read `manifest.json` and derive this at build time.
+ * The decision, stated so it can be reversed: this module is the single
+ * source of truth at runtime. A per-example `manifest.json` remains the
+ * authoring surface (it is what a contributor writes and what
+ * scripts/validate-example.mjs reads), but nothing loads from it directly.
+ * The validator's job is to prove the two agree, which turns a silent
+ * drift into a failing check. Reversal: make the loader read
+ * `manifest.json` and derive this at build time.
  *
- * WHAT IS DELIBERATELY NOT HERE: the welcome cards' markup. See the IR-7
- * release record - those four cards are bespoke editorial content (attribution
- * links with screen-reader spans, per-card disclosure lists, a tutorial video
- * link, variant selects), not repeatable tiles, and templating them could not
- * meet this release's own no-visible-change bar.
+ * Deliberately not here: the welcome cards' markup. Those four cards are
+ * bespoke editorial content (attribution links with screen-reader spans,
+ * per-card disclosure lists, a tutorial video link, variant selects), not
+ * repeatable tiles.
  *
  * @license GPL-3.0-or-later
  */
@@ -59,13 +57,12 @@ const EXAMPLES = {
     name: 'logo_plate.scad',
     description: 'Logo Plate (SVG Import)',
     manifest: '/examples/logo-plate/manifest.json',
-    // D-97: the example's own manifest.json has always declared this file and
-    // the file has always been on disk, but the loader reads THIS list - so
-    // the first preview errored with "Can't open file '/tmp/sample-logo.svg'"
-    // while the status said "Preview ready".
+    // The example's own manifest.json declares this file, but the loader
+    // reads this list: without the entry, the first preview would error with
+    // "Can't open file '/tmp/sample-logo.svg'".
     additionalFiles: [
       '/examples/logo-plate/sample-logo.svg',
-      // DP-9. The shared gallery set, copied into this tile rather than
+      // The shared gallery set, copied into this tile rather than
       // borrowed from another: a tile that reaches into a sibling's folder
       // breaks the moment that sibling is renamed or dropped.
       '/examples/logo-plate/smiley.svg',
@@ -76,7 +73,7 @@ const EXAMPLES = {
       '/examples/logo-plate/sun.svg',
       '/examples/logo-plate/presets/large-plate.json',
       '/examples/logo-plate/presets/small-plate.json',
-      // DP-60. Example passes for the layered mode, as q-charm carries, so
+      // Example passes for the layered mode, as q-charm carries, so
       // desktop OpenSCAD has something to point the layer parameters at. The
       // parameters default to empty: the stack is off until someone fills
       // one in.
@@ -91,15 +88,14 @@ const EXAMPLES = {
     description: 'Charm Designer',
     manifest: '/examples/nasif-charm-maker/manifest.json',
     additionalFiles: [
-      // DP-9. The default design, BESIDE the .scad, so desktop OpenSCAD can
-      // open it: import("heart.svg") looked in the model's own folder and the
-      // only copy lived in svg-library/. Desktop printed
-      // "ERROR: Can't open file ... heart.svg" and then rendered a blank
-      // charm anyway, reporting Status: NoError and writing an STL.
+      // The default design, beside the .scad, so desktop OpenSCAD can open
+      // it: import("heart.svg") looks in the model's own folder, and without
+      // this copy desktop would print "ERROR: Can't open file ... heart.svg"
+      // and then render a blank charm anyway, reporting Status: NoError.
       '/examples/nasif-charm-maker/heart.svg',
       '/examples/nasif-charm-maker/presets/large-pendant.json',
       '/examples/nasif-charm-maker/presets/small-pendant.json',
-      // DP-61. Example passes for the layered mode, as q-charm carries, so
+      // Example passes for the layered mode, as q-charm carries, so
       // desktop OpenSCAD has something to point the layer parameters at. The
       // parameters default to empty: the stack is off until someone fills
       // one in.
@@ -151,21 +147,15 @@ const EXAMPLES = {
       '/examples/q-charm/q_Charm_L.dxf',
       '/examples/q-charm/presets/large-charm.json',
       '/examples/q-charm/presets/small-charm.json',
-      // DP-8. Example passes for the layered mode, so desktop OpenSCAD has
+      // Example passes for the layered mode, so desktop OpenSCAD has
       // something to point the layer parameters at. The parameters themselves
       // default to empty: the tiered mode is off until someone fills one in.
       '/examples/q-charm/design_layer_1.svg',
       '/examples/q-charm/design_layer_2.svg',
       '/examples/q-charm/design_layer_3.svg',
-      // D-106, closed in DP-14. This list used to reach into
-      // nasif-charm-maker/svg-library/ for twelve files while q-charm's own
-      // manifest declared six by bare name. Both lists produced `smiley.svg`
-      // in the WASM filesystem, so the gallery worked and the disagreement
-      // stayed invisible - until you rename or drop the sibling. The six
-      // copies have been in this tile's folder since D-109; these are they,
-      // and manifest and registry now name the same files. The other six the
-      // borrowed list carried (paw, music-note, moon, flower, diamond, leaf)
-      // were never in q-charm's gallery and are gone with it.
+      // The six gallery files in this tile's own folder, the same files its
+      // manifest names: a list that reaches into a sibling's folder breaks the
+      // moment that sibling is renamed or dropped.
       '/examples/q-charm/smiley.svg',
       '/examples/q-charm/heart.svg',
       '/examples/q-charm/star.svg',
@@ -210,7 +200,7 @@ export function programDefinitions() {
 /**
  * Every file an example needs beyond its main .scad, as bare names.
  *
- * This is what lets a validator ask the question that would have caught D-97:
+ * This is what lets a validator ask the question that catches this drift:
  * does the example's own manifest.json declare anything this list does not
  * carry? Paths are stripped because a manifest names files, not URLs.
  *

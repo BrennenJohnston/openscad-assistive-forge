@@ -676,9 +676,9 @@ function stripLargeProjectFilesForLS(project) {
 /**
  * Fetch a project record exactly as stored — batched projects keep
  * projectFiles: null and inline projects keep their JSON string. Metadata
- * writes (touch/update) MUST use this instead of getProject(): re-inlining a
- * hydrated 200-file map once produced a single 218MB put() that Chromium
- * rejected, killing folder-project loads.
+ * writes (touch/update) must use this instead of getProject(): re-inlining
+ * a hydrated 200-file map can produce a single put() past Chromium's
+ * per-value cap, which rejects it.
  */
 async function getRawProjectRecord(id) {
   if (storageType === 'indexeddb' && db) {
@@ -1025,9 +1025,9 @@ export async function touchProject(id) {
     await ensureInitialized();
 
     // Raw record only: getProject() would hydrate batched projectFiles into an
-    // object, and re-inlining that map here is what once pushed a 211-file
-    // folder project past Chromium's per-value cap. The stored shape (null for
-    // batched, JSON string for inline) is written back untouched.
+    // object, and re-inlining that map here can push a big folder project past
+    // Chromium's per-value cap. The stored shape (null for batched, JSON
+    // string for inline) is written back untouched.
     const record = await getRawProjectRecord(id);
     if (!record) return false;
 
@@ -1150,8 +1150,8 @@ export async function updateProject({
       record.fileSummary = fileSummary || null;
     }
 
-    // Once a project is batched it stays batched — re-inlining a hydrated map
-    // as one record is what once exceeded Chromium's per-value cap.
+    // Once a project is batched it stays batched: re-inlining a hydrated map
+    // as one record can exceed Chromium's per-value cap.
     let filesForBatchedStore = null;
     if (projectFiles !== undefined && isFolderLink) {
       if (import.meta.env.DEV) {
@@ -1208,7 +1208,7 @@ export async function updateProject({
       record.largeFilesInStore &&
       typeof record.projectFiles === 'string'
     ) {
-      // Repair hybrid records produced by the old touch/update re-inline bug.
+      // Repair hybrid records written by older builds' touch/update.
       record.projectFiles = null;
     }
 
@@ -1281,7 +1281,7 @@ export async function deleteProject(id) {
   try {
     await ensureInitialized();
 
-    // Read the record BEFORE deleting so a folder-link's handle key can be
+    // Read the record before deleting so a folder-link's handle key can be
     // cleaned up afterwards.
     const record = await getRawProjectRecord(id);
 

@@ -50,8 +50,8 @@ const FAILED_CHECK_PATTERN =
  * The model's own words for the check that stopped it, or null.
  *
  * Exported for the render error handler, which otherwise reports the
- * CONSEQUENCE (an empty top-level object) and sends people looking for an
- * option that is not there (D-224).
+ * consequence (an empty top-level object) and sends people looking for an
+ * option that is not there.
  *
  * @param {string} text - Error message or raw OpenSCAD output
  * @returns {{message: string}|{condition: string}|null} The check's message,
@@ -224,15 +224,15 @@ const ERROR_PATTERNS = [
 
   // Library errors
   //
-  // This first entry matches what OpenSCAD ACTUALLY prints when an
+  // This first entry matches what OpenSCAD actually prints when an
   // angle-bracket library id will not resolve:
   //   WARNING: Can't open include file 'MCAD/boxes.scad', ...
   //   WARNING: Can't open library 'MCAD/boxes.scad'. in file ...
   // The two entries below it match `use <Lib/x.scad>` and
-  // `include <Lib/x.scad>`, which is source syntax rather than error text, so
-  // neither has ever fired for this failure and it fell through to the generic
-  // "Something Went Wrong ... try resetting parameters to defaults" — the one
-  // thing that is not the cause (D-42).
+  // `include <Lib/x.scad>`, which is source syntax rather than error text,
+  // so they do not fire for this failure; without this entry it would fall
+  // through to the generic "Something Went Wrong ... try resetting
+  // parameters to defaults", the one thing that is not the cause.
   //
   // A path with no folder in it is a companion file, not a library, and is
   // deliberately left to the patterns below: sending someone to the Libraries
@@ -342,13 +342,13 @@ const ERROR_PATTERNS = [
 ];
 
 /**
- * Rich translations keyed on the render worker's error codes (BR-5).
+ * Rich translations keyed on the render worker's error codes.
  *
  * The worker classifies raw stderr into { message, code, raw } using
  * src/worker/error-translations.js; passing that code to translateError()
  * resolves the classification directly instead of re-matching the worker's
- * prose against ERROR_PATTERNS (which previously downgraded several
- * worker-classified errors to the generic fallback).
+ * prose against ERROR_PATTERNS, which would downgrade several
+ * worker-classified errors to the generic fallback.
  *
  * INTERNAL_ERROR and RENDER_FAILED are deliberately absent: they are
  * catch-all codes whose message text may still match a specific legacy
@@ -494,7 +494,7 @@ const DEFAULT_ERROR = {
 /**
  * Translate a technical error message to user-friendly language.
  *
- * When the error carries a worker classification code (BR-5), the rich
+ * When the error carries a worker classification code, the rich
  * TRANSLATIONS_BY_CODE entry wins; the legacy regex path over the message
  * text remains the fallback for uncoded errors and catch-all codes.
  *
@@ -507,7 +507,7 @@ const DEFAULT_ERROR = {
 export function translateError(technicalError, { code, details } = {}) {
   // A named library beats any code the worker assigned. The worker classifies
   // this failure as "unknown module", which is the symptom; the library that
-  // never loaded is the cause, and only the raw output still names it (D-42).
+  // never loaded is the cause, and only the raw output still names it.
   for (const candidate of [technicalError, details]) {
     if (typeof candidate !== 'string' || !candidate) continue;
     const libraryMatch = MISSING_LIBRARY_PATTERN.exec(candidate);
@@ -542,8 +542,8 @@ export function translateError(technicalError, { code, details } = {}) {
   // The raw OpenSCAD output is searched as well as the message, because the
   // worker classifies errors before the main thread ever sees them: a missing
   // library is reported as "Ignoring unknown module", which the worker turns
-  // into prose that no longer contains the failing path, so the specific
-  // cause was lost before this function could name it (D-42).
+  // into prose that no longer contains the failing path, so the message
+  // alone cannot name the specific cause.
   const haystacks = [technicalError];
   if (typeof details === 'string' && details) haystacks.push(details);
 

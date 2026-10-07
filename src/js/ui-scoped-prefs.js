@@ -1,10 +1,10 @@
 /**
- * UI-Scoped Preferences (UF-14, U-25)
+ * UI-Scoped Preferences
  *
- * Forge and Classic hold independently saved VIEWING preferences. Every
- * preference the signed Q-40 table marks PER-UI reads and writes through
- * this facade, which resolves the active interface's namespace at CALL
- * time and keeps one scoped copy per interface:
+ * Forge and Classic hold independently saved viewing preferences. Every
+ * per-interface preference reads and writes through this facade, which
+ * resolves the active interface's namespace at call time and keeps one
+ * scoped copy per interface:
  *
  *   <base key>--forge      e.g. openscad-forge-grid--forge
  *   <base key>--classic    e.g. openscad-forge-grid--classic
@@ -14,17 +14,15 @@
  * build could still read. The double-dash separator cannot collide with
  * any existing single-dash key name.
  *
- * Seeding (Q-40b, owner-signed): one-time and marker-gated. The Forge
- * namespace copies the user's current merged values — they are the user's
- * Forge reality. Classic copies the same values EXCEPT the three rows
- * whose desktop defaults the old first-entry stamp always intended:
- * grid (off), axes (on), axis tick markings (on). Those three are not
- * copied; they fall through to NAMESPACE_DEFAULTS below, so a fresh
- * Classic looks like the desktop out of the box and the old
- * classic-view-defaults-v2 stamp is no longer needed at all.
+ * Seeding: one-time and marker-gated. The Forge namespace copies the
+ * user's current merged values; they are the user's Forge reality.
+ * Classic copies the same values except the three rows whose desktop
+ * defaults differ: grid (off), axes (on), axis tick markings (on). Those
+ * three are not copied; they fall through to NAMESPACE_DEFAULTS below, so
+ * a fresh Classic looks like the desktop out of the box.
  *
- * Code content, parameter values and camera pose are SHARED BY ORDER and
- * never pass through here.
+ * Code content, parameter values and camera pose are shared by every
+ * interface and never pass through here.
  *
  * @license GPL-3.0-or-later
  */
@@ -60,7 +58,7 @@ export const UI_NAMESPACES = Object.freeze(
 );
 
 /**
- * The 23 storage keys the signed Q-40 classification table marks PER-UI.
+ * The 23 per-interface storage keys.
  * The display-* names mirror display-options-controller.js's PREF_PREFIX
  * derivation and auto-rotate/rotate-speed mirror overlay-grid-controller's
  * — same getAppPrefKey generator, and the unit snapshot pins every derived
@@ -108,8 +106,8 @@ const NAMESPACE_DEFAULTS = Object.freeze({
 });
 
 /**
- * The three keys above are also the ones seeding must NOT copy into the
- * Classic namespace (Q-40b): Classic starts at the desktop defaults, not
+ * The three keys above are also the ones seeding must not copy into the
+ * Classic namespace: Classic starts at the desktop defaults, not
  * at the user's merged Forge-era values.
  */
 const CLASSIC_SEED_SKIP = new Set(Object.keys(NAMESPACE_DEFAULTS));
@@ -153,7 +151,7 @@ export function getScopedKey(baseKey, ns = getActiveUiNamespace()) {
 let seedingInProgress = false;
 
 /**
- * One-time split of existing profiles (Q-40b). Marker-gated; safe to call
+ * One-time split of existing profiles. Marker-gated; safe to call
  * from every read/write. Copies current merged values into the Forge
  * namespace, and into Classic except the desktop-default trio. Absent base
  * keys are not written — reads fall through to defaults.

@@ -3,8 +3,7 @@
  *
  * Turns the loaded project's state into a `forge-manifest.json` object for the
  * Publish dialog. Pure and DOM-free so the shape it emits can be pinned by
- * tests: the dialog used to hand out manifests the app's own loader refused,
- * and nothing checked (D-95).
+ * tests.
  *
  * The result is validated by the caller with the loader's own
  * `validateManifest`, so this module and the loader can never drift apart
@@ -42,8 +41,8 @@ export function buildProjectManifest({
   asBundle = null,
 } = {}) {
   const name = uploadName || 'design.scad';
-  // D-47's rule (see presetModelKey in main.js): a project's identity is the
-  // main .scad path INSIDE it, never the archive that delivered it.
+  // As in presetModelKey (main.js), a project's identity is the main .scad
+  // path inside it, never the archive that delivered it.
   const mainPath = mainFilePath || name;
   const isBundle =
     asBundle === null ? name.toLowerCase().endsWith('.zip') : asBundle;

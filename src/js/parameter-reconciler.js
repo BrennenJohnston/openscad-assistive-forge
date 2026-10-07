@@ -1,15 +1,14 @@
 /**
- * Parameter reconciliation after a hand edit to the code (UF-18, Q-45a).
+ * Parameter reconciliation after a hand edit to the code.
  *
- * The Customizer's values and the code's own defaults are two accounts of the
- * same thing, and until UF-18 they could not disagree out loud: the schema was
- * parsed once when the file loaded, and every render then passed `-D` for
- * every parameter in it. Editing a default in the editor changed the source
- * the worker compiled but not the `-D` that overrode it, so the model never
- * moved (U-30).
+ * The Customizer's values and the code's own defaults are two accounts of
+ * the same thing. If the schema were parsed once when the file loaded and
+ * every render passed `-D` for every parameter in it, editing a default in
+ * the editor would change the source the worker compiles but not the `-D`
+ * that overrides it, so the model would never move.
  *
- * The rule the owner signed (Q-45a):
- *   - parameters the user explicitly changed keep their values, and ONLY
+ * The rule:
+ *   - parameters the user explicitly changed keep their values, and only
  *     those are passed as `-D`;
  *   - parameters the user never touched follow the edited code's defaults;
  *   - parameters the code gained appear; parameters it lost retire.

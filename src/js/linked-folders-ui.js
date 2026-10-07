@@ -1,17 +1,16 @@
 /**
- * Linked-folders list for the welcome screen (sub-plan H, phase H2).
+ * Linked-folders list for the welcome screen.
  *
- * The folder-sync store has always been an N-key map, but the UI only ever
- * showed one slot. This module turns those stored handles into a list the
- * user can see and act on: every linked folder is listed, exactly ONE is
- * connected at a time (D-33), and the watcher / write-back keep following
- * whichever that is.
+ * The folder-sync store is an N-key map. This module turns those stored
+ * handles into a list the user can see and act on: every linked folder is
+ * listed, exactly one is connected at a time, and the watcher / write-back
+ * keep following whichever that is.
  *
  * Two things make this safe to render before any permission re-grant:
  * `handle.name` is readable without one, and `isSameEntry()` runs on
  * un-granted handles (rejections are treated as "not a match", the same
  * contract `storage-manager.js` relies on). So no DB migration is needed
- * to name a folder — see D-33.
+ * to name a folder.
  *
  * This module owns no dialogs and no storage calls. The host injects
  * `onOpen` / `onRemove`, does the work, and announces the outcome; the
@@ -31,7 +30,7 @@ import { listFolderHandles, ROOT_KEY } from './folder-handle-store.js';
  * @property {string|null} projectName
  * @property {boolean} isLegacy True when no folder-link record points here —
  *   the pre-multi-folder root slot, or a handle whose record is gone.
- * @property {SyncState|null} activeState Non-null on the ONE active folder,
+ * @property {SyncState|null} activeState Non-null on the one active folder,
  *   carrying the sync controller's state so the row cannot claim a
  *   connection while the pill is asking for permission to be re-granted.
  */

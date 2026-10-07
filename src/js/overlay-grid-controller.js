@@ -12,8 +12,8 @@ import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { noteOverlayChanged } from './overlay-settings.js';
 import { createCropDialog } from './crop-dialog.js';
-// UF-14 (U-25): auto-rotate and its speed are PER-UI viewing preferences
-// (signed Q-40 table); the reference-overlay cluster stays app-level.
+// Auto-rotate and its speed are per-interface viewing preferences; the
+// reference-overlay cluster stays app-level.
 import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
 
 const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
@@ -465,10 +465,10 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     }
 
     /**
-     * UF-35: the ✕ left the group's <summary> — a control inside the
-     * disclosure's own control is axe's nested-interactive — and now sits in
-     * the actions layer beside the <details>. It is no longer a descendant of
-     * the group, so it is reached through the row that stacks the two.
+     * The ✕ sits in the actions layer beside the <details>, not in its
+     * <summary> (a control inside the disclosure's own control is axe's
+     * nested-interactive). It is not a descendant of the group, so it is
+     * reached through the row that stacks the two.
      */
     function hideButtonFor(groupEl) {
       return (
@@ -510,7 +510,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       });
       bar.appendChild(showAll);
 
-      // Per-group restore chips (C12): one click brings back just that group
+      // Per-group restore chips: one click brings back just that group
       hiddenGroups.forEach((groupEl) => {
         const label =
           groupEl.querySelector('summary span')?.textContent?.trim() ||
@@ -1076,14 +1076,14 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   }
 
   /**
-   * DP-6: hand the picture you have been tracing against to a design
+   * Hand the picture you have been tracing against to a design
    * parameter.
    *
-   * It goes in through the parameter's OWN file input, as a real File on a
+   * It goes in through the parameter's own file input, as a real File on a
    * real change event, rather than through a second code path that writes the
    * value directly. That is deliberate: the upload path already traces a
    * raster, opens the preparation editor when the drawing needs it, measures
-   * and emits the aspect companion in the same state update (the D-108 law),
+   * and emits the aspect companion in the same state update,
    * appends the gallery entry and persists it with the project. A parallel
    * path would have to copy all of that and then stay copied.
    */
@@ -1156,18 +1156,16 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const transfer = new DataTransfer();
       transfer.items.add(file);
       input.files = transfer.files;
-      // ★ A CONTRACT with createFileControl in ui-generator.js: this flag says
-      // "the person has already asked for this picture to become the design".
+      // A contract with createFileControl in ui-generator.js: this flag
+      // says "the person has already asked for this picture to become the
+      // design".
       //
-      // DP-34 stopped a chosen picture converting on its own, and rightly - but
-      // "Use as design" is not choosing a file, it is asking for the thing the
-      // conversion produces. Without this the button appeared to do nothing:
-      // the design parameter stayed empty until the person found the Start
-      // button in a control they may not even have open. MEASURED on CI, where
-      // the quick look is slower to call a picture quick and the auto-start
-      // rule therefore did not fire: design_file was still "" after 120
-      // seconds. It still goes through the same bar and the same Cancel, so
-      // nothing happens invisibly.
+      // A chosen picture does not convert on its own, but "Use as design" is
+      // not choosing a file: it asks for the thing the conversion produces.
+      // Without this flag the button would appear to do nothing, the design
+      // parameter staying empty until the person found the Start button in a
+      // control they may not even have open. It still goes through the same
+      // bar and the same Cancel, so nothing happens invisibly.
       input.dataset.forgeStartConversion = '1';
       input.dispatchEvent(new Event('change', { bubbles: true }));
       announceImmediate(
@@ -1186,7 +1184,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   }
 
   /**
-   * DP-5: cropping. Only a raster from the shared image store can be cropped -
+   * Cropping. Only a raster from the shared image store can be cropped -
    * an SVG has no pixels to cut - so the button follows the chosen source.
    */
   function currentCroppableImage() {
@@ -1232,20 +1230,19 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
           dataUrlOrText: record.dataUrl,
         });
         updateOverlayUIFromConfig();
-        // AFTER the config sync, not before: updateOverlayUIFromConfig writes
+        // After the config sync, not before: updateOverlayUIFromConfig writes
         // config.sourceFileName into this select, and that name has no
-        // "screenshot:" prefix - so setting the value first left the select
-        // matching no option at all, showing blank, and disabling the Crop
-        // button that focus was about to return to.
+        // "screenshot:" prefix, so setting the value first would leave the
+        // select matching no option at all, showing blank, and disabling the
+        // Crop button that focus is about to return to.
         if (overlaySourceSelect) {
           overlaySourceSelect.value = `screenshot:${record.name}`;
         }
         updateCropButton();
-        // DP-26 P3: the Use-as-design row read the select while it was
-        // momentarily blank (the config sync above writes a name with no
-        // "screenshot:" prefix) and hid itself - so a plain upload offered
-        // the hand-over and a CROPPED copy did not, which is backwards:
-        // cropping is what you do on the way to the Colors lane.
+        // Refresh the Use-as-design row after the select is set: read while
+        // the select is momentarily blank, it would hide itself, so a cropped
+        // copy would not offer the hand-over, which is backwards: cropping is
+        // what you do on the way to the Colors lane.
         updateUseAsDesignRow();
         noteOverlayChanged();
       } catch (error) {
@@ -1262,7 +1259,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   }
 
   /**
-   * DP-5: the millimeter field belongs to the "A height I choose" preset, so
+   * The millimeter field belongs to the "A height I choose" preset, so
    * it is hidden the rest of the time rather than sitting there inert with a
    * number that the preset is about to overwrite.
    */
@@ -1499,7 +1496,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   }
 
   /**
-   * The live swap (UF-14 P3): re-read auto-rotate and its speed from the
+   * The live swap: re-read auto-rotate and its speed from the
    * newly active namespace and re-apply them — rotation state, both
    * toggle buttons' aria-pressed, and the speed slider readout. Reduced
    * motion still wins over any saved "on".

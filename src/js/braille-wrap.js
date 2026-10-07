@@ -3,7 +3,7 @@
  * multi-card splitting for the Braille Card Customizer.
  *
  * All geometry inputs are millimeters and mirror the wedge-card SCAD
- * parameters. Translation itself is NOT done here: callers supply an async
+ * parameters. Translation itself is not done here: callers supply an async
  * `translate(text)` function (see braille-translator.js) that answers
  * `{ braille, inputPos }`, where `inputPos` gives for each cell the index of
  * the character it came from (or is null). A plain braille string is also

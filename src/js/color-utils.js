@@ -8,7 +8,7 @@
  * Desktop OpenSCAD `#` debug-modifier highlight color.
  * Source: openscad/src/glview/Renderer.cc — CGAL_HIGHLIGHT {255, 81, 81, 128}
  *
- * The `#` modifier OVERRIDES any user-defined `color()` call; it does not
+ * The `#` modifier overrides any user-defined `color()` call; it does not
  * blend. SVG/DXF export ignores model colors entirely (fixed stroke/fill).
  */
 export const DEBUG_HIGHLIGHT_COLOR = Object.freeze({
@@ -100,9 +100,9 @@ export function relativeLuminance(hex) {
 /**
  * WCAG contrast ratio between two hex colors, 1 to 21.
  *
- * Added for the drawing editor's highlight (DP-21), whose two strokes have to
- * read on any region color: the number this returns is what the record
- * quotes, so it is the app's own arithmetic and not a test's.
+ * Used by the drawing editor's highlight, whose two strokes have to read
+ * on any region color, so the ratio comes from the app's own arithmetic
+ * rather than a test's.
  *
  * @param {string} a
  * @param {string} b
