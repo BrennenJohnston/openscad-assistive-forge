@@ -59,20 +59,20 @@
   --size-icon-lg: 24px;
   --size-icon-xl: 32px;
 
-  /* Tutorial card sizing (UF-38, D-65)
+  /* Tutorial card sizing
      The card's body is a flex item with `flex: 1`, so it takes whatever the
-     header and footer leave. MEASURED at 412x810 on Firefox, the height a
-     phone actually has: the dock cap clipped 47px off the "Preview Settings
-     & Info" step with no affordance at all. The floor keeps the step title
+     header and footer leave. At 412x810 on Firefox, the height a phone
+     actually has, the dock cap would clip 47px off the "Preview Settings &
+     Info" step with no affordance at all. The floor keeps the step title
      (27px) and one line of body text visible whatever the arithmetic says;
      the cue height is the fade that admits the rest is below the fold. */
   --tutorial-body-min-height: 72px;
 
   /* The fold cue's fade height, shared by every scroller that admits it has
-     more below: the tutorial card (UF-38) and the first-visit modal body
-     (UF-41). One value, so the two folds cannot start looking different from
-     each other. The tutorial's own name is kept as an alias — it is spelled
-     that way at six call sites and renaming them is not this release's job. */
+     more below: the tutorial card and the first-visit modal body. One value,
+     so the two folds cannot start looking different from each other. The
+     tutorial's own name is kept as an alias; it is spelled that way at six
+     call sites. */
   --scroll-cue-height: 32px;
   --tutorial-scroll-cue-height: var(--scroll-cue-height);
 
@@ -108,49 +108,37 @@
   --motion-slow: 240ms;
 
   /* Z-Index Scale
-   * CAUTION: The processing overlay (.processing-overlay) uses a hardcoded
+   * The processing overlay (.processing-overlay) uses a hardcoded
    * z-index: 10000 in components.css, level with --z-index-app-overlay.
    * Because modals sit at z: 1000, any overlay shown while a modal is open
    * will cover the modal's buttons. Always gate overlay display behind
-   * waitForFirstVisitAcceptance() in JS. See the "FIRST-VISIT GATE" comment
+   * waitForFirstVisitAcceptance() in JS. See the "First-visit gate" comment
    * block in src/main.js. The tutorial family sits above all of this, and
-   * stands down rather than paint over a dialog - see D-67 below. */
+   * stands down rather than paint over a dialog (see below). */
   --z-index-base: 1;
   --z-index-sticky: 10;
   --z-index-dropdown: 100;
   --z-index-drawer: 900;
   --z-index-modal-backdrop: 950;
-  /* UF-22: the tutorial menu stays lit while the nudge dims the rest of the
+  /* The tutorial menu stays lit while the nudge dims the rest of the
      page, so it sits between that backdrop and the dialog itself. */
   --z-index-nudge-spotlight: 960;
   --z-index-modal: 1000;
   --z-index-skip-link: 9999;
-  /* Full-screen app states that are not the tutorial but used to borrow its
-     panel token: the memory banner and the WASM loading overlay. The same
-     value they have always had; they simply stopped riding a name that is
-     about to mean something else. */
+  /* Full-screen app states that are not the tutorial: the memory banner and
+     the WASM loading overlay. */
   --z-index-app-overlay: 10000;
-  /* D-67 (UF-36). The tutorial family, in the order it paints.
+  /* The tutorial family, in the order it paints.
    *
-   * The elevations from --z-index-tutorial-highlight down were bare numbers in
-   * components.css and in tutorial-sandbox.js, against the house
-   * no-hardcoded-z-index rule.
-   *
-   * The overlay's own backdrop token moved from 9998 to 10005, and that is the
-   * substance of D-67 rather than a renumbering. `.tutorial-overlay` is a
-   * stacking context, so the value on IT - not the panel's inner z - is what
-   * decides whether the tour card can be reached over a highlighted target
-   * sitting at 10001 in the root context. At 9998 it could not, and the engine
-   * papered over that at runtime: adjustTutorialZIndex read the highlight z
-   * back off its own target and re-raised the whole overlay above it on EVERY
-   * step. That is how the veil arrived at 10003, painting over dialogs at
-   * --z-index-modal. Stating the floor here means the escalation is left to do
-   * only its real job - genuinely high-z ancestors in the page - and the
-   * painted order is unchanged.
-   *
-   * MEASURED before and after on the welcome tour: veil above the ring, card
-   * above both, the tour's own dialogs above the card, the Features Guide step
-   * identical. */
+   * `.tutorial-overlay` is a stacking context, so the value on it, not the
+   * panel's inner z, decides whether the tour card can be reached over a
+   * highlighted target sitting at 10001 in the root context; the overlay's
+   * backdrop therefore sits at 10005. Stating the floor here leaves
+   * adjustTutorialZIndex only its real job, genuinely high-z ancestors in
+   * the page, rather than re-raising the whole overlay on every step and
+   * painting the veil over dialogs at --z-index-modal. The painted order:
+   * veil above the ring, card above both, the tour's own dialogs above the
+   * card. */
   --z-index-tutorial-highlight: 10001;
   --z-index-tutorial-highlight-modal: 10002;
   --z-index-tutorial-guide-modal: 10003;
@@ -300,7 +288,7 @@
 
   /* Success - Darker green for 7:1 */
   --color-success: #08651a;
-  /* D-46 (UF-25): every block that overrides --color-success must also
+  /* Every block that overrides --color-success must also
      override the solid-fill pair, or a component reading it falls back to
      the default theme's green and high contrast is quietly lost. */
   --color-success-solid: #08651a;
@@ -379,7 +367,7 @@
 
   /* Success - Bright green for 7:1 */
   --color-success: #66ff66;
-  /* D-46: keep the high-contrast green for solid fills too. */
+  /* Keep the high-contrast green for solid fills too. */
   --color-success-solid: #66ff66;
   --color-success-hover: #7fff7f;
   --color-success-text: #66ff66;
@@ -444,7 +432,7 @@
     --color-accent-subtle: #003d66;
 
     --color-success: #66ff66;
-    /* D-46: keep the high-contrast green for solid fills too. */
+    /* Keep the high-contrast green for solid fills too. */
     --color-success-solid: #66ff66;
     --color-success-hover: #7fff7f;
     --color-success-text: #66ff66;
@@ -544,7 +532,7 @@
     --color-on-error: Canvas;
 
     --color-success: LinkText;
-    /* D-46: forced colours keep the system colour for solid fills. */
+    /* Forced colours keep the system colour for solid fills. */
     --color-success-solid: LinkText;
     --color-success-hover: LinkText;
     --color-success-text: CanvasText;

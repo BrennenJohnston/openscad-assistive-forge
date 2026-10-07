@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Variant UI Theme Overrides
- * 
+ *
  * Applied when data-ui-variant="mono" is set on :root
  * Neutral naming to avoid documenting activation details
- * 
+ *
  * Color variants:
  * - Dark theme (default): Green phosphor (classic terminal)
  * - Light theme: Amber phosphor (DOS P3 monitor)
@@ -80,7 +80,7 @@
   --color-warning-text: var(--color-text-primary);
   --color-on-warning: var(--color-accent-text);
   --color-success: #00ff00;
-  /* D-46 (UF-25): mono keeps its phosphor green for solid success fills. */
+  /* Mono keeps its phosphor green for solid success fills. */
   --color-success-solid: #00ff00;
   --color-success-bg: #001a00;
   --color-success-hover: var(--color-accent-hover);
@@ -106,7 +106,7 @@
   /* Focus ring — prevent default blue ring in non-HC mono */
   --focus-ring: 0 0 0 3px var(--color-focus);
 
-  /* Phase 2: CRT visual effect variables — all reference --color-accent so
+  /* CRT visual effect variables — all reference --color-accent so
    * they adapt automatically between green (dark) and amber (light) variants. */
   --crt-glow-tight: 0 0 1px var(--color-accent);
   --crt-glow-mid: 0 0 2px
@@ -203,11 +203,10 @@
   border-color: var(--color-accent);
 }
 
-/* D-55 pattern: the generic mono hover above repaints every button's
+/* The generic mono hover above repaints every button's
  * surface with --color-hover-bg and nothing else. Under a primary's
  * accent-text (black) label that pair measures 1.11:1 — the label
- * vanishes the moment a mouse touches it (found by the City Walk axe
- * scan, which hovers a real button). Completing the pair flips the
+ * vanishes the moment a mouse touches it. Completing the pair flips the
  * label to the accent, the same hover-bg/accent pairing the header
  * toggles measure at 14.41:1 (green) and 7.79:1 (amber); icons follow
  * via currentColor. */
@@ -379,7 +378,7 @@
   accent-color: var(--color-accent);
 }
 
-/* Plain checkboxes (NOT the switch) */
+/* Plain checkboxes (not the switch) */
 :root[data-ui-variant='mono']
   input[type='checkbox']:not([role='switch']):not(.switch) {
   appearance: none;
@@ -807,7 +806,7 @@
 
 /* Remove gradients and transitions from all DOM elements.
  *
- * Scope note: The CSS universal selector (*) does NOT match pseudo-elements
+ * Scope note: The CSS universal selector (*) does not match pseudo-elements
  * (::before / ::after). CRT effect pseudo-elements — body::after (scanlines)
  * and .preview-container::after (vignette) — are therefore intentionally
  * exempt from background-image: none and will render their gradients correctly.
@@ -1125,11 +1124,10 @@
 }
 
 /* ========================================
- * Phase 4: Cross-app mono normalization
- * Extends the bracketed-text pattern (L826–1004) to remaining
- * non-conforming surfaces. Reverse-video (amber bg / black text)
- * for selected/highlighted states. High-contrast exception:
- * multicolor is acceptable in HC mode per stakeholder directive.
+ * Cross-app mono normalization
+ * Extends the bracketed-text pattern to the remaining non-conforming
+ * surfaces. Reverse-video (amber bg / black text) for selected and
+ * highlighted states. In high contrast, multicolor is acceptable.
  * ======================================== */
 
 /* --- Console action icons (emoji → bracketed-text) --- */
@@ -1230,8 +1228,8 @@
  * Native <select> option hover override.
  * Firefox respects option:hover; Chrome/Edge ignore it (Blink renders its own
  * highlight). accent-color on <select> influences Chrome's highlight color.
- * Full visual control requires replacing <select> with a custom ARIA listbox
- * (deferred — see plan's "Deferred follow-on work" item 2).
+ * Full visual control would require replacing <select> with a custom ARIA
+ * listbox.
  */
 :root[data-ui-variant='mono'] select option {
   background: var(--color-bg-primary) !important;
@@ -1304,7 +1302,7 @@
 }
 
 /* ========================================
- * Phase 2: CRT Visual Effects
+ * CRT Visual Effects
  * Approaches cool-retro-term aesthetic through pure CSS.
  *
  * Performance notes:
@@ -1341,7 +1339,7 @@
 /* ----------------------------------------
  * 4b. Scanline Overlay
  *
- * body::after is a pseudo-element — NOT matched by the DOM-element-scoped
+ * body::after is a pseudo-element, not matched by the DOM-element-scoped
  * rule `* { background-image: none !important }` — so the gradient
  * renders unobstructed without any selector restructuring.
  * Fixed position keeps scanlines viewport-locked regardless of scroll.
@@ -1402,9 +1400,8 @@
 /* ----------------------------------------
  * 4d. ASCII overlay canvas: phosphor bloom + CRT power-on
  *
- * Bloom: a subtle drop-shadow on the ASCII canvas only restores the phosphor
- * depth that per-cell brightness colors used to fake — glyph density is the
- * lightness signal, bloom adds the glow.
+ * Bloom: a subtle drop-shadow on the ASCII canvas only gives the phosphor
+ * depth; glyph density is the lightness signal, bloom adds the glow.
  *
  * Power-on: one-shot ~300 ms vertical scale-in + brightness flash applied by
  * the engine when Alt View is enabled. Both effects are disabled under
@@ -1460,7 +1457,7 @@
 /* ----------------------------------------
  * prefers-reduced-motion: reduce
  *
- * Disables ALL CRT effects that could cause visual stress:
+ * Disables all CRT effects that could cause visual stress:
  *   - Scanline and vignette pseudo-elements are hidden
  *   - Perspective transforms reset to none
  *   - Phosphor text-shadow removed
