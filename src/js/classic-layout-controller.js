@@ -2,22 +2,21 @@
  * Classic Layout Controller - Applies the Classic (desktop-OpenSCAD-style)
  * layout when the UI mode is 'classic'.
  *
- * Desktop shell mapping (C5/C7):
+ * Desktop shell mapping:
  *   Editor     — #expertModePanel, moved into a titled slot (visible by
  *                default, Window > Editor / titlebar ✕ toggles it)
  *   Display    — .preview-panel (untouched)
  *   Customizer — .param-panel with the desktop-style #classicCustomizerBar
- *                at its top: titlebar, then Automatic Preview + the moved
- *                #customizerHeaderRow (Show Details / Reset All), then the
- *                preset row
- *   Presets    — #presetControls, moved INTO the Customizer bar's
- *                #classicPresetRow (desktop puts the preset combobox inside
- *                the Customizer dock)
+ *                at its top: titlebar, then Automatic Preview with the
+ *                moved detail combobox and Reset All, then the preset row
+ *   Presets    — the preset combobox and its buttons, moved into the
+ *                Customizer bar's #classicPresetRow (desktop puts the
+ *                preset combobox inside the Customizer dock)
  *   Camera bar — #classicCameraBar, a thin row along the bottom edge of the
- *                3D view (populated by sub-plan E)
+ *                3D view (static markup in index.html)
  *   Bottom     — #classicBottomStrip spanning between the editor and the
  *                right column, holding Console and Error-Log side by side
- *                (plus Animate / Font List once sub-plan F builds them)
+ *                (plus Animate and Font List when shown)
  *
  * Moves use appendChild (event listeners survive); the original parent and
  * nextSibling are recorded so exiting Classic restores the exact DOM order.
@@ -61,23 +60,23 @@ const STOW_TAB_CLASS = 'classic-stow-tab';
 const STOW_RAIL_CLASS = 'classic-stow-rail';
 
 /**
- * The dock fields that stow toward their own edge (U-6/Q-20, UF-2a). Stowing
- * removes the whole FIELD from the layout — its space goes to the 3D view —
- * leaving a labeled un-stow tab on the field's edge rail. Distinct from the
- * per-panel ▾ collapse (one pane's body, bar stays put) and from the strip
- * fold (which becomes the bottom field's stow in UF-2b, per Q-20c).
+ * The dock fields that stow toward their own edge. Stowing removes the
+ * whole field from the layout (its space goes to the 3D view), leaving a
+ * labeled un-stow tab on the field's edge rail. Distinct from the
+ * per-panel ▾ collapse (one pane's body, bar stays put).
  *
- * Glyphs are text, not SVG (Q-20a, same R-I rule as ▾/▸), and point where the
- * content will GO: « stows the left field, » brings it back; ⌄ stows the
- * bottom strip, ⌃ brings it back.
+ * Glyphs are text, not SVG (the same rule as ▾/▸: a stylesheet that fails
+ * to load must not leave a blank button), and point where the content will
+ * go: « stows the left field, » brings it back; ⌄ stows the bottom strip,
+ * ⌃ brings it back.
  *
- * The bottom entry IS the old strip fold (Q-20c: one mechanism, converted in
- * UF-2b) — its `paneKey` keeps the historical `consoleCollapsed` name so a
- * pre-UF-2 folded preference hydrates as stowed, and D-8's height
+ * The bottom entry is the old strip fold, one mechanism: its `paneKey`
+ * keeps the historical `consoleCollapsed` name so a folded preference
+ * saved before stowing existed hydrates as stowed, and the height
  * park/restore rides the same toggle.
  *
  * `subject` is the announcement noun; `positionLabel` feeds the control and
- * tab names. NEW STRINGS, owner review pending (D-35).
+ * tab names.
  *
  * `paneKey` joins `openscad-forge-classic-panes`; a preference saved before
  * these keys existed hydrates without them.
@@ -132,13 +131,14 @@ const STOW_RAIL_IDS = Object.freeze({
 });
 
 /**
- * Panels whose title bar carries a per-panel collapse disclosure (D3 — an
- * owner-requested Forge extra; the desktop has no such control).
+ * Panels whose title bar carries a per-panel collapse disclosure, a Forge
+ * extra: the desktop has no such control.
  *
- * Console is deliberately absent: its title bar already has a ▾, and per Q-1
- * that ▾ keeps its whole-strip meaning (D-8) rather than gaining a second,
- * near-identical button beside it. Console still has a collapsed STATE below,
- * because a merged field collapses as one field and Console can be in one.
+ * Console is deliberately absent: its bar, the bottom field's first by
+ * default, carries the control that stows the whole strip, and a
+ * second, near-identical button beside it would blur the two. Console
+ * still has a collapsed state below, because a merged field collapses as
+ * one field and Console can be in one.
  * @type {ReadonlyArray<string>}
  */
 const COLLAPSE_BUTTON_PANELS = Object.freeze(
@@ -151,8 +151,8 @@ const COLLAPSIBLE_PANELS = Object.freeze(DOCK_PANELS.map((p) => p.id));
 /**
  * The `_panes` key holding a panel's collapsed state. Prefixed rather than
  * suffixed on purpose: `consoleCollapsed` is already taken, and it means the
- * whole bottom strip is folded (D-8 kept the historical name). Colliding with
- * it would wire Console's per-panel collapse to the strip fold.
+ * whole bottom strip is stowed (a historical name). Colliding with it would
+ * wire Console's per-panel collapse to the strip's stow.
  * @param {string} panelId
  * @returns {string}
  */
@@ -175,23 +175,22 @@ export function collapseCustomizerGroups() {
     });
 }
 
-/** Container for the side-by-side bottom-strip panes (D-1). */
+/** Container for the side-by-side bottom-strip panes. */
 const BOTTOM_STRIP_ID = 'classicBottomStrip';
 
 /**
- * The 3D view toolbar, declared as static markup in index.html (E3) and
+ * The 3D view toolbar, declared as static markup in index.html and
  * adopted into the camera-bar row of the grid while Classic is active.
  */
 const CAMERA_BAR_ID = 'classicCameraBar';
 
 /**
- * Dock slots, in creation order. `panelId` is optional — a slot without one
- * is a reserved field that sub-plan F fills (Animate, Font List,
- * Viewport-Control); it stays hidden until its pane-visibility state turns
- * it on. `parentId` places a slot inside another created element rather than
- * directly on the grid.
+ * Dock slots, in creation order. `panelId` names the element moved into the
+ * slot; the optional panes (Animate, Font List, Viewport-Control) stay
+ * hidden until their pane-visibility state turns them on. `parentId` places
+ * a slot inside another created element rather than directly on the grid.
  *
- * Titles are upstream dock names (Appendix U), owner-approved 2026-08-06.
+ * Titles are upstream dock names.
  */
 const SLOT_DEFS = [
   {
@@ -200,15 +199,15 @@ const SLOT_DEFS = [
     label: 'Console',
     panelId: 'consolePanel',
     parentId: BOTTOM_STRIP_ID,
-    // The fold button this bar carried through R2a–UF-1 became the bottom
-    // field's stow control in UF-2b (Q-20c) — _ensureStowButtons owns it now.
+    // No fold button: the bottom field's stow control replaces it, and
+    // _ensureStowButtons owns that.
     titlebar: { text: 'Console' },
   },
   {
     // The inner live region moves, not the tabpanel wrapper — moving
     // #console-view-structured would strand a role="tabpanel" with no
-    // tablist. ErrorLogPanel holds a direct element reference
-    // (error-log-panel.js:48-49), which appendChild preserves.
+    // tablist. ErrorLogPanel holds a direct element reference, which
+    // appendChild preserves.
     id: 'classicErrorLogSlot',
     className: 'classic-slot classic-error-log-slot',
     label: 'Error-Log',
@@ -252,15 +251,15 @@ const SLOT_DEFS = [
 
 /**
  * The dock field containers, in creation order. Each is a grid item holding
- * whichever panels the dock model has placed there (B6); the panels move
+ * whichever panels the dock model has placed there; the panels move
  * between them, the containers themselves never move.
  *
  * `anchorId` inserts a container where a static panel already sits rather than
  * appending it, so adopting that panel into the dock leaves the document
  * order — and therefore the reading order — exactly as it was.
  *
- * The bottom strip predates the field model and keeps its own id and class
- * (B2), so it is created by _ensureContainer instead of appearing here.
+ * The bottom strip predates the field model and keeps its own id and
+ * class, so it is created by _ensureContainer instead of appearing here.
  * @type {Array<{id: string, className: string, anchorId?: string}>}
  */
 const DOCK_FIELD_CONTAINERS = [
@@ -281,27 +280,26 @@ const DOCK_FIELD_CONTAINERS = [
 
 /**
  * Controls that move into the Customizer dock rather than a created slot, so
- * its header matches the desktop Customizer exactly (U4):
+ * its header matches the desktop Customizer exactly:
  *
  *   Row 1  Automatic Preview checkbox + the detail combobox + Reset
  *   Row 2  preset combobox + [+] + [−] + save preset
  *   ────   "Forge additions", collapsed: everything upstream does not have
  *
  * Moving individual controls rather than their two container rows is what
- * lets the desktop rows hold only what desktop has (D-20). The emptied
+ * lets the desktop rows hold only what desktop has. The emptied
  * #customizerHeaderRow and the #presetControls husk stay behind and are
  * hidden by classic.css; the husk-hide is also what drops the legacy preset
- * search in Classic (D-22), since the searchable combobox covers it.
+ * search in Classic, since the searchable combobox covers it.
  *
- * P5 moved Reset and save preset OUT of Forge additions and into the rows:
- * both are controls the desktop Customizer has, so a section named for what
- * the desktop lacks was the wrong shelf for them. Two owner decisions came
- * with that, both 2026-08-08 with the control on screen: the visible label
- * stays "Reset All" rather than the desktop's "Reset", because "All" says what
- * the button does to someone who has never used desktop OpenSCAD and it
- * discards work; and both controls now appear in Classic-Simplified, where
- * Forge additions had been hiding them, because Simplified already shows the
- * preset box with its + and −, and resetting parameters is a beginner action.
+ * Reset and save preset sit in the rows, not in Forge additions: both are
+ * controls the desktop Customizer has, and Forge additions is named for
+ * what the desktop lacks. The visible label stays "Reset All" rather than
+ * the desktop's "Reset", because "All" says what the button does to
+ * someone who has never used desktop OpenSCAD, and it discards work. Both
+ * controls also appear in Classic-Simplified, which already shows the
+ * preset box with its + and −, because resetting parameters is a beginner
+ * action.
  *
  * Order matters — each is appended to its target in turn — and exit()
  * restores in reverse, so every control returns to its recorded position.
@@ -309,7 +307,7 @@ const DOCK_FIELD_CONTAINERS = [
  */
 const CUSTOMIZER_DOCK_MOVES = [
   // Row 1: the detail combobox joins the Automatic Preview checkbox, then Reset
-  // ends the line — upstream's row 1 is exactly these three (U4, OpenSCAD_1).
+  // ends the line — upstream's row 1 is exactly these three.
   { panelId: 'paramDetailLevelWrap', targetId: 'classicCustomizerControls' },
   { panelId: 'resetAllBtn', targetId: 'classicCustomizerControls' },
   // Row 2: preset combobox, the +/− pair, then save preset, in upstream order
@@ -350,7 +348,7 @@ export class ClassicLayoutController {
 
     /**
      * Which Forge console tab was selected when Classic took over, so exit()
-     * can hand the panel back as found (D-9).
+     * can hand the panel back as found.
      * @type {'log'|'structured'|null}
      */
     this._consoleTabOnEnter = null;
@@ -359,7 +357,7 @@ export class ClassicLayoutController {
     this._panes = this._loadPaneState();
 
     /**
-     * Which panel sits in which dock field (B6). The only thing that moves a
+     * Which panel sits in which dock field. The only thing that moves a
      * panel is its movePanel(); this controller owns the DOM containers, the
      * occupancy attributes and the resize event that follow from it.
      * @type {ClassicDockModel}
@@ -423,7 +421,7 @@ export class ClassicLayoutController {
 
   /**
    * Whether the editor dock is actually on screen: the pane toggle says so
-   * AND the Simplified density has not dropped it.
+   * and the Simplified density has not dropped it.
    * @returns {boolean}
    * @private
    */
@@ -447,7 +445,7 @@ export class ClassicLayoutController {
     // Classic replaces the console's Log/Structured tabs with side-by-side
     // panes and hides the tablist, so a Structured selection left behind
     // would hide the Log view with no visible control to bring it back.
-    // Reset to Log, remembering what was found so exit() can restore it (D-9).
+    // Reset to Log, remembering what was found so exit() can restore it.
     this._consoleTabOnEnter = this._sanitizeConsoleTabs();
 
     // The right-top container is created around the Customizer, and the strip
@@ -459,7 +457,7 @@ export class ClassicLayoutController {
       BOTTOM_STRIP_ID,
       'classic-dock-field classic-bottom-strip'
     );
-    // The camera bar is static markup in index.html (E3), so it is adopted
+    // The camera bar is static markup in index.html, so it is adopted
     // into the grid rather than created — same appendChild contract as every
     // other move, and exit() puts it back where it came from.
     this._adoptIntoGrid(mainInterface, CAMERA_BAR_ID);
@@ -512,7 +510,7 @@ export class ClassicLayoutController {
     }
 
     // Slots are created in their default fields, so this is a no-op on a first
-    // entry and puts a user's saved arrangement back in place afterwards (B9).
+    // entry and puts a user's saved arrangement back in place afterwards.
     this._dock.applyToDom();
 
     this._applyPaneAttributes();
@@ -530,14 +528,13 @@ export class ClassicLayoutController {
     // for the ⋮ to land to the right of them on a first entry.
     this._ensureCollapseButtons();
 
-    // Stow machinery (UF-2a): the rails first, so a hydrated stow preference
+    // Stow machinery: the rails first, so a hydrated stow preference
     // has somewhere to hang its un-stow tab, then the title-bar controls.
     this._ensureStowRails();
     this._ensureStowButtons();
     this._refreshStowRails();
 
-    // The title-bar menus are the only way to relocate a panel this round
-    // (D-3), so they go on last, once every title bar exists.
+    // The title-bar menus go on last, once every title bar exists.
     initClassicPanelMenus({
       getAllPanels: () => [...DOCK_PANEL_IDS],
       getFieldOf: (panelId) => this._dock.getFieldOf(panelId),
@@ -570,7 +567,7 @@ export class ClassicLayoutController {
 
     // Also before the moves: a merged panel carries role="tabpanel", a hidden
     // flag and a titlebar living in the shared bar. Undoing that first is what
-    // lets a panel leave Classic exactly as it arrived (B7). The menu buttons
+    // lets a panel leave Classic exactly as it arrived. The menu buttons
     // go with it — the Customizer's title bar is static markup that survives
     // the exit, so a button left on it would follow the user into Forge.
     destroyClassicPanelMenus();
@@ -704,7 +701,7 @@ export class ClassicLayoutController {
   /**
    * Show/hide one of the optional panes (Window menu, titlebar ✕). Same
    * shape as toggleCustomizer, driven by a table so the three panes cannot
-   * drift apart. Announcement wording owner-approved 2026-08-06.
+   * drift apart.
    * @param {'animate'|'fontList'|'viewportControl'} pane
    * @returns {boolean} the new visibility
    * @private
@@ -723,7 +720,7 @@ export class ClassicLayoutController {
 
   /**
    * Bring a just-shown pane into view. Four open panes do not fit the bottom
-   * strip's width at their minimum size, so the strip scrolls (F7) — without
+   * strip's width at their minimum size, so the strip scrolls — without
    * this, turning on the fourth panel would scroll it in beyond the right edge
    * and the menu item would look like it had done nothing.
    * @param {string} pane
@@ -769,9 +766,9 @@ export class ClassicLayoutController {
 
   /**
    * A panel's own title bar, wherever it currently lives. Merging a field moves
-   * the ACTIVE panel's bar into the group's shared bar (_adoptTitlebar), so it
+   * the active panel's bar into the group's shared bar (_adoptTitlebar), so it
    * is no longer inside the panel; the other members keep theirs. The panel's
-   * FIRST bar is its own — anything deeper belongs to something nested in it.
+   * first bar is its own — anything deeper belongs to something nested in it.
    * @param {Element} el - the panel's element
    * @returns {Element|null}
    * @private
@@ -789,7 +786,7 @@ export class ClassicLayoutController {
   /**
    * Put a collapse disclosure on every collapsible panel's title bar, and keep
    * its name current. Runs on the same lifecycle as the move menus: a panel's
-   * title bar travels into a shared bar when its field merges (B7), and the
+   * title bar travels into a shared bar when its field merges, and the
    * button has to be named for the panels it then serves.
    * @private
    */
@@ -800,11 +797,10 @@ export class ClassicLayoutController {
       const bar = el && this._titlebarOf(el);
       if (!bar) continue;
 
-      // Known corner, owner-informed 2026-08-08: when Console is the SELECTED
-      // tab of a merged field, the shared bar is Console's own and carries no
-      // collapse button, because the owner chose not to give Console a second
-      // ▾ beside its strip fold. Selecting any other tab in the group exposes
-      // one, and it collapses the whole field.
+      // Known corner: when Console is the selected tab of a merged field, the
+      // shared bar is Console's own and carries no collapse button, since
+      // Console has none. Selecting any other tab in the group exposes one, and
+      // it collapses the whole field.
       let btn = bar.querySelector(`.${COLLAPSE_BTN_CLASS}`);
       if (!btn) {
         btn = document.createElement('button');
@@ -812,14 +808,14 @@ export class ClassicLayoutController {
         btn.className = `btn btn-sm btn-icon classic-pane-btn ${COLLAPSE_BTN_CLASS}`;
         btn.dataset.classicPanel = panelId;
         btn.addEventListener('click', () => this.togglePanelCollapsed(panelId));
-        // The state lives in aria-expanded, not in the name (APG disclosure) —
-        // the same shape as the strip's fold button. The glyph flips with it,
-        // so a sighted user is not left reading the state off nothing.
+        // The state lives in aria-expanded, not in the name (APG disclosure),
+        // the same shape as the stow buttons. The glyph flips with it, so a
+        // sighted user is not left reading the state off nothing.
         const glyph = document.createElement('span');
         glyph.className = 'classic-pane-collapse-glyph';
         glyph.setAttribute('aria-hidden', 'true');
         btn.appendChild(glyph);
-        // Ahead of the ⋮ and the ✕ (Q-1). Inserting after the title puts it
+        // Ahead of the ⋮ and the ✕. Inserting after the title puts it
         // there, and ClassicPanelMenus.refresh() re-places the ⋮ after any
         // disclosure it finds, so the two agree without sharing a selector.
         const title = bar.querySelector(`.${TITLE_CLASS}`);
@@ -827,18 +823,16 @@ export class ClassicLayoutController {
       }
       const label = this._collapseButtonLabel(panelId);
       btn.setAttribute('aria-label', label);
-      // Owner-approved 2026-08-08: this ▾ and the strip's ▾ stay the same
-      // glyph, distinguished by their names — so those names have to be
-      // reachable by hover too, not only by screen reader. Identical to the
-      // aria-label, so the two can never disagree.
+      // The name is reachable by hover too, not only by screen reader:
+      // identical to the aria-label, so the two can never disagree.
       btn.setAttribute('title', label);
     }
   }
 
   /**
-   * NEW STRING, owner review pending (D-35). A merged bar collapses its whole
-   * field as one (Q-1), so it is named for the group rather than for whichever
-   * panel's tab happens to be selected — the same rule the ⋮ follows.
+   * A merged bar collapses its whole field as one, so it is named for the
+   * group rather than for whichever panel's tab happens to be selected, the
+   * same rule the ⋮ follows.
    * @param {string} panelId
    * @returns {string}
    * @private
@@ -857,10 +851,10 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Put a stow control on each stowable field's FIRST title bar (Q-20b: the
-   * outer-edge corner — far-left of the left field's bar, far-right of the
-   * right fields'), and keep its name current. Bars rebuild on merges, so this
-   * runs on the title-bar lifecycle and removes strays it left behind.
+   * Put a stow control on each stowable field's first title bar, at its
+   * outer-edge corner (far-left of the left field's bar, far-right of the
+   * right fields'), and keep its name current. Bars rebuild on merges, so
+   * this runs on the title-bar lifecycle and removes strays it left behind.
    * @private
    */
   _ensureStowButtons() {
@@ -876,18 +870,18 @@ export class ClassicLayoutController {
         btn.type = 'button';
         btn.className = `btn btn-sm btn-icon classic-pane-btn ${STOW_BTN_CLASS}`;
         btn.dataset.classicStowField = def.name;
-        // Text glyph, not SVG (Q-20a) — the R-I rule: a stylesheet that fails
-        // to load must not leave a blank button. aria-expanded carries the
-        // state; the bar being visible at all means the field is expanded.
+        // Text glyph, not SVG: a stylesheet that fails to load must not leave
+        // a blank button. aria-expanded carries the state; the bar being
+        // visible at all means the field is expanded.
         const glyph = document.createElement('span');
         glyph.className = 'classic-stow-glyph';
         glyph.setAttribute('aria-hidden', 'true');
         glyph.textContent = def.glyphStow;
         btn.appendChild(glyph);
         btn.addEventListener('click', () => this.toggleFieldStowed(def.name));
-        // Q-20b: the control sits nearest the edge the field stows toward.
-        // The ⋮ skips aria-expanded buttons when placing itself, so this
-        // leaves the owner's Q-1 order [title … ▾ ⋮ ✕] intact either side.
+        // The control sits nearest the edge the field stows toward. The ⋮ skips
+        // aria-expanded buttons when placing itself, so this leaves the order
+        // [title … ▾ ⋮ ✕] intact either side.
         if (def.edge === 'left') {
           bar.insertBefore(btn, bar.firstChild);
         } else {
@@ -896,7 +890,6 @@ export class ClassicLayoutController {
       }
       if (btn) {
         btn.setAttribute('aria-expanded', 'true');
-        // Owner-approved 2026-08-19 (the consolidated D-35 pack, section 9).
         const label = `Stow the ${def.positionLabel}`;
         btn.setAttribute('aria-label', label);
         btn.setAttribute('title', label);
@@ -985,8 +978,7 @@ export class ClassicLayoutController {
         rail.insertBefore(tab, later || null);
       }
       // The visible label names what is inside; the accessible name starts
-      // with it (SC 2.5.3) and says what pressing does. NEW STRINGS, owner
-      // review pending (D-35).
+      // with it (SC 2.5.3) and says what pressing does.
       const contents = (this.getArrangement()[def.name] || [])
         .flat()
         .filter((id) => this._isPanelVisible(id))
@@ -1000,10 +992,10 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Collapse/expand a panel's body, leaving its title bar in place (D3). A
-   * merged field collapses as one field per Q-1, so every panel sharing the
-   * bar moves together — otherwise switching tabs inside a collapsed field
-   * would spring it open again.
+   * Collapse/expand a panel's body, leaving its title bar in place. A merged
+   * field collapses as one field, so every panel sharing the bar moves
+   * together; otherwise switching tabs inside a collapsed field would spring
+   * it open again.
    * @param {string} panelId
    * @returns {boolean} the new collapsed state
    */
@@ -1019,9 +1011,9 @@ export class ClassicLayoutController {
     this._savePaneState();
 
     const subject = members.length > 1 ? 'Panels' : `${panelLabel(panelId)}`;
-    // NEW STRINGS, owner review pending (D-35). announceImmediate, not
-    // announce(): a debounced message can be canceled by the next one, and a
-    // disclosure that sometimes says nothing is worse than one that repeats.
+    // announceImmediate, not announce(): a debounced message can be canceled
+    // by the next one, and a disclosure that sometimes says nothing is worse
+    // than one that repeats.
     announceImmediate(
       collapsed ? `${subject} collapsed` : `${subject} expanded`
     );
@@ -1029,12 +1021,12 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Programmatic strip stow/restore. The strip FOLD became the bottom field's
-   * stow in UF-2b (Q-20c: one mechanism); this wrapper keeps the historical
-   * API for callers like the Error-Log jump, which restores the strip before
-   * moving focus into it and must not have its focus stolen. The storage key
-   * keeps its historical `console` name so existing preferences survive
-   * (D-8's rule) — a profile folded before UF-2 hydrates as stowed.
+   * Programmatic strip stow/restore. The strip fold is the bottom field's
+   * stow (one mechanism); this wrapper keeps the historical API for callers
+   * like the Error-Log jump, which restores the strip before moving focus
+   * into it and must not have its focus stolen. The storage key keeps its
+   * historical `console` name so existing preferences survive: a profile
+   * folded before stowing existed hydrates as stowed.
    */
   setConsoleCollapsed(collapsed) {
     const def = STOW_FIELDS.find((f) => f.name === 'bottom');
@@ -1045,7 +1037,7 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Whether a dock field is stowed to its edge (UF-2a/b).
+   * Whether a dock field is stowed to its edge.
    * @param {string} fieldName - 'left' | 'right-top' | 'right-bottom' | 'bottom'
    * @returns {boolean}
    */
@@ -1055,8 +1047,8 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Stow a field toward its edge, or bring it back (U-6/Q-20). The field's
-   * whole content leaves the layout AND the tab order; the un-stow tab on the
+   * Stow a field toward its edge, or bring it back. The field's
+   * whole content leaves the layout and the tab order; the un-stow tab on the
    * edge rail is the way back. Focus follows the action to the control that
    * undoes it, so the keyboard user is never left on a control that just
    * display:none'd itself.
@@ -1082,7 +1074,7 @@ export class ClassicLayoutController {
   _setFieldStowed(def, stowed, { focus = true } = {}) {
     this._panes[def.paneKey] = stowed;
 
-    // D-8: the bottom stow and the row resizer both own --classic-row-bottom,
+    // The bottom stow and the row resizer both own --classic-row-bottom,
     // so the resizer parks its value for the duration. Un-stowing returns the
     // height the user chose, not the default.
     if (def.name === 'bottom') {
@@ -1094,12 +1086,11 @@ export class ClassicLayoutController {
     this._applyPaneAttributes();
     this._refreshTitlebarControls();
     this._savePaneState();
-    // The 3D view's track just changed size (B5).
+    // The 3D view's track just changed size.
     document.dispatchEvent(new CustomEvent('classic-layout-resize'));
 
-    // NEW STRINGS, owner review pending (D-35). announceImmediate for the
-    // same reason the collapse uses it: a debounced disclosure that sometimes
-    // says nothing is worse than one that repeats.
+    // announceImmediate for the same reason the collapse uses it: a debounced
+    // disclosure that sometimes says nothing is worse than one that repeats.
     announceImmediate(
       stowed ? `${def.subject} stowed` : `${def.subject} restored`
     );
@@ -1123,7 +1114,7 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Whether a dock panel is currently on screen — its pane toggle is on AND
+   * Whether a dock panel is currently on screen — its pane toggle is on and
    * the density has not dropped it. This is what makes a field occupied, so
    * moving a panel moves its contribution to the grid with it.
    * @param {string} panelId
@@ -1138,7 +1129,7 @@ export class ClassicLayoutController {
         return this._panes.editorVisible && !simplified;
       case 'customizer':
         return this._panes.customizerVisible;
-      // Viewport-Control is Standard-only for v1 (D-7). Simplified treats it
+      // Viewport-Control is Standard-only. Simplified treats it
       // as hidden without clearing the preference, so returning to Standard
       // brings it back rather than silently resetting the arrangement.
       case 'viewportControl':
@@ -1147,8 +1138,9 @@ export class ClassicLayoutController {
         return this._panes.animateVisible && !simplified;
       case 'fontList':
         return this._panes.fontListVisible && !simplified;
-      // Console and Error-Log have no toggle yet — Window > Error-Log arrives
-      // with F1. Simplified drops both with the rest of the code-facing docks.
+      // Console and Error-Log cannot be hidden in Classic: Window > Error-Log
+      // moves focus into the pane rather than toggling it. Simplified drops
+      // both with the rest of the code-facing docks.
       case 'console':
       case 'errorLog':
         return !simplified;
@@ -1183,12 +1175,14 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Move a dock panel into another field (B6) — the one mutation the dock
-   * has. Re-parents the panel, re-stamps the pane and occupancy attributes,
-   * and fires the resize event so the 3D view re-measures against its new
-   * track (B5). Announcement and focus are the title-bar menu's job (B8).
+   * Move a dock panel into another field, the one mutation the dock has.
+   * Re-parents the panel, re-stamps the pane and occupancy attributes, fires
+   * the resize event so the 3D view re-measures against its new track, and
+   * puts focus where the panel landed. The announcement is the title-bar
+   * menu's job.
    *
-   * @param {string} panelId - a dock panel id, e.g. 'console' (NOT an element id)
+   * @param {string} panelId - a dock panel id such as 'console', not an
+   *   element id
    * @param {string} targetField - 'left' | 'right-top' | 'right-bottom' | 'bottom'
    * @param {number|null} [index] - position among the field's occupants
    * @param {{mergeWith?: string|null}} [options] - join an occupant's tab group
@@ -1199,7 +1193,7 @@ export class ClassicLayoutController {
     if (!result.ok) return result;
 
     // A stowed target would swallow the panel invisibly (its field is
-    // display:none), so landing there brings the field back first (UF-2a).
+    // display:none), so landing there brings the field back first.
     const stowDef = STOW_FIELDS.find((f) => f.name === targetField);
     if (stowDef && this._panes[stowDef.paneKey]) {
       this._panes[stowDef.paneKey] = false;
@@ -1215,8 +1209,8 @@ export class ClassicLayoutController {
     // menus have to be re-hung before focus is sent to one of their buttons.
     this._refreshTitlebarControls();
 
-    // Focus contract (B8): the moved panel's title bar, or its tab when the
-    // target field merged (B7).
+    // Focus goes to the moved panel's title bar, or to its tab when the
+    // target field merged.
     this._focusAfterMove(panelId);
     return result;
   }
@@ -1254,9 +1248,9 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Back to the arrangement of the desktop screenshots (View > Reset Panel
-   * Layout, B9) — the escape hatch when a dock has been rearranged into
-   * something the user cannot find their way out of.
+   * Back to the default arrangement (View > Reset Panel Layout), the escape
+   * hatch when a dock has been rearranged into something the user cannot
+   * find their way out of.
    * @returns {boolean} whether anything changed
    */
   resetPanelLayout() {
@@ -1266,7 +1260,6 @@ export class ClassicLayoutController {
     this._applyPaneAttributes();
     document.dispatchEvent(new CustomEvent('classic-layout-resize'));
     this._refreshTitlebarControls();
-    // Wording owner-approved 2026-08-07.
     announceImmediate('Panel layout reset');
     return true;
   }
@@ -1291,7 +1284,7 @@ export class ClassicLayoutController {
   /**
    * Re-apply the arrangement when the window crosses the breakpoint. Below it
    * the stack shows the default; the user's arrangement is neither applied nor
-   * touched, and comes back unchanged on the way up (B9).
+   * touched, and comes back unchanged on the way up.
    * @private
    */
   _checkBreakpoint() {
@@ -1307,7 +1300,7 @@ export class ClassicLayoutController {
   }
 
   /**
-   * The dock's field map (B6), for the title-bar menu and the tests.
+   * The dock's field map, for the title-bar menu and the tests.
    * @returns {Record<string, string[][]>}
    */
   getArrangement() {
@@ -1347,14 +1340,13 @@ export class ClassicLayoutController {
     );
 
     // A stowed field reports 'empty' so the existing track math hands its
-    // space to the 3D view — and the empty-field display:none rule takes its
-    // content out of the tab order (the R-III trap fix, free of charge).
-    // Desktop only: below the breakpoint occupancy stays truthful and the
-    // STOW attributes alone drive the stacked presentation (UF-2c) — a
-    // stowed section leaves the flow and its rail renders as a full-width
-    // restore bar in the field's stack position, so a stowed preference can
-    // never strand a pane unreachable. _checkBreakpoint re-stamps on every
-    // crossing.
+    // space to the 3D view, and the empty-field display:none rule takes its
+    // content out of the tab order. Desktop only: below the breakpoint
+    // occupancy stays truthful and the stow attributes alone drive the
+    // stacked presentation. A stowed section leaves the flow and its rail
+    // renders as a full-width restore bar in the field's stack position, so a
+    // stowed preference can never strand a pane unreachable. _checkBreakpoint
+    // re-stamps on every crossing.
     const occupancy = this._fieldOccupancy();
     const desktop = this._isDesktopWidth();
     for (const field of DOCK_FIELDS) {
@@ -1362,9 +1354,9 @@ export class ClassicLayoutController {
       body.dataset[`classicField${field.datasetSuffix}`] =
         occupancy[field.name] && !stowed ? 'occupied' : 'empty';
     }
-    // EFFECTIVE stow, not the raw preference: a stowed field whose panes are
+    // Effective stow, not the raw preference: a stowed field whose panes are
     // all hidden has no tab to restore it, so the attribute (which drives the
-    // rails AND the sibling-pinning grid rules) must not fire for it.
+    // rails and the sibling-pinning grid rules) must not fire for it.
     for (const def of STOW_FIELDS) {
       const field = DOCK_FIELDS.find((f) => f.name === def.name);
       body.dataset[`classicStow${field.datasetSuffix}`] = String(
@@ -1398,7 +1390,7 @@ export class ClassicLayoutController {
       if (glyph) glyph.textContent = collapsed ? '▸' : '▾';
     }
 
-    // A merged field collapses as one (Q-1), and it is the group's wrapper that
+    // A merged field collapses as one, and it is the group's wrapper that
     // holds the flex share in the field — not the panels inside it — so the
     // wrapper needs the flag as well or the group stays full height.
     for (const wrapper of document.querySelectorAll('.classic-dock-tabgroup')) {
@@ -1414,7 +1406,7 @@ export class ClassicLayoutController {
 
   /**
    * Reset the Forge console to its Log tab on entering Classic, reporting
-   * which tab was selected so exit() can put it back (D-9).
+   * which tab was selected so exit() can put it back.
    * @returns {'log'|'structured'|null}
    * @private
    */
@@ -1533,12 +1525,12 @@ export class ClassicLayoutController {
       animateVisible: false,
       fontListVisible: false,
       viewportControlVisible: false,
-      // Field stow (UF-2a). Absent from pre-UF-2 preferences; each key is
-      // validated on its own below, so old profiles hydrate to false.
+      // Field stow. Absent from older preferences; each key is validated on
+      // its own below, so old profiles hydrate to false.
       stowLeft: false,
       stowRightTop: false,
       stowRightBottom: false,
-      // Per-panel collapse (D3), every panel open to begin with. Written into
+      // Per-panel collapse, every panel open to begin with. Written into
       // the same key as the rest; a preference saved before these existed
       // hydrates without them, because each key is validated on its own.
       ...Object.fromEntries(
@@ -1570,7 +1562,7 @@ export class ClassicLayoutController {
 
   /**
    * Find or create a labeled slot section inside `parent`, with an optional
-   * desktop-style titlebar (text + fold/close button).
+   * desktop-style titlebar (text + optional close button).
    * @param {Element} parent - the grid, or a container such as the bottom strip
    * @param {{id: string, className: string, label: string, titlebar?: Object}} def
    * @returns {Element} the element moved panels are appended into

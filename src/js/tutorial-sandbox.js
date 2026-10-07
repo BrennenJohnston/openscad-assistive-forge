@@ -118,13 +118,13 @@ function findScrollableParent(element) {
 /**
  * The highest point on screen where this element can actually be seen.
  *
- * The nearest SCROLLABLE ancestor is not the right answer: an ancestor whose
+ * The nearest scrollable ancestor is not the right answer: an ancestor whose
  * content happens to fit still clips with `overflow: auto`, and the scrollable
- * one may be further out and start at the top of the window. MEASURED on the
+ * one may be further out and start at the top of the window. Measured on the
  * CI Firefox runner, where wider fonts make `#welcomeScreen`'s content fit so
  * it is not scrollable: aligning to the scrollable ancestor put the target at
  * y=48 under an 86px header, while `#welcomeScreen` itself was still clipping
- * at ~145. So take the lowest top edge of every CLIPPING ancestor.
+ * at ~145. So take the lowest top edge of every clipping ancestor.
  *
  * @param {HTMLElement} el
  * @returns {number} Viewport y below which the element is not clipped
@@ -148,13 +148,12 @@ function visibleTopBoundFor(el) {
  * Bring a target into view inside its own scroll container, leaving room for
  * the halo.
  *
- * Triage Table 1 #5 (reported at UF-17): on the welcome tour's Open-or-start
- * step the halo's top edge, and the panel's own heading with it, disappeared
- * under the header. MEASURED at the base: #welcomeScreen is the scroll
- * container and its visible box starts 124px down, but scrollIntoView with
- * block:'center' centers against the WINDOW, so it parked the 476px panel at
- * y=13 and the container clipped its first 111px. The halo's top edge sat 66px
- * above the header's bottom edge.
+ * scrollIntoView with block:'center' centers against the window, not the
+ * scroll container. On the welcome tour's Open-or-start step,
+ * #welcomeScreen is the scroll container and its visible box starts 124px
+ * down, so centering against the window parks the 476px panel at y=13, the
+ * container clips its first 111px, and the halo's top edge and the panel's
+ * heading disappear under the header.
  *
  * Centring inside the container's own client box instead keeps the whole
  * target, halo included, where it can be seen. A target too tall for the box
@@ -795,16 +794,10 @@ function handleDrawerStateChange(isNowOpen) {
       !isNowOpen &&
       checkIfAnyTargetInsideDrawer(step)
     ) {
-      // D-63 (U-42, owner's phone). This branch used to call openParamPanel()
-      // and drag the panel back open, on the grounds that the tutorial needed
-      // it. MEASURED at the release base, 412x915, intro step 4: the user
-      // pressed Close, the observer reopened the drawer inside 500ms, and at
-      // 2000ms it was still open - the close never took. Together with D-62
-      // that is what made Restore look dead: close, reopen, re-minimize, back
-      // to the pill, "no input or button pressing registers".
-      //
-      // The user's close wins now. The tour points at the way back in, says
-      // so, and waits.
+      // The user's close wins. Reopening the drawer here, on the grounds that
+      // the tutorial needs it, would undo the user's Close inside 500 ms and
+      // leave the tour looking dead. Instead the tour points at the way back
+      // in, says so, and waits.
       showDrawerRequirement();
     }
   }, 100); // Debounce for 100ms
@@ -853,23 +846,21 @@ function checkIfAnyTargetInsideDrawer(step) {
 /**
  * Does this step need the Customizer panel opened before it can be shown?
  *
- * U-42 (owner's phone, 2026-08-21): "step 3 does not highlight anything for
- * the user to interact with". The old answer was "does ANY target live inside
- * the panel", and step 3 - the step that TEACHES opening the panel - lists
- * `@mobile-drawer-close` first. That resolves in the DOM while the drawer is
- * shut, so the engine opened the drawer for it and then ringed the Close
- * button, teaching the opposite of what the card said.
+ * The question is whether the step can be shown at all without opening it,
+ * not whether any target lives inside the panel. The step that teaches
+ * opening the panel lists `@mobile-drawer-close` first, which resolves in
+ * the DOM while the drawer is shut; opening the drawer for it would ring
+ * the Close button and teach the opposite of what the card says.
  *
- * The honest question is whether the step can be shown at all without opening
- * it. If some target is inside the panel but another one outside is already on
- * screen, the step has something to point at and the panel stays as the user
- * left it. Step 3 then arrives with the drawer shut and the ring on the
- * Customizer button, and the drawer observer moves the ring to the Close
- * button when the user opens it - the step follows the user through both
- * halves of what it is teaching.
+ * If some target is inside the panel but another one outside is already on
+ * screen, the step has something to point at and the panel stays as the
+ * user left it. That step then arrives with the drawer shut and the ring on
+ * the Customizer button, and the drawer observer moves the ring to the
+ * Close button when the user opens it: the step follows the user through
+ * both halves of what it is teaching.
  *
  * A collapsed desktop panel still expands: there the only visible candidate
- * IS inside the panel.
+ * is inside the panel.
  * @param {Object} step - Tutorial step
  * @returns {boolean}
  */
@@ -885,10 +876,9 @@ function stepNeedsParamPanelOpen(step) {
 const REQUIREMENT_PENDING_TEXT = '↑ Complete the action above to continue';
 
 /**
- * Q-74 + Q-76 (owner, 2026-08-22): the requirement names the control by the
- * label it wears on the surface the reader is looking at. On a phone the panel
- * is a drawer you OPEN with a button marked Customizer; on a desktop it is a
- * panel you EXPAND. Both labels renamed by UF-40 (Q-70).
+ * The requirement names the control by the label it wears on the surface
+ * the reader is looking at. On a phone the panel is a drawer you open with
+ * a button marked Customizer; on a desktop it is a panel you expand.
  */
 const DRAWER_REQUIREMENT_TEXT = {
   mobile: 'Open the Customizer to continue.',
@@ -896,7 +886,7 @@ const DRAWER_REQUIREMENT_TEXT = {
 };
 
 /**
- * The user closed the Customizer while a step still points inside it (D-63).
+ * The user closed the Customizer while a step still points inside it.
  * Ring the control that opens it again and say what is needed, instead of
  * reopening the panel against them.
  *
@@ -968,8 +958,8 @@ function getStepContent(step) {
 
 /**
  * Modes a tutorial runs in when it does not declare its own homeModes.
- * Tutorials whose targets are Forge chrome break over the Classic DOM
- * (U-12), so cross-interface launches go through the consent dialog.
+ * Tutorials whose targets are Forge chrome break over the Classic DOM, so
+ * cross-interface launches go through the consent dialog.
  */
 const FORGE_HOME_MODES = ['simplified', 'standard'];
 
@@ -1241,11 +1231,10 @@ const TUTORIALS = {
         position: 'bottom',
         completion: { type: 'modalClose', selector: '#featuresGuideModal' },
       },
-      // U-29 / Q-51b (owner, 2026-08-14): the Simplified/Standard teaching
-      // moved here from the welcome tour, near the end so nothing the tour
-      // shows depends on the choice made in it. Q-51c: the step INVITES the
-      // press and never requires it, so no completion gate. The tour survives
-      // the press (U-28), which is what makes teaching it by pressing safe.
+      // The Simplified/Standard teaching sits near the end, so nothing the
+      // tour shows depends on the choice made in it. The step invites the press
+      // and never requires it, so there is no completion gate. The tour
+      // survives the press, which is what makes teaching it by pressing safe.
       {
         title: 'Simplified or Standard',
         content: `
@@ -1276,7 +1265,7 @@ const TUTORIALS = {
         `,
         position: 'center',
       },
-      // U-45 (UF-39): the tour ends by naming the way back, because the way
+      // The tour ends by naming the way back, because the way
       // back people reached for was the browser's Back button, and it closed
       // the app.
       {
@@ -1465,7 +1454,7 @@ const TUTORIALS = {
         showWhen: isClassicStandardDensity,
         skipReason: 'not available in this view',
       },
-      // U-29 / Q-51b: the Classic half of the moved teaching. It sits after
+      // The Classic half of the Simplified/Standard teaching. It sits after
       // the editor, console and Preferences steps deliberately: those three
       // only appear in the Standard view, so a user who chooses Simplified
       // here has already been shown what the extra panes hold.
@@ -1489,7 +1478,7 @@ const TUTORIALS = {
         `,
         position: 'center',
       },
-      // U-45 (UF-39): the Classic half of the same ending. One DOM node carries
+      // The Classic half of the same ending. One DOM node carries
       // the Main Page button in both interfaces, so both tours point at it.
       {
         title: 'Back to the Main Page',
@@ -1502,11 +1491,10 @@ const TUTORIALS = {
       },
     ],
   },
-  // U-24 (UF-17): the welcome-page tour. No project loads, no mode is
-  // forced; the Classic variant resolves through modeVariants exactly the
-  // way intro/classic-intro pair up, so the registry records both as the
-  // 'welcome' family. surface: 'welcome' arms the surface-flip close guard.
-  // All strings are the Q-44-approved D-35 pack, verbatim.
+  // The welcome-page tour. No project loads, no mode is forced; the Classic
+  // variant resolves through modeVariants exactly the way intro/classic-intro
+  // pair up, so the registry records both as the 'welcome' family.
+  // surface: 'welcome' arms the surface-flip close guard.
   welcome: {
     id: 'welcome',
     title: 'Main Page Tour',
@@ -1529,10 +1517,9 @@ const TUTORIALS = {
         highlightSelector: '#shortcutsToggle',
         position: 'bottom',
       },
-      // U-29 / Q-51a (owner, 2026-08-14): the Simplified/Standard step used to
-      // sit here. It moved to the box tour, where pressing the switch does
-      // something; on the welcome surface it changes nothing a user can see.
-      // This SUPERSEDES that part of the Q-44 welcome pack. 14 steps -> 13.
+      // No Simplified/Standard step here: it belongs to the box tour, where
+      // pressing the switch does something; on the welcome surface it changes
+      // nothing a user can see.
       {
         title: 'High contrast',
         content: `
@@ -1660,9 +1647,8 @@ const TUTORIALS = {
         highlightSelector: '#shortcutsToggle',
         position: 'bottom',
       },
-      // U-29 / Q-51a: moved to the Classic box tour, same reasoning as the
-      // Forge welcome tour above. SUPERSEDES that part of the Q-44 pack.
-      // 11 steps -> 10.
+      // No Simplified/Standard step here either: it belongs to the Classic box
+      // tour, for the same reason as the Forge welcome tour above.
       {
         title: 'Open or start a project',
         content: `
@@ -2173,12 +2159,12 @@ function clearTutorialProgress() {
 }
 
 // ============================================================================
-// Persistent tutorial registry (UF-16)
+// Persistent tutorial registry
 // ============================================================================
 // localStorage, unlike the sessionStorage step progress above: completing a
-// tutorial ERASES its progress record, so "was this ever opened/completed?"
-// needs its own persistent answer. The welcome spotlight (U-23) and the
-// welcome tour's chaining (UF-17) both read it.
+// tutorial erases its progress record, so "was this ever opened/completed?"
+// needs its own persistent answer. The welcome spotlight and the
+// welcome tour's chaining both read it.
 //
 // Shape under STORAGE_KEY_TUTORIAL_STATE:
 //   { [familyId]: { opened?: ms, completed?: ms, dismissed?: ms } }
@@ -2189,7 +2175,7 @@ export const TUTORIAL_STATE_EVENT = 'forge:tutorial-state-change';
 /**
  * Fired on document when a tour appears or leaves. `detail.running` is true
  * while the overlay is on screen. Consumed by the mobile drawer, which must
- * not claim `aria-modal` over a tour card sitting outside it (D-70).
+ * not claim `aria-modal` over a tour card sitting outside it.
  */
 export const TUTORIAL_RUN_EVENT = 'forge:tutorial-run-change';
 
@@ -2256,17 +2242,20 @@ export function getTutorialFamilyState(tutorialId) {
     : {};
 }
 
-/** @param {string} tutorialId - The RESOLVED id of the tutorial that opened */
+/** @param {string} tutorialId - The resolved id of the tutorial that opened */
 export function recordTutorialOpened(tutorialId) {
   writeTutorialRegistryField(tutorialId, 'opened');
 }
 
-/** @param {string} tutorialId - The RESOLVED id of the completed tutorial */
+/** @param {string} tutorialId - The resolved id of the completed tutorial */
 export function recordTutorialCompleted(tutorialId) {
   writeTutorialRegistryField(tutorialId, 'completed');
 }
 
-/** @param {string} tutorialId - The family whose spotlight was dismissed (Q-43a: permanent) */
+/**
+ * @param {string} tutorialId - The family whose spotlight was dismissed
+ *   for good
+ */
 export function recordTutorialSpotlightDismissed(tutorialId) {
   writeTutorialRegistryField(tutorialId, 'dismissed');
 }
@@ -2275,9 +2264,8 @@ export function recordTutorialSpotlightDismissed(tutorialId) {
  * Keep the promise `aria-modal` makes. Each of these dialogs is two buttons,
  * so the trap is a Tab cycle over them plus an Escape answer.
  *
- * UF-8 reported that the resume and error dialogs claimed aria-modal without
- * any trap while only the mode-choice dialog implemented one; this is that
- * single implementation, used by all three.
+ * One implementation for the resume, error and mode-choice dialogs, so
+ * none of them claims aria-modal without a trap.
  *
  * @param {HTMLElement} modal - The dialog element
  * @param {() => void} onEscape - What Escape answers
@@ -2431,9 +2419,8 @@ function showTutorialErrorDialog(message) {
 }
 
 /**
- * Ask before a tutorial switches the interface (U-12). Wording is
- * owner-approved (D-35, 2026-08-11) with the interface names filled per
- * direction. Resolves true to switch.
+ * Ask before a tutorial switches the interface, with the interface names
+ * filled in per direction. Resolves true to switch.
  * @param {Object} tutorial - Entry from TUTORIALS
  * @returns {Promise<boolean>}
  */
@@ -2511,10 +2498,10 @@ function lockBodyScroll() {
     didLockBodyScroll = false;
     return;
   }
-  // U-24: a welcome-surface tour spans the header AND the welcome column.
+  // A welcome-surface tour spans the header and the welcome column.
   // Reaching its start card means the document may be scrolled, and the
   // body lock freezes that offset into body.top — pinning the header
-  // permanently off-view, where every header step fails (D-23 cascade).
+  // permanently off-view, where every header step fails.
   // Zero the document first; the welcome column keeps its own scroll for
   // the per-step reveals lower down.
   if (activeTutorial?.surface === 'welcome' && window.scrollY > 0) {
@@ -2606,9 +2593,9 @@ async function skipToNextValidStep(
   announceToScreenReader(`Step skipped: ${reason}`);
   const nextIndex = findNextValidStepIndex(stepIndex + direction, direction);
   if (nextIndex === null) {
-    // Defect D-28: skipping past the end because the remaining steps do not
+    // Skipping past the end because the remaining steps do not
     // apply to this layout is a finish; skipping past it because a step
-    // FAILED taught nothing, so it must not be recorded as one. The caller
+    // failed taught nothing, so it must not be recorded as one. The caller
     // says which it is.
     closeTutorial(completedIfPastEnd);
     return;
@@ -2691,7 +2678,7 @@ function watchTargetRemoval(targetElement, onRemoved) {
 /**
  * Watch the step's target and survive a re-render.
  *
- * U-28 anchor resilience: a mode or density change rebuilds panels, which
+ * Anchor resilience: a mode or density change rebuilds panels, which
  * removes the highlighted node and puts an equivalent one back a moment
  * later. Look for that replacement once before treating the removal as a
  * failure, so an interface change costs the user nothing.
@@ -2726,10 +2713,10 @@ function armTargetRemovalWatch(target, stepIndex) {
 /**
  * Re-settle the current step after the interface changed under it.
  *
- * U-28 / Q-50a (owner, 2026-08-14): a layout change the tour can live with
+ * A layout change the tour can live with
  * must not end it. If the step's subject left the screen it skips forward
  * with the reason it already carries; otherwise the spotlight simply follows
- * the element to wherever it now is. The completion gate is deliberately NOT
+ * the element to wherever it now is. The completion gate is deliberately not
  * rebuilt, so a step whose action the user has already done does not ask for
  * it a second time.
  *
@@ -2811,11 +2798,10 @@ function handleBeforeUnload() {
 /**
  * Handle browser back/forward navigation during tutorial
  *
- * Q-86 (owner, 2026-08-22): a Back press used to mean the document was on its
- * way out, so ending the tour was the only honest thing to do with it. Since
- * UF-39 the app answers that press with a dialog, and the person who chose
- * "Stay in the app" is standing on the step they were on. Progress is still
- * saved either way, so a tour that does end here can be resumed.
+ * Progress is saved first, so a tour that ends here can be resumed. When
+ * the app itself answered the Back press (its dialog, where the person can
+ * choose "Stay in the app"), the tour stays on the step it was on; any
+ * other Back press ends it.
  */
 function handlePopState() {
   if (!activeTutorial) return;
@@ -2952,7 +2938,7 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
     return;
   }
 
-  // U-12 (Q-29 entry decision): a tutorial may name a sibling built for
+  // A tutorial may name a sibling built for
   // the current interface - the welcome card's intro launches the Classic
   // tour inside Classic, directly and in place. Resolve before any gating.
   const modeCtrl = getUIModeController();
@@ -2962,9 +2948,9 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
     tutorial = TUTORIALS[variantId];
   }
 
-  // U-12: tutorials declare the interface they are built for (homeModes;
-  // Forge chrome by default). A cross-interface launch asks first
-  // (owner-approved wording, D-35); cancel stays put.
+  // Tutorials declare the interface they are built for (homeModes; Forge
+  // chrome by default). A cross-interface launch asks first; cancel stays
+  // put.
   const homeModes = tutorial.homeModes || FORGE_HOME_MODES;
   if (!homeModes.includes(modeCtrl.getMode())) {
     const proceed = await showTutorialModeChoiceDialog(tutorial);
@@ -3000,12 +2986,11 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
     }
   }
 
-  // Defect D-33: a tour already on screen has to be closed BEFORE this run
-  // captures any state. closeTutorial resets the module's globals, so doing
-  // it later (as createTutorialOverlay did) wiped the incoming tutorial and
-  // threw on activeTutorial.title, leaving no tour at all. Every abort path
-  // above has already returned, so nothing is destroyed for a tour that then
-  // fails to open.
+  // A tour already on screen has to be closed before this run captures any
+  // state: closeTutorial resets the module's globals, so closing it later
+  // would wipe the incoming tutorial and leave no tour at all. Every abort
+  // path above has already returned, so nothing is destroyed for a tour
+  // that then fails to open.
   if (tutorialOverlay) {
     closeTutorial(false, { skipAnnouncement: true });
   }
@@ -3020,7 +3005,7 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   // Move to the tutorial's home interface (consented above) or its declared
   // forceMode (the intro tour runs in Simplified). Capture the pre-tutorial
   // state first: the forced switch must never leave its mode behind as the
-  // user's density or saved preference (U-12).
+  // user's density or saved preference.
   preTutorialMode = modeCtrl.getMode();
   preTutorialDensity = modeCtrl.getClassicDensity();
   tutorialForcedMode = false;
@@ -3039,7 +3024,7 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
         skipFocus: true,
       }) === true;
     if (!tutorialForcedMode && !homeModes.includes(modeCtrl.getMode())) {
-      // The consented switch was refused (UF-5's viewport gate): never
+      // The consented switch was refused (the viewport gate): never
       // start a tour whose interface is absent.
       announceToScreenReader(
         'Classic needs a wider window right now, so the tour cannot start. Your file stays open.',
@@ -3057,23 +3042,22 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
 
   createTutorialOverlay();
 
-  // Q-28a, as revised by Q-50a: a user interface switch is handled here
+  // A user interface switch is handled here
   modeChangeUnsubscribe = modeCtrl.subscribe((newMode) =>
     handleModeChangeDuringTutorial(newMode)
   );
-  // U-28: the Classic density switch never reaches those subscribers
+  // The Classic density switch never reaches those subscribers
   // (setClassicDensity dispatches this event instead), so the tour listens
   // for it directly and re-settles the same way.
   densityChangeListener = () => {
     void reResolveStepAfterLayoutChange('the Classic view changed');
   };
   document.addEventListener('classic-density-change', densityChangeListener);
-  // U-24: spotlight cutouts stay clickable, so a user can open a project
-  // in the middle of a welcome-surface tour. That action wins the same way
-  // a mode switch does; the tour closes with its surface. U-45 (UF-39) makes
-  // it symmetrical: a project tour now ends on a step that invites a press of
-  // the Main Page button, and its steps point at chrome the welcome screen
-  // does not have.
+  // Spotlight cutouts stay clickable, so a user can open a project in the
+  // middle of a welcome-surface tour. That action wins the same way a mode
+  // switch does; the tour closes with its surface. It is symmetrical: a
+  // project tour ends on a step that invites a press of the Main Page
+  // button, and its steps point at chrome the welcome screen does not have.
   watchSurfaceChangeDuringTutorial(
     tutorial.surface === 'welcome' ? 'welcome' : 'project'
   );
@@ -3089,8 +3073,8 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
  * Create the tutorial overlay DOM structure
  */
 function createTutorialOverlay() {
-  // startTutorial closes a running tour before it captures state (D-33), so
-  // this is only a stale-node guard and must NOT reset the module's state:
+  // startTutorial closes a running tour before it captures state, so
+  // this is only a stale-node guard and must not reset the module's state:
   // closeTutorial would null the activeTutorial this overlay is being built
   // for.
   if (tutorialOverlay) {
@@ -3220,7 +3204,7 @@ function createTutorialOverlay() {
 }
 
 /**
- * Tell the rest of the app that a tour is or is not on screen (D-70).
+ * Tell the rest of the app that a tour is or is not on screen.
  *
  * A document event rather than an import, for the reason the drawer's own
  * `ui-mode-changed` listener already gives: the drawer must not depend on the
@@ -3244,9 +3228,9 @@ function setupTutorialListeners() {
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay.querySelector('#tutorialNextBtn');
 
-  // Defect D-32: passing closeTutorial straight to addEventListener handed
-  // the click event to its `completed` parameter, so the X recorded the tour
-  // as finished and threw the saved progress away.
+  // Not closeTutorial itself: addEventListener would hand the click event
+  // to its `completed` parameter, so the X would record the tour as
+  // finished and throw the saved progress away.
   closeBtn?.addEventListener('click', () => closeTutorial(false));
   minimizeBtn?.addEventListener('click', toggleMinimize);
   restoreBtn?.addEventListener('click', restoreFromBar);
@@ -3269,14 +3253,15 @@ function setupTutorialListeners() {
 }
 
 /**
- * Record, before anyone has had a chance to close it, whether something else
- * owned this Escape (Q-50c). Capture phase, so this runs ahead of the dialog's
- * own handler.
+ * Record, before anyone has had a chance to close it, whether something
+ * else owned this Escape. Capture phase, so this runs ahead of the
+ * dialog's own handler.
  *
- * The open Customizer drawer counts here even though D-62 stopped it counting
- * as a dialog anywhere else: its focus trap answers Escape by closing itself
- * and does not stop the event, so without this the one press would close the
- * drawer AND end the tour. One Escape, one surface; the next Escape exits.
+ * The open Customizer drawer counts here even though it does not count as
+ * a dialog anywhere else: its focus trap answers Escape by closing itself
+ * and does not stop the event, so without this the one press would close
+ * the drawer and end the tour. One Escape, one surface; the next Escape
+ * exits.
  */
 function noteDialogBeforeKeydown(e) {
   if (e.key === 'Escape') {
@@ -3299,11 +3284,11 @@ function handleKeydown(e) {
       activeElement.isContentEditable);
 
   if (e.key === 'Escape') {
-    // Q-50c: while a dialog the user opened from a spotlight is on screen,
+    // While a dialog the user opened from a spotlight is on screen,
     // Escape belongs to that dialog. Stand aside and let the app's own
     // handler close it; the next Escape exits the tour.
     //
-    // The dialog's own handler usually runs FIRST and removes the dialog, so
+    // The dialog's own handler usually runs first and removes the dialog, so
     // by the time this one is reached there is nothing left to see. That is
     // what noteDialogBeforeKeydown records, on the capture phase.
     if (escapeOwnedElsewhere || isAppDialogOpen() || isMobileDrawerOpen())
@@ -3487,18 +3472,9 @@ function toggleMinimize() {
 }
 
 /**
- * D-44 (UF-25, owner 2026-08-15) is SUPERSEDED here, not re-fixed.
- *
- * Its symptom was that Restore did nothing on a phone while the drawer was
- * open: the watcher re-minimized the tour in the same frame, so the button was
- * visible, labeled, and inert. The patch was to make Restore close the drawer
- * first - the move a person had to make by hand to get the tour back.
- *
- * That was a patch over D-62. With the drawer no longer counted as a dialog
- * there is nothing to re-minimize the tour, so Restore is a plain restore
- * again, and the tour comes back over the drawer the user is working in
- * instead of shutting it. UF-37's suite re-proves the dead-Restore scenario
- * impossible rather than trusting this comment.
+ * A plain restore. The open drawer does not count as a dialog, so nothing
+ * re-minimizes the tour, and the tour comes back over the drawer the user
+ * is working in instead of shutting it.
  */
 function restoreFromBar() {
   toggleMinimize();
@@ -3558,18 +3534,15 @@ const TUTORIAL_OWN_DIALOGS =
   '.tutorial-resume-modal, .tutorial-error-modal, .tutorial-mode-choice-modal';
 
 /**
- * D-62 (U-42, owner's phone, 2026-08-21). The Customizer drawer wears
- * role="dialog" for as long as it is open (drawer-controller.js), because on a
- * phone it covers the screen and holds focus. To the dialog watcher that read
- * as "the user opened a dialog over the tour", so the tour stood down on EVERY
- * drawer step on a phone - and the drawer steps are most of the tour.
- * MEASURED at the release base, 412x915, steps 3 and 4 of the intro tour: card
- * hidden, veil at 0.3, nothing on screen but a "Tutorial 3/17" pill.
+ * The Customizer drawer wears role="dialog" for as long as it is open
+ * (drawer-controller.js), because on a phone it covers the screen and holds
+ * focus. Counted as a dialog, it would make the tour stand down on every
+ * drawer step on a phone, and the drawer steps are most of the tour.
  *
  * The drawer is the app's own chrome and usually the very thing a step is
- * teaching, so it is not a dialog the tour has to get out of the way of. A real
- * dialog rendered INSIDE the drawer still counts: only the panel itself is
- * skipped, never its contents.
+ * teaching, so it is not a dialog the tour has to get out of the way of. A
+ * real dialog rendered inside the drawer still counts: only the panel
+ * itself is skipped, never its contents.
  */
 const APP_CHROME_DIALOG_SELECTOR = '#paramPanel';
 
@@ -3579,7 +3552,7 @@ const isRendered = (el) =>
     : getComputedStyle(el).display !== 'none';
 
 /**
- * Every dialog the USER has open, outermost only. Document order puts an
+ * Every dialog the user has open, outermost only. Document order puts an
  * ancestor before its own `.modal-overlay` child, so the first match of a
  * nested pair is the one worth measuring.
  * @returns {HTMLElement[]}
@@ -3598,7 +3571,7 @@ function findOpenAppDialogs() {
 }
 
 /**
- * Is a dialog the USER opened currently on screen?
+ * Is a dialog the user opened currently on screen?
  * @returns {boolean}
  */
 function isAppDialogOpen() {
@@ -3614,19 +3587,18 @@ function dialogContentBox(dialog) {
 }
 
 /**
- * D-61 / Q-66 (owner, 2026-08-21). A dialog opened from a spotlighted control
- * has to be the topmost thing on screen, and Q-50c's minimize alone never made
- * it one: the veil kept painting over the dialog at 0.3, the target kept the
- * elevation and ring the highlight class gives it, and the pill kept its
- * bottom-right corner. MEASURED at 412x730 - the owner's phone once its
- * browser chrome is taken off the height - `document.elementFromPoint` at the
- * Clear Cache dialog's Cancel AND its red confirm both returned
- * `#clearStorageBtn`, and pressing that ringed button again stacked a second
- * dialog on the first. That is the loop the owner hit.
+ * A dialog opened from a spotlighted control has to be the topmost thing
+ * on screen, and minimizing the tour alone does not make it one: the veil
+ * would keep painting over the dialog at 0.3, the target would keep the
+ * elevation and ring the highlight class gives it, and the pill would keep
+ * its bottom-right corner. Without the stand-down, at 412x730
+ * `document.elementFromPoint` at the Clear Cache dialog's Cancel and at its
+ * red confirm both return `#clearStorageBtn`, and pressing that ringed
+ * button again stacks a second dialog on the first.
  *
- * So while a user-opened dialog is up the tour stands down completely. The one
- * exception is a step whose own target lives inside that dialog - the Features
- * Guide steps, where the dialog IS the subject and its deliberate
+ * So while a user-opened dialog is up the tour stands down completely. The
+ * one exception is a step whose own target lives inside that dialog: the
+ * Features Guide steps, where the dialog is the subject and its deliberate
  * lit-through-the-cutout presentation is the step.
  */
 function applyDialogStandDown(dialogs) {
@@ -3663,16 +3635,14 @@ function applyDialogStandDown(dialogs) {
  * Keep the pill off the dialog's own box - and otherwise leave it exactly where
  * it lives.
  *
- * The first cut of this measured only the vertical gaps a dialog left, and CI
- * Firefox caught what that costs: the keyboard-shortcuts dialog paints
- * x 290-990 while the pill sits at x 1152, so it could never have been covered,
- * yet a 51px vertical gap was enough to make this function hide it. MEASURED at
- * 1280x600. A dialog the pill does not touch is a dialog it does not need to
- * dodge.
+ * A dialog the pill does not touch is a dialog it does not need to dodge:
+ * at 1280x600 the keyboard-shortcuts dialog paints x 290-990 while the pill
+ * sits at x 1152, so measuring only the vertical gaps would hide a pill
+ * that could never have been covered.
  *
  * So: only act on a real intersection. Then prefer a gap above, then below, and
  * only when neither can hold it does the pill go - because covering a dialog's
- * controls is the defect being fixed, and a focusable control outside an
+ * controls is what this prevents, and a focusable control outside an
  * `aria-modal` dialog is a focus-trap leak besides. Closing the dialog restores
  * it, and the tour with it.
  */
@@ -3720,7 +3690,7 @@ function keepPillClearOfDialogs(pill, dialogs) {
 
 /**
  * Give back everything the stand-down took. The ring goes back on whatever the
- * step points at NOW, never on whoever happened to be wearing it when the
+ * step points at now, never on whoever happened to be wearing it when the
  * dialog opened: on the Features Guide steps the modal opens while the ring is
  * still on the Help button, and handing that button its ring back leaves a
  * blue orphan burning behind the modal.
@@ -3760,12 +3730,12 @@ function syncDialogStandDown() {
 }
 
 /**
- * Q-50c (owner, 2026-08-14): pressing a spotlighted control that opens a
- * dialog must not leave the dialog stranded under the veil. MEASURED at the
- * base: the Clear Cache dialog computes z-index 1000 against the veil's
- * 10003, so it opened dimmed with the tour panel lying across it and focus on
- * a button the user could barely see. While any dialog is up the tour shrinks
- * to its bar and the veil fades; when the dialog goes, the tour comes back.
+ * Pressing a spotlighted control that opens a dialog must not leave the
+ * dialog stranded under the veil: the Clear Cache dialog's z-index is 1000
+ * against the veil's 10003, so it would open dimmed, with the tour panel
+ * lying across it and focus on a button the user could barely see. While
+ * any dialog is up the tour shrinks to its bar and the veil fades; when
+ * the dialog goes, the tour comes back.
  */
 function watchDialogsDuringTutorial() {
   let scheduled = false;
@@ -3854,17 +3824,17 @@ async function showStep(stepIndex) {
     isSettingUpStep = true;
 
     // Watch the panel whenever the step has anything inside it to point at,
-    // not only when the step opens it. Step 3 teaches BOTH halves - press
-    // Customizer to open, press Close to shut - and it now arrives with the panel
-    // shut (P2), so without this the ring could not follow the user in.
+    // not only when the step opens it. A step can teach both halves (press
+    // Customizer to open, press Close to shut) and arrive with the panel
+    // shut, so without this the ring could not follow the user in.
     if (checkIfAnyTargetInsideDrawer(step)) {
       // Set up observer to detect drawer/panel state changes (mobile + desktop)
       setupDrawerObserver();
     }
 
     if (stepNeedsParamPanelOpen(step)) {
-      // CRITICAL: Automatically open/expand the panel on BOTH mobile AND desktop
-      // The tutorial CANNOT proceed if the target element is hidden in a collapsed panel
+      // Open or expand the panel on both mobile and desktop: the tutorial
+      // cannot proceed while the target is hidden in a collapsed panel.
       if (!isParamPanelOpen()) {
         openParamPanel();
         // Wait for animation to complete
@@ -3881,7 +3851,7 @@ async function showStep(stepIndex) {
   // Resolve target with retry (late DOM availability + visibility)
   let resolvedTarget = null;
   if (step.highlightSelector || step.targetKey) {
-    // U-24: welcome-surface targets live down one long scrolling column,
+    // Welcome-surface targets live down one long scrolling column,
     // the resolver demands viewport intersection, and the engine's own
     // scroll runs only after resolution — so an off-screen target could
     // never resolve. Bring the candidate on screen first (instant, so the
@@ -3914,10 +3884,10 @@ async function showStep(stepIndex) {
     `;
   }
 
-  // D-65 (UF-38). The body is a scroll container and it keeps its offset
-  // across an innerHTML swap, so a reader who scrolled the previous step to
-  // the bottom arrived at the next one with its title already scrolled off the
-  // top. MEASURED at 412x810 while checking the new cue.
+  // The body is a scroll container and it keeps its offset across an
+  // innerHTML swap, so a reader who scrolled the previous step to the
+  // bottom would arrive at the next one with its title already scrolled
+  // off the top.
   const bodyEl = tutorialOverlay.querySelector('.tutorial-body');
   if (bodyEl) bodyEl.scrollTop = 0;
 
@@ -3979,9 +3949,9 @@ async function showStep(stepIndex) {
  * Park the card in the middle of the screen: the step asked for `center`, or
  * its target could not be resolved.
  *
- * D-65 (UF-38). Both callers used to do this by hand, and both left `dock()`'s
- * inline `width` and `maxHeight` behind while dropping the class that keeps
- * the mobile bottom-sheet rule away - so a centered card was sized by one
+ * One place for both callers, so neither leaves `dock()`'s inline `width`
+ * and `maxHeight` behind or drops the class that keeps the mobile
+ * bottom-sheet rule away; otherwise a centered card would be sized by one
  * step's dock arithmetic and padded by another rule's safe-area inset.
  * `tutorial-panel-centered` says which of the two un-docked states this is.
  *
@@ -4003,12 +3973,13 @@ function centerPanel(panel, arrow) {
 }
 
 /**
- * Say out loud that the card's body has more text below the fold (D-65).
+ * Show that the card's body has more text below the fold.
  *
- * The body is a scroll container with two independent caps above it, and until
- * now it clipped mid-sentence in silence. Presentation only: the cue element
- * is `aria-hidden`, takes no tab stop, and adds nothing to the live regions -
- * a screen-reader user reaches the rest through the scroll container itself.
+ * The body is a scroll container with two independent caps above it, and
+ * without a cue it clips mid-sentence in silence. Presentation only: the
+ * cue element is `aria-hidden`, takes no tab stop, and adds nothing to the
+ * live regions; a screen-reader user reaches the rest through the scroll
+ * container itself.
  */
 function updateScrollCue() {
   if (!tutorialOverlay) return;
@@ -4131,20 +4102,19 @@ function updateSpotlightAndPosition() {
     const deltaDown = targetRect.bottom - effectiveBottom;
     const topPadding = 16;
 
-    // Triage Table 1 #5. Two rules, and the order between them is the whole
-    // fix:
+    // Two rules, and the order between them matters:
     //
-    // `wanted` is where the target's top belongs. Aligning it to the WINDOW's
-    // top buries it under whatever chrome sits above its clipping box - on the
-    // welcome tour's Open-or-start step #welcomeScreen's box starts 124px down
-    // here and 148px down on the CI Firefox runner, and the panel's first
-    // hundred-odd pixels, halo and heading included, were simply clipped away.
+    // `wanted` is where the target's top belongs. Aligning it to the window's
+    // top would bury it under whatever chrome sits above its clipping box: on
+    // the welcome tour's Open-or-start step #welcomeScreen's box starts 124px
+    // down (148px on the CI Firefox runner), and the panel's first hundred-odd
+    // pixels, halo and heading included, would be clipped away.
     //
-    // `fits` decides whether showing the BOTTOM is even sensible. MEASURED on
-    // that runner, where wider fonts wrap the same panel to 648px inside a
-    // 572px box: the two rules fought, the bottom-first rule won, and it
-    // dragged the top back up to y=48 under an 86px header. A target too tall
-    // to fit has to show its top, because that is where its heading is.
+    // `fits` decides whether showing the bottom is even sensible. On that
+    // runner, wider fonts wrap the same panel to 648px inside a 572px box,
+    // and a bottom-first rule would drag the top back up to y=48 under an
+    // 86px header. A target too tall to fit has to show its top, because that
+    // is where its heading is.
     const wanted = visibleTopBoundFor(target) + topPadding + SPOTLIGHT_PADDING;
     const fits = targetRect.height <= effectiveBottom - wanted;
 
@@ -4232,12 +4202,11 @@ function updateSpotlightAndPosition() {
         ? Math.max(0, actionsBarRect.height || 0)
         : 0;
 
-    // UF-37: since D-62 the card stays up over the open Customizer drawer
-    // instead of collapsing to a pill, so a top dock now has something to
-    // respect. The drawer's title row carries its only Close button; a card
-    // starting at the viewport top lands squarely on it. MEASURED at 412x915
-    // on step 4 of the intro tour: the card covered y 8-348 and Playwright
-    // could not reach #drawerCloseBtn at all. Start below that row instead.
+    // The card stays up over the open Customizer drawer instead of collapsing
+    // to a pill, so a top dock has something to respect: the drawer's title
+    // row carries its only Close button, and a card starting at the viewport
+    // top would land squarely on it (at 412x915 it covered y 8-348). Start
+    // below that row instead.
     const drawerTitleRow = isMobileDrawerOpen()
       ? document.querySelector('#paramPanel .panel-header-title-row')
       : null;
@@ -4246,15 +4215,13 @@ function updateSpotlightAndPosition() {
         ? drawerTitleRow.getBoundingClientRect().bottom + 8
         : 0;
 
-    // D-77: the top dock starts below the app's own top chrome. A card
-    // pointing at something low on the screen docks upward, and at 412x810 a
-    // card starting at y 8 buried the header row and the Customizer row on
-    // its way past — measured on the intro tour's "Generate and download your
-    // file" step, where elementFromPoint at #uiModeToggle's center returned
-    // the card. Docking clear of the chrome is better than disqualifying the
-    // dock, which would cost the card its visibility on those steps.
-    // A bar the target itself lives in is not counted: the spotlight elevates
-    // that on purpose.
+    // The top dock starts below the app's own top chrome. A card pointing at
+    // something low on the screen docks upward, and at 412x810 a card
+    // starting at y 8 would bury the header row and the Customizer row on its
+    // way past. Docking clear of the chrome is better than disqualifying the
+    // dock, which would cost the card its visibility on those steps. A bar the
+    // target itself lives in is not counted: the spotlight elevates that on
+    // purpose.
     const topChromeBottom = [
       '.app-header',
       '#workflowProgress',
@@ -4301,12 +4268,10 @@ function updateSpotlightAndPosition() {
       return !!topEl && (panel.contains(topEl) || topEl === panel);
     };
 
-    // D-77: a docked card must not sit on a control it is not pointing at.
-    // Both tests above ask only about the step's OWN target, so a card that
-    // cleared its target could still bury the rest of the chrome — measured
-    // at 412x810 on the intro tour's "Generate and download your file" step,
-    // where the top-docked card covered #uiModeToggle and elementFromPoint
-    // at that button's center returned the card.
+    // A docked card must not sit on a control it is not pointing at. Both
+    // tests above ask only about the step's own target, so a card that
+    // cleared its target could still bury the rest of the chrome (at 412x810
+    // a top-docked card could cover #uiModeToggle).
     const clearanceRects = () => {
       const out = [];
       const selector = [
@@ -4389,7 +4354,7 @@ function updateSpotlightAndPosition() {
         }
 
         // Non-interactive step: keep the panel visible, choosing the docked
-        // side that buries the least — the target it points at plus (D-77)
+        // side that buries the least — the target it points at plus
         // the chrome it does not.
         const a1 = overlapArea(pr1, rect) + c1;
         const a2 = overlapArea(pr2, rect) + c2;
@@ -4682,16 +4647,13 @@ function adjustTutorialZIndex(targetElement) {
 
   let maxZ = 0;
   const collectZ = (el) => {
-    // D-67 (UF-36). The caller adds .tutorial-target-highlight one line before
-    // calling this, and that class elevates the target to
-    // --z-index-tutorial-highlight. Reading it back made the overlay measure
-    // its own work and climb above its own head on EVERY highlighted step, not
-    // just the awkward ones: MEASURED on the Clear Cache step before the fix,
-    // backdrop 10002 / spotlight 10003 / panel 10004 on a page whose real
-    // ancestors all sit below 950 - and a veil at 10003 is what buried the
-    // dialog at --z-index-modal. The overlay now starts above the whole
-    // highlight family by token, so this function is left with the job it was
-    // named for: genuinely high-z ancestors in the page.
+    // Skip the target's own highlight. The caller adds
+    // .tutorial-target-highlight one line before calling this, and that class
+    // elevates the target to --z-index-tutorial-highlight; reading it back
+    // would make the overlay measure its own work and climb above its own
+    // head on every highlighted step, burying dialogs at --z-index-modal. The
+    // overlay starts above the whole highlight family by token, so this
+    // function only has to handle genuinely high-z ancestors in the page.
     if (el.classList.contains('tutorial-target-highlight')) return;
     const zIndex = parseInt(getComputedStyle(el).zIndex, 10);
     if (!Number.isNaN(zIndex)) {
@@ -4992,17 +4954,10 @@ function clearCompletionListeners() {
 }
 
 /**
- * Q-28a (owner, 2026-08-11): a user interface switch wins over a running
- * tutorial. Close cleanly with progress saved and one announcement, never
- * switch the user back, and hand back any Classic density the tutorial's
- * own forced switch planted (U-12's empty-Classic poisoning).
- * @param {string} newMode - Mode the user switched into
- */
-/**
- * U-24: close a tour when the app surface it belongs to goes away. A welcome
+ * Close a tour when the app surface it belongs to goes away. A welcome
  * tour ends when a project opens through a spotlight cutout; a project tour
- * ends when the Main Page comes back (U-45, UF-39, where the last step points
- * at the button that does exactly that).
+ * ends when the Main Page comes back (its last step points at the button
+ * that does exactly that).
  *
  * Mirrors handleModeChangeDuringTutorial: the user's action wins, progress
  * is saved past step one, and the close announces its own reason.
@@ -5022,9 +4977,6 @@ function watchSurfaceChangeDuringTutorial(homeSurface) {
 
     closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
 
-    // Q-50d (owner, 2026-08-14): approved as drafted, in its final context.
-    // The D-35 review flag this line carried since UF-17 is retired. The
-    // Main Page half is UF-39's, and carries its own flag until signed.
     const reason =
       homeSurface === 'welcome'
         ? 'a project opened'
@@ -5040,14 +4992,21 @@ function watchSurfaceChangeDuringTutorial(homeSurface) {
   });
 }
 
+/**
+ * A user interface switch out of the tour's own interfaces wins over a
+ * running tutorial: close cleanly with progress saved and one
+ * announcement, never switch the user back, and hand back any Classic
+ * density the tutorial's own forced switch planted. A switch within them
+ * keeps the tour (see below).
+ * @param {string} newMode - Mode the user switched into
+ */
 function handleModeChangeDuringTutorial(newMode) {
   if (!activeTutorial) return;
 
-  // U-28 / Q-50a (owner, 2026-08-14) REVISES Q-28a: a switch inside the
-  // interface family this tour was built for is the user exploring, not the
-  // user leaving, so the tour stays and the step re-settles. Crossing between
-  // Forge and Classic still ends it, because the steps point at chrome the
-  // other layout does not have.
+  // A switch inside the interface family this tour was built for is the
+  // user exploring, not the user leaving, so the tour stays and the step
+  // re-settles. Crossing between Forge and Classic still ends it, because
+  // the steps point at chrome the other layout does not have.
   const homeModes = activeTutorial.homeModes || FORGE_HOME_MODES;
   if (homeModes.includes(newMode)) {
     // The user's own choice outlives the tour: closeTutorial must not switch
@@ -5130,7 +5089,7 @@ export function closeTutorial(completed = false, options = {}) {
     surfaceObserver = null;
   }
 
-  // Clean up the dialog watcher (Q-50c)
+  // Clean up the dialog watcher
   if (dialogObserver) {
     dialogObserver.disconnect();
     dialogObserver = null;
@@ -5193,7 +5152,7 @@ export function closeTutorial(completed = false, options = {}) {
   const currentStep = currentStepIndex + 1;
 
   // Clear or keep progress based on completion. The persistent registry
-  // record is written FIRST — clearTutorialProgress erases the only other
+  // record is written first: clearTutorialProgress erases the only other
   // evidence this run happened.
   if (completed) {
     if (activeTutorial?.id) {
@@ -5202,35 +5161,21 @@ export function closeTutorial(completed = false, options = {}) {
     clearTutorialProgress();
   }
 
-  // Defect D-43 (UF-25). Two faults lived here and both silently dropped
-  // focus onto <body>, which drops a keyboard or screen-reader user at the
-  // top of the document every time they leave a tour.
+  // Focus goes back to the control that opened the tour, else to whatever
+  // had focus before, and never silently to <body>, which would drop a
+  // keyboard or screen-reader user at the top of the document.
   //
-  // 1. previousFocus and triggerElement are module-level and were cleared
-  //    immediately after this callback was SCHEDULED, so by the time the
-  //    frame ran both read null and neither restore target was ever tried.
-  //    They are captured into locals here instead.
-  // 2. The old guard asked the element about its own display/visibility.
-  //    Neither reports 'none'/'hidden' for an element whose ANCESTOR is
-  //    hidden, so on the welcome screen the loop chose #primaryActionBtn
-  //    inside #mainInterface.hidden and .focus() was a no-op. isRendered()
-  //    uses checkVisibility(), which accounts for hidden ancestors.
-  // D-134. The TRIGGER is tried first, and previousFocus second.
-  //
-  // It was the other way round, and that made the restore depend on where a
-  // browser leaves focus after a click - which is not the same everywhere.
-  // MEASURED on WebKit: clicking "Take the tour" left `previousFocus` reading
-  // #main-content rather than the button, so the first branch restored to
-  // #main-content, reported success, and the button was never tried. A
-  // keyboard or screen-reader user pressed a button and was returned to the
-  // top of the document. Chromium happened to leave the button focused, so the
-  // same code passed there and the defect was invisible - and the test that
-  // catches it is skipped on CI, so no board ever showed it either.
-  //
-  // Preferring the trigger is also simply more correct: somebody pressed that
-  // control to open the tour, so that control is where leaving the tour should
-  // put them. previousFocus is the right answer only when nothing triggered
-  // this explicitly, which is what it is still there for.
+  // - previousFocus and triggerElement are module-level and are cleared as
+  //   soon as the callback below is scheduled, so they are captured into
+  //   locals here.
+  // - An element's own display/visibility does not report a hidden
+  //   ancestor, so canTakeFocus asks isRendered(), which uses
+  //   checkVisibility().
+  // - The trigger is tried first. Where a browser leaves focus after a
+  //   click differs (on WebKit, clicking "Take the tour" leaves
+  //   `previousFocus` reading #main-content), and somebody pressed that
+  //   control to open the tour, so that control is where leaving the tour
+  //   should put them.
   const restoreTo = triggerElement;
   const restoreFallback = previousFocus;
 
@@ -5292,7 +5237,7 @@ export function closeTutorial(completed = false, options = {}) {
   triggerElement = null;
 
   // Restore pre-tutorial UI mode if the tutorial changed it - unless the
-  // close was caused by the user's own switch, which must stand (Q-28a).
+  // close was caused by the user's own switch, which must stand.
   if (preTutorialMode && !options.skipModeRestore) {
     const modeCtrl = getUIModeController();
     if (modeCtrl.getMode() !== preTutorialMode) {
@@ -5307,13 +5252,13 @@ export function closeTutorial(completed = false, options = {}) {
         preTutorialDensity
       ) {
         // The restore switch itself records the tutorial's forced mode as
-        // the Classic density; hand the user's real density back (U-12).
+        // the Classic density; hand the user's real density back.
         modeCtrl.setClassicDensity(preTutorialDensity, {
           skipAnnouncement: true,
         });
       }
       if (!restored && preTutorialMode === 'classic') {
-        // UF-5's viewport gate refused Classic (window too small). Never
+        // The viewport gate refused Classic (window too small). Never
         // strand the user silently in a mode they did not choose.
         announceToScreenReader(
           'Classic needs a wider window right now, so you are staying in Assistive Forge. Your file stays open.'
@@ -5338,10 +5283,6 @@ export function closeTutorial(completed = false, options = {}) {
   }
 }
 
-/**
- * Announce a message to screen readers
- * @param {string} message - Message to announce
- */
 /**
  * Announce message to screen readers with optional politeness control.
  * Delegates to shared announcer.js utility using dual live regions

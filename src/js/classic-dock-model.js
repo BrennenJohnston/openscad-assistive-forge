@@ -1,10 +1,10 @@
 /**
- * Classic Dock Model (B6) — the field map behind Classic's relocatable dock.
+ * Classic Dock Model — the field map behind Classic's relocatable dock.
  *
  * The desktop's dock is Qt's; this is a small from-scratch equivalent. It
- * holds ONE piece of state — which panel sits in which dock field — and
- * exposes ONE mutation, movePanel(). Everything that relocates a panel goes
- * through it: the title-bar menu (B8), the Reset item (B9), and the tests.
+ * holds one piece of state — which panel sits in which dock field — and
+ * exposes one mutation, movePanel(). Everything that relocates a panel goes
+ * through it: the title-bar menu, the Reset item, and the tests.
  *
  * Shape:
  *
@@ -13,13 +13,13 @@
  *           never appears in the map.
  *   group   an ordered list of panels sharing one cell of a field. Separate
  *           groups sit side by side (the bottom strip) or stacked (a column);
- *           a group of two or more is what B7 draws as a tab group.
+ *           a group of two or more is drawn as a tab group.
  *
  *   { left: [['editor']], bottom: [['console'], ['errorLog']] }
  *
  * Groups exist because a field alone cannot express the default arrangement:
  * the bottom strip holds Console, Error-Log, Animate and Font List side by
- * side (desktop shots 1-3), so "more than one occupant" cannot by itself mean
+ * side, as on the desktop, so "more than one occupant" cannot by itself mean
  * "tab group" without turning the default layout into tabs.
  *
  * The model never touches CSS or announces anything; the layout controller
@@ -31,18 +31,19 @@
 import { getAppPrefKey } from './storage-keys.js';
 
 /**
- * The arrangement's own key (B9), separate from the column widths
- * (`classic-columns`, B4) and the pane visibility
- * (`openscad-forge-classic-panes`, B3): a corrupt arrangement can then be
+ * The arrangement's own key, separate from the column widths
+ * (`classic-columns`) and the pane visibility
+ * (`openscad-forge-classic-panes`): a corrupt arrangement can then be
  * cleared without costing the user either of the other two.
  */
 const DOCK_STORAGE_KEY = getAppPrefKey('classic-dock');
 
 /**
- * The dock fields, in the order the grid lays them out. `datasetSuffix` is the
- * body attribute B2 stamps (data-classic-field-<name>), kept here so the field
- * names have exactly one definition shared by the model, the controller and
- * the CSS attribute selectors.
+ * The dock fields, in the order the grid lays them out. `datasetSuffix` is
+ * the body attribute the layout controller stamps
+ * (data-classic-field-<name>), kept here so the field names have exactly
+ * one definition shared by the model, the controller and the CSS attribute
+ * selectors.
  * @type {ReadonlyArray<{name: string, datasetSuffix: string, elementId: string}>}
  */
 export const DOCK_FIELDS = Object.freeze([
@@ -70,8 +71,8 @@ export const DOCK_FIELDS = Object.freeze([
     positionLabel: 'lower right',
     insertAt: 'start',
   },
-  // The bottom strip predates the field model (B2) and keeps its id, so the
-  // CSS and the R2a regression tests that name it still apply.
+  // The bottom strip predates the field model and keeps its id, so the CSS
+  // and the tests that name it still apply.
   {
     name: 'bottom',
     datasetSuffix: 'Bottom',
@@ -86,9 +87,9 @@ export const DOCK_FIELDS = Object.freeze([
 export const DOCK_FIELD_NAMES = Object.freeze(DOCK_FIELDS.map((f) => f.name));
 
 /**
- * The name a dock field goes by in the interface. Owner-approved 2026-08-07:
- * a merged field's tablist is named after the field ("Bottom panels"), which
- * is what tells two tab groups apart when both are on screen.
+ * The name a dock field goes by in the interface. A merged field's tablist
+ * is named after the field ("Bottom panels"), which is what tells two tab
+ * groups apart when both are on screen.
  * @param {string} field
  * @returns {string}
  */
@@ -99,7 +100,7 @@ export function fieldLabel(field) {
 /**
  * The same name mid-sentence, for the move menu ("Move to left column") and
  * the announcement that follows it ("Console moved to the left column").
- * Owner-approved 2026-08-07. Held as its own string rather than lower-cased
+ * Held as its own string rather than lower-cased
  * from the label, so the two forms cannot drift.
  * @param {string} field
  * @returns {string}
@@ -109,11 +110,11 @@ export function fieldPositionLabel(field) {
 }
 
 /**
- * Where a panel lands in a field when the mover does not say (B8's menu items
- * carry no position). A column takes it FIRST — the panel you just moved is
- * the one you want to see, and it is what puts the Editor above the Customizer
- * in desktop screenshot 7. The bottom strip takes it LAST, because its panes
- * read left to right and a new one belongs at the end.
+ * Where a panel lands in a field when the mover does not say (the move
+ * menu's items carry no position). A column takes it first: the panel you
+ * just moved is the one you want to see, and it is what puts the Editor
+ * above the Customizer, as on the desktop. The bottom strip takes it last,
+ * because its panes read left to right and a new one belongs at the end.
  * @param {string} field
  * @returns {number|null} an index for movePanel, or null to append
  */
@@ -130,12 +131,12 @@ export function defaultInsertIndex(field) {
 export const CENTRE_FIELD = 'centre';
 
 /**
- * Every panel the dock can place, with the element that actually moves and the
- * field it starts in. The default arrangement is these `field` values, which
- * reproduce the owner's desktop screenshots 1-3.
+ * Every panel the dock can place, with the element that actually moves and
+ * the field it starts in. The default arrangement is these `field` values,
+ * which reproduce the desktop's default dock layout.
  *
- * Labels are the upstream dock names (Appendix U), owner-approved 2026-08-06 —
- * the same strings the slot titlebars show, defined once here.
+ * Labels are the upstream dock names, the same strings the slot titlebars
+ * show, defined once here.
  * @type {ReadonlyArray<{id: string, label: string, elementId: string, field: string}>}
  */
 export const DOCK_PANELS = Object.freeze([
@@ -211,10 +212,9 @@ export function defaultArrangement() {
 }
 
 /**
- * Tab-group chrome (B7). These are Classic-owned and deliberately share no id
- * or class with the Forge console's own `.console-view-tabs`, which Classic
- * hides (D-9) — two tab systems on one page must not style or select each
- * other.
+ * Tab-group chrome. These are Classic-owned and deliberately share no id or
+ * class with the Forge console's own `.console-view-tabs`, which Classic
+ * hides: two tab systems on one page must not style or select each other.
  */
 export const TAB_GROUP_CLASS = 'classic-dock-tabgroup';
 export const TAB_BAR_CLASS = 'classic-dock-tabbar';
@@ -232,7 +232,10 @@ export function tabIdFor(panelId) {
   return `classicDockTab-${panelId}`;
 }
 
-/** Why a move was refused. Consumed by B8 to keep illegal targets off the menu. */
+/**
+ * Why a move was refused, so the move menu can keep illegal targets off
+ * its list.
+ */
 export const MOVE_REJECTED = Object.freeze({
   UNKNOWN_PANEL: 'unknown-panel',
   UNKNOWN_FIELD: 'unknown-field',
@@ -260,10 +263,10 @@ export class ClassicDockModel {
     this._isPanelVisible = options.isPanelVisible || (() => true);
     this._isFieldAvailable = options.isFieldAvailable || (() => true);
     // Selecting a tab swaps which panel's titlebar sits in the shared bar, so
-    // whatever hangs controls off those title bars has to be told (B8).
+    // whatever hangs controls off those title bars has to be told.
     this._onGroupChange = options.onGroupChange || (() => {});
     // Below 1024px the dock collapses to a stack with no splitters and no
-    // relocation, so a user's arrangement is held but NOT applied (B9/D-6).
+    // relocation, so a user's arrangement is held but not applied.
     this._isDesktop = options.isDesktop || (() => true);
     const resolve = options.getElement;
     // The injected resolver answers for the panels and fields a test sets up;
@@ -276,7 +279,7 @@ export class ClassicDockModel {
     this._map = defaultArrangement();
 
     /**
-     * The selected panel of each merged group (B7). Exactly one member of
+     * The selected panel of each merged group. Exactly one member of
      * every group of two or more is in here; solo panels never are.
      * @type {Set<string>}
      */
@@ -290,7 +293,7 @@ export class ClassicDockModel {
     this._panelRoles = new Map();
 
     /**
-     * Where each relocated pane titlebar came from. A merged group shows ONE
+     * Where each relocated pane titlebar came from. A merged group shows one
      * titlebar — the active panel's, moved into the shared bar — so the fold
      * and close buttons on it keep working instead of disappearing.
      * @type {Map<Element, {parent: Element, nextSibling: Node|null}>}
@@ -303,7 +306,7 @@ export class ClassicDockModel {
    * The arrangement the DOM should currently show. At desktop widths that is
    * the user's; below the breakpoint the stack ignores the field map, so the
    * default is shown while the stored one is kept untouched — crossing the
-   * breakpoint and back returns exactly what the user left (B9).
+   * breakpoint and back returns exactly what the user left.
    * @returns {Record<string, string[][]>}
    * @private
    */
@@ -313,7 +316,7 @@ export class ClassicDockModel {
 
   /**
    * Read the saved arrangement. Anything that does not name every panel
-   * exactly once is refused WHOLE and the key dropped, so the dock opens on
+   * exactly once is refused whole and the key dropped, so the dock opens on
    * the default rather than a half-restored layout. The failure is logged,
    * never swallowed.
    * @returns {boolean} whether a stored arrangement was adopted
@@ -364,7 +367,7 @@ export class ClassicDockModel {
     }
   }
 
-  /** Persist the arrangement under its own key (B9). */
+  /** Persist the arrangement under its own key. */
   save() {
     try {
       localStorage.setItem(DOCK_STORAGE_KEY, JSON.stringify(this._map));
@@ -387,7 +390,7 @@ export class ClassicDockModel {
   }
 
   /**
-   * Replace the whole arrangement (B9 hydration). Rejected in full rather than
+   * Replace the whole arrangement (hydration). Rejected in full rather than
    * applied in part: a half-restored dock is worse than the default one.
    * @param {unknown} candidate
    * @returns {boolean} whether the candidate was accepted
@@ -400,7 +403,7 @@ export class ClassicDockModel {
     return true;
   }
 
-  /** Back to the default arrangement (View > Reset Panel Layout, B9). */
+  /** Back to the default arrangement (View > Reset Panel Layout). */
   reset() {
     this._map = defaultArrangement();
     this._normalizeActive();
@@ -443,7 +446,7 @@ export class ClassicDockModel {
 
   /**
    * Which fields hold at least one panel that is actually on screen. The grid
-   * collapses the rest to a zero track (B2).
+   * collapses the rest to a zero track.
    * @returns {Record<string, boolean>}
    */
   getOccupancy() {
@@ -458,8 +461,8 @@ export class ClassicDockModel {
   }
 
   /**
-   * Whether a panel may legally move to a field. B8 uses this so an illegal
-   * target is never offered as a menu item that does nothing.
+   * Whether a panel may legally move to a field. The move menu uses this so
+   * an illegal target is never offered as a menu item that does nothing.
    * @param {string} panelId
    * @param {string} targetField
    * @returns {boolean}
@@ -489,7 +492,7 @@ export class ClassicDockModel {
   /**
    * The only mutation. Moves a panel into `targetField` as its own group at
    * `index`, or into an existing occupant's group when `mergeWith` names one
-   * (that is the tab-merge B7 draws).
+   * (that is the tab merge).
    *
    * @param {string} panelId
    * @param {string} targetField
@@ -552,7 +555,7 @@ export class ClassicDockModel {
       };
     }
 
-    // A panel the user just merged is the one they want to see (B7).
+    // A panel the user just merged is the one they want to see.
     this._active.delete(panelId);
     this._normalizeActive();
     if (mergeWith !== null) this.setActivePanel(panelId);
@@ -632,18 +635,18 @@ export class ClassicDockModel {
    * survive exactly as they do for the entry moves
    * (classic-layout-controller.js header contract).
    *
-   * Panels whose element does not exist yet (the reserved Animate / Font List
-   * slots before sub-plan F, or any slot outside Classic) are skipped.
+   * Panels whose element does not exist (any slot outside Classic) are
+   * skipped.
    */
   applyToDom() {
     // Tab groups are torn down and rebuilt rather than reconciled in place: a
     // move is a deliberate, infrequent action, and rebuilding is the only way
     // to be sure a panel that has left a group takes none of the group's ARIA
-    // with it. Selecting a tab does NOT come through here.
+    // with it. Selecting a tab does not come through here.
     this.dissolveTabGroups();
 
     // Below the breakpoint the effective map has no groups at all, so the tab
-    // selection is dropped and re-picked on the way back. The ARRANGEMENT
+    // selection is dropped and re-picked on the way back. The arrangement
     // survives the round trip; which tab was showing does not.
     this._normalizeActive();
 
@@ -659,8 +662,7 @@ export class ClassicDockModel {
           .map((panelId) => this._getElement(elementIdFor(panelId)))
           .filter(Boolean);
         if (els.length === 0) continue;
-        // A group whose other members have no element yet — the reserved
-        // Animate and Font List slots before sub-plan F — is not a tab group.
+        // A group with only one member on the page is not a tab group.
         if (els.length === 1) wanted.push(els[0]);
         else wanted.push(this._buildTabGroup(field.name, group, els));
       }
@@ -683,7 +685,7 @@ export class ClassicDockModel {
   /**
    * Return every panel currently inside a tab group to its field container and
    * strip the tab wiring back off it. Public because exiting Classic has to
-   * undo the tab chrome BEFORE the layout controller moves the panels home —
+   * undo the tab chrome before the layout controller moves the panels home —
    * otherwise a panel leaves with role="tabpanel" and hidden still on it.
    */
   dissolveTabGroups() {
@@ -901,7 +903,7 @@ export class ClassicDockModel {
   }
 
   /**
-   * Where focus belongs after a panel moves (B7/B8): its tab when the target
+   * Where focus belongs after a panel moves: its tab when the target
    * field merged, otherwise the title bar the panel travels with.
    * @param {string} panelId
    * @returns {Element|null}
@@ -927,7 +929,7 @@ export function elementIdFor(panelId) {
  * Accept a stored arrangement only if it names every dock panel exactly once
  * across known fields. Anything else — a renamed panel, a duplicate, a missing
  * one, a non-array — is refused whole, so hydration can fall back to the
- * default instead of leaving a panel with no home (B9).
+ * default instead of leaving a panel with no home.
  *
  * @param {unknown} candidate
  * @returns {Record<string, string[][]>|null} a normalized copy, or null

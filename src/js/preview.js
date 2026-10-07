@@ -62,10 +62,10 @@ import {
   safeSetItem,
   safeRemoveItem,
 } from './storage-keys.js';
-// UF-14 (U-25): the viewing preferences the signed Q-40 table marks PER-UI
-// read and write through the scoped facade — one saved copy per interface.
-// Camera pose stays live shared state, and custom grid PRESETS stay
-// app-level (a saved library, not a viewing state).
+// The per-interface viewing preferences read and write through the scoped
+// facade: one saved copy per interface. Camera pose stays live shared
+// state, and custom grid presets stay app-level (a saved library, not a
+// viewing state).
 import {
   readScopedPref,
   writeScopedPref,
@@ -81,9 +81,9 @@ ColorManagement.enabled = false;
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
 /**
- * How far above a face the reference overlay sits when it is placed ON that
- * face (DP-5). Exactly coincident planes z-fight, and the overlay is meant to
- * be traced against the surface, so it has to win.
+ * How far above a face the reference overlay sits when it is placed on that
+ * face. Exactly coincident planes z-fight, and the overlay is meant to be
+ * traced against the surface, so it has to win.
  */
 const OVERLAY_SURFACE_EPSILON_MM = 0.25;
 
@@ -109,19 +109,18 @@ export function getThreeModule() {
     Group,
     Line,
     LineBasicMaterial,
-    // The dashed negative axis halves. Added here at the same time as the
-    // overlay that needs it — the axis-tick defect was exactly this class of
-    // omission, a consumer asking for a class this object does not carry.
+    // The dashed negative axis halves. A consumer asking for a class this
+    // object does not carry fails at runtime, so every class the overlays use
+    // is listed here.
     LineDashedMaterial,
     LineSegments,
     Vector3,
     // The axis-tick overlay rasterises its distance labels onto a canvas and
-    // hangs them in the scene as sprites. Without these three it threw
-    // "three.CanvasTexture is not a constructor" on every attempt and the
-    // whole overlay — tick lines included — was lost, because the throw
-    // happens before the group is returned. Its unit tests inject a mock
-    // module that DOES define them, which is why 20 of them passed against
-    // geometry the app could never build.
+    // hangs them in the scene as sprites. Without these three it would throw
+    // "three.CanvasTexture is not a constructor" before the group is returned,
+    // and the whole overlay, tick lines included, would be lost. Its unit
+    // tests inject a mock module that does define them, so they cannot catch
+    // a missing entry here.
     CanvasTexture,
     Sprite,
     SpriteMaterial,
@@ -132,13 +131,13 @@ export function getThreeModule() {
  * LOD (Level of Detail) configuration
  */
 /**
- * D-143 (DP-52 P4). Above this many triangles the cavity-tint classification
- * and the edge segments are computed in a worker and applied when they
- * arrive; below it they run here, as they always did, in a few milliseconds.
- * MEASURED: the two cost about 6 microseconds per triangle at 1x on this
- * machine and four times that at 4x, so 10,000 triangles is about 60 ms here
- * and 250 ms on a slow device - the most a load may hold the page. The
- * logo's Line art design (211,700 triangles) held it for 6.4 s at 4x.
+ * Above this many triangles the cavity-tint classification and the edge
+ * segments are computed in a worker and applied when they arrive; below it
+ * they run here, in a few milliseconds. The two cost about 6 microseconds
+ * per triangle on the development machine and four times that at a 4x CPU
+ * slowdown, so 10,000 triangles is about 60 ms there and 250 ms on a slow
+ * device, the most a load may hold the page. A 211,700-triangle design
+ * held the page for 6.4 s at 4x when this ran on the main thread.
  */
 export const SYNC_MESH_EXTRAS_MAX_TRIANGLES = 10_000;
 
@@ -152,19 +151,20 @@ const LOD_CONFIG = {
  * Theme-aware color scheme for 3D preview
  */
 // Cornfield front-face color: OpenSCAD src/glview/ColorMap.cc default ctor
-// OPENCSG_FACE_FRONT_COLOR = #F9D72C [OBSERVED]
-// Exported for reference/tests. Since 2026-07 the light theme no longer
-// uses the Cornfield pair directly: #f9d72c measures 1.3:1 against the
-// #f5f5f5 viewer background and fails WCAG 2.2 SC 1.4.11 (see
-// PREVIEW_COLORS below).
+// OPENCSG_FACE_FRONT_COLOR = #F9D72C.
+// Exported for reference and tests. The light theme does not use the
+// Cornfield pair directly: #f9d72c measures 1.3:1 against the #f5f5f5
+// viewer background and fails WCAG 2.2 SC 1.4.11 (see PREVIEW_COLORS
+// below).
 export const CORNFIELD_FRONT_COLOR = 0xf9d72c;
 
 // Cornfield back-face (CUTOUT) color: OpenSCAD src/glview/ColorMap.cc default ctor
-// OPENCSG_FACE_BACK_COLOR = #9DCB51 [OBSERVED]
+// OPENCSG_FACE_BACK_COLOR = #9DCB51
 export const CORNFIELD_BACK_COLOR = 0x9dcb51;
 
 // Desktop Phong exponent: OpenSCAD src/glview/GLView.cc line 324 (master),
-// src/GLView.cc line 351 (2021) — glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
+// src/GLView.cc line 351 (2021):
+// glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64).
 // Specular is black (0,0,0) so shininess has no visible effect, but aligning
 // for forward compatibility if specular is ever enabled.
 export const DESKTOP_SHININESS = 64;
@@ -174,9 +174,9 @@ export const DESKTOP_SHININESS = 64;
  * zoomCamera() takes — roughly 30% per press.
  *
  * The single source for every button, menu item and keyboard shortcut that
- * zooms by a fixed step (D-19). The View menu previously used 1, a ~2% step
- * that is effectively imperceptible and punishing for switch users, while the
- * camera panel used 15; they are now the same number in one place.
+ * zooms by a fixed step, so every surface moves the camera by the same
+ * amount. A step of 1 (about 2%) would be effectively imperceptible and
+ * punishing for switch users.
  * Continuous inputs such as the gamepad axis scale their own delta instead.
  */
 export const CAMERA_ZOOM_STEP = 15;
@@ -188,11 +188,11 @@ export const CAMERA_ZOOM_STEP = 15;
 // against the model color they are drawn on. All ratios are enforced by
 // tests/unit/preview-colors-contrast.test.js.
 //
-// The light theme's model color was the desktop Cornfield front/back pair
-// (#f9d72c / #9dcb51) until 2026-07; those measured 1.3:1 and 1.7:1
-// against the #f5f5f5 background and failed SC 1.4.11, so they were
-// darkened in the same hues (3.5:1 / 3.8:1). Desktop parity for the
-// other themes was already [UNVERIFIED], so accessibility wins here.
+// The light theme's model colors are the desktop Cornfield front/back pair
+// (#f9d72c / #9dcb51) darkened in the same hues (3.5:1 / 3.8:1): the
+// originals measure 1.3:1 and 1.7:1 against the #f5f5f5 background and
+// fail SC 1.4.11. Desktop parity for the other themes is unverified, so
+// accessibility wins here.
 export const PREVIEW_COLORS = {
   light: {
     background: 0xf5f5f5,
@@ -208,7 +208,7 @@ export const PREVIEW_COLORS = {
     gridPrimary: 0x404040,
     gridSecondary: 0x2d2d2d,
     model: 0x4d9fff,
-    modelBack: 0x3d8a44, // [UNVERIFIED] green tint for dark background
+    modelBack: 0x3d8a44, // green tint for dark background (unverified)
     edges: 0x0d1117, // 7.0:1 vs model
     ambientLight: 0xffffff,
   },
@@ -217,7 +217,7 @@ export const PREVIEW_COLORS = {
     gridPrimary: 0x000000,
     gridSecondary: 0x666666,
     model: 0x0052cc,
-    modelBack: 0x338a33, // [UNVERIFIED] high-contrast green
+    modelBack: 0x338a33, // high-contrast green (unverified)
     edges: 0xffffff, // 6.8:1 vs model
     ambientLight: 0xffffff,
   },
@@ -226,7 +226,7 @@ export const PREVIEW_COLORS = {
     gridPrimary: 0xffffff,
     gridSecondary: 0x999999,
     model: 0x66b3ff,
-    modelBack: 0x66cc66, // [UNVERIFIED] high-contrast green for dark
+    modelBack: 0x66cc66, // high-contrast green for dark (unverified)
     edges: 0x000000, // 9.5:1 vs model
     ambientLight: 0xffffff,
   },
@@ -236,7 +236,7 @@ export const PREVIEW_COLORS = {
     gridPrimary: 0x00ff00,
     gridSecondary: 0x00aa00,
     model: 0x00ff00,
-    modelBack: 0x00aa00, // [UNVERIFIED] dimmer green for intensity distinction
+    modelBack: 0x00aa00, // dimmer green for intensity distinction (unverified)
     edges: 0x003300, // 10.4:1 vs model, keeps the phosphor palette
     ambientLight: 0x00ff00,
   },
@@ -246,7 +246,7 @@ export const PREVIEW_COLORS = {
     gridPrimary: 0xffb000,
     gridSecondary: 0xcc8c00,
     model: 0xffb000,
-    modelBack: 0xcc8c00, // [UNVERIFIED] dimmer amber for intensity distinction
+    modelBack: 0xcc8c00, // dimmer amber for intensity distinction (unverified)
     edges: 0x332200, // 8.4:1 vs model, keeps the phosphor palette
     ambientLight: 0xffb000,
   },
@@ -256,7 +256,7 @@ export const PREVIEW_COLORS = {
     gridPrimary: 0x00ff00,
     gridSecondary: 0x003300,
     model: 0x33ff33,
-    modelBack: 0x00cc00, // [UNVERIFIED] dimmer green phosphor HC
+    modelBack: 0x00cc00, // dimmer green phosphor HC (unverified)
     edges: 0x001a00, // 13.5:1 vs model
     ambientLight: 0x00ff00,
   },
@@ -266,14 +266,14 @@ export const PREVIEW_COLORS = {
     gridPrimary: 0xffb000,
     gridSecondary: 0x4d3500,
     model: 0xffc233,
-    modelBack: 0xcc9a00, // [UNVERIFIED] dimmer amber phosphor HC
+    modelBack: 0xcc9a00, // dimmer amber phosphor HC (unverified)
     edges: 0x261a00, // 10.6:1 vs model
     ambientLight: 0xffb000,
   },
   // Classic mode: the desktop's Cornfield viewport background
-  // (#FFFFE5 — OpenSCAD src/glview/ColorMap.cc BACKGROUND_COLOR [OBSERVED]).
+  // (#FFFFE5 — OpenSCAD src/glview/ColorMap.cc BACKGROUND_COLOR).
   // The model pair stays the accessibility-tuned one; on cornfield it
-  // measures BETTER than on the light theme's #f5f5f5 (3.7:1 / 4.1:1 vs
+  // measures better than on the light theme's #f5f5f5 (3.7:1 / 4.1:1 vs
   // 3.5:1 / 3.8:1), so fidelity and contrast agree here. Classic ignores
   // theme and high contrast entirely, so it has no -hc sibling.
   classic: {
@@ -299,23 +299,23 @@ export const PREVIEW_COLORS = {
   // absent — it carries `"show-in-gui": false`, which is why the desktop's
   // own list shows nine JSON schemes plus the built-in Cornfield.
   //
-  // Backgrounds are VERBATIM. Model and edge colors are tuned the minimum
+  // Backgrounds are verbatim. Model and edge colors are tuned the minimum
   // distance along lightness — hue and saturation untouched, so a scheme
   // still reads as itself — until `model`/`modelBack` reach 3:1 against the
   // background (SC 1.4.11) and `edges` reaches 4.5:1 against the model.
-  // MEASURED verbatim, only Starnight and DeepOcean already passed; upstream
+  // Measured verbatim, only Starnight and DeepOcean already passed; upstream
   // Cornfield is 1.40:1 and 1.86:1. Every ratio below is asserted by
   // tests/unit/preview-colors-contrast.test.js, so a hand edit that breaks
   // one fails the suite.
   //
   // `axes` is each scheme's `axes-color`, verbatim from the same upstream
-  // files (U-13): the axis lines and tick labels paint with it instead of
-  // the app's text token, so a Forge dark theme can no longer bleed a light
+  // files: the axis lines and tick labels paint with it instead of
+  // the app's text token, so a Forge dark theme cannot bleed a light
   // foreground into a light scheme. All ten upstream values already pass
   // SC 1.4.11's 3:1 against their own backgrounds (sunset is the narrowest
   // at 3.20:1), so none needed tuning. Also asserted by the contrast suite.
   //
-  // Where a comment says "unchanged" the value IS upstream's.
+  // Where a comment says "unchanged" the value is upstream's.
   metallic: {
     background: 0xaaaaff, // upstream, verbatim
     gridPrimary: 0x7c7cd1,
@@ -413,13 +413,13 @@ export const PREVIEW_COLORS = {
 
 /**
  * The desktop's 3D View colour-scheme list, in its own order (the JSON
- * `index` field, which is the order OpenSCAD_2.png shows).
+ * `index` field, the order the desktop's Preferences list shows).
  *
  * `colors` names the PREVIEW_COLORS entry each one paints with. Cornfield
- * maps to `classic` rather than a tenth near-duplicate: `classic` already IS
- * the Cornfield background with an accessibility-tuned model pair, shipped
- * and asserted since R-II, and it holds more contrast headroom (3.72:1 /
- * 4.06:1) than a fresh minimum-distance tune would have produced.
+ * maps to `classic` rather than a tenth near-duplicate: `classic` already is
+ * the Cornfield background with an accessibility-tuned model pair, and it
+ * holds more contrast headroom (3.72:1 / 4.06:1) than a fresh
+ * minimum-distance tune would produce.
  */
 export const VIEWPORT_SCHEMES = Object.freeze([
   { id: 'cornfield', label: 'Cornfield', colors: 'classic' },
@@ -457,11 +457,10 @@ export function isViewportSchemeKey(key) {
   return VIEWPORT_SCHEME_KEYS.has(key);
 }
 
-// RENDER_STATE_COLORS was removed: it applied fabricated amber/red tints
-// that do not correspond to any desktop OpenSCAD behavior. Desktop OpenSCAD
-// uses the same colorscheme colors for both F5 preview and F6 render — it
-// does NOT tint models differently based on render quality or laser mode.
-// Model color is now: colorOverride (SCAD-derived) > PREVIEW_COLORS[theme].model.
+// No render-state tints: desktop OpenSCAD uses the same color scheme for
+// both F5 preview and F6 render and does not tint models by render quality
+// or laser mode. Model color is colorOverride (SCAD-derived), else
+// PREVIEW_COLORS[theme].model.
 
 export class PreviewManager {
   constructor(container, options = {}) {
@@ -503,9 +502,9 @@ export class PreviewManager {
     // Auto-bed: place object on Z=0 build plate
     this.autoBedEnabled = this.loadAutoBedPreference();
 
-    // Mouse-wheel zoom focal point: when true, zoom centers on the
-    // cursor; when false, zoom centers on the orbit target. Default
-    // true matches stakeholder expectation (F17, "zoom toward cursor").
+    // Mouse-wheel zoom focal point: when true, zoom centers on the cursor;
+    // when false, zoom centers on the orbit target. Defaults to true, zoom
+    // toward the cursor.
     this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
 
     // Chosen desktop viewport color scheme (Preferences ▸ 3D View). Read
@@ -523,19 +522,19 @@ export class PreviewManager {
     // Render hooks for extensibility
     this._renderOverride = null;
     this._resizeHook = null;
-    // Corner XYZ triad (UF-7): a second render pass in the default branch
+    // Corner XYZ triad: a second render pass in the default branch
     // of animate(). Follows the Axes display option (desktop: showSmallaxes
     // runs iff showaxes).
     this._axisTriad = null;
     this._postLoadHook = null; // Called after STL is loaded
     this._postLoadListeners = []; // Multi-listener post-load event
-    // D-143: the worker that computes a big mesh's extras, and the token of
+    // The worker that computes a big mesh's extras, and the token of
     // the mesh whose answer is still wanted (a mesh replaced before its
     // answer arrives has its answer dropped).
     this._extrasWorker = null;
     this._extrasToken = 0;
     this._pendingOFF = new Map();
-    this._themeChangeListeners = []; // Multi-listener theme-change event (F20)
+    this._themeChangeListeners = []; // Multi-listener theme-change event
 
     // Reference overlay (screenshot/SVG image plane under the model)
     this.referenceOverlay = null; // THREE.Mesh for the overlay plane
@@ -548,7 +547,7 @@ export class PreviewManager {
       rotationDeg: 0,
       width: 200, // mm (default; replaced by SVG physical size or explicit sizing)
       height: 150, // mm
-      // DP-5: the effective Z, in mm. Derived from zPreset except when the
+      // The effective Z, in mm. Derived from zPreset except when the
       // preset is 'custom', where the person typed it.
       zPosition: -0.25, // Slightly below Z=0 build plate (avoid z-fighting with grid)
       // Which surface the overlay is meant to sit against. A raw number is a
@@ -603,7 +602,7 @@ export class PreviewManager {
       this.container.appendChild(preview2d);
     }
 
-    // And the drawing editor's surface (DP-19), for the same reason: the
+    // And the drawing editor's surface, for the same reason: the
     // markup in index.html is the honest picture of the container, and the
     // wipe above takes it with everything else.
     if (!document.getElementById('drawingEditorSurface')) {
@@ -647,7 +646,7 @@ export class PreviewManager {
     // When that happens, geometry parsing (loadOFF / loadSTL) still works;
     // only the visual canvas is disabled.
     //
-    // IMPORTANT: three is pinned to ^0.162.0 because r163 removed WebGL 1
+    // Three is pinned to ^0.162.0 because r163 removed WebGL 1
     // support. Browsers with WebGL 2 disabled (Firefox hardware blocklist,
     // privacy-hardened profiles) can still render via the WebGL 1 fallback
     // in r162. Do not upgrade three past 0.162.x without an alternative
@@ -680,13 +679,12 @@ export class PreviewManager {
     // Three.js MeshPhongMaterial uses BRDF_Lambert which divides diffuse by π.
     // OpenSCAD's OpenGL pipeline has no such divisor (simple color * NdotL).
     // All intensities are scaled by π to cancel the BRDF divisor: ambient
-    // 0.2*π ≈ 0.628. The directional pair carries a further ×1.5 measured
-    // against the desktop itself (U-14, Q-30 2026-08-11): with the π-cancel
-    // alone, A/B captures of the owner's fixture at a pinned desktop pose
-    // rendered visibly darker than OpenSCAD 2021.01 even though the preview
-    // mesh wears the WASM-baked upstream colors verbatim — the remaining
-    // gap is three's lighting evaluation, not color handling, so the level
-    // is calibrated here and nowhere else. The user brightness/contrast
+    // 0.2*π ≈ 0.628. The directional pair carries a further ×1.5, measured
+    // against the desktop: with the π-cancel alone, A/B captures at a pinned
+    // desktop pose render visibly darker than OpenSCAD 2021.01 even though the
+    // preview mesh wears the WASM-baked upstream colors verbatim. The
+    // remaining gap is three's lighting evaluation, not color handling, so the
+    // level is calibrated here and nowhere else. The user brightness/contrast
     // sliders stay neutral multipliers on top of these bases.
     const piAmbient = 0.2 * Math.PI;
     const piDirectional = 1.5 * Math.PI;
@@ -743,8 +741,8 @@ export class PreviewManager {
 
     // Handle window resize with view preservation
     this.handleResize = () => {
-      // While the charm view has the canvas fitted to the editor's own window
-      // (DP-38), that window is what a resize has to re-measure. Sizing to the
+      // While the charm view has the canvas fitted to the editor's own window,
+      // that window is what a resize has to re-measure. Sizing to the
       // container here would hand the canvas back mid-session.
       if (this._charmHost) {
         this._sizeCanvasToCharmHost();
@@ -851,13 +849,12 @@ export class PreviewManager {
     notice.className = 'preview-webgl-error';
     notice.setAttribute('role', 'alert');
 
-    // Defect D-30: this was an h3. In Forge it sits under the "Preview
-    // Settings & Info" h2 and the order was fine, but Classic does not carry
-    // those Forge panel headings, so the page ran h1 straight to h3 and a
-    // reader navigating by heading level hit a skipped one - on the very
-    // notice written for people whose browser blocks WebGL. h2 is correct in
-    // both: it follows the h1 in Classic and sits beside the panel headings in
-    // Forge. The wording is unchanged.
+    // An h2, not an h3: in Forge the notice sits under the "Preview Settings
+    // & Info" h2, but Classic does not carry those Forge panel headings, so an
+    // h3 would skip a level after the h1 for a reader navigating by heading,
+    // on the very notice written for people whose browser blocks WebGL. h2 is
+    // correct in both: it follows the h1 in Classic and sits beside the panel
+    // headings in Forge.
     const heading = document.createElement('h2');
     heading.textContent = '3D preview unavailable';
 
@@ -1054,9 +1051,8 @@ export class PreviewManager {
   }
 
   /**
-   * Set the current render state. Retained for API compatibility.
-   * Previously applied fabricated amber/red tints; now a no-op since
-   * model color is determined by COFF per-face data or the theme default.
+   * Set the current render state. Kept for API compatibility: a no-op,
+   * because model color comes from COFF per-face data or the theme default.
    * @param {'preview'|'laser'|null} _state
    */
   setRenderState(_state) {}
@@ -1117,7 +1113,7 @@ export class PreviewManager {
     const posAttr = geometry.getAttribute('position');
     const normAttr = geometry.getAttribute('normal');
     if (!posAttr || !normAttr) return;
-    // The arithmetic lives in mesh-extras.js now (DP-52 P4), so a worker can
+    // The arithmetic lives in mesh-extras.js, so a worker can
     // run the same function for a mesh too big to run here.
     const isInner = classifyInnerFaces(posAttr.array, normAttr.array);
     geometry.setAttribute('aIsInner', new Float32BufferAttribute(isInner, 1));
@@ -1126,9 +1122,9 @@ export class PreviewManager {
   /**
    * The extras a mesh gets after it loads - the cavity tint's per-vertex flag
    * and the edge overlay's segments - where the mesh's size says they should
-   * be computed (D-143, DP-52 P4).
+   * be computed.
    *
-   * A small mesh is classified here at once, as before. A big one is handed
+   * A small mesh is classified here at once. A big one is handed
    * to a worker with copies of its positions and normals; the mesh is shown
    * meanwhile with no tint and no edges, and both arrive together, after
    * which the post-load listeners run again so the edges overlay is built
@@ -1399,8 +1395,8 @@ export class PreviewManager {
   }
 
   /**
-   * The corner triad's second pass (UF-7 P3): a scissored viewport in the
-   * lower-left (Q-26), depth cleared so the triad draws over whatever sits
+   * The corner triad's second pass: a scissored viewport in the
+   * lower-left, depth cleared so the triad draws over whatever sits
    * in its corner — the desktop renders its smallaxes with GL_ALWAYS. The
    * triad camera copies only the main camera's rotation, so pan and zoom
    * leave it untouched.
@@ -1459,7 +1455,7 @@ export class PreviewManager {
     const zoomSpeed = 10;
 
     this.keyboardHandler = (event) => {
-      // ★ The drawing editor lives in this container, and every key it uses -
+      // The drawing editor lives in this container, and every key it uses -
       // arrows between regions, Escape to leave - is a key this handler would
       // otherwise spend on the camera. A button or a table row is not an INPUT,
       // so the guard below does not cover it.
@@ -1556,23 +1552,6 @@ export class PreviewManager {
   }
 
   /**
-   * Setup on-screen camera controls (WCAG 2.2 SC 2.5.7)
-   * Adds visible buttons for camera manipulation
-   * Note: On desktop (>= 768px), the camera panel drawer handles controls.
-   * On mobile, the camera drawer in the actions bar handles controls.
-   * Floating controls are only created as a fallback if neither exists.
-   */
-  /**
-   * Camera controls live in the #cameraPanel drawer (>=768px) and the
-   * #cameraDrawer actions bar (<768px), both always present in index.html.
-   * The floating-fallback builder that used to follow the old guards here
-   * was therefore unreachable at every width - proven with a throw at its
-   * head across the desktop, Classic and mobile camera suites (36 cases, 0
-   * reached) - and was deleted with its second set of view-button bindings
-   * (AF-8, owner-approved 2026-08-19; the UF-26/UF-30 reports).
-   */
-
-  /**
    * Announce camera actions to screen readers
    * Uses centralized announcer for consistent behavior
    * @param {string} action - Action description or key pressed
@@ -1655,9 +1634,9 @@ export class PreviewManager {
           this.applyAutoBed(geometry);
         }
 
-        // D-143: inline for a small mesh, in a worker for a big one. D-152:
-        // after the bed, so the positions the worker copies are the ones the
-        // mesh is drawn with and its edges land where the model is.
+        // Inline for a small mesh, in a worker for a big one. After the bed,
+        // so the positions the worker copies are the ones the mesh is drawn
+        // with and its edges land where the model is.
         this._scheduleMeshExtras(geometry);
 
         // Create material using render-state-aware color resolution.
@@ -1695,7 +1674,7 @@ export class PreviewManager {
           this._postLoadHook();
         }
         this._firePostLoadListeners();
-        // DP-5: "Top of the model" is a promise about THIS model, so it is
+        // "Top of the model" is a promise about this model, so it is
         // re-resolved whenever one arrives. Any other preset is a constant and
         // this returns immediately.
         this.refreshOverlayZ();
@@ -1754,9 +1733,9 @@ export class PreviewManager {
           ? offData
           : new TextDecoder().decode(offData);
 
-      // D-143: a big OFF is parsed, centered and given its normals, tint and
+      // A big OFF is parsed, centered and given its normals, tint and
       // edges in the worker, and comes back as arrays the page only has to
-      // wrap; a small one is done inline, as before. The header alone decides,
+      // wrap; a small one is done inline. The header alone decides,
       // read without splitting the text.
       const faces = offFaceCount(text);
       let parsed = null;
@@ -1838,7 +1817,7 @@ export class PreviewManager {
         geometry.center();
       }
 
-      // D-152: the bed before the extras are scheduled, so a copy the worker
+      // The bed before the extras are scheduled, so a copy the worker
       // takes is bedded; the worker branch's segments above were made on the
       // centered soup and applyAutoBed moves them with the positions.
       if (this.autoBedEnabled) {
@@ -1948,7 +1927,7 @@ export class PreviewManager {
         this._postLoadHook();
       }
       this._firePostLoadListeners();
-      // DP-5: "Top of the model" is a promise about THIS model, so it is
+      // "Top of the model" is a promise about this model, so it is
       // re-resolved whenever one arrives. Any other preset is a constant and
       // this returns immediately.
       this.refreshOverlayZ();
@@ -2242,8 +2221,7 @@ export class PreviewManager {
    * Reset View returns the camera to its default angle, distance and target,
    * which is what separates it from View All (fit the model, keep the angle)
    * and Center (keep the angle and distance, re-centre on the model). Called
-   * from the View menu, the `resetView` shortcut and the camera bar, all of
-   * which used to reach a method that did not exist.
+   * from the View menu, the `resetView` shortcut and the camera bar.
    */
   resetCamera() {
     if (!this.camera) return;
@@ -2295,25 +2273,16 @@ export class PreviewManager {
   }
 
   /**
-   * Fit the whole model in view WITHOUT changing the viewing angle.
+   * OrbitControls clamps the polar angle at the poles, so from Top only an
+   * upward drag would tilt away (the downward one presses a dead clamp),
+   * where the desktop rolls straight over. This carries the camera over the
+   * pole when a gesture keeps pushing against the clamp: azimuth flips half a
+   * turn and the camera lands a real tilt past the pole, exactly the far side
+   * of the roll-over. One crossing per gesture, so a single pull cannot
+   * ping-pong across.
    *
-   * This is View ▸ View All. `fitCameraToModel()` also snaps back to the
-   * default diagonal, which is what a freshly loaded model wants but would
-   * make View All and Reset View the same command.
-   *
-   * @returns {boolean} true when the view moved
-   */
-  /**
-   * AF-11 (UF-26's recorded stop): OrbitControls clamps the polar angle at
-   * the poles, so from Top only an upward drag tilted away - the downward
-   * one pressed a dead clamp - where the desktop rolls straight over. This
-   * carries the camera OVER the pole when a gesture keeps pushing against
-   * the clamp: azimuth flips half a turn and the camera lands a real tilt
-   * past the pole, exactly the far side of the roll-over. One crossing per
-   * gesture, so a single pull cannot ping-pong across.
-   *
-   * D-48's invariant holds by construction: pure vector geometry on
-   * camera.position - camera.up is never read or written.
+   * The WORLD_UP invariant holds by construction: pure vector geometry on
+   * camera.position; camera.up is never read or written.
    */
   _setupPoleCrossing() {
     const el = this.renderer?.domElement;
@@ -2342,7 +2311,7 @@ export class PreviewManager {
       const NEAR = 0.02; // ~1.1 degrees - inside this, the clamp is what stops you
       const atTop = polar < NEAR;
       const atBottom = polar > Math.PI - NEAR;
-      // At Top the DOWNWARD drag (dy > 0) presses the clamp; at Bottom the
+      // At Top the downward drag (dy > 0) presses the clamp; at Bottom the
       // upward one. Any other motion resets the intent.
       if (atTop && dy > 0) g.acc += dy;
       else if (atBottom && dy < 0) g.acc += dy;
@@ -2356,7 +2325,7 @@ export class PreviewManager {
         g.acc = 0;
         g.crossed = this._crossPole(side);
         if (g.crossed) {
-          // The rest of THIS gesture still belongs to OrbitControls, and it
+          // The rest of this gesture still belongs to OrbitControls, and it
           // would rotate straight back into the pole from the far side
           // (measured: the crossing fired, then eight remaining moves undid
           // it). End the library's drag at the moment of crossing; the next
@@ -2385,7 +2354,7 @@ export class PreviewManager {
     const target = this.controls.target;
 
     // Damping keeps a residue of the gesture's rotation and would decay it
-    // AGAINST the landing (measured: ~7 degrees clawed back toward the
+    // against the landing (measured: ~7 degrees clawed back toward the
     // pole). One undamped update consumes the pending delta into the clamp,
     // where it can do nothing, so the landing below is exact.
     const wasDamping = this.controls.enableDamping;
@@ -2416,6 +2385,15 @@ export class PreviewManager {
     return true;
   }
 
+  /**
+   * Fit the whole model in view without changing the viewing angle.
+   *
+   * This is View ▸ View All. `fitCameraToModel()` also snaps back to the
+   * default diagonal, which is what a freshly loaded model wants but would
+   * make View All and Reset View the same command.
+   *
+   * @returns {boolean} true when the view moved
+   */
   viewAllCamera() {
     if (!this.camera || !this.mesh) return false;
 
@@ -2459,12 +2437,12 @@ export class PreviewManager {
 
   /**
    * The world's up axis. OpenSCAD is Z-up, and this app has exactly one up:
-   * OrbitControls captures its orbit frame from `camera.up` ONCE, inside the
+   * OrbitControls captures its orbit frame from `camera.up` once, inside the
    * IIFE that builds `update()`, so a later write never reaches the orbit
-   * maths — but the `lookAt(target)` at the end of every frame's update DOES
+   * maths, but the `lookAt(target)` at the end of every frame's update does
    * read it. Leaving a different up behind therefore cannot re-aim the
    * turntable; it only rolls the picture, and the roll grows with every drag
-   * until the view is un-navigable (D-48). Nothing may set a different one.
+   * until the view is un-navigable. Nothing may set a different one.
    */
   static WORLD_UP = [0, 0, 1];
 
@@ -2478,7 +2456,7 @@ export class PreviewManager {
    * therefore aimed a hair toward -Y, which is also what puts +Y up the screen
    * for Top and down it for Bottom, matching the desktop.
    *
-   * The size is MEASURED, not guessed. Looking straight down, the Z axis and
+   * The size is measured, not guessed. Looking straight down, the Z axis and
    * its scale marks lie in a plane that contains the view direction, so they
    * collapse to a line — and the ones nearest the camera blow up under
    * perspective the instant that plane opens even slightly. Comparing renders
@@ -2492,11 +2470,11 @@ export class PreviewManager {
   /**
    * Standard camera views for OpenSCAD-style viewing (Z-up coordinate system)
    *
-   * direction: unit-ish vector FROM the model center TOWARD the camera.
+   * direction: unit-ish vector from the model center toward the camera.
    *
    * There is deliberately no per-view up: screen orientation follows from the
    * direction and WORLD_UP alone, which is what keeps the orbit a turntable
-   * around global Z after every one of these (D-48).
+   * around global Z after every one of these.
    *
    * The diagonal view matches OpenSCAD's default $vpr = [55, 0, 25]:
    *   azimuth 25° from front (-Y) toward right (+X), elevation 35° above XY plane.
@@ -2660,7 +2638,7 @@ export class PreviewManager {
     // Switching projection need not move the camera, so OrbitControls emits no
     // 'change' — anything mirroring the projection has nothing to listen to.
     // Announced here so every caller (camera bar, View menu, the P shortcut)
-    // reaches every mirror, the same shape as display-option-change (E4).
+    // reaches every mirror, the same shape as display-option-change.
     document.dispatchEvent(
       new CustomEvent('preview-projection-change', {
         detail: { mode: this.projectionMode },
@@ -2834,8 +2812,9 @@ export class PreviewManager {
 
   /**
    * Pan camera and target in screen space
-   * Uses the camera's own right/up axes so panning feels natural at any viewing angle,
-   * including Top and Bottom views where the old world-up cross product was degenerate.
+   * Uses the camera's own right/up axes so panning feels natural at any
+   * viewing angle, including Top and Bottom views, where a world-up cross
+   * product would be degenerate.
    * @param {number} deltaRight - Right/left movement in screen space
    * @param {number} deltaUp - Up/down movement in screen space
    */
@@ -2863,7 +2842,7 @@ export class PreviewManager {
   rotateHorizontal(angle) {
     if (!this.controls) return;
     const camera = this.getActiveCamera();
-    // Compute offset from the orbit target (NOT world origin)
+    // Compute offset from the orbit target (not the world origin)
     const offset = camera.position.clone().sub(this.controls.target);
     // Rotate offset around the Z-axis (world up)
     offset.applyAxisAngle(new Vector3(0, 0, 1), angle);
@@ -2880,7 +2859,7 @@ export class PreviewManager {
   rotateVertical(angle) {
     if (!this.controls) return;
     const camera = this.getActiveCamera();
-    // Compute offset from the orbit target (NOT world origin)
+    // Compute offset from the orbit target (not the world origin)
     const offset = camera.position.clone().sub(this.controls.target);
     const currentDist = offset.length();
     if (currentDist < 1e-6) return; // Degenerate case
@@ -2919,8 +2898,8 @@ export class PreviewManager {
       this.orthoCamera.zoom = Math.max(0.01, this.orthoCamera.zoom);
       this.orthoCamera.updateProjectionMatrix();
       // controls.update() below only dispatches 'change' when the camera
-      // POSITION moved; an ortho zoom moves nothing, so the axis overlays'
-      // zoom-rebuild listener (UF-7) would never hear it. The wheel path
+      // position moved; an ortho zoom moves nothing, so the axis overlays'
+      // zoom-rebuild listener would never hear it. The wheel path
       // through OrbitControls sets its own zoomChanged flag; this keyboard/
       // button path has to say so itself.
       this.controls.dispatchEvent?.({ type: 'change' });
@@ -3562,7 +3541,7 @@ export class PreviewManager {
   /**
    * Toggle mouse-wheel zoom-to-cursor behavior. When enabled, scrolling
    * over the preview zooms toward the pointer position; when disabled,
-   * zoom is centered on the orbit target (the previous default).
+   * zoom is centered on the orbit target.
    * Keyboard zoom (`+` / `-`) is unaffected.
    *
    * @param {boolean} enabled
@@ -3577,8 +3556,7 @@ export class PreviewManager {
 
   /**
    * Load zoom-to-cursor preference from localStorage.
-   * Defaults to true so first-time users get the modern behavior
-   * the stakeholder asked for in F17.
+   * Defaults to true, so first-time users zoom toward the cursor.
    * @returns {boolean}
    */
   loadZoomToCursorPreference() {
@@ -3606,7 +3584,7 @@ export class PreviewManager {
    * Choose a desktop viewport color scheme and apply it now.
    *
    * Instant-apply, like the desktop: there is no OK/Cancel row in upstream's
-   * dialog (OpenSCAD_2/3.png), so picking a name IS the action.
+   * dialog, so picking a name is the action.
    *
    * The scheme governs the Classic viewport. Outside Classic the app theme
    * drives these colors and keeps doing so, because overriding it would
@@ -3642,14 +3620,14 @@ export class PreviewManager {
   }
 
   /**
-   * The live swap (UF-14 P3): re-read every PER-UI preview preference from
-   * the newly active namespace and re-apply it to the running scene in one
-   * pass — grid visibility, size, color and opacity, measurements,
-   * zoom-to-cursor and the viewport scheme. Camera pose, mesh and
-   * parameters are untouched (SHARED BY ORDER). Auto-bed's new value
-   * governs the next geometry load; the placed mesh is not re-transformed
-   * mid-flip. Colors follow separately via updateTheme(detectTheme()) —
-   * the caller (syncPreviewSceneToMode) runs that right after.
+   * The live swap: re-read every per-interface preview preference from the
+   * newly active namespace and re-apply it to the running scene in one pass
+   * (grid visibility, size, color and opacity, measurements, zoom-to-cursor
+   * and the viewport scheme). Camera pose, mesh and parameters are
+   * untouched: every interface shares them. Auto-bed's new value governs the
+   * next geometry load; the placed mesh is not re-transformed mid-flip.
+   * Colors follow separately via updateTheme(detectTheme()), which the
+   * caller (syncPreviewSceneToMode) runs right after.
    */
   reloadScopedViewPreferences() {
     this.measurementsEnabled = this.loadMeasurementPreference();
@@ -3664,7 +3642,7 @@ export class PreviewManager {
     }
     this.viewportScheme = this.loadViewportScheme();
 
-    // One rebuild covers size, color, opacity AND visibility; a no-op
+    // One rebuild covers size, color, opacity and visibility; a no-op
     // before the first model (no scene yet — the constructor reads fresh).
     this._rebuildGrid();
 
@@ -3714,7 +3692,7 @@ export class PreviewManager {
     // Store the offset for rotation centering feature
     this.autoBedOffset = offset;
 
-    // D-152: the edges overlay is built from segments stored beside the
+    // The edges overlay is built from segments stored beside the
     // geometry (the worker's, for a big mesh), in the frame the positions
     // were in when they were made. The positions just moved; the segments
     // move with them, or the overlay draws below the model by this offset.
@@ -3764,7 +3742,7 @@ export class PreviewManager {
 
     this.rotationCenteringEnabled = true;
 
-    // Adjust both camera position AND orbit controls target by the same offset
+    // Adjust both camera position and orbit controls target by the same offset
     // This preserves the exact same view while the mesh moves
     if (this.controls) {
       const camera = this.getActiveCamera();
@@ -3798,7 +3776,7 @@ export class PreviewManager {
 
     this.rotationCenteringEnabled = false;
 
-    // Adjust both camera position AND orbit controls target by the same offset
+    // Adjust both camera position and orbit controls target by the same offset
     // This preserves the exact same view while the mesh moves back
     if (this.controls) {
       const camera = this.getActiveCamera();
@@ -4425,7 +4403,7 @@ export class PreviewManager {
   }
 
   /**
-   * Choose which surface the overlay sits against (DP-5).
+   * Choose which surface the overlay sits against.
    *
    * @param {Object} options
    * @param {string} [options.preset] - under-plate | build-plate | model-top | custom
@@ -4610,7 +4588,7 @@ export class PreviewManager {
       this.overlayMeasurementHelpers.add(line);
     }
 
-    // Calculate label positions OUTSIDE the overlay bounds
+    // Calculate label positions outside the overlay bounds
     // Width label: below the bottom edge
     const bottomMid = {
       x: (corners[0].x + corners[1].x) / 2,
@@ -5221,17 +5199,17 @@ export class PreviewManager {
   }
 
   /**
-   * Give the preview area over to the drawing editor (DP-19).
+   * Give the preview area over to the drawing editor.
    *
-   * The editor goes WHERE THE 3D VIEW IS, not in a panel beside it and not in
+   * The editor goes where the 3D view is, not in a panel beside it and not in
    * a block inside the customizer, because it is the biggest surface on the
    * page and on a phone it is the whole of it. Same shape as the 2D preview's
    * takeover: hide the canvas, hide the placeholder, say what the region is
    * now.
    *
-   * ★ AND STAND THE CAMERA KEYS DOWN. `keyboardHandler` fires for any keydown
+   * And stand the camera keys down. `keyboardHandler` fires for any keydown
    * while focus is inside #previewContainer unless the target is an INPUT,
-   * TEXTAREA, SELECT or contentEditable - so a focused table row or a button
+   * TEXTAREA, SELECT or contentEditable, so a focused table row or a button
    * inside the editor would rotate the model behind it while a person thought
    * they were moving between regions.
    *
@@ -5243,7 +5221,7 @@ export class PreviewManager {
     el.hidden = false;
     el.classList.remove('hidden');
     // The render-state pills (the ready badge, the generating pill, the
-    // status bar) float over this area and, MEASURED at 412 px wide, over
+    // status bar) float over this area and, at 412 px wide, over
     // the editor's own title. They fade while the editor has the area; they
     // stay in the accessibility tree, so what they announce is still heard.
     this.container
@@ -5288,8 +5266,8 @@ export class PreviewManager {
   }
 
   /**
-   * Show or hide what the model looks like WHILE the editor still owns the
-   * area (DP-38's Charm view).
+   * Show or hide what the model looks like while the editor still owns the
+   * area (the editor's Charm view).
    *
    * The editor's Charm view is not a picture the editor draws. It is this
    * preview, which `showEditorSurface` put out of sight, and showing it again
@@ -5299,7 +5277,7 @@ export class PreviewManager {
    * being previewed as SVG shows its SVG.
    *
    * @param {boolean} visible
-   * @param {HTMLElement} [host] - The box the charm has to fit INSIDE
+   * @param {HTMLElement} [host] - The box the charm has to fit inside
    */
   setEditorCharmVisible(visible, host = null) {
     if (!this._isEditorSurfaceActive) return;
@@ -5320,10 +5298,10 @@ export class PreviewManager {
   }
 
   /**
-   * Fit the canvas to the part of the area a person can actually SEE.
+   * Fit the canvas to the part of the area a person can actually see.
    *
    * The editor is laid over this canvas, and its toolbar and drawer cover a
-   * great deal of it. MEASURED with the charm view open, visible area against
+   * great deal of it. Measured with the charm view open, visible area against
    * canvas area: 66 per cent at 1280, 57 at 900, **39 at 412** - and the
    * shapes differ as much as the sizes do, because at 900 the canvas is 476 by
    * 761 while the window left over is 460 by 445. Framed for the canvas, the
@@ -5463,8 +5441,6 @@ export class PreviewManager {
    *
    *  - **draft** (F5 Preview): #7A9F7A sage green fill, subtle edges.
    *  - **rendered** (F6 Render): #07D0A7 teal fill, #FF0603 red outlines.
-   *
-   * Reference: Testing Round 7 color-codes.json — desktop 2021.01 observations.
    *
    * @param {SVGElement} svgEl
    * @param {'draft'|'rendered'} [mode='draft']
