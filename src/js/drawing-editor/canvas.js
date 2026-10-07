@@ -1,5 +1,5 @@
 /**
- * The region canvas: the one view a person points at (DP-20).
+ * The region canvas: the one view a person points at.
  *
  * An inline <svg> with the original drawing underneath and one <path> per
  * REGION on top, each carrying `data-region`, so the browser's own hit-testing
@@ -159,7 +159,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   svg.setAttribute('aria-describedby', help.id);
   svg.dataset.tool = 'select';
 
-  // The layers, in drawing order (DP-21): the art underneath, the regions
+  // The layers, in drawing order: the art underneath, the regions
   // tinted over it, the plate being stepped through, the keyboard highlight
   // (two strokes), the marquee on top. A hatch pattern for removed regions
   // lives in defs; its color comes from the stylesheet's tokens.
