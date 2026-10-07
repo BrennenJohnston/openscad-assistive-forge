@@ -512,11 +512,11 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  // D-196: a manifest with autoPreview asked for the preview its own file
-  // load had just started. The second request landed while the worker was
-  // restarting, when isBusy() is false, so the same values rendered twice:
-  // 22 s became 45 s for the Plug Puller's first picture.
-  describe('One render per set of values (D-196)', () => {
+  // A manifest with autoPreview can ask for the preview its own file load
+  // has just started. A second request landing while the worker restarts,
+  // when isBusy() is false, would render the same values twice: 22 s
+  // becoming 45 s for the Plug Puller's first picture.
+  describe('One render per set of values', () => {
     let underway
     const finishRender = () =>
       underway
@@ -633,7 +633,7 @@ describe('AutoPreviewController', () => {
       expect(controller.enabledLibraries).toEqual([])
     })
 
-    // D-42: a library toggle changes what a render produces without moving
+    // A library toggle changes what a render produces without moving
     // any parameter, so the already-current early return and the parameter-
     // keyed cache must both be defeated.
     it('onLibrariesChange schedules a re-render although parameters did not move', () => {
@@ -721,7 +721,7 @@ describe('AutoPreviewController', () => {
 
     it('does not call render controller cancel (debounce/queued only)', () => {
       // cancelPending() only clears debounce timers and pending parameters
-      // It does NOT cancel in-progress renders (OpenSCAD WASM is blocking)
+      // It does not cancel in-progress renders (OpenSCAD WASM is blocking)
       controller.cancelPending()
       
       expect(renderController.cancel).not.toHaveBeenCalled()
@@ -912,7 +912,7 @@ describe('AutoPreviewController', () => {
   })
 
   describe('2D Mode Handling', () => {
-    it('does NOT set MODEL_IS_2D for SVG generate mode (2D modes are previewable)', async () => {
+    it('does not set MODEL_IS_2D for SVG generate mode (2D modes are previewable)', async () => {
       const onStateChange = vi.fn()
       const onError = vi.fn()
       controller.onStateChange = onStateChange
@@ -928,7 +928,7 @@ describe('AutoPreviewController', () => {
       expect(stateChangeCalls).not.toContain(PREVIEW_STATE.ERROR)
     })
 
-    it('does NOT set ERROR for DXF generate mode (2D modes are previewable)', async () => {
+    it('does not set ERROR for DXF generate mode (2D modes are previewable)', async () => {
       const onStateChange = vi.fn()
       controller.onStateChange = onStateChange
       const params = { generate: 'DXF' }
@@ -942,7 +942,7 @@ describe('AutoPreviewController', () => {
       expect(stateChangeCalls).not.toContain(PREVIEW_STATE.ERROR)
     })
 
-    it('does NOT call onError with MODEL_IS_2D for SVG generate mode', async () => {
+    it('does not call onError with MODEL_IS_2D for SVG generate mode', async () => {
       const onError = vi.fn()
       controller.onError = onError
       const params = { generate: 'SVG' }
@@ -972,7 +972,7 @@ describe('AutoPreviewController', () => {
       expect(stateChangeCalls).toContain(PREVIEW_STATE.ERROR)
     })
 
-    it('does NOT call previewManager.clear() for Customizer mode', async () => {
+    it('does not call previewManager.clear() for Customizer mode', async () => {
       const params = { generate: 'Customizer Settings' }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
@@ -997,7 +997,7 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('Rendering State Indicator (S-011)', () => {
+  describe('Rendering State Indicator', () => {
     it('transitions through RENDERING during a successful preview render', async () => {
       const onStateChange = vi.fn()
       controller.onStateChange = onStateChange
@@ -1226,7 +1226,7 @@ describe('AutoPreviewController', () => {
       expect(onError).toHaveBeenCalled()
     })
 
-    it('renderPreview() with a non-MODEL_IS_2D error does NOT trigger draft 2D fallback', async () => {
+    it('renderPreview() with a non-MODEL_IS_2D error does not trigger draft 2D fallback', async () => {
       renderController.renderPreview.mockRejectedValueOnce(new Error('WASM crash'))
 
       const onError = vi.fn()
@@ -1246,7 +1246,7 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('Full Render Color Passthrough (Phase 0)', () => {
+  describe('Full Render Color Passthrough', () => {
     beforeEach(() => {
       renderController.renderFull = vi.fn().mockResolvedValue({
         stl: new ArrayBuffer(32),
@@ -1282,7 +1282,7 @@ describe('AutoPreviewController', () => {
       )
     })
 
-    it('does NOT pass outputFormat "off" when color_passthrough flag is disabled', async () => {
+    it('does not pass outputFormat "off" when color_passthrough flag is disabled', async () => {
       isFlagEnabled.mockReturnValue(false)
       controller.setScadContent('color("red") cube(10);')
 
@@ -1292,7 +1292,7 @@ describe('AutoPreviewController', () => {
       expect(callOptions.outputFormat).toBeUndefined()
     })
 
-    it('does NOT pass outputFormat "off" when SCAD has no color() calls', async () => {
+    it('does not pass outputFormat "off" when SCAD has no color() calls', async () => {
       isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
       controller.setScadContent('cube(10);')
 
@@ -1321,7 +1321,7 @@ describe('AutoPreviewController', () => {
       expect(previewManager.loadSTL).not.toHaveBeenCalled()
     })
 
-    it('does NOT preserve color preview when full render returns OFF format', async () => {
+    it('does not preserve color preview when full render returns OFF format', async () => {
       isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
       controller.setScadContent('color("red") cube(10);')
       previewManager._getPrimaryGeometry = vi.fn(() => ({
@@ -1378,7 +1378,7 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('uses OFF format with UNMODIFIED source when no color() calls in SCAD', async () => {
+    it('uses OFF format with unmodified source when no color() calls in SCAD', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
@@ -1391,12 +1391,12 @@ describe('AutoPreviewController', () => {
 
       const [source, , options] = renderController.renderPreview.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      // KI-012: injection wrapped subtractor statements in color(){} scopes
-      // and corrupted geometry. The source must pass through byte-identical.
+      // Injection that wraps subtractor statements in color(){} scopes corrupts
+      // geometry, so the source must pass through byte-identical.
       expect(source).toBe(scad)
     })
 
-    it('uses OFF format with UNMODIFIED source when color() present and passthrough off', async () => {
+    it('uses OFF format with unmodified source when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'color("red") difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
@@ -1521,7 +1521,7 @@ describe('AutoPreviewController', () => {
       expect(result.qualityKey).not.toBe('desktop')
     })
 
-    it('CSG bypass toggle does NOT change cache key — cache must be cleared manually', () => {
+    it('CSG bypass toggle does not change cache key — cache must be cleared manually', () => {
       localStorage.removeItem('openscad-forge-debug-no-csg-colors')
       const params = { width: 10 }
       const infoWithout = controller.resolvePreviewQualityInfo(params)
@@ -1604,7 +1604,7 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('Geometry Fix Regression: developer toggle isolation (Phase 3)', () => {
+  describe('developer toggle isolation', () => {
     beforeEach(() => {
       renderController.getCapabilities = vi.fn(() => ({
         hasRenderColorsFlag: true,
@@ -1754,7 +1754,7 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('uses OFF format with UNMODIFIED source for full render when no color() calls', async () => {
+    it('uses OFF format with unmodified source for full render when no color() calls', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
@@ -1766,7 +1766,7 @@ describe('AutoPreviewController', () => {
       expect(source).toBe(scad)
     })
 
-    it('uses OFF format with UNMODIFIED source for full render when color() present and passthrough off', async () => {
+    it('uses OFF format with unmodified source for full render when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'color("blue") difference() { sphere(10); sphere(5); }'
       controller.setScadContent(scad)
@@ -1814,7 +1814,7 @@ describe('AutoPreviewController', () => {
       expect(callOptions.outputFormat).toBeUndefined()
     })
 
-    it('passes the ORIGINAL project files map through to the render', async () => {
+    it('passes the original project files map through to the render', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       const files = new Map([['main.scad', scad]])
@@ -1852,7 +1852,7 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('Render errors — no source-mutation retries (post-KI-012)', () => {
+  describe('Render errors — no source-mutation retries', () => {
     const parserErr = new Error(
       'Parser error: syntax error in file /tmp/input.scad, line 51'
     )
@@ -1935,7 +1935,7 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('Preview/Full Parity (Phase 5)', () => {
+  describe('Preview/Full Parity', () => {
     beforeEach(() => {
       renderController.getCapabilities = vi.fn(() => ({
         hasRenderColorsFlag: true,
@@ -2050,7 +2050,7 @@ describe('AutoPreviewController', () => {
       expect(fullOpts.outputFormat).toBe('off')
     })
 
-    it('both preview and full render use the identical UNMODIFIED source when no color() calls', async () => {
+    it('both preview and full render use the identical unmodified source when no color() calls', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)

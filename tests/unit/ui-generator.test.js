@@ -54,9 +54,9 @@ vi.mock('../../src/js/svg-preparer.js', () => ({
 
 // The editor itself is not under test here. A drawing whose recommendation is
 // `open_editor` makes the host open the real workspace by itself, and the real
-// workspace reads the svg-preparer module that is mocked above - which surfaced
-// as an unhandled rejection the first time a test used the recommendation the
-// app actually emits (DP-R5 session 4). Only the workspace factory is stubbed,
+// workspace reads the svg-preparer module that is mocked above - which would
+// surface as an unhandled rejection in any test that uses the recommendation
+// the app actually emits. Only the workspace factory is stubbed,
 // with what the host calls on it; the module's other exports stay real.
 vi.mock('../../src/js/svg-preparer-workspace.js', async (importOriginal) => {
   const actual = await importOriginal();
@@ -135,7 +135,7 @@ describe('UI Generator', () => {
       expect(slider.min).toBe('10');
       expect(slider.max).toBe('100');
       expect(slider.value).toBe('50');
-      // Value is now in editable spinbox instead of read-only output
+      // The value is in an editable spinbox, not a read-only output
       expect(spinbox).toBeTruthy();
       expect(spinbox.value).toBe('50');
     });
@@ -263,7 +263,7 @@ describe('UI Generator', () => {
     });
 
     it('spinbox accepts arbitrary typed values not constrained by slider step', () => {
-      // The core Item 10 bug: typing 1234 into a [0:50:10000] spinbox must work
+      // Typing 1234 into a [0:50:10000] spinbox must work
       const schema = buildParams({
         groups: [{ id: 'Dims', label: 'Dims', order: 0 }],
         params: [
@@ -571,11 +571,10 @@ describe('UI Generator', () => {
       expect(fileInput.accept).toBe('.png,.jpg');
     });
 
-    // DP-25 P2: a rebuilt file control whose default is a FILE OBJECT
-    // (the shape a saved plate value travels in) printed "[object Object]"
-    // as its status line. The name is the honest text; anything else says
-    // no file.
-    it('a file control with an object default shows the file NAME, never [object Object]', () => {
+    // A rebuilt file control whose default is a file object (the shape a
+    // saved plate value travels in) must not print "[object Object]" as its
+    // status line. The name is the honest text; anything else says no file.
+    it('a file control with an object default shows the file name, never [object Object]', () => {
       const schema = buildParams({
         params: [
           {
@@ -1586,13 +1585,11 @@ describe('UI Generator', () => {
       expect(wsContainer).toBeTruthy();
     });
 
-    it('SUPERSEDED by DP-19: the editor is built when it is opened, not when the control is', () => {
-      // It used to be built eagerly into a container inside this control. It
-      // lives in the PREVIEW AREA now and is built on the first "Open the
-      // drawing editor", so a person who never opens it never pays for it.
-      // What the old case was really pinning - that the editor exists, is a
-      // region, and starts hidden - is pinned on the surface itself in
-      // tests/unit/drawing-editor.test.js.
+    it('the editor is built when it is opened, not when the control is', () => {
+      // The editor lives in the preview area and is built on the first "Open
+      // the drawing editor", so a person who never opens it never pays for it.
+      // That the editor exists, is a region, and starts hidden is pinned on the
+      // surface itself in tests/unit/drawing-editor.test.js.
       const onChange = vi.fn();
       renderParameterUI(svgFileSchema, container, onChange, {});
       expect(container.querySelector('.svg-prep-workspace-container')).toBeTruthy();
@@ -1627,7 +1624,7 @@ describe('UI Generator', () => {
     });
   });
 
-  // ── Phase 5 — SVG prep metadata persistence ──────────────────────────
+  // ── SVG prep metadata persistence ────────────────────────────────────
 
   describe('SVG prep metadata storage', () => {
     afterEach(() => {
@@ -1755,8 +1752,8 @@ describe('UI Generator', () => {
       expect(editBtn.getAttribute('aria-label')).toBe(
         'Open the drawing editor'
       );
-      // REVISED at DP-19: "Edit" did not say what it opened, and on a
-      // stencil tile what it opens is the whole task.
+      // Not "Edit": the name says what it opens, and on a stencil tile what it
+      // opens is the whole task.
       expect(editBtn.textContent).toBe('Open the drawing editor');
 
       const badge = statusCard.querySelector('.svg-prep-status-badge');
@@ -1810,19 +1807,16 @@ describe('UI Generator', () => {
       expect(editBtn.classList.contains('btn-ghost')).toBe(true);
     });
 
-    // ── Session 4 of DP-R5: the way back into the editor ───────────────────
+    // ── The way back into the editor ──────────────────────────────────────
     //
-    // MEASURED on the owner's CREATE logo in Colors, on the built app: after
-    // Apply (or Close) the status card was EMPTY - no badge, no "Open the
-    // drawing editor" - and Convert again did not reopen it either. A person
-    // who had applied once could never get back in to change one more shape.
-    // The cause: DP-3 (DP-Q33) downgrades `auto_prepare` to `open_editor` when
-    // the flatten prediction outruns the budget, but leaves `status` at
-    // 'ready', and updateStatusCard had a branch for every status except
-    // that pairing. DP-48's wall rule made the logo's drawing confident enough
-    // to take exactly that path, which is when the card went blank.
+    // After Apply (or Close) the status card must still offer "Open the
+    // drawing editor", or a person who had applied once could never get back
+    // in to change one more shape. `auto_prepare` is downgraded to
+    // `open_editor` when the flatten prediction outruns the budget, leaving
+    // `status` at 'ready', so updateStatusCard needs a branch for that
+    // pairing too.
 
-    it('★ a ready drawing sent to the editor for its size still offers the editor', async () => {
+    it('a ready drawing sent to the editor for its size still offers the editor', async () => {
       vi.mocked(analyzeSvg).mockReturnValue({
         status: 'ready',
         recommendation: 'open_editor',
@@ -1842,11 +1836,11 @@ describe('UI Generator', () => {
       const badge = statusCard.querySelector('.svg-prep-status-badge');
       expect(badge, 'the card must say what the drawing is').toBeTruthy();
       expect(badge.dataset.level).toBe('review');
-      // DP-Q40: the things in the list are shapes, and "elements" is a code word.
+      // The things in the list are shapes, and "elements" is a code word.
       expect(badge.textContent).toBe('Needs review (3 shapes)');
     });
 
-    it('★ a drawing prepared in the editor says so, and offers the editor again', async () => {
+    it('a drawing prepared in the editor says so, and offers the editor again', async () => {
       const raw = '<svg><path/><circle/></svg>';
       // What Apply leaves behind: the raw drawing and the prepared one, under
       // the file's name. A saved project reopens through this same path.
@@ -1876,14 +1870,14 @@ describe('UI Generator', () => {
       setSvgPrepMetadata('test.svg', null);
     });
 
-    // ── DP-53 P3: a draft of the charm, drawn without emitting ─────────────
+    // ── A draft of the charm, drawn without emitting ──────────────────────
     //
     // The editor's charm view asks the host for a draft; the host builds the
     // file object and the companions exactly as Apply would and hands them to
-    // the app's draft renderer, and NOTHING goes through onChange: no state
+    // the app's draft renderer, and nothing goes through onChange: no state
     // change, no undo entry, no project flag until Apply.
 
-    it('★ on a charm host with an app behind it, the editor gets a draft renderer that draws what Apply would emit and writes nothing', async () => {
+    it('on a charm host with an app behind it, the editor gets a draft renderer that draws what Apply would emit and writes nothing', async () => {
       vi.mocked(analyzeSvg).mockReturnValue({
         status: 'ready',
         recommendation: 'open_editor',
@@ -1937,14 +1931,14 @@ describe('UI Generator', () => {
       expect(options.onDraftRender).toBeUndefined();
     });
 
-    // ── DP-54 P3, D-144: the width the charm host knows ────────────────────
+    // ── The width the charm host knows ─────────────────────────────────────
     //
     // The model echoes the box it fits a design into; the host applies the
     // design's own aspect and hands the editor the width it will print at,
     // so the too-thin measure and the advisory speak of the real size. A
     // width that arrives while the editor is open reaches it.
 
-    it("★ with the model's fit box known, the editor opens at the design's printed width", async () => {
+    it("with the model's fit box known, the editor opens at the design's printed width", async () => {
       vi.mocked(analyzeSvg).mockReturnValue({
         status: 'ready',
         recommendation: 'open_editor',
@@ -1985,13 +1979,13 @@ describe('UI Generator', () => {
       }
     });
 
-    // ── DP-49 P4: the crop, owned by the host ──────────────────────────────
+    // ── The crop, owned by the host ────────────────────────────────────────
     //
     // The editor says the rectangle; the host crops the drawing it holds,
     // emits the result the way a chosen file is emitted, and reopens the
     // editor on it with Undo crop offered. Undo puts the drawing back.
 
-    it('★ the charm host offers Crop, clips the drawing to the rectangle, emits it and reopens with Undo crop; Undo restores', async () => {
+    it('the charm host offers Crop, clips the drawing to the rectangle, emits it and reopens with Undo crop; Undo restores', async () => {
       vi.mocked(analyzeSvg).mockReturnValue({
         status: 'ready',
         recommendation: 'open_editor',
@@ -2330,7 +2324,7 @@ describe('Aspect companion parameters', () => {
     expect(container.querySelector('#param-design_scale')).toBeTruthy();
   });
 
-  it('uploading an SVG commits the file and its measured aspect in ONE snapshot', async () => {
+  it('uploading an SVG commits the file and its measured aspect in one snapshot', async () => {
     vi.mocked(measureSvgAspect).mockReturnValue(2.5);
     const onChange = vi.fn();
     renderParameterUI(schema(), container, onChange, {});
@@ -2414,9 +2408,9 @@ describe('Aspect companion parameters', () => {
   });
 });
 
-// ── DP-7 P3: per-layer companions through every emit path ────────────────────
+// ── Per-layer companions through every emit path ────────────────────────────
 
-describe('per-layer design companions (DP-7)', () => {
+describe('per-layer design companions', () => {
   const fileParam = (name) => ({
     name,
     uiType: 'file',
@@ -2504,7 +2498,7 @@ describe('per-layer design companions (DP-7)', () => {
     });
   });
 
-  describe('the outline companion (DP-11)', () => {
+  describe('the outline companion', () => {
     it('is found when a model can take its shape from the design', () => {
       const parameters = {
         design_file: fileParam('design_file'),
@@ -2524,7 +2518,7 @@ describe('per-layer design companions (DP-7)', () => {
       expect(findSilhouetteParams(null, null)).toBeNull();
     });
 
-    it('gets a value but NO control, like the other companions', () => {
+    it('gets a value but no control, like the other companions', () => {
       const params = buildParams({
         params: [
           fileParam('design_file'),
@@ -2542,7 +2536,7 @@ describe('per-layer design companions (DP-7)', () => {
     });
   });
 
-  describe('the stencil plates (DP-12)', () => {
+  describe('the stencil plates', () => {
     it('are found when a tile builds them', () => {
       const parameters = {
         design_file: fileParam('design_file'),
@@ -2570,7 +2564,7 @@ describe('per-layer design companions (DP-7)', () => {
       expect(findPlateParams(null)).toEqual([]);
     });
 
-    it('get a value but NO control: the app writes them', () => {
+    it('get a value but no control: the app writes them', () => {
       const params = buildParams({
         params: [
           fileParam('design_file'),
@@ -2589,13 +2583,13 @@ describe('per-layer design companions (DP-7)', () => {
   });
 
   describe('the six emit paths', () => {
-    it('every one of them goes through the SINGLE funnel', () => {
+    it('every one of them goes through the single funnel', () => {
       // The six paths are upload, raster trace, editor Apply, editor Keep,
       // gallery pick, and clear-to-default. Rather than testing six sites and
-      // hoping a seventh is never added, this pins the STRUCTURE that makes
+      // hoping a seventh is never added, this pins the structure that makes
       // all of them correct: the file control reports a value in exactly one
       // place, and that place attaches the aspect and the layer companions in
-      // the same state update (D-108's law).
+      // the same state update.
       const source = readFileSync(
         resolve(process.cwd(), 'src/js/ui-generator.js'),
         'utf8'
@@ -2612,7 +2606,7 @@ describe('per-layer design companions (DP-7)', () => {
       const emitEnd = body.indexOf('\n  }', emitStart);
       const emitBody = body.slice(emitStart, emitEnd);
       expect(emitBody).toContain('onChange(param.name');
-      // DP-53: the companions are built in ONE place for the emit AND for a
+      // The companions are built in one place for the emit and for a
       // draft render, so a draft draws exactly what Apply would emit - and
       // the draft never reports a value.
       expect(emitBody).toContain('buildEmissionExtra');
@@ -2634,7 +2628,7 @@ describe('per-layer design companions (DP-7)', () => {
   });
 
   describe('in the rendered UI', () => {
-    it('gives layer companions a value but NO control', () => {
+    it('gives layer companions a value but no control', () => {
       const params = buildParams({
         params: [
           fileParam('design_file'),
@@ -2655,8 +2649,8 @@ describe('per-layer design companions (DP-7)', () => {
   });
 });
 
-// ── DP-58, D-163: a layer file's aspect is its canvas's, not its content's ──
-describe('layerCanvasAspect (D-163)', () => {
+// ── A layer file's aspect is its canvas's, not its content's ──────────────
+describe('layerCanvasAspect', () => {
   it('reads width over height from the normalized canvas the model fits', async () => {
     const { layerCanvasAspect } = await import('../../src/js/ui-generator.js');
     const layer2 =

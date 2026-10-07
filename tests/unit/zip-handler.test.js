@@ -629,9 +629,9 @@ describe('ZIP Handler', () => {
     })
 
     it('should resolve tablet version digits in preset name to the correct folder', () => {
-      // Regression: single-digit tokens like '7','8','9' from 'iPad 7,8,9' were
-      // filtered by the length > 1 guard, causing 'Cases/iPad 7,8,9/...' and
-      // 'Cases/iPad 10/...' to tie on ('ipad','fintie','touchchat') → null.
+      // Single-digit tokens like '7','8','9' from 'iPad 7,8,9' must not be
+      // filtered by a length > 1 guard, or 'Cases/iPad 7,8,9/...' and
+      // 'Cases/iPad 10/...' tie on ('ipad','fintie','touchchat') → null.
       const files = makeFiles([
         ['main.scad', '// scad'],
         ['Cases/iPad 7,8,9/Fintie/TouchChat/openings_and_additions.txt', 'ipad789 tc'],
@@ -862,8 +862,8 @@ describe('ZIP Handler', () => {
     })
   })
 
-  describe('applyCompanionAliases — root key creation guard (KI-012 regression)', () => {
-    it('should CREATE root openings key when project has no root-level openings file', () => {
+  describe('applyCompanionAliases — root key creation guard', () => {
+    it('should create root openings key when project has no root-level openings file', () => {
       const files = new Map([
         ['main.scad', 'include <openings_and_additions.txt>'],
         ['Cases/iPad/LWFL/openings_and_additions.txt', 'lwfl openings'],
@@ -878,7 +878,7 @@ describe('ZIP Handler', () => {
       expect(result.get('openings_and_additions.txt')).toBe('lwfl openings')
     })
 
-    it('should CREATE root default.svg when project has no root-level SVG', () => {
+    it('should create root default.svg when project has no root-level SVG', () => {
       const files = new Map([
         ['main.scad', 'import("default.svg")'],
         ['SVG files/iPad/App/icon.svg', '<svg>app icon</svg>'],
@@ -892,7 +892,7 @@ describe('ZIP Handler', () => {
       expect(result.get('default.svg')).toBe('<svg>app icon</svg>')
     })
 
-    it('should NOT replace existing root keys — preserve original content (KI-012 fix)', () => {
+    it('should not replace existing root keys — preserve original content', () => {
       const files = new Map([
         ['main.scad', 'include <openings_and_additions.txt>'],
         ['openings_and_additions.txt', 'default content'],
@@ -909,7 +909,7 @@ describe('ZIP Handler', () => {
       expect(result.get('default.svg')).toBe('<svg>placeholder</svg>')
     })
 
-    it('should CREATE root openings from resolved path when no root key exists (Bug A/B scenario)', () => {
+    it('should create root openings from resolved path when no root key exists', () => {
       const files = new Map([
         ['keyguard_v75.scad', 'include <openings_and_additions.txt>'],
         ['Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt', 'andnary lwfl'],
@@ -1009,8 +1009,8 @@ describe('ZIP Handler', () => {
     })
   })
 
-  describe('applyCompanionAliases — create-only semantics (KI-012 inversion)', () => {
-    it('generic: should CREATE root key when target does not exist (Structure B)', () => {
+  describe('applyCompanionAliases — create-only semantics', () => {
+    it('generic: should create root key when target does not exist (Structure B)', () => {
       const files = new Map([
         ['main.scad', 'include <config.txt>'],
         ['presets/Alpha/config.txt', 'alpha config'],
@@ -1023,7 +1023,7 @@ describe('ZIP Handler', () => {
       expect(result.get('config.txt')).toBe('alpha config')
     })
 
-    it('generic: should NOT replace root key when target already exists (Structure A)', () => {
+    it('generic: should not replace root key when target already exists (Structure A)', () => {
       const files = new Map([
         ['main.scad', 'include <config.txt>'],
         ['config.txt', 'default config'],
@@ -1036,7 +1036,7 @@ describe('ZIP Handler', () => {
       expect(result.get('config.txt')).toBe('default config')
     })
 
-    it('legacy: should CREATE root openings when target does not exist', () => {
+    it('legacy: should create root openings when target does not exist', () => {
       const files = new Map([
         ['main.scad', 'include <openings_and_additions.txt>'],
         ['Cases/iPad/LWFL/openings_and_additions.txt', 'lwfl openings'],
@@ -1050,7 +1050,7 @@ describe('ZIP Handler', () => {
       expect(result.get('openings_and_additions.txt')).toBe('lwfl openings')
     })
 
-    it('legacy: should NOT replace root openings when target already exists', () => {
+    it('legacy: should not replace root openings when target already exists', () => {
       const files = new Map([
         ['main.scad', 'include <openings_and_additions.txt>'],
         ['openings_and_additions.txt', 'original content'],
@@ -1309,7 +1309,7 @@ describe('ZIP Handler', () => {
     })
   })
 
-  // Phase 1 — failure-mode tests (expected to FAIL against current code)
+  // Failure-mode tests
 
   describe('buildPresetCompanionMap — failure mode: sibling substring ambiguity', () => {
     const SIBLING_FIXTURE = new Map([
@@ -1977,7 +1977,7 @@ describe('ZIP Handler', () => {
     })
   })
 
-  describe('buildPresetCompanionMap — Phase 7: full 292-preset validation', () => {
+  describe('buildPresetCompanionMap — full 292-preset validation', () => {
     const __test_dirname = dirname(fileURLToPath(import.meta.url))
 
     const MOUNT_TYPES = [
@@ -2113,21 +2113,19 @@ describe('ZIP Handler', () => {
       expect(presetNames).toHaveLength(292)
     })
 
-    // Validated thresholds (actual: 292 unique, 0 heuristic, 0 unmapped):
+    // Validated thresholds (actual: 292 unique, 0 heuristic, 0 unmapped).
     //
-    // Two companion-resolution improvements eliminated all 22 former
-    // ancestor-fallback heuristic defaults:
+    // Two companion-resolution rules keep the ancestor-fallback heuristic at
+    // zero (22 presets would fall back without them):
     //
     // 1. extraSegmentsMatchTokens word filter parity: single-char non-digit
-    //    words (e.g. "x" in "TD Snap 5 x 5") are now skipped, matching the
-    //    tokeniser's own filter. Recovers 3 presets whose single-winner
-    //    ancestor check was failing due to unmatched "x".
+    //    words (e.g. "x" in "TD Snap 5 x 5") are skipped, matching the
+    //    tokeniser's own filter (3 presets).
     //
     // 2. App-name exact-match tie-breaker: when tied candidates span
     //    different intermediate folders (e.g. mount types) but the preset has
     //    a parsed app name, prefer candidates whose leaf folder tokenizes to
-    //    the same set as the app name. Recovers 19 LTROP presets whose
-    //    app-level paths tied across mount types.
+    //    the same set as the app name (19 LTROP presets).
 
     it('should resolve 290+ uniquely via legacy path', () => {
       const map = buildPresetCompanionMap(fileTree, parameterSets)
