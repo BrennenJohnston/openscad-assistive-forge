@@ -680,7 +680,7 @@ async function mountFiles(files, options = {}) {
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
 
     try {
-      // S-013: data-URL companion files (images) are decoded to binary
+      // Data-URL companion files (images) are decoded to binary
       // before mounting — see ./mount-content.js (shared with unit tests).
       const fsContent = resolveMountContent(content, {
         onDecodeError: (decodeErr) =>
@@ -1279,7 +1279,7 @@ async function renderWithCallMain(
     // Clear accumulated console output for this render
     openscadConsoleOutput = '';
 
-    // S-012: Synthetic missing-file warnings. Scan for include/use directives
+    // Synthetic missing-file warnings. Scan for include/use directives
     // and inject desktop-format warnings for files not found in the virtual FS.
     const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
     const fsSearchPaths = [inputDir, WORK_DIR, '/libraries'].filter(Boolean);
