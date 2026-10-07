@@ -1,8 +1,7 @@
 /**
- * Bridge-less multi-layer stencil plates (DP-12).
+ * Bridge-less multi-layer stencil plates.
  *
- * The method, in the owner's own words and worked through here so the code
- * can be checked against it:
+ * The method, worked through here so the code can be checked against it:
  *
  *   Every enclosed shape is an island, and an island inside an island gets the
  *   next layer number. Plate 1 cuts EVERY layer - 1, 2 and 3 together - and
@@ -17,8 +16,8 @@
  *     layer 2     black, white   (ends white)
  *     layer 3     black, white, black
  *
- * ★ WHY THERE ARE NO BRIDGES, which is the whole point of the method. Plate
- * k's cut is the union of layers k..N, so it is always a SOLID region, never
+ * Why there are no bridges, which is the whole point of the method. Plate
+ * k's cut is the union of layers k..N, so it is always a solid region, never
  * a ring. The counter of a letter A is not a separate island on plate 1: it
  * is cut along WITH the A, because it belongs to a deeper layer. Nothing is
  * ever left connected to nothing, so nothing needs a tie holding it, so no
@@ -129,11 +128,11 @@ export function plateFit({
 /**
  * One transform out of two, so path data is mapped exactly once.
  *
- * ★ D-122 again, from the other side. A cut can arrive already carrying a
- * transform onto the layer canvas (see svg-preparer's readLayerFile), and the
- * fit is a second transform from that canvas onto the plate. Applying them one
- * after the other means walking every curve twice; applying only the second
- * means the first is silently dropped, which is the defect. Both are uniform
+ * A cut can arrive already carrying a transform onto the layer canvas (see
+ * svg-preparer's readLayerFile), and the fit is a second transform from
+ * that canvas onto the plate. Applying them one after the other means
+ * walking every curve twice; applying only the second silently drops the
+ * first. Both are uniform
  * scales with a translate, so they compose into one:
  *
  *   p_mm = fit.s * (pre.s * p + pre.d) + fit.d
@@ -161,7 +160,7 @@ export function composeFit(fit, pre) {
  *   it there.
  * @param {{scale: number, dx: number, dy: number}} [args.cutTransform] - The
  *   transform from the cut's own units onto the layer canvas, composed with
- *   the fit so the coordinates are mapped once (D-122).
+ *   the fit so the coordinates are mapped once.
  * @param {number} args.canvasSpan
  * @param {number} args.canvasHeight
  * @param {number} args.plateW - mm
@@ -211,20 +210,19 @@ export function buildStencilPlate({
   // else, for the reason in the comment below: a hole in a path of its own is
   // not a hole.
   if (pegs) d += ` ${jigHolePathData({ ...pegs, plateW, plateH })}`;
-  // Rings arrive already in plate millimeters (fitRingsToPlate did that, once)
-  // so there is nothing here to scale. This is the D-122-free path; the
-  // cutPathData one below is what the charm-era callers still use.
+  // Rings arrive already in plate millimeters (fitRingsToPlate did that,
+  // once) so there is nothing here to scale. The cutPathData path below is
+  // for callers that hand over path data instead.
   if (rings && rings.length > 0) {
     d += ` ${ringsToPathData(rings)}`;
   } else if (cutPathData) {
-    // ★ ONE PATH, always. MEASURED against OpenSCAD 2026.01.03: two separate
-    // <path> elements are UNIONED on import - a 40 mm square with a 20 mm
-    // square in a second path came back as 12 facets, a plain solid square,
-    // the hole gone. The same two shapes as subpaths of ONE path came back as
-    // 32: a square with a hole in it. Even-odd applies WITHIN a path and not
-    // across paths, so a cut in its own <path>, however correctly placed,
-    // cuts nothing. The first version of this file did exactly that and
-    // produced solid plates that looked like plates.
+    // One path, always. OpenSCAD 2026.01.03 unions separate <path> elements on
+    // import: a 40 mm square with a 20 mm square in a second path comes back
+    // as 12 facets, a plain solid square, the hole gone. The same two shapes
+    // as subpaths of one path come back as 32: a square with a hole in it.
+    // Even-odd applies within a path and not across paths, so a cut in its own
+    // <path>, however correctly placed, cuts nothing and the plate prints
+    // solid.
     //
     // So the fit is baked into the coordinates rather than carried by a
     // <g transform>, and everything joins one `d`.
@@ -265,7 +263,7 @@ export function buildStencilPlate({
  * @param {object} args
  * @param {string|null} args.cutPathData - The whole design's cut
  * @param {{scale: number, dx: number, dy: number}} [args.cutTransform] - The
- *   transform onto the layer canvas, composed with the fit (D-122). The
+ *   transform onto the layer canvas, composed with the fit. The
  *   bridges take the SAME one: they are built in the design's units too.
  * @param {string} [args.bridgePathData] - Ribs to restore, same coordinates
  * @param {number} args.canvasSpan
@@ -322,13 +320,12 @@ export function buildLaserSheet({
 }
 
 /**
- * Layer per element for a stencil, with the background left uncut (DP-12).
+ * Layer per element for a stencil, with the background left uncut.
  *
- * ★ A TRACED PHOTOGRAPH'S OUTERMOST SHAPE IS THE PAPER, NOT THE DRAWING, and
- * this is the second place in this round that has had to learn it. Measured on
- * the owner's own mark: its trace has a full-bleed light rectangle as the only
- * root, so plate 1 - which cuts the union of every layer - cut a rectangle the
- * size of the whole image. A stencil that cuts everything is a hole.
+ * A traced photograph's outermost shape is the paper, not the drawing. A
+ * trace whose only root is a full-bleed light rectangle would have plate 1
+ * - which cuts the union of every layer - cut a rectangle the size of the
+ * whole image. A stencil that cuts everything is a hole.
  *
  * A root classified as a hole is a background: it is never cut, and the depth
  * that decides the layers is counted from the shapes drawn ON it. An ignored
@@ -358,12 +355,12 @@ export function stencilLayers(tree, roles, cap = 3, canvas = null) {
   /**
    * Is this root the paper rather than the drawing?
    *
-   * COLOR CANNOT ANSWER THIS, and is not consulted. The bird fixture's
-   * background is a light `<rect fill="#efe9dc">`; the owner's traced mark
-   * has a DARK one, rgb(54,59,127). Both are the paper. What they share is
-   * that they span the whole artwork and something is drawn on them.
+   * Color cannot answer this, and is not consulted. The bird fixture's
+   * background is a light `<rect fill="#efe9dc">`; a traced logo can have a
+   * dark one, rgb(54,59,127). Both are the paper. What they share is that
+   * they span the whole artwork and something is drawn on them.
    *
-   * JUDGEMENT CALL, stated plainly: a root covering essentially everything
+   * A judgement call, stated plainly: a root covering essentially everything
    * AND having children is treated as background. A deliberate filled panel
    * with art on it - a sign, a badge - trips this too, and its panel will not
    * be cut. That is the safer way round: an uncut panel is a stencil that
@@ -371,11 +368,10 @@ export function stencilLayers(tree, roles, cap = 3, canvas = null) {
    */
   const isBackdrop = (index) => {
     const n = tree.nodes[index];
-    // Against the CANVAS, not against the other shapes. The first version of
-    // this compared a root's area with the LARGEST area in the drawing - but
-    // the outermost shape is always the largest, so every root with children
-    // was called paper. Three nested squares lost their outer square and the
-    // stencil came out a plate short.
+    // Against the canvas, not against the other shapes: the outermost shape is
+    // always the largest, so comparing with the largest area would call every
+    // root with children paper, and three nested squares would lose their
+    // outer square and come out a plate short.
     //
     // The paper is the thing that fills the picture: a traced photograph's
     // background rect IS the viewBox. A drawing's outer shape has margin
@@ -391,10 +387,10 @@ export function stencilLayers(tree, roles, cap = 3, canvas = null) {
     if (!node) return;
     const role = roleAt(index);
     // A background or an ignored shape is not the design; step past it
-    // WITHOUT spending a layer on it, so the drawing on top starts at 1.
-    // Color is deliberately NOT consulted. It cannot tell paper from
-    // drawing, and using it here also mis-skipped the first LIGHT shape of a
-    // light-on-dark design, which is content, not paper.
+    // without spending a layer on it, so the drawing on top starts at 1.
+    // Color is deliberately not consulted. It cannot tell paper from drawing,
+    // and it would skip the first light shape of a light-on-dark design, which
+    // is content, not paper.
     const isDesign = role !== 'ignore' && !(depth === 0 && isBackdrop(index));
     const next = isDesign ? depth + 1 : depth;
     if (isDesign) {
@@ -455,7 +451,6 @@ export function scaleTranslatePath(d, s, dx, dy) {
 
 /**
  * What this plate is called, and what to do with it.
- * STRINGS: owner review pending (DP-R1 text pack).
  */
 export function plateLabel(layer, layerCount, colourName = null) {
   return colourName
@@ -464,9 +459,9 @@ export function plateLabel(layer, layerCount, colourName = null) {
 }
 
 /**
- * Put rings on the plate, ONCE.
+ * Put rings on the plate, once.
  *
- * ★ D-122 BY CONSTRUCTION. The rings arrive in the drawing's own units and
+ * The rings arrive in the drawing's own units and
  * `contentBox` says where the drawing is in them; this returns rings in plate
  * millimeters, and it is the only place the two spaces meet. Nothing
  * downstream fits anything again, because there is nothing left to fit.
@@ -506,7 +501,6 @@ export function fitRingsToPlate(rings, contentBox, plate) {
  *
  * Getting this wrong ruins the piece and there is no undo once paint is down,
  * so it is spelled out rather than left to be inferred from a number.
- * STRINGS: owner review pending (DP-R1 text pack).
  *
  * @param {number|string[]} layerCountOrNames - How many plates, or the color
  *   names in paint order when the caller knows them

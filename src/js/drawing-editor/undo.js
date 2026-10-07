@@ -1,12 +1,12 @@
 /**
- * A command stack for the drawing editor (DP-20).
+ * A command stack for the drawing editor.
  *
  * Every change a person makes in the editor is a command with a `do` and an
  * `undo`, so Undo puts back exactly what was there and says what came back.
  * Bounded, because a stack that grew without limit through a long session
  * would be a memory leak with a keyboard shortcut; session only, because a
  * stack that rode into the saved project would grow the 2 MB localStorage
- * lane without bound (the same reason the old delete-undo was one level).
+ * lane without bound.
  *
  * @license GPL-3.0-or-later
  */

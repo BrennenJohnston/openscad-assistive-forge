@@ -1,39 +1,33 @@
 /**
  * One conversion, start to finish, as stages a person can watch and a Cancel
- * that lands between them (DP-52), inside them (DP-78), and before a drawing
- * the editor could not hold is ever prepared (DP-78, D-172).
+ * that lands between them, inside them, and before a drawing the editor
+ * could not hold is ever prepared.
  *
- * The trace runner already owns the worker and its three stages (reading,
- * ink, tracing), and Cancel there is `terminate()`. What came AFTER the worker
- * - the credit line, the analysis, the nesting tree, the rows and the pictures
- * of the editor, then the emit - ran on the main thread in one unbroken
- * stretch with no stage a person could read and no moment a Cancel could land.
- * The label a person watched was painted from the worker's last message, so
- * it stood still at "Finding the ink" while the page did the rest.
+ * The trace runner owns the worker and its three stages (reading, ink,
+ * tracing), and Cancel there is `terminate()`. What comes after the worker -
+ * the credit line, the analysis, the nesting tree, the rows and the pictures
+ * of the editor, then the emit - runs on the main thread, and run in one
+ * unbroken stretch it has no stage a person can read and no moment a Cancel
+ * can land.
  *
  * This job reports each stage as the page enters it, yields to the event loop
  * between the main-thread stages so a paint and a click can happen, and reads
  * a cancel flag at every yield. It owns no DOM: the host hands it the
  * main-thread steps as functions, and a dialog listens to `onStage`.
  *
- * ★ D-171 (DP-77, MEASURED 2026-09-20): on a photograph of a printed symbol
- * the "Preparing the drawing" stage was ONE task of 5.1 s on a 4x-throttled
- * CPU (the credit line, the parse, the nesting tree) and "Updating the charm"
- * another of 6.0 s (the emit), so a Cancel click could not land for two
- * seconds and the job finished with the drawing emitted. And the stage label
- * was written at the START of that task and painted only when it ENDED, so
- * the dialog read "Finding the ink" for the whole of preparing. Three things
- * changed for that:
+ * On a photograph of a printed symbol, with a 4x-throttled CPU, preparing the
+ * drawing (the credit line, the parse, the nesting tree) is 5.1 s of work and
+ * the emit another 6.0 s. So:
  *
  *   - `refuse` runs first, before any main-thread work: a host that can tell
  *     from the traced text alone that the drawing is more than the editor
- *     can hold (the shape cap, D-172) says so, and the job ends there with
- *     a `TraceRefused`. Nothing is prepared, nothing is emitted.
- *   - `prepare` may be a LIST of steps; a checkpoint runs between each, and
+ *     can hold (the shape cap) says so, and the job ends there with a
+ *     `TraceRefused`. Nothing is prepared, nothing is emitted.
+ *   - `prepare` may be a list of steps; a checkpoint runs between each, and
  *     every step (and `update`) is handed the checkpoint so it can ask for one
  *     inside its own work, between the parse and the analysis, before the emit.
- *   - a PAINT follows each stage's report before its work begins, so the
- *     label is on the screen BEFORE the work it names, not after. A plain
+ *   - A paint follows each stage's report before its work begins, so the
+ *     label is on the screen before the work it names, not after. A plain
  *     macrotask is not enough for that: the browser paints at the next frame,
  *     and a task that starts before the frame holds the paint until it ends.
  *     So the job waits for a frame (requestAnimationFrame, then a task after
@@ -182,13 +176,12 @@ export function createConversionJob({
    */
   async function run(steps) {
     if (running) {
-      // D-151. A conversion asked for while one runs is the person changing
-      // their mind - a setting moved, another mode chosen - and the newest
-      // settings win, as the runner's own start() always had it. The one in
-      // flight ends as superseded (never as a failure, never with a word),
-      // and this one begins once it has let go. Refusing it lost the change:
-      // "Conversion failed: A conversion is already running", and the old
-      // result stood.
+      // A conversion asked for while one runs is the person changing their
+      // mind (a setting moved, another mode chosen), and the newest settings
+      // win, as in the runner's own start(). The one in flight ends as
+      // superseded (never as a failure, never with a word), and this one begins
+      // once it has let go. Refusing it would lose the change and leave the old
+      // result standing.
       stop('superseded');
       await current.catch(() => {});
     }
@@ -218,10 +211,9 @@ export function createConversionJob({
         if (verdict) throw new TraceRefused(verdict, traced);
       }
       report('preparing');
-      // The label above reaches the screen at the next frame, and a task
-      // that begins before the frame holds it back until the task ends
-      // (D-171: "Finding the ink" stood for the whole of preparing). Wait
-      // for the frame, so the stage a person reads is the one running.
+      // The label above reaches the screen at the next frame, and a task that
+      // begins before the frame holds it back until the task ends. Wait for the
+      // frame, so the stage a person reads is the one running.
       await painted();
       const list = Array.isArray(prepare) ? prepare : [prepare];
       let value = traced;

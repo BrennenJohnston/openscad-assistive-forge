@@ -2,14 +2,10 @@
  * Image Import Module
  *
  * PNG/JPG-to-SVG vectorization for the file parameter pipeline.
- * Uses imagetracerjs (Unlicense) for raster-to-vector conversion.
- *
- * Library selection rationale (OSS-first search, 2026-03-18):
- *   - potrace-js 0.0.6: unmaintained since 2017, 127 downloads/wk
- *   - imagetracerjs 1.2.6: 41.8K downloads/wk, Unlicense, pure JS, sync API
- *   - esm-potrace-wasm 0.4.1: 2.5K downloads/wk, GPL-2.0, WASM dependency
- *   Selected imagetracerjs for broad adoption, permissive license, and
- *   synchronous imagedataToSVG() that avoids WASM init complexity.
+ * Uses imagetracerjs (Unlicense) for raster-to-vector conversion: widely
+ * used, permissive, pure JS, and its synchronous imagedataToSVG() needs no
+ * WASM start-up. The other candidates were potrace-js (unmaintained) and
+ * esm-potrace-wasm (GPL-2.0, with a WASM dependency).
  *
  * @license GPL-3.0-or-later
  */
@@ -26,16 +22,15 @@ export const IMAGE_IMPORT_LIMITS = {
 };
 
 /**
- * Below this share of the picture, a color a RELIEF host found is the edge
+ * Below this share of the picture, a color a relief host found is the edge
  * between two others rather than a color of its own, and `keepAboveShare`
- * folds it into the nearer of them (D-138).
+ * folds it into the nearer of them.
  *
- * PROPOSED at 2 %, and the value is the owner's to set (DP-Q54): it is a
- * public default and it decides what a person is offered to paint. MEASURED
- * on the owner's CREATE logo: navy 83 %, white 12 %, and four ramp colors of
- * 1 % each that between them carried three quarters of the shapes.
+ * It is a public default, and it decides what a person is offered to paint.
+ * A two-color logo traced into navy 83 %, white 12 %, and four ramp colors
+ * of 1 % each that between them carried three quarters of the shapes.
  *
- * A STENCIL never passes it: that lane is painted by hand, and a cat's green
+ * A stencil never passes it: that lane is painted by hand, and a cat's green
  * eyes at under a percent are the point of it.
  */
 export const RELIEF_COLOUR_SHARE_FLOOR = 0.02;
@@ -114,12 +109,12 @@ export async function convertPngToSvg(dataUrl, options = {}) {
 export async function convertImageDataToSvg(imageData, options = {}) {
   const { ink, ...tracerOverrides } = options;
 
-  // ★ A PICTURE TOO BIG TO TRACE IS MADE SMALLER, NOT REFUSED. The cap exists
+  // A picture too big to trace is made smaller, not refused. The cap exists
   // because tracing cost grows with pixels, and a photograph off a phone is
-  // several times over it. Refusing it made the person go and find an image
-  // editor; scaling it down loses detail no stencil could cut anyway. The
-  // factor is SAID, because a person who scaled their own picture on purpose
-  // needs to know it was scaled again.
+  // several times over it. Refusing it would send the person off to find an
+  // image editor; scaling it down loses detail no stencil could cut anyway.
+  // The factor is said, because a person who scaled their own picture on
+  // purpose needs to know it was scaled again.
   let pixels = imageData;
   let downscale = null;
   if (imageData.width * imageData.height > IMAGE_IMPORT_LIMITS.maxPixels) {
@@ -135,10 +130,9 @@ export async function convertImageDataToSvg(imageData, options = {}) {
     );
   }
 
-  // DP-79: the photo defaults, through the SAME functions the trace worker
-  // calls, so the two roads cannot drift (the D-138 lesson). A camera picture
-  // is worked at the print's cell; `inkAt` carries the millimeters per pixel
-  // of the pixels in hand.
+  // The photo defaults, through the same functions the trace worker calls,
+  // so the two roads cannot drift. A camera picture is worked at the print's
+  // cell; `inkAt` carries the millimeters per pixel of the pixels in hand.
   const { workingPicture, inkStage, SPECK_FLOOR_MM2 } =
     await import('./ink-prepare.js');
   // The host's mmPerPixel is for the SOURCE pixels; the cap above may have
@@ -221,13 +215,10 @@ export async function convertImageDataToSvg(imageData, options = {}) {
   let summary = null;
 
   if (inkAt && inkAt.mode && inkAt.mode !== 'standard') {
-    // ★ D-131: this read `imageData`, the ORIGINAL, so the downscale computed
-    // twenty lines above was thrown away for every ink mode - which is every
-    // mode an icon or a photo goes through. An 8 MP picture was ink-extracted
-    // and traced at 8 MP and a 12 MP phone photo at 12 MP, while the summary
-    // cheerfully reported that it had been scaled down by N. The cap was dead
-    // code on the one path that needed it most, and the shipped conversion ran
-    // three to ten times slower than its own stages because of this one word.
+    // `pixels`, not `imageData`: reading the original here would throw away
+    // the downscale above for every ink mode, and an 8 MP picture would be
+    // extracted and traced at full size, three to ten times slower, while the
+    // summary said it had been scaled down.
     const stage = inkStage(pixels, inkAt, { makeImageData });
     pixels = stage.pixels;
     summary = stage.summary;
@@ -249,12 +240,11 @@ export async function convertImageDataToSvg(imageData, options = {}) {
     summary = { ...summary, printedWidthMm };
   }
 
-  // DP-34: imagetracerjs is loaded here on demand rather than at the top of the
-  // file. Every conversion a person actually starts now runs in the trace
-  // worker, which carries its own copy of the tracer in its own chunk; a static
-  // import here put a SECOND copy in the core bundle, which every visitor
-  // downloads whether or not they ever choose a picture. MEASURED: the core
-  // chunk carried the tracer with no production caller left for this function.
+  // imagetracerjs is loaded here on demand rather than at the top of the
+  // file. Every conversion a person starts runs in the trace worker, which
+  // carries its own copy of the tracer in its own chunk; a static import here
+  // would put a second copy in the core bundle, which every visitor downloads
+  // whether or not they ever choose a picture.
   const { default: ImageTracer } = await import('imagetracerjs');
   const tracerOptions = { ...TRACER_OPTIONS, ...tracerOverrides };
   const svgString = ImageTracer.imagedataToSVG(pixels, tracerOptions);

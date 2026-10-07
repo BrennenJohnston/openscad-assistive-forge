@@ -1,9 +1,10 @@
 /**
- * A shape's own thickness, at the printed size and in the picture (DP-54 P1).
+ * A shape's own thickness, at the printed size and in the picture.
  *
- * DP-36 measures the whole drawing's line width with a ridge: a distance
- * transform over the ink, and on the ridge of a stroke (the pixels that are
- * local maxima of that distance) twice the distance is the stroke's width.
+ * The thin-line advisory measures a whole drawing's line width with a
+ * ridge: a distance transform over the ink, and on the ridge of a stroke
+ * (the pixels that are local maxima of that distance) twice the distance
+ * is the stroke's width.
  * Here the same measure is taken over ONE shape at a time, so the editor can
  * say which shapes are too thin rather than that the drawing is. The shape's
  * rings are rasterized into a small mask of that shape alone, twice: at
@@ -12,17 +13,16 @@
  * picture floor (a shape under three pixels in the picture was never traced
  * faithfully, whatever size it prints at).
  *
- * MEASURED at P0 on the owner's logo (206 shapes): both measures in about
- * 65 ms, and 1,200 rectangles in 95 ms, so the cheaper stand-in the plan
- * held in reserve (2A/P from the rings) is not needed. It would also have
- * halved a blob's width, which this does not: for a disc the ridge is about
- * its diameter, and a 0.5 mm dot prints or not by its diameter.
+ * On a 206-shape logo both measures take about 65 ms, and 1,200 rectangles
+ * 95 ms, so no cheaper stand-in is needed - and an area-over-perimeter
+ * estimate from the rings would halve a blob's width, which this does not:
+ * for a disc the ridge is about its diameter, and a 0.5 mm dot prints or
+ * not by its diameter.
  *
- * Both floors are PROPOSED (accessibility rule 11: a physical readability
- * threshold is proposed, never set) and asked at DP-Q58 with P0's table.
- * A shape's rings decide only the width; the cell size caps the mask at 256
- * cells on the long side, so a shape the size of the whole picture costs
- * the same as a large one.
+ * Both floors are physical printability thresholds, decided rather than
+ * assumed. A shape's rings decide only the width; the cell size caps the
+ * mask at 256 cells on the long side, so a shape the size of the whole
+ * picture costs the same as a large one.
  *
  * @license GPL-3.0-or-later
  */
@@ -31,9 +31,9 @@ import { ringsFromPathData } from './ring-geometry.js';
 import { lineWidthPercentiles } from './ink-extraction.js';
 import { PRINT_CELL_MM } from './print-cell.js';
 
-/** Under this a 0.4 mm nozzle cannot be relied on to lay a line (proposed). */
+/** Under this a 0.4 mm nozzle cannot be relied on to lay a line. */
 export const THIN_PRINT_MM = 0.5;
-/** Under this in the picture the shape was never traced faithfully (proposed). */
+/** Under this in the picture the shape was never traced faithfully. */
 export const THIN_PICTURE_PX = 3;
 /** The print measure's cell, in mm (print-cell.js; the worker reads it too). */
 export { PRINT_CELL_MM };

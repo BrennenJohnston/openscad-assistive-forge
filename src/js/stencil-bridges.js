@@ -1,25 +1,25 @@
 /**
  * Bridges: ribs of material left across a cut so an island stays attached.
  *
- * PORTED FROM the owner's own stencil-forge repository, src/js/stencil-bridges.js
+ * Ported from stencil-forge, src/js/stencil-bridges.js
  * (https://github.com/BrennenJohnston/stencil-forge, GPL-3.0-or-later): the
  * ray/ring intersection, the rib rectangle, and the fan of evenly spaced rays
  * with a half-step retry. Prior art surveyed there: PathBinder (MIT) and
  * BridgeIt (MIT) place configurable-width connectors the same way.
  *
- * ★ WHERE BRIDGES BELONG, AND WHERE THEY DO NOT. The 3D-printed multi-layer
- * stencil exists so that bridges are UNNECESSARY: each plate's cut is the
+ * Where bridges belong, and where they do not. The 3D-printed multi-layer
+ * stencil exists so that bridges are unnecessary: each plate's cut is the
  * union of its layer and everything deeper, which is always solid and never a
  * ring, so nothing is ever left connected to nothing. See stencil-plates.js.
  *
- * A LASER CUT has no such luxury. It is one sheet, cut once, and the counter
+ * A laser cut has no such luxury. It is one sheet, cut once, and the counter
  * of an O always falls out. So bridges are the laser lane's instrument, and
  * the single-sheet 3D print's, and they are not used by the layered mode at
  * all. Reaching for them there would put a scar across artwork that did not
  * need one.
  *
- * One deliberate change on the way over: the owner's version fans its rays
- * from the island's CENTROID. A centroid can fall outside a concave island -
+ * One deliberate difference: stencil-forge fans its rays from the island's
+ * centroid. A centroid can fall outside a concave island -
  * the middle of a C is in the gap - and rays from outside cross the ring in
  * the wrong order. This uses svg-nesting's interiorPoint(), which scans for a
  * point genuinely inside, for the same reason the nesting analysis does.
@@ -177,8 +177,6 @@ export function findIslands(elements, tree) {
 
 /**
  * Bridges for a whole design, with a plain-language report.
- *
- * STRINGS: owner review pending (DP-R1 text pack).
  *
  * @param {Array} elements
  * @param {{nodes: Array}} tree

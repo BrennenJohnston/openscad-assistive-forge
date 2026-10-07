@@ -1,48 +1,42 @@
 /**
  * The drawing editor, where the preview lives.
  *
- * The owner's complaint about the old one was structural rather than cosmetic:
- * it was a block nested inside the customizer's file control, a long flat list
- * with no shape to it, and the preview was a before-and-after pair. So this is
- * a SURFACE. It takes the whole preview area - the biggest thing on the page,
- * and on a phone the only thing - the way the 2D preview does, with a toolbar
- * across the top, the drawing in the middle, and a side panel of collapsible
+ * It is a surface, not a block inside the customizer's file control: it
+ * takes the whole preview area - the biggest thing on the page, and on a
+ * phone the only thing - the way the 2D preview does, with a toolbar across
+ * the top, the drawing in the middle, and a side panel of collapsible
  * sections beside it.
  *
- * ★ WHAT THIS IS NOT: a rewrite of the editing itself. The roles, the layer
- * column, the delete-and-undo keyed by original index, the tiers, the manual
- * render, the announcements and the persistence are all
- * `svg-preparer-workspace.js`, which is 2,100 lines with 3,200 lines of tests
- * on it, and it is MOUNTED here rather than re-derived. Its pieces are then
- * put where the surface wants them - the shape list and the warnings in the
- * side panel, the Apply/Save/Keep buttons in the toolbar - by moving the
- * nodes, which keeps every listener the workspace attached to them. Deriving
- * it again would have spent the round's remaining time re-earning behavior
- * the owner already has, and the way to lose a pinned behavior is to write
- * it twice. The surface is new; what happens inside it is the tested thing.
- * To reverse: build the table into this file and delete the mount.
+ * The editing itself is not here. The roles, the layer column, the
+ * delete-and-undo keyed by original index, the tiers, the manual render,
+ * the announcements and the persistence are all `svg-preparer-workspace.js`,
+ * which has its own large test suite, and it is mounted here rather than
+ * re-derived. Its pieces are then put where the surface wants them - the
+ * shape list and the warnings in the side panel, the Apply/Save/Keep buttons
+ * in the toolbar - by moving the nodes, which keeps every listener the
+ * workspace attached to them. The way to lose a pinned behavior is to write
+ * it twice. To reverse: build the table into this file and delete the
+ * mount.
  *
- * ★ THE CUSTOMIZER STAYS REACHABLE. Focus is trapped only when the editor is
+ * The customizer stays reachable. Focus is trapped only when the editor is
  * opened from the no-model door, where there is nothing behind it to reach.
- * Opened over the preview, a person can Tab straight out into the parameters,
- * which is the owner's "way out" and the reason the surface is a region rather
- * than a dialog.
+ * Opened over the preview, a person can Tab straight out into the
+ * parameters, which is why the surface is a region rather than a dialog.
  *
  * Two purposes on the one component:
  *   relief   the charm tiles: the workspace's own Foreground / Hole / Ignore
- *            rows, layers and offsets, exactly as before, in the Regions
- *            section.
- *   stencil  the Harley law (stencil-colours.js): the drawing's REGIONS, each
+ *            rows, layers and offsets, in the Regions section.
+ *   stencil  the Harley law (stencil-colours.js): the drawing's regions, each
  *            with a color, the palette, the plates in paint order and the
  *            loose pieces each plate would leave. The color engine is a lazy
- *            chunk and arrives after the surface does. DP-20 gave it the
- *            tools: a canvas a person can point at, a table a person can walk
- *            with the arrow keys, and an Undo that says what came back. The
- *            two are ONE selection: ticking a row and clicking a region do
- *            the same thing by the same path.
+ *            chunk and arrives after the surface does. Its tools are a canvas
+ *            a person can point at, a table a person can walk with the arrow
+ *            keys, and an Undo that says what came back. The two are one
+ *            selection: ticking a row and clicking a region do the same
+ *            thing by the same path.
  *
  * This file is `surface.js` and not `index.js` for a reason that is worth a
- * line: a chunk is named after its module, and an `index.js` here became an
+ * line: a chunk is named after its module, and an `index.js` here becomes an
  * `index-<hash>.js` in the build, which the bundle budget counts as the app's
  * own entry chunk. The editor is lazy; its name has to say so.
  *
@@ -168,7 +162,7 @@ export function createDrawingEditor({
     return el;
   };
 
-  // The tools (DP-20). Visible text, the key in the accessible name.
+  // The tools. Visible text, the key in the accessible name.
   const toolsGroup = document.createElement('div');
   toolsGroup.className = 'drawing-editor-tools';
   toolsGroup.setAttribute('role', 'group');
@@ -217,7 +211,7 @@ export function createDrawingEditor({
   zoomGroup.className = 'drawing-editor-zoom';
   zoomGroup.append(fitBtn, zoomInBtn, zoomOutBtn);
 
-  // The view (DP-21): the untouched drawing or the plan over it, and one
+  // The view: the untouched drawing or the plan over it, and one
   // plate at a time.
   const showOriginalBtn = button(
     S.showOriginal,
@@ -248,10 +242,9 @@ export function createDrawingEditor({
   const stencilTools = document.createElement('div');
   stencilTools.className = 'drawing-editor-stencil-tools';
   // The working hands only; the view, zoom and history groups get the view
-  // row. MEASURED at a 1280 window: the toolbar's real width is 692 px (the
-  // editor shares the window with the customizer) and the groups sum to
-  // 1,705 px, so two rows cannot hold them - the honest structure is three
-  // NAMED rows, none of which wraps.
+  // row. At a 1280 px window the toolbar's real width is 692 px (the editor
+  // shares the window with the customizer) and the groups sum to 1,705 px, so
+  // two rows cannot hold them: three named rows, none of which wraps.
   stencilTools.append(toolsGroup, paintGroup);
   stencilTools.hidden = true;
   viewGroup.hidden = true;
@@ -261,7 +254,7 @@ export function createDrawingEditor({
   const viewControls = document.createElement('div');
   viewControls.className = 'drawing-editor-view-controls';
 
-  // DP-38: the drawing, or the thing the drawing makes.
+  // The drawing, or the thing the drawing makes.
   //
   // A real fieldset with two real radios. Two named choices where only one can
   // be true is what a radio group IS, so the markup says it and nothing has to
@@ -315,19 +308,19 @@ export function createDrawingEditor({
     if (e.target && e.target.name === viewGroupName) setView(e.target.value);
   });
 
-  // DP-38 P2 says this out loud, because a person will SEE the difference and
-  // should not be left wondering whether their model changed. It is shown in
-  // the charm view only: it describes the picture beneath, and in the drawing
-  // view there is no picture beneath to describe. Not in the live region -
-  // the switch already announced what happened, and DP-32 allows one sentence
-  // per action, not two.
+  // Said out loud, because a person will see the difference and should not
+  // be left wondering whether their model changed. It is shown in the charm
+  // view only: it describes the picture beneath, and in the drawing view
+  // there is no picture beneath to describe. Not in the live region - the
+  // switch already announced what happened, and one action gets one
+  // sentence, not two.
   const draftNote = document.createElement('p');
   draftNote.className = 'drawing-editor-draft-note';
   draftNote.textContent = S.draftNote;
 
-  // DP-53: the charm on request. The drawing view combines by itself (the
+  // The charm on request. The drawing view combines by itself (the
   // workspace's business); the charm view renders the charm with the drawing
-  // as it is now, as a DRAFT the host draws without touching the design, so
+  // as it is now, as a draft the host draws without touching the design, so
   // Undo never steps through drafts and nothing is written until Apply. Shown
   // in the charm view only, and only when a host offers `onDraftRender` (the
   // standalone door has no charm). The note says which drawing the charm
@@ -340,7 +333,7 @@ export function createDrawingEditor({
   renderCharmBtn.setAttribute('aria-label', S.renderCharmLabel);
   renderCharmBtn.hidden = true;
 
-  // DP-49: the crop. A relief editor whose host can crop shows the button in
+  // The crop. A relief editor whose host can crop shows the button in
   // the drawing view; the view itself takes the stage's place while it is
   // open, and Undo crop appears once the host says a crop can be taken back.
   const cropBtn = button(
@@ -357,7 +350,7 @@ export function createDrawingEditor({
   );
   undoCropBtn.hidden = true;
   let panelOpenBeforeCrop = null;
-  // DP-80: the crop view opened on a picture nothing has converted yet
+  // The crop view opened on a picture nothing has converted yet
   // (Crop first). There is no drawing behind it, so Save crop hands the
   // rectangle over and closes the editor, and Cancel closes it too.
   let cropFirst = false;
@@ -446,8 +439,8 @@ export function createDrawingEditor({
   undoCropBtn.addEventListener('click', () => {
     if (typeof callbacks.onUndoCrop === 'function') callbacks.onUndoCrop();
   });
-  // The note under the charm view is ONE note in two states: draft quality
-  // (DP-38), and, once a draft was rendered, which drawing the charm shows.
+  // The note under the charm view is one note in two states: draft quality
+  //, and, once a draft was rendered, which drawing the charm shows.
   let draftRendering = false;
   const setCharmNote = (rendered) => {
     draftNote.textContent = rendered ? S.charmNote : S.draftNote;
@@ -467,7 +460,7 @@ export function createDrawingEditor({
     'editor-close'
   );
 
-  // G0 (DP-24): the picture is the editor; the side panel is a drawer over
+  // The picture is the editor; the side panel is a drawer over
   // it, owned by this toggle. State lives in aria-expanded.
   const panelToggleBtn = button(
     S.panelToggle,
@@ -611,20 +604,17 @@ export function createDrawingEditor({
   legend.hidden = true;
 
   body.append(stage, cropPanel.element, panel);
-  // ★ D-140: two rows that never depend on state.
+  // Two rows that never depend on state.
   //
-  // Before this the header row held the title, Shapes, the whole workspace
-  // footer (Apply, its hint sentence, Save, Keep original, Reset) and Close.
-  // MEASURED at the editor's real 692 px: the footer wrapped to two lines
-  // because the hint is 418 px wide, and Close fell to a third line on its
-  // own at y 279. When the hint went away after a render the row reflowed and
-  // Close climbed back up, so the layout MOVED as the person worked. On a
-  // phone the same pile was 401 px of a 753 px surface and the picture was
-  // cut 26 px short.
+  // One header row holding the title, Shapes, the whole workspace footer
+  // (Apply, its hint sentence, Save, Keep original, Reset) and Close wraps at
+  // the editor's real 692 px, because the hint alone is 418 px wide, and it
+  // reflows whenever the hint comes and goes, so the layout moves as the
+  // person works. On a phone the same pile takes 401 px of a 753 px surface.
   //
   // Row 1 is the name of the thing and the two ways out of it. Row 2 is the
   // work: which view, then what to do with it, then a More for the three
-  // controls a person reaches for now and then. The hint sentence moves to
+  // controls a person reaches for now and then. The hint sentence lives on
   // the status line, where a sentence belongs, so no row's height depends on
   // whether a button happens to be disabled.
   const toolbarHeaderRow = document.createElement('div');
@@ -659,9 +649,8 @@ export function createDrawingEditor({
   moreBtn.addEventListener('click', () => setMore(morePanel.hidden));
   /**
    * Escape shuts the innermost thing that is open, and this menu is one of
-   * them. Without it, one press with More open left the editor entirely -
-   * the same distance a row's menu used to travel before DP-39 put it in
-   * this chain. Focus goes back to the button that opened it.
+   * them. Without it, one press with More open would leave the editor
+   * entirely. Focus goes back to the button that opened it.
    */
   function closeToolbarMore() {
     if (morePanel.hidden) return false;
@@ -692,7 +681,7 @@ export function createDrawingEditor({
   statusLine.className = 'drawing-editor-statusline';
   statusLine.append(status);
   root.append(skipToTable, toolbar, statusLine, body);
-  // D-165: whatever else is in the element is an editor nobody destroyed;
+  // Whatever else is in the element is an editor nobody destroyed;
   // the surface owns the element and there is one editor in it.
   surfaceEl
     .querySelectorAll(':scope > .drawing-editor')
@@ -717,18 +706,17 @@ export function createDrawingEditor({
   toolbarViewRow.insertBefore(refs.footer, moreBtn);
   // The three tools a person reaches for now and then go behind More; the
   // hint sentence goes to the status line. Both leave the button row, which
-  // is why its height no longer moves with the work (D-140).
+  // is why its height does not move with the work.
   morePanel.append(viewControls);
   statusLine.append(refs.applyHint);
 
   /**
-   * Below the drawer band the working row cannot hold six controls. MEASURED
-   * at 412 with the two-row toolbar: it wrapped across four lines and the
-   * toolbar still took 241 px of a 753 px screen. The three actions a person
-   * finishes with move into More, which is already on the row, and come back
-   * when there is room again.
+   * Below the drawer band the working row cannot hold six controls: at 412 px
+   * it wraps across four lines and the toolbar takes 241 px of a 753 px
+   * screen. The three actions a person finishes with move into More, which is
+   * already on the row, and come back when there is room again.
    *
-   * MOVED, never copied: the same nodes with the same listeners and one
+   * Moved, never copied: the same nodes with the same listeners and one
    * accessible name each. A copy would put two "Reset" buttons in the
    * accessibility tree and let them drift apart.
    */
@@ -816,7 +804,7 @@ export function createDrawingEditor({
 
   let isOpen = false;
   let purpose = 'relief';
-  /** 'drawing' or 'charm' (DP-38). Back to the drawing on every open. */
+  /** 'drawing' or 'charm'. Back to the drawing on every open. */
   let view = 'drawing';
   /** Whether the drawer was open when the charm view closed it. */
   let panelOpenBeforeCharm = null;
@@ -834,7 +822,7 @@ export function createDrawingEditor({
   let selected = new Set();
   const rows = new Map();
   const stack = createCommandStack({ onChange: updateHistoryButtons });
-  // The view (DP-21): the plan or the original, and which plate, if any.
+  // The view: the plan or the original, and which plate, if any.
   let showingOriginal = false;
   let plateIndex = -1;
 
@@ -891,13 +879,11 @@ export function createDrawingEditor({
   /**
    * Leave without a verdict: Close, and Escape where Escape is the way out.
    *
-   * ★ D-149 (DP-55). This used to be `finish('onKeepOriginal')`, so Close
-   * meant "the original stands" - and MEASURED on the owner's logo, a look at
-   * an APPLIED drawing ended with the charm reverting to the raw one: CREATE
-   * raised (53,490 triangles) became a raised slab (29,388). A host that
-   * offers `onClose` is asked to leave things as they are; one that does not
-   * (the Edit Drawing door) gets Keep original as before. The Keep original
-   * BUTTON is not routed through here and keeps its meaning.
+   * Close does not mean "the original stands": a look at an applied drawing
+   * must not end with the charm reverting to the raw one. A host that offers
+   * `onClose` is asked to leave things as they are; one that does not (the
+   * Edit Drawing door) gets Keep original. The Keep original button is not
+   * routed through here and keeps its meaning.
    */
   function leave() {
     finish(
@@ -946,15 +932,15 @@ export function createDrawingEditor({
     callbacks = rest;
     purpose = askedPurpose === 'stencil' ? 'stencil' : 'relief';
     root.dataset.purpose = purpose;
-    // DP-38: every open starts on the drawing. A re-trace calls open() on an
+    // Every open starts on the drawing. A re-trace calls open() on an
     // editor that is already up, and coming back to a charm view of a drawing
-    // that has just changed underneath it would be showing the OLD charm.
+    // that has just changed underneath it would be showing the old charm.
     resetView();
     // No charm to switch to without a model behind the editor (`mode` is the
     // same flag the workspace reads to decide whether Apply means anything),
     // and none on the stencil purpose either: what sits behind THAT editor is
     // a tile of plates, and a control labeled Charm would be naming something
-    // that is not there. DP-38 is the charm's release.
+    // that is not there.
     viewSwitch.hidden = rest.mode === 'file' || purpose !== 'relief';
     syncRenderCharm();
     isOpen = true;
@@ -962,7 +948,7 @@ export function createDrawingEditor({
     initialPlan = savedPlan || null;
     show();
 
-    // DP-80: Crop first. The editor opens on a picture nothing has converted
+    // Crop first. The editor opens on a picture nothing has converted
     // yet, straight into the crop view. There is no drawing, so the
     // workspace is not opened and the rows of drawing tools stay out of the
     // way (the CSS on data-crop-first); Save crop hands the rectangle to the
@@ -1013,7 +999,7 @@ export function createDrawingEditor({
         buildStencil(svgString, openedSentence || S.opened);
       } else {
         setCount('regions', analysis?.elements?.length ?? null);
-        // DP-81 (D-175): a reopen the workspace painted from its stored
+        // A reopen the workspace painted from its stored
         // result says so, with the counts, and never "The model preview is
         // behind it" as if the drawing were new.
         const asLeft =
@@ -1058,7 +1044,7 @@ export function createDrawingEditor({
       });
     }
     // After the host's own open hook: at phone width the customizer drawer
-    // stands aside for the editor (D-178) and moves focus to its toggle as
+    // stands aside for the editor and moves focus to its toggle as
     // it goes, so the editor's first focus is set last.
     (cropFirst && cropTop ? cropTop : title).focus();
   }
@@ -1084,7 +1070,7 @@ export function createDrawingEditor({
     }
     // The drawer is about the DRAWING's shapes, and in the charm view there is
     // no drawing on screen for it to be about. It also costs more of the charm
-    // than anything else does: MEASURED at 1280, the editor's chrome covers
+    // than anything else does: at 1280 px the editor's chrome covers
     // the canvas's top 215 px and the drawer its right 310 px, and the charm
     // itself is 515 px wide - so the toolbar clips 30 px off its top while the
     // drawer hides 206 px of its side. It closes here and comes back exactly
@@ -1105,7 +1091,7 @@ export function createDrawingEditor({
     if (typeof onViewChange === 'function') onViewChange(view, stage);
     syncRenderCharm();
     syncCrop();
-    // DP-32, one action one announcement: one control pressed, one sentence
+    // One action, one announcement: one control pressed, one sentence
     // saying what is now on screen.
     say(view === 'charm' ? S.viewShowingCharm : S.viewShowingDrawing);
   }
@@ -1119,7 +1105,7 @@ export function createDrawingEditor({
   /**
    * Ask the host for a draft of the charm with the drawing as it is now:
    * the current combined result (waiting for the combine if one is in
-   * flight, and saying so) and the Layer column (null unless built, D-142).
+   * flight, and saying so) and the Layer column (null unless built).
    */
   async function renderCharm() {
     if (draftRendering || typeof callbacks.onDraftRender !== 'function') return;
@@ -1171,17 +1157,17 @@ export function createDrawingEditor({
   /** Show what this purpose needs and nothing it does not. */
   function applyPurpose() {
     const stencil = purpose === 'stencil';
-    // G0 (DP-24): the picture is the editor. The stencil purpose starts with
-    // the drawer closed - the canvas and the paint tools carry the task; the
-    // relief purpose starts with it open - the shape list IS the hands.
+    // The picture is the editor. The stencil purpose starts with the drawer
+    // closed - the canvas and the paint tools carry the task; the relief
+    // purpose starts with it open - the shape list is the hands.
     //
-    // ★ Except on a narrow screen, signed at DP-Q46a. There the panel is not a
-    // strip beside the drawing, it is a drawer laid over it: MEASURED at 412,
-    // 396 px of a 412 px screen. Open, the first thing a person sees after
-    // choosing a picture is a list of shapes on top of the picture they
-    // chose. Shut, the picture is the first thing SEEN as well as the first
-    // thing read, and the list is one press away on a button already in the
-    // header. Nothing changes above the band, where the panel covers nothing.
+    // Except on a narrow screen. There the panel is not a strip beside the
+    // drawing, it is a drawer laid over it: 396 px of a 412 px screen. Open,
+    // the first thing a person sees after choosing a picture is a list of
+    // shapes on top of the picture they chose. Shut, the picture is the first
+    // thing seen as well as the first thing read, and the list is one press
+    // away on a button already in the header. Nothing changes above the band,
+    // where the panel covers nothing.
     setPanel(!stencil && !panelIsDrawer());
     sections.colours.details.hidden = !stencil;
     sections.plates.details.hidden = !stencil;
@@ -1194,9 +1180,9 @@ export function createDrawingEditor({
     canvas.root.hidden = !stencil;
     legend.hidden = !stencil;
     applyBtn.hidden = !stencil;
-    // DP-Q40: and the WORD is the relief purpose's vocabulary too. A region is
-    // a thing the stencil lane cuts and paints; what somebody is looking at on
-    // a charm is a shape, which is already the word the rows and counts use.
+    // The word follows the purpose too. A region is a thing the stencil lane
+    // cuts and paints; what somebody is looking at on a charm is a shape, which
+    // is already the word the rows and counts use.
     panelToggleBtn.textContent = stencil ? S.panelToggle : S.panelToggleShapes;
     skipToTable.textContent = stencil ? S.skipToRegions : S.skipToShapes;
     const regionsName = sections.regions?.details?.querySelector(
@@ -1382,7 +1368,7 @@ export function createDrawingEditor({
     canvas.setState({ fills, selected, removed });
   }
 
-  // ── The view: the toggle and the plate stepper (DP-21) ──────────────────
+  // ── The view: the toggle and the plate stepper ──────────────────────────
 
   showOriginalBtn.addEventListener('click', () => {
     showingOriginal = !showingOriginal;
@@ -1562,7 +1548,7 @@ export function createDrawingEditor({
   /**
    * The palette as options, in place, so a select that has focus keeps it.
    *
-   * ★ Unpainted only where it can be true. In a line drawing plate 1 is
+   * Unpainted only where it can be true. In a line drawing plate 1 is
    * the whole outline and the base coat goes through it, so every face
    * inside the outline is painted at least that; offering "unpainted" there
    * would be offering something the plates cannot do. Filled art has no
@@ -2087,11 +2073,10 @@ export function createDrawingEditor({
   });
 
   /**
-   * How many loose pieces a plate lists in full. MEASURED on the cat PNG
-   * traced at seven colors: the masks do not tile, and 567 sliver gaps
-   * between them are honest islands - 236 on plate 1 alone. Listing every
-   * one is a wall nobody can walk with a screen reader, so each plate shows
-   * its largest few and counts the rest; the section's count stays true.
+   * How many loose pieces a plate lists in full. A traced picture can leave
+   * hundreds of loose pieces on a plate, and listing every one is a wall
+   * nobody can walk with a screen reader, so each plate shows its largest few
+   * and counts the rest; the section's count stays true.
    */
   const ISLAND_LIST_CAP = 8;
 
@@ -2192,16 +2177,16 @@ export function createDrawingEditor({
   root.addEventListener('focusin', (event) => {
     const tr = event.target.closest?.('tr[data-region]');
     if (tr && regionsBlock.contains(tr) && plan) {
-      // A keyboard arrival: the highlight pulses, then settles (DP-21).
+      // A keyboard arrival: the highlight pulses, then settles.
       canvas.setHighlight(tr.dataset.region, { pulse: true });
       describeHighlight(tr.dataset.region);
     }
   });
 
-  // ★ Every shortcut the editor takes is STOPPED here. MEASURED: Ctrl+Z
-  // inside the editor also reached the app's own undo, which put the
-  // customizer's parameters back a step and rebuilt the file control under
-  // the editor's feet.
+  // Every shortcut the editor takes is stopped here. Otherwise Ctrl+Z inside
+  // the editor also reaches the app's own undo, which puts the customizer's
+  // parameters back a step and rebuilds the file control under the editor's
+  // feet.
   root.addEventListener('keydown', (event) => {
     if (purpose !== 'stencil' || !plan) return;
     if (handleTableKeys(event)) return;
@@ -2293,14 +2278,13 @@ export function createDrawingEditor({
     'keydown',
     (event) => {
       if (event.key !== 'Escape' || !isOpen) return;
-      // Already spent. The focus trap listens on the DOCUMENT in this same
+      // Already spent. The focus trap listens on the document in this same
       // phase, so it reaches the press before this does and calls
       // preventDefault before its own handler runs - and it does not stop the
-      // event. Without this, one Escape shut a row's menu in the trap and then
-      // closed the whole editor here. MEASURED: the menu closed, focus landed
-      // on the More button, and a tick later it was back on the door.
+      // event. Without this, one Escape would shut a row's menu in the trap and
+      // then close the whole editor here.
       if (event.defaultPrevented) return;
-      // DP-49: the crop view is the innermost thing open.
+      // The crop view is the innermost thing open.
       if (cropPanel.isOpen()) {
         event.preventDefault();
         event.stopPropagation();
@@ -2323,9 +2307,8 @@ export function createDrawingEditor({
       if (event.target.classList?.contains('drawing-editor-rename-input')) {
         return;
       }
-      // The drawer does NOT intercept Escape: "Escape from anywhere inside
-      // takes one path" is pinned behavior the owner already has, and the
-      // drawer's own way shut is its toggle.
+      // The drawer does not intercept Escape: Escape from anywhere inside takes
+      // one path, and the drawer's own way shut is its toggle.
       event.preventDefault();
       event.stopPropagation();
       leave();
@@ -2350,15 +2333,15 @@ export function createDrawingEditor({
     dismiss: dismissSurface,
     setCount,
     say,
-    /** D-120: resolves once the workspace's ring engine is in. */
+    /** Resolves once the workspace's ring engine is in. */
     whenReady: () => workspace.whenReady(),
     setDesignWidthMm: (mm) => workspace.setDesignWidthMm(mm),
-    /** DP-49: whether the crop view is what is on the stage. */
+    /** Whether the crop view is what is on the stage. */
     isCropOpen: () => cropPanel.isOpen(),
-    /** DP-80: whether the editor is open on a picture, before a conversion. */
+    /** Whether the editor is open on a picture, before a conversion. */
     isCropFirst: () => isOpen && cropFirst,
     getResult: () => workspace.getResult(),
-    /** DP-81: the key the result on screen would be trusted by on a reopen. */
+    /** The key the result on screen would be trusted by on a reopen. */
     choicesKey: () => workspace.choicesKey(),
     getRoleOverrides: () => workspace.getRoleOverrides(),
     getOffsetOverrides: () => workspace.getOffsetOverrides(),
@@ -2427,7 +2410,7 @@ function buildAddColourForm(uid) {
   return { form, name, hex, button };
 }
 
-/** The plate rule (DP-Q18) as one checkbox with its help beside it. */
+/** The plate rule as one checkbox with its help beside it. */
 function buildRuleField(uid) {
   const wrap = document.createElement('div');
   wrap.className = 'drawing-editor-rule';

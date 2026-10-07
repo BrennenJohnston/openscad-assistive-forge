@@ -1,12 +1,11 @@
 /**
  * Every word the drawing editor says, in one file.
  *
- * One file so the owner can read the whole surface's language in one sitting
- * rather than hunting it through the code, and so a translation - or a change
+ * One file so the whole surface's language can be read in one sitting
+ * rather than hunted through the code, and so a translation - or a change
  * of mind about a word - is one place.
  *
- * STRINGS: owner review pending (DP-R2 text pack). US English. No em dashes
- * (UF-3). Anything a screen reader says is flagged doubly in the pack.
+ * US English, no em dashes. A11Y marks a string a screen reader says.
  *
  * @license GPL-3.0-or-later
  */
@@ -43,24 +42,22 @@ export const EDITOR_STRINGS = Object.freeze({
    *
    * Two words for one link, picked by purpose like the section name above it:
    * the stencil lane cuts and paints regions, and the charm's panel says
-   * Shapes. A11Y - the link is spoken, and it named a section that is not
-   * called that any more.
-   *
-   * STRINGS: owner review pending.
+   * Shapes. A11Y - the link is spoken, so it must name the section by the
+   * name the section has.
    */
   skipToRegions: 'Skip to the regions table',
   skipToShapes: 'Skip to the shapes list',
   backToToolbar: 'Back to the toolbar',
 
   /**
-   * The side panel is a drawer over the drawing now (G0: the picture is the
-   * editor). The toggle carries the state in aria-expanded; no announcement,
+   * The side panel is a drawer over the drawing: the picture is the editor.
+   * The toggle carries the state in aria-expanded; no announcement,
    * because the pressed control already says which way it went.
    */
   panelToggle: 'Regions',
 
   /**
-   * DP-46: the toolbar's overflow. Three controls a person reaches for now
+   * The toolbar's overflow. Three controls a person reaches for now
    * and then - Compare with original, Show roles, Design width - live behind
    * it so the working row holds its actions on one line at the editor's real
    * width (692 px at a 1280 window with the customizer open). A11Y: the
@@ -71,7 +68,7 @@ export const EDITOR_STRINGS = Object.freeze({
   moreToolsLabel: 'More editor tools',
 
   /**
-   * DP-38: the two-state switch between the drawing and the thing it makes.
+   * The two-state switch between the drawing and the thing it makes.
    *
    * A real radio group, not a button that toggles: there are two named
    * choices and only one can be true, which is what a radio group IS. The
@@ -82,8 +79,6 @@ export const EDITOR_STRINGS = Object.freeze({
    * It appears only when there is a model behind the editor. Through the
    * standalone door there is no charm to show, and a control offering a view
    * that cannot exist is worse than no control.
-   *
-   * STRINGS: owner review pending.
    */
   viewLegend: 'View',
   viewDrawing: 'Drawing',
@@ -92,15 +87,13 @@ export const EDITOR_STRINGS = Object.freeze({
   viewShowingCharm: 'Showing the charm.',
 
   /**
-   * DP-38 P2. Said once, in the editor, because the person will SEE the
-   * difference and should not have to wonder whether their model changed.
-   * A11Y.
+   * Said once, in the editor, because the person will see the difference and
+   * should not have to wonder whether their model changed. A11Y.
    */
   draftNote: 'Previews are drawn at draft quality while you edit.',
   /**
-   * DP-53: the charm view's Render preview. The drawing combines by itself;
-   * the charm is rendered on request, as a draft that touches nothing.
-   * STRINGS: owner review pending.
+   * The charm view's Render preview. The drawing combines by itself; the
+   * charm is rendered on request, as a draft that touches nothing.
    */
   renderCharm: 'Render preview',
   renderCharmLabel: 'Render the charm with the drawing as it is now',
@@ -114,14 +107,11 @@ export const EDITOR_STRINGS = Object.freeze({
   sectionColours: 'Colors',
   sectionRegions: 'Regions',
   /**
-   * DP-Q40 (signed): "Shapes" is the word on the CHARM's panel.
+   * "Shapes" is the word on the charm's panel.
    *
    * A region is a thing the stencil lane cuts and paints, and that lane keeps
    * the word. What somebody is looking at on a charm is a shape, and it is
-   * already the word the rows and the counts use ("7 shapes", "Shape 1"), so
-   * the heading was the odd one out.
-   *
-   * STRINGS: owner review pending.
+   * already the word the rows and the counts use ("7 shapes", "Shape 1").
    */
   sectionShapes: 'Shapes',
   panelToggleShapes: 'Shapes',
@@ -130,9 +120,9 @@ export const EDITOR_STRINGS = Object.freeze({
 
   /**
    * Said once when the surface takes the preview area. A11Y. On the stencil
-   * purpose the engine's own finding follows it in the same breath (★ D-124:
-   * "21 regions found, no colors yet: every one starts as the base coat."),
-   * so a drawing that arrived with no plan is never pretended to have one.
+   * purpose the engine's own finding follows it in the same breath ("21
+   * regions found, no colors yet: every one starts as the base coat."), so a
+   * drawing that arrived with no plan is never pretended to have one.
    */
   opened: 'Drawing editor open. The model preview is behind it.',
 
@@ -151,7 +141,7 @@ export const EDITOR_STRINGS = Object.freeze({
   engineFailed:
     'The color engine could not be loaded, so the regions cannot be shown. Reload the page and try again.',
 
-  // ── The toolbar (DP-20) ────────────────────────────────────────────────
+  // ── The toolbar ────────────────────────────────────────────────────────
   /** The five tools, with the key that picks each in the accessible name. */
   tools: Object.freeze({
     select: 'Select',
@@ -167,9 +157,8 @@ export const EDITOR_STRINGS = Object.freeze({
   /** The current color for the Paint tool. A11Y. */
   paintColourLabel: 'Paint with',
   /**
-   * REVISED at DP-24 from "Colour the selection" (sic): same act, the Paint
-   * tool's own verb, and the hands row fits the editor's real 692 px at a
-   * 1280 window with room instead of teetering at one pixel.
+   * The Paint tool's own verb, and short enough that the hands row fits the
+   * editor's real 692 px at a 1280 px window with room to spare.
    */
   paintSelection: 'Paint selection',
   undo: 'Undo',
@@ -280,7 +269,7 @@ export const EDITOR_STRINGS = Object.freeze({
   orderChanged: (name, position) => `${name} now paints ${ordinal(position)}.`,
   labelOrder: (name, position) => `${name} moved to ${ordinal(position)}`,
   /**
-   * The plate rule, DP-Q18. On is the stacked rule: every later color is cut
+   * The plate rule. On is the stacked rule: every later color is cut
    * through this plate too, so nothing can fall out. Off is the hand method.
    */
   ruleLabel: 'Later colors also cut through each plate',
@@ -289,7 +278,7 @@ export const EDITOR_STRINGS = Object.freeze({
   ruleStacked: 'Later colors cut through each plate.',
   ruleOwn: 'Each plate cuts its own color only.',
 
-  // ── The view (DP-21) ───────────────────────────────────────────────────
+  // ── The view ───────────────────────────────────────────────────────────
   /** A pressed toggle: the untouched drawing alone, or the plan over it. */
   showOriginal: 'Show original',
   showingOriginal: 'Showing the original drawing.',
@@ -317,7 +306,7 @@ export const EDITOR_STRINGS = Object.freeze({
       : 'plates set to their own color only',
 
   /**
-   * The crop view (DP-49). Four insets in percent, because a share reads the
+   * The crop view. Four insets in percent, because a share reads the
    * same whatever the picture's size, and a sentence that says what stays.
    */
   crop: 'Crop',
@@ -342,19 +331,17 @@ export const EDITOR_STRINGS = Object.freeze({
   cropUndone: (n) => `Crop undone. ${count(n, 'shape', 'shapes')}.`,
 
   /**
-   * DP-80: Crop first. The crop view on a picture nothing has converted yet:
-   * its own opening sentence (which the status line carries too), and the
-   * sentence for leaving it (the editor closes; nothing was converted).
-   * STRINGS: owner review pending (DP-R6 text pack rows 15 and 16).
+   * Crop first: the crop view on a picture nothing has converted yet. Its own
+   * opening sentence (which the status line carries too), and the sentence
+   * for leaving it (the editor closes; nothing was converted).
    */
   cropFirstViewOpen:
     'Crop view open on your picture. Four sliders take an edge off; Save crop starts the conversion.',
   cropFirstCanceled: 'Crop canceled. Nothing was converted.',
 
   /**
-   * DP-81 (D-175): a reopen whose stored result is trusted, so Apply is
-   * ready at once and nothing is combined again. A11Y.
-   * STRINGS: owner review pending (DP-R6 text pack rows 18 and 19).
+   * A reopen whose stored result is trusted, so Apply is ready at once and
+   * nothing is combined again. A11Y.
    */
   openedAsLeft: (on, off) =>
     `Drawing editor open, as you left it. ${count(on, 'shape', 'shapes')} on, ${off} off.`,

@@ -1,5 +1,5 @@
 /**
- * A drawing sent by a link (DP-62).
+ * A drawing sent by a link.
  *
  * `?drawing=<url>` names a PNG, JPG, SVG or DXF. Forge fetches it from one of
  * the hosts a project may come from, hands it to the design parameter of

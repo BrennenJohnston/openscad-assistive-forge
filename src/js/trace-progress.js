@@ -1,24 +1,23 @@
 /**
  * Start, Crop first, and the quick look's sentence above them.
  *
- * Choosing a picture used to begin converting it immediately, with the words
- * "Converting to SVG..." as the only sign anything was happening and no way to
- * stop. On a slow device that was a page you could not use and could not get
- * back. Both other tools people know do it the other way round: Illustrator
- * waits for Image Trace and then Expand, Inkscape waits for Update or OK.
+ * A chosen picture waits for Start. A conversion that begins the moment a
+ * picture is chosen, with no way to stop, is a page a person on a slow
+ * device can neither use nor get back. The tools people know wait to be
+ * asked: Illustrator waits for Image Trace and then Expand, Inkscape waits
+ * for Update or OK.
  *
- * So: the person starts it. The bar, the stage sentence and Cancel used to
- * live here too; since DP-52 they live in the conversion dialog
- * (conversion-dialog.js), which stands in front of the page for the whole
- * job - one place for the progress, never two. What stays here is the Start
- * button, the quick look's note, and the busy mark on the region while a
- * conversion runs.
+ * So the person starts it. The bar, the stage sentence and Cancel live in
+ * the conversion dialog (conversion-dialog.js), which stands in front of
+ * the page for the whole job - one place for the progress, never two. What
+ * lives here is the Start button, the quick look's note, and the busy mark
+ * on the region while a conversion runs.
  *
- * DP-80 adds Crop first beside Start: a photograph of a page is mostly the
- * page, and the part that matters is cropped out BEFORE anything is
- * converted. The button is offered as soon as the pixels are read; once the
- * picture has converted it reads Crop, and is the same crop the editor
- * offers. What a press does is the host's (the crop view on the picture).
+ * Crop first sits beside Start: a photograph of a page is mostly the page,
+ * and the part that matters is cropped out before anything is converted.
+ * The button is offered as soon as the pixels are read; once the picture
+ * has converted it reads Crop, and is the same crop the editor offers. What
+ * a press does is the host's (the crop view on the picture).
  *
  * Accessibility, deliberately:
  *
@@ -35,7 +34,6 @@
 
 let panelSeq = 0;
 
-/** STRINGS: owner review pending (DP-R6 text pack rows 12 and 13). */
 export const CROP_FIRST_LABEL = 'Crop first';
 export const CROP_FIRST_NAME = 'Crop first, before converting the picture';
 
@@ -131,7 +129,7 @@ export function createTraceProgress({ onStart, onCrop } = {}) {
     },
 
     /**
-     * DP-80: offer the crop beside Start, with the words for where the
+     * Offer the crop beside Start, with the words for where the
      * picture stands: "Crop first" before it has converted, "Crop" after.
      */
     offerCrop(label = CROP_FIRST_LABEL, name = CROP_FIRST_NAME) {
@@ -144,7 +142,7 @@ export function createTraceProgress({ onStart, onCrop } = {}) {
 
     /**
      * A trace has begun: Start goes away, the region is busy. A conversion
-     * that started by itself (DP-Q32) keeps the crop on offer: a press on it
+     * that started by itself keeps the crop on offer: a press on it
      * ends that conversion and opens the crop, which is the person's answer
      * to work nobody asked for.
      */

@@ -1,20 +1,19 @@
 /**
  * Nesting analysis for SVG designs: which shape sits inside which.
  *
- * The layered engine needs one thing this app never computed before: for
- * every element, how many other elements enclose it. That number is the
- * element's depth, and depth is what the owner's containment law is written
- * in - an element may only join layer N if something at layer N-1 still
- * surrounds it, or the printer is asked to build a piece of geometry
- * standing on nothing.
+ * The layered engine needs, for every element, how many other elements
+ * enclose it. That number is the element's depth, and depth is what the
+ * containment law is written in - an element may only join layer N if
+ * something at layer N-1 still surrounds it, or the printer is asked to
+ * build a piece of geometry standing on nothing.
  *
- * PORTED FROM the owner's own stencil-forge repository, src/js/geometry-core.js
+ * Ported from stencil-forge, src/js/geometry-core.js
  * (https://github.com/BrennenJohnston/stencil-forge, GPL-3.0-or-later):
  * the ray-cast point-in-polygon, the bounding-box prefilter, and the
- * smallest-enclosing-ring parent search. Two things changed on the way over:
+ * smallest-enclosing-ring parent search. Two things are different here:
  *
  *   1. stencil-forge unions its input through clipper2-js first and builds
- *      the tree over RINGS. Here the tree is built over ELEMENTS, because
+ *      the tree over rings. Here the tree is built over elements, because
  *      the editor's Layer column is per element and a union would dissolve
  *      exactly the identities the column needs.
  *   2. No clipper2-js at all. That library is a dependency of this app, so
@@ -25,7 +24,7 @@
  *
  * Coordinates are SVG user units with transforms already baked by
  * svg-preparer's parseSvgElements (x right, y down). Nothing here parses
- * paint, so it is unharmed by the D-118 class-rule defect.
+ * paint, so how a fill is declared makes no difference to it.
  *
  * @license GPL-3.0-or-later
  */
@@ -37,10 +36,10 @@ import {
 } from 'svg-path-commander';
 
 /**
- * The prototype's layer cap. The owner's number: three passes is what the
- * tiered charm model builds, so the editor never offers a fourth even when
- * the artwork could support one. The LIMIT a file earns is its nesting
- * depth; this is the ceiling applied to it.
+ * The layer cap. Three passes is what the tiered charm model builds, so the
+ * editor never offers a fourth even when the artwork could support one. The
+ * limit a file earns is its nesting depth; this is the ceiling applied to
+ * it.
  */
 export const LAYER_CAP = 3;
 
@@ -48,10 +47,10 @@ export const LAYER_CAP = 3;
 const CURVE_STEPS = 16;
 
 /**
- * How many elements the sliced builder takes between two checkpoints
- * (DP-78 P3). MEASURED at the list cap in Chromium on a 4x-throttled CPU:
- * the whole tree over 1,000 traced shapes is 223 to 316 ms, so a slice of a
- * hundred is tens of milliseconds and a Cancel never waits for the tree.
+ * How many elements the sliced builder takes between two checkpoints. At
+ * the list cap in Chromium on a 4x-throttled CPU the whole tree over 1,000
+ * traced shapes is 223 to 316 ms, so a slice of a hundred is tens of
+ * milliseconds and a Cancel never waits for the tree.
  */
 const NEST_SLICE = 100;
 
@@ -204,18 +203,18 @@ const CURVED_COMMANDS = new Set(['c', 's', 'q', 't', 'a']);
 /**
  * How many ring points a path WILL make, without making them.
  *
- * DP-37 P3 needs the size of the flatten before deciding whether to run it,
- * and the flatten's cost is in ring points (§1.6) - so something has to know
+ * The editor needs the size of the flatten before deciding whether to run
+ * it, and the flatten's cost is in ring points - so something has to know
  * the point count on the main thread, cheaply, before the geometry chunk has
  * even loaded. This mirrors `polygonFromPathData` above rather than guessing:
  * a straight segment is one point, a curved one is CURVE_STEPS, and the
  * constant is the same constant.
  *
- * It reads the `d` string and counts COORDINATE GROUPS, not command letters.
+ * It reads the `d` string and counts coordinate groups, not command letters.
  * SVG lets one letter carry many groups - `c1 2 3 4 5 6 7 8 9 10 11 12` is two
- * curves - and counting letters undercounts real artwork by 40 to 46 per cent,
- * MEASURED on the owner's two prepped icons. Counting groups brings the same
- * two to 0.1 and 0.8 per cent.
+ * curves - and counting letters undercounts real artwork by 40 to 46 per
+ * cent on two prepared icons. Counting groups brings the same two to 0.1 and
+ * 0.8 per cent.
  *
  * Where it is wrong it is wrong HIGH: a cubic whose controls happen to be
  * collinear is emitted as one corner by the real thing and counted as
@@ -446,7 +445,7 @@ export function buildNestingTree(elements, options = {}) {
 }
 
 /**
- * The same tree, built a slice at a time (DP-78 P3, D-171): `checkpoint` is
+ * The same tree, built a slice at a time: `checkpoint` is
  * awaited every NEST_SLICE elements of the polygon pass and again every
  * NEST_SLICE of the parent search, so the page can paint and a Cancel can
  * land while the tree is being built. The result is exactly what
@@ -637,9 +636,9 @@ export function distanceToEdge(pt, polygon) {
 
 /**
  * Whether a round hole can be cut at a point without breaking out of the
- * shape or leaving a wall too thin to survive (DP-11).
+ * shape or leaving a wall too thin to survive.
  *
- * NOTHING IS MOVED. A hole that does not fit is reported, with the numbers,
+ * Nothing is moved. A hole that does not fit is reported, with the numbers,
  * so the person can decide. Sliding it somewhere legal would put the ring in
  * a place they did not choose, on a pendant shaped like their own drawing.
  *

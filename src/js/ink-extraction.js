@@ -1,28 +1,28 @@
 /**
  * Ink extraction: getting line work out of a colored picture.
  *
- * WHY THIS EXISTS. Forge traces a raster image by quantizing it to two colors
- * and keeping the darker bucket. That works for a dark drawing on light paper.
- * It fails, silently, on the pictures communication symbols are actually made
- * of: black line work over a saturated fill, where the fill color carries
- * meaning (Fitzgerald coding). MEASURED on the shipped tracer with the fixtures
- * in `tests/fixtures/aac/`: a black person glyph inside a blue rounded square
- * traced to ONE path - the blue square. The glyph was gone, and nothing said
- * so.
+ * Why this exists. Forge traces a raster image by quantizing it to two
+ * colors and keeping the darker bucket. That works for a dark drawing on
+ * light paper. It fails, silently, on the pictures communication symbols are
+ * actually made of: black line work over a saturated fill, where the fill
+ * color carries meaning (Fitzgerald coding). On the fixtures in
+ * `tests/fixtures/aac/`, the two-color trace alone turns a black person
+ * glyph inside a blue rounded square into one path - the blue square - and
+ * the glyph is gone without a word.
  *
  * The mechanism is luminance. Rec.601 luma puts yellow near 226 and blue near
  * 88, so a yellow fill lands in the paper bucket (its line work survives, by
  * luck) while blue, green and red land in the ink bucket alongside the black
  * drawn on top of them, and the two become one shape.
  *
- * WHAT THIS DOES. It runs BEFORE the tracer and decides what counts as ink,
+ * What this does. It runs before the tracer and decides what counts as ink,
  * using lightness and colourfulness rather than luminance alone. Black line
- * work is dark AND gray; a blue fill is dark and very much not gray. Separating
- * on both keeps the drawing and rejects the field.
+ * work is dark and gray; a blue fill is dark and very much not gray.
+ * Separating on both keeps the drawing and rejects the field.
  *
- * The output is an ImageData of black on white, which the existing
- * imagetracerjs -> SVG -> preparer chain consumes unchanged. There is no new
- * dependency, no grid emitter, and nothing here touches the vector path.
+ * The output is an ImageData of black on white, which the imagetracerjs ->
+ * SVG -> preparer chain consumes unchanged; nothing here touches the vector
+ * path.
  *
  * @license GPL-3.0-or-later
  */
@@ -34,7 +34,7 @@
  *   colored field survive; the field does not.
  * - `silhouette`: keep the whole outer shape, filled. Detail inside is lost on
  *   purpose - for very small pieces where detail could not be felt anyway.
- * - `standard`: no extraction at all. What Forge did before this existed.
+ * - `standard`: no extraction at all: the plain two-color trace.
  */
 export const INK_MODES = ['lineart', 'silhouette', 'standard', 'colours'];
 
@@ -46,11 +46,11 @@ export const INK_DEFAULTS = {
   /** C* at or below this may be ink. 0 is a perfect gray. */
   chromaMax: 25,
   chromaRange: [2, 80],
-  // How many flat colors the Colors mode looks for. Six is what the
-  // owner's own cat needs for its painted colors; the picture also has a
-  // second black along its outlines, so seven finds every one of them. A
-  // color that was never found cannot be taken out later, so the help
-  // text says to ask for more rather than fewer.
+  // How many flat colors the Colors mode looks for. Six is what a painted
+  // cat picture needs for its painted colors; that picture also has a second
+  // black along its outlines, so seven finds every one of them. A color that
+  // was never found cannot be taken out later, so the help text says to ask
+  // for more rather than fewer.
   colourCount: 6,
   colourCountRange: [2, 8],
 };
@@ -198,7 +198,7 @@ export function lightnessHistogram(imageData) {
  * A 3x3 median over each color channel. JPEG ringing puts speckles of color
  * along a black stroke, and a chroma gate would otherwise punch holes in it.
  *
- * NOT on by default, and this is why: a median over a 3x3 window removes any
+ * Not on by default, and this is why: a median over a 3x3 window removes any
  * feature thinner than half the window, so it erases a one-pixel stroke along
  * with the speckles. On a line drawing that is the whole picture. It is offered
  * as `denoise` for photographs, where strokes are many pixels wide and the
@@ -214,10 +214,9 @@ export function medianFilter3x3(imageData, makeImageData) {
   const window = new Uint8Array(9);
 
   // The nine values are sorted in place by insertion, with nothing allocated
-  // per pixel. MEASURED (DP-79 P0b) on a 1331 x 1200 photograph: the sort by
-  // Array.prototype.slice and sort took 8,847 ms, this 413 ms, the output
-  // identical byte for byte. The median is on for every camera picture now,
-  // and a photograph at the cap is 2 MP.
+  // per pixel. On a 1331 x 1200 photograph, Array.prototype.slice and sort
+  // take 8,847 ms and this 413 ms, with identical output. The median is on
+  // for every camera picture, and a photograph at the cap is 2 MP.
   for (let y = 0; y < height; y++) {
     const y0 = y > 0 ? y - 1 : 0;
     const y2 = y < height - 1 ? y + 1 : y;
@@ -253,16 +252,16 @@ export function medianFilter3x3(imageData, makeImageData) {
 }
 
 /**
- * The smallest region worth keeping, in PIXELS of the traced image.
+ * The smallest region worth keeping, in pixels of the traced image.
  *
- * ★ Four is the floor, and it scales with how big a pixel is in millimeters.
+ * Four is the floor, and it scales with how big a pixel is in millimeters.
  * A picture traced at 0.1 mm per pixel has a 4-pixel region 0.04 mm2 across,
  * which no printer or laser can make and no eye can see; the same 4 pixels at
  * 1 mm per pixel is 4 mm2, which is a real mark. The rule is therefore "at
  * least four pixels, and at least a tenth of a square millimeter", and the
- * second half is what a caller who knows the scale gets. Written for the
- * color separation, and since DP-79 the ink modes' speck floor as well; it
- * lives here so the trace worker's ink road reaches it without the tracer.
+ * second half is what a caller who knows the scale gets. It serves the
+ * color separation and the ink modes' speck floor; it lives here so the
+ * trace worker's ink road reaches it without the tracer.
  *
  * @param {number} [mmPerPixel] - Millimeters one pixel will become
  * @returns {number} Area floor in square pixels
@@ -273,13 +272,13 @@ export function floorPx(mmPerPixel = 0) {
 }
 
 /**
- * Remove connected pieces smaller than the floor, BEFORE a mask grows.
+ * Remove connected pieces smaller than the floor, before a mask grows.
  *
- * ★ Growth alone resurrected what the floor exists to drop: a stray
- * anti-alias pixel grew into a five-pixel cross and sailed over the
- * four-pixel floor - MEASURED on the owner's cat, the shape count exploded
- * from under eighty to 1,853. So the too-small pieces leave the MASK first,
- * counted, and only what was already worth keeping gets to grow.
+ * Growth alone resurrects what the floor exists to drop: a stray anti-alias
+ * pixel grows into a five-pixel cross and sails over the four-pixel floor,
+ * and on a painted cat picture the shape count goes from under eighty to
+ * 1,853. So the too-small pieces leave the mask first, counted, and only
+ * what was already worth keeping gets to grow.
  *
  * @param {Uint8Array} mask - Cleaned in place
  * @param {number} width
@@ -330,8 +329,8 @@ export function dropSmallPieces(mask, width, height, floorPx) {
 /**
  * A morphological close: dilate `radius` times, then erode `radius` times,
  * four-connected. It bridges a gap up to twice the radius wide and fills a
- * hole up to that size, and leaves everything larger where it was. DP-79
- * runs it on a camera picture's Solid shape at 0.1 mm, where crayon leaves
+ * hole up to that size, and leaves everything larger where it was. A camera
+ * picture's Solid shape gets it at 0.1 mm, where crayon leaves
  * gaps in a fill that the eye reads as one object.
  *
  * @param {Uint8Array} mask - 0 or 1 per pixel; not changed
@@ -396,8 +395,8 @@ export function closeMask(mask, width, height, radius) {
  * @param {number} options.lightnessMax
  * @param {number} options.chromaMax
  * @param {boolean} [options.useAlpha] - Treat transparency as the shape
- * @param {boolean} [options.invert] - The ink is the LIGHT side of the
- *   lightness line: a light drawing over a dark ground (D-139)
+ * @param {boolean} [options.invert] - The ink is the light side of the
+ *   lightness line: a light drawing over a dark ground
  * @returns {Uint8Array}
  */
 export function inkMask(
@@ -419,11 +418,11 @@ export function inkMask(
       continue;
     }
     const { L, chroma } = srgbToLab(data[i], data[i + 1], data[i + 2]);
-    // D-139: on a light drawing over a dark ground the INK is the light
-    // side of the line. The chroma gate still runs, and runs on the side
-    // that was chosen, which is the whole point: it used to throw the
-    // colored ground away first, leaving nothing over half the picture for
-    // the old inversion rule to notice.
+    // On a light drawing over a dark ground the ink is the light side of the
+    // line. The chroma gate still runs, and runs on the side that was chosen,
+    // which is the whole point: run first, it would throw the colored ground
+    // away and leave nothing over half the picture for the inversion rule
+    // below to notice.
     const dark = invert ? L > lightnessMax : L <= lightnessMax;
     mask[p] = dark && chroma <= chromaMax ? 1 : 0;
   }
@@ -552,7 +551,7 @@ export const REJECTED_COLOR_TOLERANCE = 30;
  *
  * `coherence` is what keeps the suggestion honest. A symbol with one blue
  * field averages to that blue. A card with yellow, blue, green and red fields
- * averages to mud - MEASURED on the Fitzgerald fixture: rgb(155,134,69), a
+ * averages to mud - on the Fitzgerald fixture, rgb(155,134,69), a
  * color that appears nowhere in it. Coherence is the share of rejected
  * pixels actually near the mean, so the caller can decline to suggest anything
  * when the picture has no single fill color.
@@ -623,12 +622,12 @@ export function dominantRejectedColor(imageData, mask, minChroma = 25) {
  * Put a see-through picture on a white page before anybody traces it.
  *
  * Standard mode keeps a picture's own colors and does not build an ink mask,
- * so a PNG with transparency reached the tracer with its alpha intact and the
- * tracer decided for itself what a see-through pixel was. What it decided was
- * not white, and a logo saved on a transparent background came out with a
- * field around it that nobody drew. Compositing first is the signed answer
- * (DP-Q31, audit 15): the picture is put on white, which is what a person
- * looking at it in any viewer has already seen.
+ * so a PNG with transparency would reach the tracer with its alpha intact
+ * and the tracer would decide for itself what a see-through pixel was. What
+ * it decides is not white, and a logo saved on a transparent background
+ * comes out with a field around it that nobody drew. So the picture is put
+ * on white first, which is what a person looking at it in any viewer has
+ * already seen.
  *
  * Reports whether it did anything, because "see-through parts were treated as
  * white" is worth saying and is a lie on a picture that had none.
@@ -641,9 +640,9 @@ export function dominantRejectedColor(imageData, mask, minChroma = 25) {
  * How thin the thinnest lines in a drawing are, in picture pixels.
  *
  * A charm is fourteen millimeters across and a 0.4 mm nozzle cannot lay a line
- * thinner than about half a millimeter. MEASURED on nine stock icons, their
- * outlines land between 0.31 and 0.65 mm at that size - some of them print and
- * some of them do not, and nothing in the app said which was which.
+ * thinner than about half a millimeter. On nine stock icons the outlines
+ * land between 0.31 and 0.65 mm at that size - some of them print and some
+ * of them do not, and this is what says which is which.
  *
  * The measurement is a distance transform: for every ink pixel, how far it is
  * from the nearest paper. On the RIDGE of a stroke - the pixels that are local
@@ -670,8 +669,7 @@ export function lineWidthPercentiles(mask, width, height, options = {}) {
   // letter strokes a couple of pixels across, and it is the thinnest thing in
   // most icons - so without this the advisory describes a caption that has
   // already been taken off the drawing and says a charm will not print
-  // because of lettering that is not on it. An e2e caught exactly that: the
-  // ring fixture, whose stroke is thirty pixels, reported 0.06 mm.
+  // because of lettering that is not on it.
   const ignoreBelowY =
     options.ignoreBelowY > 0 ? options.ignoreBelowY : Infinity;
 
@@ -723,8 +721,8 @@ export function lineWidthPercentiles(mask, width, height, options = {}) {
       ) {
         continue;
       }
-      // 2d - 1, not 2d. A distance transform measures centre-to-nearest-PAPER
-      // PIXEL, so a stroke three pixels across reads d = 2 and 2d would call
+      // 2d - 1, not 2d. A distance transform measures centre-to-nearest-paper
+      // pixel, so a stroke three pixels across reads d = 2 and 2d would call
       // it four. Subtracting one is exact on odd widths and one pixel low on
       // even ones, and low is the right direction for an advisory: this
       // number decides whether a person is warned that a line may not print,
@@ -824,23 +822,22 @@ export function extractInk(imageData, options = {}) {
     coverage = maskCoverage(mask);
     inverted = true;
   } else if (mode === 'lineart' && !useAlpha && coverage <= COVERAGE_WARN_LOW) {
-    // ★ D-139: NOTHING PASSED BOTH GATES, so try the other side of the
-    // lightness line before giving up.
+    // Nothing passed both gates, so try the other side of the lightness line
+    // before giving up.
     //
     // The rule above asks whether the ink covers more than half the picture,
-    // and on the owner's CREATE logo - white lettering on a navy ground - it
-    // could never fire: the chroma gate rejects the navy first (chroma 45
-    // against a limit of 25), so the ink was nothing at all, 0 % coverage,
-    // and the app emitted an 85-byte empty drawing and called it ready.
+    // and on a logo of white lettering on a navy ground it can never fire: the
+    // chroma gate rejects the navy first (chroma 45 against a limit of 25), so
+    // the ink is nothing at all, 0 % coverage, and the result would be an
+    // empty drawing.
     //
-    // Deciding on LIGHTNESS ALONE is not the answer either, and a measurement
-    // says why: the AAC blue-field card is mostly dark by lightness, and
-    // turning it around throws away the dark glyph that is its whole point.
-    // What is special about the logo is not that it is dark - it is that
-    // NOTHING SURVIVED, which is the one case where the other side is worth
-    // a look. The swap is taken only when it finds a drawing rather than a
-    // page: a blank picture's light side covers everything, and everything is
-    // not a drawing.
+    // Deciding on lightness alone is not the answer either: the AAC blue-field
+    // card is mostly dark by lightness, and turning it around throws away the
+    // dark glyph that is its whole point. What is special about the logo is not
+    // that it is dark - it is that nothing survived, which is the one case
+    // where the other side is worth a look. The swap is taken only when it
+    // finds a drawing rather than a page: a blank picture's light side covers
+    // everything, and everything is not a drawing.
     const other = inkMask(source, {
       lightnessMax,
       chromaMax,

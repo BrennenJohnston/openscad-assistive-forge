@@ -6,8 +6,8 @@
  * Project". Traced, that sentence is not a caption any more - it is forty-odd
  * separate shapes, each one a letter, and on a charm fourteen millimeters wide
  * they come out as unreadable specks that soak up print time and cannot be
- * felt. MEASURED across nine icons: 45 to 60 of every 49 to 74 shapes were the
- * caption. The icon was the small part.
+ * felt. Across nine icons, 45 to 60 of every 49 to 74 shapes are the
+ * caption. The icon is the small part.
  *
  * So the picture a person chose is not the picture they got, and this finds the
  * difference and offers to remove it.
@@ -18,19 +18,19 @@
  * centers sit in the bottom band, and which together occupy a short strip.
  * Every clause earns its place:
  *
- *   - EIGHT, because a sentence has many letters and a drawing rarely has
+ *   - Eight, because a sentence has many letters and a drawing rarely has
  *     eight separate small marks in a row along its bottom edge. It is also
  *     what protects a drawing that legitimately ends in a few dots.
- *   - SMALL IN BOTH DIRECTIONS, because a letter is small; a baseline rule or
+ *   - Small in both directions, because a letter is small; a baseline rule or
  *     a wide shadow is not.
- *   - IN THE BOTTOM BAND, because that is where attribution is printed.
- *   - A SHORT STRIP, because a line of text is one or two lines tall. Detail
+ *   - In the bottom band, because that is where attribution is printed.
+ *   - A short strip, because a line of text is one or two lines tall. Detail
  *     scattered through the lower third of a drawing is drawing, not a caption.
  *
- * MEASURED with these numbers on both tracing engines, over the nine icons and
- * three control pictures: it fires on all nine icons and on the one control
- * that genuinely has a printed line along its bottom edge, never on the two
- * hand-drawn fixtures, and NOTHING of a caption is left behind - zero kept
+ * With these numbers, on both tracing engines, over nine icons and three
+ * control pictures, it fires on all nine icons and on the one control that
+ * genuinely has a printed line along its bottom edge, never on the two
+ * hand-drawn fixtures, and nothing of a caption is left behind - zero kept
  * shapes inside the band, on every picture, on both engines.
  *
  * ── Undo ─────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@
 import { getPathBBox } from 'svg-path-commander';
 
 /**
- * The rule, as signed. Exported so a test can state what it is testing and so
+ * The rule. Exported so a test can state what it is testing and so
  * the numbers live in one place rather than in four conditions.
  */
 export const CREDIT_LINE_RULE = Object.freeze({
@@ -89,9 +89,9 @@ function subpathsOf(pathData) {
 }
 
 /**
- * How many pieces the sliced pass takes between two checkpoints (DP-78 P3,
- * D-171). MEASURED in Chromium at 4x on a 900-ring traced drawing: the
- * whole pass is 210 ms, one box per ring; a hundred rings is about 25 ms.
+ * How many pieces the sliced pass takes between two checkpoints. In
+ * Chromium at 4x on a 900-ring traced drawing the whole pass is 210 ms, one
+ * box per ring; a hundred rings is about 25 ms.
  */
 const CREDIT_SLICE = 100;
 
@@ -201,7 +201,7 @@ export function findCreditLine(svgString, rule = {}) {
 }
 
 /**
- * findCreditLine a slice at a time (DP-78 P3, D-171): `checkpoint` is
+ * findCreditLine a slice at a time: `checkpoint` is
  * awaited every `every` pieces, so a Cancel pressed while a traced drawing
  * is looked over lands within one slice. The answer is findCreditLine's.
  *
@@ -278,7 +278,7 @@ export function removeCreditLine(svgString, rule = {}) {
 }
 
 /**
- * removeCreditLine a slice at a time (DP-78 P3, D-171): both passes, the
+ * removeCreditLine a slice at a time: both passes, the
  * look and the removal, await `checkpoint` every `every` pieces. The result
  * is removeCreditLine's, to the byte.
  *

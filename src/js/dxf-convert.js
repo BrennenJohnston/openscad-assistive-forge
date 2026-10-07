@@ -1,18 +1,18 @@
 /**
  * DXF in, DXF out, with the engine as the converter.
  *
- * The partner pipelines this round exists to meet emit DXF as well as SVG, and
+ * The drawing pipelines Forge works alongside emit DXF as well as SVG, and
  * DXF is what a laser cutter's software usually wants back. Forge already ships
  * an OpenSCAD engine that reads DXF and writes it, so no parser is needed here:
  * a one-line wrapper (`import("drawing.dxf");`) rendered to SVG is the way in,
  * and the edited SVG rendered to DXF is the way out.
  *
- * MEASURED at bird scale through the real engine: a DXF import rendered to SVG
- * in 301 ms, and a 2D drawing exported to DXF in 334 ms. The five-minute figure
- * in the ledger (AF-7) is whole-model 3D PROJECTION, which is a different
- * operation entirely; the two must not be confused.
+ * At bird scale through the real engine, a DXF import renders to SVG in
+ * 301 ms, and a 2D drawing exports to DXF in 334 ms. A whole-model 3D
+ * projection takes minutes, which is a different operation entirely; the
+ * two must not be confused.
  *
- * WHAT OPENSCAD'S DXF IMPORT DOES NOT READ. Its importer handles 2D geometry
+ * What OpenSCAD's DXF import does not read. Its importer handles 2D geometry
  * entities. Text, dimensions, and other annotation entities are outside that
  * subset and simply do not arrive - so a file made only of those imports as
  * nothing, and this module says so rather than handing back an empty drawing.
@@ -38,10 +38,10 @@ export const INSUNITS_MILLIMETERS = 4;
 /**
  * Declare the drawing's units, so a laser cutter does not guess.
  *
- * MEASURED on our own export: OpenSCAD writes correct millimeter COORDINATES
+ * OpenSCAD writes correct millimeter coordinates
  * but no $INSUNITS and no $MEASUREMENT, so the file says nothing at all about
  * what its numbers mean. Software configured for inches reads 50 as fifty
- * INCHES - a 25.4x error that looks perfectly fine on screen and ruins a sheet
+ * inches - a 25.4x error that looks perfectly fine on screen and ruins a sheet
  * of material.
  *
  * The header OpenSCAD writes is $ACADVER = AC1006 (R10), which predates both
@@ -107,16 +107,16 @@ const SPLINE_SAMPLES_PER_SPAN = 8;
 const ELLIPSE_SEGMENTS = 72;
 
 /**
- * D-123 (DP-26 P2): evaluate the curve entities OpenSCAD's importer does
- * not read, BEFORE the engine sees the file.
+ * Evaluate the curve entities OpenSCAD's importer does not read, before
+ * the engine sees the file.
  *
- * MEASURED on the owner's own Fusion sketch (31 SPLINE, 2 ELLIPSE, 1 LINE):
- * the importer reads none of the curved 33, so 31 of the 34 entities
- * vanished SILENTLY - the editor showed two shapes and said nothing was
- * missing. Every SPLINE is evaluated with the NURBS arithmetic (Cox-de
+ * A Fusion sketch of 31 SPLINE, 2 ELLIPSE and 1 LINE entities: the
+ * importer reads none of the curved ones, so nearly the whole drawing
+ * vanishes silently, and the editor would show two shapes and say nothing
+ * was missing. Every SPLINE is evaluated with the NURBS arithmetic (Cox-de
  * Boor basis, rational when weights arrive) and every ELLIPSE
  * parametrically, and each becomes a chain of LINE entities - the one
- * entity this repo's own known-extents fixture PROVES the engine joins
+ * entity this repo's own known-extents fixture proves the engine joins
  * back into closed shapes at coincident endpoints.
  *
  * @param {string} dxfText
@@ -475,7 +475,7 @@ export async function dxfToSvg({ dxfText, fileName, render }) {
   const wrapper = importWrapper(mounted);
   const started = Date.now();
 
-  // D-123: splines and ellipses become line chains the importer reads.
+  // Splines and ellipses become line chains the importer reads.
   const curves = evaluateDxfCurves(dxfText);
 
   let result;
@@ -504,9 +504,8 @@ export async function dxfToSvg({ dxfText, fileName, render }) {
   if (!svg || !svg.includes('<svg')) {
     throw emptyImportError(fileName);
   }
-  // D-123, the other half: the engine's own WARNING lines used to be
-  // swallowed here (core rule 13's exact shape). They ride out for the
-  // editor's warnings list, deduplicated - the importer repeats itself
+  // The engine's own WARNING lines are not swallowed here: they ride out for
+  // the editor's warnings list, deduplicated - the importer repeats itself
   // per entity.
   const warnings = [
     ...new Set(

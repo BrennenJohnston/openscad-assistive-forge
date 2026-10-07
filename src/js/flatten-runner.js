@@ -8,7 +8,7 @@
  *
  * The one difference is what gets sent. A trace transfers a pixel buffer, which
  * is worth moving rather than copying; a flatten sends path data as strings,
- * which are structured-cloned. MEASURED on 200 traced shapes: the payload is
+ * which are structured-cloned. On 200 traced shapes the payload is
  * 111 KB and one clone of it costs 0.13 ms, against a flatten of the same
  * drawing at 14.7 seconds. Nothing is transferred, so the caller keeps its own
  * elements and can re-run without re-reading anything.
@@ -117,7 +117,7 @@ export function createFlattenRunner(options = {}) {
    * @param {object} svgMeta - {viewBox, width, height}
    * @param {object} [opts]
    * @param {Function} [opts.onStage] - Called with {stage}
-   * @param {boolean} [opts.compound] - DP-82: the rows of a traced drawing
+   * @param {boolean} [opts.compound] - The rows of a traced drawing
    *   with an offset among them, combined by their parity (see
    *   flattenCompoundRings); each element's `offset` in svg units travels
    * @returns {Promise<{svg: string|null, warnings: string[], ms: number|null}>}

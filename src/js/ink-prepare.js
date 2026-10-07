@@ -1,43 +1,42 @@
 /**
- * The photo defaults (DP-79, D-173, D-176): what a camera picture goes through
- * before it is traced, and the one place both roads to the tracer call.
+ * The photo defaults: what a camera picture goes through before it is
+ * traced, and the one place both roads to the tracer call.
  *
  * A photograph of a printed symbol has no transparency, paper grain, and
  * twenty times the pixels a 14 mm charm can print. Traced at the file's own
- * resolution every mode made thousands of shapes of the grain (MEASURED,
- * DP-77: the panel photo 1,270 / 341 / 3,686 / 3,939 across the four modes;
- * the sharpie drawing's advisory read 0.01 mm for a 0.28 mm line, because
- * the thinnest things in the mask were specks). Three steps change that, and
- * every one is measured in build/dp-r6/dp-79/p0.log:
+ * resolution every mode makes thousands of shapes of the grain (a panel
+ * photograph: 1,270 / 341 / 3,686 / 3,939 across the four modes), and a
+ * marker drawing's advisory reads 0.01 mm for a 0.28 mm line, because the
+ * thinnest things in the mask are specks. These steps change that:
  *
- *   - THE WORKING RESOLUTION: the picture is resampled so that one pixel is
+ *   - The working resolution: the picture is resampled so that one pixel is
  *     PRINT_CELL_MM at the width the design prints (forty pixels per printed
  *     millimeter; 560 px at the editor's 14 mm), never up, never under
  *     WORKING_MIN_PX on the long side. The panel photo goes from 1331 to 560
  *     px and its Line art from 1,303 shapes to 384 by this step alone.
- *   - THE MEDIAN (`smooth`): the 3x3 median ink-extraction.js already offered
+ *   - The median (`smooth`): the 3x3 median ink-extraction.js already offers
  *     for photographs, on for a camera picture. 384 to 224.
- *   - THE SPECK FLOOR (`speckFloor`): pieces of the ink mask under 0.1 mm² at
+ *   - The speck floor (`speckFloor`): pieces of the ink mask under 0.1 mm² at
  *     the printed size are dropped and counted, and Potrace's turdsize is set
- *     to the same number so the two engines agree. 224 to 25; the sharpie's
- *     advisory 0.014 to 0.275 mm, because the widths are measured after it.
- *   - THE CLOSE, on Solid shape only: a 0.1 mm close bridges the gaps crayon
+ *     to the same number so the two engines agree. 224 to 25; the marker
+ *     drawing's advisory 0.014 to 0.275 mm, because the widths are measured
+ *     after it.
+ *   - The close, on Solid shape only: a 0.1 mm close bridges the gaps crayon
  *     leaves, so the panel's glove and sponge come out whole (8 to 6). Line
  *     art gets no close; closing a line drawing fills its counters.
  *
- * A FILE is left exactly as it was: the nine library icons, the owner's logo
- * and the repo's fixtures are pinned unchanged, because the floor that helps
- * a photograph deletes a logo's small text (145 shapes to 22, the DP-48 P2
- * refusal). Which picture is a camera's is the quick look's `camera` verdict
- * (quick-look.js): no transparency, and a ground that is not flat at the
- * thumbnail scale. The host passes it with `mmPerPixel`, `smooth` and
- * `speckFloor`; with none of them set, nothing here runs and the trace is the
- * trace it was before DP-79.
+ * A file is left exactly as it was: the nine library icons, a logo and the
+ * repo's fixtures are pinned unchanged, because the floor that helps a
+ * photograph deletes a logo's small text (145 shapes to 22). Which picture
+ * is a camera's is the quick look's `camera` verdict (quick-look.js): no
+ * transparency, and a ground that is not flat at the thumbnail scale. The
+ * host passes it with `mmPerPixel`, `smooth` and `speckFloor`; with none of
+ * them set, nothing here runs and the trace is the plain one.
  *
  * Pure arithmetic over pixel buffers, no DOM: it runs in the trace worker,
  * and the main-thread converter in image-import.js calls the same functions
- * so the two roads cannot drift (the D-138 lesson: a setting the host passes
- * is not a setting the worker uses until the worker names it).
+ * so the two roads cannot drift. A setting the host passes is not a setting
+ * the worker uses until the worker names it.
  *
  * @license GPL-3.0-or-later
  */

@@ -15,11 +15,11 @@
 import { INK_DEFAULTS } from './ink-extraction.js';
 
 /**
- * The words that differ between the two hosts (D-156). One panel serves a
- * charm's file control and the stencil tile, and it used to speak only the
- * stencil's language: "a plate for each" color, "the surface behind the
- * stencil", on a charm where no stencil is possible. Relief is the default
- * because it is the purpose of every host but the tile.
+ * The words that differ between the two hosts. One panel serves a charm's
+ * file control and the stencil tile, and the stencil's language ("a plate
+ * for each" color, "the surface behind the stencil") is wrong on a charm,
+ * where no stencil is possible. Relief is the default because it is the
+ * purpose of every host but the tile.
  */
 const PURPOSE_WORDS = {
   relief: {
@@ -51,7 +51,7 @@ const PURPOSE_WORDS = {
 const wordsFor = (purpose) => PURPOSE_WORDS[purpose] || PURPOSE_WORDS.relief;
 
 /**
- * What a change ends with when the run waits for a press (D-157): the
+ * What a change ends with when the run waits for a press: the
  * button's own name, so a person who has not converted yet hears Start and
  * one who has hears Convert again.
  */
@@ -62,14 +62,12 @@ export const INK_MODE_CHOICES = [
   {
     value: 'lineart',
     label: 'Line art',
-    // STRINGS: DP-R6 text pack row 10 (REVISED at DP-79).
     description:
       'Keep the drawn lines, drop the color behind them. Best for symbols, line drawings and photos of a printed symbol.',
   },
   {
     value: 'silhouette',
     label: 'Solid shape',
-    // STRINGS: DP-R6 text pack row 11 (REVISED at DP-79).
     description:
       'Keep the outline of the whole picture, filled in. Best for small charms, and for a photo where the shapes matter more than the lines.',
   },
@@ -109,9 +107,9 @@ export const OPEN_SYMBOL_SETS = [
 /**
  * What the color separation found, said in one sentence.
  *
- * STRINGS: owner review pending (DP-R2 text pack). Every color is named with
- * its share, because a person who wanted a color that is not in the list has
- * to be able to SEE that it is not there - and the answer is to ask for more.
+ * Every color is named with its share, because a person who wanted a color
+ * that is not in the list has to be able to see that it is not there - and
+ * the answer is to ask for more.
  *
  * @param {Array<{name: string, hex: string, share: number,
  *   isBackground: boolean}>} colors
@@ -129,8 +127,8 @@ export function colourSentence(colours, notes = {}, purpose = 'relief') {
   );
   const painted = list.filter((c) => !c.isBackground).length;
   const head = wordsFor(purpose).colourHead(painted);
-  // DP-79: a camera picture says the size it was worked at (row 9) in place
-  // of the cap's clause; a file that was only capped keeps the cap's.
+  // A camera picture says the size it was worked at in place of the cap's
+  // clause; a file that was only capped keeps the cap's.
   const worked = workedSentence(notes.working);
   const downscale =
     !worked && notes.factor
@@ -144,8 +142,8 @@ export function colourSentence(colours, notes = {}, purpose = 'relief') {
 }
 
 /**
- * The size a camera picture was worked at (DP-79; DP-R6 text pack row 9,
- * A11Y: it rides in the summary the panel announces).
+ * The size a camera picture was worked at (A11Y: it rides in the summary the
+ * panel announces).
  *
  * @param {{width: number, printedWidthMm: number}|null|undefined} working
  * @returns {string} Empty when the picture was left at its own pixels
@@ -159,8 +157,7 @@ export function workedSentence(working) {
 }
 
 /**
- * How many specks the floor left out (DP-79; DP-R6 text pack rows 7 and 8,
- * A11Y: announced with the summary).
+ * How many specks the floor left out (A11Y: announced with the summary).
  *
  * @param {{specksDropped?: number, printedWidthMm?: number}|null} summary
  * @returns {string} Empty when nothing was left out
@@ -248,7 +245,7 @@ export function warningSentences(summary) {
  * color can carry meaning (an AAC symbol's background is part of what it
  * says), and printing in a filament near it keeps the symbol recognizable.
  * A stencil says "this plate"; a charm or a pendant is one piece and says
- * so (D-156).
+ * so.
  *
  * @param {Object|null} summary
  * @param {number} [minCoherence]
@@ -279,12 +276,12 @@ export function filamentSentence(
  * @param {string} deps.idPrefix - Unique per host, so two panels can coexist
  * @param {Function} deps.onChange - Called with the settings on every change
  * @param {Function} [deps.announce] - Speak a sentence
- * @param {'relief'|'stencil'} [deps.purpose] - Whose words the panel speaks
- *   (D-156): a charm's, or the stencil tile's
+ * @param {'relief'|'stencil'} [deps.purpose] - Whose words the panel speaks:
+ *   a charm's, or the stencil tile's
  * @param {Function} [deps.runsBySelf] - Asked at every change: will the host
  *   re-run the conversion by itself? When not, the change's own sentence
- *   ends by naming the press that will (D-157), so the change and what it
- *   waits for are ONE announcement
+ *   ends by naming the press that will, so the change and what it
+ *   waits for are one announcement
  * @param {Function} [deps.startLabel] - The name of that press: Start
  *   conversion before anything has run, Convert again after
  * @returns {{element: HTMLElement, getSettings: Function, setSummary: Function, setBusy: Function}}
@@ -306,7 +303,7 @@ export function createInkControls({
     chromaMax: INK_DEFAULTS.chromaMax,
     colourCount: INK_DEFAULTS.colourCount,
     wallColour: 'auto',
-    // DP-79: the photo defaults. Off until the host says the picture is a
+    // The photo defaults. Off until the host says the picture is a
     // camera's (setPictureClass), then on; a person can turn either off.
     smooth: false,
     speckFloor: false,
@@ -437,11 +434,10 @@ export function createInkControls({
   wallWrap.append(wallLabel, wallSelect, wallHelp);
   sliders.appendChild(wallWrap);
 
-  // DP-79: the two photo defaults a person can turn off (or on). Switches,
+  // The two photo defaults a person can turn off (or on). Switches,
   // because each is a yes or no with a visible name, and the help sentence
   // says which pictures start with it on. The label wraps the control and
   // its words, so the whole line is the target.
-  // STRINGS: DP-R6 text pack rows 3 to 6 (A11Y).
   const makeSwitch = (key, labelText, help) => {
     const wrap = document.createElement('div');
     wrap.className = 'ink-slider-row ink-switch-row';
@@ -559,7 +555,7 @@ export function createInkControls({
   /**
    * A change the person made, said with what happens next. When the host
    * will not re-run by itself, the sentence ends with the press that will.
-   * STRINGS: owner review pending (A11Y, DP-57 text pack).
+   * A11Y.
    */
   const sayChange = (message) => {
     let waits = false;
@@ -595,7 +591,7 @@ export function createInkControls({
     colourCount.range.disabled = !isColours;
     colourCount.number.disabled = !isColours;
     wallSelect.disabled = !isColours;
-    // DP-79: Light and dark builds no ink mask, so there is nothing for the
+    // Light and dark builds no ink mask, so there is nothing for the
     // speck floor to floor there; a switch that changes nothing is disabled.
     speck.input.disabled = settings.mode === 'standard';
   };
@@ -660,8 +656,8 @@ export function createInkControls({
     emit();
   });
 
-  // STRINGS: DP-R6 text pack rows 27 and 28 (A11Y): the change, then the
-  // press that runs it, the way every other control on this panel says it.
+  // A11Y: the change, then the press that runs it, the way every other
+  // control on this panel says it.
   smooth.input.addEventListener('change', () => {
     settings.smooth = smooth.input.checked;
     sayChange(`${smooth.labelText}: ${settings.smooth ? 'on' : 'off'}`);
@@ -677,7 +673,7 @@ export function createInkControls({
     element: root,
     getSettings: () => ({ ...settings }),
     /**
-     * DP-79: what the picture is, from the host's quick look. A camera
+     * What the picture is, from the host's quick look. A camera
      * picture starts with both photo defaults on, a file with both off. Said
      * by the help sentences rather than announced: the person has not acted
      * yet, and nothing re-runs.
@@ -690,7 +686,7 @@ export function createInkControls({
       speck.input.checked = settings.speckFloor;
     },
     /**
-     * DP-81 (D-175 b): the settings a drawing was traced with, put back on a
+     * The settings a drawing was traced with, put back on a
      * rebuilt control. Nothing is announced and nothing re-runs: the drawing
      * on the charm IS this trace, and the panel only has to agree with it.
      * Unknown keys and values are left alone.
@@ -749,17 +745,13 @@ export function createInkControls({
       warningsEl.hidden = true;
     },
     setBusy(busy) {
-      // Only ever WRITES the waiting line; setSummary is what clears it.
+      // Only ever writes the waiting line; setSummary is what clears it.
       // Clearing on the way out would erase a summary that had already landed.
       //
-      // This note used to add that the re-trace "finishes inside the same
-      // turn". That was true when the trace ran on the main thread, and is not
-      // any more: DP-34 moved it into a worker, so the waiting line is now
-      // genuinely visible for as long as the trace takes, which is the point of
-      // having it. Anything waiting on this element has to wait PAST the
-      // waiting line rather than treat a change as an answer - a test that did
-      // exactly that passed for years and only failed once the work stopped
-      // blocking the page.
+      // The trace runs in a worker, so the waiting line is visible for as
+      // long as the trace takes, which is the point of having it. Anything
+      // waiting on this element has to wait past the waiting line rather than
+      // treat a change as an answer.
       if (busy) {
         summaryEl.textContent = 'Re-reading the picture…';
         // The run that is starting has not removed anything yet, and the one
@@ -771,8 +763,8 @@ export function createInkControls({
     /**
      * Replace the waiting line when a trace did not finish.
      *
-     * D-119: setBusy writes "Re-reading the picture…" and only setSummary
-     * clears it, so a failed trace used to leave that sentence standing as if
+     * setBusy writes "Re-reading the picture…" and only setSummary clears it,
+     * so without this a failed trace would leave that sentence standing as if
      * work were still going on. Takes the caller's own already-shown failure
      * text rather than inventing a second wording for the same event.
      *
@@ -792,20 +784,20 @@ export function createInkControls({
      * @param {Object|null} summary
      * @param {number} pathCount
      * @param {{creditLine?: object|null, quiet?: boolean}} [extras] -
-     *   `quiet` writes the sentence without announcing it: a refusal (DP-78)
+     *   `quiet` writes the sentence without announcing it: a refusal
      *   is one action whose one announcement the host makes, and the panel
      *   still shows what the worker found
      */
     setSummary(summary, pathCount, extras = {}) {
       const sentence = summarySentence(summary, pathCount);
       const filament = filamentSentence(summary, undefined, undefined, purpose);
-      // DP-32's law: one action, one announcement. Choosing a picture and
+      // One action, one announcement. Choosing a picture and
       // converting it is one action, so what was traced and what was taken off
       // it are one sentence - not a second announcement arriving behind the
       // first and interrupting it.
       const credit = creditLineSentence(extras.creditLine);
-      // DP-79: the size a camera picture was worked at, and the specks the
-      // floor left out, in the same sentence (rows 7 to 9).
+      // The size a camera picture was worked at, and the specks the floor left
+      // out, in the same sentence.
       const worked = workedSentence(summary && summary.working);
       const specks = specksSentence(summary);
       summaryEl.textContent = [sentence, filament, credit, worked, specks]

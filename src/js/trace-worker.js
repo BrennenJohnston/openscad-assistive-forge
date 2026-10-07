@@ -38,7 +38,7 @@
  * Potrace is asked for and cannot answer, the reply SAYS which engine ran
  * rather than quietly substituting one.
  *
- * DP-79: a camera picture (the ink settings' `camera`, the quick look's
+ * A camera picture (the ink settings' `camera`, the quick look's
  * verdict) is worked at the print's cell before anything looks for ink, and
  * its median, speck floor and Solid-shape close ride in `ink-prepare.js`, the
  * same functions the main-thread converter calls, so the two roads cannot
@@ -125,14 +125,13 @@ self.onmessage = async (event) => {
       pixels = downscale.imageData;
     }
 
-    // DP-79: a camera picture is worked at the print's cell. `inkAt` carries
-    // the millimeters per pixel of the pixels now in hand; the summary says
-    // what was done in `working`. The host's `mmPerPixel` is for the SOURCE
-    // pixels, and the cap above may just have made each pixel `factor`
-    // times bigger: MEASURED on the sharpie photograph (18 MP, capped by
-    // four), the sentence read "the size a 1.9 mm design can use" for a 7.6
-    // mm print and the floor was sixteen times too strict, until the factor
-    // was carried across.
+    // A camera picture is worked at the print's cell. `inkAt` carries the
+    // millimeters per pixel of the pixels now in hand; the summary says what
+    // was done in `working`. The host's `mmPerPixel` is for the source pixels,
+    // and the cap above may just have made each pixel `factor` times bigger:
+    // without carrying the factor across, an 18 MP photograph capped by four
+    // would be described as "the size a 1.9 mm design can use" for a 7.6 mm
+    // print, and the floor would be sixteen times too strict.
     const capped =
       ink && ink.mmPerPixel > 0 && downscale
         ? { ...ink, mmPerPixel: ink.mmPerPixel * downscale.factor }
@@ -163,10 +162,10 @@ self.onmessage = async (event) => {
       const { colourLabel } = await import('./stencil-colours.js');
       const hexOf = (c) =>
         `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
-      // DP-79: the median before the separation, when the switch is on (a
+      // The median before the separation, when the switch is on (a
       // photograph's grain would otherwise be its own colors); the floor at
       // the printed size only with its switch on, else the separation's own
-      // four pixels, as before.
+      // four pixels.
       const source = inkAt.smooth
         ? medianFilter3x3(pixels, makeImageData)
         : pixels;
@@ -174,10 +173,9 @@ self.onmessage = async (event) => {
       const options = {
         count: inkAt.colourCount ?? 6,
         mmPerPixel: floorOn ? inkAt.mmPerPixel : 0,
-        // D-138. The worker builds its own options rather than forwarding
-        // ink, so a setting the host passes has to be named here too - which
-        // is exactly how the share floor reached the separation in a unit
-        // test and nowhere in the app for an afternoon.
+        // The worker builds its own options rather than forwarding ink, so a
+        // setting the host passes has to be named here too, or it reaches the
+        // separation in a unit test and nowhere in the app.
         shareFloor: inkAt.shareFloor ?? 0,
         nameFor: (c) => colourLabel(hexOf(c)),
       };
@@ -237,11 +235,11 @@ self.onmessage = async (event) => {
       inkMask = stage.mask;
       turdsize = stage.turdsize;
       // How thin the thinnest lines are, so the editor can say whether they
-      // will print. MEASURED at 15 to 20 ms on a picture at the 2 MP cap, so
-      // it rides along with the stage that already has the mask rather than
-      // costing a second pass over the picture later. Measured AFTER the
-      // speck floor (D-176): the thinnest things in a photograph's raw mask
-      // are its specks, and the advisory read 0.01 mm for a 0.28 mm line.
+      // will print. It costs 15 to 20 ms on a picture at the 2 MP cap, so it
+      // rides along with the stage that already has the mask rather than
+      // costing a second pass over the picture later. Measured after the speck
+      // floor: the thinnest things in a photograph's raw mask are its specks,
+      // and before the floor the advisory reads 0.01 mm for a 0.28 mm line.
       if (inkMask) {
         // Two answers, because the caller does not know yet whether this
         // picture has a caption on it: that is decided on the other side,
@@ -265,12 +263,12 @@ self.onmessage = async (event) => {
       }
     } else {
       // Standard keeps the picture's own colors and builds no mask, so a
-      // see-through picture used to reach the tracer with its alpha and the
-      // tracer decided what that meant. It is put on white first now, which is
-      // what the person has already seen in every viewer they opened it in.
+      // see-through picture would reach the tracer with its alpha and the
+      // tracer would decide what that meant. It is put on white first, which
+      // is what the person has already seen in every viewer they opened it in.
       const flat = compositeOntoWhite(pixels, makeImageData);
       pixels = flat.imageData;
-      // DP-79: the median for a camera picture, on this road too.
+      // The median for a camera picture, on this road too.
       const smoothed = !!(inkAt && inkAt.smooth);
       if (smoothed) pixels = medianFilter3x3(pixels, makeImageData);
       if (flat.composited || smoothed) {
@@ -294,7 +292,7 @@ self.onmessage = async (event) => {
 
     // Potrace needs the one-bit mask, which only the ink modes produce. Asked
     // for without one, it is not silently swapped: the reply names the engine
-    // that actually ran, so a census or a person can tell.
+    // that actually ran, so a test or a person can tell.
     const engine = data.engine || DEFAULT_TRACE_ENGINE;
     const usePotrace = engine === 'potrace' && !!inkMask;
     let svg;
@@ -306,7 +304,7 @@ self.onmessage = async (event) => {
         await import('./potrace-trace.js');
       const pathData = await trace(inkMask, pixels.width, pixels.height, {
         ...FORGE_POTRACE_SETTINGS,
-        // DP-79: the speck floor, so Potrace drops what the mask already
+        // The speck floor, so Potrace drops what the mask already
         // dropped and the two engines agree on what a speck is.
         ...(turdsize !== undefined ? { turdsize } : {}),
         ...(potraceOverrides || {}),

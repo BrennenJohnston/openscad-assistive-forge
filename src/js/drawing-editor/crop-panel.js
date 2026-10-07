@@ -1,5 +1,5 @@
 /**
- * The crop view (DP-49).
+ * The crop view.
  *
  * Opens in place of the drawing: the picture with the kept rectangle clear
  * and the rest shaded, four rows named Top, Bottom, Left and Right, each a
@@ -47,7 +47,7 @@ export function createCropPanel({ say, onSave, onCancel } = {}) {
   let open = false;
   let box = null;
   let returnTo = null;
-  // DP-80: the view's two sentences. The in-editor crop keeps its own; a
+  // The view's two sentences. The in-editor crop keeps its own; a
   // crop opened before anything is converted (Crop first) brings sentences
   // that say so.
   let sentences = { opened: S.cropViewOpen, canceled: S.cropCanceled };

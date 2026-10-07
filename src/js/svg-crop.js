@@ -1,5 +1,5 @@
 /**
- * Cropping a vector drawing (DP-49).
+ * Cropping a vector drawing.
  *
  * A drawing is cropped by clipping: every shape's rings intersected with the
  * kept rectangle through the ring engine, shapes the clip empties dropped,
