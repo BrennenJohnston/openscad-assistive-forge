@@ -38,7 +38,7 @@ import {
   analyzeComplexity,
   getAdaptiveQualityConfig,
 } from './quality-tiers.js';
-import { PreviewManager } from './preview.js';
+import { PreviewManager, PREVIEW_COLORS } from './preview.js';
 import { getViewportControlPanel } from './viewport-control-panel.js';
 import { PREVIEW_STATE } from './auto-preview-controller.js';
 import { LIBRARY_DEFINITIONS } from './library-manager.js';
@@ -1874,14 +1874,8 @@ export function initFileHandler({
           const hasSavedColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
           if (modelColorPicker && !hasSavedColor) {
             const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-            // Match PREVIEW_COLORS from preview.js (Cornfield gold)
-            const PREVIEW_COLORS = {
-              light: 0xf9d72c,
-              dark: 0x4d9fff,
-              'light-hc': 0x0052cc,
-              'dark-hc': 0x66b3ff,
-            };
-            const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
+            const colorHex = (PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light)
+              .model;
             modelColorPicker.value =
               '#' + colorHex.toString(16).padStart(6, '0');
           }

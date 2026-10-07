@@ -25,8 +25,12 @@ function notify() {
   for (const cb of subscribers) {
     try {
       cb(images);
-    } catch {
-      /* subscriber error */
+    } catch (error) {
+      // One subscriber failing must not stop the others hearing the change,
+      // and its error is reported the way an event listener's would be.
+      queueMicrotask(() => {
+        throw error;
+      });
     }
   }
 }

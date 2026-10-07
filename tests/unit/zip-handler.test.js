@@ -2133,14 +2133,14 @@ describe('ZIP Handler', () => {
         categorise(map, presetNames)
 
       console.log(
-        `[Phase 7 Legacy] Unique: ${unique}, Heuristic: ${heuristic}, ` +
+        `[Legacy] Unique: ${unique}, Heuristic: ${heuristic}, ` +
           `Unmapped: ${unmapped} / ${presetNames.length}`
       )
       if (unmappedNames.length > 0) {
-        console.log('[Phase 7 Legacy] Unmapped:', unmappedNames)
+        console.log('[Legacy] Unmapped:', unmappedNames)
       }
       if (heuristicNames.length > 0) {
-        console.log('[Phase 7 Legacy] Heuristic:', heuristicNames)
+        console.log('[Legacy] Heuristic:', heuristicNames)
       }
 
       expect(unique).toBeGreaterThanOrEqual(290)
@@ -2155,11 +2155,11 @@ describe('ZIP Handler', () => {
         categorise(map, presetNames)
 
       console.log(
-        `[Phase 7 Generic] Unique: ${unique}, Heuristic: ${heuristic}, ` +
+        `[Generic] Unique: ${unique}, Heuristic: ${heuristic}, ` +
           `Unmapped: ${unmapped} / ${presetNames.length}`
       )
       if (unmappedNames.length > 0) {
-        console.log('[Phase 7 Generic] Unmapped:', unmappedNames)
+        console.log('[Generic] Unmapped:', unmappedNames)
       }
 
       expect(unique).toBeGreaterThanOrEqual(290)
@@ -2249,7 +2249,7 @@ describe('ZIP Handler', () => {
       expect(genericCounts.ambiguous).toBe(legacyCounts.ambiguous)
 
       console.log(
-        `[Phase 7 Resolution] Unique: ${legacyCounts.unique}, ` +
+        `[Resolution] Unique: ${legacyCounts.unique}, ` +
           `Ancestor-fallback: ${legacyCounts['ancestor-fallback']}, ` +
           `Ambiguous: ${legacyCounts.ambiguous}`
       )
