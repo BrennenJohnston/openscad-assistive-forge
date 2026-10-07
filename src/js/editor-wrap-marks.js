@@ -1,12 +1,12 @@
 /**
- * Desktop-parity wrap marks for the CodeMirror editor (U-37 ¶3).
+ * Desktop-parity wrap marks for the CodeMirror editor.
  *
  * Two marks, both from OpenSCAD 2021.01's own defaults in `src/settings.cc`:
  *
  *   lineWrapIndentationStyle = "Fixed", lineWrapIndentation = 4
- *       continuation rows start a FIXED four columns from the left edge of
+ *       continuation rows start a fixed four columns from the left edge of
  *       the text area, regardless of how far the logical line is itself
- *       indented. Measured off the owner's desktop screenshot: a line
+ *       indented. Measured off a desktop screenshot: a line
  *       indented twelve columns and a line indented none put their
  *       continuations at the same x.
  *
@@ -15,16 +15,16 @@
  *       i.e. on all but the last row of a wrapped line. Parked at a fixed x
  *       at the border, not next to where the text happens to stop.
  *
- * NEITHER mark is made of characters. The indent is CSS padding and the
+ * Neither mark is made of characters. The indent is CSS padding and the
  * arrow is DOM in CodeMirror's own `layer()`, which mounts outside
  * `.cm-content`. Copying a wrapped line therefore yields the original bytes,
  * and a screen reader reading the document never meets either mark.
  *
- * They ship as two independent extensions because the owner's answer to Q-58
- * was (c): two Preferences toggles, mirroring the desktop, where
- * `lineWrapIndentationStyle` and `lineWrapVisualizationEnd` really are
- * separate settings. So the arrow's reserved column travels with the ARROW
- * rather than with the indent — switch the indent off on its own and the text
+ * They ship as two independent extensions with two Preferences toggles,
+ * mirroring the desktop, where `lineWrapIndentationStyle` and
+ * `lineWrapVisualizationEnd` really are separate settings. So the arrow's
+ * reserved column travels with the arrow rather than with the indent:
+ * switch the indent off on its own and the text
  * must still leave the arrow somewhere to sit; switch the arrow off and the
  * full pane width comes back.
  *
@@ -71,11 +71,11 @@ export const ARROW_COLUMN_CH = 2;
 /**
  * Glyph size, in `em` so it tracks the font-size preference.
  *
- * MEASURED off the owner's desktop screenshot: the marker is 10px wide and
- * 11px tall against a 19px row, so it reads at a little over half the row.
- * Ours renders at 0.85em — 11.9px in the 14px default against a 22.4px row —
- * which lands in the same place. Sized at one character cell it came out
- * around 4px of actual ink and was an indistinct blob rather than an arrow.
+ * Measured off a desktop screenshot: the marker is 10px wide and 11px tall
+ * against a 19px row, so it reads at a little over half the row. Ours
+ * renders at 0.85em (11.9px in the 14px default against a 22.4px row),
+ * which lands in the same place. At one character cell it would be around
+ * 4px of actual ink, an indistinct blob rather than an arrow.
  */
 const ARROW_GLYPH_EM = 0.85;
 
@@ -83,7 +83,7 @@ const ARROW_GLYPH_EM = 0.85;
  * The hanging indent.
  *
  * `padding-left` pushes the whole line block right by four columns;
- * `text-indent` pulls only its FIRST row back to where it was. Rows two and
+ * `text-indent` pulls only its first row back to where it was. Rows two and
  * on therefore start four columns in, and the first row keeps the full pane
  * width to wrap in — which is exactly what Fixed means and what the desktop
  * draws.
@@ -109,7 +109,7 @@ const wrapIndentTheme = EditorView.theme({
  * drawing over it. The desktop's Scintilla wraps early to leave its marker
  * room; CM6 wraps at the content box, so the content box is what has to give.
  *
- * This belongs to the arrow and not to the indent (Q-58c): with the arrow
+ * This belongs to the arrow and not to the indent: with the arrow
  * switched off there is nothing to reserve room for, and the line should get
  * the width back.
  */
@@ -280,9 +280,9 @@ function buildWrapArrowLayer() {
       // A width change re-wraps every line, so which rows continue changes
       // wholesale. CodeMirror does not report that as `geometryChanged` —
       // the browser re-wraps the text in CSS without the doc view being
-      // redrawn — so the width is compared here instead. MEASURED: without
-      // this, taking the Classic pane from 213px to 701px left the arrows
-      // drawn for the old width, and `markers()` was never called again.
+      // redrawn — so the width is compared here instead. Without this, taking
+      // the Classic pane from 213px to 701px would leave the arrows drawn for
+      // the old width, and `markers()` would never be called again.
       const width = update.view.contentDOM.clientWidth;
       if (width !== lastContentWidth) {
         lastContentWidth = width;
@@ -302,13 +302,13 @@ function buildWrapArrowLayer() {
       const { right, baseTop } = layerGeometry(view);
       const width = arrowColumnWidth(view);
 
-      // Row counts come from the rendered elements, NOT from
+      // Row counts come from the rendered elements, not from
       // `BlockInfo.height`. The height map is CodeMirror's cached measurement
       // and can be a cycle behind: a pane resize re-wraps the text in CSS
       // immediately, so by the time this runs the DOM is already right while
-      // the height map may not be. MEASURED — reading the map here drew the
-      // old width's arrows and, having recorded the new width, never
-      // corrected itself. The line boxes are always current.
+      // the height map may not be. Reading the map here would draw the old
+      // width's arrows and, having recorded the new width, never correct
+      // itself. The line boxes are always current.
       const lines = [];
       for (const block of view.viewportLineBlocks) {
         const element = lineElementAt(view, block.from);

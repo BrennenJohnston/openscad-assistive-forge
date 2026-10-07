@@ -99,7 +99,7 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
-  // Phase 6 (color parity): COFF format is the preferred path for 3D preview
+  // Color parity: COFF format is the preferred path for 3D preview
   // when SCAD source contains color() calls.  Falls back to STL automatically
   // when no color() calls are detected.  Disable via kill-switch or URL
   // (?flag_color_passthrough=false) if COFF output causes regressions.
@@ -124,10 +124,8 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
-  // C4.6: acceptance suite green (classic-mode.spec.js + console-fidelity
-  // .spec.js walk the four-pane contract), so Classic is available to all
-  // users as a View > Interface Mode option. Disable via
-  // ?flag_classic_mode=false or the settings panel.
+  // Classic is available to all users as a View > Interface Mode option.
+  // Disable via ?flag_classic_mode=false or the settings panel.
   classic_mode: {
     id: 'classic_mode',
     name: 'Classic Desktop Layout',
@@ -206,10 +204,9 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
-  // F35 Phase A — persistent two-way sync with a folder on disk via the
-  // File System Access API. Chromium-only, gated dark by default until
-  // Spike S1 has been verified on real Chrome / Edge instances. Phase B
-  // (file-change watcher / F14) and Phase C (write-back) extend this.
+  // Persistent two-way sync with a folder on disk via the File System
+  // Access API (Chromium only). The file-change watcher and the write-back
+  // below extend this.
   local_folder_sync: {
     id: 'local_folder_sync',
     name: 'Persistent Local Folder Sync (Chromium only)',
@@ -220,15 +217,15 @@ export const FLAGS = {
       'support showDirectoryPicker (Firefox / Safari today). ' +
       'Phase A: connect / disconnect / persist. Phase B (auto-rerun on ' +
       'external edits) and Phase C (write-back) ship behind separate flags.',
-    // C5.1: Phase A surfaced — on by default; the UI still hides itself on
-    // browsers without showDirectoryPicker.
+    // On by default; the UI still hides itself on browsers without
+    // showDirectoryPicker.
     default: true,
     rollout: 100,
     userConfigurable: true,
     killSwitch: false,
   },
-  // C5.2 (Phase B): watch the connected folder for external edits and
-  // re-render automatically — Ken's edit-in-desktop-editor loop.
+  // Watch the connected folder for external edits and re-render
+  // automatically, for editing the source in a desktop editor.
   folder_sync_watch: {
     id: 'folder_sync_watch',
     name: 'Folder Change Watcher (Chromium only)',
@@ -242,12 +239,10 @@ export const FLAGS = {
     killSwitch: false,
     requires: ['local_folder_sync'],
   },
-  // C5.3 (Phase C): write back into the connected folder.
+  // Write back into the connected folder.
   //
-  // Dark until tested on real Chrome/Edge with the watcher active - and that
-  // test is the OWNER's to run, because a native folder picker cannot be
-  // driven by a machine. IR-5 built the paths this describes; before it, the
-  // description promised exports that had no write path at all.
+  // Off by default until tested on real Chrome/Edge with the watcher active,
+  // by hand: a native folder picker cannot be driven by a machine.
   folder_sync_writeback: {
     id: 'folder_sync_writeback',
     name: 'Folder Write-Back (Chromium only)',

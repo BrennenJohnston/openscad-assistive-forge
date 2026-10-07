@@ -42,10 +42,9 @@ export function setExportDependencies(deps) {
 /**
  * Export the model in the given format.
  *
- * Upstream's File > Export renders whatever you ask for. This used to refuse
- * with a "Format Mismatch" toast whenever the render in hand was a different
- * format — a dead end the user could only escape by finding the output-format
- * select and pressing Generate. It now renders on demand instead.
+ * Upstream's File > Export renders whatever you ask for, so this renders
+ * on demand when the render in hand is a different format, rather than
+ * leaving the user to find the output-format select and press Generate.
  *
  * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
  * @param {Object} [options]

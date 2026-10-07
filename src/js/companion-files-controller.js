@@ -267,9 +267,9 @@ export function initCompanionFilesController({
     }
     controls.classList.remove('hidden');
 
-    // Once per render, before the count decides anything: this used to sit
-    // inside the no-companions branch only, so Save as Project stayed hidden
-    // in exactly the case it exists for — a multi-file project not yet saved.
+    // Once per render, before the count decides anything: inside the
+    // no-companions branch only, Save as Project would stay hidden in exactly
+    // the case it exists for, a multi-file project not yet saved.
     if (saveBtn) {
       updateCompanionSaveButton();
     }
@@ -372,7 +372,7 @@ export function initCompanionFilesController({
     );
     // A folder row is a real <button> inside a listitem wrapper. It cannot be
     // both the list's item and its own control: axe refuses role="button" as a
-    // child of role="list" (D-38), and a native button also carries Enter,
+    // child of role="list", and a native button also carries Enter,
     // Space and focusability without a tabindex/keydown pair of its own.
     const folderItems = sortedFolders.map(([folderName, childNode]) => {
       const count = countFilesRecursive(childNode);
@@ -435,8 +435,8 @@ export function initCompanionFilesController({
     });
 
     // The list owns listitems and nothing else. The breadcrumb bar is a <nav>
-    // and lives in its own host above the list (D-38); it also stops scrolling
-    // away with the rows now that it is outside the scroll box.
+    // and lives in its own host above the list, outside the scroll box, so it
+    // does not scroll away with the rows.
     if (breadcrumbHost) breadcrumbHost.innerHTML = breadcrumbHtml;
     container.innerHTML = folderItems.join('') + fileItems.join('');
 
@@ -444,19 +444,19 @@ export function initCompanionFilesController({
 
     /**
      * Put focus somewhere sensible after the tree redraws for a navigation the
-     * user asked for (D-54).
+     * user asked for.
      *
      * The list is rebuilt with innerHTML, so the row they just pressed is
-     * detached by the time this runs and focus has already fallen to <body> —
-     * UF-23's mechanism on the navigation path. Only the three navigation
-     * handlers call this; a background re-render must never move focus.
+     * detached by the time this runs and focus has already fallen to <body>.
+     * Only the three navigation handlers call this; a background re-render
+     * must never move focus.
      *
      * @param {string|null} folderLeft - Folder the user stepped OUT of, whose
      *   row is now on screen again. Null when stepping in.
      */
     function focusAfterTreeNavigation(folderLeft = null) {
       // Match on dataset rather than a selector, so a folder name containing
-      // quotes cannot break the lookup (the UF-23 rule).
+      // quotes cannot break the lookup.
       const rows = [...container.querySelectorAll('.project-file-item')];
       const target = folderLeft
         ? rows.find((row) => row.dataset.folderEnter === folderLeft) || rows[0]
@@ -498,7 +498,7 @@ export function initCompanionFilesController({
         focusAfterTreeNavigation();
       };
       row.addEventListener('click', enter);
-      // Enter and Space are the button's own now. Escape still has to be
+      // Enter and Space are the button's own. Escape still has to be
       // bound: it is this tree's way back up one level.
       row.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && companionCurrentPath.length > 0) {
@@ -538,8 +538,8 @@ export function initCompanionFilesController({
     const projectFiles = state.projectFiles;
 
     if (shouldShow) {
-      // COMPATIBILITY FALLBACK — Phase 8 removal candidate:
-      // 'default.svg' when screenshot_file param exists but is empty/unset.
+      // Compatibility fallback: 'default.svg' when the screenshot_file
+      // parameter exists but is empty or unset.
       const screenshotFile = parameters.screenshot_file || 'default.svg';
       const resolved = resolveProjectFile(projectFiles, screenshotFile);
       if (resolved) {
@@ -610,7 +610,7 @@ export function initCompanionFilesController({
       }
     }
 
-    // COMPATIBILITY FALLBACK — Phase 8 removal candidate.
+    // Compatibility fallback.
     if (!screenshotFile) {
       const resolved = resolveProjectFile(projectFiles, 'default.svg');
       if (resolved) screenshotFile = resolved.key;
@@ -654,7 +654,7 @@ export function initCompanionFilesController({
     }
 
     try {
-      // AF-4: a file lands where you are STANDING in the tree, not always at
+      // A file lands where you are standing in the tree, not always at
       // the root. companionCurrentPath is the folder the tree is showing.
       const targetPath = [...companionCurrentPath, file.name].join('/');
       const fileName = targetPath;
@@ -867,7 +867,7 @@ export function initCompanionFilesController({
     restoreFocusToFileRow(path);
     // Immediate, not debounced: the preview this is about to await announces
     // "Rendering preview..." within the debounce window and swallows it
-    // otherwise. Measured swallowed before this was changed.
+    // otherwise.
     announceImmediate(`Saved ${path}`);
 
     const autoPreviewController = getAutoPreviewController();

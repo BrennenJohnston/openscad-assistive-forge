@@ -1,17 +1,16 @@
 /**
- * Desktop-parity fold markers for the CodeMirror editor (U-37 ¶1).
+ * Desktop-parity fold markers for the CodeMirror editor.
  *
  * OpenSCAD 2021.01 draws QScintilla's BoxedTreeFoldStyle in the fold margin: a
  * bordered square holding a minus where a block is open and a plus where it is
- * collapsed. Ours drew CodeMirror's default chevrons. Folding itself already
- * worked — this is fidelity, not capability.
+ * collapsed, where CodeMirror's default draws chevrons. Folding itself
+ * works either way; this is fidelity, not capability.
  *
- * MEASURED off the owner's screenshots rather than guessed: the box is 12px
- * square against a 19px row (screenshot 122650, the marker at line 177), with a
- * 2px border, a centered stroke, and the plus's vertical arm the same length as
- * its horizontal one.
+ * Measured off desktop screenshots rather than guessed: the box is 12px
+ * square against a 19px row, with a 2px border, a centered stroke, and the
+ * plus's vertical arm the same length as its horizontal one.
  *
- * What is deliberately NOT built here is the guide line: the desktop runs a
+ * What is deliberately not built here is the guide line: the desktop runs a
  * vertical rule through the boxes linking a block to its children, and CM6 has
  * no gutter facility for a mark that spans lines. That deviation is recorded
  * rather than faked.
@@ -34,7 +33,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  *
  * Built with DOM calls and presentation attributes, never an inline `style`
  * block or a data: URI, so the strict `style-src 'self'` the app ships under
- * has nothing to refuse (the R-I lesson).
+ * has nothing to refuse.
  *
  * @param {boolean} open
  * @returns {HTMLElement}
@@ -45,10 +44,10 @@ export function foldMarkerDOM(open) {
 
   // CodeMirror's DEFAULT marker sets this title; supplying `markerDOM` replaces
   // that element wholesale and it never gets set (`FoldMarker.toDOM` returns
-  // the custom node before it reaches the `span.title = ...` line). MEASURED,
-  // and caught by `menu-parity.spec.js`, which asserts the fold gutter holds
-  // something with a title — so restyling the marker had quietly taken away
-  // its only accessible name. Same strings CodeMirror uses.
+  // the custom node before it reaches the `span.title = ...` line), so a
+  // custom marker has to carry its accessible name itself;
+  // `menu-parity.spec.js` asserts the fold gutter holds something with a
+  // title. Same strings CodeMirror uses.
   wrapper.title = open ? 'Fold line' : 'Unfold line';
 
   const svg = document.createElementNS(SVG_NS, 'svg');

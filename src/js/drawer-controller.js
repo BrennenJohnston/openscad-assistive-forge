@@ -41,26 +41,22 @@ export function initDrawerController() {
   let focusTrap = null;
 
   /**
-   * D-70 (UF-38, signed Q-77). The drawer is a modal dialog, and since UF-37
-   * the tour card stays on screen over it. Two consequences, both MEASURED at
-   * 412x915 on intro step 4 before this change: eight consecutive Tabs never
-   * left `#paramPanel`, so Next / Back / minimize / Close were unreachable;
-   * and `aria-modal="true"` told assistive technology to ignore everything
-   * outside the drawer, so a screen-reader user got no instructions at all on
-   * the drawer steps - which is most of the tour.
+   * The drawer is a modal dialog, and the tour card stays on screen over it.
+   * Left modal, the drawer's focus trap would keep Tab inside `#paramPanel`,
+   * so the card's Next / Back / minimize / Close would be unreachable, and
+   * `aria-modal="true"` would tell assistive technology to ignore everything
+   * outside the drawer, so a screen-reader user would get no instructions on
+   * the drawer steps, which are most of the tour.
    *
    * The drawer stays modal for every ordinary use. It only stands its
    * modality down for the one surface that is deliberately outside it.
    *
-   * Both surfaces have to stand down together, and that is the one place this
-   * goes further than Q-77's wording. The tour card is itself
+   * Both surfaces stand down together. The tour card is itself
    * `role="dialog" aria-modal="true"`, so dropping the drawer's claim alone
-   * would not open the tour up - it would just swap which surface assistive
-   * technology hides, leaving the reader with instructions they cannot act on.
-   * While the two are on screen together, neither claims to be the only thing
-   * there. The card's own claim is restored the moment the drawer closes;
-   * whether a coach mark should ever have been `aria-modal` is a wider
-   * question, raised for the owner rather than answered here.
+   * would only swap which surface assistive technology hides, leaving the
+   * reader with instructions they cannot act on. While the two are on screen
+   * together, neither claims to be the only thing there; the card's own
+   * claim is restored the moment the drawer closes.
    */
   const tourOverlay = () => document.querySelector('.tutorial-overlay');
 
@@ -146,12 +142,10 @@ export function initDrawerController() {
   }
 
   /**
-   * DP-80 (D-178). The drawing editor takes the preview area, and at phone
-   * width this drawer stood over it, modal, its focus trap holding Tab: a
-   * person who pressed "Open the drawing editor" or "Crop first" IN the
-   * drawer got an editor they could neither see nor reach until they found
-   * the drawer's own Close (MEASURED at 412: a press on the editor's Save
-   * crop landed on the drawer's ink panel instead). The drawer stands
+   * The drawing editor takes the preview area, and at phone width this
+   * drawer would stand over it, modal, its focus trap holding Tab: a person
+   * who pressed "Open the drawing editor" or "Crop first" in the drawer
+   * would get an editor they could neither see nor reach. The drawer stands
    * aside while the editor is open and comes back when it closes, keeping
    * whatever focus the editor's host has just set inside it (the button
    * the person pressed), so the place they were at is the place they land.
@@ -191,7 +185,7 @@ export function initDrawerController() {
       drawer.setAttribute('role', originalAttrs.role);
     }
     drawer.removeAttribute('aria-modal');
-    syncModality(); // hands the card back its own modality (D-70)
+    syncModality(); // hands the card back its own modality
     drawer.removeAttribute('aria-labelledby');
     if (originalAttrs.ariaLabel) {
       drawer.setAttribute('aria-label', originalAttrs.ariaLabel);
@@ -264,7 +258,7 @@ export function initDrawerController() {
   });
 
   /**
-   * Close drawer only if pointer started AND ended on backdrop
+   * Close drawer only if pointer started and ended on backdrop
    */
   backdrop.addEventListener('pointerup', (event) => {
     if (
@@ -327,7 +321,7 @@ export function initDrawerController() {
   });
 
   // A tour can start or end while the drawer is already open, so modality is
-  // re-decided rather than fixed at open time (D-70).
+  // re-decided rather than fixed at open time.
   document.addEventListener('forge:tutorial-run-change', syncModality);
 
   // Wire up close button
@@ -355,7 +349,7 @@ export function initDrawerController() {
         document.body.classList.remove('drawer-open');
         document.body.style.removeProperty('top');
         isOpen = false;
-        syncModality(); // D-70, as in close()
+        syncModality(); // as in close()
 
         // Deactivate focus trap
         if (focusTrap) {

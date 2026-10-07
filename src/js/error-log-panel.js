@@ -65,9 +65,9 @@ export class ErrorLogPanel {
     };
 
     /**
-     * The `Show [All ▾]` narrowing (U6b). null = no narrowing, so the Console's
-     * per-type checkboxes decide, exactly as they did before this control
-     * existed. A type here shows only that type, whatever the checkboxes say.
+     * The `Show [All ▾]` narrowing. null = no narrowing, so the Console's
+     * per-type checkboxes decide. A type here shows only that type, whatever
+     * the checkboxes say.
      * @type {string|null}
      */
     this.showOnly = null;
@@ -118,19 +118,19 @@ export class ErrorLogPanel {
     let lineNum = null;
     const message = trimmed;
 
-    // D-232: on every render that draws text, Fontconfig notes that the
+    // On every render that draws text, Fontconfig notes that the
     // browser engine has no config file. The text still renders, and the
     // desktop console shows the line as plain output, so it is not an error;
-    // the ERROR: test below matched its lowercase "error:".
+    // the ERROR: test below would match its lowercase "error:".
     if (/^Fontconfig error: Cannot load default config file\b/i.test(trimmed)) {
       return null;
     }
 
-    // D-203: a line OpenSCAD labels a warning is one, whatever its text
-    // quotes. "WARNING: [manifold] Minkowski failed with error, falling back
-    // to Nef operation: CGAL ERROR: assertion violation!" matched the ERROR:
-    // test below on the words after the colon, and a preview that had worked
-    // was announced as an error.
+    // A line OpenSCAD labels a warning is one, whatever its text quotes.
+    // "WARNING: [manifold] Minkowski failed with error, falling back to Nef
+    // operation: CGAL ERROR: assertion violation!" would match the ERROR:
+    // test below on the words after the colon, and a preview that worked
+    // would be announced as an error.
     if (/^WARNING:/i.test(trimmed)) {
       type = ERROR_LOG_TYPE.WARNING;
       group = 'Compile';
@@ -160,15 +160,14 @@ export class ErrorLogPanel {
       group = 'Parse';
     } else if (
       /^CGAL error/i.test(trimmed) ||
-      // `|` binds looser than anything else in a regex, so the original
-      // /^Mesh (is )?not|manifold/i read as (^Mesh (is )?not) OR (manifold) —
-      // and that second alternative was UNANCHORED. Every line containing the
-      // word "manifold" was therefore an ERROR, including OpenSCAD's healthy
-      // status line "Top level object is a 3D object (manifold):", which the
-      // Error-Log then showed as a red row while the Console showed nothing.
+      // Two separate tests, not /^Mesh (is )?not|manifold/i: `|` binds looser
+      // than anything else in a regex, so that reads as (^Mesh (is )?not) or
+      // (manifold), and the unanchored second alternative would make every line
+      // containing "manifold" an error, including OpenSCAD's healthy status
+      // line "Top level object is a 3D object (manifold):".
       /^Mesh (is )?not\b/i.test(trimmed) ||
-      // A real complaint says the object is NOT manifold. The status line says
-      // it IS one, so the negation is what tells them apart.
+      // A real complaint says the object is not manifold. The status line says
+      // it is one, so the negation is what tells them apart.
       /\bnot\b[^\n]*\bmanifold\b/i.test(trimmed)
     ) {
       type = ERROR_LOG_TYPE.ERROR;
@@ -345,9 +344,9 @@ export class ErrorLogPanel {
 
   /**
    * The live region the table renders into, plus the `Show [All ▾]` row above
-   * it (U6b). Built once and kept, so the select survives every render.
+   * it. Built once and kept, so the select survives every render.
    *
-   * The row sits OUTSIDE the live region on purpose: role="log" belongs to the
+   * The row sits outside the live region on purpose: role="log" belongs to the
    * content that changes, and a <select> rebuilt inside one would be read out
    * on every render.
    * @returns {HTMLElement}
@@ -383,11 +382,11 @@ export class ErrorLogPanel {
     select.id = 'error-log-show';
     select.className = 'error-log-show-select';
 
-    // Owner-approved 2026-08-08: only the types this engine can actually emit.
-    // Upstream's list also has UI-WARNING, FONT-WARNING, EXPORT-WARNING and
-    // EXPORT-ERROR; those are desktop message SOURCES with no equivalent here,
-    // so they are omitted rather than shipped as options that match nothing.
-    // Trace is ours, not upstream's, and the panel already filters on it.
+    // Only the types this engine can actually emit. Upstream's list also has
+    // UI-WARNING, FONT-WARNING, EXPORT-WARNING and EXPORT-ERROR; those are
+    // desktop message sources with no equivalent here, so they are omitted
+    // rather than shipped as options that match nothing. Trace is ours, not
+    // upstream's, and the panel already filters on it.
     for (const [value, text] of [
       ['all', 'All'],
       [ERROR_LOG_TYPE.ERROR, TYPE_LABELS[ERROR_LOG_TYPE.ERROR]],
@@ -535,11 +534,10 @@ export class ErrorLogPanel {
     const thead = document.createElement('thead');
     const row = document.createElement('tr');
 
-    // Upstream's headers (OpenSCAD_1). "Group" is real data — parseLine has
-    // always computed Compile / Parse / Geometry / Runtime / General and never
-    // shown it. Owner-approved 2026-08-08: the Group cell carries the severity
-    // badge as well as the group name, so relabelling the column does not leave
-    // severity to the red row color alone (WCAG 1.4.1).
+    // Upstream's headers. "Group" is real data: parseLine computes Compile /
+    // Parse / Geometry / Runtime / General. The Group cell carries the
+    // severity badge as well as the group name, so relabelling the column
+    // does not leave severity to the red row color alone (WCAG 1.4.1).
     const cols = [
       { key: 'group', label: 'Group' },
       { key: 'file', label: 'File' },
