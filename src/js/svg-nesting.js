@@ -3,7 +3,7 @@
  *
  * The layered engine needs, for every element, how many other elements
  * enclose it. That number is the element's depth, and depth is what the
- * containment rule is written in - an element may only join layer N if
+ * containment law is written in - an element may only join layer N if
  * something at layer N-1 still surrounds it, or the printer is asked to
  * build a piece of geometry standing on nothing.
  *
