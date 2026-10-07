@@ -4,9 +4,9 @@
  * A picture may be converted without a press only when it is small and the
  * quick look calls it quick. Both, because a small picture on a very slow
  * phone is not quick, and the whole point is not to start work nobody asked
- * for on a device that cannot afford it. Every way a conversion could start
- * by itself asks here - choosing a file and changing a setting on the ink
- * panel alike - so no road starts work this rule would refuse.
+ * for on a device that cannot afford it. Choosing a file is the one road
+ * that asks; a setting changed on the ink panel never starts a conversion
+ * by itself.
  *
  * @license GPL-3.0-or-later
  */
