@@ -1,12 +1,12 @@
 /**
- * U-46 / Q-73a: the mobile toolbar's fourth row, reclaimed.
+ * The mobile toolbar's fourth row, reclaimed.
  *
- * With a project open at 412px the app spent four stacked rows — 147px in
- * Simplified, 187px in Standard — before any content, and one of them was a
- * 54px row holding four 44px icons in a 396px width. The Customizer row below
- * it had 218px of free space once its visible heading stood down. So the four
- * app-chrome controls (high contrast, theme, Full Screen, Help) move there,
- * and the row they leave collapses.
+ * With a project open at 412px the app would spend four stacked rows (147px
+ * in Simplified, 187px in Standard) before any content, and one of them is
+ * a 54px row holding four 44px icons in a 396px width. The Customizer row
+ * below it has 218px of free space once its visible heading stands down.
+ * So the four app-chrome controls (high contrast, theme, Full Screen, Help)
+ * move there, and the row they leave collapses.
  *
  * Measured at 412x915 and 412x810, project surface, both densities:
  *   Simplified  147px -> 93px    Standard  187px -> 135px
@@ -18,13 +18,13 @@
  *
  * Two conditions, both necessary:
  *
- *  - MOBILE-SHAPED, by `isViewportDesktopShaped()` — the same predicate the
- *    Classic gate and UF-41's first-visit modal ride. Q-73c settled that the
- *    app carries ONE definition of "mobile"; a media query cannot express
- *    "at least 1024 wide AND not portrait" and a second breakpoint is the
- *    cross-file drift this project keeps paying for.
+ *  - Mobile-shaped, by `isViewportDesktopShaped()`: the same predicate the
+ *    Classic gate and the first-visit modal use. The app carries one
+ *    definition of "mobile"; a media query cannot express "at least 1024
+ *    wide and not portrait", and a second breakpoint is the cross-file
+ *    drift this project keeps paying for.
  *
- *  - PROJECT SURFACE. The Customizer row does not exist on the welcome
+ *  - Project surface. The Customizer row does not exist on the welcome
  *    screen, and components.css force-shows the workflow row there precisely
  *    so high contrast and theme stay reachable before a file is open. Moving
  *    the controls into a row that is not on screen would take them away on

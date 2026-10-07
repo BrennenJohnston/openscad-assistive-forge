@@ -1,16 +1,14 @@
 /**
  * Saving into the connected folder, on purpose.
  *
- * Phase B of folder sync already watches a linked folder and re-renders when
- * another program edits a file in it. Phase C could only ever write ONE thing
- * back: a preset sidecar, automatically, on save. Exports and edited companion
- * files had no write path at all, so the loop only ran one way - the desktop
- * editor's changes reached Forge, and nothing of Forge's reached the folder.
+ * Folder sync watches a linked folder and re-renders when another program
+ * edits a file in it. This is the other direction: Forge's exports and
+ * edited companion files reaching the folder.
  *
- * This closes it. Every write here is something the person asked for by
- * pressing a button, every write goes through FolderWriteBack (which tells the
- * watcher before any bytes land, so the loop cannot feed itself), and every
- * write is announced. Nothing is silent and nothing is automatic.
+ * Every write here is something the person asked for by pressing a button,
+ * every write goes through FolderWriteBack (which tells the watcher before
+ * any bytes land, so the loop cannot feed itself), and every write is
+ * announced. Nothing is silent and nothing is automatic.
  *
  * Chromium-only, by feature detection: the File System Access API's directory
  * picker does not exist on Firefox or Safari, and the affordances stay hidden

@@ -1,12 +1,12 @@
 /**
  * WASM mount filtering — decouples the storage cap from the render cap.
  *
- * Projects may now store hundreds of MB of companions (IndexedDB writes
+ * Projects may store hundreds of MB of companions (IndexedDB writes
  * blobs to disk), but everything passed to a render is structured-cloned
  * into the worker and written into the Emscripten MEMFS heap alongside
  * geometry. Mounting a 500 MB folder per render would exhaust the WASM
- * heap, so: the main .scad and all TEXT companions always mount, while
- * BINARY companions (images as data URLs, byte arrays) mount only when
+ * heap, so: the main .scad and all text companions always mount, while
+ * binary companions (images as data URLs, byte arrays) mount only when
  * the render can actually use them — i.e. they are referenced from the
  * include/use/import graph — unless the whole binary set is small enough
  * not to matter.

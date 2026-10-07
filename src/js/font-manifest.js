@@ -1,5 +1,5 @@
 /**
- * Font manifest (F2) — the one description of the fonts OpenSCAD can actually
+ * Font manifest — the one description of the fonts OpenSCAD can actually
  * use for text().
  *
  * These four files are really present in public/fonts/ and are really mounted

@@ -13,11 +13,11 @@
  *      path is how the two drift apart.
  *   2. **It waits for the engine.** A launched file can arrive before the WASM
  *      engine has finished starting - earlier than any upload ever could, since
- *      the launch IS the page load. Handing it to the app early is the same
+ *      the launch is the page load. Handing it to the app early is the same
  *      trap the deep-link lifecycle already guards against.
  *   3. **It does nothing at all where launchQueue does not exist.** That is
  *      most browsers: file handling is a Chromium-family feature, is not
- *      Baseline, and only works for an INSTALLED app. Feature-detected, so a
+ *      Baseline, and only works for an installed app. Feature-detected, so a
  *      visitor in Firefox or Safari is unaffected.
  *
  * @license GPL-3.0-or-later

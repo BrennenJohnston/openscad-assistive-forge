@@ -202,12 +202,12 @@ export class ModeManager {
     // Move focus to the appropriate target after switch (WCAG 2.4.3 Focus
     // Order), unless a menu or dialog has taken focus in the meantime.
     //
-    // D-15: this runs a frame later, and a user who presses the editor toggle
+    // This runs a frame later, and a user who presses the editor toggle
     // and then opens a menu in the same task lands here with the menu already
     // holding focus. Taking it back leaves the menu open with focus outside
-    // it, breaking the APG contract that focus moves INTO an open menu.
+    // it, breaking the APG contract that focus moves into an open menu.
     //
-    // Deliberately narrow. Declining whenever focus had changed AT ALL would
+    // Deliberately narrow. Declining whenever focus had changed at all would
     // also skip the move in the ordinary case where the switch itself moved
     // focus, and the 2.4.3 behavior every other path relies on would become
     // conditional on timing. Only a menu or a dialog owns focus in a way this

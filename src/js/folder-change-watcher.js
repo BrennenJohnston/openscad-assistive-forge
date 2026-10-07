@@ -1,5 +1,5 @@
 /**
- * Folder Change Watcher (F14 / C5.2, Phase B of local folder sync)
+ * Folder Change Watcher (local folder sync)
  *
  * Polls the files of a connected local folder (File System Access API)
  * for external modifications — the "edit in a desktop editor, save,
@@ -9,12 +9,12 @@
  *  - Fast poll (default 1.5s) stats only the watched file list
  *    (main .scad + text companions) via handle.getFile() and compares
  *    lastModified + size snapshots.
- *  - A cheap full poll would still be O(files); a full-tree RESCAN
+ *  - A cheap full poll would still be O(files); a full-tree rescan
  *    (default 30s) additionally discovers newly created files.
  *  - Paused while the tab is hidden and while a render is in flight.
  *  - Losing permission stops the watcher and notifies the caller.
- *  - updateSnapshot() lets write-back (Phase C) bump the snapshot
- *    BEFORE writing a watched file so self-writes never re-trigger.
+ *  - updateSnapshot() lets write-back bump the snapshot
+ *    before writing a watched file so self-writes never re-trigger.
  *
  * All I/O goes through injected dependencies so the class is fully
  * unit-testable without a real directory handle.
@@ -103,8 +103,8 @@ export class FolderChangeWatcher {
   }
 
   /**
-   * Mark a path as being written by the app (Phase C write-back). The
-   * watcher skips it until endSelfWrite() — called BEFORE the write
+   * Mark a path as being written by the app (write-back). The
+   * watcher skips it until endSelfWrite() — called before the write
    * starts, so a poll can never observe our own half-finished write as
    * an external change.
    * @param {string} path
@@ -127,7 +127,7 @@ export class FolderChangeWatcher {
   }
 
   /**
-   * Record the current stats of every watched file WITHOUT reporting
+   * Record the current stats of every watched file without reporting
    * changes. Call once after (re)connecting, before start().
    */
   async primeSnapshot() {
@@ -151,8 +151,8 @@ export class FolderChangeWatcher {
   }
 
   /**
-   * Pre-write snapshot bump (Phase C write-back): record the stats a
-   * watched file WILL have after our own write so the next poll does
+   * Pre-write snapshot bump: record the stats a
+   * watched file will have after our own write so the next poll does
    * not see the write as an external change.
    * @param {string} path
    * @param {{lastModified: number, size: number}} stats

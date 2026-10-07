@@ -107,7 +107,7 @@ export class MemoryMonitor {
     }
 
     // No direct WASM interface — rely on updateFromWorker() for data.
-    // Do NOT fall back to performance.memory: it measures the main-thread
+    // Do not fall back to performance.memory: it measures the main-thread
     // JS heap (naturally 400-600MB+ for a complex app), not the WASM
     // worker heap. Using it here would trigger false warning badges.
     return {

@@ -1,14 +1,14 @@
 /**
- * Per-project reference-overlay settings (DP-5).
+ * Per-project reference-overlay settings.
  *
- * WHY A PROJECT FILE, and not a preference. The overlay's app-level keys
- * (`overlay-*`, the UF-14 facade) are deliberately shared across projects:
- * opacity and color are how a person likes to work, not facts about a
- * design. Where the image SITS is the opposite - it is measured against one
- * particular model, and carrying it to the next project would place someone
- * else's tracing over your charm. So this layer sits ABOVE the preferences
- * and never migrates them: a project with no settings file falls back to the
- * app-level values exactly as before.
+ * Why a project file, and not a preference: the overlay's app-level keys
+ * (`overlay-*`) are deliberately shared across projects, because opacity
+ * and color are how a person likes to work, not facts about a design.
+ * Where the image sits is the opposite: it is measured against one
+ * particular model, and carrying it to the next project would place
+ * someone else's tracing over your charm. So this layer sits above the
+ * preferences and never migrates them: a project with no settings file
+ * falls back to the app-level values.
  *
  * The shape follows `svg-prep-metadata`'s precedent: one additive JSON in the
  * project's own file store, written through addProjectFile, ignored by any
@@ -32,7 +32,7 @@ let host = null;
 /**
  * Everything worth remembering about where an overlay sits.
  *
- * `calibrationMmPerPx` is a SNAPSHOT, not an instruction. unit-sync owns the
+ * `calibrationMmPerPx` is a snapshot, not an instruction. unit-sync owns the
  * live px/mm scale and it is shared with Image Measurement, so restoring a
  * project must never silently move it - someone could be mid-measurement on
  * another design. It is stored so the sizes here can be explained later, and
@@ -72,7 +72,7 @@ function numberOr(value, fallback) {
 /**
  * Put a saved record back onto a preview manager.
  *
- * Deliberately does NOT switch the overlay's image: choosing the source is
+ * Deliberately does not switch the overlay's image: choosing the source is
  * the person's act and the file may not be in this project at all. Sizes and
  * placement are restored; the picture is whatever they pick.
  *
@@ -85,7 +85,7 @@ export function applyOverlaySettings(previewManager, settings) {
     return false;
   if (settings.version !== OVERLAY_SETTINGS_VERSION) return false;
 
-  // The aspect lock goes back FIRST. setOverlaySize recomputes the other
+  // The aspect lock goes back first. setOverlaySize recomputes the other
   // dimension from the lock, so restoring a size while the lock is in the
   // wrong state re-derives one of the two numbers and quietly loses the
   // placement the person saved.

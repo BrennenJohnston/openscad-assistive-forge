@@ -168,8 +168,8 @@ export function validateManifest(data) {
   if (data.defaults !== undefined && typeof data.defaults !== 'object') {
     errors.push('"defaults" must be an object');
   } else if (data.defaults && typeof data.defaults === 'object') {
-    // defaults.starterParameters — optional array of parameter names (IR-9).
-    // Additive: a manifest without it renders exactly as it did before. Names
+    // defaults.starterParameters — optional array of parameter names.
+    // Additive: a manifest without it renders unchanged. Names
     // this design does not have are reported, never fatal - a manifest is
     // somebody else's file and a stale name in it is not a reason to refuse
     // the whole project.

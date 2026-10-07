@@ -176,10 +176,9 @@ export function createFocusTrap(container, options = {}) {
  * @param {Function|HTMLElement|HTMLElement[]} [options.alsoTrap] - Extra
  *   container(s) that count as inside the trap, alongside `container`. Pass a
  *   function to have it re-read on every Tab, for a surface that comes and
- *   goes. Added for D-70 (UF-38): the mobile Customizer drawer is modal, and
- *   a running tutorial's card sits outside it - reachable to the eye, but
- *   MEASURED unreachable by keyboard, eight Tabs in a row. Defaults to null,
- *   so every existing caller keeps exactly today's single-container behavior.
+ *   goes: the mobile Customizer drawer is modal, and a running tutorial's
+ *   card sits outside it, reachable to the eye but not by keyboard without
+ *   this. Defaults to null: a single container.
  * @returns {Object} Focus trap controller with activate/deactivate methods
  */
 export function createDocumentFocusTrap(container, options = {}) {
@@ -238,10 +237,10 @@ export function createDocumentFocusTrap(container, options = {}) {
 
     // Spanning two containers means the browser's own Tab order runs off the
     // end of the first one into whatever the document has in between, and the
-    // recovery below only fires on the press AFTER that - so focus cycled the
-    // drawer forever and never arrived (MEASURED: 80 presses, 41 drawer
-    // focusables, the card's 4 never reached). With more than one container
-    // the trap drives Tab itself rather than nudging the browser's attempt.
+    // recovery below only fires on the press after that, so focus would cycle
+    // the first container forever and never arrive. With more than one
+    // container the trap drives Tab itself rather than nudging the browser's
+    // attempt.
     if (containers.length > 1) {
       e.preventDefault();
       const index = focusable.indexOf(active);
@@ -251,10 +250,9 @@ export function createDocumentFocusTrap(container, options = {}) {
       }
       // `getFocusableElements` is a selector's opinion about what can take
       // focus, and it is sometimes wrong. Driving Tab by hand means one
-      // element that refuses `.focus()` would pin the walk there forever -
-      // MEASURED before this guard: 65 presses stuck on a param group's
-      // summary. Confirm the move landed, and step past whatever will not
-      // take it.
+      // element that refuses `.focus()` would pin the walk there forever (a
+      // param group's summary can). Confirm the move landed, and step past
+      // whatever will not take it.
       const size = focusable.length;
       const direction = e.shiftKey ? -1 : 1;
       for (let hop = 1; hop <= size; hop++) {

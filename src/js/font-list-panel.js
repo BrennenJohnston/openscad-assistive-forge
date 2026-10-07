@@ -1,6 +1,6 @@
 /**
- * Font List panel (F3) — Classic's equivalent of desktop OpenSCAD's Font List
- * dock, transcribed from upstream FontList.ui (Appendix U7).
+ * Font List panel — Classic's equivalent of desktop OpenSCAD's Font List
+ * dock, transcribed from upstream FontList.ui.
  *
  * It lists the fonts text() can really use — the four in font-manifest.js, the
  * same four the worker mounts — with upstream's Filter and Selection groups
@@ -9,21 +9,21 @@
  * Two deliberate adaptations of upstream, both because the desktop original
  * depends on something a browser does not give us:
  *
- *   Chars [All/Any]   DISABLED. Upstream filters by whether a font covers the
+ *   Chars [All/Any]   Disabled. Upstream filters by whether a font covers the
  *                     characters in the sample text; that needs glyph-coverage
  *                     parsing of the TTF, which we do not do. Shown, disabled,
  *                     with the reason in words rather than quietly dropped.
- *   Drag a font       REPLACED by "Copy font name". Upstream lets you drag a
+ *   Drag a font       Replaced by "Copy font name". Upstream lets you drag a
  *                     row into the editor. A drag has no keyboard equivalent,
  *                     so the panel offers the same result — the exact string
  *                     to paste into text(font = "...") — on a button.
  *
  * Sample text uses the FontFace API rather than a stylesheet of @font-face
- * rules: the pages's CSP sets style-src 'self' with no 'unsafe-inline', so
+ * rules: the page's CSP sets style-src 'self' with no 'unsafe-inline', so
  * injecting CSS text would be blocked, while a scripted FontFace load is not
  * CSS at all. The fetch itself is same-origin, which font-src 'self' allows.
  *
- * The panel lives in a dock field the user can move, merge and hide (B6-B9),
+ * The panel lives in a dock field the user can move, merge and hide,
  * so every listener is attached to an element inside the panel's own subtree —
  * re-parenting by appendChild carries those with it, ancestor listeners would
  * not survive.
