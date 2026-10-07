@@ -497,7 +497,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const showAll = document.createElement('button');
       showAll.className = 'param-groups-show-all btn btn-sm btn-outline';
       showAll.type = 'button';
-      showAll.textContent = `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+      showAll.textContent = `${count} group${count !== 1 ? 's' : ''} hidden: Show all`;
       showAll.addEventListener('click', () => {
         container.querySelectorAll('.param-group[hidden]').forEach((el) => {
           el.removeAttribute('hidden');
@@ -564,7 +564,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
         .querySelector('.param-groups-hidden-bar .param-groups-show-all')
         ?.focus();
       announceImmediate(
-        `${groupLabel} group hidden — use Show all groups to restore`
+        `${groupLabel} group hidden. Use Show all groups to restore`
       );
     });
   }

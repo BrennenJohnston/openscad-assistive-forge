@@ -398,7 +398,7 @@ export function initCompanionFilesController({
       const size =
         typeof content === 'string'
           ? formatFileSize(new Blob([content]).size)
-          : '\u2014';
+          : 'Unknown';
       const ext = name.split('.').pop().toLowerCase();
       const isEditable = ['txt', 'csv', 'json', 'scad'].includes(ext);
       const icon = getFileIcon(ext);

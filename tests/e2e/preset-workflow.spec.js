@@ -59,7 +59,7 @@ const loadSimpleBoxExample = async (page, { expandGroups = false } = {}) => {
  * UF-25: seven tests in this file looked for the Save Preset control with
  * `button:has-text("Save Preset"), button[aria-label*="Save preset"]`, and that
  * matches nothing. #savePresetBtn is icon-only, so it carries no such text, and
- * its aria-label reads "Save Preset - overwrites current preset" - CSS
+ * its aria-label reads "Save Preset: overwrites current preset" - CSS
  * attribute matching is case-sensitive, so the lowercase "preset" in the old
  * selector missed it too. It is also disabled until a preset is selected, since
  * it OVERWRITES. Each of those tests then hit `if (!visible) test.skip()` and

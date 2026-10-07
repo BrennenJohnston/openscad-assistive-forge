@@ -20,10 +20,10 @@ const SOURCES = [
   { sourceId: 'previewStatusStats', mirrorId: 'classicStatusStats' },
   { sourceId: 'memoryText', mirrorId: 'classicStatusMemory' },
   {
-    // Desktop caption format: "keyguard_v75.scad — OpenSCAD"
+    // Desktop caption format, as on Windows: "keyguard_v75.scad - OpenSCAD"
     sourceId: 'fileInfoSummary',
     mirrorId: 'classicWindowTitle',
-    format: (text) => (text.trim() ? `${text.trim()} — ` : ''),
+    format: (text) => (text.trim() ? `${text.trim()} - ` : ''),
   },
 ];
 
@@ -39,7 +39,7 @@ let onCameraChange = null;
  * @returns {string}
  */
 function statusNumber(value) {
-  if (!Number.isFinite(value)) return '—';
+  if (!Number.isFinite(value)) return 'unknown';
   // A rotation a hair below zero rounds to the string "-0.00", which reads as a
   // defect rather than as zero. Normalize the sign, not the value.
   const rounded = Number(value.toFixed(2));

@@ -1078,7 +1078,7 @@ test.describe('ASCII City Walk — landmarks (CW-10)', () => {
     const items = page.locator('#cityWalkLegend li')
     expect(await items.count()).toBeGreaterThanOrEqual(1)
     // Rows carry a compass direction from the player.
-    await expect(items.first()).toContainText('—')
+    await expect(items.first()).toHaveText(/: (north|south|east|west)/)
 
     // L selects and announces the first landmark…
     await page.keyboard.press('KeyL')

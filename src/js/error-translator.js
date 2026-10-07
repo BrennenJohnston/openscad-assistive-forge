@@ -263,8 +263,8 @@ const ERROR_PATTERNS = [
       'This model uses a geometry feature (likely projection() or roof()) that triggers ' +
       'a known crash in the browser-based rendering engine (CGAL + WebAssembly).',
     suggestion:
-      'Remove or simplify projection()/roof() calls. This is a known upstream issue — ' +
-      'the same model may work in desktop OpenSCAD.',
+      'Remove or simplify projection()/roof() calls. This is a known upstream issue. ' +
+      'The same model may work in desktop OpenSCAD.',
   },
   // Emscripten abort — unrecoverable WASM crash
   {
@@ -408,7 +408,7 @@ export const TRANSLATIONS_BY_CODE = {
     title: 'Empty Result',
     explanation: 'This parameter combination produces no geometry.',
     suggestion:
-      'Check that the selected options are compatible — some combinations intentionally produce empty output.',
+      'Check that the selected options are compatible. Some combinations intentionally produce empty output.',
   },
   MODEL_IS_2D: {
     title: '2D Model Detected',
@@ -449,8 +449,8 @@ export const TRANSLATIONS_BY_CODE = {
       'This model uses a geometry feature (likely projection() or roof()) that triggers ' +
       'a known crash in the browser-based rendering engine (CGAL + WebAssembly).',
     suggestion:
-      'Remove or simplify projection()/roof() calls. This is a known upstream issue — ' +
-      'the same model may work in desktop OpenSCAD.',
+      'Remove or simplify projection()/roof() calls. This is a known upstream issue. ' +
+      'The same model may work in desktop OpenSCAD.',
   },
   WASM_ABORT: {
     title: 'Rendering Engine Crashed',

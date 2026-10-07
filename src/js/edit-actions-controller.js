@@ -83,7 +83,7 @@ export class EditActionsController {
       announceImmediate('Viewport image copied to clipboard');
     } catch {
       announceImmediate(
-        'Could not copy image — try right-click and "Save image as"'
+        'Could not copy image. Try right-click and "Save image as"'
       );
     }
   }
@@ -136,7 +136,7 @@ export class EditActionsController {
     const dz = pos.z - t.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (dist < 1e-6) {
-      announceImmediate('Camera at target — no rotation');
+      announceImmediate('Camera at target: no rotation');
       return;
     }
 
@@ -202,7 +202,7 @@ export class EditActionsController {
     const entry = navigable[this._errorIndex];
     this.onJumpToLine(entry.file, entry.line);
     const pos = `${this._errorIndex + 1} of ${navigable.length}`;
-    announceImmediate(`Error ${pos}: line ${entry.line} — ${entry.message}`);
+    announceImmediate(`Error ${pos}, line ${entry.line}: ${entry.message}`);
   }
 
   // ---------------------------------------------------------------------------

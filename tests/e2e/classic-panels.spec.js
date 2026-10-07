@@ -1185,7 +1185,7 @@ test.describe('Font List panel (F3)', () => {
 
     const copyBtn = page.locator('#fontListCopyBtn');
     await expect(copyBtn).toBeDisabled();
-    await expect(page.locator('#fontListSelName')).toHaveText('—');
+    await expect(page.locator('#fontListSelName')).toHaveText('None');
 
     // The radio is labelled with the font, so it is reachable by name — the
     // accessible equivalent of upstream's drag-a-row.

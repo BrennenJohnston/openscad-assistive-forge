@@ -89,7 +89,7 @@ export const ERROR_TRANSLATIONS = [
     // Detect empty geometry from OpenSCAD console output
     pattern: /Current top[ -]?level object is empty/i,
     message:
-      'This configuration produces no geometry. Check that the selected options are compatible — some parameter combinations may result in empty output.',
+      'This configuration produces no geometry. Check that the selected options are compatible. Some parameter combinations may result in empty output.',
     code: 'EMPTY_GEOMETRY',
   },
   {

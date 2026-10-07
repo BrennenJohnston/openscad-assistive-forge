@@ -855,7 +855,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     helpNote.className = 'city-walk-help-note';
     helpNote.textContent =
       'The city is built from real OpenStreetMap building and street data. ' +
-      'Buildings are solid — streets and open ground are walkable.';
+      'Buildings are solid. Streets and open ground are walkable.';
     help.appendChild(helpNote);
 
     const helpAttribution = document.createElement('p');
@@ -1717,7 +1717,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // A real text mark, not a color and not an icon font: the tick has
       // to survive a screen reader and a high-contrast theme alike, and
       // the word after it is what actually gets read out.
-      li.textContent = `${seen ? '✓ ' : ''}${lm.name} — ${headingLabel(bearing)}`;
+      li.textContent = `${seen ? '✓ ' : ''}${lm.name}: ${headingLabel(bearing)}`;
       if (seen) {
         const sr = document.createElement('span');
         sr.className = 'sr-only';

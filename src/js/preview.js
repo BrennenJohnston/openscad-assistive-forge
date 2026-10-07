@@ -870,7 +870,7 @@ export class PreviewManager {
     const stepTexts = [
       'Make sure hardware acceleration is enabled in your browser settings.',
       'In Firefox: open about:config and check that "webgl.disabled" is false.',
-      'Privacy-hardening extensions or profiles may also block WebGL — try allowing it for this site.',
+      'Privacy-hardening extensions or profiles may also block WebGL. Try allowing it for this site.',
     ];
     for (const text of stepTexts) {
       const li = document.createElement('li');

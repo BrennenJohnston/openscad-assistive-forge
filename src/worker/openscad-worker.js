@@ -217,7 +217,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         }
 
         if (mismatches.length > 0) {
-          const msg = `[Worker] WASM integrity check FAILED — ${mismatches.join('; ')}. Files may be corrupted or tampered with; re-run npm run setup-wasm.`;
+          const msg = `[Worker] WASM integrity check FAILED: ${mismatches.join('; ')}. Files may be corrupted or tampered with; re-run npm run setup-wasm.`;
           console.warn(msg);
           self.postMessage({
             type: 'WARNING',
@@ -467,7 +467,7 @@ async function mountFonts() {
       payload: {
         code: 'NO_FONTS',
         message:
-          'No fonts were loaded — the text() function will not render correctly.' +
+          'No fonts were loaded. The text() function will not render correctly.' +
           (corruptCount > 0
             ? ' Font files appear to be corrupted (HTML served instead of TTF). Check deployment.'
             : ''),
