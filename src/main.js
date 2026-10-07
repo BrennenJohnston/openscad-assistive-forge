@@ -126,7 +126,7 @@ import {
   updateStoragePrefs,
   shouldDeferLargeDownloads,
   formatBytes as _formatBytes,
-  // v2: Persistence and backup
+  // Persistence and backup
   checkPersistentStorage as _checkPersistentStorage,
   requestPersistentStorage as _requestPersistentStorage,
   clearCacheWithOptions,
@@ -138,7 +138,6 @@ import {
   readProjectFilesFromList,
   findLinkedProjectForHandle,
 } from './js/storage-manager.js';
-// showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
 import { startTutorial } from './js/tutorial-sandbox.js';
 import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
 import { initTourNudge } from './js/tour-nudge.js';
@@ -217,7 +216,7 @@ import {
   onScaleChange,
 } from './js/unit-sync.js';
 
-// Storage keys are centralized in ./js/storage-keys.js (audit Q4)
+// Storage keys are centralized in ./js/storage-keys.js
 import {
   initPreferencesDialog,
   openPreferencesDialog,
@@ -228,17 +227,17 @@ import {
   announceError as _announceError,
   POLITENESS as _POLITENESS,
 } from './js/announcer.js';
-// Expert Mode (M2) - Code editor integration
+// Expert Mode - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
 import { loadEditorPrefs, saveEditorPref } from './js/editor-prefs.js';
 // UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
-// U-10: Classic is desktop-only for now — the viewport half of the gate
+// Classic is desktop-only for now — the viewport half of the gate
 import {
   isViewportDesktopShaped,
   subscribeViewportShape,
 } from './js/classic-availability.js';
-// U-46: the four app-chrome controls join the Customizer row on a phone
+// The four app-chrome controls join the Customizer row on a phone
 import { initMobileToolbar } from './js/mobile-toolbar.js';
 import {
   initClassicLayoutController,
@@ -305,7 +304,7 @@ import {
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
-  // v2: Folder operations
+  // Folder operations
   createFolder as _createFolder,
   moveFolder as _moveFolder,
 } from './js/saved-projects-manager.js';
@@ -321,9 +320,6 @@ import Split from 'split.js';
  * Resolve parameters for 2D export (SVG/DXF) using the parsed parameter schema.
  * For each parameter that has an enum with a 2D-compatible value, overrides the
  * current value so the model produces 2D geometry for the export.
- *
- * Replaces the worker-side hardcoded approach (which only handled keyguard-specific
- * parameters and missed the critical `generate` parameter).
  *
  * @param {Object} parameters - Current UI parameter values
  * @param {Object|null} schema - Parsed schema from extractParameters() (schema.parameters)
@@ -380,8 +376,6 @@ function confirmProjectionFallback(format) {
     'Cancel'
   );
 }
-
-// EXAMPLE_DEFINITIONS moved to file-handler.js
 
 /**
  * Detect OFF/COFF geometry bytes masquerading as another format.
@@ -451,9 +445,9 @@ let renderQueue = null;
 
 /**
  * Export quality mode. Module-scope like previewManager so the __forgeDebug
- * hook can read it: File > Export Quality is its only control (UF-11) and
- * there is no DOM element left to ask. Session-only on purpose - the retired
- * drawer select also reset to 'model' on every boot.
+ * hook can read it: File > Export Quality is its only control and
+ * there is no DOM element to ask. Session-only on purpose: every boot
+ * starts at 'model'.
  */
 let exportQualityMode = 'model';
 
@@ -470,8 +464,7 @@ let editorPreviewTrigger = null;
  *
  * This is the single source for render-state enablement. It gates the File
  * menu's export items, the Generate button's Download state, and the Classic
- * editor toolbar's Export STL button; the same recipe used to be written out
- * twice, which is exactly the drift the risk register calls out.
+ * editor toolbar's Export STL button, so the three cannot drift apart.
  *
  * @param {Object} parameters - current parameter values
  * @returns {boolean}
@@ -483,19 +476,19 @@ function hasFullQualitySTLFor(parameters) {
   );
 }
 
-/* ── Error Log: reaching it by keyboard and by menu (F1) ──────────────────────
+/* ── Error Log: reaching it by keyboard and by menu ───────────────────────────
  *
  * The Error-Log lives in two different places depending on the host, so every
  * entry point below resolves WHERE it is from the DOM rather than from a mode
  * flag that could disagree with it:
  *
  *   Forge    inside the console's Structured tabpanel, behind a tab
- *   Classic  its own pane in the bottom strip (B2), always on screen
+ *   Classic  its own pane in the bottom strip, always on screen
  *
  * The two hosts therefore mean different things by "show the Error Log". In
  * Forge it is genuinely hidden and has to be revealed; in Classic it is
  * already there and what the user wants is to GET to it. Classic must never
- * click the Structured tab — that tablist is hidden there (D-9), so it would
+ * click the Structured tab — that tablist is hidden there, so it would
  * be an invisible control changing an invisible selection.
  */
 
@@ -537,7 +530,7 @@ function isErrorLogShowing() {
     if (getUIModeController().getClassicDensity() === 'simplified')
       return false;
     if (getClassicLayoutController()?.isConsoleCollapsed()) return false;
-    // Merged into a tab group (B7) and not the selected tab: the model sets
+    // Merged into a tab group and not the selected tab: the model sets
     // `hidden` on the panels that are not showing.
     return !document.getElementById('classicErrorLogSlot')?.hidden;
   }
@@ -582,10 +575,10 @@ function hideErrorLogForge() {
 
 /**
  * Classic: the pane is already in the bottom strip, so this is about reaching
- * it — unfold the strip if it is folded (D-8), select its tab if it has been
- * merged into a group (B7), then focus the title bar's menu button, which is
- * the focusable control the title bar carries (the same contract B8 uses after
- * a move).
+ * it — unfold the strip if it is folded, select its tab if it has been
+ * merged into a group, then focus the title bar's menu button, which is
+ * the focusable control the title bar carries (the same landing point a
+ * panel move uses).
  * @returns {boolean}
  */
 function showErrorLogClassic() {
@@ -593,7 +586,7 @@ function showErrorLogClassic() {
   if (!slot) return false;
 
   if (getUIModeController().getClassicDensity() === 'simplified') {
-    // Nothing else speaks here, so this is the one announcement F1 adds.
+    // Nothing else speaks here, so this announcement is the only feedback.
     announceImmediate('Error-Log is not available in the Simplified view');
     return false;
   }
@@ -605,7 +598,7 @@ function showErrorLogClassic() {
 
   // A merged group's tab lives in the shared bar, outside the panel; a solo
   // panel keeps its own title bar. tabIdFor comes from the dock model so the
-  // id scheme has one definition (plan §4 rule 5).
+  // id scheme has one definition.
   const tab = document.getElementById(tabIdFor('errorLog'));
   if (tab) {
     tab.click();
@@ -659,7 +652,7 @@ function toggleErrorLog() {
  * keys off and the preference key it persists under.
  *
  * Upstream's View menu hides the editor toolbar and the 3D view toolbar
- * separately (U2), so "Hide Toolbar" splits in two. The icon toolbar is this
+ * separately, so "Hide Toolbar" splits in two. The icon toolbar is this
  * app's own third bar; it keeps its item and its stored preference so nothing
  * on screen becomes unhideable, renamed so a screen reader can tell the three
  * apart. One table, so the menu and the startup restore cannot drift.
@@ -672,8 +665,6 @@ const CLASSIC_HIDEABLE_TOOLBARS = {
     storageKey: 'openscad-forge-classic-editor-toolbar-hidden',
   },
   view: {
-    // E7 already shipped the CSS rule for this attribute; nothing set it until
-    // the menu item existed, so the 3D view toolbar could not be hidden.
     label: 'Hide 3D View toolbar',
     name: '3D view toolbar',
     datasetKey: 'classicCameraBarHidden',
@@ -715,10 +706,9 @@ function toggleClassicToolbar(bar) {
 /**
  * Open the keyboard-shortcuts editor, wiring it on first use.
  *
- * This block was copy-pasted at FOUR call sites (Edit ▸ Preferences, Help ▸
- * Keyboard Shortcuts, the header button, and the Ctrl+Shift+K handler), which
- * is this project's recorded worst bug shape: a fix applied to three of four
- * copies looks done and is not. One copy now.
+ * One copy for the four ways in (Edit ▸ Preferences, Help ▸ Keyboard
+ * Shortcuts, the header button, and Ctrl+Shift+K): a fix applied to three
+ * of four copies looks done and is not.
  */
 function _openShortcutsModal() {
   const modal = document.getElementById('shortcutsModal');
@@ -732,15 +722,15 @@ function _openShortcutsModal() {
   openModal(modal);
 }
 
-// Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
-// transcribes what upstream's template actually inserts, and this round fetches
-// nothing from upstream, so building it would mean inventing it.
+// Edit ▸ Insert Template. Nothing in this repository transcribes what
+// upstream's template actually inserts, so building it would mean
+// inventing it.
 const INSERT_TEMPLATE_REASON =
   "Insert Template is not built yet: nothing in this project records what the desktop's template inserts, and guessing would put code you did not write into your file.";
 
-// Help ▸ Offline … (G6). Both are disabled with a reason rather than hidden:
-// D-39 defers all offline-documentation bundling out of this plan, so nothing
-// third-party is fetched, pinned or vendored here.
+// Help ▸ Offline …: both are disabled with a reason rather than hidden.
+// Offline documentation is not bundled, so nothing third-party is
+// fetched, pinned or vendored here.
 const OFFLINE_DOCUMENTATION_REASON =
   'Offline documentation is not bundled yet. Use Documentation, which opens the OpenSCAD manual in a new window while you are online.';
 const OFFLINE_CHEAT_SHEET_REASON =
@@ -756,7 +746,7 @@ function openAboutModal() {
 
   const versionLine = document.getElementById('aboutVersion');
   if (versionLine) {
-    // Audit 19: the version alone cannot tell two builds of the same version
+    // The version alone cannot tell two builds of the same version
     // apart, which is exactly what somebody reporting a bug needs to do. The
     // stamp is the string the service worker names its cache after, so what a
     // person reads here and what they see in DevTools are the same thing.
@@ -768,7 +758,7 @@ function openAboutModal() {
   });
 }
 
-/** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup (G5). */
+/** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup. */
 const JUMP_TO_LABEL = 'Jump To…';
 const JUMP_TO_EMPTY_REASON =
   'No panels are open, so there is nowhere to jump to. Turn one on from this menu first.';
@@ -791,10 +781,10 @@ function dockPanelReachable(panel) {
 }
 
 /**
- * Put focus on a Classic dock panel: its tab when it is merged into a group
- * (B7), otherwise its title bar's menu button — the same landing point B8
- * uses after a move and F1 uses for the Error-Log, so a jump feels like
- * every other way of arriving at a panel.
+ * Put focus on a Classic dock panel: its tab when it is merged into a
+ * group, otherwise its title bar's menu button — the same landing point a
+ * panel move and the Error-Log shortcut use, so a jump feels like every
+ * other way of arriving at a panel.
  * @param {string} panelId
  * @returns {boolean}
  */
@@ -863,9 +853,7 @@ function openJumpToPicker() {
 }
 
 /**
- * Window ▸ Customizer, Ctrl+Alt+4 and Ctrl+B are one command. The two
- * shortcuts used to toggle a `.sidebar` element that exists nowhere in this
- * app, so both were silently dead (G5).
+ * Window ▸ Customizer, Ctrl+Alt+4 and Ctrl+B are one command.
  */
 function toggleCustomizerPanel() {
   const layout = getClassicLayoutController();
@@ -894,11 +882,11 @@ function toggleEditorPanel() {
     return;
   }
   // Forge: open or close the Editor itself — the same command as its
-  // toolbar toggle, announced by the mode manager ("Editor opened…", C-38).
-  // This used to route through togglePanelVisibility('codeEditor'), whose
-  // primary element is the toggle BUTTON: the item hid the editor's entry
-  // point from the toolbar while the editor stayed shut (UF-10). Hiding
-  // the button remains the hidden-panels preference's job.
+  // toolbar toggle, announced by the mode manager ("Editor opened…"). Not
+  // togglePanelVisibility('codeEditor'), whose primary element is the
+  // toggle button: that would hide the editor's entry point from the
+  // toolbar while the editor stayed shut. Hiding the button is the
+  // hidden-panels preference's job.
   if (!_isEnabled('expert_mode')) {
     announceImmediate(CODE_EDITOR_UNAVAILABLE_REASON);
     return;
@@ -922,21 +910,12 @@ function restoreClassicToolbarPrefs() {
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
 
-// companionCurrentPath moved to companion-files-controller.js
-
-// Screen reader announcer - now uses centralized announcer.js
-// (Local implementation removed - use imported announce/announceImmediate/announceError)
-
-// HFM/Alt View state and functions moved to hfm-controller.js
-// Dialog functions moved to dialogs.js
-// sanitizeUrlParams, exportFormatFromMenu, applyToolbarModeVisibility moved to hfm-controller.js
-
 // Initialize app
 async function initApp() {
   console.log(`OpenSCAD Assistive Forge v${__APP_VERSION__}`);
   console.log('Initializing...');
 
-  // Initialize Milestone 0 Foundation systems early
+  // Initialize the foundation systems early
   // Feature flags: Enable controlled rollout of new features
   if (import.meta.env.DEV) {
     debugFlags(); // Log flag states for debugging (dev only)
@@ -949,10 +928,10 @@ async function initApp() {
   // Must run before any localStorage reads to ensure consistent key access
   migrateStorageKeys();
 
-  // UF-14: split the PER-UI viewing preferences into per-interface
-  // namespaces (Q-40b seeding). After the migration so it copies migrated
-  // values; before any controller init so every scoped read finds its
-  // namespace ready. Marker-gated — a no-op on every boot after the first.
+  // Split the per-UI viewing preferences into per-interface namespaces.
+  // After the migration so it copies migrated values; before any controller
+  // init so every scoped read finds its namespace ready. Marker-gated — a
+  // no-op on every boot after the first.
   ensureScopedPrefsSeeded();
 
   // Recovery Mode: Detect if we're recovering from a memory-related crash
@@ -980,7 +959,7 @@ async function initApp() {
   if (isRecoveryMode) {
     console.log('[Recovery] Recovery mode activated');
 
-    // Apply conservative settings per B.5.4 Recovery Mode Specification:
+    // Apply conservative settings for recovery mode:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
     // - CodeMirror disabled (use textarea only — less memory overhead)
@@ -1122,21 +1101,20 @@ async function initApp() {
 
   document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
     // This banner tells the user to save immediately, so the button has to
-    // reach a real save. It used to click #saveProjectBtn, which does not
-    // exist in index.html.
+    // reach a real save.
     getFileActionsController().onSave();
   });
 
   document
     .getElementById('memoryBannerReduceFn')
     ?.addEventListener('click', () => {
-      // Reduce export quality to low. The mode lives in main.js now
-      // (File > Export Quality) - there is no select to poke (UF-11).
+      // Reduce export quality to low. The mode lives in main.js (File > Export
+      // Quality); there is no select to poke.
       setExportQualityMode('low');
-      // Also reduce preview quality to fast. MEASURED: dispatching 'change'
-      // here started four renders, because that handler kicks auto-preview —
-      // and rendering is the memory-hungry operation this banner is warning
-      // about. Do exactly what the handler does, minus the kick.
+      // Also reduce preview quality to fast. Dispatching 'change' here would
+      // start renders, because that handler kicks auto-preview — and rendering
+      // is the memory-hungry operation this banner is warning about. Do exactly
+      // what the handler does, minus the kick.
       const previewQuality = document.getElementById('previewQualitySelect');
       if (previewQuality) {
         previewQuality.value = 'fast';
@@ -1176,11 +1154,9 @@ async function initApp() {
     .getElementById('memoryBannerExport')
     ?.addEventListener('click', () => {
       // Downloads the render that already exists, and says so plainly when
-      // there is none. Deliberately does NOT start a fresh render: rendering
+      // there is none. Deliberately does not start a fresh render: rendering
       // is the memory-hungry operation this banner is warning about, which
-      // is why this is the one export path that opts out of G3's
-      // render-on-demand. Previously clicked #renderExportButton, which does
-      // not exist.
+      // is why this is the one export path that opts out of render-on-demand.
       exportFormatFromMenu('stl', { renderIfNeeded: false });
       console.log('[Memory] STL export triggered for emergency save');
     });
@@ -1188,13 +1164,10 @@ async function initApp() {
   document
     .getElementById('memoryBannerReload')
     ?.addEventListener('click', () => {
-      // Recovery mode is real — it boots with the code editor disabled to
-      // cut memory. Restoring work across the reload is NOT: the snapshot
-      // this used to write came from #openscadSource, which does not exist,
-      // and the read side sets window._recoverySource, which nothing
-      // consumes. Rather than write data no one reads, the button now only
-      // does what it can do, and its tooltip no longer promises a save.
-      // The beforeunload dirty guard still stops an unsaved buffer here.
+      // Recovery mode boots with the code editor disabled to cut memory. It
+      // does not carry work across the reload, so the button only reloads,
+      // and its tooltip promises no save. The beforeunload dirty guard still
+      // stops an unsaved buffer here.
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
@@ -1204,12 +1177,11 @@ async function initApp() {
   window.addEventListener('storage-quota-exceeded', (e) => {
     const msg =
       e.detail?.message || 'Storage is full. Data could not be saved.';
-    // MEASURED before this change: the same sentence reached a screen reader
-    // three times — politely from updateStatus, assertively from
-    // _announceError, and assertively again from the toast. The toast's is the
-    // one worth keeping: a failed save is an error, so it belongs in the
-    // assertive region, and the toast says "Storage Problem" first so the
-    // announcement names its own subject.
+    // One announcement, not three: updateStatus would say it politely,
+    // _announceError assertively, and the toast assertively again. The
+    // toast's is the one worth keeping: a failed save is an error, so it
+    // belongs in the assertive region, and the toast says "Storage Problem"
+    // first so the announcement names its own subject.
     updateStatus(msg, 'error', { announce: false });
     showErrorToast({ title: 'Storage Problem', message: msg });
   });
@@ -1257,7 +1229,7 @@ async function initApp() {
   // no File System Access API at all.
   let folderWriteBack = null;
 
-  // IR-5: explicit saves into the connected folder. Every write is asked for,
+  // Explicit saves into the connected folder. Every write is asked for,
   // goes through FolderWriteBack's self-trigger contract, and is announced.
   const folderSaveActions = createFolderSaveActions({
     getWriteBack: () => folderWriteBack,
@@ -1301,11 +1273,11 @@ async function initApp() {
   }
   let previewQualityMode = PREVIEW_QUALITY_DEFAULT;
   /**
-   * DP-38 P2: true while a drawing-editor session is open.
+   * True while a drawing-editor session is open.
    *
    * The charm behind the editor is a thing somebody is GLANCING at while they
    * work on the drawing in front of it, not the thing they are judging, and
-   * MEASURED on the traced Bathroom icon the charm's own `$fn = 64` puts the
+   * on the traced Bathroom icon the charm's own `$fn = 64` puts the
    * app's default quality at 65,288 triangles and 0.31 s a render. DRAFT is
    * 26,120 and 0.16 s for a charm that is identical except for the clip's
    * rounded edges.
@@ -1317,17 +1289,17 @@ async function initApp() {
    * preview slower in the name of speed.
    */
   let editorDraftQuality = false;
-  // DP-53: the parameter hash of the charm drawn as a draft of the drawing
+  // The parameter hash of the charm drawn as a draft of the drawing
   // being edited, while that draft stands; null once anything else is drawn
   // or committed. The badge reads from it.
   let draftPreviewHash = null;
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
-  // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
-  // Previously 5s, now 15s to avoid unnecessary fast-mode triggers
+  // With Manifold, renders are fast enough that only one over 15 s counts
+  // as slow; a lower bar switches to fast mode when it is not needed.
   const AUTO_PREVIEW_SLOW_RENDER_MS = 15000;
-  // MANIFOLD OPTIMIZED: Raised threshold since Manifold handles high polygon counts efficiently
-  // Previously 150K, now 300K as Manifold can handle complex geometry
+  // Manifold handles high polygon counts efficiently, so the bar is 300K
+  // triangles.
   const AUTO_PREVIEW_TRIANGLE_THRESHOLD = 300000;
   const autoPreviewHints = {
     forceFastUntil: 0,
@@ -1620,7 +1592,7 @@ async function initApp() {
     }
   });
 
-  // B1 fix: Terminate WASM worker before page unload to prevent browser freeze.
+  // Terminate WASM worker before page unload to prevent browser freeze.
   // Without this, a mid-render worker blocks the unload sequence on some browsers.
   window.addEventListener('beforeunload', () => {
     if (renderController) {
@@ -1628,7 +1600,7 @@ async function initApp() {
     }
   });
 
-  // U-41 (UF-39): the Back button gets an answer instead of the door. Installed
+  // The Back button gets an answer instead of the door. Installed
   // before any surface can flip, so the very first project opened is guarded.
   // The comparison view keeps its own popstate consumer, and this hands that
   // press to it rather than asking on top of it.
@@ -1645,7 +1617,7 @@ async function initApp() {
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
 
-  // Advertise shortcuts to assistive technology (MC-1) and keep the
+  // Advertise shortcuts to assistive technology and keep the
   // attributes current when the user re-maps a shortcut.
   applyAriaKeyshortcuts(keyboardConfig.getAllShortcuts());
   keyboardConfig.addChangeListener((shortcuts) =>
@@ -1879,7 +1851,7 @@ async function initApp() {
     if (usedEl) usedEl.textContent = displayText;
   }
 
-  // Smart Cache Clear Dialog (v2)
+  // Smart Cache Clear Dialog
   async function showSmartCacheClearDialog() {
     try {
       const storageInfo = await getDetailedStorageInfo();
@@ -2184,7 +2156,7 @@ async function initApp() {
     }
   }
 
-  // Wire up storage clear button (now uses smart dialog)
+  // Wire up storage clear button
   const clearStorageBtn = document.getElementById('clearStorageBtn');
   if (clearStorageBtn) {
     clearStorageBtn.addEventListener('click', showSmartCacheClearDialog);
@@ -2311,23 +2283,18 @@ async function initApp() {
     }
   }
 
-  // _collectFilesFromDir moved to file-handler.js
-
-  // handleFolderImport moved to file-handler.js
-
-  // ── F35 Phase A: Persistent local-folder sync (Chromium only) ───────────
+  // ── Persistent local-folder sync (Chromium only) ────────────────────────
   //
   // Hidden by default. Reveals only when:
-  //   1. The local_folder_sync feature flag is on (defaults OFF until
-  //      Spike S1 has been verified on Chrome / Edge), AND
+  //   1. The local_folder_sync feature flag is on, AND
   //   2. The runtime exposes showDirectoryPicker (Chromium today).
   //
   // The connect / restore flows reuse the existing file-handler folder
   // walker so the loaded files behave identically to a snapshot import;
-  // Phase A only adds persistence of the directory handle. Phase B
-  // (file-watcher / F14) and Phase C (write-back) build on this.
+  // this part adds persistence of the directory handle, and the watcher and
+  // the write-back below build on it.
   const folderSyncCtrl = getFolderSyncController();
-  // Exposed to the File menu (C5.1); stays null on unsupported browsers so
+  // Exposed to the File menu; stays null on unsupported browsers so
   // the menu item can render disabled with an honest tooltip.
   let connectToLocalFolder = null;
   if (_isEnabled('local_folder_sync') && folderSyncCtrl.isSupported()) {
@@ -2339,7 +2306,7 @@ async function initApp() {
 
     if (connectBtn) connectBtn.hidden = false;
 
-    // ── Sub-plan H: every linked folder listed, one connected ───────────
+    // ── Every linked folder listed, one connected ───────────────────────
     // Created here so the section only ever exists on a browser that can
     // actually hold folder handles.
     const linkedFoldersUi = createLinkedFoldersUi({
@@ -2456,7 +2423,7 @@ async function initApp() {
      * Reflect controller state into the status pill + buttons. Called
      * via `subscribe()` so this stays the single source of truth.
      *
-     * The pill describes the ONE connected folder (D-33); the linked-folders
+     * The pill describes the ONE connected folder; the linked-folders
      * list below it shows every folder this browser knows. Connect Folder
      * therefore stays visible in every state — it is how a second folder
      * gets linked.
@@ -2503,12 +2470,12 @@ async function initApp() {
 
     /**
      * After connect / restore succeeds, walk the folder and hand the
-     * collected files to the existing snapshot loader. Keeps Phase A
+     * collected files to the existing snapshot loader. Keeps the
      * file-loading semantics identical to the cross-browser flow so
      * everything downstream (parser, schema, presets, render) is
      * unchanged.
      */
-    // Created below when folder_sync_watch is enabled (C5.2)
+    // Created below when folder_sync_watch is enabled
     let folderWatcher = null;
 
     async function _loadFromConnectedFolder(handle) {
@@ -2573,7 +2540,7 @@ async function initApp() {
         );
 
         // Apply per-project UI preferences from the record (same contract as
-        // loadSavedProject) \u2014 cheap now that folder-link records are tiny.
+        // loadSavedProject): cheap, because folder-link records are tiny.
         try {
           const record = await getProject(linkResult.id);
           if (record?.uiPreferences != null) {
@@ -2652,7 +2619,7 @@ async function initApp() {
       updateStatus('Disconnected from folder');
     });
 
-    // ── C5.2 (Phase B): watch the connected folder for external edits ──
+    // ── Watch the connected folder for external edits ──
     if (_isEnabled('folder_sync_watch')) {
       resumeFolderWatch = async () => {
         if (!folderWatcher) return;
@@ -2751,12 +2718,12 @@ async function initApp() {
       });
     }
 
-    // ── C5.3 (Phase C, default OFF): writing back into the folder ────────
+    // ── Writing back into the folder (off by default) ────────────────────
     //
-    // The instance is built regardless and the FLAG is checked at every use.
-    // IR-5 gave the export and companion paths a way in here, and they live
-    // far from this block; hoisting the object is what lets them share the one
-    // self-trigger contract instead of writing bytes of their own.
+    // The instance is built regardless and the flag is checked at every use.
+    // The export and companion paths use it too, and they live far from this
+    // block; hoisting the object is what lets them share the one self-trigger
+    // contract instead of writing bytes of their own.
     folderWriteBack = new FolderWriteBack({
       getHandle: () => folderSyncCtrl.getHandle(),
       getWatcher: () => folderWatcher,
@@ -2804,8 +2771,6 @@ async function initApp() {
     });
   }
 
-  // _promptScadSelection moved to file-handler.js
-
   let storageUpdateTimeout = null;
   const scheduleStorageUpdate = (delayMs = 2500) => {
     if (storageUpdateTimeout) {
@@ -2831,21 +2796,21 @@ async function initApp() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════
-  // FIRST-VISIT GATE — Critical Initialization Barrier
+  // First-visit gate: the critical initialization barrier
   //
   // On the very first visit the app shows a blocking disclosure modal that
   // the user must accept before any downloads (WASM, manifest files, etc.)
   // can begin. Several subsystems depend on this gate:
   //
   //   ┌──────────────────────────────────────────────────────────────────┐
-  //   │  Z-INDEX STACK (highest on top)                                 │
+  //   │  Z-index stack (highest on top)                                 │
   //   │                                                                 │
   //   │  z: 10009  Tour card over the Features Guide                    │
   //   │  z: 10008  The tour's own dialogs (resume / error / mode)       │
   //   │  z: 10007  Tutorial panel + pill (--z-index-tutorial-panel)     │
   //   │  z: 10006  Tutorial veil       (--z-index-tutorial-spotlight)   │
   //   │  z: 10005  Tutorial overlay    (--z-index-tutorial-backdrop)    │
-  //   │  z: 10001..10004  Tutorial highlight family (D-67 tokens)       │
+  //   │  z: 10001..10004  Tutorial highlight family (tokens)            │
   //   │  z: 10000  Processing overlay  (.processing-overlay)            │
   //   │  z: 10000  Memory banner / WASM overlay (--z-index-app-overlay) │
   //   │  z:  9999  Skip-link                                            │
@@ -2854,11 +2819,11 @@ async function initApp() {
   //   │  z:   900  Drawers             (--z-index-drawer)               │
   //   └──────────────────────────────────────────────────────────────────┘
   //
-  // A tutorial layer above a modal is NOT a license to paint over one: while
-  // a user-opened dialog is on screen the tour stands down entirely (D-61,
-  // Q-66). See applyDialogStandDown in tutorial-sandbox.js.
+  // A tutorial layer above a modal is not a license to paint over one: while
+  // a user-opened dialog is on screen the tour stands down entirely. See
+  // applyDialogStandDown in tutorial-sandbox.js.
   //
-  // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
+  // Invariant: the processing overlay (z: 10000) must never be shown while
   // the first-visit modal (z: 1000) is open. Because the overlay sits
   // above the modal, it would cover the "Download & Continue" button and
   // trap the user in an infinite spinner. All code paths that call
@@ -2884,9 +2849,8 @@ async function initApp() {
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
-    // The legacy keydown listener checked this flag itself. Now that its
-    // shortcuts live in the registry, the guard belongs there — and it covers
-    // every registered shortcut, not only the six that were folded in (G7).
+    // The guard lives in the shortcut registry, so it covers every
+    // registered shortcut.
     keyboardConfig.setEnabled(!blocked);
     if (appRoot) {
       if (blocked) {
@@ -2910,12 +2874,12 @@ async function initApp() {
     });
   };
 
-  // U-10 (UF-5): the modal's Classic card is genuinely disabled while the
-  // viewport is mobile-shaped, with the reason VISIBLE in the card (the
-  // C-15 shape — a real disabled attribute cannot snap back under the
-  // user's hand), and re-enables live if the window turns desktop-shaped
-  // while the modal is open. A checked Classic choice is cleared when the
-  // gate closes over it so it cannot be submitted stale.
+  // The modal's Classic card is genuinely disabled while the viewport is
+  // mobile-shaped, with the reason visible in the card (a real disabled
+  // attribute cannot snap back under the user's hand), and re-enables live
+  // if the window turns desktop-shaped while the modal is open. A checked
+  // Classic choice is cleared when the gate closes over it so it cannot be
+  // submitted stale.
   const updateFirstVisitClassicGate = () => {
     const radio = document.getElementById('firstVisitChoiceClassic');
     const note = document.getElementById('firstVisitClassicGate');
@@ -2932,7 +2896,7 @@ async function initApp() {
     if (gated && radio.checked) {
       radio.checked = false;
     }
-    // UF-41 (U-39): the modal's mobile layout — stowed concept rows instead
+    // The modal's mobile layout — stowed concept rows instead
     // of the four bullets, no screenshots, no desktop-switching line — rides
     // this same predicate rather than a second breakpoint of its own, so the
     // pictures disappear exactly where the choice they illustrate is not
@@ -2948,11 +2912,11 @@ async function initApp() {
   const firstVisitModal = document.getElementById('first-visit-modal');
   const firstVisitCheck = isFirstVisit();
 
-  // U-21: the Forge card image and the backdrop's Forge half follow the
+  // The Forge card image and the backdrop's Forge half follow the
   // app's active theme, resolved exactly the way detectTheme() resolves
   // dark-vs-light outside Classic (data-theme attribute, else the system
-  // preference). High contrast resolves through the same two values
-  // (Q-38); Classic's side stays the light capture always - Classic is
+  // preference). High contrast resolves through the same two values;
+  // Classic's side stays the light capture always - Classic is
   // light by design. The backdrop swap rides a class so the image URL
   // stays in the stylesheet (CSP: no inline styles).
   const applyFirstVisitThemeAssets = () => {
@@ -2970,12 +2934,12 @@ async function initApp() {
     firstVisitModal?.classList.toggle('first-visit-forge-dark', dark);
   };
 
-  // UF-41 (U-39): the modal's body scrolls on the sizes where the content
-  // still cannot fit (360x640 and 375x667 are arithmetically out of reach —
-  // see the release record's height table), and before this there was no
-  // affordance of any kind: `overflow: auto` with Android's overlay
-  // scrollbars, which fade out on their own. The cue is the fade; the class
-  // is the only thing driving it, so it can never be shown at the scroll end.
+  // The modal's body scrolls on the sizes where the content still cannot
+  // fit (360x640 and 375x667 are arithmetically out of reach), and
+  // `overflow: auto` alone gives no affordance of any kind with Android's
+  // overlay scrollbars, which fade out on their own. The cue is the fade;
+  // the class is the only thing driving it, so it can never be shown at the
+  // scroll end.
   const firstVisitBody = firstVisitModal?.querySelector('.modal-body');
   const updateFirstVisitScrollCue = () => {
     const box = firstVisitModal?.querySelector('.modal-first-visit');
@@ -3010,7 +2974,7 @@ async function initApp() {
     window.addEventListener('resize', updateFirstVisitScrollCue);
     // And this catches everything neither of those can see: a web font
     // arriving, high contrast resolving late, a user's own text-size
-    // setting. MEASURED without it — booting into high contrast at
+    // setting. Without it, booting into high contrast at
     // 1280x800 leaves 22px below the fold and no cue at all, because
     // nothing the other listeners watch for has happened. The scroller
     // itself is watched for the viewport half; its children are watched
@@ -3070,7 +3034,7 @@ async function initApp() {
       showFirstVisitChoiceError();
       return;
     }
-    // U-10 belt-and-braces: if the window turned mobile-shaped inside the
+    // Belt and braces: if the window turned mobile-shaped inside the
     // gate's debounce window, a checked Classic radio can race the Continue
     // press. Clear it and fall into the ordinary no-choice flow instead of
     // silently submitting a gated choice.
@@ -3084,11 +3048,9 @@ async function initApp() {
     // Unchecked "remember" = proceed this session only; the modal returns
     // next visit because the first-visit marker is never written.
     //
-    // Q-21 (2026-08-10) signed "remember checked by default". The owner's
-    // directive of 2026-08-27 (line 2) supersedes it: the box now ships
-    // UNCHECKED, so the test has to be null-safe toward NOT remembering.
-    // `?.checked !== false` would remember whenever the element goes missing,
-    // which is remember-by-default surviving as DOM drift.
+    // The box ships unchecked, so the test has to be null-safe toward not
+    // remembering: `?.checked !== false` would remember whenever the element
+    // goes missing, which is remember-by-default surviving as DOM drift.
     if (document.getElementById('firstVisitRemember')?.checked === true) {
       markFirstVisitComplete();
     }
@@ -3190,11 +3152,11 @@ async function initApp() {
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
 
-  // U-10 (UF-5 P4+P5): one dismissible banner, two notices. The boot
-  // notice says a saved Classic preference was deferred by the viewport
-  // gate (the preference stays saved — the controller's deferral flag
-  // protects it until an explicit mode switch). The live notice says a
-  // Classic session whose window turned phone-shaped stays alive (Q-24a).
+  // One dismissible banner, two notices. The boot notice says a saved
+  // Classic preference was deferred by the viewport gate (the preference
+  // stays saved — the controller's deferral flag protects it until an
+  // explicit mode switch). The live notice says a Classic session whose
+  // window turned phone-shaped stays alive.
   const classicGateBanner = document.getElementById('classicGateBanner');
   const showClassicGateNotice = (kind) => {
     if (!classicGateBanner) return null;
@@ -3257,7 +3219,7 @@ async function initApp() {
     applyToolbarModeVisibility(newMode);
   });
 
-  // U-46 (Q-73a): on a mobile-shaped project surface the four app-chrome
+  // On a mobile-shaped project surface the four app-chrome
   // controls move out of their own row and into the Customizer row. Wired
   // after applyToolbarModeVisibility so the row it collapses has already
   // settled into the density it is going to hold.
@@ -3292,7 +3254,7 @@ async function initApp() {
             : undefined,
       });
       if (result.success) {
-        // The dirty flag means "differs from the saved project" (D-10), so
+        // The dirty flag means "differs from the saved project", so
         // saving — and only saving — clears it.
         getEditorStateManager().markClean();
         companionFilesCtrl.updateCompanionSaveButton();
@@ -3320,7 +3282,7 @@ async function initApp() {
    * @param {string} format - 'svg' or 'dxf'
    */
   async function _export2DOneClick(format) {
-    // D-29, same as the 3D export path: this is reached both through
+    // As on the 3D export path, this is reached both through
     // _renderForExport and directly from the Classic toolbar's DXF button,
     // so it publishes on its own account rather than trusting its caller.
     publishEditorEdits();
@@ -3494,7 +3456,7 @@ async function initApp() {
    * @returns {Promise<'ready'|'downloaded'|false>}
    */
   async function _renderForExport(format, { stlBinary = true } = {}) {
-    // D-29: File > Export renders straight from state, so it needs the
+    // File > Export renders straight from state, so it needs the
     // editor published first for the same reason Render does.
     publishEditorEdits();
 
@@ -3633,7 +3595,7 @@ async function initApp() {
   // A recent entry is only a file name, so re-opening works when this browser
   // still holds the content: a saved project, or a bundled example. A one-off
   // upload leaves nothing behind, and that entry renders disabled with a
-  // reason rather than failing on click (D-28). Menu builders are synchronous,
+  // reason rather than failing on click. Menu builders are synchronous,
   // so the lookup is cached and rebuilt whenever the project list changes.
   const recentResolution = new Map();
 
@@ -3720,7 +3682,7 @@ async function initApp() {
     // clearing `hidden` alone left the command doing nothing at all — and a
     // display:none summary cannot take focus, which dropped focus on <body>
     // as the menu closed. Route through the controller so its class and the
-    // Window menu's tick keep reading one state (D-41).
+    // Window menu's tick keep reading one state.
     const uiCtrl = getUIModeController();
     if (uiCtrl && !uiCtrl.isPanelShowing('libraries')) {
       uiCtrl.togglePanelVisibility('libraries');
@@ -3733,21 +3695,21 @@ async function initApp() {
 
   // ── Toolbar: File menu ──────────────────────────────────────────────────
   // Order, labels and separators transcribed from upstream MainWindow.ui at
-  // tag openscad-2026.01.01-TEST2 (Appendix U2). Omitted and documented:
-  // Save All and the Python submenu (D-24 — one document, no Python in the
-  // WASM build). Quit has no browser meaning, so its slot is dropped and the
-  // single Close carries the clearer name "Close Project" (D-27, owner
-  // 2026-08-08). "Open Local Folder…" is a Forge extra, kept beside Open File.
+  // tag openscad-2026.01.01-TEST2. Omitted: Save All and the Python submenu
+  // (one document, no Python in the WASM build). Quit has no browser
+  // meaning, so its slot is dropped and the single Close carries the clearer
+  // name "Close Project". "Open Local Folder…" is a Forge extra, kept beside
+  // Open File.
   getToolbarMenuController().registerMenuBuilder('file', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
     // state.stl is only set by a full Generate. Commands that act on WHAT IS
-    // ON SCREEN are available as soon as a preview has put a mesh there (P10).
+    // ON SCREEN are available as soon as a preview has put a mesh there.
     const hasViewportModel = hasRender || Boolean(previewManager?.mesh);
 
     // Recent Files submenu: entries this browser can still re-open, then
-    // Clear Recent. Unreachable entries stay listed but disabled (D-28).
+    // Clear Recent. Unreachable entries stay listed but disabled.
     const hasRecent = fileActionsController.recentFiles.length > 0;
     const recentItems = [
       ...(hasRecent
@@ -3779,10 +3741,9 @@ async function initApp() {
       },
     ];
 
-    // Export submenu, in upstream order (U2). POV is omitted and documented
-    // (D-24 -- the WASM build has no POV writer). Every entry renders on
-    // demand when the render in hand is not already that format, so no export
-    // is a dead end any more.
+    // Export submenu, in upstream order. POV is omitted: the WASM build has
+    // no POV writer. Every entry renders on demand when the render in hand is
+    // not already that format, so no export is a dead end.
     const exportFormats = [
       ['stl', 'Export as STL (ascii)\u2026', { stlBinary: false }],
       ['stl', 'Export as STL (binary)\u2026', { stlBinary: true }],
@@ -3790,7 +3751,7 @@ async function initApp() {
       ['off', 'Export as OFF\u2026', {}],
       ['wrl', 'Export as WRL\u2026', {}],
       ['amf', 'Export as AMF\u2026', {}],
-      // Measured 2026-08-08: this build's renderer traps on 3MF with
+      // This build's renderer traps on 3MF with
       // "function signature mismatch", so the item says so instead of
       // failing every time it is pressed.
       ['3mf', 'Export as 3MF\u2026', {}, THREEMF_UNAVAILABLE_REASON],
@@ -3820,8 +3781,7 @@ async function initApp() {
         label: 'Export as Image\u2026',
         shortcutAction: 'exportImage',
         // It photographs the canvas, so it needs something on screen and
-        // nothing else. It used to demand a full render while telling the
-        // user to "Load and preview a file first" -- which they had (P10).
+        // nothing else.
         enabled: hasViewportModel,
         tooltip: hasViewportModel
           ? 'Save the current viewport as a PNG image'
@@ -3956,10 +3916,9 @@ async function initApp() {
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
-      // UF-11: proxies the export-quality mode whose drawer select was
-      // retired; these labels are the retired select's options and this list
-      // is the setting's one home. Forge-only, like the other UF-11 menu
-      // homes - Classic's File menu keeps its audited upstream shape.
+      // The export-quality mode: this list is the setting's one home.
+      // Forge-only, like the other menu homes for drawer settings - Classic's
+      // File menu keeps its upstream shape.
       ...(document.body.dataset.uiMode !== 'classic'
         ? [
             {
@@ -3994,10 +3953,9 @@ async function initApp() {
   /**
    * Is there a code editor the user can see right now? ModeManager's expert
    * flag stays false in Classic even while the dock's Editor pane is mounted
-   * and visible (R3b-1), so the mode alone cannot answer this. The Edit-menu
-   * gates, the live font-size apply and jump-to-line all ask this one
-   * question — asking it three different ways is how the two below stayed
-   * dead in Classic while the menu items enabled (UF-10).
+   * and visible, so the mode alone cannot answer this. The Edit-menu gates,
+   * the live font-size apply and jump-to-line all ask this one question, so
+   * the three cannot disagree.
    */
   function isEditorOnScreen() {
     const box = document
@@ -4024,9 +3982,9 @@ async function initApp() {
       const modeManager = getModeManager();
       const editor = modeManager?.getEditorInstance?.();
       if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
-        // setFontSize, not updateOptions: the latter never existed on either
-        // editor, which is how this control once saved and announced sizes
-        // without changing anything on screen (R-IV).
+        // setFontSize, not updateOptions: the latter does not exist on either
+        // editor, and calling it would save and announce sizes without changing
+        // anything on screen.
         editor.setFontSize?.(size);
       }
     },
@@ -4034,10 +3992,10 @@ async function initApp() {
   editActionsController.init();
 
   // -- Toolbar: Edit menu --------------------------------------------------
-  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
-  // Omitted and documented: Show Next/Previous Tab (D-24 -- one document, no
-  // editor tabs). Preferences is relabelled honestly (D-29). Jump to previous
-  // error is a Forge extra, kept beside its upstream sibling.
+  // Order and labels transcribed from upstream MainWindow.ui. Omitted: Show
+  // Next/Previous Tab (one document, no editor tabs). Preferences is
+  // relabelled honestly. Jump to previous error is a Forge extra, kept
+  // beside its upstream sibling.
   getToolbarMenuController().registerMenuBuilder('edit', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -4167,7 +4125,7 @@ async function initApp() {
       {
         // Upstream has no menu entry for this — it is Alt+Ins only — but a
         // keyboard-only action that does nothing tells the user nothing.
-        // Disabled here so it can at least say why (D-43).
+        // Disabled here so it can at least say why.
         type: 'action',
         label: 'Insert Template',
         disabled: true,
@@ -4272,7 +4230,7 @@ async function initApp() {
               } else {
                 // No preview yet (the manager is created by the first
                 // geometry): persist the choice so the first paint honors
-                // it instead of silently dropping it (UF-15 P2).
+                // it instead of silently dropping it.
                 if (!VIEWPORT_SCHEMES.some((s) => s.id === id)) return;
                 writeScopedPref(STORAGE_KEY_VIEWPORT_SCHEME, id);
               }
@@ -4341,7 +4299,7 @@ async function initApp() {
                   : 'Zoom toward the mouse pointer, off'
               );
             },
-            // UF-14 (Q-40c): the grid is per-interface now, and Preferences
+            // The grid is per-interface, and Preferences
             // is Classic's home for its own copy. Reads fall back to the
             // scoped preference before any model exists (the facade's
             // Classic default is grid-off).
@@ -4389,7 +4347,7 @@ async function initApp() {
             onGridSizeChange: (value) => {
               // Drive the canonical control so the drawer's handler applies,
               // persists and reports the change exactly once — two controls,
-              // one code path (the D-24 lesson).
+              // one code path.
               const drawer = document.getElementById('gridPresetSelect');
               if (!drawer) return;
               drawer.value = value;
@@ -4428,11 +4386,11 @@ async function initApp() {
     'The CSG tree is not available in this browser build. Export as CSG saves the flattened CSG source instead.';
 
   // -- Toolbar: Design menu -------------------------------------------------
-  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
-  // Four items ship visibly disabled with a reason rather than absent, so the
-  // menu still tells the truth about what desktop OpenSCAD offers: 3D Print
-  // (D-26), Measure Distance / Angle (D-15) and the two CSG dumps (D-38).
-  // Cancel Render is a Forge extra, kept next to the render it cancels.
+  // Order and labels transcribed from upstream MainWindow.ui. Four items
+  // ship visibly disabled with a reason rather than absent, so the menu
+  // still tells the truth about what desktop OpenSCAD offers: 3D Print,
+  // Measure Distance / Angle and the two CSG dumps. Cancel Render is a
+  // Forge extra, kept next to the render it cancels.
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -4493,7 +4451,7 @@ async function initApp() {
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => {
           // Never the transformer button: with a cached full render its
-          // action is 'download', and Render must not mean download (U-8a).
+          // action is 'download', and Render must not mean download.
           const btn = document.getElementById('primaryActionBtn');
           if (btn && !btn.disabled) runFullRender();
         },
@@ -4556,7 +4514,7 @@ async function initApp() {
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
     // Center and View All fit the camera to previewManager.mesh, which a
-    // preview already provides; state.stl needs a full Generate (P10).
+    // preview already provides; state.stl needs a full Generate.
     const hasViewportModel =
       Boolean(state.stl) || Boolean(previewManager?.mesh);
     const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
@@ -4604,8 +4562,8 @@ async function initApp() {
         handler: () => displayOptionsController.toggle('axes'),
       },
       {
-        // Upstream label (U2). This app's mm tick overlay IS the scale-marker
-        // overlay; E3 already named the toolbar button the same way.
+        // Upstream's label. This app's mm tick overlay is the scale-marker
+        // overlay, and the toolbar button carries the same name.
         type: 'toggle',
         label: 'Show Scale Markers',
         checked: displayOptionsController.get('axisMarks'),
@@ -4618,10 +4576,8 @@ async function initApp() {
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
-      // UF-11: the grid, measurements and status-bar toggles moved here from
-      // the Preview Settings drawer. Forge-only: Classic's View menu keeps
-      // its audited desktop shape, and Classic never showed the drawer these
-      // came from.
+      // The grid, measurements and status-bar toggles. Forge-only: Classic's
+      // View menu keeps its desktop shape.
       ...(document.body.dataset.uiMode !== 'classic'
         ? [
             {
@@ -4713,9 +4669,8 @@ async function initApp() {
         shortcutAction: 'viewDiagonal',
         handler: cameraViewHandler('diagonal'),
       },
-      // Center, View All and Reset View are three different commands upstream
-      // and were two-thirds duplicates here: Center called a method that did
-      // not exist, and View All and Reset View both fitted the model (G4).
+      // Center, View All and Reset View are three different commands upstream,
+      // and three different commands here.
       {
         type: 'action',
         label: 'Center',
@@ -4809,7 +4764,7 @@ async function initApp() {
           }
         },
       },
-      // -- Per-toolbar hide toggles (U2's tail; Classic-only markup) --
+      // -- Per-toolbar hide toggles (Classic-only markup) --
       ...(document.body.dataset.uiMode === 'classic'
         ? [
             { type: 'separator' },
@@ -4822,7 +4777,7 @@ async function initApp() {
           ]
         : []),
       { type: 'separator' },
-      // -- Preview Quality (proxies #previewQualitySelect, C4) --
+      // -- Preview Quality (proxies #previewQualitySelect) --
       (() => {
         const select = document.getElementById('previewQualitySelect');
         const options = select ? Array.from(select.options) : [];
@@ -4843,9 +4798,8 @@ async function initApp() {
           })),
         };
       })(),
-      // UF-11: the edge budget moved here from the drawer select; the values
-      // are the retired select's options and this list is now their one home.
-      // setEdgeBudget persists, rebuilds the overlay and announces the stats.
+      // The edge budget: this list is the setting's one home. setEdgeBudget
+      // persists, rebuilds the overlay and announces the stats.
       ...(document.body.dataset.uiMode !== 'classic'
         ? [
             (() => {
@@ -4885,8 +4839,7 @@ async function initApp() {
               },
             },
             {
-              // The way back from any arrangement the title-bar menus can
-              // produce (B9). Label owner-approved 2026-08-07.
+              // The way back from any arrangement the title-bar menus can produce.
               label: 'Reset Panel Layout',
               handler: () => {
                 getClassicLayoutController()?.resetPanelLayout();
@@ -4909,10 +4862,8 @@ async function initApp() {
     const uiCtrl = getUIModeController();
     /**
      * The tick reads the DOM, not the Simplified-view preference: Classic's
-     * dock adopts the Console and shows it whatever that preference says, so
-     * the menu claimed the Console was off while it sat on screen. And
-     * togglePanelVisibility announces the change itself, so announcing here
-     * too said it twice.
+     * dock adopts the Console and shows it whatever that preference says. And
+     * togglePanelVisibility announces the change itself, so this does not.
      *
      * @param {string} panelId
      * @param {string} label
@@ -4933,8 +4884,8 @@ async function initApp() {
       document.body.dataset.uiMode === 'classic' && Boolean(classicLayout);
 
     /**
-     * A Forge panel that Classic keeps out of the Customizer column (P6, owner
-     * Q-4). classic.css hides the row while its <details> is closed, so `open`
+     * A Forge panel that Classic keeps out of the Customizer column.
+     * classic.css hides the row while its <details> is closed, so `open`
      * is both the visibility and the tick — one state, so the two cannot
      * disagree.
      *
@@ -4943,7 +4894,7 @@ async function initApp() {
      * WRAPPER div, so its tick would report a closed panel as showing and its
      * handler would flip a class the Classic rule does not read. Rather than
      * two helpers in one list for reasons a reader cannot see, all five of the
-     * Q-4 set go through this one.
+     * set go through this one.
      *
      * @param {string} selector - the row's <details>
      * @param {string} label - the panel's name, as the Window menu lists it
@@ -4972,16 +4923,14 @@ async function initApp() {
 
     // Upstream builds this menu from the docks themselves, so its order is the
     // dock order: Editor, Console, Customizer, Error-Log, Animate, Font List,
-    // Viewport-Control (U2). Next/Previous Window are omitted — one window
-    // (D-24).
+    // Viewport-Control. Next/Previous Window are omitted: one window.
     const editorAvailable = _isEnabled('expert_mode');
 
     return [
       {
         // Forge's tick asks the toggle button's own pressed state — the DOM
         // truth for "is the editor open". The registry's codeEditor entry
-        // tracks whether the BUTTON is shown, which is a different question
-        // and the one this tick wrongly answered before (UF-10).
+        // tracks whether the button is shown, which is a different question.
         type: 'toggle',
         label: 'Editor',
         shortcutAction: 'toggleCodeEditor',
@@ -5012,7 +4961,7 @@ async function initApp() {
       },
       // Error-Log gets a custom handler rather than a panelToggle: it is a
       // console tab in Forge and an always-present strip pane in Classic, so
-      // PANEL_REGISTRY's show/hide semantics fit neither host (F1).
+      // PANEL_REGISTRY's show/hide semantics fit neither host.
       {
         type: 'toggle',
         label: 'Error-Log',
@@ -5020,10 +4969,8 @@ async function initApp() {
         checked: isErrorLogShowing(),
         handler: () => toggleErrorLog(),
       },
-      // The three panels sub-plan F builds are Classic-only this round (D-32),
-      // so each is a real dock toggle in Classic and keeps its previous Forge
-      // behavior outside it. Viewport-Control used to be disabled in Classic
-      // with an apologetic tooltip; it is a real panel now (F4/F6).
+      // Three panels are Classic-only, so each is a real dock toggle in Classic
+      // and keeps its Forge behavior outside it.
       ...(inClassic
         ? [
             {
@@ -5044,8 +4991,8 @@ async function initApp() {
               checked: classicLayout.isViewportControlVisible(),
               handler: () => classicLayout.toggleViewportControl(),
             },
-            // The five Forge panels Classic keeps out of the Customizer column
-            // (P6, Q-4). Listed after the dock panels and in the column order
+            // The five Forge panels Classic keeps out of the Customizer column.
+            // Listed after the dock panels and in the column order
             // they had, so a user who knows where they used to be finds them
             // in that order here. Outside Classic these stay where they were,
             // in the web-only group at the foot of this menu.
@@ -5053,9 +5000,9 @@ async function initApp() {
             forgeExtraToggle('#measureSection', 'Image Measurement'),
             forgeExtraToggle('#overlaySection', 'Reference Image'),
             forgeExtraToggle('#libraryControls > details', 'Libraries'),
-            // UF-35 put a .forge-disclosure-row between the two, so this can
-            // no longer be a direct-child selector; the class is unique
-            // inside the wrapper either way.
+            // A .forge-disclosure-row sits between the two, so this cannot be a
+            // direct-child selector; the class is unique inside the wrapper either
+            // way.
             forgeExtraToggle(
               '#projectFilesControls .project-files-details',
               'Companion Files'
@@ -5100,7 +5047,7 @@ async function initApp() {
             type: 'action',
             label: target.label,
             handler: () => {
-              // Immediate, not debounced: MEASURED, a render reporting in
+              // Immediate, not debounced: a render reporting in
               // within 350ms cancels a pending announcement outright, so the
               // user hears nothing about the jump they just made.
               if (target.focus())
@@ -5110,11 +5057,9 @@ async function initApp() {
         };
       })(),
       // -- Web-only panel toggles --
-      // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
-      //
-      // Classic lists these above instead, as the Q-4 set keyed on each row's
-      // own [open]. Listing them here as well would put two items with the
-      // same name in one menu, which is what happened when P6 first added them.
+      // Classic lists these above instead, keyed on each row's own [open].
+      // Listing them here as well would put two items with the same name in
+      // one menu.
       ...(inClassic
         ? []
         : [
@@ -5123,11 +5068,8 @@ async function initApp() {
             panelToggle('companionFileManagement', 'Companion Files'),
             panelToggle('imageMeasurement', 'Image Measurement'),
             panelToggle('referenceOverlay', 'Reference Image'),
-            // Classic's Window menu has carried this since the Q-4 set; the
-            // Forge list simply never gained it although the section and its
-            // registry entry exist here too (UF-10). Same tail slot as
-            // Classic's; the announcement uses the registry label
-            // "Advanced Menu", the C-38 shape.
+            // The same tail slot as Classic's Window menu; the announcement uses the
+            // registry label "Advanced Menu".
             panelToggle('advancedMenu', 'Advanced'),
           ]),
     ];
@@ -5167,9 +5109,9 @@ async function initApp() {
             'noopener,noreferrer'
           ),
       },
-      // Both offline items keep U2's position and say why they cannot work
-      // rather than being hidden. Bundling either one is deferred out of this
-      // plan entirely (D-39) — nothing third-party is fetched or vendored here.
+      // Both offline items keep upstream's position and say why they cannot
+      // work rather than being hidden: nothing third-party is fetched or
+      // vendored here.
       {
         type: 'action',
         label: 'Offline Documentation',
@@ -5194,7 +5136,7 @@ async function initApp() {
         tooltip: OFFLINE_CHEAT_SHEET_REASON,
       },
       {
-        // U2's sentence case. It opens the guide's Libraries page; the live
+        // Upstream's sentence case. It opens the guide's Libraries page; the live
         // list of what is mounted is File > Show Library Folder.
         type: 'action',
         label: 'Library info',
@@ -5202,8 +5144,8 @@ async function initApp() {
       },
       { type: 'separator' },
       {
-        // Was the same target as Library info — the duplicate R11 exists to
-        // remove. It opens the guide at its Workflow page instead.
+        // Not the same target as Library info: it opens the guide at its
+        // Workflow page.
         type: 'action',
         label: 'Features Guide',
         handler: () => _openFeaturesTab('tab-workflow'),
@@ -5335,10 +5277,10 @@ async function initApp() {
   // Initialize high contrast toggle button
   const contrastBtn = document.getElementById('contrastToggle');
   if (contrastBtn) {
-    // D-60, the same defect as the theme button's: the label was written
-    // only inside this handler, so Ctrl+H and the City Walk's in-game
-    // toggle left it saying the opposite of the truth to the one group of
-    // people who cannot see the button change.
+    // The label is synced from the state, not written only inside this
+    // handler: Ctrl+H and the City Walk's in-game toggle change the contrast
+    // too, and the label must not say the opposite of the truth to the people
+    // who cannot see the button change.
     const syncContrastLabel = () => {
       const on = themeManager.highContrast;
       contrastBtn.setAttribute(
@@ -5371,7 +5313,7 @@ async function initApp() {
     shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
 
-  // ── The drawing editor takes the preview area (DP-19) ─────────────────
+  // ── The drawing editor takes the preview area ─────────────────────────
   // The editor says it is opening; what that means for the 3D canvas is the
   // preview's business, and this is the one place that knows both.
   // Looked up at the moment, not at boot: the preview's init() rebuilds its
@@ -5381,14 +5323,14 @@ async function initApp() {
     document.getElementById('drawingEditorSurface');
   window.addEventListener('drawing-editor:open', () => {
     previewManager?.showEditorSurface?.(drawingEditorSurface());
-    // DP-38 P2: cheaper previews for as long as the session lasts.
+    // Cheaper previews for as long as the session lasts.
     editorDraftQuality = true;
     applyPreviewQualityMode();
   });
   window.addEventListener('drawing-editor:close', () => {
     previewManager?.hideEditorSurface?.(drawingEditorSurface());
     editorDraftQuality = false;
-    // DP-53: whatever draft stood, the committed design comes back below.
+    // Whatever draft stood, the committed design comes back below.
     draftPreviewHash = null;
     applyPreviewQualityMode();
     // Changing the quality marks the preview stale, which is honest and, on
@@ -5402,12 +5344,12 @@ async function initApp() {
       }
     }
   });
-  // DP-53: a draft of the charm with the drawing as it is now, asked for from
+  // A draft of the charm with the drawing as it is now, asked for from
   // the editor's charm view. Drawn through the preview alone: the state, the
   // undo history and the project are not touched, so nothing is written
   // until Apply, and closing without it leaves the committed design standing
   // (the close handler above re-renders it, from the cache when it can).
-  // DP-62: a DXF chosen for a design parameter converts through the same
+  // A DXF chosen for a design parameter converts through the same
   // engine the standalone door uses. Asked at the moment of choosing, so a
   // control built before the controller exists still gets it.
   setDxfRenderProvider(() =>
@@ -5426,7 +5368,7 @@ async function initApp() {
     autoPreviewController.forcePreview(draft);
   });
 
-  // DP-38: the editor's Charm view is this preview, seen through an editor
+  // The editor's Charm view is this preview, seen through an editor
   // that has stopped painting over it.
   window.addEventListener('drawing-editor:view', (event) => {
     previewManager?.setEditorCharmVisible?.(
@@ -5438,7 +5380,7 @@ async function initApp() {
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
 
-  // ── Export the whole stencil set (DP-17) ──────────────────────────────
+  // ── Export the whole stencil set ──────────────────────────────────────
   // A six-colour stencil is seven printed parts, and the one thing that must
   // not go wrong is which plate is which. The button renders them in order and
   // hands back a zip whose names say what each file is.
@@ -5470,7 +5412,6 @@ async function initApp() {
     const pegs =
       params.registration === 'pegs' || params.registration === 'both';
     const parts = count + (pegs ? 1 : 0);
-    // STRINGS: owner review pending (DP-R2 text pack).
     stencilSetExportInfo.textContent = pegs
       ? `${count} plates and the jig base, plus the paint order.`
       : `${count} plates, plus the paint order.`;
@@ -5605,7 +5546,7 @@ async function initApp() {
               `${formatName} is a 2D format. See guidance below the format selector.`
             );
 
-            // UX-B: Show "What will be auto-adjusted" indicator
+            // Show "What will be auto-adjusted" indicator
             const state = stateManager.getState();
             const autoAdjustDiv = document.getElementById('format2dAutoAdjust');
             const autoAdjustList = document.getElementById(
@@ -5707,9 +5648,9 @@ async function initApp() {
     if (!renderController) {
       renderController = new RenderController();
 
-      // Q-45a: only parameters the user actually changed travel as -D.
+      // Only parameters the user actually changed travel as -D.
       // Everything else follows the SCAD source's own declarations, which is
-      // what lets an edited default take effect at all (U-30).
+      // what lets an edited default take effect at all.
       renderController.setWithheldDefineKeyResolver(() => {
         const defineState = stateManager.getState();
         return collectWithheldDefineKeys({
@@ -6060,7 +6001,7 @@ async function initApp() {
 
     if (!indicator || !memoryInfo) return;
 
-    // D-227: the indicator is a polite live region and NVDA says its tooltip
+    // The indicator is a polite live region and NVDA says its tooltip
     // whenever it is written, so a poll that finds the same value must leave
     // the text, the classes and the tooltip untouched.
     if (indicator.classList.contains('hidden')) {
@@ -6073,7 +6014,7 @@ async function initApp() {
       text.textContent = label;
     }
 
-    // BR-4: no fictional percent. Warning state is driven by an absolute-MB
+    // No fictional percent. Warning state is driven by an absolute-MB
     // threshold so the indicator turns "warning" only when the WASM heap
     // buffer is genuinely large. The MemoryMonitor decides the badge
     // separately via memoryInfo.usedMB.
@@ -6092,7 +6033,7 @@ async function initApp() {
     }
   }
 
-  // memoryPollInterval is now declared at the top of initApp() to avoid TDZ
+  // memoryPollInterval is declared at the top of initApp() to avoid TDZ
   function startMemoryPolling() {
     if (memoryPollInterval) return;
 
@@ -6122,7 +6063,7 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
-    // BUG-B fix: handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
+    // Handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
     // generate=Customizer Settings (or similar non-previewable mode). The previous mesh
     // must be cleared so the 3D canvas is empty, matching the expectation that
     // "Customizer Settings" produces no visible geometry.
@@ -6176,8 +6117,8 @@ async function initApp() {
     }
 
     // A library the model needs did not resolve. Say that, because the empty
-    // geometry handled below is its CONSEQUENCE: the old guidance sent the
-    // user hunting through parameters for a cause that was a checkbox (D-42).
+    // geometry handled below is its consequence, and its guidance would send
+    // the user hunting through parameters for a cause that is a checkbox.
     if (findMissingLibrary(`${msg}\n${detailsStr}`)) {
       if (previewManager) {
         previewManager.clear();
@@ -6191,7 +6132,7 @@ async function initApp() {
 
     // One of the model's own checks (an assert()) stopped it. Its message
     // is the cause; the empty geometry handled below is only its
-    // consequence, whose guidance sent people looking for an option (D-224).
+    // consequence, whose guidance would send people looking for an option.
     // Announced once, assertively, as an error.
     const failedCheck = findFailedCheck(`${msg}\n${detailsStr}`);
     if (failedCheck) {
@@ -6555,8 +6496,8 @@ async function initApp() {
       const fileSizeHeavy = scadContent.length > 15000; // 15KB+ SCAD file
       estimatedSlow =
         estimate.warning ||
-        estimate.seconds >= 8 || // Lowered from 12s to 8s
-        estimate.complexity >= 80 || // Lowered from 120 to 80
+        estimate.seconds >= 8 ||
+        estimate.complexity >= 80 ||
         fileSizeHeavy;
     }
 
@@ -6611,7 +6552,7 @@ async function initApp() {
     previewQualityMode = getSelectedPreviewQualityMode();
     adaptivePreviewMemo = { key: null, info: null };
 
-    // DP-38 P2. Read here rather than written into the select, so the
+    // Read here rather than written into the select, so the
     // person's own choice is untouched and comes back by itself the moment
     // the session ends.
     if (editorDraftQuality && previewQualityMode !== 'auto') {
@@ -6720,13 +6661,13 @@ async function initApp() {
       (state.complexityAnalysis?.warnings?.length ?? 0) > 0;
     if (!isComplex) return;
     lastComplexityAdvisedFile = fileName;
-    // D-202: the advisory fires before the first preview, so it cannot know
-    // the preview will be slow, and it said so of a model that draws in 2 s.
+    // The advisory fires before the first preview, so it cannot know the
+    // preview will be slow, and must not say so of a model that draws in 2 s.
     const advisoryMsg =
       'This model has many parts. If previews are slow, switch Preview ' +
       'quality to "Performance (auto)".';
-    // updateStatus announces on its own; a second call here said the whole
-    // advisory twice.
+    // updateStatus announces on its own; a second call here would say the
+    // whole advisory twice.
     updateStatus(advisoryMsg, 'info');
   }
 
@@ -6778,7 +6719,7 @@ async function initApp() {
     });
   }
 
-  // Status bar visibility. The control is View > Show Status Bar (UF-11);
+  // Status bar visibility. The control is View > Show Status Bar;
   // boot only restores the persisted choice here.
   function setPreviewStatusBarShown(shown) {
     const bar = document.getElementById('previewStatusBar');
@@ -7074,7 +7015,7 @@ async function initApp() {
   }
 
   /**
-   * The live swap (UF-14 P3): re-read the main.js-owned PER-UI surfaces
+   * The live swap: re-read the main.js-owned per-UI surfaces
    * from the newly active namespace and re-apply them — status-bar
    * visibility, model color override, the appearance sliders, and
    * auto-rotate (via the overlay/grid controller). Runs on every
@@ -7133,10 +7074,8 @@ async function initApp() {
   function getThemeDefaultColor() {
     const root = document.documentElement;
     const uiVariant = root.getAttribute('data-ui-variant');
-    // themeManager exposes highContrast as a property; the method call this
-    // used to make (isHighContrastEnabled) never existed and threw the
-    // moment UF-14's live swap became the first caller to actually reach
-    // this line (every older path short-circuited on the picker's value).
+    // themeManager exposes highContrast as a property; there is no
+    // isHighContrastEnabled method.
     const highContrast = themeManager.highContrast === true;
 
     // Check for mono variant first
@@ -7148,7 +7087,7 @@ async function initApp() {
     const activeTheme = themeManager.getActiveTheme();
     const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
 
-    // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
+    // Match PREVIEW_COLORS from preview.js (Cornfield gold)
     const PREVIEW_COLORS = {
       light: 0xf9d72c,
       dark: 0x4d9fff,
@@ -7216,7 +7155,7 @@ async function initApp() {
       [PREVIEW_STATE.ERROR]: '✗ Preview failed',
     };
     previewStateIndicator.textContent = stateMessages[state] || state;
-    // DP-53: a draft of the drawing is not the design, and the badge says so
+    // A draft of the drawing is not the design, and the badge says so
     // for as long as it is what is on screen.
     const draftStands =
       state === PREVIEW_STATE.CURRENT &&
@@ -7335,7 +7274,7 @@ async function initApp() {
    * @param {boolean} deferIfNotReady - If true, will attempt to init WASM first if not ready
    */
   async function initAutoPreviewController(deferIfNotReady = false) {
-    // D-181: renderController exists from the first line of
+    // renderController exists from the first line of
     // ensureWasmInitialized, long before its worker can render. A controller
     // made in that window previews at once, fails ("Worker not ready") and
     // tells the person "Preview failed" about a project that never had a
@@ -7386,7 +7325,7 @@ async function initApp() {
           previewQualityMode === 'auto' ? resolveAdaptiveCacheKey : null,
         resolvePreviewParameters:
           previewQualityMode === 'auto' ? resolveAdaptiveParameters : null,
-        // Render / Generate / export. Playback stops and stays stopped (F5):
+        // Render / Generate / export. Playback stops and stays stopped:
         // two render requests would queue behind each other on the one
         // blocking worker and make both slow.
         onFullRenderStart: () => getAnimatePanel()?.pauseForExternalRender(),
@@ -7437,7 +7376,7 @@ async function initApp() {
           ) {
             window.updateConsoleOutput(consoleOutput);
           }
-          // DP-54 (D-144): a model that says how wide it fits a design tells
+          // A model that says how wide it fits a design tells
           // the file control, so the drawing editor measures against the size
           // the design really prints at.
           const fit = consoleOutput
@@ -7450,11 +7389,10 @@ async function initApp() {
         onProgress: (percent, message, type) => {
           // Simplified status: just show what's happening, no confusing percentages
           if (type === 'preview') {
-            // DP-32 (one action, one announcement): an auto-preview fires on
-            // every parameter change and this progress callback repeats -
-            // measured through the live region, one change spoke "Rendering
-            // preview..." four times before "Preview ready". The progress
-            // line stays visible on the status surfaces; the completion (or
+            // One action, one announcement: an auto-preview fires on every parameter
+            // change and this progress callback repeats, so one change would speak
+            // "Rendering preview..." several times before "Preview ready". The
+            // progress line stays visible on the status surfaces; the completion (or
             // the error) is the news and still speaks.
             updateStatus('Rendering preview...', 'default', {
               announce: false,
@@ -7597,7 +7535,7 @@ async function initApp() {
 
   /**
    * Announce render-state transitions to every surface that gates on them
-   * (the Classic STL buttons, U-8b). Dispatched from inside
+   * (the Classic STL buttons). Dispatched from inside
    * updatePrimaryActionButton() — the one place that computes the state —
    * so the event can never drift from what the transformer shows.
    * @param {boolean} hasFullRender
@@ -7608,10 +7546,10 @@ async function initApp() {
     );
   }
 
-  // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
+  // Import shared validation schemas (FILE_SIZE_LIMITS is imported at top of initApp() to avoid TDZ)
   ({ validateFileUpload } = await import('./js/validation-schemas.js'));
 
-  // Initialize file handler controller (extracted from main.js)
+  // Initialize file handler controller
   fileHandler = initFileHandler({
     getPreviewManager: () => previewManager,
     setPreviewManager: (pm) => {
@@ -7661,7 +7599,7 @@ async function initApp() {
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
   // IMPORTANT: Skip draft restoration if a manifest or project URL is specified --
-  // the URL intent takes priority over any cached draft (fixes race condition)
+  // the URL intent takes priority over any cached draft
   const hasManifestParam = urlParams.get('manifest');
   const hasProjectParam = urlParams.get('project') || urlParams.get('scad');
   const draft =
@@ -7948,17 +7886,6 @@ async function initApp() {
     stateManager.announceChange(message);
   }
 
-  // Companion file functions (detectIncludeUse, detectRequiredCompanionFiles,
-  // autoSaveCompanionFiles, updateCompanionSaveButton, renderProjectFilesList,
-  // syncOverlayWithScreenshotParam, autoSelectOverlaySource, getFileIcon,
-  // handleProjectFileAction, handleAddCompanionFile, removeProjectFile,
-  // editProjectFile, applyTextFileEditorChanges, updateProjectFilesUI)
-  // moved to companion-files-controller.js
-
-  // showProcessingOverlay moved to file-handler.js
-
-  // handleFile moved to file-handler.js
-
   // ── Unified upload routing (welcome zone + file picker) ─────────────────
 
   function withRelativePath(file, relPath) {
@@ -8188,9 +8115,9 @@ async function initApp() {
     });
   }
 
-  // Escape belongs to the dialog, not to the textarea. Bound to the textarea it
-  // died the moment a keyboard user tabbed to Cancel or the X, which is exactly
-  // the path they take (UF-23, U-32).
+  // Escape belongs to the dialog, not to the textarea: bound to the textarea
+  // it would die the moment a keyboard user tabbed to Cancel or the X, which
+  // is exactly the path they take.
   if (textFileEditorModal) {
     textFileEditorModal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -8375,8 +8302,8 @@ async function initApp() {
     }
   });
 
-  // ========== START NEW PROJECT ==========
-  // Stakeholder feedback: Users want a way to start a new project from scratch
+  // ========== Start new project ==========
+  // A way to start a new project from scratch.
   const startNewProjectBtn = document.getElementById('startNewProjectBtn');
   if (startNewProjectBtn) {
     startNewProjectBtn.addEventListener('click', async () => {
@@ -8440,8 +8367,6 @@ if (rounded) {
     });
   }
 
-  // loadExampleByKey moved to file-handler.js
-
   // Load examples - unified handler
   // IMPORTANT: Keep this as the single click handler for all example buttons.
   // Having multiple click handlers (e.g. role-specific + unified) causes duplicate example loads,
@@ -8476,7 +8401,7 @@ if (rounded) {
     });
   });
 
-  // U-24 (UF-17): the welcome-tour card starts a tour of the surface it
+  // The welcome-tour card starts a tour of the surface it
   // sits on. No example loads, so the unified [data-example] handler
   // above never sees this button.
   const welcomeTourBtn = document.getElementById('startWelcomeTourBtn');
@@ -8486,16 +8411,16 @@ if (rounded) {
     });
   }
 
-  // U-27 (UF-22): ask about the welcome tour once per load, after the gate.
+  // Ask about the welcome tour once per load, after the gate.
   const tourNudgeSettled = initTourNudge({
     waitForFirstVisitAcceptance,
     startTutorial,
   });
 
-  // U-23 (UF-16): the Beginners-card spotlight waits for the first-visit
-  // gate — inside the inert #app it would be unreachable and unannounced.
-  // Q-52c: it now also waits for the nudge, so the card's tip takes over
-  // when the dialog is answered instead of competing with it.
+  // The Beginners-card spotlight waits for the first-visit gate — inside
+  // the inert #app it would be unreachable and unannounced. It also waits
+  // for the nudge, so the card's tip takes over when the dialog is
+  // answered instead of competing with it.
   void initWelcomeSpotlight({
     waitForFirstVisitAcceptance,
     waitForTourNudge: () => tourNudgeSettled,
@@ -8537,7 +8462,7 @@ if (rounded) {
     initUrlParams.toString()
       ? `${window.location.pathname}?${initUrlParams}${window.location.hash}`
       : `${window.location.pathname}${window.location.hash}`;
-  // DP-62: a drawing sent by a link. `?drawing=<url>` fetches a PNG, JPG,
+  // A drawing sent by a link. `?drawing=<url>` fetches a PNG, JPG,
   // SVG or DXF from a host a project may come from and hands it to the design
   // parameter of whatever the link opened, as if the person had chosen it:
   // the conversion starts behind the dialog and its Cancel, and the editor
@@ -8582,7 +8507,7 @@ if (rounded) {
         return;
       }
       // The example's own "Save this file for quick access?" comes up right
-      // after the controls do. The drawing waits for it (DP-52: an editor
+      // after the controls do. The drawing waits for it (an editor
       // opened behind an inert page can neither take focus nor say so).
       await waitForNoModal();
       deliverDrawing(target, file);
@@ -8938,13 +8863,13 @@ if (rounded) {
   }
 
   // =========================================
-  // D-187: a shared link that failed says so on the Main Page.
-  // The link handlers below return to the Main Page when a download fails.
-  // Their sentence used to reach only the visually hidden status region, and
-  // the link was stripped from the address bar, so a sighted person saw the
-  // Main Page and nothing else. The notice stands at the top of "Open or
-  // start a project" until dismissed, gives the loader's own reason, and
-  // offers the same link again.
+  // A shared link that failed says so on the Main Page. The link handlers
+  // below return to the Main Page when a download fails and strip the link
+  // from the address bar, so a sentence in the visually hidden status
+  // region alone would leave a sighted person with the Main Page and
+  // nothing else. The notice stands at the top of "Open or start a
+  // project" until dismissed, gives the loader's own reason, and offers the
+  // same link again.
   // =========================================
   const LINK_FAILURE_HEADING = 'The shared project could not be opened.';
   let linkFailureRetryUrl = null;
@@ -9021,9 +8946,9 @@ if (rounded) {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // MANIFEST DEEP-LINK LIFECYCLE — ORDER OF OPERATIONS
+    // Manifest deep-link lifecycle: the order of operations
     //
-    // The steps below MUST execute in this exact order. Reordering them
+    // The steps below must execute in this exact order. Reordering them
     // causes hard-to-diagnose bugs (e.g. the processing overlay covering
     // the first-visit modal, trapping the user in an infinite spinner).
     //
@@ -9092,13 +9017,13 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
-        // IR-9: a manifest can name the handful of parameters a beginner should
+        // A manifest can name the handful of parameters a beginner should
         // meet first. Set BEFORE handleFile, because handleFile is what
         // renders - setting it afterwards would show every control once and
         // then take most of them away again, which is worse than either state.
         setStarterParameters(defaults?.starterParameters);
 
-        // ?preset=<name> or manifest defaults.preset. D-200: with one, the
+        // ?preset=<name> or manifest defaults.preset. With one, the
         // first preview waits until the preset is applied below, so the
         // design's own values are not rendered and thrown away first.
         const presetName = initUrlParams.get('preset') || defaults?.preset;
@@ -9126,9 +9051,9 @@ if (rounded) {
           const message = unknownStarterMessage(unknown);
           if (message) {
             console.warn(`[DeepLink] ${message}`);
-            // The notice, not the status line. IR-13 measured a status
-            // message standing for about 660 ms before the render replaced
-            // it - long enough to exist, not long enough to read.
+            // The notice, not the status line: a status message stands for about
+            // 660 ms before the render replaces it - long enough to exist, not long
+            // enough to read.
             const { createParameterNotices } =
               await import('./js/parameter-notices.js');
             createParameterNotices(
@@ -9198,7 +9123,7 @@ if (rounded) {
                 state.schema,
                 parametersContainer,
                 (values) => {
-                  // DP-53: a committed change ends whatever draft stood.
+                  // A committed change ends whatever draft stood.
                   draftPreviewHash = null;
                   stateManager.setState({ parameters: values });
                   if (autoPreviewController) {
@@ -9209,7 +9134,7 @@ if (rounded) {
                 mergedParams
               );
 
-              // D-192: the selection a person makes from the list (state,
+              // The selection a person makes from the list (state,
               // hidden select, the preset's signature, nothing changed yet),
               // and the searchable list a person sees says so as well.
               setCurrentPresetSelection(match);
@@ -9221,7 +9146,7 @@ if (rounded) {
               }
               updatePrimaryActionButton();
 
-              // D-194: the sentence the announcement below says, so what is
+              // The sentence the announcement below says, so what is
               // seen and heard match, and no em dash in the status line.
               updateStatus(`${projectName} loaded with preset ${match.name}`);
               announceImmediate(
@@ -9232,10 +9157,10 @@ if (rounded) {
                 `[DeepLink] Preset not found: "${presetName}". Available:`,
                 presets.map((p) => p.name)
               );
-              // D-195: a notice, not the status line. The status line stood
-              // about 300 ms before the render replaced it, and the announcer
-              // replaced it at once, so nobody learned no preset was applied.
-              // add(), not show(): what else this link reported stays.
+              // A notice, not the status line: the status line stands about 300 ms
+              // before the render replaces it, and the announcer replaces it at once,
+              // so nobody would learn no preset was applied. add(), not show(): what
+              // else this link reported stays.
               updateStatus(`${projectName} loaded from manifest`);
               const { createParameterNotices, describeMissingPreset } =
                 await import('./js/parameter-notices.js');
@@ -9250,7 +9175,7 @@ if (rounded) {
           announceImmediate(`${projectName} loaded from manifest`);
         }
 
-        // D-200: the first preview handleFile left to this handler, with the
+        // The first preview handleFile left to this handler, with the
         // preset's values, or the design's own when the preset was not found.
         // It joins the debounced request above rather than adding a render.
         if (presetName && autoPreviewController) {
@@ -9289,7 +9214,7 @@ if (rounded) {
         // error occurred before step 2, e.g. during first-visit wait)
         if (dismissOverlay) dismissOverlay();
         // A starter list armed for a load that never happened must not be
-        // waiting for whatever project this person opens next (IR-9).
+        // waiting for whatever project this person opens next.
         setStarterParameters(null);
         console.error('[DeepLink] Manifest load failed:', error);
 
@@ -9349,7 +9274,7 @@ if (rounded) {
   }
 
   // =========================================
-  // Direct launch link: ?project=<url> support (Item 7)
+  // Direct launch link: ?project=<url> support
   // Allows linking directly to any .scad or .zip file hosted on the web
   // Usage: ?project=https://example.com/keyguard.zip or ?scad=https://example.com/box.scad
   // =========================================
@@ -9364,7 +9289,7 @@ if (rounded) {
 
     setTimeout(async () => {
       try {
-        // D-188: the manifest handler's step 1, for the same reason. The
+        // The manifest handler's step 1, for the same reason. The
         // file handler shows the processing overlay and then asks to save
         // the file, and neither may stand over the welcome dialog.
         if (firstVisitBlocking || !hasUserAcceptedDownload) {
@@ -9385,7 +9310,7 @@ if (rounded) {
 
         const loadedBefore = stateManager.getState().uploadedFile;
         if (isZipUrl) {
-          // D-186: the manifest lane's download, which follows a Git LFS
+          // The manifest lane's download, which follows a Git LFS
           // pointer on raw.githubusercontent.com to the archive itself
           // instead of handing the 130-byte pointer to the unzipper.
           const blob = await fetchProjectBlob(projectParam, urlFileName);
@@ -9417,7 +9342,7 @@ if (rounded) {
         const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
-        // D-186: handleFile reports its own failures (an archive it cannot
+        // handleFile reports its own failures (an archive it cannot
         // open gets the "ZIP Extraction Failed" dialog and the status "Failed
         // to extract ZIP file") and returns without loading anything. Only a
         // project that changed is a success worth announcing.
@@ -9448,7 +9373,7 @@ if (rounded) {
     }, 500);
   }
 
-  // DP-62: a drawing with no design to put it on opens the standalone editor.
+  // A drawing with no design to put it on opens the standalone editor.
   if (drawingParam && !exampleParam && !manifestParam && !projectParam) {
     setTimeout(() => applyLinkedDrawing({ door: true }), 500);
   }
@@ -9712,7 +9637,7 @@ if (rounded) {
   }
 
   // =========================================================================
-  // Expert Mode Integration (M2)
+  // Expert Mode Integration
   // =========================================================================
   const expertModeToggle = document.getElementById('expertModeToggle');
   const expertModePanel = document.getElementById('expertModePanel');
@@ -9726,7 +9651,7 @@ if (rounded) {
   let currentEditor = null;
   let modeManager = null;
   let editorStateManager = null;
-  /** Pending "focus the editor" timer, so a later claim on focus can win (D-15). */
+  /** Pending "focus the editor" timer, so a later claim on focus can win. */
   let editorFocusTimer;
 
   // True while an editor edit is being written into stateManager. The push
@@ -9754,8 +9679,8 @@ if (rounded) {
   // Export/Generate right after a pause still sees the edit.
   const EDITOR_WRITE_BACK_DELAY_MS = 500;
 
-  // Owner-approved wording (UF-18, Q-45). Names the control and its shortcut
-  // so the next step is not left to be guessed.
+  // Names the control and its shortcut so the next step is not left to be
+  // guessed.
   const EDITED_PENDING_PREVIEW_MESSAGE =
     'Edited. Press Preview (F5) to update the model.';
 
@@ -9763,7 +9688,7 @@ if (rounded) {
    * Publish an editor edit into the app's single source of truth, so render,
    * export and save all see it. Mirrors the folder-watch writer
    * (`main.js` folder-change handler) minus its re-render: typing must not
-   * start a render (D-12) — Preview/F5 does that.
+   * start a render — Preview/F5 does that.
    * @param {string} code
    * @param {Object} [options]
    * @param {boolean} [options.announcePending=true] - False when something is
@@ -9791,18 +9716,17 @@ if (rounded) {
     if (autoPreviewController) {
       const cameraSettled = autoPreviewController.initialPreviewDone;
       autoPreviewController.setScadContent(code);
-      // D-11: an edit is not a new file — keep the user's viewpoint instead
+      // An edit is not a new file — keep the user's viewpoint instead
       // of re-fitting to the model. setScadContent clears the preview cache
       // (which is keyed on parameters, not source) but also resets the
       // camera-settled flag, which would snap a zoomed-in user back out.
       autoPreviewController.initialPreviewDone = cameraSettled;
     }
 
-    // Typing deliberately does not render (D-12, desktop parity), and until
-    // now nothing said so: P0 measured zero renders after an edit with no
-    // affordance anywhere on screen, which is half of why U-30 read as
-    // "completely useless". Fires once per edit burst, not per keystroke,
-    // and the next render's own status replaces it.
+    // Typing deliberately does not render (desktop parity), so this says so:
+    // without it there is no affordance anywhere on screen after an edit.
+    // Fires once per edit burst, not per keystroke, and the next render's own
+    // status replaces it.
     if (announcePending) updateStatus(EDITED_PENDING_PREVIEW_MESSAGE);
 
     updatePrimaryActionButton();
@@ -9833,7 +9757,7 @@ if (rounded) {
       applyEditorEdit(code, { announcePending: false });
   }
 
-  // Reconciliation bookkeeping (UF-18, Q-45a). `retiredParameterValues` holds
+  // Reconciliation bookkeeping. `retiredParameterValues` holds
   // values the user had set on parameters the code has since removed, so
   // editing a declaration away and back does not reset their choice.
   let lastReconciledSource = null;
@@ -9842,14 +9766,13 @@ if (rounded) {
 
   /**
    * Re-read the parameter schema from the edited source and fold it into the
-   * live values (Q-45a).
+   * live values.
    *
-   * The schema used to be parsed once, when the file loaded, and every render
-   * then passed `-D` for every parameter in it — so an edited default reached
-   * the worker but the stale `-D` overrode it and the model never moved
-   * (U-30). This runs on Preview, Render and Save: the owner chose those
-   * moments over a typing-pause timer so the Customizer is never rebuilt
-   * under a user's hand or mid-sentence for a screen reader.
+   * A schema parsed once at load would pass `-D` for every parameter in it,
+   * so an edited default would reach the worker but the stale `-D` would
+   * override it and the model would never move. This runs on Preview, Render
+   * and Save rather than on a typing-pause timer, so the Customizer is never
+   * rebuilt under a user's hand or mid-sentence for a screen reader.
    *
    * @returns {{added: string[], removed: string[]}|null} null when nothing moved
    */
@@ -9967,7 +9890,7 @@ if (rounded) {
     // Expose modeManager globally for keyboard shortcut handler
     window._modeManager = modeManager;
 
-    // Classic-mode editor co-existence (C5): the desktop shell shows the
+    // Classic-mode editor co-existence: the desktop shell shows the
     // editor pane ALONGSIDE the customizer, so entering classic must never
     // route through modeManager's exclusive expert view (which hides
     // #paramPanelBody). If expert mode was active, unwind it first so the
@@ -10046,17 +9969,13 @@ if (rounded) {
           currentEditor.refreshLayout?.();
         }
 
-        // Focus the editor. Partial mitigation for D-15, NOT a fix for it:
-        // 100ms is long enough for the user to have opened a menu, tabbed
-        // onward or clicked something else, and this used to take focus
-        // regardless. It now declines when something else has claimed focus,
-        // which can only ever mean one fewer steal.
+        // Focus the editor, unless something else has claimed focus in the
+        // 100 ms since: by then the user may have opened a menu, tabbed onward or
+        // clicked something else.
         //
-        // It does not close D-15. Measured 2026-08-08: with this guard in
-        // place, pressing the toggle and moving focus in the same task still
-        // ends with the editor focused, so at least one other path focuses it —
-        // most likely initExpertEditor's own first-run focus. Finding that path
-        // is its own piece of work and is not attempted here.
+        // This does not stop every steal: pressing the toggle and moving focus in
+        // the same task still ends with the editor focused, so at least one other
+        // path focuses it - most likely initExpertEditor's own first-run focus.
         if (currentEditor && currentEditor.focus) {
           clearTimeout(editorFocusTimer);
           editorFocusTimer = setTimeout(() => {
@@ -10096,9 +10015,9 @@ if (rounded) {
     /**
      * The source the editor should show. `uploadedFile.content` is the single
      * source of truth — it is what render, export, save and auto-preview all
-     * read, and what every loader writes. Reading anything else first (as this
-     * used to) lets a stale cache win forever, so a second project load could
-     * never reach the editor.
+     * read, and what every loader writes. Reading anything else first would
+     * let a stale cache win forever, so a second project load could never
+     * reach the editor.
      * @returns {string}
      */
     function resolveEditorSource() {
@@ -10123,9 +10042,8 @@ if (rounded) {
           getClassicEditorToolbar()?.refresh();
         },
         onSave: () => {
-          // #saveProjectBtn does not exist in index.html, so the editor's
-          // Ctrl+S was a no-op that still announced "Saved". Route it to the
-          // same handler the File menu uses; it flushes the write-back first.
+          // The editor's Ctrl+S goes to the same handler the File menu uses; it
+          // flushes the write-back first.
           fileActionsController.onSave();
         },
         onRun: () => {
@@ -10172,8 +10090,8 @@ if (rounded) {
 
     /**
      * Render a preview of the editor's current code. Explicit user action
-     * (▶ Preview, Ctrl+Enter) — typing alone never renders (D-12). The
-     * dirty flag is untouched: only saving clears it (D-10).
+     * (▶ Preview, Ctrl+Enter) — typing alone never renders. The
+     * dirty flag is untouched: only saving clears it.
      */
     function triggerPreviewFromEditor() {
       if (!currentEditor) return;
@@ -10335,8 +10253,7 @@ if (rounded) {
     // Push channel: loaded source → editor. Every writer of
     // uploadedFile.content (the load funnel, folder-watch, back-to-welcome)
     // reaches the editor through this one subscription, so Standard,
-    // Simplified and Classic all refill from the same place. Replaces a
-    // 'scadCodeUpdated' event that had a listener and no dispatchers.
+    // Simplified and Classic all refill from the same place.
     stateManager.subscribe((newState, prevState) => {
       if (isApplyingEditorEdit) return;
       const nextFile = newState?.uploadedFile;
@@ -10378,8 +10295,8 @@ if (rounded) {
   let splitInstance = null;
   const previewPanel = document.querySelector('.preview-panel');
 
-  // Note: Vertical split (preview info vs canvas) is now handled by the overlay drawer
-  // in preview-settings-drawer.js - no Split.js needed for that anymore
+  // The vertical split (preview info vs canvas) is the overlay drawer in
+  // preview-settings-drawer.js; no Split.js is needed for that.
 
   if (paramPanel && previewPanel) {
     // (Storage key defined at module level as STORAGE_KEY_LAYOUT_SIZES)
@@ -10613,7 +10530,7 @@ if (rounded) {
     // viewport re-detects on every entry and exit (detectTheme() returns
     // 'classic' while the mode is active).
     const syncPreviewSceneToMode = () => {
-      // UF-14 P3: the flip crosses a preference-namespace boundary, so the
+      // The flip crosses a preference-namespace boundary, so the
       // target interface's own saved viewing state is re-applied in one
       // pass. The DOM surfaces swap even before any model exists...
       reloadScopedUiSurfaces();
@@ -10661,22 +10578,21 @@ if (rounded) {
       },
     });
 
-    // Classic window-bottom status bar (C8): mirrors the viewport overlay
+    // Classic window-bottom status bar: mirrors the viewport overlay
     initClassicStatusBar();
 
-    // Classic editor toolbar (D4). Dependencies are injected because they are
+    // Classic editor toolbar. Dependencies are injected because they are
     // closures in here; the toolbar owns wiring and enablement only, never a
-    // second implementation of any action.
-    // The workflow buttons (Preview/Render/STL/DXF) left this toolbar for
-    // the top Classic toolbar (U-5/Q-18a), taking their render-state deps
-    // with them.
+    // second implementation of any action. The workflow buttons
+    // (Preview/Render/STL/DXF) live on the top Classic toolbar, with their
+    // render-state deps.
     initClassicEditorToolbar({
       fileActionsController,
       getEditor: () => getModeManager()?.getEditorInstance?.() || null,
       getState: () => stateManager.getState(),
     });
 
-    // Classic Font List panel (F3). Registering the sample faces costs no new
+    // Classic Font List panel. Registering the sample faces costs no new
     // bandwidth: the worker fetches these same four files from the same URLs
     // to mount them for text(), so the browser serves these from cache.
     {
@@ -10688,19 +10604,19 @@ if (rounded) {
       fontListPanel.loadSampleFaces();
     }
 
-    // Classic Viewport-Control panel (F4). The PreviewManager is built lazily
+    // Classic Viewport-Control panel. The PreviewManager is built lazily
     // once WASM is ready, so the panel binds to its camera later, the same way
     // the display-options and overlay-grid controllers do.
     initViewportControlPanel({ getPreviewManager: () => previewManager });
 
-    // Classic Animate panel (F5). Playback drives real renders through the
+    // Classic Animate panel. Playback drives real renders through the
     // auto-preview controller's -D $t path.
     initAnimatePanel({
       getAutoPreviewController: () => autoPreviewController,
       getParameters: () => stateManager.getState().parameters || {},
     });
 
-    // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
+    // Classic Customizer bar: titlebar ✕ + the Automatic Preview mirror.
     // All state flows through the real controls (#autoPreviewToggle), never
     // element-to-element side channels.
     document
@@ -10726,14 +10642,14 @@ if (rounded) {
       }
     }
 
-    // Classic display strip (C4.5): snap views, axes/grid overlays, bed
+    // Classic display strip: snap views, axes/grid overlays, bed
     // size, Preview/Render — thin wrappers over the existing actions
-    // Classic icon toolbar (C6): thin wrappers over the same actions the
+    // Classic icon toolbar: thin wrappers over the same actions the
     // menus drive — no new state anywhere.
     const classicToolbar = document.getElementById('classicToolbar');
     if (classicToolbar) {
       restoreClassicToolbarPrefs();
-      // E3 moved the snap-view buttons to the 3D view toolbar. Scoping this
+      // The snap-view buttons live on the 3D view toolbar. Scoping this
       // to #classicToolbar would silently leave every one of them dead, so it
       // queries the document — both bars are Classic-only markup.
       document.querySelectorAll('[data-classic-view]').forEach((btn) => {
@@ -10745,8 +10661,7 @@ if (rounded) {
       });
 
       // The bar's View All and Reset View carry the same labels as the View
-      // menu's items, so they run the same commands (G4). Reset View used to
-      // be a third behavior again — a snap to the diagonal view.
+      // menu's items, so they run the same commands.
       document
         .getElementById('classicViewHomeBtn')
         ?.addEventListener('click', () => {
@@ -10785,7 +10700,7 @@ if (rounded) {
         ?.addEventListener('click', () =>
           document.getElementById('redoBtn')?.click()
         );
-      // U-8b: the desktop's Export STL exports a render that exists; ours
+      // The desktop's Export STL exports a render that exists; ours
       // gates the same way. aria-disabled + reason rather than disabled, so
       // keyboard and screen-reader users can find the button and hear why
       // (the editor toolbar's pattern). Enabled, it downloads the existing
@@ -10826,7 +10741,7 @@ if (rounded) {
         });
       }
 
-      // The workflow triad's other members (U-5, Q-18a).
+      // The workflow triad's other members.
       document
         .getElementById('classicTbPreviewBtn')
         ?.addEventListener('click', () => {
@@ -10864,9 +10779,9 @@ if (rounded) {
         perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
         orthoBtn?.setAttribute('aria-pressed', String(mode === 'orthographic'));
       };
-      // These used to update only inside their own click handlers, so changing
-      // projection from the View menu or the P shortcut left the pair claiming
-      // the wrong state (D-10). R3a's event reaches every mirror.
+      // Synced from the projection event, not only inside their own click
+      // handlers, so changing projection from the View menu or the P shortcut
+      // keeps the pair truthful.
       syncProjectionButtons();
       document.addEventListener(
         'preview-projection-change',
@@ -10912,19 +10827,18 @@ if (rounded) {
         });
       };
       wireOverlayToggle('classicEdgesToggle', 'edges');
-      // Honest split per D-16: the combined "Axes (mm)" button drove two
-      // separate display flags at once, so the View menu and the toolbar
-      // could disagree about either. Each now drives exactly its own flag,
-      // and axisMarks IS this app's scale-marker overlay.
+      // One flag per button: a combined "Axes (mm)" button driving two display
+      // flags at once would let the View menu and the toolbar disagree about
+      // either. axisMarks is this app's scale-marker overlay.
       wireOverlayToggle('classicAxesToggle', 'axes');
       wireOverlayToggle('classicScaleMarkersToggle', 'axisMarks');
 
-      // Bed grid and its size select are dropped from Classic entirely
-      // (D-18); both remain in Simplified and Standard, where the preview
-      // settings drawer owns them.
+      // Bed grid and its size select are dropped from Classic entirely; both
+      // remain in Simplified and Standard, where the preview settings drawer
+      // owns them.
 
       // Zoom uses the one shared step so the bar, the View menu and the
-      // camera panel all move the camera by the same amount (D-19).
+      // camera panel all move the camera by the same amount.
       const wireZoom = (btnId, direction) => {
         document.getElementById(btnId)?.addEventListener('click', () => {
           if (!previewManager) return;
@@ -10935,7 +10849,7 @@ if (rounded) {
       wireZoom('classicZoomInBtn', 1);
       wireZoom('classicZoomOutBtn', -1);
 
-      // Measurement has no engine yet (D-15). The buttons are aria-disabled
+      // Measurement has no engine yet. The buttons are aria-disabled
       // rather than disabled so they stay discoverable; activating one says
       // why instead of doing nothing.
       for (const id of ['classicMeasureDistBtn', 'classicMeasureAngleBtn']) {
@@ -10956,11 +10870,10 @@ if (rounded) {
         ?.addEventListener('click', () => {
           const stripState = stateManager.getState();
           if (!stripState.uploadedFile) return;
-          // The same flushing trigger the top toolbar's Preview uses (E3-era
-          // defect, re-reported UF-1 §L): the plain path re-serves the cached
-          // preview of the last PUBLISHED content, so an edit typed within
-          // the write-back debounce was invisible to exactly this button.
-          // Null until the expert block initializes (a Simplified-only
+          // The same flushing trigger the top toolbar's Preview uses: the plain
+          // path re-serves the cached preview of the last published content, so an
+          // edit typed within the write-back debounce would be invisible to exactly
+          // this button. Null until the expert block initializes (a Simplified-only
           // session), where the plain path is right.
           if (editorPreviewTrigger) {
             editorPreviewTrigger();
@@ -11062,7 +10975,7 @@ if (rounded) {
     // Initialize image measurement tool
     initImageMeasurement({
       onCoordinateCopied: (axis, value) => {
-        // GAP 7: populate focused parameter field with copied coordinate
+        // Populate focused parameter field with copied coordinate
         const active = document.activeElement;
         if (
           active &&
@@ -11413,22 +11326,19 @@ if (rounded) {
       // Strip param to avoid accidental sharing
       urlParams.delete('hfm');
       /**
-       * CW-66: ...and KEEP THE FRAGMENT. This cleanup composed the new URL
-       * from pathname and query alone, so a link of the form
-       * `/?hfm=unlock#v=1&params=...` lost its payload the moment it opened -
-       * the door destroyed the very thing the link was carrying.
+       * Keep the fragment: composing the new URL from pathname and query alone
+       * would make a link of the form `/?hfm=unlock#v=1&params=...` lose its
+       * payload the moment it opened.
        *
-       * ★ THE MERGED HELPER `cleanUrlKeepingFragment()` IS NOT A DROP-IN
-       * HERE, WHICH IS WHY THIS IS A LINE RATHER THAN A CALL. That helper
-       * closes over `initUrlParams`, a DIFFERENT URLSearchParams built at
-       * module start; this block deletes `hfm` from its own local copy. Calling
-       * the helper would compose from a copy that still HAS `hfm` and put the
-       * parameter straight back, which is exactly what the comment above is
-       * preventing. Making the helper usable would mean mutating a
-       * module-level object other code reads afterwards - a bigger and less
-       * reversible change than the round's closing release should make.
+       * `cleanUrlKeepingFragment()` is not a drop-in here, which is why this is
+       * a line rather than a call. That helper closes over `initUrlParams`, a
+       * different URLSearchParams built at module start; this block deletes
+       * `hfm` from its own local copy. Calling the helper would compose from a
+       * copy that still has `hfm` and put the parameter straight back. Making
+       * the helper usable would mean mutating a module-level object other code
+       * reads afterwards.
        *
-       * The arithmetic now lives in two places, and that is the stated cost.
+       * The arithmetic lives in two places, and that is the stated cost.
        */
       const newUrl = urlParams.toString()
         ? `${window.location.pathname}?${urlParams}${window.location.hash}`
@@ -11450,14 +11360,14 @@ if (rounded) {
       return 'Alt View unlocked. Refresh to persist.';
     };
 
-    // ASCII City Walk (CW-4): the gated welcome card's launch button. The
+    // ASCII City Walk: the gated welcome card's launch button. The
     // game module is lazy-loaded on first press so it costs nothing until
     // someone who found the unlock actually plays.
     const cityWalkLaunchBtn = document.getElementById('cityWalkLaunchBtn');
     if (cityWalkLaunchBtn) {
-      // CW-11: the game is desktop-only, gated on the same viewport shape as
-      // Classic (U-10/Q-24a). ENTRY only — a session already running survives
-      // any resize, and Escape always leaves.
+      // The game is desktop-only, gated on the same viewport shape as Classic.
+      // Entry only: a session already running survives any resize, and Escape
+      // always leaves.
       const cityWalkGateReason = () =>
         document
           .getElementById('cityWalkGateReason')
@@ -11665,8 +11575,6 @@ if (rounded) {
   // Focus Mode - Maximize 3D preview
   const focusModeBtn = document.getElementById('focusModeBtn');
   const cameraDrawer = document.getElementById('cameraDrawer');
-  // mainInterface is already declared at line 484
-  // comparisonView container is accessed via DOM query
 
   if (focusModeBtn && mainInterface) {
     let isFocusMode = false;
@@ -11946,19 +11854,17 @@ if (rounded) {
   });
 
   /**
-   * The full-quality render with all of its UI side effects and NO download
-   * side effect (U-8a). Extracted from the generate branch of the
-   * primaryActionBtn handler so every Render surface — Design ▸ Render, the
-   * rebindable `render` shortcut, and both Classic Render buttons — can
-   * render without going through the Generate↔Download transformer, whose
-   * meaning depends on state the user cannot see. Pressing Render used to
-   * trigger an STL save prompt whenever a full render was already cached.
+   * The full-quality render with all of its UI side effects and no download
+   * side effect. Every Render surface (Design ▸ Render, the rebindable
+   * `render` shortcut and both Classic Render buttons) calls this rather
+   * than the primaryActionBtn handler, which means Generate or Download
+   * depending on state the user cannot see: through it, pressing Render
+   * would trigger an STL save prompt whenever a full render was cached.
    */
   async function runFullRender() {
-    // D-29: this read used to happen with a write-back still queued, so
-    // pressing Render within 500 ms of typing was a race — measured at P0,
-    // the Classic toolbar's Render carried the edit only 1 time in 5. Every
-    // Preview button already published first; Render never did.
+    // Publish the editor's pending write-back first, or pressing Render
+    // within 500 ms of typing would render the content from before the edit.
+    // Every Preview button publishes first too.
     publishEditorEdits();
     const state = stateManager.getState();
 
@@ -12331,7 +12237,7 @@ if (rounded) {
         }
       }
 
-      // Use COGA-compliant friendly error translation (code-first, BR-5)
+      // Use COGA-compliant friendly error translation (code-first)
       const friendlyError = translateError(error.message, {
         code: error.code,
         details: error.details,
@@ -12427,7 +12333,7 @@ if (rounded) {
     });
   }
 
-  // ========== PUBLISH PROJECT ==========
+  // ========== Publish project ==========
 
   const publishProjectBtn = document.getElementById('publishProjectBtn');
   const publishProjectModal = document.getElementById('publishProjectModal');
@@ -12472,11 +12378,11 @@ if (rounded) {
   );
   const copySettingsLinkBtn = document.getElementById('copySettingsLinkBtn');
 
-  // ── The drawing editor's own door (IR-4) ────────────────────────────────
+  // ── The drawing editor's own door ───────────────────────────────────────
   //
   // Two triggers, one picker, one lazily-built editor. The module is imported
-  // on first use: nobody pays for it until they open it, and the core bundle
-  // has about 20 KB of gzip headroom left.
+  // on first use, so nobody pays for it until they open it, and it stays out
+  // of the core bundle's size budget.
   const svgEditFileInput = document.getElementById('svgEditFileInput');
   const editDrawingSpotlightBtn = document.getElementById(
     'editDrawingSpotlightBtn'
@@ -12502,16 +12408,14 @@ if (rounded) {
     return svgEditEntry;
   }
 
-  // "Open with Forge" (IR-10). An installed app can be registered with the
+  // "Open with Forge". An installed app can be registered with the
   // operating system for a set of file types, and the files then arrive here.
   //
-  // WIRED BUT INERT ON PURPOSE. The registration lives in the web app
-  // manifest's `file_handlers` member, and that member is NOT in
-  // public/manifest.json - it stays out until somebody has installed Forge on
-  // a real machine and watched an "Open with" actually work. Registering file
-  // types with an operating system is not something to ship on a code read.
-  // The exact block to add is in the release record, and this consumer is
-  // ready for it: one JSON edit and the path below runs.
+  // Wired but inert on purpose. The registration lives in the web app
+  // manifest's `file_handlers` member, and that member is not in
+  // public/manifest.json: it stays out until an "Open with" has been seen to
+  // work from an installed Forge on a real machine. Adding that member is
+  // the one edit that makes the path below run.
   //
   // Feature-detected, so this does nothing at all in Firefox or Safari, and
   // nothing in Chrome or Edge until the app is installed.
@@ -12565,7 +12469,7 @@ if (rounded) {
       await entry.openFile(file);
     });
 
-    // DP-62: a drawing sent by a link with no design to put it on waits for
+    // A drawing sent by a link with no design to put it on waits for
     // this listener before it is handed to the input.
     document.body.dataset.drawingDoorReady = '1';
 
@@ -12689,9 +12593,8 @@ if (rounded) {
 
       const manifest = generateManifestFromProject();
 
-      // The dialog used to hand out manifests its own loader refuses (D-95).
-      // Checking the emission against the same validator the loader runs makes
-      // that class of defect impossible to ship again.
+      // Check the emitted manifest against the same validator the loader runs,
+      // so the dialog can never hand out a manifest its own loader refuses.
       const validation = validateManifest(manifest);
       if (!validation.valid) {
         showErrorToast({
@@ -12804,7 +12707,7 @@ if (rounded) {
 
         try {
           const uiModeController = getUIModeController();
-          // asBundle: false - the archive ships the project UNPACKED beside
+          // asBundle: false - the archive ships the project unpacked beside
           // its manifest, so the manifest has to name loose files even when
           // the project itself arrived as a ZIP.
           const manifest = buildProjectManifest({
@@ -12880,7 +12783,7 @@ if (rounded) {
     }
   }
 
-  // ========== RENDER QUEUE ==========
+  // ========== Render queue ==========
 
   // Initialize render queue
   renderQueue = new RenderQueue(renderController, {
@@ -13035,9 +12938,9 @@ if (rounded) {
 
   // Add to Queue button
   addToQueueBtn?.addEventListener('click', () => {
-    // D-29's sibling (AF-5): a queued job snapshots the project's content at
-    // this moment, so an edit still inside the write-back window would be
-    // left behind for every render the job ever does.
+    // Publish first: a queued job snapshots the project's content at this
+    // moment, so an edit still inside the write-back window would be left
+    // behind for every render the job ever does.
     publishEditorEdits();
     const state = stateManager.getState();
 
@@ -13271,7 +13174,7 @@ if (rounded) {
     true
   );
 
-  // ========== COMPARISON MODE ==========
+  // ========== Comparison mode ==========
 
   // Initialize comparison controller
   // Pass getter function to handle lazy renderController initialization
@@ -13303,8 +13206,8 @@ if (rounded) {
   // Add to Comparison button
   const addToComparisonBtn = document.getElementById('addToComparisonBtn');
   addToComparisonBtn?.addEventListener('click', () => {
-    // D-29's sibling (AF-5): comparison variants render from the content
-    // captured here, same exposure as the queue.
+    // Publish first: comparison variants render from the content captured
+    // here, the same exposure as the queue.
     publishEditorEdits();
     const state = stateManager.getState();
 
@@ -13323,8 +13226,8 @@ if (rounded) {
       return;
     }
 
-    // CRITICAL: Set project content BEFORE adding variant to avoid race condition
-    // The ComparisonView subscription will try to auto-render when variant is added
+    // Set the project content before adding the variant: the ComparisonView
+    // subscription auto-renders as soon as a variant is added.
     const libsForRender = getEnabledLibrariesForRender();
     comparisonController.setProject(
       state.uploadedFile.content,
@@ -13458,8 +13361,7 @@ if (rounded) {
       setAppSurface('welcome');
     }
 
-    // Optionally clear variants or keep them
-    // comparisonController.clearAll();
+    // Variants are kept: leaving comparison mode does not clear them.
 
     console.log('[Comparison] Exited comparison mode');
     updateStatus('Exited comparison mode');
@@ -13474,14 +13376,13 @@ if (rounded) {
     }
   });
 
-  // ========== PRESET SYSTEM ==========
+  // ========== Preset system ==========
   // OpenSCAD Customizer-compatible preset management
   // Preset controls: Save = update current, + = new, - = delete
 
   // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
   // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
   const DESIGN_DEFAULTS_ID = '__design_defaults__';
-  // PRESET_SORT_KEY imported from storage-keys.js
 
   // Searchable combobox instance (non-null only when searchable_combobox flag is on)
   let _presetCombobox = null;
@@ -13620,7 +13521,7 @@ if (rounded) {
           : 'Select a preset first to delete';
     }
 
-    // Copy Preset button (C4.4): duplicates any selection, including design
+    // Copy Preset button: duplicates any selection, including design
     // defaults (that copies the schema defaults into a new preset)
     const copyPresetBtn = document.getElementById('copyPresetBtn');
     if (copyPresetBtn) {
@@ -13630,9 +13531,9 @@ if (rounded) {
         : 'Select a preset first to copy it';
     }
 
-    // Copy preset name button (F30): enabled whenever something is selected,
-    // including the immutable "design default values" entry (the spec asks for
-    // the exact visible name to be copied, regardless of mutability).
+    // Copy preset name button: enabled whenever something is selected,
+    // including the immutable "design default values" entry, whose visible
+    // name copies like any other.
     const copyPresetNameBtn = document.getElementById('copyPresetNameBtn');
     if (copyPresetNameBtn) {
       copyPresetNameBtn.disabled = !hasPresetSelected;
@@ -13655,9 +13556,9 @@ if (rounded) {
   }
 
   /**
-   * Single entry point for applying a preset's parameters AND companion files.
-   * Called by both the Manage Presets modal and the preset dropdown so the two
-   * code paths stay identical in behavior (Bug D fix).
+   * Single entry point for applying a preset's parameters and companion
+   * files. Called by both the Manage Presets modal and the preset dropdown
+   * so the two code paths behave identically.
    *
    * Responsibilities:
    *  1. Merge visible preset parameters onto current state
@@ -13714,7 +13615,7 @@ if (rounded) {
       ? new Map(canonicalProjectFiles)
       : currentProjectFilesForLog;
 
-    // E2: Merge explicit preset.companionFiles (saved presets with embedded content)
+    // Merge explicit preset.companionFiles (content a saved preset embeds)
     if (
       preset.companionFiles &&
       Object.keys(preset.companionFiles).length > 0
@@ -13738,7 +13639,7 @@ if (rounded) {
       companionMapping
     );
 
-    // Ground-truth diagnostics for LWFL geometry debugging (Phase 1)
+    // Ground-truth diagnostics: which companion files the preset mounted
     const _diagCompanion = {
       presetName: preset.name,
       presetId: preset.id,
@@ -13799,7 +13700,7 @@ if (rounded) {
     stateManager.setState({ projectFiles: aliasedFiles });
 
     // Reset output format to STL when loading a preset whose parameters
-    // produce 3D geometry.  Check both the dropdown AND the state because
+    // produce 3D geometry.  Check both the dropdown and the state because
     // they can desync (e.g. dropdown shows STL but state still says SVG
     // after a welcome-screen round-trip).
     const _fmtSelect = document.getElementById('outputFormat');
@@ -13890,7 +13791,7 @@ if (rounded) {
     updatePresetControlStates();
   }
 
-  // D-47: user presets are keyed by the PROJECT's main file, not the archive
+  // User presets are keyed by the project's main file, not the archive
   // that delivered it. A ZIP's filename changes when someone renames or
   // re-downloads it; the main .scad path inside it does not. The desktop keys
   // presets the same way (the sidecar .json sits beside the .scad).
@@ -13920,7 +13821,7 @@ if (rounded) {
     }
 
     const modelName = presetModelKey(state);
-    // Presets saved before D-47 sit under the archive's name; move them to
+    // Older presets sit under the archive's name; move them to
     // the stable key once. No-op on every later call.
     presetManager.adoptLegacyModelKey(state.uploadedFile.name, modelName);
     const currentSortOrder =
@@ -13933,8 +13834,9 @@ if (rounded) {
     // Clear and rebuild native select dropdown
     presetSelect.innerHTML = '<option value="">-- Select Preset --</option>';
 
-    // "design default values" is ALWAYS first in dropdown (desktop OpenSCAD parity)
-    // This is a virtual preset derived from the .scad source defaults, not stored in PresetManager
+    // "design default values" is always first in the dropdown (desktop
+    // OpenSCAD parity): a virtual preset derived from the .scad source
+    // defaults, not stored in PresetManager.
     const defaultsOption = document.createElement('option');
     defaultsOption.value = DESIGN_DEFAULTS_ID;
     defaultsOption.textContent = 'design default values';
@@ -14021,7 +13923,7 @@ if (rounded) {
         ];
       }
       _presetCombobox.update(comboOptions, currentPresetId || null);
-      // AF-10 (R-II P5b): at rest the desktop shows the active
+      // At rest the desktop shows the active
       // "design default values", not a search hint. Display only.
       _presetCombobox.setRestingLabel('design default values');
       _presetCombobox.setDisabled(false);
@@ -14151,7 +14053,7 @@ if (rounded) {
       }
 
       try {
-        // E2: Capture companion files (text-only, exclude images and main file)
+        // Capture companion files (text-only, exclude images and main file)
         const companionSnapshot = {};
         if (state.projectFiles) {
           for (const [path, content] of state.projectFiles.entries()) {
@@ -14665,7 +14567,7 @@ if (rounded) {
   /**
    * Overwrite the currently selected preset with the current parameter
    * values. Shared by the Save button and the unsaved-changes prompt when
-   * switching presets (C4.4).
+   * switching presets.
    * @returns {boolean} True if the preset was saved
    */
   function overwriteCurrentPreset() {
@@ -14703,7 +14605,7 @@ if (rounded) {
     }
 
     try {
-      // E2: Capture companion files (text-only, exclude images and main file)
+      // Capture companion files (text-only, exclude images and main file)
       const companionSnapshot = {};
       if (state.projectFiles) {
         for (const [path, content] of state.projectFiles.entries()) {
@@ -14740,8 +14642,7 @@ if (rounded) {
     }
   }
 
-  // Save button: Update currently selected preset (not create new)
-  // "Pressing 'Save Preset' creates a new preset. It should simply save any parameter changes to the current preset"
+  // Save button: update the selected preset; it never creates a new one.
   savePresetBtn.addEventListener('click', () => {
     if (overwriteCurrentPreset()) {
       // Brief visual feedback on button
@@ -14752,12 +14653,12 @@ if (rounded) {
     }
   });
 
-  // Add button: Create new preset (shows dialog)
-  // "You use the '+' button to create a new preset based on the current customizer parameter settings"
+  // Add button: create a new preset from the current settings (shows a
+  // dialog), like the desktop Customizer's + button.
   addPresetBtn.addEventListener('click', showSavePresetModal);
 
-  // Copy button (C4.4): duplicate the selected preset's SAVED values into a
-  // new preset named "<name> (copy)" and select it. Copying design defaults
+  // Copy button: duplicate the selected preset's saved values into a new
+  // preset named "<name> (copy)" and select it. Copying design defaults
   // creates a preset from the schema defaults.
   copyPresetBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
@@ -14867,7 +14768,7 @@ if (rounded) {
   // Manage button: Import/export modal
   managePresetsBtn.addEventListener('click', showManagePresetsModal);
 
-  // Copy preset name button (F30): copies the visible label of the
+  // Copy preset name button: copies the visible label of the
   // currently-selected preset to the clipboard with a polite SR
   // announcement. Works for the immutable "design default values"
   // entry too — copies the exact displayed string verbatim.
@@ -14910,7 +14811,7 @@ if (rounded) {
     });
   }
 
-  // Phase 9: Preset search/filter
+  // Preset search/filter
   const presetSearchInput = document.getElementById('presetSearchInput');
   const presetSearchClear = document.getElementById('presetSearchClear');
   const presetSearchStatus = document.getElementById('presetSearchStatus');
@@ -15029,7 +14930,7 @@ if (rounded) {
       if (link.dataset.featureTab) {
         openFeaturesGuide({ tab: link.dataset.featureTab });
       } else if (link.dataset.doc) {
-        // For now, open Features Guide; in future could show docs
+        // A link that names a doc opens the Features Guide at its default tab.
         openFeaturesGuide();
       }
     });
@@ -15037,7 +14938,7 @@ if (rounded) {
 
   /**
    * Three-way unsaved-changes prompt shown when switching away from a
-   * preset with unsaved parameter changes (C4.4, Ken's preset contract).
+   * preset with unsaved parameter changes.
    * @param {string} presetName - Name of the preset with unsaved changes
    * @returns {Promise<'save'|'discard'|'cancel'>}
    */
@@ -15079,7 +14980,7 @@ if (rounded) {
 
     const state = stateManager.getState();
 
-    // Unsaved-changes guard (C4.4): switching away from a dirty user preset
+    // Unsaved-changes guard: switching away from a dirty user preset
     // offers Save / Discard / Cancel instead of silently dropping edits
     const previousPresetId = state.currentPresetId;
     if (
@@ -15324,9 +15225,9 @@ if (rounded) {
 
   // Subscribe to preset changes
   presetManager.subscribe((action, _preset, _modelName) => {
-    // Update dropdown only when the preset LIST changes.
-    // IMPORTANT: presetManager emits a 'load' event too; rebuilding the <select> on 'load'
-    // resets selection back to "-- Select Preset --" (confirmed by logs: updatePresetDropdown exit newValue="").
+    // Update the dropdown only when the preset list changes. presetManager
+    // emits a 'load' event too, and rebuilding the <select> on 'load' would
+    // reset the selection to "-- Select Preset --".
     if (action === 'load') {
       return;
     }
@@ -15345,9 +15246,9 @@ if (rounded) {
     }
   });
 
-  // ========== END PRESET SYSTEM ==========
+  // ========== End preset system ==========
 
-  // ========== ADVANCED MENU ==========
+  // ========== Advanced menu ==========
 
   // View Source Button
   const viewSourceBtn = document.getElementById('viewSourceBtn');
@@ -15588,8 +15489,8 @@ if (rounded) {
       .filter(Boolean);
   }
 
-  // Echo drawer fold state (C9): a fold the user chose survives re-renders
-  // with the same problems; only NEW warnings/errors force it back open.
+  // Echo drawer fold state: a fold the user chose survives re-renders with
+  // the same problems; only new warnings or errors force it back open.
   let echoDrawerUserCollapsed = false;
   let lastEchoImportantCount = 0;
 
@@ -15655,10 +15556,10 @@ if (rounded) {
       .join('\n');
 
     // The drawer is 120px tall and holds one render's messages, so without
-    // this a design that echoes more than about six lines showed only its
-    // first few, every time (U-31). Same reasoning as the console modal: the
-    // content is replaced wholesale each render, so there is no reader
-    // position worth preserving and no scrolled-up pause.
+    // this a design that echoes more than about six lines would show only its
+    // first few, every time. Same reasoning as the console modal: the content
+    // is replaced wholesale each render, so there is no reader position worth
+    // preserving and no scrolled-up pause.
     echoMessagesEl.scrollTop = echoMessagesEl.scrollHeight;
 
     // Show the drawer: always mark it visible so the badge/label appears.
@@ -15675,9 +15576,9 @@ if (rounded) {
     }
     lastEchoImportantCount = importantCount;
 
-    // aria mirrors the REAL state — the class and attribute are never
-    // written from different truths (the old code marked echo-only output
-    // aria-expanded=false while the content stayed visible).
+    // aria mirrors the real state: the class and the attribute are never
+    // written from different truths, so echo-only output cannot read as
+    // aria-expanded=false while its content stays visible.
     document
       .getElementById('echoDrawerToggle')
       ?.setAttribute(
@@ -15720,10 +15621,10 @@ if (rounded) {
 
     consoleOutput.innerHTML = highlightedLines.join('\n');
 
-    // Land on the newest output, like the desktop console (U-31). No
-    // scrolled-up pause here, unlike the Log view: this pane shows only the
-    // LATEST render's output rather than a running log, so when it is
-    // re-rendered the text a reader was holding their place in is gone.
+    // Land on the newest output, like the desktop console. No scrolled-up
+    // pause here, unlike the Log view: this pane shows only the latest
+    // render's output rather than a running log, so when it is re-rendered
+    // the text a reader was holding their place in is gone.
     consoleOutput.scrollTop = consoleOutput.scrollHeight;
   }
 
@@ -15744,7 +15645,7 @@ if (rounded) {
 
     // renderConsoleOutput's scroll-to-newest ran against a hidden modal, where
     // scrollHeight is 0, so it did nothing. Now that the modal has layout, put
-    // it on the newest output the way the desktop console does (U-31).
+    // it on the newest output the way the desktop console does.
     if (consoleOutput) {
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
@@ -15767,7 +15668,7 @@ if (rounded) {
 
     // A collapsed drawer has no layout, so the scroll-to-newest that ran when
     // its messages arrived was a no-op against a scrollHeight of 0. Opening it
-    // is the first moment the write can land (U-31).
+    // is the first moment the write can land.
     if (!collapsed) {
       const messages = document.getElementById('echoMessages');
       if (messages) messages.scrollTop = messages.scrollHeight;
@@ -15913,7 +15814,7 @@ if (rounded) {
     resetBtn?.click();
   });
 
-  // Expand all / Collapse all (F5).
+  // Expand all / Collapse all.
   // Setting `.open` programmatically fires the <details> 'toggle' event
   // which is already wired in ui-generator.js to persist per-file state,
   // so these handlers stay deliberately tiny.
@@ -15932,9 +15833,8 @@ if (rounded) {
       if (d.open !== open) d.open = open;
     });
     if (open) {
-      // Per F5 acceptance criteria: focus the first parameter when
-      // Expand-all is activated to give keyboard users a clear next
-      // landing spot.
+      // Focus the first parameter when Expand all is activated, to give
+      // keyboard users a clear next landing spot.
       const firstControl = /** @type {HTMLElement|null} */ (
         parametersContainer.querySelector(
           '.param-control input, .param-control select, .param-control textarea, .param-control button'
@@ -16153,9 +16053,9 @@ if (rounded) {
     }
   });
 
-  // ========== END ADVANCED MENU ==========
+  // ========== End advanced menu ==========
 
-  // ========== FEATURES GUIDE MODAL ==========
+  // ========== Features guide modal ==========
 
   // Open Features Guide modal with optional tab selection
   function openFeaturesGuide({ tab = 'libraries' } = {}) {
@@ -16287,11 +16187,10 @@ if (rounded) {
     }
   });
 
-  // ========== END FEATURES GUIDE MODAL ==========
+  // ========== End features guide modal ==========
 
-  // ========== CONFIGURABLE KEYBOARD SHORTCUTS ==========
-  // Register handlers for configurable keyboard actions
-  // These complement the existing shortcuts and provide customization
+  // ========== Configurable keyboard shortcuts ==========
+  // Handlers for the configurable actions defined in keyboard-config.js.
 
   keyboardConfig.on('render', () => {
     const state = stateManager.getState();
@@ -16300,13 +16199,11 @@ if (rounded) {
     }
   });
 
-  // Folded out of the legacy keydown listener (G7). Each of these was a second
-  // document-level path this registry knew nothing about: invisible in the
-  // shortcuts modal, impossible to rebind, and — for Ctrl+Z — firing the
-  // parameter undo even while the user was typing in the code editor, because
-  // that listener had no text-entry guard. The registry skips every non-global
-  // shortcut inside an input or a contenteditable, so the editor keeps its own
-  // undo and nothing fires twice.
+  // Registered here rather than in a document-level keydown listener, so
+  // these show in the shortcuts modal, can be rebound, and stay out of text
+  // entry: the registry skips every non-global shortcut inside an input or
+  // a contenteditable, so Ctrl+Z in the code editor runs the editor's own
+  // undo, not the parameter undo, and nothing fires twice.
   keyboardConfig.on('undo', () => {
     const state = stateManager.getState();
     if (state.uploadedFile && stateManager.canUndo()) {
@@ -16385,9 +16282,8 @@ if (rounded) {
     focusModeBtn?.click();
   });
 
-  // Ctrl+B and Ctrl+Alt+4 are both described as "Toggle Customizer panel" in
-  // the shortcuts modal, and both toggled the same non-existent `.sidebar`.
-  // They now do what they say; the duplicate binding is reported, not removed.
+  // Ctrl+B and Ctrl+Alt+4 carry the same description in the shortcuts
+  // modal, "Toggle Customizer panel", and run the same command.
   keyboardConfig.on('toggleParameters', () => toggleCustomizerPanel());
 
   keyboardConfig.on('resetView', () => {
@@ -16580,8 +16476,8 @@ if (rounded) {
       announceImmediate('View fitted to model');
     }
   });
-  // Ctrl+] / Ctrl+[ (U2). The menu, the camera bar and these share one step
-  // (D-19), so every surface moves the camera by the same amount.
+  // Ctrl+] / Ctrl+[. The menu, the camera bar and these share one step, so
+  // every surface moves the camera by the same amount.
   keyboardConfig.on('zoomIn', () => {
     if (previewManager) {
       previewManager.zoomCamera(CAMERA_ZOOM_STEP);
@@ -16606,15 +16502,13 @@ if (rounded) {
   keyboardConfig.on('toggleConsole', () =>
     getUIModeController().togglePanelVisibility('consoleOutput')
   );
-  // 'errorLog' is not in PANEL_REGISTRY, so togglePanelVisibility used to
-  // early-return here and Ctrl+Alt+2 did nothing at all (F1). The Error-Log is
-  // a console tab in Forge and a strip pane in Classic; registry semantics fit
+  // 'errorLog' is not in PANEL_REGISTRY, so togglePanelVisibility would
+  // return early and Ctrl+Alt+2 would do nothing. The Error-Log is a console
+  // tab in Forge and a strip pane in Classic; registry semantics fit
   // neither, so it gets its own per-host handler.
   keyboardConfig.on('toggleErrorLog', () => toggleErrorLog());
-  // These two now run the same command as their Window-menu items. Ctrl+Alt+4
-  // used to toggle a `.sidebar` element that exists nowhere in this app, so it
-  // was silently dead — and in Classic the Editor lives in the dock, which the
-  // panel registry cannot reach (G5).
+  // These two run the same command as their Window-menu items: in Classic
+  // the Editor lives in the dock, which the panel registry cannot reach.
   keyboardConfig.on('toggleCodeEditor', () => toggleEditorPanel());
   keyboardConfig.on('toggleCustomizer', () => toggleCustomizerPanel());
   keyboardConfig.on('jumpToPanel', () => openJumpToPicker());
@@ -16643,7 +16537,7 @@ if (rounded) {
     }
   });
 
-  // ========== GAMEPAD CONTROLLER INTEGRATION ==========
+  // ========== Gamepad controller integration ==========
   if (gamepadController) {
     // Camera controls - use rotateHorizontal/rotateVertical for orbit
     gamepadController.on('camera:rotate', ({ x, y }) => {
@@ -16807,19 +16701,18 @@ function renderLibraryUI(detectedLibraries) {
         statusArea.textContent = `${lib.name} ${checkbox.checked ? 'enabled' : 'disabled'}`;
       }
       // A library is a render input: re-preview so a model that needs a
-      // switched-off library says so instead of rendering from leftovers
-      // (D-42). The libraryManager subscription set up alongside the
-      // controller already refreshes its enabled-libraries snapshot.
+      // switched-off library says so instead of rendering from leftovers. The
+      // libraryManager subscription set up alongside the controller already
+      // refreshes its enabled-libraries snapshot.
       autoPreviewController.onLibrariesChange(
         stateManager.getState().parameters || {}
       );
     });
   });
 
-  // AF-4: the list always showed the same four names whether or not this
-  // copy of the app can actually serve their files. Probe reality (each
-  // library's own manifest, the file the worker mounts from) and say so on
-  // the row. An ENABLED library stays operable even when unreachable, so it
+  // Probe whether this copy of the app can actually serve each library's
+  // files (its own manifest, the file the worker mounts from) and say so on
+  // the row. An enabled library stays operable even when unreachable, so it
   // can still be switched off.
   libraryManager.checkAvailability().then((availability) => {
     allLibraries.forEach((lib) => {
@@ -16836,7 +16729,6 @@ function renderLibraryUI(detectedLibraries) {
       row.classList.add('library-unavailable');
       const note = document.createElement('span');
       note.className = 'library-unavailable-note';
-      // D-35: new string, flagged in the ledger for owner review.
       note.textContent =
         'Not available right now: the library’s files could not be reached.';
       row.querySelector('.library-info')?.appendChild(note);
@@ -16850,16 +16742,16 @@ function getEnabledLibrariesForRender() {
   return paths;
 }
 
-// Desktop reference geometry from CLI extracts (OpenSCAD 2026.01.03 Nightly, Manifold backend).
-// Source: docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
+// Desktop reference geometry from CLI extracts (OpenSCAD 2026.01.03
+// Nightly, Manifold backend).
 //
-// Facet counts here are ENGINE-VERSION-SPECIFIC tessellation bookkeeping;
-// the parity suite measured identical volume/bbox across engines while
-// facet counts differ by up to ~9% (see desktop-comparison-results.md
-// resolution addendum). Authoritative parity checking lives in
-// `npm run parity` (scripts/parity/), which compares dimensional metrics
-// with tolerances — this debug helper's ±10% triangle comparison remains
-// only as a quick in-browser sanity probe.
+// Facet counts here are engine-version-specific tessellation bookkeeping:
+// volume and bounding box measured identical across engines while facet
+// counts differ by up to ~9% (desktop-comparison-results.md, under
+// docs/archive/audit/). The authoritative parity check is `npm run parity`
+// (scripts/parity/), which compares dimensional metrics with tolerances;
+// this debug helper's ±10% triangle comparison is only a quick in-browser
+// sanity probe.
 const DESKTOP_REFERENCE_GEOMETRY = {
   '3d-printed-keyguard': {
     scenarioId: '3d-printed-keyguard',
@@ -16908,9 +16800,8 @@ if (typeof window !== 'undefined') {
   window.stateManager = stateManager;
   window.presetManager = presetManager;
   window.themeManager = themeManager;
-  // D-152: for a spec that reads the preview's mesh and its overlays.
   window.previewManager = previewManager;
-  // D-152: for a spec that reads the preview's mesh and its overlays. A
+  // For a spec that reads the preview's mesh and its overlays. A
   // getter, because the manager is made after this line runs.
   Object.defineProperty(window, 'previewManager', {
     get: () => previewManager,
@@ -16929,8 +16820,8 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * Where the active camera is (DP-19). A spec has to be able to prove
-     * that a key pressed inside the drawing editor did NOT move the model
+     * Where the active camera is. A spec has to be able to prove
+     * that a key pressed inside the drawing editor did not move the model
      * behind it, and a screenshot of a hidden canvas cannot say so.
      * @returns {{x: number, y: number, z: number}|null}
      */
@@ -16942,7 +16833,7 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * The reference overlay's live placement (DP-5). Where the image SITS is
+     * The reference overlay's live placement. Where the image sits is
      * saved per project, and a spec has to be able to prove the numbers came
      * back rather than infer it from a picture.
      * @returns {Object|null}
@@ -16965,9 +16856,9 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * Mouse-wheel zoom focal point (UF-11). The Preferences checkbox became
-     * this setting's only control, so specs prove a change against the
-     * manager's state rather than a second checkbox.
+     * Mouse-wheel zoom focal point. The Preferences checkbox is this
+     * setting's only control, so specs prove a change against the manager's
+     * state rather than a second checkbox.
      * @returns {boolean|null}
      */
     zoomToCursor() {
@@ -16975,7 +16866,7 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * Grid scene truth (UF-14). `visible` reads the helper actually in the
+     * Grid scene truth. `visible` reads the helper actually in the
      * scene, not the preference — the preference matrix asserts what is
      * painted, exactly as axisTickOverlay() does for ticks.
      * @returns {{enabled: boolean, visible: boolean|null, size: {widthMm: number, heightMm: number}|null}|null}
@@ -16990,9 +16881,9 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * Export quality mode (UF-11). File > Export Quality became this
-     * setting's only control and it has no DOM element to read, so the
-     * memory-banner and recovery specs prove changes here.
+     * Export quality mode. File > Export Quality is this setting's only
+     * control and it has no DOM element to read, so the memory-banner and
+     * recovery specs prove changes here.
      * @returns {string}
      */
     exportQuality() {
@@ -17000,7 +16891,7 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * Camera projection scene truth (UF-15). Projection is live camera
+     * Camera projection scene truth. Projection is live camera
      * state shared across the interfaces by order — never persisted — so
      * the preference matrix proves flip continuity here rather than
      * through either interface's own toggle button.
@@ -17014,18 +16905,18 @@ if (typeof window !== 'undefined') {
      * What the axis-tick overlay actually put in the scene.
      *
      * `inScene` is read from the scene graph, not from the preference: the
-     * defect this exists to catch was the option reading as ON while the
-     * overlay had thrown and nothing was drawn. Asserting the toggle's own
-     * state would have reported success throughout.
+     * defect this exists to catch is the option reading as on while the
+     * overlay has thrown and nothing is drawn. Asserting the toggle's own
+     * state would report success throughout.
      *
-     * `colorHex` is the color the overlay actually baked at build time —
-     * the only way a spec can prove the U-13 theme bleed stays fixed
+     * `colorHex` is the color the overlay actually baked at build time, the
+     * only way a spec can prove the overlay took the active theme's color
      * (screenshots can't read a material). Null until a build succeeded.
      *
-     * `distanceMm`/`tickStepMm` expose the UF-7 zoom-adaptive scale so a
-     * spec can prove the overlay re-derived itself after a zoom, and
-     * `nodes` names the depth-honest children (ticks, dashed negatives,
-     * line-glyph digits) actually present under the group.
+     * `distanceMm`/`tickStepMm` expose the zoom-adaptive scale so a spec can
+     * prove the overlay re-derived itself after a zoom, and `nodes` names the
+     * depth-honest children (ticks, dashed negatives, line-glyph digits)
+     * actually present under the group.
      *
      * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number, colorHex: number|null, distanceMm: number|null, tickStepMm: number|null, nodes: string[]}|null}
      */
@@ -17047,7 +16938,7 @@ if (typeof window !== 'undefined') {
     },
 
     /**
-     * The corner XYZ triad's live state (UF-7 P3). `present` reads the
+     * The corner XYZ triad's live state. `present` reads the
      * PreviewManager's own reference — the render pass draws exactly when
      * that reference exists, so a spec asserting on it is asserting on what
      * the second pass will actually paint. `letterColorHex` is the
@@ -17205,7 +17096,7 @@ if (typeof window !== 'undefined') {
 
     /**
      * Headless render hook for the desktop-parity harness
-     * (scripts/parity/render-wasm.mjs). Renders arbitrary SCAD at FULL
+     * (scripts/parity/render-wasm.mjs). Renders arbitrary SCAD at full
      * quality to binary STL without touching UI state — no project needs
      * to be loaded.
      *
@@ -17352,8 +17243,6 @@ if (typeof window !== 'undefined') {
     /**
      * Export the SCAD source exactly as it would be sent to the renderer.
      * @param {Object} [options]
-     * @param {boolean} [options.injected=false] - true  → return CSG-color-injected source
-     *                                            false → return original (raw) source
      * @param {boolean} [options.download=false] - trigger a browser file download
      * @returns {string|null} The SCAD source text, or null if no model is loaded
      */
@@ -17365,8 +17254,8 @@ if (typeof window !== 'undefined') {
         return null;
       }
 
-      // Renders always use unmodified source (KI-012); the old
-      // `injected` diagnostic mode died with injectCsgColors (F-4).
+      // Renders always use the unmodified source, so it is the only source
+      // there is to export.
       const source =
         autoPreviewController?.currentScadContent || state.uploadedFile.content;
       const label = 'original';
