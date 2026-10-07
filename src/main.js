@@ -8115,9 +8115,9 @@ async function initApp() {
     });
   }
 
-  // Escape belongs to the dialog, not to the textarea. Bound to the textarea it
-  // died the moment a keyboard user tabbed to Cancel or the X, which is exactly
-  // the path they take (UF-23, U-32).
+  // Escape belongs to the dialog, not to the textarea: bound to the textarea
+  // it would die the moment a keyboard user tabbed to Cancel or the X, which
+  // is exactly the path they take.
   if (textFileEditorModal) {
     textFileEditorModal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -8302,8 +8302,8 @@ async function initApp() {
     }
   });
 
-  // ========== START NEW PROJECT ==========
-  // Stakeholder feedback: Users want a way to start a new project from scratch
+  // ========== Start new project ==========
+  // A way to start a new project from scratch.
   const startNewProjectBtn = document.getElementById('startNewProjectBtn');
   if (startNewProjectBtn) {
     startNewProjectBtn.addEventListener('click', async () => {
@@ -8367,8 +8367,6 @@ if (rounded) {
     });
   }
 
-  // loadExampleByKey moved to file-handler.js
-
   // Load examples - unified handler
   // IMPORTANT: Keep this as the single click handler for all example buttons.
   // Having multiple click handlers (e.g. role-specific + unified) causes duplicate example loads,
@@ -8403,7 +8401,7 @@ if (rounded) {
     });
   });
 
-  // U-24 (UF-17): the welcome-tour card starts a tour of the surface it
+  // The welcome-tour card starts a tour of the surface it
   // sits on. No example loads, so the unified [data-example] handler
   // above never sees this button.
   const welcomeTourBtn = document.getElementById('startWelcomeTourBtn');
@@ -8413,16 +8411,16 @@ if (rounded) {
     });
   }
 
-  // U-27 (UF-22): ask about the welcome tour once per load, after the gate.
+  // Ask about the welcome tour once per load, after the gate.
   const tourNudgeSettled = initTourNudge({
     waitForFirstVisitAcceptance,
     startTutorial,
   });
 
-  // U-23 (UF-16): the Beginners-card spotlight waits for the first-visit
-  // gate — inside the inert #app it would be unreachable and unannounced.
-  // Q-52c: it now also waits for the nudge, so the card's tip takes over
-  // when the dialog is answered instead of competing with it.
+  // The Beginners-card spotlight waits for the first-visit gate — inside
+  // the inert #app it would be unreachable and unannounced. It also waits
+  // for the nudge, so the card's tip takes over when the dialog is
+  // answered instead of competing with it.
   void initWelcomeSpotlight({
     waitForFirstVisitAcceptance,
     waitForTourNudge: () => tourNudgeSettled,
@@ -8464,7 +8462,7 @@ if (rounded) {
     initUrlParams.toString()
       ? `${window.location.pathname}?${initUrlParams}${window.location.hash}`
       : `${window.location.pathname}${window.location.hash}`;
-  // DP-62: a drawing sent by a link. `?drawing=<url>` fetches a PNG, JPG,
+  // A drawing sent by a link. `?drawing=<url>` fetches a PNG, JPG,
   // SVG or DXF from a host a project may come from and hands it to the design
   // parameter of whatever the link opened, as if the person had chosen it:
   // the conversion starts behind the dialog and its Cancel, and the editor
@@ -8509,7 +8507,7 @@ if (rounded) {
         return;
       }
       // The example's own "Save this file for quick access?" comes up right
-      // after the controls do. The drawing waits for it (DP-52: an editor
+      // after the controls do. The drawing waits for it (an editor
       // opened behind an inert page can neither take focus nor say so).
       await waitForNoModal();
       deliverDrawing(target, file);
@@ -8865,13 +8863,13 @@ if (rounded) {
   }
 
   // =========================================
-  // D-187: a shared link that failed says so on the Main Page.
-  // The link handlers below return to the Main Page when a download fails.
-  // Their sentence used to reach only the visually hidden status region, and
-  // the link was stripped from the address bar, so a sighted person saw the
-  // Main Page and nothing else. The notice stands at the top of "Open or
-  // start a project" until dismissed, gives the loader's own reason, and
-  // offers the same link again.
+  // A shared link that failed says so on the Main Page. The link handlers
+  // below return to the Main Page when a download fails and strip the link
+  // from the address bar, so a sentence in the visually hidden status
+  // region alone would leave a sighted person with the Main Page and
+  // nothing else. The notice stands at the top of "Open or start a
+  // project" until dismissed, gives the loader's own reason, and offers the
+  // same link again.
   // =========================================
   const LINK_FAILURE_HEADING = 'The shared project could not be opened.';
   let linkFailureRetryUrl = null;
@@ -8948,9 +8946,9 @@ if (rounded) {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // MANIFEST DEEP-LINK LIFECYCLE — ORDER OF OPERATIONS
+    // Manifest deep-link lifecycle: the order of operations
     //
-    // The steps below MUST execute in this exact order. Reordering them
+    // The steps below must execute in this exact order. Reordering them
     // causes hard-to-diagnose bugs (e.g. the processing overlay covering
     // the first-visit modal, trapping the user in an infinite spinner).
     //
@@ -9019,13 +9017,13 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
-        // IR-9: a manifest can name the handful of parameters a beginner should
+        // A manifest can name the handful of parameters a beginner should
         // meet first. Set BEFORE handleFile, because handleFile is what
         // renders - setting it afterwards would show every control once and
         // then take most of them away again, which is worse than either state.
         setStarterParameters(defaults?.starterParameters);
 
-        // ?preset=<name> or manifest defaults.preset. D-200: with one, the
+        // ?preset=<name> or manifest defaults.preset. With one, the
         // first preview waits until the preset is applied below, so the
         // design's own values are not rendered and thrown away first.
         const presetName = initUrlParams.get('preset') || defaults?.preset;
@@ -9053,9 +9051,9 @@ if (rounded) {
           const message = unknownStarterMessage(unknown);
           if (message) {
             console.warn(`[DeepLink] ${message}`);
-            // The notice, not the status line. IR-13 measured a status
-            // message standing for about 660 ms before the render replaced
-            // it - long enough to exist, not long enough to read.
+            // The notice, not the status line: a status message stands for about
+            // 660 ms before the render replaces it - long enough to exist, not long
+            // enough to read.
             const { createParameterNotices } =
               await import('./js/parameter-notices.js');
             createParameterNotices(
@@ -9125,7 +9123,7 @@ if (rounded) {
                 state.schema,
                 parametersContainer,
                 (values) => {
-                  // DP-53: a committed change ends whatever draft stood.
+                  // A committed change ends whatever draft stood.
                   draftPreviewHash = null;
                   stateManager.setState({ parameters: values });
                   if (autoPreviewController) {
@@ -9136,7 +9134,7 @@ if (rounded) {
                 mergedParams
               );
 
-              // D-192: the selection a person makes from the list (state,
+              // The selection a person makes from the list (state,
               // hidden select, the preset's signature, nothing changed yet),
               // and the searchable list a person sees says so as well.
               setCurrentPresetSelection(match);
@@ -9148,7 +9146,7 @@ if (rounded) {
               }
               updatePrimaryActionButton();
 
-              // D-194: the sentence the announcement below says, so what is
+              // The sentence the announcement below says, so what is
               // seen and heard match, and no em dash in the status line.
               updateStatus(`${projectName} loaded with preset ${match.name}`);
               announceImmediate(
@@ -9159,10 +9157,10 @@ if (rounded) {
                 `[DeepLink] Preset not found: "${presetName}". Available:`,
                 presets.map((p) => p.name)
               );
-              // D-195: a notice, not the status line. The status line stood
-              // about 300 ms before the render replaced it, and the announcer
-              // replaced it at once, so nobody learned no preset was applied.
-              // add(), not show(): what else this link reported stays.
+              // A notice, not the status line: the status line stands about 300 ms
+              // before the render replaces it, and the announcer replaces it at once,
+              // so nobody would learn no preset was applied. add(), not show(): what
+              // else this link reported stays.
               updateStatus(`${projectName} loaded from manifest`);
               const { createParameterNotices, describeMissingPreset } =
                 await import('./js/parameter-notices.js');
@@ -9177,7 +9175,7 @@ if (rounded) {
           announceImmediate(`${projectName} loaded from manifest`);
         }
 
-        // D-200: the first preview handleFile left to this handler, with the
+        // The first preview handleFile left to this handler, with the
         // preset's values, or the design's own when the preset was not found.
         // It joins the debounced request above rather than adding a render.
         if (presetName && autoPreviewController) {
@@ -9216,7 +9214,7 @@ if (rounded) {
         // error occurred before step 2, e.g. during first-visit wait)
         if (dismissOverlay) dismissOverlay();
         // A starter list armed for a load that never happened must not be
-        // waiting for whatever project this person opens next (IR-9).
+        // waiting for whatever project this person opens next.
         setStarterParameters(null);
         console.error('[DeepLink] Manifest load failed:', error);
 
@@ -9276,7 +9274,7 @@ if (rounded) {
   }
 
   // =========================================
-  // Direct launch link: ?project=<url> support (Item 7)
+  // Direct launch link: ?project=<url> support
   // Allows linking directly to any .scad or .zip file hosted on the web
   // Usage: ?project=https://example.com/keyguard.zip or ?scad=https://example.com/box.scad
   // =========================================
@@ -9291,7 +9289,7 @@ if (rounded) {
 
     setTimeout(async () => {
       try {
-        // D-188: the manifest handler's step 1, for the same reason. The
+        // The manifest handler's step 1, for the same reason. The
         // file handler shows the processing overlay and then asks to save
         // the file, and neither may stand over the welcome dialog.
         if (firstVisitBlocking || !hasUserAcceptedDownload) {
@@ -9312,7 +9310,7 @@ if (rounded) {
 
         const loadedBefore = stateManager.getState().uploadedFile;
         if (isZipUrl) {
-          // D-186: the manifest lane's download, which follows a Git LFS
+          // The manifest lane's download, which follows a Git LFS
           // pointer on raw.githubusercontent.com to the archive itself
           // instead of handing the 130-byte pointer to the unzipper.
           const blob = await fetchProjectBlob(projectParam, urlFileName);
@@ -9344,7 +9342,7 @@ if (rounded) {
         const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
-        // D-186: handleFile reports its own failures (an archive it cannot
+        // handleFile reports its own failures (an archive it cannot
         // open gets the "ZIP Extraction Failed" dialog and the status "Failed
         // to extract ZIP file") and returns without loading anything. Only a
         // project that changed is a success worth announcing.
@@ -9375,7 +9373,7 @@ if (rounded) {
     }, 500);
   }
 
-  // DP-62: a drawing with no design to put it on opens the standalone editor.
+  // A drawing with no design to put it on opens the standalone editor.
   if (drawingParam && !exampleParam && !manifestParam && !projectParam) {
     setTimeout(() => applyLinkedDrawing({ door: true }), 500);
   }
@@ -9639,7 +9637,7 @@ if (rounded) {
   }
 
   // =========================================================================
-  // Expert Mode Integration (M2)
+  // Expert Mode Integration
   // =========================================================================
   const expertModeToggle = document.getElementById('expertModeToggle');
   const expertModePanel = document.getElementById('expertModePanel');
@@ -9653,7 +9651,7 @@ if (rounded) {
   let currentEditor = null;
   let modeManager = null;
   let editorStateManager = null;
-  /** Pending "focus the editor" timer, so a later claim on focus can win (D-15). */
+  /** Pending "focus the editor" timer, so a later claim on focus can win. */
   let editorFocusTimer;
 
   // True while an editor edit is being written into stateManager. The push
