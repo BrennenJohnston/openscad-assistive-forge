@@ -9,7 +9,7 @@
  * two apart, and a photograph and a drawing meet in the same editor.
  *
  * Ported from stencil-forge, src/js/color-separation.js
- * (https://github.com/BrennenJohnston/stencil-forge, GPL-3.0-or-later): the
+ * (GPL-3.0-or-later): the
  * deterministic k-means with histogram-prefiltered farthest-point seeding,
  * and the border-vote background pick. Two things are different here: a
  * fixed palette path, so a person who knows their paint can name it and get
