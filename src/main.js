@@ -126,7 +126,7 @@ import {
   updateStoragePrefs,
   shouldDeferLargeDownloads,
   formatBytes as _formatBytes,
-  // v2: Persistence and backup
+  // Persistence and backup
   checkPersistentStorage as _checkPersistentStorage,
   requestPersistentStorage as _requestPersistentStorage,
   clearCacheWithOptions,
@@ -138,7 +138,6 @@ import {
   readProjectFilesFromList,
   findLinkedProjectForHandle,
 } from './js/storage-manager.js';
-// showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
 import { startTutorial } from './js/tutorial-sandbox.js';
 import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
 import { initTourNudge } from './js/tour-nudge.js';
@@ -217,7 +216,7 @@ import {
   onScaleChange,
 } from './js/unit-sync.js';
 
-// Storage keys are centralized in ./js/storage-keys.js (audit Q4)
+// Storage keys are centralized in ./js/storage-keys.js
 import {
   initPreferencesDialog,
   openPreferencesDialog,
@@ -228,17 +227,17 @@ import {
   announceError as _announceError,
   POLITENESS as _POLITENESS,
 } from './js/announcer.js';
-// Expert Mode (M2) - Code editor integration
+// Expert Mode - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
 import { loadEditorPrefs, saveEditorPref } from './js/editor-prefs.js';
 // UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
-// U-10: Classic is desktop-only for now — the viewport half of the gate
+// Classic is desktop-only for now — the viewport half of the gate
 import {
   isViewportDesktopShaped,
   subscribeViewportShape,
 } from './js/classic-availability.js';
-// U-46: the four app-chrome controls join the Customizer row on a phone
+// The four app-chrome controls join the Customizer row on a phone
 import { initMobileToolbar } from './js/mobile-toolbar.js';
 import {
   initClassicLayoutController,
@@ -305,7 +304,7 @@ import {
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
-  // v2: Folder operations
+  // Folder operations
   createFolder as _createFolder,
   moveFolder as _moveFolder,
 } from './js/saved-projects-manager.js';
@@ -321,9 +320,6 @@ import Split from 'split.js';
  * Resolve parameters for 2D export (SVG/DXF) using the parsed parameter schema.
  * For each parameter that has an enum with a 2D-compatible value, overrides the
  * current value so the model produces 2D geometry for the export.
- *
- * Replaces the worker-side hardcoded approach (which only handled keyguard-specific
- * parameters and missed the critical `generate` parameter).
  *
  * @param {Object} parameters - Current UI parameter values
  * @param {Object|null} schema - Parsed schema from extractParameters() (schema.parameters)
@@ -380,8 +376,6 @@ function confirmProjectionFallback(format) {
     'Cancel'
   );
 }
-
-// EXAMPLE_DEFINITIONS moved to file-handler.js
 
 /**
  * Detect OFF/COFF geometry bytes masquerading as another format.
@@ -451,9 +445,9 @@ let renderQueue = null;
 
 /**
  * Export quality mode. Module-scope like previewManager so the __forgeDebug
- * hook can read it: File > Export Quality is its only control (UF-11) and
- * there is no DOM element left to ask. Session-only on purpose - the retired
- * drawer select also reset to 'model' on every boot.
+ * hook can read it: File > Export Quality is its only control and
+ * there is no DOM element to ask. Session-only on purpose: every boot
+ * starts at 'model'.
  */
 let exportQualityMode = 'model';
 
@@ -470,8 +464,7 @@ let editorPreviewTrigger = null;
  *
  * This is the single source for render-state enablement. It gates the File
  * menu's export items, the Generate button's Download state, and the Classic
- * editor toolbar's Export STL button; the same recipe used to be written out
- * twice, which is exactly the drift the risk register calls out.
+ * editor toolbar's Export STL button, so the three cannot drift apart.
  *
  * @param {Object} parameters - current parameter values
  * @returns {boolean}
@@ -483,19 +476,19 @@ function hasFullQualitySTLFor(parameters) {
   );
 }
 
-/* ── Error Log: reaching it by keyboard and by menu (F1) ──────────────────────
+/* ── Error Log: reaching it by keyboard and by menu ───────────────────────────
  *
  * The Error-Log lives in two different places depending on the host, so every
  * entry point below resolves WHERE it is from the DOM rather than from a mode
  * flag that could disagree with it:
  *
  *   Forge    inside the console's Structured tabpanel, behind a tab
- *   Classic  its own pane in the bottom strip (B2), always on screen
+ *   Classic  its own pane in the bottom strip, always on screen
  *
  * The two hosts therefore mean different things by "show the Error Log". In
  * Forge it is genuinely hidden and has to be revealed; in Classic it is
  * already there and what the user wants is to GET to it. Classic must never
- * click the Structured tab — that tablist is hidden there (D-9), so it would
+ * click the Structured tab — that tablist is hidden there, so it would
  * be an invisible control changing an invisible selection.
  */
 
@@ -537,7 +530,7 @@ function isErrorLogShowing() {
     if (getUIModeController().getClassicDensity() === 'simplified')
       return false;
     if (getClassicLayoutController()?.isConsoleCollapsed()) return false;
-    // Merged into a tab group (B7) and not the selected tab: the model sets
+    // Merged into a tab group and not the selected tab: the model sets
     // `hidden` on the panels that are not showing.
     return !document.getElementById('classicErrorLogSlot')?.hidden;
   }
@@ -582,10 +575,10 @@ function hideErrorLogForge() {
 
 /**
  * Classic: the pane is already in the bottom strip, so this is about reaching
- * it — unfold the strip if it is folded (D-8), select its tab if it has been
- * merged into a group (B7), then focus the title bar's menu button, which is
- * the focusable control the title bar carries (the same contract B8 uses after
- * a move).
+ * it — unfold the strip if it is folded, select its tab if it has been
+ * merged into a group, then focus the title bar's menu button, which is
+ * the focusable control the title bar carries (the same landing point a
+ * panel move uses).
  * @returns {boolean}
  */
 function showErrorLogClassic() {
@@ -593,7 +586,7 @@ function showErrorLogClassic() {
   if (!slot) return false;
 
   if (getUIModeController().getClassicDensity() === 'simplified') {
-    // Nothing else speaks here, so this is the one announcement F1 adds.
+    // Nothing else speaks here, so this announcement is the only feedback.
     announceImmediate('Error-Log is not available in the Simplified view');
     return false;
   }
@@ -605,7 +598,7 @@ function showErrorLogClassic() {
 
   // A merged group's tab lives in the shared bar, outside the panel; a solo
   // panel keeps its own title bar. tabIdFor comes from the dock model so the
-  // id scheme has one definition (plan §4 rule 5).
+  // id scheme has one definition.
   const tab = document.getElementById(tabIdFor('errorLog'));
   if (tab) {
     tab.click();
@@ -659,7 +652,7 @@ function toggleErrorLog() {
  * keys off and the preference key it persists under.
  *
  * Upstream's View menu hides the editor toolbar and the 3D view toolbar
- * separately (U2), so "Hide Toolbar" splits in two. The icon toolbar is this
+ * separately, so "Hide Toolbar" splits in two. The icon toolbar is this
  * app's own third bar; it keeps its item and its stored preference so nothing
  * on screen becomes unhideable, renamed so a screen reader can tell the three
  * apart. One table, so the menu and the startup restore cannot drift.
@@ -672,8 +665,6 @@ const CLASSIC_HIDEABLE_TOOLBARS = {
     storageKey: 'openscad-forge-classic-editor-toolbar-hidden',
   },
   view: {
-    // E7 already shipped the CSS rule for this attribute; nothing set it until
-    // the menu item existed, so the 3D view toolbar could not be hidden.
     label: 'Hide 3D View toolbar',
     name: '3D view toolbar',
     datasetKey: 'classicCameraBarHidden',
@@ -715,10 +706,9 @@ function toggleClassicToolbar(bar) {
 /**
  * Open the keyboard-shortcuts editor, wiring it on first use.
  *
- * This block was copy-pasted at FOUR call sites (Edit ▸ Preferences, Help ▸
- * Keyboard Shortcuts, the header button, and the Ctrl+Shift+K handler), which
- * is this project's recorded worst bug shape: a fix applied to three of four
- * copies looks done and is not. One copy now.
+ * One copy for the four ways in (Edit ▸ Preferences, Help ▸ Keyboard
+ * Shortcuts, the header button, and Ctrl+Shift+K): a fix applied to three
+ * of four copies looks done and is not.
  */
 function _openShortcutsModal() {
   const modal = document.getElementById('shortcutsModal');
@@ -732,15 +722,15 @@ function _openShortcutsModal() {
   openModal(modal);
 }
 
-// Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
-// transcribes what upstream's template actually inserts, and this round fetches
-// nothing from upstream, so building it would mean inventing it.
+// Edit ▸ Insert Template. Nothing in this repository transcribes what
+// upstream's template actually inserts, so building it would mean
+// inventing it.
 const INSERT_TEMPLATE_REASON =
   "Insert Template is not built yet: nothing in this project records what the desktop's template inserts, and guessing would put code you did not write into your file.";
 
-// Help ▸ Offline … (G6). Both are disabled with a reason rather than hidden:
-// D-39 defers all offline-documentation bundling out of this plan, so nothing
-// third-party is fetched, pinned or vendored here.
+// Help ▸ Offline …: both are disabled with a reason rather than hidden.
+// Offline documentation is not bundled, so nothing third-party is
+// fetched, pinned or vendored here.
 const OFFLINE_DOCUMENTATION_REASON =
   'Offline documentation is not bundled yet. Use Documentation, which opens the OpenSCAD manual in a new window while you are online.';
 const OFFLINE_CHEAT_SHEET_REASON =
@@ -756,7 +746,7 @@ function openAboutModal() {
 
   const versionLine = document.getElementById('aboutVersion');
   if (versionLine) {
-    // Audit 19: the version alone cannot tell two builds of the same version
+    // The version alone cannot tell two builds of the same version
     // apart, which is exactly what somebody reporting a bug needs to do. The
     // stamp is the string the service worker names its cache after, so what a
     // person reads here and what they see in DevTools are the same thing.
@@ -768,7 +758,7 @@ function openAboutModal() {
   });
 }
 
-/** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup (G5). */
+/** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup. */
 const JUMP_TO_LABEL = 'Jump To…';
 const JUMP_TO_EMPTY_REASON =
   'No panels are open, so there is nowhere to jump to. Turn one on from this menu first.';
@@ -791,10 +781,10 @@ function dockPanelReachable(panel) {
 }
 
 /**
- * Put focus on a Classic dock panel: its tab when it is merged into a group
- * (B7), otherwise its title bar's menu button — the same landing point B8
- * uses after a move and F1 uses for the Error-Log, so a jump feels like
- * every other way of arriving at a panel.
+ * Put focus on a Classic dock panel: its tab when it is merged into a
+ * group, otherwise its title bar's menu button — the same landing point a
+ * panel move and the Error-Log shortcut use, so a jump feels like every
+ * other way of arriving at a panel.
  * @param {string} panelId
  * @returns {boolean}
  */
@@ -863,9 +853,7 @@ function openJumpToPicker() {
 }
 
 /**
- * Window ▸ Customizer, Ctrl+Alt+4 and Ctrl+B are one command. The two
- * shortcuts used to toggle a `.sidebar` element that exists nowhere in this
- * app, so both were silently dead (G5).
+ * Window ▸ Customizer, Ctrl+Alt+4 and Ctrl+B are one command.
  */
 function toggleCustomizerPanel() {
   const layout = getClassicLayoutController();
@@ -894,11 +882,11 @@ function toggleEditorPanel() {
     return;
   }
   // Forge: open or close the Editor itself — the same command as its
-  // toolbar toggle, announced by the mode manager ("Editor opened…", C-38).
-  // This used to route through togglePanelVisibility('codeEditor'), whose
-  // primary element is the toggle BUTTON: the item hid the editor's entry
-  // point from the toolbar while the editor stayed shut (UF-10). Hiding
-  // the button remains the hidden-panels preference's job.
+  // toolbar toggle, announced by the mode manager ("Editor opened…"). Not
+  // togglePanelVisibility('codeEditor'), whose primary element is the
+  // toggle button: that would hide the editor's entry point from the
+  // toolbar while the editor stayed shut. Hiding the button is the
+  // hidden-panels preference's job.
   if (!_isEnabled('expert_mode')) {
     announceImmediate(CODE_EDITOR_UNAVAILABLE_REASON);
     return;
@@ -922,21 +910,12 @@ function restoreClassicToolbarPrefs() {
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
 
-// companionCurrentPath moved to companion-files-controller.js
-
-// Screen reader announcer - now uses centralized announcer.js
-// (Local implementation removed - use imported announce/announceImmediate/announceError)
-
-// HFM/Alt View state and functions moved to hfm-controller.js
-// Dialog functions moved to dialogs.js
-// sanitizeUrlParams, exportFormatFromMenu, applyToolbarModeVisibility moved to hfm-controller.js
-
 // Initialize app
 async function initApp() {
   console.log(`OpenSCAD Assistive Forge v${__APP_VERSION__}`);
   console.log('Initializing...');
 
-  // Initialize Milestone 0 Foundation systems early
+  // Initialize the foundation systems early
   // Feature flags: Enable controlled rollout of new features
   if (import.meta.env.DEV) {
     debugFlags(); // Log flag states for debugging (dev only)
@@ -949,10 +928,10 @@ async function initApp() {
   // Must run before any localStorage reads to ensure consistent key access
   migrateStorageKeys();
 
-  // UF-14: split the PER-UI viewing preferences into per-interface
-  // namespaces (Q-40b seeding). After the migration so it copies migrated
-  // values; before any controller init so every scoped read finds its
-  // namespace ready. Marker-gated — a no-op on every boot after the first.
+  // Split the per-UI viewing preferences into per-interface namespaces.
+  // After the migration so it copies migrated values; before any controller
+  // init so every scoped read finds its namespace ready. Marker-gated — a
+  // no-op on every boot after the first.
   ensureScopedPrefsSeeded();
 
   // Recovery Mode: Detect if we're recovering from a memory-related crash
@@ -980,7 +959,7 @@ async function initApp() {
   if (isRecoveryMode) {
     console.log('[Recovery] Recovery mode activated');
 
-    // Apply conservative settings per B.5.4 Recovery Mode Specification:
+    // Apply conservative settings for recovery mode:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
     // - CodeMirror disabled (use textarea only — less memory overhead)
@@ -1122,21 +1101,20 @@ async function initApp() {
 
   document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
     // This banner tells the user to save immediately, so the button has to
-    // reach a real save. It used to click #saveProjectBtn, which does not
-    // exist in index.html.
+    // reach a real save.
     getFileActionsController().onSave();
   });
 
   document
     .getElementById('memoryBannerReduceFn')
     ?.addEventListener('click', () => {
-      // Reduce export quality to low. The mode lives in main.js now
-      // (File > Export Quality) - there is no select to poke (UF-11).
+      // Reduce export quality to low. The mode lives in main.js (File > Export
+      // Quality); there is no select to poke.
       setExportQualityMode('low');
-      // Also reduce preview quality to fast. MEASURED: dispatching 'change'
-      // here started four renders, because that handler kicks auto-preview —
-      // and rendering is the memory-hungry operation this banner is warning
-      // about. Do exactly what the handler does, minus the kick.
+      // Also reduce preview quality to fast. Dispatching 'change' here would
+      // start renders, because that handler kicks auto-preview — and rendering
+      // is the memory-hungry operation this banner is warning about. Do exactly
+      // what the handler does, minus the kick.
       const previewQuality = document.getElementById('previewQualitySelect');
       if (previewQuality) {
         previewQuality.value = 'fast';
@@ -1176,11 +1154,9 @@ async function initApp() {
     .getElementById('memoryBannerExport')
     ?.addEventListener('click', () => {
       // Downloads the render that already exists, and says so plainly when
-      // there is none. Deliberately does NOT start a fresh render: rendering
+      // there is none. Deliberately does not start a fresh render: rendering
       // is the memory-hungry operation this banner is warning about, which
-      // is why this is the one export path that opts out of G3's
-      // render-on-demand. Previously clicked #renderExportButton, which does
-      // not exist.
+      // is why this is the one export path that opts out of render-on-demand.
       exportFormatFromMenu('stl', { renderIfNeeded: false });
       console.log('[Memory] STL export triggered for emergency save');
     });
@@ -1188,13 +1164,10 @@ async function initApp() {
   document
     .getElementById('memoryBannerReload')
     ?.addEventListener('click', () => {
-      // Recovery mode is real — it boots with the code editor disabled to
-      // cut memory. Restoring work across the reload is NOT: the snapshot
-      // this used to write came from #openscadSource, which does not exist,
-      // and the read side sets window._recoverySource, which nothing
-      // consumes. Rather than write data no one reads, the button now only
-      // does what it can do, and its tooltip no longer promises a save.
-      // The beforeunload dirty guard still stops an unsaved buffer here.
+      // Recovery mode boots with the code editor disabled to cut memory. It
+      // does not carry work across the reload, so the button only reloads,
+      // and its tooltip promises no save. The beforeunload dirty guard still
+      // stops an unsaved buffer here.
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
@@ -1204,12 +1177,11 @@ async function initApp() {
   window.addEventListener('storage-quota-exceeded', (e) => {
     const msg =
       e.detail?.message || 'Storage is full. Data could not be saved.';
-    // MEASURED before this change: the same sentence reached a screen reader
-    // three times — politely from updateStatus, assertively from
-    // _announceError, and assertively again from the toast. The toast's is the
-    // one worth keeping: a failed save is an error, so it belongs in the
-    // assertive region, and the toast says "Storage Problem" first so the
-    // announcement names its own subject.
+    // One announcement, not three: updateStatus would say it politely,
+    // _announceError assertively, and the toast assertively again. The
+    // toast's is the one worth keeping: a failed save is an error, so it
+    // belongs in the assertive region, and the toast says "Storage Problem"
+    // first so the announcement names its own subject.
     updateStatus(msg, 'error', { announce: false });
     showErrorToast({ title: 'Storage Problem', message: msg });
   });
@@ -1257,7 +1229,7 @@ async function initApp() {
   // no File System Access API at all.
   let folderWriteBack = null;
 
-  // IR-5: explicit saves into the connected folder. Every write is asked for,
+  // Explicit saves into the connected folder. Every write is asked for,
   // goes through FolderWriteBack's self-trigger contract, and is announced.
   const folderSaveActions = createFolderSaveActions({
     getWriteBack: () => folderWriteBack,
@@ -1301,11 +1273,11 @@ async function initApp() {
   }
   let previewQualityMode = PREVIEW_QUALITY_DEFAULT;
   /**
-   * DP-38 P2: true while a drawing-editor session is open.
+   * True while a drawing-editor session is open.
    *
    * The charm behind the editor is a thing somebody is GLANCING at while they
    * work on the drawing in front of it, not the thing they are judging, and
-   * MEASURED on the traced Bathroom icon the charm's own `$fn = 64` puts the
+   * on the traced Bathroom icon the charm's own `$fn = 64` puts the
    * app's default quality at 65,288 triangles and 0.31 s a render. DRAFT is
    * 26,120 and 0.16 s for a charm that is identical except for the clip's
    * rounded edges.
@@ -1317,17 +1289,17 @@ async function initApp() {
    * preview slower in the name of speed.
    */
   let editorDraftQuality = false;
-  // DP-53: the parameter hash of the charm drawn as a draft of the drawing
+  // The parameter hash of the charm drawn as a draft of the drawing
   // being edited, while that draft stands; null once anything else is drawn
   // or committed. The badge reads from it.
   let draftPreviewHash = null;
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
-  // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
-  // Previously 5s, now 15s to avoid unnecessary fast-mode triggers
+  // With Manifold, renders are fast enough that only one over 15 s counts
+  // as slow; a lower bar switches to fast mode when it is not needed.
   const AUTO_PREVIEW_SLOW_RENDER_MS = 15000;
-  // MANIFOLD OPTIMIZED: Raised threshold since Manifold handles high polygon counts efficiently
-  // Previously 150K, now 300K as Manifold can handle complex geometry
+  // Manifold handles high polygon counts efficiently, so the bar is 300K
+  // triangles.
   const AUTO_PREVIEW_TRIANGLE_THRESHOLD = 300000;
   const autoPreviewHints = {
     forceFastUntil: 0,
@@ -11418,7 +11390,7 @@ if (rounded) {
        * `/?hfm=unlock#v=1&params=...` lost its payload the moment it opened -
        * the door destroyed the very thing the link was carrying.
        *
-       * ★ THE MERGED HELPER `cleanUrlKeepingFragment()` IS NOT A DROP-IN
+       * THE MERGED HELPER `cleanUrlKeepingFragment()` IS NOT A DROP-IN
        * HERE, WHICH IS WHY THIS IS A LINE RATHER THAN A CALL. That helper
        * closes over `initUrlParams`, a DIFFERENT URLSearchParams built at
        * module start; this block deletes `hfm` from its own local copy. Calling
