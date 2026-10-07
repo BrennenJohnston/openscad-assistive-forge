@@ -1,16 +1,16 @@
 name: Release Checks
 
-# The slow browser lanes and the Lighthouse audit. They run every night on
-# develop, on the push that sets a version (the release candidate), and by
-# hand; a pull request runs the Test Suite workflow only. The check names
-# here are the ones the main ruleset requires.
+# The slow browser lanes and the Lighthouse audit. They run on every push to
+# develop (each merge), every night, and by hand; a pull request runs the Test
+# Suite workflow only. The check names here are the ones the main ruleset
+# requires, and only the push run counts toward them: a run started by hand
+# does not appear among a commit's checks.
 
 on:
   schedule:
     - cron: '0 9 * * *'
   push:
     branches: [develop]
-    paths: [package.json]
   workflow_dispatch:
 
 jobs:
