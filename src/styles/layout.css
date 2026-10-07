@@ -52,7 +52,7 @@ body {
   min-width: 0;
 }
 
-/* U-2/Q-16: the Main Page button leads the header in both themes, nearest
+/* The Main Page button leads the header in both themes, nearest
    the browser's own Back button; the branding shifts right. */
 .header-content > #clearFileBtn {
   min-height: var(--size-touch-target);
@@ -115,9 +115,9 @@ body {
 
 /* Header Controls Container.
    position: relative so absolutely-positioned sr-only descendants (the
-   U-10 gate reason span) resolve against THIS row, not <html> — a static
-   container lets a 1px sr-only box land past the viewport edge and add
-   phantom page scroll (the R2a 31px lesson, re-learned at 92px). */
+   Classic gate's reason span) resolve against this row, not <html>: a
+   static container lets a 1px sr-only box land past the viewport edge and
+   add phantom page scroll. */
 .header-controls {
   position: relative;
   display: flex;
@@ -188,19 +188,16 @@ body {
   border-color: var(--color-accent);
 }
 
-/* D-55: these two rules were being beaten, and the pairs below are the ones
-   these controls always intended — nothing here is a new colour.
-   `.btn-secondary:hover:not(:disabled)` in components.css sets a BACKGROUND and
-   nothing else, at (0,3,0) in a later-loading file, so it won and left whatever
-   text colour another rule had already chosen. MEASURED on the resulting pairs:
-   Forge hover #1c2024 on #80838d = 4.33:1, and the pressed Classic toggle kept
-   its white accent text over #858585 = 3.69:1, where AA needs 4.5:1 for 14px.
-   The token it used, --color-border, is a BORDER colour being used as a
-   surface. Restoring these needs weight, not new values: naming the class the
-   override targets and matching its :not(:disabled) takes them past it.
-   The guard is the contrast test, not the selector — if .btn-secondary ever
-   leaves this button, that test fails rather than the colour silently
-   regressing. */
+/* Weight, not new colours: `.btn-secondary:hover:not(:disabled)` in
+   components.css sets a background and nothing else, at (0,3,0) in a
+   later-loading file, so it would win and leave whatever text colour
+   another rule had chosen (Forge hover #1c2024 on #80838d = 4.33:1; the
+   pressed Classic toggle's white accent text over #858585 = 3.69:1, where
+   AA needs 4.5:1 for 14px). Naming the class the override targets and
+   matching its :not(:disabled) takes these rules past it.
+   The guard is the contrast test, not the selector: if .btn-secondary
+   ever leaves this button, that test fails rather than the colour
+   silently regressing. */
 .contrast-toggle.btn-secondary:hover:not(:disabled),
 .classic-toggle.btn-secondary:hover:not(:disabled) {
   background: var(--color-hover-bg);
@@ -211,22 +208,21 @@ body {
   background: var(--color-accent-hover);
 }
 
-/* U-10 gate: entering Classic needs a desktop-shaped viewport. The gated
+/* Gate: entering Classic needs a desktop-shaped viewport. The gated
    button stays focusable (aria-disabled, not disabled) so keyboard and
    screen-reader users can find it and hear why; it must read as
-   unavailable without relying on colour alone (dimmed AND the cursor
+   unavailable without relying on colour alone (dimmed and the cursor
    changes), matching the Classic toolbar's disabled-with-reason look.
 
-   CW-Q13(c), owner-signed: 0.7, not 0.5, so this gate reads like the City
-   Walk card's (game.css). opacity composites the WHOLE control over its
-   backdrop, so the pair a person sees is not the pair getComputedStyle
-   reports, and nothing measures it unless a guard does the blending —
-   axe skips contrast on aria-disabled entirely. MEASURED across all eight
-   theme states at 0.5, five sat below 4.5:1: light 3.32:1, dark 3.29:1,
-   mono light 3.16:1, mono dark 3.85:1, dark + HC 4.06:1. At 0.7 the worst
-   of the eight is 5.4:1 and it still reads as dimmed. High contrast is the
-   mode people choose BECAUSE they need contrast, which is what made the
-   old value worst exactly where it mattered most. */
+   0.7, not 0.5, so this gate reads like the City Walk card's (game.css).
+   opacity composites the whole control over its backdrop, so the pair a
+   person sees is not the pair getComputedStyle reports, and nothing
+   measures it unless a guard does the blending: axe skips contrast on
+   aria-disabled entirely. Across all eight theme states at 0.5, five sit
+   below 4.5:1: light 3.32:1, dark 3.29:1, mono light 3.16:1, mono dark
+   3.85:1, dark + HC 4.06:1. At 0.7 the worst of the eight is 5.4:1 and it
+   still reads as dimmed. High contrast is the mode people choose because
+   they need contrast. */
 .classic-toggle[aria-disabled='true'] {
   opacity: 0.7;
   cursor: not-allowed;
@@ -346,14 +342,12 @@ body {
   font-weight: 600;
 }
 
-/* U-29 (UF-21): the Simplified/Standard switch controls how much of the
-   project interface is shown, and on the welcome surface there is no project
-   interface to show. MEASURED at the base: pressing it there changes nothing
-   a user can see (196 rendered elements before and after; #mainInterface is
-   not rendered either way), while announcing "All panels are now visible"
-   about panels that are not on screen. It is taught in the box tour instead,
-   where pressing it does something. display:none, not visually-hidden - an
-   inert control must not stay Tab-reachable. */
+/* The Simplified/Standard switch controls how much of the project
+   interface is shown, and on the welcome surface there is no project
+   interface to show: pressing it there would change nothing a user can
+   see while announcing "All panels are now visible" about panels that are
+   not on screen. display:none, not visually-hidden: an inert control must
+   not stay Tab-reachable. */
 body[data-app-surface='welcome'] #uiModeToggle {
   display: none;
 }
@@ -885,7 +879,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
 
 @media (max-height: 720px) {
   .welcome-screen {
-    /* align-items: flex-start is now the default */
+    /* align-items: flex-start is the default */
     padding-top: var(--space-lg);
     padding-bottom: var(--space-lg);
   }
@@ -894,7 +888,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
 /* Mobile portrait: ensure welcome content starts at top */
 @media (max-width: 767px) {
   .welcome-screen {
-    /* align-items: flex-start is now the default */
+    /* align-items: flex-start is the default */
     padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
     /* Remove scrollbar gutter reservation on mobile - use native overlay scrollbars */
     scrollbar-gutter: auto;
@@ -1017,7 +1011,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
 
 /* Mobile drawer close button -- lives in the sticky panel-header title row */
 .drawer-close-btn {
-  /* min-width/min-height now provided by .forge-control */
+  /* min-width/min-height provided by .forge-control */
   z-index: var(--z-index-base);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
@@ -1132,9 +1126,9 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
 
   /* The status line's own mobile placement lives with its base rule further
-     down this file — putting it here would be overridden by that rule, which
-     is later in source order (measured: it stretched the box from y 143 to
-     y 854). See "U-46 / Q-73b" beside .preview-status-bar. */
+     down this file: putting it here would be overridden by that rule, which
+     is later in source order (it would stretch the box from y 143 to
+     y 854). See the comment beside .preview-status-bar. */
 
   @media (prefers-reduced-motion: reduce) {
     .preview-panel {
@@ -1293,7 +1287,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
 }
 
-/* U-46 / Q-73b: on a phone the status line reads at the TOP of the preview.
+/* On a phone the status line reads at the top of the preview.
    Bottom-left is the desktop home, and there it is under something in every
    state — measured at 412x915 with a project open and a finished preview:
      camera pad shut  y 829..854, and #actionsBar starts at y 816. The bar
@@ -1369,11 +1363,10 @@ body[data-app-surface='welcome'] #uiModeToggle {
 }
 
 /*
- * BR-4: removed .memory-bar / .memory-bar-fill rules. We previously rendered
- * a faux progressbar whose percent was (heapBytes / 1 GB) * 100, but the
- * WASM runtime does not expose a real memory limit. The indicator now shows
- * an absolute MB value only; the warning/critical classes still color the
- * text when the absolute heap exceeds the threshold.
+ * No memory bar: the WASM runtime does not expose a real memory limit, so
+ * a percentage would be invented. The indicator shows an absolute MB value
+ * only; the warning/critical classes color the text when the absolute heap
+ * exceeds the threshold.
  */
 
 /* Warning state (~819 MB+ allocated) */
@@ -1722,7 +1715,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
   display: flex;
 }
 
-/* Hide vertical gutter - no longer used with overlay approach */
+/* Hide vertical gutter - not used with the overlay approach */
 .gutter.gutter-vertical {
   display: none !important;
 }
@@ -1982,10 +1975,10 @@ body[data-app-surface='welcome'] #uiModeToggle {
   }
 
   /* Hide all actions except the collapse button when collapsed. By class,
-   * not id: the game's Camera panel (CW-35) shares this markup with its own
-   * toggle id, and matching the Forge's #cameraPanelToggle here hid the
-   * game's only reopen control - and dropped focus to <body>, outside the
-   * game layer's key listener, killing every game key (CW-38). */
+   * not id: the game's Camera panel shares this markup with its own toggle
+   * id, and matching the Forge's #cameraPanelToggle here would hide the
+   * game's only reopen control and drop focus to <body>, outside the game
+   * layer's key listener, killing every game key. */
   .camera-panel.collapsed .camera-header-actions > :not(.btn-collapse-panel) {
     display: none;
   }
@@ -2269,7 +2262,7 @@ body[data-app-surface='welcome'] #uiModeToggle {
 /* ============================================================================
    Compact Keyboard Shortcuts - Icon-Only Popover
    ============================================================================
-   On narrow widths or short heights, convert the shortcuts help to a 
+   On narrow widths or short heights, convert the shortcuts help to a
    compact icon button with a popover-style dropdown.
    ============================================================================ */
 @media (max-width: 600px), (max-height: 500px) {
@@ -2584,12 +2577,10 @@ details summary:focus,
   color: var(--color-text-primary);
 }
 
-/* Heading level moved h3 -> h2 with defect D-30. The level is a document
-   -structure fix, not a request for a bigger heading, so the size is pinned to
-   the token nearest the h3 default this replaced (18px vs the browser's
-   18.72px) - otherwise the UA default for h2 would jump it to 24px. Using the
-   token also means it now follows the large-text preference, which the
-   browser default did not. */
+/* The heading is an h2 for document structure, not for a bigger heading,
+   so the size is pinned to the token nearest the h3 default (18px vs the
+   browser's 18.72px); the UA default for h2 would jump it to 24px. The
+   token also follows the large-text preference. */
 .preview-webgl-error h2 {
   margin: 0 0 var(--space-sm);
   font-size: var(--font-size-lg);
@@ -2638,7 +2629,7 @@ details summary:focus,
   display: none;
 }
 
-/* Status area in drawer - now visually hidden, kept for screen readers */
+/* Status area in drawer - visually hidden, kept for screen readers */
 .status-area {
   /* Visually hidden but accessible to screen readers */
   position: absolute;
@@ -3016,7 +3007,7 @@ details summary:focus,
   display: none;
 }
 
-/* Stats in drawer - now visually hidden, kept for screen readers */
+/* Stats in drawer - visually hidden, kept for screen readers */
 .stats {
   /* Visually hidden but accessible to screen readers */
   position: absolute;
@@ -3918,16 +3909,13 @@ details summary:focus,
   }
 
   /* Buttons align right on same row as logo.
-     UF-42: they WRAP rather than refuse to. nowrap plus justify-content:
-     flex-end overflows to the LEFT, where there is no scrollbar and no way
-     back — measured in high contrast at 412x810, where the row's own
-     controls grow (the Main Page button 100.8 -> 116.6px, the interface
-     switch 193.6 -> 213.8px) and push the content past the 396px available.
-     The result was #app carrying 24px of hidden scroll range, scrolled to
-     23, with the Main Page button starting at x -15 and its label cut. On
-     the release base the same measurement read 100px of range with the
-     Classic button 96px off the right edge, so this is older than this
-     release and worse before it.
+     They wrap rather than refuse to: nowrap plus justify-content: flex-end
+     overflows to the left, where there is no scrollbar and no way back. In
+     high contrast at 412x810 the row's own controls grow (the Main Page
+     button 100.8 -> 116.6px, the interface switch 193.6 -> 213.8px) and
+     push the content past the 396px available, which without wrapping
+     leaves #app 24px of hidden scroll range and the Main Page button
+     starting at x -15 with its label cut.
      Wrapping costs a header row exactly when the contents genuinely do not
      fit — in high contrast at 412px the header goes 48px -> 96px — and a
      taller header is the right price for a control you can still reach.
@@ -3992,7 +3980,7 @@ details summary:focus,
     min-width: unset;
     border-bottom: none;
     flex-direction: column-reverse;
-    /* CRITICAL: Remove backdrop-filter to allow fixed positioning to work correctly */
+    /* Remove backdrop-filter to allow fixed positioning to work correctly */
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -4153,9 +4141,9 @@ details summary:focus,
   /* Camera drawer D-pads - scale based on viewport width */
   .camera-drawer:not(.collapsed) .camera-drawer-dpad {
     /*
-      IMPORTANT: don't cap to vw here.
-      Previous cap (26vw) made the D-pad container ~78px wide on small screens,
-      while buttons were ~40px, causing overflow/squeezing and “uneven” spacing.
+      Don't cap to vw here: a 26vw cap makes the D-pad container ~78px wide
+      on small screens while the buttons are ~40px, causing overflow,
+      squeezing and uneven spacing.
     */
     max-width: none;
     width: calc(
@@ -4266,13 +4254,13 @@ details summary:focus,
   /* ============================================================================
      Mobile Portrait Camera Focus Mode
      ============================================================================
-     When focus mode is active AND camera drawer is expanded on mobile portrait:
+     When focus mode is active and camera drawer is expanded on mobile portrait:
      - Preview fills the space above the camera controls
      - Header, workflow progress, and other UI are hidden/overlaid
      - Only the focus mode button remains visible (floating top-right)
      ============================================================================ */
 
-  /* When focus mode AND camera drawer is expanded: full-screen preview overlay */
+  /* Focus mode with the camera drawer expanded: full-screen preview overlay */
   .main-interface.focus-mode.camera-focus-mode {
     position: fixed !important;
     inset: 0 !important;
