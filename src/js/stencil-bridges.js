@@ -2,7 +2,7 @@
  * Bridges: ribs of material left across a cut so an island stays attached.
  *
  * Ported from stencil-forge, src/js/stencil-bridges.js
- * (https://github.com/BrennenJohnston/stencil-forge, GPL-3.0-or-later): the
+ * (GPL-3.0-or-later): the
  * ray/ring intersection, the rib rectangle, and the fan of evenly spaced rays
  * with a half-step retry. Prior art surveyed there: PathBinder (MIT) and
  * BridgeIt (MIT) place configurable-width connectors the same way.

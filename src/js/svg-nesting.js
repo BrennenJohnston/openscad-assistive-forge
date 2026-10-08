@@ -8,7 +8,7 @@
  * build a piece of geometry standing on nothing.
  *
  * Ported from stencil-forge, src/js/geometry-core.js
- * (https://github.com/BrennenJohnston/stencil-forge, GPL-3.0-or-later):
+ * (GPL-3.0-or-later):
  * the ray-cast point-in-polygon, the bounding-box prefilter, and the
  * smallest-enclosing-ring parent search. Two things are different here:
  *

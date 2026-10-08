@@ -9,7 +9,7 @@
  * clipper2-js directly.
  *
  * Ported from stencil-forge, src/js/geometry-core.js
- * (https://github.com/BrennenJohnston/stencil-forge, GPL-3.0-or-later): the
+ * (GPL-3.0-or-later): the
  * scale convention, the Path64 conversions, the three flat booleans, the
  * signed-area and centroid formulas, and buildRingTree. Three things are
  * different here:
