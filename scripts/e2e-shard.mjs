@@ -270,6 +270,14 @@ export const MEASURED_SECONDS = {
   'first-visit-links.spec.js': 40.0,
   'project-link-lane.spec.js': 10.0,
   'link-failure-notice.spec.js': 30.0,
+  // The shared checks' self-test: small pages served on a routed host, no app
+  // and no engine. Nine cases in 3.8 s locally; booked at 10, the rounding
+  // potrace-engine carries.
+  'invariants-selftest.spec.js': 10.0,
+  // Three cases, each a first visit that downloads the engine: 4.2, 7.6 and
+  // 11.4 s locally. No CI measurement yet, so it keeps the default, written
+  // down rather than left implicit. Chromium only (PROJECT_IGNORES).
+  'real-start.spec.js': 60.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
@@ -298,6 +306,11 @@ export const DEFAULT_WEIGHT_S = 60;
  * for it: a module worker importing a module under COEP is the exact shape
  * of two earlier WebKit worker failures. It passes there in 3.6 s. Reverse
  * with the others.
+ *
+ * real-start.spec.js runs on Chromium only, for the same arithmetic: booked at
+ * the default, it and the shared checks' self-test put the three-shard Edge
+ * lane at 35.2 of its 35 minutes. What it guards is the app's own start-up
+ * order, the same code in every browser. Reverse with the others.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
@@ -305,12 +318,14 @@ export const PROJECT_IGNORES = Object.freeze({
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
+    'real-start.spec.js',
   ],
   firefox: [
     'wasm-smoke.spec.js',
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
+    'real-start.spec.js',
   ],
 });
 
