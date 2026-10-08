@@ -1,12 +1,9 @@
 /**
  * E2E baseline: Generic (non-keyguard) project workflow
  *
- * Phase 1 parity harness — establishes E2E coverage for a community-style
- * SCAD project that uses generic parameter names (no "generate",
- * "type_of_keyguard", or laser-cutting names).
- *
- * Acknowledges that 6 of 21 existing E2E files are stakeholder-specific;
- * this file adds the first generic-project baseline to balance coverage.
+ * A parity harness: E2E coverage for a community-style SCAD project that
+ * uses generic parameter names (no "generate", "type_of_keyguard", or
+ * laser-cutting names), to balance the stakeholder-specific files.
  *
  * @license GPL-3.0-or-later
  */
@@ -73,11 +70,11 @@ const getColorDebugFixturePath = () =>
 const getSimple2dFixturePath = () =>
   path.join(process.cwd(), 'tests', 'fixtures', 'simple-2d.scad')
 
-// UF-9 P1: parameter groups render as <details> collapsed by default
-// (F5, owner decision 2026-05-15), and single-file uploads can raise the
-// save-project prompt whose dialog intercepts clicks. Clear the prompt,
-// then expand the groups so the typed group-scoped control assertions
-// below still prove the parameter UI rendered.
+// Parameter groups render as <details> collapsed by default, and
+// single-file uploads can raise the save-project prompt whose dialog
+// intercepts clicks. Clear the prompt, then expand the groups so the typed
+// group-scoped control assertions below still prove the parameter UI
+// rendered.
 async function expandParamGroups(page) {
   await expect(page.locator('.param-group').first()).toBeAttached({
     timeout: 10_000,

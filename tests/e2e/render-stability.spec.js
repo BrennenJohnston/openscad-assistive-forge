@@ -1,9 +1,8 @@
 /**
- * Render stability E2E test suite — Phase 0.2 baseline
+ * Render stability E2E test suite.
  *
- * Post-remediation regression safety net.
- * Verifies BUG-A/B/C/D fixes remain effective after parity remediation.
- * Assertions upgraded from baseline (soft) to post-fix (hard) 2026-03-12.
+ * A regression safety net: the BUG-A/B/C/D fixes from the parity work stay
+ * effective, with hard assertions.
  *
  * @license GPL-3.0-or-later
  */
@@ -27,24 +26,24 @@ const isCI = !!process.env.CI;
 test.describe.configure({ timeout: 180_000 });
 
 /**
- * UF-25, and this is a documented gap rather than a repair.
+ * A documented gap rather than a repair.
  *
  * Four tests in this file (BUG-B's two Customizer Settings cases, BUG-C's
  * debounce case and the 2D-to-3D transition) drive a `generate` parameter:
  * they pick "Customizer settings" or "first layer for SVG/DXF file" from a
- * dropdown and check what the preview does. MEASURED: no example this suite
- * loads has such a parameter. `colored-box` has none, and the only fixtures
- * in the repository that do are tests/fixtures/keyguard-minimal and
+ * dropdown and check what the preview does. No example this suite loads
+ * has such a parameter: `colored-box` has none, and the only fixtures in
+ * the repository that do are tests/fixtures/keyguard-minimal and
  * keyguard-v75.
  *
- * So those four skip, and until now they skipped SILENTLY with a bare
- * test.skip() - which reads in a report as a deliberate exclusion rather than
- * as coverage that quietly stopped existing. They now carry this reason.
+ * So those four skip, and they carry this reason rather than a bare
+ * test.skip(), which would read in a report as a deliberate exclusion
+ * rather than as coverage that quietly stopped existing.
  *
  * The fix, when someone takes it: load the keyguard-minimal fixture as a ZIP
- * the way keyguard-workflow.spec.js does, and point these four at it. It was
- * not taken here because it puts a heavy keyguard render into a suite that is
- * otherwise about a small box, and that trade deserves its own measurement.
+ * the way keyguard-workflow.spec.js does, and point these four at it. It
+ * puts a heavy keyguard render into a suite that is otherwise about a small
+ * box, and that trade deserves its own measurement.
  */
 const NO_GENERATE_PARAM =
   'no fixture in this suite has a `generate` parameter (see the note above)';
@@ -56,10 +55,10 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-    // UF-25: #consolePanel is defaultHiddenInBasic and Simplified is the
-    // default mode, so the console test clicked at a summary the mode
-    // controller had hidden and timed out. This suite drives panels, so it
-    // asks for Standard.
+    // #consolePanel is defaultHiddenInBasic and Simplified is the default
+    // mode, so a click at the console's summary would land on a panel the
+    // mode controller has hidden. This suite drives panels, so it asks for
+    // Standard.
     localStorage.setItem(
       'openscad-forge-ui-mode',
       JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
@@ -105,12 +104,10 @@ async function getPreviewStats(page) {
  * Detect whether the preview canvas currently contains rendered geometry.
  */
 async function hasMesh(page) {
-  // UF-9 established this and UF-25 needed it here: a readPixels taken
-  // outside an animation frame reads a CLEARED drawing buffer, so a perfectly
-  // rendered model reports no mesh. MEASURED before the fix: the preset-cycle
-  // test logged `mesh=false, triangles=116` - the geometry was plainly there.
-  // The nested double-rAF puts the read inside the frame that has just been
-  // painted.
+  // A readPixels taken outside an animation frame reads a cleared drawing
+  // buffer, so a perfectly rendered model would report no mesh
+  // (`mesh=false, triangles=116`). The nested double rAF puts the read
+  // inside the frame that has just been painted.
   return page.evaluate(
     () =>
       new Promise((resolve) => {
@@ -194,8 +191,8 @@ test.describe('Render Stability — Preset Cycling (BUG-A post-fix)', () => {
       try {
         await waitForPreviewIdle(page, { timeout: 90_000 });
       } catch (e) {
-        // presetValue was never defined here, so this handler threw a
-        // ReferenceError of its own whenever a render timed out (UF-25).
+        // A render that times out is logged, and the cycle moves on to the next
+        // preset.
         console.warn(`[PresetCycle] Preset ${presetName}: render did not complete in time`);
       }
 
@@ -424,10 +421,9 @@ test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
     await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
-    // A DXF is a 2D drawing, so this needs a model that can be asked for one.
-    // UF-25: without that, the export produced nothing, the test waited out a
-    // 120s download timeout and then RETURNED EARLY AND PASSED - two minutes
-    // of wall clock to assert nothing at all.
+    // A DXF is a 2D drawing, so this needs a model that can be asked for one;
+    // without that the export produces nothing, and a test that waited out the
+    // download timeout and returned would assert nothing at all.
     const generateParam = page.locator('.param-control').filter({ hasText: /^generate/i });
     test.skip((await generateParam.count()) === 0, NO_GENERATE_PARAM);
 
@@ -449,13 +445,13 @@ test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
     await page.waitForTimeout(500);
 
     // Click the Generate button
-    // UF-25: this union used to resolve first() to #classicTbRenderBtn, the
-    // Classic toolbar's Render button, which is not rendered in Forge.
+    // The Forge primary action; Classic's toolbar Render button is not
+    // rendered in Forge.
     const generateBtn = page.locator('#primaryActionBtn');
     await expect(generateBtn).toBeEnabled();
 
-    // Listen for download. If it never arrives, that IS the failure: the
-    // guard this test exists for is the CONTENT of the file.
+    // Listen for download. If it never arrives, that is the failure: the
+    // guard this test exists for is the content of the file.
     const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
     await generateBtn.click();
 
@@ -491,15 +487,11 @@ test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
   });
 
   /*
-   * Q-55(ii) (owner, 2026-08-15): the 'DXF postProcessDXF converts LWPOLYLINE
-   * entities to LINE' case was REMOVED here. It built a 40-line DXF fixture,
-   * called window.__postProcessDXF, found it undefined - its own comment said
-   * "this is expected; the function lives in the worker" - and then returned
-   * and passed. It could never assert anything.
-   *
-   * The behaviour it named is genuinely covered: tests/unit/dxf-postprocess.test.js
-   * imports postProcessDXF from src/worker/dxf-postprocess.js and tests the
-   * LWPOLYLINE-to-LINE conversion for real, in the unit suite, on every run.
+   * The postProcessDXF LWPOLYLINE-to-LINE conversion is covered in the unit
+   * suite: tests/unit/dxf-postprocess.test.js imports postProcessDXF from
+   * src/worker/dxf-postprocess.js and tests it for real on every run. A
+   * browser case cannot reach it: the function lives in the worker, so
+   * window.__postProcessDXF is undefined here.
    */
 });
 
@@ -512,7 +504,7 @@ test.describe('Render Stability — 2D/3D Preview Transitions', () => {
     await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
-    // Find the generate parameter dropdown. UF-25: a bare `select` resolved
+    // Find the generate parameter dropdown. A bare `select` would resolve
     // first() to #charmVariantSelect on the welcome screen, which is not
     // visible once a project is open. Use the same idiom as the tests above.
     const generateParam = page

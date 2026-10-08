@@ -1,8 +1,8 @@
 /**
  * Responsive Audit — Breakpoint x UI-Surface Test Matrix
  *
- * Discovery spec: 9 viewports x 10 UI surfaces. Failures are expected and
- * will be triaged in Phase 3. WASM-dependent tests are skipped in CI.
+ * Discovery spec: 9 viewports x 10 UI surfaces. Failures are expected
+ * and are triaged separately. WASM-dependent tests are skipped in CI.
  */
 import { test, expect } from '@playwright/test'
 import path from 'path'
@@ -186,12 +186,11 @@ for (const vp of VIEWPORTS) {
       expect(isScrollable).toBe(true)
 
       // The backdrop spans the whole viewport and the open drawer covers the
-      // middle of it, so Playwright's default click - at the element's centre -
-      // lands on the drawer's own content every time. MEASURED with the drawer
-      // open: the centre hits the preset actions at 320, Reset at 375, the
-      // customizer header at 480 and the panel body at 600. A person taps the
-      // strip beside the drawer, 32 px wide at the narrowest of these; so does
-      // this.
+      // middle of it, so Playwright's default click, at the element's center,
+      // lands on the drawer's own content every time: with the drawer open, the
+      // center hits the preset actions at 320, Reset at 375, the customizer
+      // header at 480 and the panel body at 600. A person taps the strip beside
+      // the drawer, 32 px wide at the narrowest of these; so does this.
       const strip = await page.evaluate(() => {
         const back = document.querySelector('#drawerBackdrop')
         const panel = document
@@ -355,20 +354,17 @@ for (const vp of VIEWPORTS) {
       // #shortcutsToggle sits in the static HTML, so it is visible the instant
       // the document loads - but initApp() is async and called at module scope,
       // and this button's click handler is attached thousands of lines into it.
-      // So there is a window where the button is on screen and DEAD, and a
+      // So there is a window where the button is on screen and dead, and a
       // click that lands in it is swallowed: waiting longer on the modal cannot
       // recover that click, because nothing is ever coming.
       //
-      // MEASURED (build/dp-r4 harness, clicking every 100ms from
-      // domcontentloaded and timing the first click that works): the dead
-      // window after `load` is 766ms on Firefox, 450ms on Chromium, and 1,287ms
-      // on Chromium at 6x CPU throttling - it scales with how slow the machine
-      // is. This test used to click exactly once, at `load`, then allow the
-      // modal 3s. On a contended CI box that window passes 3s and the test
-      // fails with nothing wrong with the app, which is what happened on CI
-      // Firefox: three attempts red in a row, then green on the re-run.
-      // Locally it is not flaky at all (0 failures in 6 Firefox runs, ~4.7s
-      // each), so patience alone would have proved nothing here.
+      // Clicking every 100ms from domcontentloaded and timing the first click
+      // that works, the dead window after `load` is 766ms on Firefox, 450ms on
+      // Chromium, and 1,287ms on Chromium at 6x CPU throttling: it scales with
+      // how slow the machine is. On a contended CI box it passes 3s, so a
+      // single click at `load` with 3s for the modal fails with nothing wrong
+      // with the app, while locally it never fails; patience alone proves
+      // nothing here.
       //
       // Clicking until the modal answers fixes the cause and leaves every
       // assertion below untouched. _openShortcutsModal always opens (it never

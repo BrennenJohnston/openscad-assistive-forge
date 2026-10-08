@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
+test.describe('Expert Mode E2E Smoke Test', () => {
   test('should activate Expert Mode, show editor, accept input, and display typed content', async ({
     page,
   }) => {
@@ -232,7 +232,7 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
   })
 })
 
-test.describe('D-15 — opening the editor must not steal focus from a menu', () => {
+test.describe('Opening the editor must not steal focus from a menu', () => {
   /**
    * The editor is focused after a mode switch for WCAG 2.4.3, which is right
    * on its own. The defect is that it happens a frame later, unconditionally,
@@ -288,8 +288,8 @@ test.describe('D-15 — opening the editor must not steal focus from a menu', ()
     })
 
     expect(state.menuOpen).toBe(true)
-    // MEASURED on the parent commit: activeIsEditor true with the menu open,
-    // from mode-manager's requestAnimationFrame focus, which had no guard.
+    // mode-manager's requestAnimationFrame focus needs a guard, or the editor
+    // takes focus with the menu open.
     expect(state.activeIsEditor).toBe(false)
     expect(state.activeInMenu).toBe(true)
   })
@@ -341,8 +341,7 @@ test.describe('Edit ▸ Font Size actually changes the font', () => {
       .first()
       .click()
 
-    // MEASURED on the parent commit: unchanged, because the method called
-    // does not exist.
+    // The method called must exist, or the size stays unchanged.
     await expect.poll(fontSize, { timeout: 5_000 }).toBeGreaterThan(before)
   })
 })

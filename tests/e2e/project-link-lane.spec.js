@@ -1,11 +1,11 @@
 /**
- * A direct link to a project archive (`?project=<zip url>`), D-186.
+ * A direct link to a project archive (`?project=<zip url>`).
  *
  * GitHub keeps a file tracked by Git LFS as a pointer of about 130 bytes:
  * raw.githubusercontent.com serves the pointer, media.githubusercontent.com
- * the file. The manifest lane always followed the pointer; this lane handed
- * it to the unzipper, which failed and blamed a corrupted archive, and then
- * the lane said "Loaded" over its own failure.
+ * the file. This lane follows the pointer, as the manifest lane does,
+ * rather than handing it to the unzipper, which fails, blames a corrupted
+ * archive, and leaves the lane saying "Loaded" over its own failure.
  *
  * The first-visit flag is pre-set here: the welcome dialog on the link road
  * is first-visit-links' subject.
@@ -48,7 +48,7 @@ function linkVerdict(page) {
   })
 }
 
-test.describe('A direct link to a project archive (D-186)', () => {
+test.describe('A direct link to a project archive', () => {
   test('an LFS-tracked ZIP opens', async ({ page }) => {
     test.skip(isCI, 'WASM processing is slow/unreliable in CI')
 

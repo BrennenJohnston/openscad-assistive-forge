@@ -294,11 +294,11 @@ test.describe('Welcome tour nudge', () => {
   test('it waits behind a full-screen overlay instead of opening underneath one', async ({
     page,
   }) => {
-    // The first build of this release opened the dialog under the WASM
-    // loading overlay (z-index 10000 against the dialog's 1000), with
-    // "Loading OpenSCAD Engine" printed across its buttons. No ordinary spec
-    // can catch that, because CI and local runs both boot with the engine
-    // already cached and the overlay gone in milliseconds. So one is stood up
+    // Opening the dialog under the WASM loading overlay (z-index 10000
+    // against the dialog's 1000) would print "Loading OpenSCAD Engine" across
+    // its buttons. No ordinary spec can catch that, because CI and local runs
+    // both boot with the engine already cached and the overlay gone in
+    // milliseconds. So one is stood up
     // by hand. #processingOverlay is the app's own id for a covering overlay
     // and nothing creates it at boot.
     await page.addInitScript(() => {

@@ -548,7 +548,7 @@ test.describe('Braille translation workflow (card)', () => {
     )
 
     // Pager is keyboard-operable: prev unavailable on the first card, next
-    // works and keeps focus on the last (D-228)
+    // works and keeps focus on the last
     await expect(page.locator('#braillePrevCard')).toHaveAttribute(
       'aria-disabled',
       'true'
@@ -828,10 +828,10 @@ test.describe('Braille translation workflow (card)', () => {
     await expectPanelAxeClean(page)
   })
 
-  // D-230: the empty status line was display: none, so its first message
-  // arrived together with its reveal and NVDA did not say it ("Six-key entry
-  // is on.", "Filled from your text: ..."). Empty, it stays rendered and in
-  // the accessibility tree, only visually hidden.
+  // An empty status line stays rendered and in the accessibility tree, only
+  // visually hidden: a line that is display: none while empty reveals its
+  // first message together with itself, and NVDA does not say it ("Six-key
+  // entry is on.", "Filled from your text: ...").
   test('the braille editor status line is in the accessibility tree while empty', async ({ page, browserName }) => {
     await openBrailleCard(page)
     await page.locator('#brailleFieldEditor summary').click()
@@ -847,9 +847,9 @@ test.describe('Braille translation workflow (card)', () => {
     }
   })
 
-  // D-229: an empty message box was hidden, so the first error arrived with
-  // the box itself and NVDA said only "alert". Empty, each box stays rendered
-  // and in the accessibility tree, taking no room on the page.
+  // Each empty message box stays rendered and in the accessibility tree,
+  // taking no room on the page: a box hidden while empty arrives with its
+  // first error, and NVDA says only "alert".
   test('the empty message boxes stay in the accessibility tree and take no room', async ({ page, browserName }) => {
     await openBrailleCard(page)
     for (const [id, role] of [
@@ -1071,8 +1071,8 @@ test.describe('Braille Charm workflow', () => {
     await expect(charInput).toHaveValue('\u2813', { timeout: 10000 }) // ⠓
 
     // Pager is keyboard-operable. At either end its button stays focusable,
-    // marked unavailable rather than disabled, which dropped focus to the
-    // page (D-228)
+    // marked unavailable rather than disabled, since disabling it would drop
+    // focus to the page.
     await expect(page.locator('#braillePrevCard')).toHaveAttribute(
       'aria-disabled',
       'true'
@@ -1285,7 +1285,7 @@ test.describe('Braille Sign workflow', () => {
     })
   }
 
-  test("a dot size outside ADA's range stops the model and says why (D-224)", async ({ page }) => {
+  test("a dot size outside ADA's range stops the model and says why", async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
     test.setTimeout(300_000)
 
@@ -1421,7 +1421,7 @@ test.describe('Braille Sign workflow', () => {
     )
   })
 
-  test('sign braille follows the ADA sign rule until Exactly as typed is chosen (D-236)', async ({ page }) => {
+  test('sign braille follows the ADA sign rule until Exactly as typed is chosen', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-sign')

@@ -1,7 +1,7 @@
 /**
  * Parity Regression — Post-Remediation Verification
  *
- * Automated gate that verifies all 14 RESOLVED parity scenarios from the
+ * Automated gate that verifies all 14 resolved parity scenarios from the
  * desktop-vs-browser audit remain functional. Each test.describe block
  * maps to one or more scenario IDs (S-001 through S-016) from
  * docs/archive/audit/scenario-matrix.md.
@@ -79,7 +79,7 @@ async function uploadFile(page, filePath) {
 }
 
 async function uploadMultipleFiles(page, filePaths) {
-  // #fileInput is single-file since the unified upload surface (C1.2) —
+  // #fileInput is single-file since the unified upload surface —
   // multi-file projects go in as a zip, matching the real user flow.
   const zip = new JSZip();
   for (const filePath of filePaths) {
@@ -186,8 +186,8 @@ async function sampleCanvasColorGroups(page) {
 
 test.describe('Parity — Color Passthrough (S-001–004, S-006)', () => {
   test('WASM emits per-face colors with 2+ distinct face-color groups', async ({ page, browserName }) => {
-    // Un-skipped for Chromium-family CI (skip-debt drawdown); Firefox/WebKit
-    // CI workers are not yet proven stable for real WASM renders.
+    // Runs on Chromium-family CI; Firefox/WebKit CI workers are not yet
+    // proven stable for real WASM renders.
     test.skip(
       isCI && browserName !== 'chromium',
       'Non-Chromium CI workers cannot complete WASM renders reliably'
@@ -238,8 +238,8 @@ test.describe('Parity — Color Passthrough (S-001–004, S-006)', () => {
 
 test.describe('Parity — Debug Modifier Dual-Render (S-005)', () => {
   test('# modifier geometry renders as THREE.Group with two children', async ({ page, browserName }) => {
-    // Un-skipped for Chromium-family CI (skip-debt drawdown); Firefox/WebKit
-    // CI workers are not yet proven stable for real WASM renders.
+    // Runs on Chromium-family CI; Firefox/WebKit CI workers are not yet
+    // proven stable for real WASM renders.
     test.skip(
       isCI && browserName !== 'chromium',
       'Non-Chromium CI workers cannot complete WASM renders reliably'
@@ -286,10 +286,9 @@ test.describe('Parity — Blank Display (S-007)', () => {
     const generateParam = page
       .locator('.param-control')
       .filter({ hasText: /^generate/i });
-    // UF-27: both of these used to skip in silence. The keyguard fixture DOES
-    // carry a `generate` parameter with a Customizer option - that is the whole
-    // premise of S-007 - so a fixture that lost either one would have reported
-    // a pass rather than the regression it is.
+    // The keyguard fixture carries a `generate` parameter with a Customizer
+    // option (the whole premise of S-007), so a fixture that lost either one
+    // must fail rather than skip.
     expect(await generateParam.count()).toBeGreaterThan(0);
 
     const generateSelect = generateParam.locator('select').first();
@@ -523,15 +522,14 @@ test.describe('Parity — Preset Cycling Stability (S-014)', () => {
     const presets = options.slice(0, Math.min(4, options.length));
 
     /*
-     * UF-27: this used to skip in silence here, so the case reported a clean
-     * skip rather than the coverage gap it is. MEASURED: the keyguard fixture
-     * offers 2 presets and this case needs 3 to be what its name says, so it
-     * has never once exercised "3+ sequential preset switches".
+     * The keyguard fixture offers 2 presets and this case needs 3 to be what
+     * its name says, so it skips with the reason below rather than in silence:
+     * that is a coverage gap, not a clean skip.
      *
      * The fix, when someone takes it: add a third preset to the keyguard
-     * fixture. It was not taken here because that fixture is shared with the
-     * golden geometry manifest, so changing it is a geometry-parity decision
-     * rather than a test-hygiene one.
+     * fixture. That fixture is shared with the golden geometry manifest, so
+     * changing it is a geometry-parity decision rather than a test-hygiene
+     * one.
      */
     test.skip(
       presets.length < 3,
@@ -591,8 +589,8 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     await expect(slider).toBeAttached({ timeout: 30_000 });
 
     if (!(await slider.isVisible().catch(() => false))) {
-      // UF-11: the slider lives in Edit ▸ Preferences ▸ 3D View now, and the
-      // menu bar is hidden in Simplified — switch to Standard first.
+      // The slider lives in Edit ▸ Preferences ▸ 3D View, and the menu bar is
+      // hidden in Simplified, so switch to Standard first.
       await page.locator('#uiModeToggle').click();
       await page.locator('#editMenuBtn').click();
       await page

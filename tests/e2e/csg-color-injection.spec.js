@@ -1,9 +1,10 @@
 /**
  * CSG Face Coloring — E2E Runtime Verification (unmodified source)
  *
- * Verifies the post-KI-012 color pipeline: SCAD without color() calls renders
- * UNMODIFIED (injectCsgColors() source mutation was removed because wrapping
- * each difference() subtractor in its own color(){} scope corrupted geometry).
+ * Verifies the color pipeline after the KI-012 work: SCAD without color()
+ * calls renders unmodified (no injectCsgColors() source mutation, since
+ * wrapping each difference() subtractor in its own color(){} scope
+ * corrupts geometry).
  *
  * On the current engine (OpenSCAD 2026.04.03 + Manifold), --enable=render-colors
  * natively emits distinct per-CSG-operation face colors even for colorless

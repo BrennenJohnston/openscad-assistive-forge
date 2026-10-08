@@ -1,5 +1,5 @@
 /**
- * Tutorial Spotlight Regression Tests (E5)
+ * Tutorial Spotlight Regression Tests
  *
  * Validates that all 6 tutorials run correctly across desktop and mobile
  * viewports, with spotlight targeting, panel positioning, completion

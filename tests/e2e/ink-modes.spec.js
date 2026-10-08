@@ -173,7 +173,7 @@ test.describe('What to keep from a picture', () => {
     const standard = await shapeCount(page);
 
     console.log('[ink] bird line art:', lineArt, 'standard:', standard);
-    // The signed default changes behaviour for photographs, so the case that
+    // The chosen default changes behavior for photographs, so the case that
     // already worked has to keep working. Both find the same drawing.
     expect(lineArt).toBeGreaterThan(1);
     expect(standard).toBeGreaterThan(1);

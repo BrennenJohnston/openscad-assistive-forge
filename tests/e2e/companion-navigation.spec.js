@@ -1,13 +1,13 @@
 /**
- * E2E tests for companion-file navigation (UF-23, U-32).
+ * E2E tests for companion-file navigation.
  *
- * The reported dead-end: once a companion file is open there is no way back.
- * Measured at develop@008dd6c, in both interfaces:
- *   - Apply and Ctrl+S drop focus on <body>, because the file list is rebuilt
- *     with innerHTML before closeModal fires, so the button it captured as the
- *     trigger is detached and .focus() on it does nothing.
- *   - Escape is bound to the textarea, not the dialog, so it does nothing once
- *     the user has tabbed to Cancel or the X.
+ * Once a companion file is open there must be a way back, in both
+ * interfaces:
+ *   - Apply and Ctrl+S must not drop focus on <body>: a file list rebuilt
+ *     with innerHTML before closeModal fires detaches the button it captured
+ *     as the trigger, and .focus() on it does nothing.
+ *   - Escape must be bound to the dialog, not the textarea, or it does
+ *     nothing once the user has tabbed to Cancel or the X.
  *
  * These cases carry the same isCI skip as project-files.spec.js next door:
  * they need a real multi-file project, which needs the file handler, which is
@@ -120,15 +120,15 @@ const focusedDescriptor = (page) =>
 
 /**
  * Every control the companion tree offers, with the selector scoped to the
- * whole panel rather than to #projectFilesList: UF-31 moves the breadcrumb bar
- * out of the list (D-38), and this measurement must hold either side of that.
+ * whole panel rather than to #projectFilesList, so the measurement holds
+ * wherever the breadcrumb bar sits.
  */
 const TREE_CONTROLS = [
   { name: 'breadcrumb', selector: '#projectFilesControls .file-nav-breadcrumb-btn' },
   { name: 'edit button', selector: '#projectFilesControls [data-action="edit"]' },
   { name: 'remove button', selector: '#projectFilesControls [data-action="remove"]' },
   { name: 'folder row', selector: '#projectFilesControls [data-folder-enter]' },
-  // AF-4 (C-20): the two action buttons under the tree join the contract.
+  // The two action buttons under the tree join the contract.
   { name: 'add-file button', selector: '#projectFilesControls .project-files-add-btn' },
   { name: 'save-as-project button', selector: '#companionSaveBtn' },
 ];
@@ -168,15 +168,15 @@ const underToken = ({ token, measured }) =>
     .filter((m) => m.w + 0.5 < token || m.h + 0.5 < token)
     .map((m) => `${m.name} "${m.label}" ${m.w}x${m.h} < ${token}`);
 
-test.describe('Companion files: controls you can hit (D-37)', () => {
+test.describe('Companion files: controls you can hit', () => {
   test.describe.configure({ timeout: 180_000 });
 
   /**
-   * D-37, MEASURED on this release's base (develop@2f89c48) at 1400x900,
-   * identical in both interfaces, against a resolved token of 36px:
+   * These are the controls that are the way back through the tree, and each
+   * must meet the token. At 1400x900, against a resolved token of 36px,
+   * sizes like these fail it in both interfaces:
    *   home breadcrumb 24.5x22, folder crumb 30.8x22,
    *   edit button 26.5x24, remove button 19.8x24, folder rows 523x33.1.
-   * These are the controls that ARE the way back through the tree.
    */
   for (const ui of [{ classic: false, name: 'Forge' }, { classic: true, name: 'Classic' }]) {
     test(`every tree control meets the touch-target token (${ui.name})`, async ({
@@ -257,15 +257,14 @@ const focusedRow = (page) =>
   });
 
 /**
- * D-54. Entering or leaving a folder rebuilt the list with innerHTML, which
- * destroyed the row the user had just pressed and dropped focus on <body> —
- * UF-23's dead-end on the navigation path rather than the save path. Measured
- * pre-existing before UF-31 and unchanged by it.
+ * Entering or leaving a folder must not destroy the row the user just
+ * pressed and drop focus on <body> (a list rebuilt with innerHTML does
+ * both): a dead-end on the navigation path.
  *
- * Signed behaviour: entering lands on the first row inside the folder, leaving
+ * The behavior: entering lands on the first row inside the folder, leaving
  * lands on the folder row you came out of.
  */
-test.describe('Companion files: the tree keeps your place (D-54)', () => {
+test.describe('Companion files: the tree keeps your place', () => {
   test.describe.configure({ timeout: 180_000 });
 
   for (const ui of [
@@ -312,7 +311,7 @@ test.describe('Companion files: the tree keeps your place (D-54)', () => {
   });
 });
 
-test.describe('Companion files: Add File lands where you are standing (AF-4)', () => {
+test.describe('Companion files: Add File lands where you are standing', () => {
   test.skip(isCI, 'needs the WASM file handler, like the rest of this file');
 
   test('a file added while inside utils/ is filed under utils/, not the root', async ({
@@ -428,7 +427,7 @@ test.describe('Companion files: a way back', () => {
       .toBe('BUTTON action=edit path=utils/helpers.scad');
   });
 
-  test('an edited companion reaches the render (the U-30 interlock)', async ({
+  test('an edited companion reaches the render', async ({
     page,
   }) => {
     test.skip(isCI, 'Needs a real render, so needs WASM');

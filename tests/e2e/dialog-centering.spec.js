@@ -3,11 +3,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 
-// U-1: native <dialog> elements opened with showModal() rendered in the top-left
-// corner because reset.css's `* { margin: 0 }` destroyed the UA's
-// `dialog { margin: auto }` centering. Three raw-dialog users share the fate:
-// the folder main-.scad picker (.folder-scad-select-dialog), the preset import
-// dialog (.import-mode-dialog) and the unsaved-preset prompt
+// Native <dialog> elements opened with showModal() must be centered:
+// reset.css's `* { margin: 0 }` destroys the UA's `dialog { margin: auto }`
+// centering and puts them in the top-left corner. Three raw-dialog users
+// share the risk: the folder main-.scad picker
+// (.folder-scad-select-dialog), the preset import dialog
+// (.import-mode-dialog) and the unsaved-preset prompt
 // (.preset-import-mode-dialog).
 
 const isCI = !!process.env.CI

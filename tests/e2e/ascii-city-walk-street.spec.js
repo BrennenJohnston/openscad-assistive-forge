@@ -1593,7 +1593,7 @@ test.describe('ASCII City Walk — cars are cars', () => {
       }
       return { total: cars.length, halves }
     })
-    // The six signed classes and nothing else: 5.8/5.0/4.6/4.9/4.4/5.2 m.
+    // The six chosen classes and nothing else: 5.8/5.0/4.6/4.9/4.4/5.2 m.
     expect(Object.keys(check.halves).sort()).toEqual([
       '2.20',
       '2.30',
@@ -1862,7 +1862,7 @@ test.describe('ASCII City Walk — the kerb', () => {
     // number.
     expect(hi - lo, `camera rose from ${lo} to ${hi}`).toBeGreaterThan(0.1)
     // It never stopped: a kerb is drawn and felt, but it is not an obstacle.
-    // This is the directive's non-negotiable half.
+    // That half is not negotiable.
     //
     // The stall count only means anything once the walk has begun, so the
     // fact that it began is asserted first - a walker who never moved would

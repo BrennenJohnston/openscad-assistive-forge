@@ -1,5 +1,5 @@
 /**
- * E2E tests for the shared parameter link (IR-1).
+ * E2E tests for the shared parameter link.
  *
  * The app writes the user's non-default parameter values into the URL fragment
  * as `#v=1&params=<json>`. These tests pin the whole round trip: a link's values
@@ -84,9 +84,8 @@ test.describe('Shared parameter links', () => {
     await openSimpleBox(page, payload({ width: 999 }))
 
     await expect(page.locator('#param-width')).toHaveValue('100')
-    // IR-13 replaced the one-line status this used to assert with a notice
-    // that stays until dismissed (IR-Q16). The old sentence said only that
-    // SOMETHING had been adjusted; this names the parameter and the number.
+    // A notice that stays until dismissed names the parameter and the
+    // number, rather than saying only that something was adjusted.
     await expect
       .poll(
         async () =>
@@ -159,9 +158,9 @@ test.describe('Shared parameter links', () => {
   test('the notice about changed values stays until it is dismissed', async ({
     page,
   }) => {
-    // IR-Q16. D-98 made this sentence reachable at all; measured, it then
-    // stood for about 660 ms before the render replaced it, so someone who
-    // looked up late never learned their number had changed.
+    // A status line alone would stand for about 660 ms before the render
+    // replaced it, so someone who looked up late would never learn their
+    // number had changed.
     await openSimpleBox(
       page,
       payload({ width: 999, hole_count: 0, not_a_real_parameter: 5 })
@@ -229,8 +228,8 @@ test.describe('Shared parameter links', () => {
   })
 })
 
-// DP-44: a tile can name a dial with @label(...) so the customizer stops
-// repeating the group's word on every control. The parameter NAME is
+// A tile can name a dial with @label(...) so the customizer stops
+// repeating the group's word on every control. The parameter name is
 // untouched, which is the whole point: a link, a preset and a project all
 // still carry design_scale.
 test.describe('Dial labels from the tile', () => {

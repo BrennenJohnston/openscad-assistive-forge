@@ -709,7 +709,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar', () => {
   }) => {
     // An old 100 percent was 1.6 m/s, which is slower than anything this
     // scale offers. It clamps to the floor, and that player comes back
-    // walking 2.4 m/s - faster than they left, which is the signed
+    // walking 2.4 m/s - faster than they left, which is the intended
     // consequence of the rebase rather than a rounding accident.
     await withStoredSpeed(page, '1')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('speed 50%')

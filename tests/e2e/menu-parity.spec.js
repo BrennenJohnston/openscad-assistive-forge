@@ -186,8 +186,8 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test.describe('File menu parity (G1)', () => {
-  test('order and labels follow upstream U2', async ({ page }) => {
+test.describe('File menu parity', () => {
+  test('order and labels follow upstream', async ({ page }) => {
     await loadFixture(page)
 
     await page.locator('#fileMenuBtn').click()
@@ -195,7 +195,7 @@ test.describe('File menu parity (G1)', () => {
 
     expect(items.map((i) => i.label)).toEqual(FILE_MENU_ORDER)
 
-    // R11: File > Close appeared twice and Save All duplicated Save.
+    // File > Close appears once, and there is no Save All beside Save.
     expect(items.filter((i) => /close/i.test(i.label))).toHaveLength(1)
     expect(items.some((i) => i.label === 'Save All')).toBe(false)
 
@@ -244,7 +244,7 @@ test.describe('File menu parity (G1)', () => {
     const uploaded = entries.find((e) => e.label === 'sample.scad')
     expect(uploaded.disabled).toBe(true)
 
-    // Clear Recent sits last, after a separator, per U2.
+    // Clear Recent sits last, after a separator, as upstream has it.
     expect(labels[labels.length - 1]).toBe('Clear Recent')
     expect(labels[labels.length - 2]).toBe('---')
     expect(entries[entries.length - 1].disabled).toBe(false)
@@ -329,8 +329,8 @@ test.describe('File menu parity (G1)', () => {
   })
 })
 
-test.describe('Edit menu parity (G2)', () => {
-  test('order and labels follow upstream U2', async ({ page }) => {
+test.describe('Edit menu parity', () => {
+  test('order and labels follow upstream', async ({ page }) => {
     await loadFixture(page)
     await openEditor(page)
 
@@ -546,7 +546,7 @@ test.describe('Editor folding', () => {
   })
 })
 
-test.describe('Grown menus stay reachable (G1/G2)', () => {
+test.describe('Grown menus stay reachable', () => {
   test('the Edit menu scrolls and its last item is reachable by keyboard', async ({
     page,
   }) => {
@@ -680,8 +680,8 @@ async function cameraPose(page) {
   return page.evaluate(() => window.__forgeDebug?.cameraPose() ?? null)
 }
 
-test.describe('View menu parity (G4)', () => {
-  test('order follows U2 and every registered shortcut is displayed', async ({
+test.describe('View menu parity', () => {
+  test('order follows upstream and every registered shortcut is displayed', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -716,7 +716,7 @@ test.describe('View menu parity (G4)', () => {
     expect(items.find((i) => i.label === 'Reset View').disabled).toBe(false)
   })
 
-  test('a preview is enough for the commands that act on the viewport (P10)', async ({
+  test('a preview is enough for the commands that act on the viewport', async ({
     page,
   }) => {
     test.setTimeout(300_000)
@@ -800,8 +800,8 @@ test.describe('View menu parity (G4)', () => {
     const panned = await cameraPose(page)
     expect(distance(panned.target, modelCentre)).toBeGreaterThan(1)
 
-    // Ctrl+] is new in G4. Three presses must move the camera three steps
-    // closer — not six, which is what a second live path would produce.
+    // Ctrl+] zooms in one step. Three presses must move the camera three
+    // steps closer, not six, which is what a second live path would produce.
     const ZOOM_STEP = 15
     for (let i = 0; i < 3; i++) await page.keyboard.press('Control+]')
     const zoomed = await cameraPose(page)
@@ -821,7 +821,7 @@ test.describe('View menu parity (G4)', () => {
     expect(radius(centered)).toBeCloseTo(radius(zoomed), 3)
 
     // View All undoes the zoom by refitting; Reset View ignores the model and
-    // returns to the startup pose. These were the same command before G4.
+    // returns to the startup pose. They are separate commands.
     const fitted = await runViewItem('View All')
     expect(radius(fitted)).toBeCloseTo(fittedRadiusAtStart, 3)
     expect(radius(fitted) - radius(centered)).toBeGreaterThan(3 * ZOOM_STEP - 5)
@@ -854,8 +854,8 @@ const WINDOW_MENU_ORDER_STANDARD = [
   'Advanced',
 ]
 
-test.describe('Window menu parity (G5)', () => {
-  test('order follows U2 and Jump To moves focus into the panel it names', async ({
+test.describe('Window menu parity', () => {
+  test('order follows upstream and Jump To moves focus into the panel it names', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -963,7 +963,7 @@ test.describe('Window menu parity (G5)', () => {
   })
 })
 
-// Appendix U2's Help menu, then the Forge extras this app keeps.
+// The desktop's Help menu, then the Forge extras this app keeps.
 const HELP_MENU_ORDER = [
   'About',
   'OpenSCAD Homepage',
@@ -978,8 +978,8 @@ const HELP_MENU_ORDER = [
   'Report Issue',
 ]
 
-test.describe('Help menu parity (G6)', () => {
-  test('order follows U2, no two items share a target, and About is honest', async ({
+test.describe('Help menu parity', () => {
+  test('order follows upstream, no two items share a target, and About is honest', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -1036,8 +1036,8 @@ test.describe('Help menu parity (G6)', () => {
   })
 })
 
-test.describe('Mnemonics and one path per shortcut (G7)', () => {
-  test('menus underline the access keys U2 marks, and only those', async ({
+test.describe('Mnemonics and one path per shortcut', () => {
+  test('menus underline the access keys upstream marks, and only those', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -1077,7 +1077,7 @@ test.describe('Mnemonics and one path per shortcut (G7)', () => {
     const view = await underlined('view')
     expect(view['Back']).toBe('k') // Bac&k
     expect(view['Center']).toBe('n') // Ce&nter
-    // U2 marks no access key on the display toggles.
+    // Upstream marks no access key on the display toggles.
     expect(view['Show Edges']).toBeNull()
     expect(view['View All']).toBeNull()
 
@@ -1160,8 +1160,8 @@ test.describe('Mnemonics and one path per shortcut (G7)', () => {
   })
 })
 
-test.describe('Design menu and Export submenu parity (G3)', () => {
-  test('Design order follows U2 and unavailable items say why', async ({
+test.describe('Design menu and Export submenu parity', () => {
+  test('Design order follows upstream and unavailable items say why', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -1191,7 +1191,7 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     )
   })
 
-  test('Export submenu follows U2 and never gates on a prior render', async ({
+  test('Export submenu follows upstream and never gates on a prior render', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -1221,7 +1221,7 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     expect(items.some((i) => /POV/i.test(i.label))).toBe(false)
   })
 
-  test('the output-format select tells the same 3MF story as the menu (T2-B2)', async ({
+  test('the output-format select tells the same 3MF story as the menu', async ({
     page,
   }) => {
     // No fixture: the select is static markup, and the point is that the two

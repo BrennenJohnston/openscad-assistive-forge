@@ -14,12 +14,11 @@ const isCI = !!process.env.CI
 
 // Dismiss first-visit modal so it doesn't block UI interactions.
 //
-// UF-25: also ask for Standard. #projectFilesControls is
-// defaultHiddenInBasic in ui-mode-controller.js and Simplified is the
-// default mode, so four tests here waited for a panel the mode controller
-// had deliberately hidden and failed on every local run. Diagnosed at UF-23
-// and repaired here. The repair belongs to the test: which panels Simplified
-// hides is a signed product decision (Q-40), not something a spec may change
+// Also ask for Standard: #projectFilesControls is defaultHiddenInBasic in
+// ui-mode-controller.js and Simplified is the default mode, so a test that
+// waits for the panel in Simplified waits for a panel the mode controller
+// has deliberately hidden. The fix belongs to the test: which panels
+// Simplified hides is a product decision, not something a spec may change
 // by asserting against it.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -163,10 +162,8 @@ const uploadWideZipProject = async (page) => {
 }
 
 /**
- * UF-25: the file list lives inside a collapsed <details>, so
- * #projectFilesList is present but not visible until the disclosure is
- * opened. Three tests asserted on it straight after upload and failed on
- * every local run.
+ * The file list lives inside a collapsed <details>, so #projectFilesList is
+ * present but not visible until the disclosure is opened.
  */
 const openProjectFilesDisclosure = async (page) => {
   const details = page.locator('details.project-files-details')
@@ -258,8 +255,7 @@ test.describe('Project Files Manager', () => {
     await openProjectFilesDisclosure(page)
 
     // The fixture ships helpers.scad and settings.txt beside main.scad, so
-    // there are always non-main files here. This used to skip itself when it
-    // found none, which hid the fact that it found none (UF-25).
+    // there are always non-main files here, asserted rather than guarded.
     const nonMainItems = page.locator('.project-file-item:not(.main-file)')
     await expect(nonMainItems.first()).toBeVisible()
 
@@ -280,8 +276,8 @@ test.describe('Project Files Manager', () => {
     // Find a .txt file's edit button
     const txtFileItem = page.locator('.project-file-item:has(.project-file-name:has-text(".txt"))').first()
     
-    // The fixture always ships settings.txt, so these guards were hiding a
-    // missing panel rather than a missing file (UF-25).
+    // The fixture always ships settings.txt, so a guard here would hide a
+    // missing panel rather than a missing file.
     await expect(txtFileItem).toBeVisible()
 
     const editBtn = txtFileItem.locator('button[data-action="edit"]')
@@ -422,9 +418,9 @@ cube(10);
     const fileItems = page.locator('.project-file-item')
     const initialCount = await fileItems.count()
     
-    // main.scad + helpers.scad + settings.txt: three, always. The old guards
-    // skipped instead of failing, so a panel that never opened looked like a
-    // project that had nothing to remove (UF-25).
+    // main.scad + helpers.scad + settings.txt: three, always. Asserted rather
+    // than guarded, so a panel that never opened cannot look like a project
+    // that had nothing to remove.
     expect(initialCount).toBeGreaterThanOrEqual(2)
 
     // Find a non-main file to remove
@@ -493,13 +489,12 @@ cube(10);
   })
 
   /**
-   * UF-34. The case above passes only because a single-file example takes the
-   * renderer's companionCount === 0 branch, which is the ONLY branch that
-   * refreshes this button. With companions present the button kept its hidden
-   * class, so Save as Project was missing in exactly the situation it exists
-   * for: a multi-file project that is not saved yet.
+   * The case above passes on the single-file branch of the renderer
+   * (companionCount === 0). With companions present the button must lose its
+   * hidden class too, or Save as Project is missing in exactly the situation
+   * it exists for: a multi-file project that is not saved yet.
    */
-  test('companion save button is visible when the project HAS companion files', async ({
+  test('companion save button is visible when the project has companion files', async ({
     page,
   }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
@@ -515,12 +510,11 @@ cube(10);
   })
 
   /**
-   * UF-33. UF-31 made every row one touch target tall, which cost the list a
-   * visible row inside its 200px ceiling — four on a phone where it had been
-   * five. The owner chose to let the box grow with the content up to a larger
-   * cap, so six rows now have to fit before anything scrolls, at either
-   * density. Measured from the rows themselves rather than from a literal, so
-   * a phone (44px rows) and a mouse (36px rows) are both covered.
+   * Every row is one touch target tall, so a 200px ceiling would show only
+   * four rows on a phone. The box grows with the content up to a larger cap,
+   * so six rows have to fit before anything scrolls, at either density.
+   * Measured from the rows themselves rather than from a literal, so a phone
+   * (44px rows) and a mouse (36px rows) are both covered.
    */
   test('six rows fit before the file list starts scrolling', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')

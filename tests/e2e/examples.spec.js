@@ -17,12 +17,10 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-// F5 (owner decision 2026-05-15): parameter groups render as <details>
-// collapsed by default, so a .param-control can be attached yet hidden
-// inside its group. Prove the parameters loaded first, then expand the
-// groups so the visibility assertion still means what it meant when these
-// deep-link tests were written (UF-9 P1; this was D-11's real mechanism —
-// not a dev-vs-deployed lane difference).
+// Parameter groups render as <details> collapsed by default, so a
+// .param-control can be attached yet hidden inside its group. Prove the
+// parameters loaded first, then expand the groups so the visibility
+// assertion still means what it says.
 async function expectParamsLoaded(page) {
   await expect(page.locator('.param-control').first()).toBeAttached({ timeout: 10000 })
   // Some example sources raise the save-project prompt (q-charm loads as
@@ -84,7 +82,7 @@ test.describe('Example Deep-Links', () => {
   })
 })
 
-test.describe('An example brings every file it needs (D-97)', () => {
+test.describe('An example brings every file it needs', () => {
   test('logo-plate previews without the engine complaining', async ({
     page,
   }) => {

@@ -255,7 +255,7 @@ test.describe('Terminology - No Old Terms', () => {
   })
 })
 
-test.describe('Customizer terminology (C11)', () => {
+test.describe('Customizer terminology', () => {
   test('the pane is named Customizer, not Parameters', async ({ page }) => {
     await page.goto('/')
 

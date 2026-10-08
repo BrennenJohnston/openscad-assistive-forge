@@ -367,7 +367,7 @@ test.describe('Per-panel collapse', () => {
     await expect(btn).toHaveAttribute('aria-label', 'Collapse Editor');
     await expect(btn).toHaveText('▸');
 
-    // The point of the whole phase: the body is gone, the title bar is not.
+    // The whole point: the body is gone, the title bar is not.
     await expect(
       page.locator('#classicEditorSlot .classic-pane-titlebar')
     ).toBeVisible();
@@ -467,7 +467,7 @@ test.describe('Per-panel collapse', () => {
     page,
   }) => {
     test.setTimeout(300_000);
-    // Exactly the shape R3a wrote — no collapse keys at all.
+    // The shape saved before collapse existed: no collapse keys at all.
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
@@ -503,7 +503,7 @@ test.describe('Per-panel collapse', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // Merge Error-Log into Console's cell, so one shared bar serves both (B7).
+    // Merge Error-Log into Console's cell, so one shared bar serves both.
     await page.locator('#classicErrorLogSlot .classic-panel-menu-btn').click();
     await page
       .getByRole('menuitem', { name: 'Merge with Console', exact: true })
@@ -683,8 +683,8 @@ test.describe('Customizer header rows', () => {
     await expect(row1.locator('#resetAllBtn')).toBeEnabled();
 
     // Narrow: three controls do not fit one line in a 343px column, so the row
-    // wraps. That is the wanted answer — the same one R2a gave the toolbars
-    // rather than letting them overflow. What must NOT happen is clipping.
+    // wraps. That is the wanted answer, as for the toolbars, rather than
+    // letting them overflow. What must not happen is clipping.
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.waitForTimeout(400);
     const narrow = await readRows();
@@ -760,7 +760,7 @@ test.describe('Forge extras out of the Customizer column', () => {
       ).toBeHidden();
     }
 
-    // The point of the phase: nothing to walk past before the parameters.
+    // The point: nothing to walk past before the parameters.
     const gap = await page.evaluate(() => {
       const container = document.getElementById('parametersContainer');
       const firstGroup = container.querySelector('details.param-group');
@@ -1750,7 +1750,7 @@ test.describe('Window-menu toggles (F6)', () => {
 
 // ─── The dock: each new panel moves and merges like the ones already there ───
 
-test.describe('New panels inside the dock (B6-B9)', () => {
+test.describe('New panels inside the dock', () => {
   test.beforeEach(async ({ page }) => {
     await seedPanes(page, {
       animateVisible: true,
@@ -1819,7 +1819,7 @@ test.describe('New panels inside the dock (B6-B9)', () => {
 
     // Splitting is the same move operation with a different target — but the
     // menu now lives on the group's SHARED bar, because a merged group shows
-    // the active panel's title bar moved into it (B7). The button is renamed
+    // the active panel's title bar moved into it. The button is renamed
     // for the group and its items name their subject.
     await page
       .getByRole('button', { name: 'Move panels', exact: true })
@@ -1944,7 +1944,7 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     await enterClassicStandard(page);
 
     // sr-only spans are position:absolute; in a static container they resolve
-    // against <html> and poke past the viewport — the 31px bug R2a paid for.
+    // against <html> and poke past the viewport, a 31px overflow.
     for (const width of [375, 900]) {
       await page.setViewportSize({ width, height: 800 });
       await page.waitForTimeout(400);
@@ -2052,7 +2052,7 @@ test.describe('Status-bar viewport telemetry', () => {
       })
       .toMatch(/^Viewport:/);
 
-    // The whole point of the phase. The camera's feed fires ~118 times per
+    // The whole point. The camera's feed fires ~118 times per
     // drag; if the telemetry were inside the bar's live region a screen reader
     // would read a pose ten times a second.
     const placement = await page.evaluate(() => {
@@ -2285,7 +2285,7 @@ test.describe('Small-defect sweep', () => {
     await seedFirstVisit(page);
     await loadProject(page);
 
-    // T2-A1. The real .btn.btn-danger in the app's own stylesheet — the class
+    // The real .btn.btn-danger in the app's own stylesheet — the class
     // dialogs.js gives the confirm button of every destructive action. Rendered
     // here rather than reached through the preset flow, which needs a saved
     // preset before Delete is even enabled.

@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// Classic mode (desktop-OpenSCAD-style layout) — C4 acceptance.
+// Classic mode (desktop-OpenSCAD-style layout).
 //
-// Classic is gated on the classic_mode feature flag (default ON since C4.6);
+// Classic is gated on the classic_mode feature flag (default on);
 // flag-off behavior is covered via the URL override. Mode switching goes
 // through the real UI: the header Classic toggle, the Simplified/Standard
 // switch, and View > Interface Mode radios.
@@ -55,7 +55,7 @@ async function pickInterfaceMode(page, radioName) {
   await radio.click();
 }
 
-test.describe('Classic header toggle (C1)', () => {
+test.describe('Classic header toggle', () => {
   test('classic-header-toggle: always-visible button enters classic and returns to the remembered custom mode', async ({
     page,
   }) => {
@@ -150,7 +150,7 @@ test.describe('Classic header toggle (C1)', () => {
   });
 });
 
-test.describe('Classic chrome strip (C3)', () => {
+test.describe('Classic chrome strip', () => {
   test('classic-strips-custom-chrome: Forge chrome hides in classic and returns on exit', async ({
     page,
   }) => {
@@ -287,7 +287,7 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     // ...and keeps everything customizing needs
     await expect(page.locator('.preview-panel')).toBeVisible();
     await expect(page.locator('#paramPanel')).toBeVisible();
-    // C2 moves the individual desktop controls rather than the whole presets
+    // Classic moves the desktop controls one by one, not the whole presets
     // panel, so the preset row holds the chooser and the +/- pair directly
     await expect(page.locator('#classicPresetRow #presetSelector')).toHaveCount(
       1
@@ -551,7 +551,7 @@ test.describe('Classic on mobile (375px, touch)', () => {
     ).toBeHidden();
     await expect(page.locator('#classicEdgesToggle')).toBeHidden();
     // Primary actions keep their seats — they have no one-tap menu equivalent.
-    // They now live on the 3D view toolbar, which E3 created.
+    // They live on the 3D view toolbar.
     await expect(page.locator('#classicPreviewBtn')).toBeVisible();
     await expect(page.locator('#classicRenderBtn')).toBeVisible();
     await expect(page.locator('#classicViewHomeBtn')).toBeVisible();
@@ -791,7 +791,7 @@ test.describe('Classic desktop appearance', () => {
   });
 });
 
-test.describe('Classic acceptance (C13)', () => {
+test.describe('Classic acceptance', () => {
   test('classic-menu-reachability: every hidden control has a menu home', async ({
     page,
   }) => {
@@ -854,9 +854,9 @@ test.describe('Classic acceptance (C13)', () => {
     await page.keyboard.press('Escape');
 
     // File > Close Project returns to the welcome screen (accept the
-    // unsaved-changes confirmation the #clearFileBtn handler shows). The
-    // item was named "Close" until G1 dropped upstream's Quit slot and gave
-    // the single remaining close action the clearer name.
+    // unsaved-changes confirmation the #clearFileBtn handler shows). With
+    // upstream's Quit slot dropped, the single remaining close action has
+    // the clearer name.
     await page.locator('#fileMenuBtn').click();
     // Target the visible label: a menu item's accessible name also carries
     // its sr-only tooltip, so an exact name match cannot be used here.
@@ -938,7 +938,7 @@ test.describe('Classic acceptance (C13)', () => {
   });
 });
 
-test.describe('Classic mode layout (C4)', () => {
+test.describe('Classic mode layout', () => {
   test('entering Classic moves console and presets into pane slots, exiting restores them', async ({
     page,
   }) => {
@@ -1005,10 +1005,10 @@ test.describe('Classic mode layout (C4)', () => {
     ).toHaveCount(1);
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
 
-    // Upstream row 1 is Automatic Preview + the detail combobox + Reset. P5
-    // moved Reset here from Forge additions: it IS a control the desktop
-    // Customizer has, so hiding it in a section named for what desktop lacks
-    // was the wrong shelf. Row 2 gained save preset for the same reason.
+    // Upstream row 1 is Automatic Preview + the detail combobox + Reset.
+    // Reset is a control the desktop Customizer has, so it lives here rather
+    // than in a section named for what the desktop lacks. Row 2 has save
+    // preset for the same reason.
     await expect(
       page.locator('#classicCustomizerControls #paramDetailLevelWrap')
     ).toHaveCount(1);
@@ -1041,7 +1041,7 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(page.locator('#customizerHeaderRow')).toBeHidden();
     await expect(page.locator('#presetSearchLegacy')).toBeHidden();
 
-    // Editor pane (C5): visible by default alongside the customizer
+    // Editor pane: visible by default alongside the customizer
     const editorSlot = page.locator('#classicEditorSlot');
     await expect(editorSlot).toBeVisible();
     await expect(editorSlot.locator('#expertModePanel')).toHaveCount(1);
@@ -1080,7 +1080,7 @@ test.describe('Classic mode layout (C4)', () => {
     expect(iconImage, 'vendored icon resolves').toContain('openscad-icons');
 
     // Snap views and Render moved to the 3D view toolbar. Six snap views —
-    // G4 took Reset View out of them and gave it its own command.
+    // Reset View is its own command, not one of them.
     const cameraBar = page.locator('#classicCameraBar');
     await expect(cameraBar.locator('[data-classic-view]')).toHaveCount(6);
     await expect(cameraBar.locator('#classicRenderBtn')).toBeVisible();
@@ -1095,7 +1095,7 @@ test.describe('Classic mode layout (C4)', () => {
     );
     await axesToggle.click();
 
-    // Window-bottom status bar (C8): visible at the bottom, mirroring the
+    // Window-bottom status bar: visible at the bottom, mirroring the
     // hidden in-viewport overlay's text; only one aria-live status source
     const statusBar = page.locator('#classicStatusBar');
     await expect(statusBar).toBeVisible();
@@ -1157,7 +1157,7 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(page.locator('#classicCustomizerBar')).toBeHidden();
   });
 
-  test('preset copy and unsaved-changes guard (C4.4)', async ({ page }) => {
+  test('preset copy and unsaved-changes guard', async ({ page }) => {
     test.setTimeout(240_000);
 
     // Legacy native select (combobox flag off) so the test can drive the
@@ -1180,7 +1180,7 @@ test.describe('Classic mode layout (C4)', () => {
     );
 
     // Copy design defaults into a new preset; it becomes the selection.
-    // Copy Preset is a Forge addition, so C2 puts it in the collapsed
+    // Copy Preset is a Forge addition, so it lives in the collapsed
     // "Forge additions" section — open that first, as a user would.
     await presetSelect.selectOption('__design_defaults__');
     const forgeExtras = page.locator('#classicForgeExtras');
@@ -1227,7 +1227,7 @@ test.describe('Classic mode layout (C4)', () => {
   }) => {
     test.setTimeout(240_000);
 
-    // classic_mode defaults on since C4.6; force it off via URL override
+    // classic_mode defaults on; force it off via URL override
     await loadSampleProject(page, { query: '?flag_classic_mode=false' });
     await switchToStandardMode(page);
 
@@ -1241,7 +1241,7 @@ test.describe('Classic mode layout (C4)', () => {
   });
 });
 
-test.describe('Classic dock shell (B2)', () => {
+test.describe('Classic dock shell', () => {
   test('classic-dock-strip: Console and Error-Log sit side by side under a full-height editor', async ({
     page,
   }) => {
@@ -1280,7 +1280,7 @@ test.describe('Classic dock shell (B2)', () => {
     // Error-Log is to the RIGHT of Console
     expect(errorBox.x).toBeGreaterThan(consoleBox.x);
 
-    // R6: the editor runs full height — it starts above the strip and its
+    // The editor runs full height — it starts above the strip and its
     // bottom edge lines up with the strip's
     expect(editorBox.y).toBeLessThan(consoleBox.y);
     expect(
@@ -1292,7 +1292,7 @@ test.describe('Classic dock shell (B2)', () => {
       editorBox.x + editorBox.width - 2
     );
 
-    // R8: the camera bar exists as its own row between view and strip
+    // The camera bar exists as its own row between view and strip
     await expect(page.locator('#classicCameraBar')).toHaveCount(1);
 
     // Classic replaces the console tabs with panes, so the tablist goes
@@ -1395,7 +1395,7 @@ test.describe('Classic dock shell (B2)', () => {
   });
 });
 
-test.describe('Classic dock resizers (B4)', () => {
+test.describe('Classic dock resizers', () => {
   test('classic-resizer-keyboard: each separator is a tab stop that moves its pane and announces the width', async ({
     page,
   }) => {
@@ -1585,7 +1585,7 @@ test.describe('Classic dock resizers (B4)', () => {
   });
 });
 
-test.describe('Classic canvas re-measure (B5)', () => {
+test.describe('Classic canvas re-measure', () => {
   test('classic-resizer-remeasure: the 3D canvas follows a keyboard resize', async ({
     page,
   }) => {
@@ -1686,7 +1686,7 @@ test.describe('Classic canvas re-measure (B5)', () => {
   });
 });
 
-test.describe('Automatic Preview control (C4)', () => {
+test.describe('Automatic Preview control', () => {
   test('classic-auto-preview-sync: all three surfaces drive one piece of state', async ({
     page,
   }) => {
@@ -1951,8 +1951,8 @@ test.describe('Classic editor toolbar behavior', () => {
   });
 });
 
-test.describe('Classic 3D view toolbar (E3-E7)', () => {
-  // Upstream viewerToolBar order (Appendix U3), verbatim
+test.describe('Classic 3D view toolbar', () => {
+  // Upstream viewerToolBar order, verbatim
   const ORDER = [
     'Preview',
     'Render',
@@ -2001,7 +2001,7 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     );
     expect(names).toEqual(ORDER);
 
-    // R8: it sits along the bottom edge of the 3D view, above the strip
+    // It sits along the bottom edge of the 3D view, above the strip
     const [barBox, viewBox, stripBox] = await Promise.all([
       bar.boundingBox(),
       page.locator('.preview-panel').boundingBox(),
@@ -2051,7 +2051,7 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
 
     // The snap-view buttons moved out of #classicToolbar; if the wiring were
     // still scoped to it they would all be silently dead. Six, not seven:
-    // G4 gave Reset View its own command instead of a snap to diagonal, so it
+    // Reset View is its own command rather than a snap to diagonal, so it
     // means the same thing as the View menu item of that name.
     const viewButtons = page.locator('#classicCameraBar [data-classic-view]');
     await expect(viewButtons).toHaveCount(6);
@@ -2079,9 +2079,9 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
       )
       .toBe(true);
 
-    // Read the state rather than assume it: P9 makes Classic open with axes
-    // and scale markers ON (the desktop's defaults), so a fixed 'false' start
-    // was pinning a default this suite does not own. What matters is the flip.
+    // Read the state rather than assume it: Classic opens with axes and scale
+    // markers on (the desktop's defaults), so a fixed 'false' start would pin
+    // a default this suite does not own. What matters is the flip.
     const markersBefore = await markers.getAttribute('aria-pressed');
     const axesBefore = await axes.getAttribute('aria-pressed');
     const flipped = (before) => (before === 'true' ? 'false' : 'true');
@@ -2201,7 +2201,7 @@ test.describe('Classic toolbars stay one row', () => {
   });
 });
 
-test.describe('Classic dock relocation (B6-B8)', () => {
+test.describe('Classic dock relocation', () => {
   /** Enter Classic in Standard density at a desktop width. */
   async function enterClassicDesktop(page, width = 1400) {
     await page.setViewportSize({ width, height: 900 });
@@ -2375,7 +2375,7 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     const errorTab = page.getByRole('tab', { name: 'Error-Log' });
     const consoleTab = page.getByRole('tab', { name: 'Console' });
 
-    // After a merge focus lands on the newly selected tab (B7)
+    // After a merge focus lands on the newly selected tab
     await expect(errorTab).toBeFocused();
     await expect(errorTab).toHaveAttribute('aria-selected', 'true');
     await expect
@@ -2679,7 +2679,7 @@ test.describe('Classic dock relocation (B6-B8)', () => {
   });
 });
 
-test.describe('View menu per-toolbar hide toggles (G4)', () => {
+test.describe('View menu per-toolbar hide toggles', () => {
   /** Enter Classic in Standard density at a desktop width. */
   async function enterClassicDesktop(page) {
     await page.setViewportSize({ width: 1400, height: 900 });
@@ -2689,7 +2689,7 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
     await expect(page.locator('#classicBottomStrip')).toBeVisible();
   }
 
-  // Upstream splits "Hide Toolbar" into one item per toolbar (U2). The icon
+  // Upstream splits "Hide Toolbar" into one item per toolbar. The icon
   // toolbar is this app's own third bar and keeps an item so nothing on
   // screen becomes unhideable.
   const BARS = [
@@ -2743,7 +2743,7 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
 
     // The Console is adopted into the dock and shown whatever the
     // Simplified-view preference says, so reading that preference reported it
-    // as off while it sat in the bottom strip (G5, caught by a screenshot).
+    // as off while it sat in the bottom strip.
     await expect(page.locator('#consolePanel')).toBeVisible();
 
     await page.locator('#windowMenuBtn').click();

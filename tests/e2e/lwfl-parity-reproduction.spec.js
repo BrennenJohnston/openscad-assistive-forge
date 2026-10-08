@@ -1,5 +1,5 @@
 /**
- * LWFL Parity Reproduction — Phase 2 of LWFL Geometry Follow-up Plan
+ * LWFL Parity Reproduction
  *
  * Focused reproduction of Bug A and Bug B on the exact failing LWFL preset.
  * Compares four render modes with aligned backend, output format, and quality
@@ -44,10 +44,9 @@ const OUTPUT_DIR = path.resolve(
   __dirname, '..', '..', 'artifacts', 'lwfl-parity-reproduction',
 );
 
-// UF-9 P1: the stakeholder bundle names its preset "... LAMP WFL 84"
-// (LAMP Words For Life), not "LWFL" — the old default filter matched
-// nothing ("Total options: 6, LWFL matches: 0" was this file's whole
-// local red). 'WFL' hits the real preset; LWFL_PRESET still overrides.
+// The stakeholder bundle names its preset "... LAMP WFL 84" (LAMP Words
+// For Life), not "LWFL", so 'WFL' hits the real preset; LWFL_PRESET still
+// overrides.
 const LWFL_PRESET_FILTER = process.env.LWFL_PRESET || 'WFL';
 
 // Bug A and Bug B parameter keys from KI-012
@@ -119,7 +118,7 @@ async function captureGeometryStats(page) {
 }
 
 /**
- * Collect console messages that match the Phase 1 diagnostic patterns.
+ * Collect console messages that match the diagnostic patterns.
  * Returns structured data for each logged diagnostic event.
  */
 function createDiagnosticCollector(page) {
@@ -230,7 +229,7 @@ function filterLwflPresets(options) {
 
 // ── Test Suite ─────────────────────────────────────────────────────────────────
 
-test.describe('LWFL Parity Reproduction — Phase 2', () => {
+test.describe('LWFL Parity Reproduction', () => {
   test.describe.configure({ timeout: 600_000 });
 
   test.beforeEach(async ({ page }) => {

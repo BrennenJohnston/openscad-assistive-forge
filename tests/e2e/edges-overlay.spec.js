@@ -1,14 +1,13 @@
 /**
- * D-152: the edges overlay sits on the model (2026-09-17).
+ * The edges overlay sits on the model.
  *
- * The owner's walk found the "Edges" overlay drawn in a different place from
- * the charm. Every mesh over 10,000 triangles takes the geometry worker's
- * path (D-143): its edge segments are made on the centered soup, and the
- * auto-bed then moved the geometry up onto the build plate without them, so
- * the overlay hung below the model by the bed offset. The default charm is
- * 29,372 triangles, so it always showed it; the small example models never
- * did. RED on the build before the fix: the overlay's lowest point half a
- * charm below the model's.
+ * Every mesh over 10,000 triangles takes the geometry worker's path: its
+ * edge segments are made on the centered soup, and the auto-bed moves the
+ * geometry up onto the build plate, so segments left behind would hang
+ * below the model by the bed offset. The default charm is 29,372
+ * triangles, so it always takes that path; the small example models never
+ * do. The failure shows as the overlay's lowest point half a charm below
+ * the model's.
  *
  * @license GPL-3.0-or-later
  */
@@ -66,8 +65,8 @@ const boxes = (page) =>
     }
   })
 
-test.describe('the edges overlay sits on the model (D-152)', () => {
-  test('★ on the default charm, the overlay and the mesh share a box', async ({
+test.describe('the edges overlay sits on the model', () => {
+  test('on the default charm, the overlay and the mesh share a box', async ({
     page,
   }) => {
     test.setTimeout(480000)

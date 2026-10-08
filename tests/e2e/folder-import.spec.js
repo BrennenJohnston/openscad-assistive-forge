@@ -71,7 +71,7 @@ async function backToWelcome(page) {
   await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 10_000 })
 }
 
-// ── Multi-folder welcome screen (sub-plan H / R3c) ───────────────────────
+// ── Multi-folder welcome screen ──────────────────────────────────────────
 //
 // Real FileSystemDirectoryHandles come from OPFS (navigator.storage
 // .getDirectory()): they structured-clone into IndexedDB, report

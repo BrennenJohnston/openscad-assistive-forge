@@ -51,10 +51,10 @@ function fullManifest() {
   }
 }
 
-// UF-9 P1: parameter groups render as <details> collapsed by default
-// (F5, owner decision 2026-05-15) — even a group-less SCAD lands in one
-// default group — so a .param-control is attached yet hidden. Prove the
-// load, expand the groups, then assert visibility.
+// Parameter groups render as <details> collapsed by default (even a
+// group-less SCAD lands in one default group), so a .param-control is
+// attached yet hidden. Prove the load, expand the groups, then assert
+// visibility.
 async function expectParamsLoaded(page) {
   await expect(page.locator('.param-control').first()).toBeAttached({ timeout: 10000 })
   // The manifest deep-link flow raises the "Shared Project" save-copy modal
@@ -534,7 +534,7 @@ test.describe('Manifest Loading - Accessibility', () => {
 })
 
 // ---------------------------------------------------------------------------
-// IR-9 — the starter subset
+// The starter subset
 //
 // A manifest can name the handful of parameters a beginner should meet first.
 // A 174-parameter keyguard is the truthful shape of that design and an unusable
@@ -608,7 +608,7 @@ async function visibleControlNames(page) {
   )
 }
 
-test.describe('Starter subset (IR-9)', () => {
+test.describe('Starter subset', () => {
   test('a manifest without the field renders every parameter, as it always did', async ({
     page,
   }) => {
@@ -654,7 +654,7 @@ test.describe('Starter subset (IR-9)', () => {
     await expect(button).toBeFocused()
 
     // Record everything the live region says, rather than sampling it later.
-    // MEASURED while writing this: the preview pipeline announces
+    // The preview pipeline announces
     // "Rendering preview..." about 200 ms after the press, so a sample taken
     // afterwards proves nothing about whether the reveal was announced at all.
     await page.evaluate(() => {
@@ -755,7 +755,7 @@ test.describe('Starter subset (IR-9)', () => {
   test('every hidden control is hidden from everybody, not just from the screen', async ({
     page,
   }) => {
-    // The rule this release is held to: no aria-only tricks. A control the
+    // The rule: no aria-only tricks. A control the
     // wall hides must be display:none, so nothing reaches it - not a screen
     // reader, not the Tab key, not a pointer.
     await loadStarterProject(page, ['width'])
@@ -786,17 +786,17 @@ test.describe('Starter subset (IR-9)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// D-192: the preset a link applies is the preset the list shows
+// The preset a link applies is the preset the list shows
 //
-// The handler applied the preset and set the hidden native select, but never
-// refreshed the searchable list a person sees, which kept saying "design
-// default values". The design here has a parameter the presets leave alone,
-// like the example's $fn: a preset that sets some of a design's parameters
-// is applied, not changed. The load test above says "preset auto-selects" and never
-// looked, so this went unseen until the example's presets could import.
+// Applying the preset and setting the hidden native select is not enough:
+// the searchable list a person sees must show it too, not "design default
+// values". The design here has a parameter the presets leave alone, like
+// the example's $fn: a preset that sets some of a design's parameters is
+// applied, not changed. The load test above says "preset auto-selects"
+// and does not look at the list.
 // ---------------------------------------------------------------------------
 
-test.describe('The preset a link applies is the one the list shows (D-192)', () => {
+test.describe('The preset a link applies is the one the list shows', () => {
   const THREE_PARAMETER_SCAD = `
 width = 50; // [10:1:100]
 height = 30; // [10:1:100]
@@ -846,15 +846,15 @@ cube([width, height, depth]);
 })
 
 // ---------------------------------------------------------------------------
-// D-194: the status line after a preset link says what the announcement says
+// The status line after a preset link says what the announcement says
 //
-// It put an em dash between the project and the preset, the one em dash among
-// the app's status lines, while the announcement right after it said
-// "{project} loaded with preset {name}". The status region is a live region
-// too, so a screen reader heard one event in two wordings.
+// The announcement says "{project} loaded with preset {name}", and the
+// status region is a live region too, so the status line uses the same
+// wording (no em dash between the project and the preset), or a screen
+// reader hears one event in two wordings.
 // ---------------------------------------------------------------------------
 
-test.describe('The status line after a preset link (D-194)', () => {
+test.describe('The status line after a preset link', () => {
   test.describe.configure({ timeout: 90_000 })
 
   test('is the sentence the announcement says, with no em dash', async ({ page }) => {
@@ -887,16 +887,16 @@ test.describe('The status line after a preset link (D-194)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// D-195: a link that names a preset the project does not have says so
+// A link that names a preset the project does not have says so
 //
-// It said so only in the status line, which stood about 300 ms before the
-// render replaced it, and the announcer replaced it at once with "loaded from
-// manifest": nobody learned that no preset was applied. Now it is a notice
-// that stays until dismissed, like the one for a starter setting the design
-// does not have.
+// The status line alone is not enough: it stands about 300 ms before the
+// render replaces it, and the announcer replaces it at once with "loaded
+// from manifest", so nobody would learn that no preset was applied. It is a
+// notice that stays until dismissed, like the one for a starter setting
+// the design does not have.
 // ---------------------------------------------------------------------------
 
-test.describe('A link that names a missing preset (D-195)', () => {
+test.describe('A link that names a missing preset', () => {
   test.describe.configure({ timeout: 120_000 })
 
   const TITLE = 'This link asks for a preset this project does not have'
@@ -952,7 +952,7 @@ test.describe('A link that names a missing preset (D-195)', () => {
       await skip.click()
       await skip.waitFor({ state: 'hidden', timeout: 3000 })
       // closeModal gives the focus back, then again 50 ms and one frame
-      // later (its WebKit retry). MEASURED: a test that moved the focus
+      // later (its WebKit retry). A test that moved the focus
       // inside those 50 ms lost it to the retry in 3 runs of 10.
       await page.evaluate(
         () =>
@@ -1069,16 +1069,16 @@ test.describe('A link that names a missing preset (D-195)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// D-199: a manifest project goes by its main file's name
+// A manifest project goes by its main file's name
 //
-// The manifest lane hands the loader no file object, so the loader fell back
-// to the placeholder "example.scad": the name in the file box and the Classic
-// title bar, in "Loaded: ... + N presets" (said to screen readers too), and
-// the key the project's interface preferences are kept under. Every manifest
-// project was "example.scad".
+// The manifest lane hands the loader no file object, so without care the
+// loader falls back to the placeholder "example.scad": the name in the
+// file box and the Classic title bar, in "Loaded: ... + N presets" (said
+// to screen readers too), and the key the project's interface preferences
+// are kept under.
 // ---------------------------------------------------------------------------
 
-test.describe('The name a manifest project goes by (D-199)', () => {
+test.describe('The name a manifest project goes by', () => {
   test.describe.configure({ timeout: 90_000 })
 
   test('is its main file, in the file box and in what is said', async ({ page }) => {
@@ -1112,16 +1112,16 @@ test.describe('The name a manifest project goes by (D-199)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// D-200: a link that applies a preset renders the preset, and only that
+// A link that applies a preset renders the preset, and only that
 //
-// The file loader started its first preview with the design's own values,
-// then the link applied its preset and rendered again; the first picture was
-// thrown away unseen. My Plug Puller's defaults take 19 s in the browser and
-// its "Small hands" preset under 1 s, so that link made a person wait 20 s
-// for a picture that cost one.
+// The first preview must not start with the design's own values before the
+// link applies its preset: that picture would be thrown away unseen. My
+// Plug Puller's defaults take 19 s in the browser and its "Small hands"
+// preset under 1 s, so that order would make a person wait 20 s for a
+// picture that costs one.
 // ---------------------------------------------------------------------------
 
-test.describe('A link that applies a preset (D-200)', () => {
+test.describe('A link that applies a preset', () => {
   test.describe.configure({ timeout: 90_000 })
 
   test('renders once, with the preset values', async ({ page }) => {

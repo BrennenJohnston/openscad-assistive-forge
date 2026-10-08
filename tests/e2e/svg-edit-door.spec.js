@@ -1875,7 +1875,7 @@ test.describe('the shapes row keeps its name and its Delete', () => {
       const rows = await rowFacts(page)
       expect(rows.length).toBeGreaterThan(0)
       for (const [i, row] of rows.entries()) {
-        // Six characters and an ellipsis is the floor the row is signed to
+        // Six characters and an ellipsis is the floor the row is meant to
         // keep. 30 px is that floor with room for the font to differ.
         expect(
           row.nameWidth,

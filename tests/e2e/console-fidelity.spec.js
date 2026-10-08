@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// Console fidelity (C4.3) — desktop-parity contract for the console log:
+// Console fidelity: the desktop-parity contract for the console log:
 //   1. Litmus: a missing include file must surface "Can't open include file".
 //   2. Append-only: a re-render never wipes the log; a "── Render N ──"
 //      separator marks the new run and earlier output stays visible.
@@ -92,7 +92,7 @@ async function openConsolePanel(page) {
   await expect(page.locator('#console-output')).toBeVisible();
 }
 
-test.describe('Console fidelity (C4.3)', () => {
+test.describe('Console fidelity', () => {
   test('missing include file surfaces "Can\'t open include file"', async ({
     page,
   }) => {
@@ -156,7 +156,7 @@ test.describe('Console fidelity (C4.3)', () => {
   });
 });
 
-// ─── P7: status chatter belongs to the Console, not the Error-Log ─────────────
+// ─── Status chatter belongs to the Console, not the Error-Log ────────────────
 
 test.describe('Renderer status routing', () => {
   test('a clean render fills the Console and leaves the Error-Log empty', async ({
@@ -222,7 +222,7 @@ test.describe('Renderer status routing', () => {
   });
 });
 
-// ─── P7b: upstream column labels and the Show filter (U6b) ───────────────────
+// ─── Upstream column labels and the Show filter ──────────────────────────────
 
 test.describe('Error-Log chrome', () => {
   test('the columns read Group | File | Line | Info and Show narrows the table', async ({

@@ -237,7 +237,7 @@ test.describe('ASCII City Walk — plantings', () => {
     const props = await propStats(page)
     expect(props.plantingPlaced.picnic_table).toBe(0)
     expect(props.plantingPlaced.flowerbed).toBe(0)
-    // The directive's fallback fires HERE, and only here, and is counted
+    // The fallback fires here, and only here, and is counted
     // apart from the data so a reader can always tell design from map.
     expect(props.fallbackPlanters).toBe(40)
     expect(props.plantingPlaced.planter).toBe(props.fallbackPlanters)

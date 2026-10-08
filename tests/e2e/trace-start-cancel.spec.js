@@ -299,7 +299,7 @@ test.describe('Start, a bar that moves, and Cancel', () => {
     await expect(p.start).toBeVisible({ timeout: 120_000 });
     await expect(p.start).toHaveText('Start conversion');
 
-    // Nothing converted itself. This is the directive's first sentence.
+    // Nothing converted itself.
     await page.waitForTimeout(1500);
     await expect(p.info).not.toContainText('converted from');
     await expect(p.running).toBeHidden();

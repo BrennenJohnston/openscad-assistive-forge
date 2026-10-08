@@ -1,16 +1,15 @@
 /**
- * E2E tests for File > Show Library Folder… (UF-24, U-33, D-41).
+ * E2E tests for File > Show Library Folder….
  *
  * A browser has no library folder on disk, so this command's whole job is to
  * reveal the panel listing the bundles this build mounts.
  *
- * Measured at develop@7ae711b, Classic Simplified: the command runs, and
- * nothing happens. Simplified hides #libraryControls with the mode
- * controller's `ui-mode-hidden` class, while _showLibraryBundles removes
- * `hidden` — a different class that is not there. The panel stays
+ * In Classic Simplified the command must show the panel. Simplified hides
+ * #libraryControls with the mode controller's `ui-mode-hidden` class, so
+ * removing `hidden` (a different class) is not enough: the panel would stay
  * display:none, and because a display:none summary cannot take focus, the
- * .focus() call is a silent no-op and focus lands on <body> when the menu
- * closes.
+ * .focus() call would be a silent no-op and focus would land on <body>
+ * when the menu closes.
  *
  * Classic Simplified is the only surface where this is reachable: Forge
  * Simplified hides the File menu itself, and Standard density does not hide
@@ -103,7 +102,7 @@ test.describe('File > Show Library Folder…', () => {
   });
 });
 
-test.describe('Libraries panel: names reflect reality (AF-4)', () => {
+test.describe('Libraries panel: names reflect reality', () => {
   // Availability is probed per library against its own manifest.json - the
   // file the worker mounts from. Stub two outcomes so the case is
   // deterministic on every machine, downloaded bundles or not.

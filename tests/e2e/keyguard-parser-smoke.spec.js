@@ -116,7 +116,7 @@ test.describe('Keyguard Parser Smoke Tests', () => {
     expect(tabletOptionCount).toBeGreaterThanOrEqual(90)
   })
 
-  test('[Hidden] parameters are NOT visible in the UI', async ({ page }) => {
+  test('[Hidden] parameters are not visible in the UI', async ({ page }) => {
     test.skip(!KEYGUARD_EXISTS, `Fixture not found: ${KEYGUARD_SCAD_PATH}`)
     test.setTimeout(120000)
     const fileInput = page.locator('#fileInput')

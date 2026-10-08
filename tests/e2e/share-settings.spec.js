@@ -1,9 +1,9 @@
 /**
- * E2E tests for sharing the values on screen (IR-3).
+ * E2E tests for sharing the values on screen.
  *
  * The round trip this pins is the one an organization like Makers Making
  * Change actually needs: send one link, the requester adjusts values, the
- * requester sends a link BACK carrying their exact settings, and the
+ * requester sends a link back carrying their exact settings, and the
  * organization opens it and sees those numbers.
  *
  * @license GPL-3.0-or-later

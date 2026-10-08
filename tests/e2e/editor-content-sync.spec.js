@@ -87,7 +87,7 @@ const editorText = (editor) =>
     el.tagName === 'TEXTAREA' ? el.value : el.textContent
   );
 
-test.describe('Editor content sync (R5)', () => {
+test.describe('Editor content sync', () => {
   test('standard-second-load: a second project replaces the open editor', async ({
     page,
   }) => {
