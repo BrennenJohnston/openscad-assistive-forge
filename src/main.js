@@ -8557,10 +8557,16 @@ if (rounded) {
     const banner = document.getElementById('manifestInfoBanner');
     const text = document.getElementById('manifestInfoText');
     if (!banner) return;
-    const parts = ['Shared project'];
-    if (name) parts[0] = `Shared project: <strong>${name}</strong>`;
-    if (author) parts.push(`by ${author}`);
-    if (text) text.innerHTML = parts.join(' ');
+    // The name and author come from whoever hosts the manifest: text only.
+    if (text) {
+      text.textContent = name ? 'Shared project: ' : 'Shared project';
+      if (name) {
+        const strong = document.createElement('strong');
+        strong.textContent = name;
+        text.append(strong);
+      }
+      if (author) text.append(` by ${author}`);
+    }
     const saveBtn = document.getElementById('manifestSaveCopyBtn');
     if (saveBtn) {
       saveBtn.disabled = false;

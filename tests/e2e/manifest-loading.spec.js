@@ -1192,3 +1192,34 @@ test.describe('A link that applies a preset', () => {
     expect(dispatches, dispatches.join('\n')).toHaveLength(1)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Test Suite: The shared-project banner
+// ---------------------------------------------------------------------------
+
+test.describe('Manifest Loading - Shared project banner', () => {
+  test.describe.configure({ timeout: 60_000 })
+
+  // Whoever hosts a project writes its manifest, so the name and author are
+  // text from outside the app: they are shown as words, never as markup.
+  test('shows the name and author as text, never as markup', async ({ page }) => {
+    await setupMockManifestServer(page, {
+      manifest: {
+        ...minimalManifest(),
+        name: 'Box <b>bold</b>',
+        author: 'Ann <a href="https://example.com">link</a>',
+      },
+      files: { 'test.scad': MINIMAL_SCAD },
+    })
+
+    await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
+
+    const text = page.locator('#manifestInfoText')
+    await expect(page.locator('#manifestInfoBanner')).toBeVisible({ timeout: 30000 })
+    await expect(text).toHaveText(
+      'Shared project: Box <b>bold</b> by Ann <a href="https://example.com">link</a>'
+    )
+    await expect(text.locator('b, a')).toHaveCount(0)
+    await expect(text.locator('strong')).toHaveText('Box <b>bold</b>')
+  })
+})
