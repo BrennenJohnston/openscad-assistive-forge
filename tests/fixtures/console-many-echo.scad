@@ -1,5 +1,5 @@
-// UF-19 fixture: enough console output that the log must scroll in both
-// interfaces, so scroll POSITION can be asserted rather than mere presence.
+// Fixture: enough console output that the log must scroll in both
+// interfaces, so scroll position can be asserted rather than mere presence.
 // The last echo is a distinct marker, which is what "the newest line" means
 // in these tests.
 

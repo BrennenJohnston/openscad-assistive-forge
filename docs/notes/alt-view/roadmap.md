@@ -631,7 +631,7 @@ exception is now the rule.
 The order is the building's OWN TAG, then the nearest POI, then the hash:
 `shop` beats `amenity` beats `tourism`.
 
-★ Only the first half of that order is decided by the data. Exactly three
+Only the first half of that order is decided by the data. Exactly three
 buildings in the four extracts carry more than one of the three tags, and only
 one of them resolves differently either way - the Richard Levy Gallery in
 Albuquerque, `shop=art` plus `tourism=gallery`, which gets a shop window rather
@@ -698,7 +698,7 @@ baked circle:
 | with a height recorded | 1,366 (the rest record 0, meaning "not surveyed") |
 | nearest-neighbour spacing | p10 8.1 m, **median 16.7 m**, p90 29.1 m |
 
-★ **The service's own count is wrong by five times, and only the geometry says
+**The service's own count is wrong by five times, and only the geometry says
 so.** `returnCountOnly` and `returnIdsOnly` both report 21,703 poles inside
 that circle. Fetching the features and measuring their distances gives 4,115,
 the furthest at 1,295 m of a 1,300 m radius. The same disagreement holds at
@@ -707,7 +707,7 @@ The bake believes the features and re-checks every point against the radius
 itself. A count endpoint that cannot be reproduced by the features it counts
 is not evidence.
 
-★ **A surveyed pole register is the first thing able to measure how wide our
+**A surveyed pole register is the first thing able to measure how wide our
 roads really are.** 572 of the 3,679 lit poles stand inside a ribbon this game
 draws - and Seattle City Light does not put poles in traffic lanes, so the
 ribbon is what is wrong. The disagreement splits cleanly by class:
@@ -733,14 +733,14 @@ a street 50 ft (15.2 m) wide or less takes street lights alternating every
 180 ft (55 m); a wider one takes opposite pairs every 250 ft (76 m); a
 pedestrian street takes luminaires every 60 ft (18 m).
 
-★ **The wide-street rule cannot fire in any of these four cities, and the code
+**The wide-street rule cannot fire in any of these four cities, and the code
 says so out loud.** Every class this game lights is 14 m or narrower, and the
 only class wider than 15.2 m - motorway - is deliberately unlit. The rule
 is written against the width rather than the class name so a
 future change reaches it, and a unit test drives it with a synthetic 18 m road,
 because a rule nothing exercises is a rule nobody has tested.
 
-★ **And the standard says one more thing than this release implements.** Its
+**And the standard says one more thing than this release implements.** Its
 full sentence is "street lights alternating every 180 ft, **pedestrian lights
 between them at 60 ft**" - so on a real Seattle street a walker passes a
 luminaire every 18 m, not every 55. That is exactly what City Light's register
@@ -760,21 +760,21 @@ grid, so a later release can put Seattle's hills back:
 | license | public domain / Open Government License - Canada, both written into the file |
 | grid | 30 m, square, centered on the city, clipped to the bake radius |
 
-★ **A burst is not a throughput.** Forty samples measured 21 per second at
+**A burst is not a throughput.** Forty samples measured 21 per second at
 concurrency 8 and 41 at 16. Two hundred sustained samples, same machine, same
 minute, measure 1.2, 1.8 and 4.3 - the first numbers were the connection pool
 warming up. The grid step is 30 m rather than 20 because of the second set:
 5,913 points for Seattle instead of 13,273, for a difference no 3x6 pixel
 character cell can show.
 
-★ **HTTP 200 is not an answer.** EPQS returns 200 with an empty body often
+**HTTP 200 is not an answer.** EPQS returns 200 with an empty body often
 enough to hit once inside the first 2,000 points of a Seattle bake, and an
 unguarded `await response.json()` threw out of the worker, out of `Promise.all`
 and out of the whole script, twenty minutes in. An unreadable body is now a
 retryable failure like any other, and the sample cache is flushed as it goes
 so a crash costs nothing.
 
-★ **A gate that cannot see its own warnings is not a gate.** The bake refuses
+**A gate that cannot see its own warnings is not a gate.** The bake refuses
 to write an extract if Overpass or the sampler reported a problem - and the
 first version of that check filtered its input for `/WARNING:|ERROR:/`, which
 none of the sampler's own messages contain. A unit test asked what the pattern
@@ -810,7 +810,7 @@ and a tint faded on it would collapse inside the first few meters and then
 barely move for two hundred. Green is left free on purpose for the release
 after this one.
 
-★ **The tint source was decided by steadiness, not by taste.** Two were built
+**The tint source was decided by steadiness, not by taste.** Two were built
 and photographed against the same scene: a per-class table, and the cell's own
 color driven down to a low luminance. The pictures were arguable. The numbers
 were not. Over a look of 1.5 degrees per frame, the per-class table changes
@@ -820,7 +820,7 @@ loses because it inherits the converter's per-cell color decision, and that
 decision re-rolls - which is the churn this whole part of the document is
 about. The class table shipped.
 
-★ **The first version of that comparison measured one thing twice.** It rebuilt
+**The first version of that comparison measured one thing twice.** It rebuilt
 the backing from the development cell probe, which carries glyphs, intensity
 and luminance but not the palette or the color indices, so the sampled arm
 silently fell back to the class table and both rows printed 12.23 per cent,
@@ -829,7 +829,7 @@ The rewrite drives both through the same public entry point the real layer uses
 and asserts they differ before it reports a difference: they differ on 95.6 per
 cent of cells.
 
-★ **Painting behind a character takes contrast away, and amber is the binding
+**Painting behind a character takes contrast away, and amber is the binding
 case.** Today every glyph sits on pure black, which is the most contrast a
 screen can give, so every tint is bounded by measurement rather than by eye. A
 unit guard drives every palette entry against every tint at the dimmest ink the
@@ -842,7 +842,7 @@ fainter in both than in color. That is a contrast bound, not a preference, and
 it cannot be turned up without taking legibility away from a player who has no
 other cue.
 
-★ **The performance bar was missed, and the release says so.** Filling a cell
+**The performance bar was missed, and the release says so.** Filling a cell
 is about 1.1 million pixel writes per conversion at 30 per cent, and it costs
 4.2 milliseconds against a bar of 1.5. Two rewrites were measured and neither
 helped. Filling each row run with the array's own `fill` is five times WORSE,
@@ -895,14 +895,14 @@ cell is looking at. The converter can take an anchored cell's character from
 that value instead of from the screen, and still uses the lit cell for
 everything else - whether the cell draws at all, how bright, what color.
 
-★ **The field is deliberately coarse, and that is the mechanism rather than a
+**The field is deliberately coarse, and that is the mechanism rather than a
 compromise.** At the texture's own resolution a patch is a few centimeters, a
 cell forty meters away covers hundreds of them, and the smallest camera move
 slides onto a different one - the character would re-roll exactly as before.
 What makes a character belong to a wall is that a patch of wall about the size
 of a cell shares one value.
 
-★ **And that is why the facade cannot have this yet.** The lattice that holds a
+**And that is why the facade cannot have this yet.** The lattice that holds a
 wall still is the lattice that erases its windows, because at this character
 size a window is about one cell across. Measured over a twenty-four frame walk,
 characters changing per frame:
@@ -929,14 +929,14 @@ cent per frame, the paving from 1.15 to 0.01, and the wall and the shopfront
 come out bit for bit identical, which is how the scoping is checked rather than
 asserted.
 
-★ **A low rate of change is not proof, so it is not what this rests on.** A
+**A low rate of change is not proof, so it is not what this rests on.** A
 picture frozen to the screen would score just as low while being exactly wrong.
 The claim is checked instead by following real points on the ground: forty-five
 of them, projected into the cell grid every frame as the walker advances. A
 point keeps its character 98.5 per cent of frame pairs with anchoring on,
 against 88.9 per cent without. The character stays with the ground.
 
-★ **It ships switched off, and the reason is not the feature.** The anchored
+**It ships switched off, and the reason is not the feature.** The anchored
 choice is an index into a list - cheaper than the nearest-shape search it
 replaces - but the shader that normally does that search is not handed the
 field value, and there is no room beside what it already carries. So anchoring

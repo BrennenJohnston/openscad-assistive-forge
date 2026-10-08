@@ -176,8 +176,6 @@ it reads from disk, and tells you if `files` does not name it.
 
 ### Layered designs (prototype)
 
-STRINGS/PROSE: owner review pending (DP-R1 text pack).
-
 Most designs are one shape cut or raised once. A **layered** design is built
 in passes: the app looks at which shapes sit inside which, writes one file per
 pass, and your model builds them one on top of the other. Three nested squares
@@ -224,8 +222,6 @@ Add each example pass file to `files`, the same as any other file your design
 reads.
 
 ## 5b. The feature contract (charm-program models)
-
-STRINGS/PROSE: owner review pending (DP-R1 text pack).
 
 Three models share the charm program, and features kept being added to one and
 forgotten on the others. This table is the contract. It is not documentation

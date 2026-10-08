@@ -1,4 +1,4 @@
-// UF-24 fixture: a library module that lives three folders deep inside its
+// Fixture: a library module that lives three folders deep inside its
 // bundle. Every file after the first in a folder used to be dropped during
 // the mount, so this include resolved to nothing and the render was empty.
 include <NopSCADlib/utils/core/core.scad>

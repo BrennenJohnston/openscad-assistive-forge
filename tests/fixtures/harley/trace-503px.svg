@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="503" height="629" viewBox="0 0 503 629">
   <!--
-    D-122's red proof. A drawing whose user units are PIXELS, at the size a
+    A drawing whose user units are pixels, at the size a
     trace of sketch4.png comes out: 503 x 629. Everything else in the stencil
     tests sits on a canvas about 100 units across, which is the size a layer
     file is normalized to, so a plate builder that confuses the two lands its
