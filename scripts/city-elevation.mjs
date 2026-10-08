@@ -1,41 +1,41 @@
 /**
- * Bake-time terrain sampling for the ASCII City Walk extracts (CW-77).
+ * Bake-time terrain sampling for the ASCII City Walk extracts.
  *
  * Dev-lane only: this never runs in the browser. It samples a national 1 m
  * digital elevation model on a regular grid clipped to a city's circle and
- * hands back the block `ascii-city-extract@2` carries, so CW-79 can build a
+ * hands back the block `ascii-city-extract@2` carries, so the game can build a
  * heightfield from data rather than from a guess.
  *
- * WHY A GRID AND NOT THE VERTICES. The obvious thing is to sample every road
- * vertex and building centroid, which is what the plan first proposed. A grid
+ * Why a grid and not the vertices: the obvious thing is to sample every road
+ * vertex and building centroid. A grid
  * is better for the thing that consumes it: a walker's height has to be
- * defined EVERYWHERE, including in the middle of a plaza and inside a block,
+ * defined everywhere, including in the middle of a plaza and inside a block,
  * and a scatter of vertices leaves those to an interpolation nobody measured.
  * A grid is also cacheable and resumable by construction - its points do not
  * move when the map data does.
  *
- * WHY THE POINT SERVICES AND NOT A GEOTIFF (CW-Q77, owner-signed): no new
+ * Why the point services and not a GeoTIFF: no new
  * dependency, and the services are fast enough if you ask them properly.
  *
- * ★ A BURST IS NOT A THROUGHPUT. A 40-sample burst against USGS EPQS measured
+ * A burst is not a throughput. A 40-sample burst against USGS EPQS measured
  * 21 samples/s at concurrency 8 and 41/s at 16, and both numbers are useless:
  * they are the connection pool warming up. Two hundred sustained samples on
  * the same machine, the same minute, measure 1.2/s at concurrency 4, 1.8/s at
  * 8 and 4.3/s at 16 - the service answers every request with HTTP 200 and is
- * simply SLOW and variable (latency p50 2.0-3.6 s, p95 up to 11.5 s, worst
+ * simply slow and variable (latency p50 2.0-3.6 s, p95 up to 11.5 s, worst
  * 24.4 s). Nothing is rate-limited; 600 sustained requests drew zero non-200
  * responses. The grid step and the concurrency below are both chosen against
  * the sustained number, not the burst.
  *
- * SOURCES AND LICENCES (plan §1.6, fetched 2026-08-28):
+ * Sources and licences (fetched 2026-08-28):
  *   - USGS 3DEP via the EPQS point service, for the three US cities. The
  *     National Map: "free and in the public domain. There are no
  *     restrictions." Requested credit is written into every extract.
  *   - NRCan CDEM/HRDEM altitude service, for Burnaby, under the Open
  *     Government Licence - Canada.
  *
- * GOOGLE SURFACES ARE PROHIBITED as a source for anything that enters this
- * repository (plan §8.3). Nothing here touches one.
+ * Google surfaces are prohibited as a source for anything that enters this
+ * repository. Nothing here touches one.
  *
  * @license GPL-3.0-or-later
  */
@@ -162,7 +162,7 @@ export function readSample(source, body) {
 /**
  * One JSON fetch, with the failure the DEM service actually produces.
  *
- * ★ HTTP 200 IS NOT AN ANSWER. USGS EPQS returns 200 with an EMPTY BODY often
+ * HTTP 200 is not an answer. USGS EPQS returns 200 with an empty body often
  * enough to matter - once in the first 2,000 points of a Seattle bake - and
  * `await r.json()` then throws out of the worker, out of Promise.all and out
  * of the whole script, killing a bake that had been running for twenty
@@ -291,7 +291,7 @@ export async function sampleGrid({
       }
       cache.set(key(p), value);
       done++;
-      // ★ FLUSH AS WE GO. Written only at the end, a crash 20 minutes into a
+      // Flush as we go. Written only at the end, a crash 20 minutes into a
       // 5,909-point city threw away every answer - which is exactly what
       // happened on the first real Seattle bake, and the cache exists so that
       // cannot cost anything.

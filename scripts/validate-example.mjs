@@ -11,7 +11,7 @@
  *
  *   - A first-party tile shipped with a picture its manifest declared, its
  *     folder contained, and the app could not find, because a second list had
- *     drifted (D-97). The file sweep is that defect turned into a check.
+ *     drifted. The file sweep is that defect turned into a check.
  *   - A tile with no license is a tile nobody else can legally reuse, which is
  *     the opposite of why it is here.
  *   - A parameter with no comment above it renders as a bare variable name in
@@ -28,8 +28,8 @@
  *   0 - every folder passed (notes may still be printed)
  *   1 - at least one folder has an error
  *
- * What it does NOT do: render anything. Static checks are fast and need no
- * browser; the render is a separate gate (tests/e2e/wasm-smoke.spec.js), and
+ * What it does not do: render anything. Static checks are fast and need no
+ * browser; the render is a separate check (tests/e2e/wasm-smoke.spec.js), and
  * the last line of a passing run says so.
  *
  * @license GPL-3.0-or-later

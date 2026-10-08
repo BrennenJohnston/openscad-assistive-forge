@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 /**
- * Bundle Size Budget Checker (Milestone 3: Performance & Stability)
+ * Bundle Size Budget Checker
  *
- * Enforces the bundle size budgets below. (They were first set in a
- * planning doc, LAYER_2_BUILD_PLAN.md, that never shipped in this repo -
- * the numbers here are the authority now. AF-8.)
- *
- * Budgets:
- * - Core app: < 500 KB gzipped
- * - Total (Expert Mode / CodeMirror editor): < 1.5 MB gzipped
+ * Enforces the gzipped size budgets in BUDGETS below.
  *
  * Usage:
  *   node scripts/check-bundle-budget.js
@@ -57,20 +51,18 @@ const BUDGETS = {
   // works, so it is the number that decides how long a first visit takes.
   // Vite generates hashes with alphanumeric chars and underscores.
   //
-  // ★ RAISED FROM 500 KB TO 586 KB BY THE OWNER at gate G1 (DP-Q22,
-  // 2026-08-28), with the numbers in front of them. Wiring the stencil colour
-  // engine into the customizer put this at 516,052 B against the old 512,000;
-  // moving the whole stencil engine into a chunk that only loads when a
-  // stencil is opened brought it back to 511,760, which passed with 240 bytes
-  // to spare. The drawing editor is the biggest thing still to be written, and
-  // 240 bytes is not room to write it in. The owner's decision was to raise
-  // the number rather than spend the round shaving bytes off working code:
-  // "I would rather spend the round building the editor". The check still
-  // fails loudly if something doubles.
+  // Raised from 500 KB to 586 KB (600 kB decimal). Wiring the stencil color
+  // engine into the customizer put this at 516,052 B against the old
+  // 512,000; moving the whole stencil engine into a chunk that only loads
+  // when a stencil is opened brought it back to 511,760, which passed with
+  // 240 bytes to spare. The drawing editor was still to be written, and 240
+  // bytes is not room to write it in, so I raised the number rather than
+  // shave bytes off working code. The check still fails loudly if something
+  // doubles.
   //
-  // Remember D-121 when reading any of these: this script weighs .js, .css,
-  // .html and .json only. Images, fonts, SVGs, .scad and .wasm are invisible
-  // to it, including to the "Total Assets" line below.
+  // The code lines weigh .js, .css, .html and .json only: images, fonts,
+  // SVGs and .scad files are invisible to them, the "Total Assets" line
+  // included. WebAssembly has lines of its own below.
   coreApp: {
     name: 'Core App (no Monaco)',
     budget: 600 * 1000, // 600 kB, decimal - see the note above
@@ -84,22 +76,10 @@ const BUDGETS = {
     pattern: /^index-[a-zA-Z0-9_-]+\.css$/,
     critical: false,
   },
-  // Total assets (excluding WASM and external Monaco)
-  // ★ SIGNED BY THE OWNER at gate DP-Q43 (2026-09-14): "Weigh .wasm, with its
-  // own line." D-121 had this file class invisible since round 1 - the checker
-  // weighed .js, .css, .html and .json only - so a WebAssembly binary could
-  // double without a word. It cannot now.
-  //
-  // MEASURED when the line went in: potrace.wasm 18,357 B gzipped, the only
-  // wasm this weighs. 30,000 leaves room for a rebuild to grow a little and
-  // fails loudly if one doubles.
-  //
-  // One correction to what was in front of the owner when they signed: the
-  // gate's note said the OpenSCAD engine's wasm is downloaded rather than
-  // committed and so absent at check time. That was wrong - only
-  // public/wasm/openscad.* is gitignored; public/wasm/openscad-official/ is
-  // tracked and lands in dist at 3.26 MB gzipped. The decision is unaffected,
-  // and the engine is excluded by name above with its reason.
+  // WebAssembly, on a line of its own so that a binary cannot double without
+  // a word. Measured when the line went in: potrace.wasm 18,357 B gzipped,
+  // the only wasm this weighs. 30,000 leaves room for a rebuild to grow a
+  // little and fails loudly if one doubles.
   wasmAssets: {
     name: 'WebAssembly (excluding the OpenSCAD and braille engines)',
     budget: 30000,
@@ -112,7 +92,7 @@ const BUDGETS = {
   // loader together, so that neither it nor the lines around it can grow
   // behind another. It is loaded only by the braille tools' worker, so Total
   // Assets leaves its loader out, as it left out the engine it replaced.
-  // MEASURED by this script when the line went in: liblouis.wasm 64,462 B
+  // Measured by this script when the line went in: liblouis.wasm 64,462 B
   // and its loader 15,251 B gzipped, 79,713 B in all (liblouis 3.39.0, built by
   // scripts/build-liblouis-wasm.sh). 100,000 is that plus 15 percent, rounded
   // up to the next 10,000. The line also fails unless it finds both files, so
@@ -127,10 +107,10 @@ const BUDGETS = {
   },
   totalAssets: {
     name: 'Total Assets',
-    // 1,250,000 B, the owner's number (2026-10-07), set when this line
-    // stopped weighing library files the app never loads. MEASURED then:
-    // 1,183,705 B gzipped, so about 5.6 percent of room. It weighs code the
-    // browser may fetch, not the vendored WASM engine.
+    // 1,250,000 B, set when this line stopped weighing library files the
+    // app never loads. Measured then: 1,183,705 B gzipped, so about 5.6
+    // percent of room. It weighs code the browser may fetch, not the
+    // vendored WASM engine.
     budget: 1250000,
     pattern: null, // Sum all
     exclude: BRAILLE_ENGINE,
@@ -236,7 +216,7 @@ function checkBudgets(distPath) {
       !neverLoaded(f)
   );
 
-  // WebAssembly is weighed on its own line (DP-Q43), not folded into the code
+  // WebAssembly is weighed on its own line, not folded into the code
   // total: "Total Assets" has always meant code the browser parses, and the
   // OpenSCAD engine would drown both numbers.
   const wasmFiles = allFiles.filter(

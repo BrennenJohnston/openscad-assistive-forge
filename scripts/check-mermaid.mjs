@@ -6,7 +6,7 @@
  * parse shows a red "Unable to render rich display" box in its place. The
  * markdown lint and the link checker do not read the fences, so the
  * architecture page carried a broken diagram through every green board
- * until a reader saw it (2026-09-18). This runs the parser GitHub runs, in
+ * until a reader saw it. This runs the parser GitHub runs, in
  * the Playwright Chromium the tests already use, and fails on the first
  * diagram Mermaid rejects.
  *

@@ -1,22 +1,22 @@
 /**
- * Fail when a Playwright run reports tests that never started (Q-23).
+ * Fail when a Playwright run reports tests that never started.
  *
  * The Chromium job once passed for a whole release while two menu-parity
  * tests were red, because tests the global clock cut off report as
  * "did not run" rather than failed — a green check over an incomplete run.
  *
- * UF-27 / D-50: on the installed Playwright (1.57) that is no longer how a
- * cut-off test is reported, and this script had stopped being able to see
- * the one thing it exists for. MEASURED against a deliberately timed-out
- * run: the tests the clock killed came back with `status: 'skipped'` and a
- * result attached, so the original "no results at all" test never fired and
- * the script printed "all 4 tests ran" over a run Playwright itself
- * described as "2 did not run".
+ * On the installed Playwright (1.57) that is no longer how a cut-off test
+ * is reported, and this script had stopped being able to see the one thing
+ * it exists for. Measured against a deliberately timed-out run: the tests
+ * the clock killed came back with `status: 'skipped'` and a result
+ * attached, so the original "no results at all" test never fired and the
+ * script printed "all 4 tests ran" over a run Playwright itself described
+ * as "2 did not run".
  *
  * The discriminator, measured across every skip shape this repo uses
  * (declarative, runtime bare, runtime with a reason, raised from a hook,
  * describe-level, and fixme): a real skip always reports
- * `expectedStatus: 'skipped'` AND carries a skip/fixme annotation. A test
+ * `expectedStatus: 'skipped'` and carries a skip/fixme annotation. A test
  * the clock cut off reports `expectedStatus: 'passed'` with no annotation
  * at all. Playwright also files "Timed out waiting Ns for the test suite to
  * run" in the report's top-level `errors`, which belong to no test.
@@ -26,7 +26,7 @@
  * guard — but a backstop that cannot fail is exactly the vacuous green this
  * check was written to prevent.
  *
- * Sharding-safe: MEASURED that a `--shard=n/m` run reports only its own
+ * Sharding-safe: measured that a `--shard=n/m` run reports only its own
  * shard's tests, each carrying a result, so this runs per shard.
  *
  * Usage: node scripts/check-e2e-complete.mjs <playwright-json-report>

@@ -1,5 +1,5 @@
 /**
- * The words a person reads are American English (DP-Q49).
+ * The words a person reads are American English.
  *
  * `strings.js` has declared "US English" in its own header since it was
  * written, and shipped "Colours" fifty-four times anyway. A rule with nothing
@@ -16,7 +16,7 @@
  *   - the comment lines of the tiles' `.scad` files
  *   - the prose of `docs/**` and the root papers, outside code fences
  *
- * What it deliberately does NOT read, because DP-Q49 leaves them alone:
+ * What it deliberately does not read, because the rule leaves them alone:
  * identifiers, CSS class names, file names and settings keys (`colourCount`,
  * `wallColour`, `colour-separation.js`, `.drawing-editor-colour-select`), the
  * City Walk's OpenStreetMap data, the tool output under
@@ -101,7 +101,7 @@ const ALLOWED_ON_LINE = [
   'American English',
   'Labour Party',
   // The deliberate escape hatch. A line that quotes a spelling on purpose -
-  // the wording a release replaced, or the form a comment says it is NOT
+  // the wording a release replaced, or the form a comment says it is not
   // using - marks itself "(sic)" and this reader walks past it. Use it only
   // for a quotation; a string a person reads is never (sic).
   '(sic)',
@@ -127,7 +127,7 @@ const ROOT_PAPERS = [
   'README.md',
   'CHANGELOG.md',
   'CREDITS.md',
-  // The community papers live where GitHub reads them (DP-64); the rest of
+  // The community papers live where GitHub reads them; the rest of
   // the project's papers are under docs/project and the docs walk finds them.
   join('.github', 'CONTRIBUTING.md'),
   join('.github', 'SECURITY.md'),
@@ -154,7 +154,7 @@ const IDENT_ADJACENT = /[-_/\\#$]/
 
 // A whole string literal that is one lower-case token, or a SCREAMING_CASE
 // constant: a key, a stored value, an error code the app compares, a CSS
-// class, a file name. DP-Q49 leaves every one of them alone.
+// class, a file name. The rule leaves every one of them alone.
 const KEY_LIKE = /^([a-z0-9][a-z0-9_.:-]*|[A-Z][A-Z0-9_]*)$/
 
 /**
@@ -212,7 +212,7 @@ function collector() {
 /**
  * The string literals and comments of a JavaScript file. Everything else -
  * identifiers, keywords, numbers - never reaches the word list, which is what
- * DP-Q49 asks for.
+ * the rule asks for.
  */
 export function jsTextRuns(source) {
   const { runs, push } = collectorFor()
@@ -264,7 +264,7 @@ export function jsTextRuns(source) {
       // A quoted lower-case word on its own is a key, a stored value or a
       // class name, never a sentence: `settings.mode === 'colours'` and
       // `makeSlider('colours', 'How many colours', ...)` are the same word
-      // twice, and DP-Q49 changes only the half a person reads. The one
+      // twice, and the rule changes only the half a person reads. The one
       // exception is a word beside its own plural, which is prose.
       if (!KEY_LIKE.test(literal) || countPairOnLine(literal, lineAround(source, start))) {
         push(literal, at, start, 'string')

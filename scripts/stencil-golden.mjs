@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * The stencil acceptance oracle: does Forge cut the same shapes the owner cut?
+ * The stencil acceptance oracle: does Forge cut the same shapes I cut?
  *
- * The owner made six stencil plates for their cat by hand - Illustrator to
- * Fusion 360 to STL - and those seven files (six plates plus the jig) are in
+ * I made six stencil plates for my cat by hand - Illustrator to Fusion 360
+ * to STL - and those seven files (six plates plus the jig) are in
  * `tests/fixtures/harley/`. They are the answer sheet. This harness puts a
  * Forge plate beside the reference plate of the same number and reports
  * intersection over union of the two cuts.
  *
- * WHY THE NUMBER COMES FROM GEOMETRY AND NOT FROM A PICTURE. The obvious
+ * Why the number comes from geometry and not from a picture: the obvious
  * design is to render both plates top-down with OpenSCAD and compare the
  * pixels. It was not taken, for two reasons that are not matters of taste:
  * CI has no desktop OpenSCAD, so an oracle built on renders could never run
@@ -19,10 +19,10 @@
  * here, in one place, at a resolution this file sets.
  * To reverse: add a `--from-render` mode that shells out to the pinned
  * nightly and decodes the PNGs instead.
- * Pictures for the eyes-on gates are a separate job: `--render` writes the
+ * Pictures for checking by eye are a separate job: `--render` writes the
  * top views with the pinned nightly and compares nothing.
  *
- * WHAT IS COMPARED. The cut, normalised to its OWN bounding box. Where the
+ * What is compared: the cut, normalised to its own bounding box. Where the
  * cut sits on the plate and how big it is are the person's parameters
  * (plate size, margin, design scale); which shapes are cut is the engine's
  * business, and that is what this measures. Registration features and the
@@ -32,7 +32,7 @@
  * Usage:
  *   node scripts/stencil-golden.mjs --self-check
  *   node scripts/stencil-golden.mjs --plate <a.svg|a.stl> --reference <b.stl>
- *   node scripts/stencil-golden.mjs --fixture harley          (wired in DP-17)
+ *   node scripts/stencil-golden.mjs --fixture harley
  *   node scripts/stencil-golden.mjs --render <file.stl> --out <file.png>
  */
 
@@ -457,15 +457,15 @@ function comparePair(plateFile, referenceFile, flipY) {
 }
 
 /**
- * Build the owner's six plates from their own drawing, through the app's real
- * modules, and set each one beside the plate they cut by hand.
+ * Build my six plates from my own drawing, through the app's real modules,
+ * and set each one beside the plate I cut by hand.
  *
  * The route is exactly the app's: the faces of the line network, the reference
- * colour plan applied by point, `platesFor` under the OWN rule because that is
- * how the owner cut theirs, one fit onto the plate, one even-odd path out.
+ * colour plan applied by point, `platesFor` under the `own` rule because that
+ * is how I cut mine, one fit onto the plate, one even-odd path out.
  *
  * The plate is 60 x 60 with a 10.15 mm margin, which makes the design 39.70 mm
- * tall - the height the owner's silhouette actually is - so a Forge plate and
+ * tall - the height of the silhouette I drew - so a Forge plate and
  * the plate it is set beside are the same size.
  *
  * @param {{write?: string|null, absorb?: boolean, rule?: string}} options
@@ -547,7 +547,7 @@ async function harleyFixture({ write = null, absorb = true, rule = 'own' }) {
       mkdirSync(write, { recursive: true });
       writeFileSync(resolve(write, `forge-plate-${i + 1}.svg`), plate(true));
     }
-    // ★ The comparison takes the plate WITHOUT its crosses. Forge puts a cross
+    // The comparison takes the plate without its crosses. Forge puts a cross
     // 8 mm in from each corner and the reference puts a peg hole 2.5 mm in, so
     // no single edge band can drop both: at 8 mm the band would be a seventh
     // of the plate, and the cat's own silhouette comes within 8.16 mm of the

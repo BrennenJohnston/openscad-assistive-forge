@@ -223,9 +223,9 @@ async function generatePerLibraryManifest(libName) {
 
   const files = collectScadFiles(libPath);
 
-  // AF-12: one archive per library, so the worker fetches ONE file instead
-  // of one request per entry (695 for dotSCAD). Fixed entry dates keep the
-  // zip byte-stable across runs, so an unchanged library does not dirty
+  // One archive per library, so the worker fetches one file instead of one
+  // request per entry (695 for dotSCAD). Fixed entry dates keep the zip
+  // byte-stable across runs, so an unchanged library does not dirty
   // anything.
   const { default: JSZip } = await import('jszip');
   const zip = new JSZip();

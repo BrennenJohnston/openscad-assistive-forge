@@ -44,8 +44,8 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // Matches the owner's evidence screenshots, so the artifacts this
-        // lane writes can be compared against them directly.
+        // The size of the reference screenshots, so the artifacts this lane
+        // writes can be compared against them directly.
         viewport: { width: 1920, height: 1080 },
       },
     },

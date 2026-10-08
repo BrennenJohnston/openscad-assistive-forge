@@ -1,5 +1,5 @@
 /**
- * Bake a bundled city extract for the ASCII City Walk game (CW-2).
+ * Bake a bundled city extract for the ASCII City Walk game.
  *
  * Dev-lane script (never runs in the browser): queries the public Overpass
  * API for building footprints and roads around a center point, trims the
@@ -58,22 +58,21 @@ import {
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 
 /**
- * ★ THE GATE (the D-97 shape, and D-123's second helping of it). An engine
- * that says WARNING and a caller that says "converted, 2 shapes" is how this
- * project shipped a DXF with 31 of 34 entities silently missing. Overpass
- * reports trouble in a `remark` string and still returns HTTP 200 with a
- * partial body; the elevation sampler collects its own. Either one stops the
- * bake, because a bake that half-worked and said nothing is the failure mode
- * that costs a whole round.
+ * Stop the bake on any warning. An engine that says WARNING and a caller
+ * that says "converted, 2 shapes" is how this project shipped a DXF with 31
+ * of 34 entities silently missing. Overpass reports trouble in a `remark`
+ * string and still returns HTTP 200 with a partial body; the elevation
+ * sampler collects its own. Either one stops the bake, because a bake that
+ * half-worked and said nothing is the costliest failure to find later.
  */
 function assertNoWarnings(lines, where) {
-  // ★ ANY entry is fatal, not only one that says the word. The first version
+  // Any entry is fatal, not only one that says the word. The first version
   // of this filtered for /WARNING:|ERROR:/ - and the elevation sampler's own
   // messages carry neither word, so the gate could not see the thing it was
   // written to catch: a run that lost points to a 503 would have written the
-  // extract anyway, which is the exact D-97 shape. A list of problems IS the
-  // problem. A unit test asked what the pattern actually matched, and that is
-  // the only reason this was found before a bake ran.
+  // extract anyway, the same silent failure as the DXF. A list of problems is
+  // the problem. A unit test asked what the pattern actually matched, and that
+  // is the only reason this was found before a bake ran.
   const bad = (lines ?? [])
     .filter(Boolean)
     .map(String)
@@ -88,7 +87,7 @@ function assertNoWarnings(lines, where) {
 const USER_AGENT =
   'openscad-assistive-forge bake-city-extract (https://github.com/BrennenJohnston/openscad-assistive-forge)';
 
-// CW-Q9 doubled each city's AREA (bake radius 500 -> 707 m), which roughly
+// Each city's area was doubled (bake radius 500 -> 707 m), which roughly
 // doubles every extract. The warning is advisory - it marks a bake that has
 // outgrown the deliberate size, not one that is broken.
 const SIZE_WARN_BYTES = 1600 * 1024;
@@ -124,8 +123,9 @@ if (centerParts.length !== 2 || centerParts.some((n) => !Number.isFinite(n))) {
 }
 const center = { lat: centerParts[0], lon: centerParts[1] };
 const radiusM = Math.round(parseFloat(args.radius ?? '500'));
-// CW-77. The terrain sampler and the pole register are both OFF unless asked
-// for: a rebake of the geometry alone must stay a cheap, obvious thing.
+// The terrain sampler runs unless `--elevation off` is passed, and the pole
+// register only when asked for, so a rebake of the geometry alone is still a
+// cheap, obvious thing.
 const wantElevation = args.elevation !== 'off';
 const elevationStepM = Math.round(
   parseFloat(args['elevation-step'] ?? String(ELEVATION_STEP_M))
@@ -133,8 +133,9 @@ const elevationStepM = Math.round(
 // Never committed (build/ is gitignored) and shared between runs, so a
 // re-bake of the same circle costs no requests at all.
 const cacheDir = args.cache ?? join(process.cwd(), 'build', 'elevation-cache');
-// Seattle City Light's pole register, authorised at G1 (CW-Q76). Opt-in by
-// name, because it is a Seattle dataset and nothing else has an equivalent.
+// Seattle City Light's pole register (city-light-poles.mjs says where it
+// comes from). Opt-in by name, because it is a Seattle dataset and nothing
+// else has an equivalent.
 const wantPoles = args.poles === 'city-light';
 if (!Number.isFinite(radiusM) || radiusM < 50 || radiusM > 2000) {
   usage('--radius must be between 50 and 2000 meters');
@@ -144,30 +145,30 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const outDir =
   args.out ?? join(scriptDir, '..', 'public', 'examples', 'ascii-city');
 
-// CW-33: greenspace comes from a NAMED set of leisure and landuse values, not
-// from every polygon carrying those keys. A downtown is wall to wall
+// Greenspace comes from a named set of leisure and landuse values, not from
+// every polygon carrying those keys. A downtown is wall to wall
 // landuse=commercial/retail/industrial, and fetching those would multiply the
-// extract for ground that is already drawn as ground. This is the list the
-// plan's coverage table was measured against (plan section 1d): every one of
-// the four cities has some, from 20 polygons in Seattle to 249 in Denver.
+// extract for ground that is already drawn as ground. Coverage was measured
+// against this list: every one of the four cities has some, from 20 polygons
+// in Seattle to 249 in Denver.
 //
-// Ways only this round. Some large parks are mapped as multipolygon RELATIONS
-// and will be missed; that is a recorded future slice rather than an
-// oversight, and the per-city counts in the release record say what it costs.
+// Ways only. Some large parks are mapped as multipolygon relations and will
+// be missed; that is a known gap rather than an oversight, and the per-city
+// counts in the release record say what it costs.
 const GREEN_LEISURE = GREEN_LEISURE_VALUES.join('|');
 const GREEN_LANDUSE = GREEN_LANDUSE_VALUES.join('|');
 const STOREFRONT_AMENITY = STOREFRONT_AMENITY_VALUES.join('|');
-// CW-43/CW-44: filtered unions ONLY, the CW-33 lesson — bare node["amenity"]
-// timed the public instance out (HTTP 504, measured). kerb and
-// tactile_paving are key-presence queries by design: the keys exist only on
-// pedestrian nodes, and the plan §1f coverage table was measured exactly so.
+// Filtered unions only, the greenspace lesson — bare node["amenity"] timed
+// the public instance out (HTTP 504, measured). kerb and tactile_paving are
+// key-presence queries by design: the keys exist only on pedestrian nodes,
+// and their coverage was measured exactly so.
 const FURNITURE_AMENITY = FURNITURE_AMENITY_VALUES.join('|');
 const FURNITURE_HIGHWAY = FURNITURE_HIGHWAY_VALUES.join('|');
 const FURNITURE_EMERGENCY = FURNITURE_EMERGENCY_VALUES.join('|');
 const ATTRACTION_TOURISM = ATTRACTION_TOURISM_VALUES.join('|');
-// CW-55 (CW-Q55): the planting and resting seeds. Filtered unions, like
-// everything else here - a planter is a node OR a way, a flowerbed is a way
-// under either leisure or landuse, a picnic table is a node.
+// The planting and resting seeds. Filtered unions, like everything else
+// here - a planter is a node or a way, a flowerbed is a way under either
+// leisure or landuse, a picnic table is a node.
 const PLANTER_MAN_MADE = PLANTER_MAN_MADE_VALUES.join('|');
 const FLOWERBED = FLOWERBED_VALUES.join('|');
 const PICNIC_LEISURE = PICNIC_LEISURE_VALUES.join('|');
@@ -243,10 +244,10 @@ const elements = rawElements
   .map((el) => trimOverpassElement(el))
   .filter(Boolean)
   .filter((el) => {
-    // CW-77: a building below the street is not part of the street. `layer`
+    // A building below the street is not part of the street. `layer`
     // below zero or `location=underground` is how the map says so, and the
     // game was extruding those from z = 0 like any other - a car park under a
-    // plaza standing up through it. Dropped HERE so the extract is smaller
+    // plaza standing up through it. Dropped here so the extract is smaller
     // rather than the game filtering on every load, which is where the
     // building:part floor already lives.
     const t = el.tags ?? {};
@@ -260,7 +261,7 @@ const elements = rawElements
     return true;
   })
   .filter((el) => {
-    // CW-Q31: the part-area floor, applied HERE so the extract itself gets
+    // The part-area floor, applied here so the extract itself gets
     // smaller rather than the game filtering on every load. Denver is mapped
     // with thousands of building:part slivers - ledges and setbacks a few
     // centimetres across that no character cell could show - and they are
@@ -271,7 +272,7 @@ const elements = rawElements
     return false;
   });
 
-// CW-77 (CW-Q76): Seattle City Light's surveyed streetlight register, beside
+// Seattle City Light's surveyed streetlight register, beside
 // OpenStreetMap's own lamps. Negative ids mark every element that is not from
 // OSM, so the ODbL statement on this file keeps meaning what it says.
 let poleReport = null;
@@ -292,7 +293,7 @@ if (wantPoles) {
   );
 }
 
-// CW-77 (CW-Q77): the terrain, from a national 1 m DEM point service.
+// The terrain, from a national 1 m DEM point service.
 let elevation = null;
 let elevationReport = null;
 if (wantElevation) {
@@ -325,7 +326,7 @@ if (wantElevation) {
 }
 
 const extract = {
-  // CW-77: v2 is ADDITIVE. Everything v1 carried is still here and in the
+  // v2 is additive. Everything v1 carried is still here and in the
   // same shape; a v1 reader ignores `elevation` and the street-lamp nodes and
   // gets exactly the city it always got.
   format: 'ascii-city-extract@2',
@@ -355,10 +356,10 @@ const json = JSON.stringify(extract);
 writeFileSync(outPath, json);
 
 const sizeKb = Math.round(json.length / 1024);
-// The per-city table CW-33's record is built from: everything a reviewer
-// would otherwise have to re-derive by reading the JSON.
-// CW-55: the same courtesy for the planting seeds - a reviewer should not
-// have to read the JSON to learn what a rebake actually brought back.
+// The per-city table the release record is built from: everything a reader
+// would otherwise have to re-derive by reading the JSON, the planting seeds
+// included, so nobody has to read the JSON to learn what a rebake actually
+// brought back.
 const plantingLine = Object.entries(model.stats.plantingByKind)
   .sort((a, b) => b[1] - a[1])
   .map(([kind, n]) => `${kind} ${n}`)

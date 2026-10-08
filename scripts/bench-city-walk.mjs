@@ -1,31 +1,31 @@
 /**
  * @license GPL-3.0-or-later
  */
-// The ASCII City Walk performance bench (CW-30 P0).
+// The ASCII City Walk performance bench.
 //
-// This is the instrument Round 5's acceptance bar (CW-Q28) is measured on:
-// 30 fps while walking at the 10% character floor with heavy rain, under a
-// 4x CPU throttle standing in for a low-end machine. CW-31, CW-32 and CW-37
-// all read their numbers from this script, so its honesty is part of the
-// deliverable.
+// This is the instrument the game's performance bar is measured on: 30 fps
+// while walking at the 10% character floor with heavy rain, under a 4x CPU
+// throttle standing in for a low-end machine. Every performance change to
+// the game reads its numbers from this script, so its honesty is part of the
+// work.
 //
 //   node scripts/bench-city-walk.mjs --label=baseline
 //   node scripts/bench-city-walk.mjs --throttle=1 --seconds=30
 //   node scripts/bench-city-walk.mjs --sizes=0.1,0.3,0.5,0.1 --throttle=1
 //   node scripts/bench-city-walk.mjs --gpu-luid=0,101218   (the other adapter)
 //
-// WHAT IT REFUSES TO DO, and why each guard is here:
+// What it refuses to do, and why each guard is here:
 //
-//   * It runs HEADED. Headless Chromium renders through SwiftShader, which is
+//   * It runs headed. Headless Chromium renders through SwiftShader, which is
 //     a software rasteriser: it reads about a third of the real frame rate and
 //     has repeatedly produced confident wrong perf answers in this project.
-//     The GL renderer string is fetched, PRINTED, and checked - a software
+//     The GL renderer string is fetched, printed, and checked - a software
 //     renderer aborts the run rather than reporting a number.
 //   * It refuses to measure a tree it cannot identify. Another checkout's dev
 //     server has served this project's port before and faked a whole result,
 //     so the script fetches one served module and requires a marker string
-//     that only the tree under test carries. Point --base-url at your OWN
-//     server on your OWN port; never assume 5173.
+//     that only the tree under test carries. Point --base-url at your own
+//     server on your own port; never assume 5173.
 //   * It reports how far the walker actually travelled. A bench where the
 //     keyboard went to the wrong element still produces plausible-looking
 //     millisecond numbers, and the distance line is what catches it.
@@ -33,37 +33,37 @@
 //     so this measures the dev server. A production build cannot be benched
 //     with it, by design - the counters are not shipped.
 //   * It refuses to guess which GPU it ran on. Windows hands a non-fullscreen
-//     Chromium the power-saving adapter, so on a two-GPU laptop the DEFAULT is
-//     the integrated one, and every table this script printed before CW-67 was
-//     an integrated-GPU table whether or not anybody read it that way.
-//     --gpu-luid=<high>,<low> (the LUIDs are on chrome://gpu) picks the other
-//     one; the renderer string is printed on EVERY ROW either way, because a
-//     bench row without one has measured nobody knows what.
+//     Chromium the power-saving adapter, so on a two-GPU laptop the default is
+//     the integrated one, and every table this script printed before it could
+//     choose was an integrated-GPU table whether or not anybody read it that
+//     way. --gpu-luid=<high>,<low> (the LUIDs are on chrome://gpu) picks the
+//     other one; the renderer string is printed on every row either way,
+//     because a bench row without one has measured nobody knows what.
 //
-// CW-67 RETIRED THE "reverse" COLUMN. It reported the reverse-video cell count
-// of the LAST converted frame, which is a snapshot of wherever the walker
-// happened to stop: it swung between 0 and 95,425 across runs of the same
-// configuration and said nothing about stability. What the reverse-video layer
-// does over a sequence is scripts/seq-city-walk.mjs's question, and that script
-// answers it per frame pair.
+// There is no "reverse" column any more. It reported the reverse-video cell
+// count of the last converted frame, which is a snapshot of wherever the
+// walker happened to stop: it swung between 0 and 95,425 across runs of the
+// same configuration and said nothing about stability. What the reverse-video
+// layer does over a sequence is scripts/seq-city-walk.mjs's question, and that
+// script answers it per frame pair.
 //
-// NUMBERS FROM DIFFERENT SESSIONS ARE NOT COMPARABLE. Three rounds of
-// evidence on this machine say so: it is shared with other agent sessions and
-// with the owner's own work. Every claim built on this script must be a
-// same-session A/B, and every table must carry that caveat.
+// Numbers from different sessions are not comparable. The evidence on this
+// machine says so: it is shared with other work running at the same time.
+// Every claim built on this script must be a same-session A/B, and every
+// table must carry that caveat.
 
 import { chromium } from '@playwright/test'
 
 const DEFAULTS = {
   baseUrl: process.env.PW_BASE_URL || 'http://localhost:5199',
-  // Both cities the CW-30 baseline table names. Seattle is the owner's
-  // reference city; Burnaby is the second-densest extract.
+  // Both cities the baseline table names. Seattle is the reference city;
+  // Burnaby is the second-densest extract.
   cities: 'seattle',
   seconds: 60,
   throttle: 4,
   charScale: 0.1,
   // --sizes=0.1,0.3,0.5 sweeps the character size, one walk per size inside
-  // ONE browser session, in the order given. Repeat a size to check the run
+  // one browser session, in the order given. Repeat a size to check the run
   // order is not itself the effect. Overrides --char-scale when set.
   sizes: '',
   rain: 'heavy',
@@ -75,16 +75,16 @@ const DEFAULTS = {
   width: 1600,
   height: 900,
   // --profile=1 additionally records a CPU profile over the walk and prints
-  // self-time per function. That table is how CW-30 found out which part of
-  // the converter actually costs the time, rather than assuming.
+  // self-time per function. That table is how the part of the converter that
+  // actually costs the time was found, rather than assumed.
   profile: 0,
   // Which converter paths to measure, in order. Every named variant is walked
   // separately, from the same spawn and along the same scripted route, inside
-  // ONE browser session - which is the only way an A/B on this machine means
+  // one browser session - which is the only way an A/B on this machine means
   // anything. Repeat a name to check the run order is not itself the effect:
   //   --variants=new,legacy-taps,new,legacy-taps
   variants: 'new',
-  // --walk=0 measures from a STANDING pose instead of a scripted walk.
+  // --walk=0 measures from a standing pose instead of a scripted walk.
   //
   // Both modes are needed and they answer different questions. The walk is
   // what the acceptance bar is about, but under a 4x throttle it is not
@@ -93,34 +93,34 @@ const DEFAULTS = {
   // different scenery. (Measured: four interleaved 45 s walks covered 17, 16,
   // 14 and 23 m and saw wildly different amounts of reverse video.) Standing
   // still with the rain on keeps every frame dirty, so conversions run flat
-  // out over the SAME view - which is what a comparison of two converter
+  // out over the same view - which is what a comparison of two converter
   // paths actually needs.
   walk: 1,
   // --shot=<prefix> writes <prefix>-<city>-<variant>.png of the viewport at
-  // the end of each run, for the eyes-on gates. Pair it with --rain=none
+  // the end of each run, for checking by eye. Pair it with --rain=none
   // --walk=0 so the two variants photograph the same standing scene.
   shot: '',
   // --colour=on runs in palette mode. Needed to price anything that only
-  // exists there: the CW-71 ink budget is inert in monochrome, so a bench of
+  // exists there: the palette ink budget is inert in monochrome, so a bench of
   // it without this measures nothing at all.
   colour: 'off',
-  // --daylight=on runs with CW-85's backing painted. It is a per-cell fill
+  // --daylight=on runs with the daylight backing painted. It is a per-cell fill
   // under the glyphs, so it is the one thing in the converter that costs
   // paint time without changing a single glyph decision - the only way to
   // price it is to run the same walk twice.
   daylight: 'off',
-  // CW-86: --anchored=on takes ground, paving and greenspace glyphs from the
+  // --anchored=on takes ground, paving and greenspace glyphs from the
   // surface. It currently forces the CPU glyph path, so this is the flag that
   // prices that path as much as it prices the anchoring.
   anchored: 'off',
-  // CW-92: `--ink-families=off` reinstates the per-frame nearest-palette match,
+  // `--ink-families=off` reinstates the per-frame nearest-palette match,
   // so the authored table has an A-B-B-A of its own. Colour mode only.
   inkFamilies: '',
-  // --ink-budget sets the CW-71 palette ink budget for every run: `off`, or
+  // --ink-budget sets the palette ink budget for every run: `off`, or
   // `floor,whiteLum,whiteChroma`. Empty leaves the game's own. Only palette
   // mode is affected, so pair it with a colour run.
   inkBudget: '',
-  // --luminance selects the CW-70 treatment of the solid bright layer for
+  // --luminance selects the treatment of the solid bright layer for
   // every run: stock | calm | off. Empty leaves the game's own.
   luminance: '',
   // --gpu-luid=high,low selects a D3D adapter (Chromium --use-adapter-luid).
@@ -138,15 +138,15 @@ const VARIANTS = {
   // against it inside one session.
   'legacy-cpu-sample': { cpuSample: true },
   'legacy-all': { taps: true, contrast: true, cpuSample: true },
-  // CW-39 (CW-Q37): the game retired the phosphor trail, so 'new' now runs
+  // The game retired the phosphor trail, so 'new' now runs
   // at persistFade 0. This variant re-enables the retired fade through the
   // converter's own public API (not a setBenchLegacy switch) so trail-on
   // can be A/B'd against trail-off inside one session.
   trail: {},
-  // CW-41: the cell-raster facade filtering OFF (bias forced to zero), so
+  // The cell-raster facade filtering off (bias forced to zero), so
   // its cost can be A/B'd against the shipped filtering in one session.
   'no-cellraster': {},
-  // CW-68: the frame-to-frame memory turned OFF for this run, so its cost can
+  // The frame-to-frame memory turned off for this run, so its cost can
   // be priced against the shipped configuration inside one session - which is
   // the only kind of comparison this machine supports. Use it A-B-B-A:
   //   --variants=no-hysteresis,new,new,no-hysteresis
@@ -243,7 +243,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
 
   await page.goto(`${opts.baseUrl}/?hfm=unlock`, { waitUntil: 'load' })
 
-  // The GL renderer is read HERE, on the page that is about to be measured,
+  // The GL renderer is read here, on the page that is about to be measured,
   // and never on a throwaway navigation first: loading the app twice in one
   // page leaves the second load short of its unlock, and the gated card
   // never appears. One navigation per measured run, always.
@@ -300,7 +300,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     )
   }
 
-  // CW-68. Read what the game configured for itself, or turn it off for the
+  // Read what the game configured for itself, or turn it off for the
   // variant that prices it; either way the answer goes in the table, because
   // a converter row that does not say whether the memory was on is a number
   // about nothing.
@@ -330,8 +330,8 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     )
   }
 
-  // ★ A DAY BENCH THAT QUIETLY RAN AT NIGHT would price nothing and read as
-  // proof the backing is free, so check the PAINT rather than the setting.
+  // A Day bench that quietly ran at Night would price nothing and read as
+  // proof the backing is free, so check the paint rather than the setting.
   //
   // Not hasBackingProvider(): the game installs its provider once and that
   // provider returns null while Night is on, so it answers true either way
@@ -340,7 +340,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
   // carrying paint is the thing to ask. Measured at the spawn at 30 %:
   // 27-57 % at Night against 85-95 % under Day, so 0.7 sits in a 30-point
   // gap rather than near either side.
-  // CW-86: and the same rule - ask what is IN FORCE, not what was requested.
+  // The same rule for anchoring: ask what is in force, not what was requested.
   if (opts.inkFamilies) {
     const want = opts.inkFamilies === 'on'
     const got = await page.evaluate((on) => {
@@ -434,7 +434,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     }
   }
 
-  // CW-39: set the variant's persistFade explicitly every time - never
+  // Set the variant's persistFade explicitly every time - never
   // inherit the previous variant's fade - and read it back the same way the
   // legacy flags are read back. setPersistFade refuses under reduced motion,
   // which would silently turn a 'trail' run into a trail-off run reported
@@ -453,7 +453,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     )
   }
 
-  // CW-41: set the facade filtering per variant, never inherited. Passing a
+  // Set the facade filtering per variant, never inherited. Passing a
   // cell height of 1 gives log2(1) = 0 - stock filtering; anything else
   // re-syncs the game's own bias from the converter's real cell size.
   await page.evaluate((off) => {
@@ -492,7 +492,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
   })
 
   // The scripted walk: forward held for the whole run (keyboard.press is far
-  // too brief to repaint - the CW-17 discipline), with a turn pulsed in every
+  // too brief to repaint), with a turn pulsed in every
   // five seconds so the view keeps changing rather than settling into one
   // corridor. Deterministic, so two runs walk the same walk.
   if (opts.walk) {
@@ -524,9 +524,10 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     }
   })
 
-  // The eyes-on capture. Taken with --rain=none --walk=0 the pose and the
-  // scene are identical between variants, so two shots differ only where the
-  // code does - which is what makes looking at them worth anything.
+  // The capture for checking by eye. Taken with --rain=none --walk=0 the
+  // pose and the scene are identical between variants, so two shots differ
+  // only where the code does - which is what makes looking at them worth
+  // anything.
   if (opts.shot) {
     await page.waitForTimeout(400)
     // The run index is in the name so that repeating a variant - the control
@@ -582,8 +583,8 @@ async function main() {
 
   const launchArgs = [
     // Chromium throttles rAF to 1 Hz when it believes the window is
-    // occluded, which once turned a real measurement into a flat line
-    // (CW-12). These keep the tab running at full rate while it is behind
+    // occluded, which once turned a real measurement into a flat line. These
+    // keep the tab running at full rate while it is behind
     // whatever else is on screen.
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
@@ -603,12 +604,12 @@ async function main() {
       'openscad-forge-city-walk-colour',
       colourOn ? 'on' : 'off'
     )
-    // CW-85: absent means Night, which is the shipped default.
+    // Absent means Night, which is the shipped default.
     localStorage.setItem(
       'openscad-forge-city-walk-daylight',
       dayOn ? 'day' : 'night'
     )
-    // CW-42: benches measure the size THEY set. The inert forced-probe map
+    // Benches measure the size they set. The inert forced-probe map
     // stops the entry calibration on its first frame, and clearing the
     // stored floor keeps a previous real calibration from seeding the
     // landing or blocking the keypress ladder below 30% (the scale
@@ -620,7 +621,7 @@ async function main() {
   const page = await context.newPage()
 
   try {
-    // Is the server on the other end of --base-url actually serving THIS
+    // Is the server on the other end of --base-url actually serving this
     // tree? A dev server from another checkout has answered for this project
     // before and produced a full red-then-green proof that meant nothing.
     const probe = await page.request.get(opts.baseUrl + opts.markerPath)
@@ -647,7 +648,7 @@ async function main() {
       .map((v) => v.trim())
       .filter(Boolean)
 
-    // A size sweep is a list of runs inside ONE session, which is the only
+    // A size sweep is a list of runs inside one session, which is the only
     // kind of comparison this shared machine supports.
     const sizes = opts.sizes
       ? String(opts.sizes)
