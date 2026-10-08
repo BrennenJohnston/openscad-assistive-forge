@@ -54,9 +54,9 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     // Read-only tap on a feed the app already publishes. Declared here rather
     // than added to the app: nothing in src/ changes to make this spec possible.
-    window.__uf26Poses = [];
+    window.__cameraPoses = [];
     document.addEventListener('viewport-camera-change', (ev) => {
-      window.__uf26Poses.push(ev.detail.pose);
+      window.__cameraPoses.push(ev.detail.pose);
     });
   });
 });
@@ -117,8 +117,8 @@ function screenBasis({ x, y, z }) {
  */
 async function readCamera(page) {
   const raw = await page.evaluate(() => ({
-    pose: window.__uf26Poses?.length
-      ? window.__uf26Poses[window.__uf26Poses.length - 1]
+    pose: window.__cameraPoses?.length
+      ? window.__cameraPoses[window.__cameraPoses.length - 1]
       : null,
     cam: window.__forgeDebug?.cameraPose?.() ?? null,
   }));

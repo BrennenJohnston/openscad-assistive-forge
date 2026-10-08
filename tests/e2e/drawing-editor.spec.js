@@ -1657,7 +1657,7 @@ test.describe('Crop first', () => {
       const said = await page.evaluate(() => window.__quickLookSaid)
       test.skip(
         !/under a second/.test(said || ''),
-        `this machine's quick look did not call the picture quick (${said}), so DP-Q32's rule waits for a press and nothing starts by itself`
+        `this machine's quick look did not call the picture quick (${said}), so the quick-look rule waits for a press and nothing starts by itself`
       )
     }
     // The run began by itself and the press landed inside it.

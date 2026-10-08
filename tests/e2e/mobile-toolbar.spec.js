@@ -207,7 +207,7 @@ for (const height of HEIGHTS) {
         }
         return [...seen];
       });
-      expect(hits, 'D-82: the tail of the label was the GitHub link').toEqual([
+      expect(hits, 'the tail of the label was the GitHub link').toEqual([
         'clearFileBtn',
       ]);
     });

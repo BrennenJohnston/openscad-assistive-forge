@@ -756,7 +756,7 @@ test.describe('Forge extras out of the Customizer column', () => {
     for (const { selector, label } of FORGE_EXTRAS) {
       await expect(
         page.locator(selector),
-        `${label} should not be in the Classic column by default (Q-4)`
+        `${label} should not be in the Classic column by default`
       ).toBeHidden();
     }
 

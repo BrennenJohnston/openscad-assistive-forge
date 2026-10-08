@@ -3117,11 +3117,11 @@ test.describe('One action, one announcement', () => {
     )
 
     await page.evaluate(() => {
-      window.__dp32Heard = []
+      window.__previewHeard = []
       const node = document.getElementById('srAnnouncer')
       new MutationObserver(() => {
         const t = node.textContent.trim()
-        if (t) window.__dp32Heard.push(t)
+        if (t) window.__previewHeard.push(t)
       }).observe(node, {
         childList: true,
         characterData: true,
@@ -3147,13 +3147,13 @@ test.describe('One action, one announcement', () => {
       .poll(
         () =>
           page.evaluate(() =>
-            (window.__dp32Heard ?? []).some((t) => t.includes('Preview ready'))
+            (window.__previewHeard ?? []).some((t) => t.includes('Preview ready'))
           ),
         { timeout: 120_000 }
       )
       .toBe(true)
     // And the transient progress line must not have spoken.
-    const heard = await page.evaluate(() => window.__dp32Heard ?? [])
+    const heard = await page.evaluate(() => window.__previewHeard ?? [])
     expect(
       heard.filter((t) => t.includes('Rendering preview')),
       `heard: ${heard.join(' | ')}`

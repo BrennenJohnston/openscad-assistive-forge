@@ -964,7 +964,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar', () => {
           await page.waitForTimeout(200)
           const m = await measure(locator)
           console.log(
-            `[cw15] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
+            `[contrast] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
           )
           expect(
             m.ratio,

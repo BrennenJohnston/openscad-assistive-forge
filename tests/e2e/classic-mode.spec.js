@@ -510,7 +510,7 @@ test.describe('Classic on mobile (375px, touch)', () => {
         console.log('[d56]   ' + JSON.stringify(s));
       }
       await page
-        .screenshot({ path: 'test-results/d56-panel-did-not-fit.png' })
+        .screenshot({ path: 'test-results/stacked-panel-did-not-fit.png' })
         .catch(() => {});
       throw err;
     }

@@ -94,7 +94,7 @@ test.describe('ASCII City Walk — the acceptance path runs', () => {
 
     const after = await stats(page)
     console.log(
-      `[cw37] floor=${floor} rain=${rain} cells=${after.cells} ` +
+      `[perf] floor=${floor} rain=${rain} cells=${after.cells} ` +
         `gpu=${after.usedGpu} avg=${after.avgMs.toFixed(1)}ms ` +
         `interval=${after.dynamicIntervalMs}ms`
     )
@@ -122,7 +122,7 @@ test.describe('ASCII City Walk — the acceptance path runs', () => {
 
     const s = await stats(page)
     console.log(
-      `[cw37] gpuAvailable=${s.gpuAvailable} usedGpu=${s.usedGpu} ` +
+      `[perf] gpuAvailable=${s.gpuAvailable} usedGpu=${s.usedGpu} ` +
         `failure=${s.gpuFailure || 'none'}`
     )
 

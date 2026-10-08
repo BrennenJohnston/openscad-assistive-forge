@@ -361,16 +361,15 @@ test.describe('Classic gate: the dimmed toggle stays legible', () => {
   }) => {
     test.skip(
       true,
-      'UF-42 (U-46, Q-73c): the state this measures no longer exists. The ' +
-        'gated toggle is now removed rather than dimmed, and the gated and ' +
-        'hidden conditions are the same condition, so no viewport can produce ' +
-        'a visible aria-disabled Classic button to measure. Kept rather than ' +
-        'deleted: if a dimmed gate ever returns, the composited measurement ' +
-        'it needs is written here already. The lesson it was built on stands ' +
-        'and belongs to the next dimmed control: axe skips contrast on ' +
-        'aria-disabled elements and the token guards cannot see an opacity ' +
-        'composite, so a dimmed pair is measured by nothing that already ' +
-        'exists.'
+      'The state this measures does not exist: the gated toggle is removed ' +
+        'rather than dimmed, and the gated and hidden conditions are the ' +
+        'same condition, so no viewport can produce a visible aria-disabled ' +
+        'Classic button to measure. Kept rather than deleted: if a dimmed ' +
+        'gate ever returns, the composited measurement it needs is written ' +
+        'here already. The lesson it was built on belongs to the next ' +
+        'dimmed control: axe skips contrast on aria-disabled elements and ' +
+        'the token guards cannot see an opacity composite, so a dimmed pair ' +
+        'is measured by nothing that already exists.'
     );
     // Intentionally unreachable. See the skip reason above.
     await expect(page.locator('#classicModeToggle')).toBeHidden();

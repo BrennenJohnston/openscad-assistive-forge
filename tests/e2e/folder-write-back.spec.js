@@ -109,7 +109,7 @@ test.describe('Saving into the connected folder', () => {
         // A real directory handle: OPFS ones behave like picked ones for
         // everything except the grant.
         const opfs = await navigator.storage.getDirectory()
-        const root = await opfs.getDirectoryHandle('ir5-writeback', {
+        const root = await opfs.getDirectoryHandle('writeback-test', {
           create: true,
         })
         // Start from a known state, so a rerun cannot read a stale file.
@@ -181,8 +181,8 @@ test.describe('Saving into the connected folder', () => {
         }
       })
 
-      console.log('[ir5] announced:', JSON.stringify(result.announced))
-      console.log('[ir5] watcher:', JSON.stringify(result.watcherCalls))
+      console.log('[writeback] announced:', JSON.stringify(result.announced))
+      console.log('[writeback] watcher:', JSON.stringify(result.watcherCalls))
 
       // The companions are on disk, byte for byte.
       expect(result.saved.ok).toBe(true)

@@ -21,7 +21,7 @@ const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
  */
 
 const WASM_READY_TIMEOUT = 180_000;
-const MARKER = 'UF6_P6_FLUSH_MARKER';
+const MARKER = 'CAMERA_BAR_FLUSH_MARKER';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {

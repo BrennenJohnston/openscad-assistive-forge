@@ -24,10 +24,10 @@ import { test, expect } from '@playwright/test';
 const isCI = !!process.env.CI;
 
 const FIXTURE = {
-  name: 'af12-dotscad.scad',
+  name: 'archive-dotscad.scad',
   mimeType: 'text/plain',
   buffer: Buffer.from(
-    'include <dotSCAD/src/arc.scad>\necho("AF12_MOUNTED");\ncube(3);\n'
+    'include <dotSCAD/src/arc.scad>\necho("ARCHIVE_MOUNTED");\ncube(3);\n'
   ),
 };
 
@@ -66,7 +66,7 @@ async function renderWithDotscad(page) {
     .poll(() => page.locator('#console-output').textContent(), {
       timeout: 180_000,
     })
-    .toContain('AF12_MOUNTED');
+    .toContain('ARCHIVE_MOUNTED');
 }
 
 test('dotSCAD mounts from its archive: a handful of requests, not hundreds', async ({

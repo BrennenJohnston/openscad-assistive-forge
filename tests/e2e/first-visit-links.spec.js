@@ -111,7 +111,7 @@ test.describe('A shared link on a first visit', () => {
     test.skip(isCI, 'WASM processing is slow/unreliable in CI')
     test.skip(
       browserName !== 'chromium',
-      "Routing cannot hold the render worker's engine request on Firefox (measured in IR-R2 A0)"
+      "Routing cannot hold the render worker's engine request on Firefox"
     )
 
     // The render worker fetches the engine; only a context route holds it.

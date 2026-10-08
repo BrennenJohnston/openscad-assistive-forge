@@ -180,11 +180,11 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
   // with an observer armed before the toggle: what a screen reader hears,
   // accumulated.
   await page.evaluate(() => {
-    window.__uf11Heard = [];
+    window.__gridHeard = [];
     const node = document.getElementById('srAnnouncer');
     new MutationObserver(() => {
       const t = node.textContent.trim();
-      if (t) window.__uf11Heard.push(t);
+      if (t) window.__gridHeard.push(t);
     }).observe(node, { childList: true, characterData: true, subtree: true });
   });
   await page.keyboard.press('Enter');
@@ -199,7 +199,7 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
     .toBe('false');
   await expect
     .poll(() =>
-      page.evaluate(() => (window.__uf11Heard ?? []).join(' | '))
+      page.evaluate(() => (window.__gridHeard ?? []).join(' | '))
     )
     .toContain('Grid hidden');
 });

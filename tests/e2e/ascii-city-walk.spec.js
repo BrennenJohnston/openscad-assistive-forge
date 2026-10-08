@@ -213,7 +213,7 @@ test.describe('ASCII City Walk — desktop-only gate', () => {
           })
 
           console.log(
-            `[cw11] ${label} ${state}: ${measured.color} on ${measured.background} @ ${measured.opacity} = ${measured.ratio}:1`
+            `[contrast] ${label} ${state}: ${measured.color} on ${measured.background} @ ${measured.opacity} = ${measured.ratio}:1`
           )
           expect(
             measured.ratio,
@@ -1540,7 +1540,7 @@ test.describe('ASCII City Walk — accessibility toggles', () => {
           await page.waitForTimeout(200)
           const m = await measure(locator)
           console.log(
-            `[cw14] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
+            `[contrast] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
           )
           expect(
             m.ratio,
@@ -2276,13 +2276,13 @@ test.describe('ASCII City Walk — find the traveler', () => {
     await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
     await page.evaluate(() => {
       const g = window.__cityWalkGame
-      window.__cw65 = { from: { x: g.walkState.x, y: g.walkState.y }, seen: null }
+      window.__approachProbe = { from: { x: g.walkState.x, y: g.walkState.y }, seen: null }
     })
     await page.keyboard.down('ArrowUp')
     await page.waitForFunction(
       () => {
         const g = window.__cityWalkGame
-        const p = window.__cw65
+        const p = window.__approachProbe
         if (p.seen) return true
         const moved = Math.hypot(
           g.walkState.x - p.from.x,
@@ -2307,7 +2307,7 @@ test.describe('ASCII City Walk — find the traveler', () => {
       undefined,
       { timeout: 25000 }
     )
-    const outside = await page.evaluate(() => window.__cw65.seen)
+    const outside = await page.evaluate(() => window.__approachProbe.seen)
     expect(outside, 'no movement frame was observed outside the radius').toBeTruthy()
     expect(outside.found, `fired at ${outside.d.toFixed(1)}m`).toBe(false)
     expect(outside.hidden, `bubble open at ${outside.d.toFixed(1)}m`).toBe(true)

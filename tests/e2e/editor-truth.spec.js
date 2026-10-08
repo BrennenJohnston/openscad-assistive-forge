@@ -25,7 +25,7 @@ const BASE_SOURCE = [
   '/*[Dimensions]*/',
   'size = 10; // [5:50]',
   '',
-  'echo(str("UF18_SIZE=", size));',
+  'echo(str("EDITOR_SIZE=", size));',
   '',
   '$fn = 16;',
   'for (i = [0 : floor(size / 10)]) {',
@@ -46,7 +46,7 @@ const BASE_TRIANGLES = '24 triangles';
 const EDITED_TRIANGLES = '60 triangles';
 
 const FIXTURE = {
-  name: 'uf18-editor-truth.scad',
+  name: 'editor-truth.scad',
   mimeType: 'text/plain',
   buffer: Buffer.from(BASE_SOURCE),
 };
@@ -142,7 +142,7 @@ test.describe('The editor decides the model', () => {
       .toContain(EDITED_TRIANGLES);
     // The compiler's own report of the value it used.
     await expect.poll(() => echoText(page), { timeout: 15_000 }).toContain(
-      'UF18_SIZE=40'
+      'EDITOR_SIZE=40'
     );
 
     // 2. A geometry edit was never masked by -D; keep it that way.
@@ -168,7 +168,7 @@ test.describe('The editor decides the model', () => {
       .poll(() => statsText(page), { timeout: RENDER_TIMEOUT })
       .toContain(EDITED_TRIANGLES);
     await expect.poll(() => echoText(page), { timeout: 15_000 }).toContain(
-      'UF18_SIZE=40'
+      'EDITOR_SIZE=40'
     );
   });
 
@@ -196,7 +196,7 @@ test.describe('The editor decides the model', () => {
     await sizeInput.blur();
     await expect
       .poll(() => echoText(page), { timeout: RENDER_TIMEOUT })
-      .toContain('UF18_SIZE=33');
+      .toContain('EDITOR_SIZE=33');
 
     // Now move the SAME parameter's default in code. The user's choice wins,
     // in the render and in the control.
@@ -210,7 +210,7 @@ test.describe('The editor decides the model', () => {
 
     await expect
       .poll(() => echoText(page), { timeout: RENDER_TIMEOUT })
-      .toContain('UF18_SIZE=33');
+      .toContain('EDITOR_SIZE=33');
     await expect(sizeInput).toHaveValue('33');
   });
 
@@ -227,14 +227,14 @@ test.describe('The editor decides the model', () => {
     // measured 1-in-5 for the Classic toolbar's Render before the fix.
     await editor.click();
     await page.keyboard.press('Control+End');
-    await page.keyboard.insertText('\necho("UF18_RENDER_MARKER");');
+    await page.keyboard.insertText('\necho("EDITOR_RENDER_MARKER");');
     await page.locator('#primaryActionBtn').click();
 
     await expect
       .poll(() => page.locator('#console-output').textContent(), {
         timeout: RENDER_TIMEOUT,
       })
-      .toContain('UF18_RENDER_MARKER');
+      .toContain('EDITOR_RENDER_MARKER');
   });
 
   /** The actions drawer holds Compare and Queue; open it if collapsed. */

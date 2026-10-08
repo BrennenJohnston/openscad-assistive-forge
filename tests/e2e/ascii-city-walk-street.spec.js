@@ -1347,14 +1347,14 @@ test.describe('ASCII City Walk — where you are', () => {
     // Count how many times the live region is written, not just its value:
     // two announcements per press would be read out twice.
     await page.evaluate(() => {
-      window.__cw27Writes = 0
+      window.__announcerWrites = 0
       const el = document.querySelector('#cityWalkAnnouncer')
       // announceInLayer deliberately clears the region and sets it again on
       // the next frame, so a screen reader re-reads identical text. That is
       // TWO mutations for ONE announcement - count only the ones that put
       // words in, or this asserts the implementation instead of the promise.
       new MutationObserver(() => {
-        if ((el.textContent ?? '').trim() !== '') window.__cw27Writes++
+        if ((el.textContent ?? '').trim() !== '') window.__announcerWrites++
       }).observe(el, { childList: true, characterData: true, subtree: true })
     })
 
@@ -1375,7 +1375,7 @@ test.describe('ASCII City Walk — where you are', () => {
     )
     const said = await announcer.textContent()
     await page.waitForTimeout(400)
-    expect(await page.evaluate(() => window.__cw27Writes)).toBe(1)
+    expect(await page.evaluate(() => window.__announcerWrites)).toBe(1)
 
     // The sentence is a real one: no empty clause, no dangling comma.
     expect(said).not.toMatch(/,\s*,/)
@@ -2218,12 +2218,12 @@ test.describe('ASCII City Walk — the converter remembers the last frame', () =
       // Both numbers are logged, because the difference between them is what
       // the lit-cell scope removes, and a reader of this line should see it.
       console.log(
-        `[CW-68 memory] ${path}: GOVERNED (unanchored, lit, non-tree) ` +
+        `[glyph memory] ${path}: GOVERNED (unanchored, lit, non-tree) ` +
           `${withMemory.governedChanges} of ${without.governedChanges} ` +
           `stateless re-rolls survive = ` +
           `${((withMemory.governedChanges / without.governedChanges) * 100).toFixed(1)} % ` +
           `(bar < ${MUST_PREVENT * 100} %) over ${withMemory.governedCells} ` +
-          `governed cell-frames; TREE cells counted apart (CW-94): ` +
+          `governed cell-frames; TREE cells counted apart: ` +
           `${withMemory.treeChanges} of ${without.treeChanges} re-rolls over ` +
           `${withMemory.treeCells} cell-frames; every LIT cell including ` +
           `anchored ones ${withMemory.litChanges} of ${without.litChanges} = ` +
@@ -2843,7 +2843,7 @@ test.describe('ASCII City Walk — glyphs anchored to the surface', () => {
     expect(moved.ground + moved.paving).toBeGreaterThan(0)
     expect(
       moved.wall + moved.storefront,
-      'the facade is anchored since CW-91 and must move'
+      'the facade is anchored and must move'
     ).toBeGreaterThan(0)
     // And the classes that are NOT in the set did not move one cell. The road
     // carries neither a uv attribute nor a map, so it could not be anchored
