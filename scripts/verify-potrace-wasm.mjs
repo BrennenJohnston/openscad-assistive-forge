@@ -108,7 +108,7 @@ check(
   `${JSON.stringify(squareBox)}, expected about 4..12 on both axes`
 );
 
-// ★ The flip. Ink in the TOP rows must come back in the TOP half of the
+// The flip. Ink in the top rows must come back in the top half of the
 // drawing: potrace counts rows from the bottom and its own SVG backend flips
 // them back, so a build that does only half of that pair is upside down. Half
 // a picture is a wide margin on purpose - the question is which end the ink is

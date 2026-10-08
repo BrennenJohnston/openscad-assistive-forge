@@ -27,7 +27,7 @@ export default defineConfig({
   // Windows: 1 worker (terminal hang avoidance). CI: 2 workers (ubuntu-latest has 2 vCPUs).
   workers: isWindows ? 1 : (isCI ? 2 : undefined),
   // Use list reporter in CI to prevent HTML reporter hangs, HTML locally.
-  // The JSON report feeds scripts/check-e2e-complete.mjs (Q-23): a run the
+  // The JSON report feeds scripts/check-e2e-complete.mjs: a run the
   // clock cut short must fail the job, not pass with tests never started.
   reporter: isCI
     ? [
@@ -80,7 +80,7 @@ export default defineConfig({
     // Firefox - Tier 1 browser (extended timeouts for WASM init overhead)
     // wasm-smoke runs on Chromium-family projects only for now: it performs
     // real WASM renders with no CI skip, and Firefox/WebKit CI runners are
-    // not yet proven stable for that (see the skip-debt drawdown plan).
+    // not yet proven stable for that.
     {
       name: 'firefox',
       use: {
@@ -91,7 +91,7 @@ export default defineConfig({
       timeout: 90000,
       testIgnore: ignores('firefox'),
     },
-    // Visual regression tests (Milestone 3: Performance & Stability)
+    // Visual regression tests
     // Run separately with: npm run test:visual
     {
       name: 'visual-regression',
@@ -107,22 +107,21 @@ export default defineConfig({
     },
     // WebKit/Safari - Tier 2 browser (requires macOS runners, extended timeouts)
     //
-    // Q-48 (owner, 2026-08-14): this lane is SCOPED, and the reason is
-    // arithmetic. Running all 782 tests, it reached 177 of them in its
-    // 25-minute budget - 103 passed, 2 failed, 70 skipped, 597 never started -
-    // so it reported the clock rather than the browser. MEASURED cost on the
-    // macOS runner: ~13.5s per executed test in classic-mode, ~7.6s in
-    // accessibility, against ~19 tests/min on the Firefox lane. Finishing the
-    // whole suite needs roughly 100+ minutes, and macOS runners bill at 10x,
-    // so a complete lane was rejected on cost.
+    // This lane is scoped, and the reason is arithmetic. Running everything, it
+    // reached 177 of 782 tests in its 25-minute budget (103 passed, 2 failed,
+    // 70 skipped, 597 never started), so it reported the clock rather than the
+    // browser. Measured cost on the macOS runner: ~13.5s per executed test in
+    // classic-mode, ~7.6s in accessibility, against ~19 tests/min on the
+    // Firefox lane. Finishing the whole suite needs roughly 100+ minutes, and
+    // macOS runners bill at 10x, so a complete lane was rejected on cost.
     //
-    // The owner chose coverage weighted toward accessibility, because Safari
-    // is the browser VoiceOver users are on, so that suite buys more here than
-    // anywhere else. The scope is these five files (~176 tests), which fit the
-    // existing budget and still include classic-mode, where this lane's one
-    // reproducible failure lives.
+    // Coverage is weighted toward accessibility, because Safari is the browser
+    // VoiceOver users are on, so that suite buys more here than anywhere else.
+    // The scope is these five files (~176 tests), which fit the existing budget
+    // and still include classic-mode, where this lane's one reproducible
+    // failure lives.
     //
-    // Anything outside this list is NOT covered on Safari. Widening it means
+    // Anything outside this list is not covered on Safari. Widening it means
     // re-checking the arithmetic above, not just adding a line.
     {
       name: 'webkit',
@@ -138,9 +137,9 @@ export default defineConfig({
         '**/theme-switching.spec.js',
         '**/first-visit-choice.spec.js',
         '**/basic-workflow.spec.js',
-        // A module worker importing a module is the exact shape of D-31 and
-        // D-133, and both of those were WebKit refusing it under COEP where no
-        // other browser did. The one lane that has to run this runs it.
+        // A module worker importing a module is the exact shape of two earlier
+        // failures, both WebKit refusing it under COEP where no other browser
+        // did. The one lane that has to run this runs it.
         '**/potrace-engine.spec.js',
       ],
     },

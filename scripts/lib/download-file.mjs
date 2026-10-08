@@ -2,16 +2,16 @@
  * Download a file to a path, following redirects, opening the file only
  * when the final response is a 200.
  *
- * D-169 (2026-09-19): the downloader in scripts/download-wasm.js opened the
- * write stream BEFORE the response arrived and, on a redirect, deleted the
- * destination without waiting and recursed at once. The recursion opened
- * the same path again, and the two operations raced on the file system
- * thread pool. When the delete landed second (Linux, the CI runners) the
- * redirected download wrote into a deleted file, 'finish' fired, the script
- * printed "Downloaded font archive", and the checksum read found nothing:
- * #263's Build Check, red on a docs-only change. The release URL for the
- * fonts always redirects, so every Linux build ran that race. Windows never
- * showed it: deleting an open file fails there, and the error was swallowed.
+ * The old downloader in scripts/download-wasm.js opened the write stream
+ * before the response arrived and, on a redirect, deleted the destination
+ * without waiting and recursed at once. The recursion opened the same path
+ * again, and the two operations raced on the file system thread pool. When
+ * the delete landed second (Linux, the CI runners) the redirected download
+ * wrote into a deleted file, 'finish' fired, the script printed "Downloaded
+ * font archive", and the checksum read found nothing. The release URL for
+ * the fonts always redirects, so every Linux build ran that race. Windows
+ * never showed it: deleting an open file fails there, and the error was
+ * swallowed.
  *
  * Here nothing touches the destination until a 200 arrives, and a redirect
  * or an error status drains its body and moves on.

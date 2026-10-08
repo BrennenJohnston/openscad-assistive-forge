@@ -1,13 +1,13 @@
 /**
- * Seattle City Light's own pole register, as extract nodes (CW-77, CW-Q76).
+ * Seattle City Light's own pole register, as extract nodes.
  *
  * Dev-lane only. Seattle is the one city of the four with a published,
- * surveyed streetlight register, and the owner authorised its use explicitly
- * at gate G1 (CW-Q76) after being told that its catalog page states no
- * licence. The provenance is written into the extract so that anybody reading
- * the file can see where the poles came from and on whose say-so.
+ * surveyed streetlight register, and I authorised its use explicitly,
+ * knowing that its catalog page states no licence. The provenance is
+ * written into the extract so that anybody reading the file can see where
+ * the poles came from and on whose say-so.
  *
- * WHAT THE SERVICE ACTUALLY HOLDS, measured 2026-08-29 against the baked
+ * What the service actually holds, measured 2026-08-29 against the baked
  * circle (47.612, -122.340, r = 1,300 m):
  *
  *   - 4,115 poles, of which 3,679 carry `HasStreetlight = Yes`.
@@ -16,9 +16,9 @@
  *   - `HEIGHT` is populated on 1,736 of the 4,115 and is zero on the rest,
  *     so it is carried where it exists and never defaulted.
  *
- * ★ THE SERVICE'S OWN COUNT IS WRONG, BY FIVE TIMES. `returnCountOnly=true`
+ * The service's own count is wrong, by five times. `returnCountOnly=true`
  * and `returnIdsOnly=true` both report 21,703 poles inside that circle;
- * fetching the features and MEASURING their distances gives 4,115, with the
+ * fetching the features and measuring their distances gives 4,115, with the
  * furthest at 1,295 m. The same disagreement holds at 200 m (1,484 against a
  * measured 170) and at 400 m (4,174 against 675). Only the feature endpoint
  * is believed here, and every point is re-checked against the radius after it
@@ -131,7 +131,7 @@ export async function fetchPoles({
  * lights. Every point is re-measured against the radius, because the
  * service's own spatial filter cannot be trusted (see the header).
  *
- * IDs ARE NEGATIVE, AND THAT IS THE CONTRACT. OpenStreetMap ids are positive,
+ * IDs are negative, and that is the contract. OpenStreetMap ids are positive,
  * so a negative id in an extract says "this element is not from OSM" without
  * a reader having to look anything up, and the ODbL attribution on the file
  * keeps meaning exactly what it says.

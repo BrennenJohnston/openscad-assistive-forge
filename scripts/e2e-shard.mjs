@@ -1,12 +1,12 @@
 /**
- * Which spec files a browser lane's shard should run (D-72).
+ * Which spec files a browser lane's shard should run.
  *
- * WHY THIS EXISTS. Playwright's own `--shard=n/2` divides the suite by TEST
- * COUNT, walking the files in path order. That gives two halves with almost
+ * Why this exists: Playwright's own `--shard=n/2` divides the suite by test
+ * count, walking the files in path order. That gives two halves with almost
  * exactly the same number of tests - 476 and 475 - and wildly different
- * amounts of work, because the expensive files all sort early. Measured on the
- * green Chromium board of 2026-08-22 (run 32589505121, per-test durations read
- * out of the two shard logs and summed per file):
+ * amounts of work, because the expensive files all sort early. Measured on a
+ * green Chromium board (per-test durations read out of the two shard logs
+ * and summed per file):
  *
  *   shard 1/2 : 50.3 test-minutes, 476 tests   -> 26m48s wall
  *   shard 2/2 : 20.9 test-minutes, 475 tests   -> 12m28s wall
@@ -23,8 +23,8 @@
  * shard - the list is read from disk, never hand-maintained - so a spec added
  * tomorrow cannot fall between the shards and quietly stop being run.
  *
- * KEEPING THE TABLE HONEST. The weights below are Chromium seconds. Edge runs
- * the same specs and is slower across the board, but the RATIOS between files
+ * Keeping the table honest: the weights below are Chromium seconds. Edge runs
+ * the same specs and is slower across the board, but the ratios between files
  * are what the packing uses, and those hold: Edge's shards are lopsided in the
  * same shape and by the same files. A file whose cost changes materially, or a
  * new file that turns out to be expensive, shows up as one shard drifting
@@ -43,102 +43,68 @@ import { fileURLToPath } from 'node:url';
 /**
  * Measured Chromium seconds per spec file.
  *
- * RE-MEASURED 2026-08-27 from run 33063099176's GREEN Chromium shards, after
- * CW-59, CW-60 and CW-61 grew the city suites. What the old table got wrong is
- * worth knowing, because it is the shape this drifts in:
+ * The table drifts where tests are added. A re-measure that finds the files
+ * nobody touched at 1.0x and the files that grew far over their booking
+ * means the model was not decaying everywhere: it was wrong exactly where the
+ * suite grew, and optimistic by minutes a shard, which is how a lane can
+ * project 25 minutes and take 32. A file missing from the table is booked at
+ * DEFAULT_WEIGHT_S, far too little for a suite that builds a 3D city in every
+ * case.
  *
- *   files nobody touched      classic-panels 1.0x, classic-mode 1.0x,
- *                             accessibility 1.0x - the table was RIGHT
- *   the city walk files       street 329 -> 902, controls 417 -> 891,
- *                             walk 373 -> 704, teleport 190 -> 274
- *   two city files            calibration and furniture were NOT IN THE TABLE
- *                             and so were booked at 60 against a real 147/131
- *
- * The model was not decaying everywhere. It was wrong exactly where this round
- * added tests, and it was optimistic by about seven minutes a shard - which is
- * how a lane can project 25 minutes and take 32.
- *
- * ★ RE-MEASURE FROM A GREEN RUN, NEVER A RED ONE. The first attempt at this
- * read a shard that had timed out, where every file looked 3-5x its weight
- * INCLUDING files no branch had touched. That uniform inflation is the tell
- * for a starved runner, and re-weighting from it would have baked the
- * starvation into the model permanently.
+ * Re-measure from a green run, never a red one. A shard that timed out shows
+ * every file at 3-5x its weight, including files no branch touched. That
+ * uniform inflation is the tell for a starved runner, and re-weighting from
+ * it would bake the starvation into the model permanently.
  */
 export const MEASURED_SECONDS = {
-  // The City Walk suite was one 1,079-second file until D-78. Packing by cost
-  // put all of it on one shard, where two workers then spent most of the run
-  // driving 3D city sessions at the same time on a two-core runner with
-  // software rendering. That shard's overhead - wall time beyond the work
-  // divided by its workers - went from 1.6 to 5.6 minutes, its flaky count
-  // from 6 to 11, and two cases tipped over into failing. Splitting the file
-  // does nothing for Playwright's own --shard, since the pieces sort next to
-  // their parent, but it is exactly what a cost packer needs: it can put the
-  // pieces on DIFFERENT shards. These three weights are the old file's own
-  // describe blocks, re-summed from the same run.
+  // The City Walk suite was once one file. Packing by cost put all of it on
+  // one shard, where two workers then spent most of the run driving 3D city
+  // sessions at the same time on a two-core runner with software rendering:
+  // that shard's overhead (wall time beyond the work divided by its workers)
+  // went from 1.6 to 5.6 minutes, its flaky count from 6 to 11, and two cases
+  // tipped over into failing. Splitting the file does nothing for
+  // Playwright's own --shard, since the pieces sort next to their parent, but
+  // it is exactly what a cost packer needs: it can put the pieces on
+  // different shards.
   'ascii-city-walk-controls.spec.js': 2068,
-  // CW-64 added four cases here (the trigger, the re-entry, the reduced-motion
-  // picture, and the WCAG 2.3.1 measurement), taking the file from 40 to 44.
-  // 775 is 704.3 scaled by test count and LABELLED an estimate, the same way
-  // CW-63 did the furniture spec - the next re-measure from a green run
-  // replaces it. The 2.3.1 case is the one that could beat this estimate: it
-  // watches a whole ~20 s show rather than driving a control, so it is dearer
-  // than the file's 17.6 s average. Worth watching on the first green board.
+  // The seven City Walk weights are estimates scaled from a green local
+  // Chromium board (per-test durations summed per file, times one constant,
+  // x1.8, set so the street file lands in its known CI range): the packer
+  // uses ratios, and a same-day, same-machine green board is the best ratio
+  // data there is. The next green CI board replaces them.
   //
-  // CW-65 adds FIVE traveler cases, 44 -> 49, so 775 * 49 / 44 = 863. Still an
-  // ESTIMATE and still scaled by count, because the only CI timing available
-  // is from a RED run whose Edge shards hit the ceiling - and CW-62 paid for
-  // the rule that re-weighting from a starved runner bakes the starvation in.
-  // Re-measure from the next green board.
-  //
-  // ★ Two of the five HOLD A WALK KEY until something happens rather than for
-  // a fixed time (the find, and axe over the open bubble), which is correct -
-  // a wall-clock hold is a bet on the frame rate - but it does mean their cost
-  // scales with how slow the runner is. They are the ones to watch.
-  // CW-79 RE-WEIGHTED THE SEVEN CITY FILES (2026-08-31). Rounds 8's own
-  // releases (CW-81/87/82/95/79) grew five of them AFTER the 08-27
-  // re-measure, and both CI passes of PR-R8C's run died on 'Timed out
-  // waiting 2100s' - the scatter was interruption, not flakiness, and the
-  // rule above says never re-weight from those. Source instead: the GREEN
-  // local chromium board of 2026-08-31 (headed, Iris Xe, 190 tests,
-  // per-test durations summed per file), scaled by ONE constant (x1.8,
-  // set so the street file lands in its known CI range) - the packer uses
-  // RATIOS, and a same-day same-machine green board is the best ratio
-  // data that exists. The next green CI board replaces these.
+  // Two of this file's cases hold a walk key until something happens rather
+  // than for a fixed time (the find, and axe over the open bubble), which is
+  // correct, since a wall-clock hold is a bet on the frame rate, but it does
+  // mean their cost scales with how slow the runner is. They are the ones to
+  // watch.
   'ascii-city-walk.spec.js': 2078,
-  // CW-97 CI-fix batch 6 RE-PRICED THIS ONE FILE from whole-lane CI
-  // evidence: across three diagnostic runs the three heavy Chromium lanes
-  // ran nearly EQUAL wall time (34:52 / 35:50 / 37:04 on the last), each
-  // anchored by one of walk/controls/street - so street's true CI cost
-  // stands level with the other two, not at half. The old 985 (a local
-  // hardware ratio) under-priced it ~2x, and the packer answered by
-  // stacking extra co-files onto street's lanes - which is precisely the
-  // lane that kept overflowing its clock on Edge. Priced level with its
-  // peers; the next green CI board replaces all three with measurements.
+  // Priced from whole-lane CI evidence: across three diagnostic runs the
+  // three heavy Chromium lanes ran nearly equal wall time (34:52, 35:50 and
+  // 37:04 on the last), each anchored by one of walk, controls and street, so
+  // street's true CI cost stands level with the other two, not at half. A
+  // local hardware ratio under-priced it about 2x, and the packer answered by
+  // stacking extra co-files onto street's lanes, precisely the lane that kept
+  // overflowing its clock on Edge.
   'ascii-city-walk-street.spec.js': 2050,
-  // NOT measured on CI - CW-36 is newer than the last board. Estimated from
-  // this machine, where the file runs 37.5 s against the controls file's
-  // 84 s, and the controls file is 417.4 here: 37.5 / 84 * 417.4 ~= 186,
-  // rounded up because every one of its eight cases builds a city. Left
-  // unlisted it would be booked at DEFAULT_WEIGHT_S, 60, and lopside a shard
-  // by two minutes. The next board replaces this with a measurement.
+  // Not measured on CI. Estimated from a local machine, where the file runs
+  // 37.5 s against the controls file's 84 s, and the controls file is 417.4
+  // there: 37.5 / 84 * 417.4 ~= 186, rounded up because every one of its
+  // eight cases builds a city. Left unlisted it would be booked at
+  // DEFAULT_WEIGHT_S, 60, and lopside a shard by two minutes.
   'ascii-city-walk-teleport.spec.js': 211,
   // Same estimate, same caveat: 29.4 s here against the controls file's 84 s,
   // so 29.4 / 84 * 417.4 ~= 146. Two cases, both of which load a city.
   'ascii-city-walk-perf-smoke.spec.js': 66,
-  // CW-62: these two were NEVER IN THE TABLE and were therefore booked at
-  // DEFAULT_WEIGHT_S, 60, against a real 147 and 131. An unmeasured city
-  // spec is not a cheap newcomer - every one of its cases builds a 3D city.
+  // An unmeasured city spec is not a cheap newcomer: every one of its cases
+  // builds a 3D city, so this file and the furniture file need entries rather
+  // than DEFAULT_WEIGHT_S.
   'ascii-city-walk-calibration.spec.js': 228,
-  // CW-63 added two cases to this file (the diagrid present in Seattle, absent
-  // in Denver), taking it from 9 to 11. This 160 is the 130.8 measured on run
-  // 33063099176's green shards SCALED BY TEST COUNT, not a fresh measurement -
-  // both new cases launch the game and enter a city, which is the dominant
-  // cost here, so they are typical rather than cheap. Marked so the next
-  // re-measure from a green run replaces it rather than inheriting it.
-  //
-  // ★ The alternative was to leave 130.8, and that is exactly the mistake
-  // CW-62 fixed: a weight that is 22% low on the one file a release grew is
-  // how a lane projects 25 minutes and takes 32. Edge has about two minutes of
+  // Scaled by test count from a green-run measurement when two cases were
+  // added (both launch the game and enter a city, the dominant cost here, so
+  // they are typical rather than cheap), not freshly measured. Leaving the
+  // old number would be 22% low on the one file that grew, which is how a
+  // lane projects 25 minutes and takes 32: Edge has about two minutes of
   // margin, and 29 unbooked seconds is a sixth of it.
   'ascii-city-walk-furniture.spec.js': 164,
   'classic-panels.spec.js': 442.5,
@@ -176,11 +142,11 @@ export const MEASURED_SECONDS = {
   'welcome-spotlight.spec.js': 30.2,
   'editor-fold-markers.spec.js': 28.0,
   'classic-tutorial.spec.js': 25.9,
-  // 25.0 was measured in CI for four cases. IR-8 added a fifth (the tile
-  // template's render), measured locally at 4.1 s against a warm dev server,
-  // where the other four came to about 24 s - close enough to the CI number
-  // to add 5 and be slightly conservative. Re-measure from a CI shard log
-  // next time this file is touched.
+  // 25.0 was measured in CI for four cases. A fifth (the tile template's
+  // render) measured 4.1 s locally against a warm dev server, where the other
+  // four came to about 24 s: close enough to the CI number to add 5 and be
+  // slightly conservative. Re-measure from a CI shard log next time this file
+  // is touched.
   'wasm-smoke.spec.js': 33.4,
   'auto-preview.spec.js': 21.1,
   'library-panel.spec.js': 19.6,
@@ -223,95 +189,78 @@ export const MEASURED_SECONDS = {
   'stakeholder-zip-acceptance.spec.js': 0,
   'zip-workflow.spec.js': 0,
 
-  // Forge Interop Round 1's own specs, summed from the Chromium shard logs of
-  // run 32799325283 (2026-08-25) by the method this file's header describes.
-  // Before these numbers went in, all seven were booked at DEFAULT_WEIGHT_S
-  // (60s each, 420s of imaginary work) and the planner's own 25-minute guard
-  // went red at 25.1 projected minutes - which is exactly what that guard is
-  // for. `folder-write-back.spec.js` is deliberately absent: it is newer than
-  // this run and has no CI measurement yet, so it keeps the default.
+  // Summed from the Chromium shard logs of one run, by the method this file's
+  // header describes. Booked at DEFAULT_WEIGHT_S, seven new files were 420 s
+  // of imaginary work, and the planner's own 25-minute guard went red at 25.1
+  // projected minutes, which is exactly what that guard is for.
+  // `folder-write-back.spec.js` is deliberately absent: it has no CI
+  // measurement yet, so it keeps the default.
   'param-links.spec.js': 73.1,
   'publish-dialog.spec.js': 23.4,
   'share-settings.spec.js': 53.5,
   'ink-modes.spec.js': 45.5,
   'dxf-roundtrip.spec.js': 19.7,
 
-  // Design Pipeline Round 1, summed from the Chromium shards of run
-  // 33186286382 (2026-08-28), the same method. svg-edit-door grew from 6 cases
-  // to 12 across DP-3 and DP-4 and was still booked at its Interop-era 34.1,
-  // a 3.8x under-count; overlay-placement is new and was riding the 60s
-  // default against a real 107.9. Between them that is 143 seconds of work
-  // the planner could not see, and the Edge lanes of that very run ended at
-  // 35 minutes with "25 did not run".
+  // Summed from the Chromium shards of one run, the same method. svg-edit-door
+  // had grown from 6 cases to 12 and was still booked at 34.1, a 3.8x
+  // under-count; overlay-placement was new and was riding the 60 s default
+  // against a real 107.9. Between them that was 143 seconds of work the
+  // planner could not see, and the Edge lanes of that run ended at 35 minutes
+  // with "25 did not run".
   'svg-edit-door.spec.js': 129.8,
   'overlay-placement.spec.js': 107.9,
 
-  // stencil-plates.spec.js left with the Stencil Maker tile (DP-63).
-  // DP-19..21, RE-MEASURED at DP-38 and again at DP-41. It was ONE case - one
-  // load of the stencil tile, every walk the editor has on it - measured
-  // locally at 42 s after DP-21 (8.5 s at DP-19) and booked at the same
-  // four-times ratio stencil-plates carries. DP-38 added eight more for the
-  // Drawing / Charm switch, one of which renders the charm twice to prove the
-  // session is cheaper.
-  //
-  // ★ At DP-38 I measured it LOCALLY - nine cases in 37 s - decided it sat
-  // well inside the 170 booked, and left it. From a green CI board it is
-  // **190.6 s** (run 34915591751): over the booking, by a fifth. The local
-  // number was not wrong, it was the wrong number, and this file is Chromium
-  // only so nothing else was absorbing the difference.
+  // One load of the drawing editor's tile with every walk the editor has on
+  // it, then the Drawing / Charm switch cases, one of which renders the charm
+  // twice to prove the session is cheaper. Measured locally at 37 s for nine
+  // cases, it looked well inside its booking; a green CI board measured
+  // 190.6 s, over the booking by a fifth. The local number was not wrong, it
+  // was the wrong number, and this file is Chromium only, so nothing else was
+  // absorbing the difference.
   //
   // Chromium only (PROJECT_IGNORES): the two-shard lanes were a third of a
   // minute from their 35-minute ceiling before this file existed.
   'drawing-editor.spec.js': 220.0,
-  // DP-34, RE-MEASURED at DP-43. Now five cases: the 2000x2000 noise picture is
-  // built and traced TWICE, because the conversion got fast enough that one run
-  // can no longer carry both mid-conversion checks (13,401 ms with
-  // imagetracerjs, 1,872 with Potrace, same picture and throttle). MEASURED
-  // locally at 33.8 s for the file; booked at the same four-times ratio the
-  // files above carry. Chromium only (PROJECT_IGNORES): CPU throttling is a CDP
-  // feature, and the other lanes have no headroom (see the note below).
+  // Five cases: the 2000x2000 noise picture is built and traced twice,
+  // because the conversion is fast enough that one run cannot carry both
+  // mid-conversion checks (13,401 ms with imagetracerjs, 1,872 with Potrace,
+  // same picture and throttle). Measured locally at 33.8 s for the file;
+  // booked at the same four-times ratio the files above carry. Chromium only
+  // (PROJECT_IGNORES): CPU throttling is a CDP feature, and the other lanes
+  // have no headroom (see the note below).
   'trace-start-cancel.spec.js': 135.0,
-  // DP-36 added four cases to ink-modes for the credit line, each opening the
-  // editor door on a fixture. MEASURED locally: the file went from 9 cases to
-  // 13 and from about 33 s to 42 s. Unlisted it was booked at DEFAULT_WEIGHT_S,
-  // 60, which was already close; 70 keeps the same slack the measurement had.
+  // Four of these cases open the editor door on a fixture for the credit
+  // line. Measured locally: 13 cases in about 42 s. DEFAULT_WEIGHT_S, 60, was
+  // already close; 70 keeps the same slack the measurement had.
   'ink-modes.spec.js': 70.0,
-  // DP-37 added layout, ordering and worker cases to the editor's door spec.
-  // MEASURED locally: 15 cases to 24, about 32 s to 114 s, and two of the new
-  // ones combine a 210-shape drawing for real. Unlisted it was booked at
-  // DEFAULT_WEIGHT_S, 60, which is now less than the measurement.
-  //
-  // RE-WEIGHTED at DP-41, and this time from a GREEN CI BOARD rather than from
-  // this machine (run 34915591751, Chromium shards, summed per file). DP-37
-  // through DP-40 took it from 24 cases to 62: the flatten worker, the budget,
-  // the signed row, choosing rows, the row-to-picture link, the phone sheet
-  // and the touch walks. It measured **242.8 s on CI** against the 200 booked
-  // here - forty seconds of work the planner could not see, in the file that
-  // grew most this round.
-  //
-  // 280 is that measurement with the headroom the entries above carry. Local
-  // is not the number to book: the same file runs 156 s on this machine, and
-  // booking that would have hidden the overrun instead of finding it.
+  // The editor's door spec: layout, ordering and worker cases, two of which
+  // combine a 210-shape drawing for real, then the flatten worker, the
+  // budget, the shapes row, choosing rows, the row-to-picture link, the phone
+  // sheet and the touch walks, 62 cases in all. A green CI board measured
+  // 242.8 s, and 280 is that measurement with the headroom the entries above
+  // carry. Local is not the number to book: the same file runs 156 s on a
+  // local machine, and booking that would hide an overrun instead of finding
+  // it.
   'svg-edit-door.spec.js': 280.0,
-  // DP-39 / DP-40 measured it too, from the same green board: layered-design
-  // 51.2 s, ink-modes 76.6 s, trace-start-cancel 59.4 s, dxf-roundtrip 22.4 s,
-  // potrace-engine 3.3 s. Only ink-modes is over its booking, by 6.6 s against
-  // a 70 that was itself rounded up from 42 - inside the rounding, so it is
-  // left alone and written down rather than nudged. layered-design has never
-  // been listed and rides DEFAULT_WEIGHT_S at 60, which its 51.2 fits.
+  // From the same green board: layered-design 51.2 s, ink-modes 76.6 s,
+  // trace-start-cancel 59.4 s, dxf-roundtrip 22.4 s, potrace-engine 3.3 s.
+  // Only ink-modes is over its booking, by 6.6 s against a 70 that was itself
+  // rounded up from 42: inside the rounding, so it is left alone and written
+  // down rather than nudged. layered-design is not listed and rides
+  // DEFAULT_WEIGHT_S at 60, which its 51.2 fits.
   //
-  // DP-43. One case: a ring traced through the real worker on both engines,
-  // which is also the only place the wasm is proved to load under COOP/COEP.
-  // MEASURED locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on Firefox.
-  // Booked at 10 rather than scaled up like the three files above - it is a
-  // tenth of their size, and rounding 7.8 to 10 is already the whole margin
-  // those ratios exist to buy.
+  // potrace-engine: one case, a ring traced through the real worker on both
+  // engines, which is also the only place the wasm is proved to load under
+  // COOP/COEP. Measured locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on
+  // Firefox. Booked at 10 rather than scaled up like the three files above:
+  // it is a tenth of their size, and rounding 7.8 to 10 is already the whole
+  // margin those ratios exist to buy.
   'potrace-engine.spec.js': 10.0,
-  // IR-R2, the shared-link road: three new files, MEASURED locally on
-  // Chromium. Booked at DEFAULT_WEIGHT_S they added three minutes of test time
-  // to every lane and put the three-shard Edge and Firefox lanes at 35.2 and
-  // 35.1 of their 35-minute ceiling (34.7 and 34.6 without them); booked at
-  // what they cost, the lanes project to 34.9 and 34.8.
+  // The shared-link files, measured locally on Chromium. Booked at
+  // DEFAULT_WEIGHT_S they added three minutes of test time to every lane and
+  // put the three-shard Edge and Firefox lanes at 35.2 and 35.1 of their
+  // 35-minute ceiling (34.7 and 34.6 without them); booked at what they cost,
+  // the lanes project to 34.9 and 34.8.
   //   first-visit-links   two cases, 3 s and 27 s (the second holds the
   //                       engine 6 s on every worker restart); both skip on
   //                       CI, so this is what a local board pays.
@@ -327,28 +276,28 @@ export const MEASURED_SECONDS = {
 export const DEFAULT_WEIGHT_S = 60;
 
 /**
- * Spec files a browser lane does NOT run, by Playwright project name.
+ * Spec files a browser lane does not run, by Playwright project name.
  *
- * ONE source of truth: playwright.config.js builds each project's
+ * One source of truth: playwright.config.js builds each project's
  * `testIgnore` from this table, and the planner leaves these files out of
  * that project's shards and out of its projection, so a lane is booked for
- * what it will actually run. Before this, wasm-smoke was ignored on Firefox
- * by the config and still charged to Firefox's shards by the planner.
+ * what it will actually run (a file ignored by the config but charged by the
+ * planner books time nobody spends).
  *
- * ★ drawing-editor.spec.js (DP-19) runs on Chromium only. MEASURED before it
- * was written: the two-shard lanes (Edge, Firefox) projected to 34.8 of their
- * 35 minutes with nothing added, so no honest weight for a new file fits -
- * 35 s, its measured cost scaled the way stencil-plates is, put the lane at
- * 35.1. Edge cannot be re-split without the owner editing ruleset 12059827
- * (on the owner ledger). The editor's walk is DOM and keyboard behaviour the
- * Chromium lane covers on three shards; the door's twelve cases still run
+ * drawing-editor.spec.js runs on Chromium only. Measured before it was
+ * written: the two-shard lanes (Edge, Firefox) projected to 34.8 of their 35
+ * minutes with nothing added, so no honest weight for a new file fits; 35 s,
+ * its measured cost scaled the way the other editor files are, put the lane
+ * at 35.1. Edge cannot be re-split without changing the repository ruleset's
+ * required checks. The editor's walk is DOM and keyboard behavior the
+ * Chromium lane covers on three shards; the door's cases still run
  * everywhere. Reverse: delete the two entries once the lanes are re-split.
  *
- * ★ potrace-engine.spec.js (DP-43) is out of Edge and Firefox for the same
- * arithmetic and runs on Chromium and WebKit instead. WebKit is the lane that
- * matters for it: a module worker importing a module under COEP is the exact
- * shape of D-31 and D-133, and WebKit is where both of those bit. It passes
- * there in 3.6 s. Reverse with the others.
+ * potrace-engine.spec.js is out of Edge and Firefox for the same arithmetic
+ * and runs on Chromium and WebKit instead. WebKit is the lane that matters
+ * for it: a module worker importing a module under COEP is the exact shape
+ * of two earlier WebKit worker failures. It passes there in 3.6 s. Reverse
+ * with the others.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
@@ -366,19 +315,19 @@ export const PROJECT_IGNORES = Object.freeze({
 });
 
 /**
- * Suites that RUN on CI but skip themselves the moment they start.
+ * Suites that run on CI but skip themselves the moment they start.
  *
- * The owner paused the City Walk e2e on CI (PR #201): CI software-renders the
- * 3D city at about two seconds a frame, so every one of these files reports
- * skipped in seconds there while still costing its full measured minutes on a
- * local hardware board. `useCityWalkFixtures()` carries the one skip.
+ * The City Walk e2e suites are paused on CI: CI software-renders the 3D city
+ * at about two seconds a frame, so every one of these files reports skipped
+ * in seconds there while still costing its full measured minutes on a local
+ * hardware board. `useCityWalkFixtures()` carries the one skip.
  *
- * The planner has to know, because it books time per file. MEASURED on the
- * Chromium lane before this existed: the three heaviest City Walk files were
- * given a shard EACH (2,078 s, 2,068 s and 2,050 s booked, seconds actually
- * spent), which left three of six shards idle on CI and pushed everything else
- * into the remainder - shard 6 alone carried 44 files. Two tests began failing
- * there for crowding rather than for behaviour.
+ * The planner has to know, because it books time per file. Without this, the
+ * three heaviest City Walk files were given a shard each (2,078 s, 2,068 s
+ * and 2,050 s booked, seconds actually spent), which left three of six
+ * shards idle on CI and pushed everything else into the remainder (shard 6
+ * alone carried 44 files), and two tests began failing there for crowding
+ * rather than for behavior.
  *
  * Reverse this the moment the suites come back: delete the `test.skip` in
  * `useCityWalkFixtures()` and this list together, or the lanes will be booked

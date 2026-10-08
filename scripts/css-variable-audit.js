@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * CSS Variable Audit (DEBT-18)
+ * CSS Variable Audit
  *
  * Parses src/styles/semantic-tokens.css for all --color-* and --focus-*
  * custom property definitions, then verifies that each one is overridden in
@@ -14,7 +14,6 @@
  * Usage:
  *   node scripts/css-variable-audit.js
  *   npm run css-variable-audit
- *   pixi run css-variable-audit
  *
  * Exit codes:
  *   0 — all tokens are accounted for (or intentionally exempted)
@@ -42,7 +41,7 @@ const MONO_SELECTOR = ":root[data-ui-variant='mono'] {";
 // ---------------------------------------------------------------------------
 // Intentionally-missing tokens
 //
-// These tokens exist in semantic-tokens.css but are NOT overridden in the mono
+// These tokens exist in semantic-tokens.css but are not overridden in the mono
 // block because they are brand color references used for documentation/reference
 // only — they are never directly referenced as foreground or background values
 // in component CSS.  Audit failures for these tokens would be false positives.

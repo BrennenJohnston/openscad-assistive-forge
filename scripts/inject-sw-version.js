@@ -51,7 +51,7 @@ export function injectSwVersion(distDir, swVersion) {
 }
 
 /**
- * Write the build stamp into the capability index (audit 19).
+ * Write the build stamp into the capability index.
  *
  * `forge-capabilities.txt` is copied from public/ verbatim and never passes
  * through the bundle, exactly like sw.js, so a `define` cannot reach it and

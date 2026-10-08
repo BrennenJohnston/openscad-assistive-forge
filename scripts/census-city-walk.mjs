@@ -1,30 +1,28 @@
 /**
  * @license GPL-3.0-or-later
  */
-// The ASCII City Walk PLACEMENT CENSUS (CW-75).
+// The ASCII City Walk placement census.
 //
-// Round 8's directive says props stand in the road and cars clip through each
-// other. Both are counting questions, and until this script existed they were
-// answered from a scratch file that lived in a session scratchpad and pointed
-// at somebody else's checkout. This one ships, runs the SHIPPED extracts
-// through the SHIPPED parser and builders, and prints the numbers a release
-// record has to quote.
+// Props standing in the road and cars clipping through each other are both
+// counting questions. This script runs the shipped extracts through the
+// shipped parser and builders, and prints the numbers a release record has
+// to quote.
 //
 //   node scripts/census-city-walk.mjs
 //   node scripts/census-city-walk.mjs --cities=seattle --samples=6
 //   node scripts/census-city-walk.mjs --json=build/census.json
 //
-// WHAT IT COUNTS, and why each row is here:
+// What it counts, and why each row is here:
 //
 //   * Props per stream, so a placement change can be shown to have moved only
-//     what it claimed to move (the CW-45/46 seed law: a stream that reshuffles
+//     what it claimed to move (the seed law: a stream that reshuffles
 //     another stream's draw order is a bug, and the census is how you see it).
-//   * Trunks and lamp poles standing INSIDE a drawn roadway ribbon. The two
+//   * Trunks and lamp poles standing inside a drawn roadway ribbon. The two
 //     are told apart by their obstacle side length, never lumped: a "trees in
 //     roads" count that quietly includes 0.15 m lamp poles is a wrong number
-//     with a right shape (T51). Hydrants (0.30 m) and waste baskets (0.45 m)
+//     with a right shape. Hydrants (0.30 m) and waste baskets (0.45 m)
 //     are square too and are excluded by exact side.
-//   * Car-on-car overlaps as TRUE rectangle overlaps, split parked-vs-parked
+//   * Car-on-car overlaps as true rectangle overlaps, split parked-vs-parked
 //     and traffic-vs-parked. The second pair had never been counted, because
 //     the frozen traffic left no record of where it went; `buildStreetProps`
 //     now writes one. The overlap test is `rectsOverlap` from the game itself,
@@ -32,13 +30,13 @@
 //     geometry test is how a census comes to disagree with the build for a
 //     reason that is not a bug.
 //   * People standing in a roadway with no mapped crossing near them.
-//   * Mass standing over an empty column, canopies and their legs (CW-76).
+//   * Mass standing over an empty column, canopies and their legs.
 //     The old "floating buildings" row counted a tower with no podium, one
 //     slice of a stack of orphan parts, and a canopy - which hangs on purpose
 //     - as the same thing; see the block that computes them for what replaced
 //     it and why.
 //
-// WHAT IT REFUSES TO DO. It never re-implements a placement. Every position it
+// What it refuses to do: it never re-implements a placement. Every position it
 // judges comes out of the builders themselves, so the census cannot be wrong
 // in the same direction as the code it audits.
 
@@ -64,7 +62,7 @@ const ALL_CITIES = ['seattle', 'denver', 'albuquerque', 'burnaby']
 /**
  * Median and quartile nearest-neighbour distance over a point set.
  *
- * CW-77: a lamp COUNT cannot say whether a street is lit - two cities with
+ * A lamp count cannot say whether a street is lit - two cities with
  * the same count light very different amounts of street. The spacing can, and
  * it is the number the lighting standard is written in.
  */
@@ -108,7 +106,7 @@ const IN_ROAD_MARGIN_M = 0.15
 // Mapped crossing nodes sit on the way they cross.
 const CROSSING_REACH_M = 12
 
-// T51: what an obstacle's square side says it is.
+// What an obstacle's square side says it is.
 const LAMP_SIDE_M = 0.15
 const HYDRANT_SIDE_M = 0.3
 const BASKET_SIDE_M = 0.45
@@ -120,8 +118,8 @@ function parseArgs(argv) {
     cities: ALL_CITIES,
     samples: 4,
     json: null,
-    // CW-77: which copy of the extracts to read. A rebake moves counts for
-    // TWO reasons at once - the live map has changed, and the code has - and
+    // Which copy of the extracts to read. A rebake moves counts for two
+    // reasons at once - the live map has changed, and the code has - and
     // the only way to tell them apart is to run one against the other's data.
     extracts: join(ROOT, 'public/examples/ascii-city'),
   }
@@ -213,7 +211,7 @@ function censusOf(city, samples, extractsDir) {
   row.carsRefusedOverlap = props.stats.carsRefusedOverlap ?? 0
   row.roadsWithoutParking = props.stats.roadsWithoutParking ?? 0
 
-  // --- trunks and poles standing in a roadway (T51) ------------------------
+  // --- trunks and poles standing in a roadway ------------------------------
   const near = (a, b) => Math.abs(a - b) < 0.005
   let trunks = 0
   let trunksInRoad = 0
@@ -322,23 +320,23 @@ function censusOf(city, samples, extractsDir) {
   row.peopleInRoadAtCrossing = peopleInRoadAtCrossing
   row.samples.peopleInRoad = peopleSamples
 
-  // --- buildings: what floats and what is a canopy (CW-76) -----------------
+  // --- buildings: what floats and what is a canopy -------------------------
   //
-  // ★ THE ROW THAT USED TO BE HERE COUNTED THREE DIFFERENT THINGS. "Buildings
-  // whose lowest drawn volume floats" was 33 / 23 / 0 / 14 before CW-76, and
-  // only one of the three was a defect:
+  // The row that used to be here counted three different things. "Buildings
+  // whose lowest drawn volume floats" was 33 / 23 / 0 / 14, and only one of
+  // the three was a defect:
   //
   //   * a tower whose parts all start in the air with no podium under them
   //     (Metropolitan Park West Tower at 45 m) - the defect;
-  //   * one slice of a STACK of orphaned building:parts whose lower slices
+  //   * one slice of a stack of orphaned building:parts whose lower slices
   //     are separate ways standing on the street (Seattle has a stack running
   //     8.2 -> 9.8 -> 15.8 -> 121.9 -> 134.1 m at one footprint, and the old
   //     row called four of its five slices floating);
-  //   * a canopy, which hangs BY DEFINITION.
+  //   * a canopy, which hangs by definition.
   //
   // So the row is replaced by three that each mean one thing. `floatingMass`
   // is the oracle: a mass whose column really is empty under it, measured by
-  // city-data AFTER its own repair pass, so it is a post-condition and not an
+  // city-data after its own repair pass, so it is a post-condition and not an
   // assumption.
   const st = model.stats
   row.floatingMass = st.floatingMass
@@ -381,7 +379,7 @@ function censusOf(city, samples, extractsDir) {
     : '0.0'
   row.samples.roofOverRoadway = roofSamples
 
-  // --- CW-77: where the lamps came from, and the terrain the bake sampled.
+  // --- where the lamps came from, and the terrain the bake sampled.
   row.lampsMappedConsidered = props.stats.lampsMappedConsidered ?? 0
   row.lampsMapped = props.stats.lampsMapped ?? 0
   row.lampsMappedNudged = props.stats.lampsMappedNudged ?? 0
@@ -400,12 +398,12 @@ function censusOf(city, samples, extractsDir) {
       `${model.elevation.minM.toFixed(1)}..${model.elevation.maxM.toFixed(1)} m`
     : 'none (v1 extract)'
 
-  // --- the nearest-lamp spacing, which is what a lighting standard is ABOUT.
+  // --- the nearest-lamp spacing, which is what a lighting standard is about.
   // A count says how many; only the spacing says whether the street is lit.
   const lampPts = (props.lampHeads ?? []).map((l) => [l.x, l.y])
   row.lampSpacing = nearestSpacing(lampPts)
 
-  // --- CW-73/CW-74: read the builders' own counters, never recount the tags
+  // --- read the builders' own counters, never recount the tags
   const s = cityGroup.stats
   row.storefrontSource = s.storefrontSource
   row.storefrontOwnTagged = s.storefrontOwnTagged

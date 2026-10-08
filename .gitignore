@@ -23,14 +23,13 @@ playwright-report/
 # scripts/check-e2e-complete.mjs, never something to commit.
 playwright-results.json
 
-# Review screenshots and OpenSCAD check output (D-7, Q-39b): these travel in
-# PR descriptions now. Files committed before this rule stay tracked.
+# Generated output: review screenshots, OpenSCAD check output and the desktop
+# audit's results. Screenshots travel in pull request descriptions instead.
 build/
 
-# The frame-sequence instrument's own output (CW-67): filmstrips, contact
-# sheets, class maps and WebMs. Kept out for the same reason build/ is - it
-# is measurement, not source. The ones a release RECORD cites are copied into
-# the research folder's R8-filmstrips\ instead.
+# The frame-sequence instrument's own output: filmstrips, contact sheets,
+# class maps and WebMs. Kept out for the same reason build/ is - it is
+# measurement, not source.
 seq-out/
 
 # Parity harness output (generated; goldens live in scripts/parity/golden/)
@@ -96,12 +95,5 @@ docs/archive/audit/ki-012-investigation/bug-b-capture-2/
 docs/archive/audit/ki-012-investigation/_wasm-cache/
 docs/archive/audit/ki-012-investigation/_wasm-backup/
 
-# Developer scratch / temp files
-_em_temp/
-.tmp-scad-check/
-
 # CI runner logs downloaded for local triage (e.g. WebKit GitHub Actions logs)
 webkit-logs*.txt
-
-# CAD-to-parametric sub-project (lives on feat/cad-to-parametric only)
-forge-cad-to-parametric/

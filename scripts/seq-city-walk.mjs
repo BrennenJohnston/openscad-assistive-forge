@@ -1,35 +1,35 @@
 /**
  * @license GPL-3.0-or-later
  */
-// The ASCII City Walk FRAME-SEQUENCE instrument (CW-67 P3).
+// The ASCII City Walk frame-sequence instrument.
 //
 // A sibling of scripts/stability-city-walk.mjs, not a replacement: that one
 // asks whether a nearly-still picture fractures, this one asks what a picture
-// does while somebody WALKS THROUGH IT. Round 8 exists because every earlier
-// verdict about steadiness was read off a still or off a 2 cm creep, and the
-// real walk is 4.8 m/s - thirty times faster than anything that had been
-// measured. A still is not a filmstrip.
+// does while somebody walks through it. Earlier verdicts about steadiness
+// were read off a still or off a 2 cm creep, and the real walk is 4.8 m/s -
+// thirty times faster than anything that had been measured. A still is not a
+// filmstrip.
 //
 //   node scripts/seq-city-walk.mjs --base-url=http://localhost:5490
 //   node scripts/seq-city-walk.mjs --sizes=10,30 --modes=walk,look --colour=on
 //   node scripts/seq-city-walk.mjs --pose=786.05,326.77,180 --label=lamp
 //   node scripts/seq-city-walk.mjs --gpu-luid=0,101218   (the other adapter)
 //
-// WHAT IT MEASURES. N consecutive CONVERTED frames under a scripted pose,
-// scored cell by cell on the converter's own grid by src/js/game/seq-metrics.js
-// - the same module the unit tests pin, imported through the dev server so the
-// code under test is the code that runs. Per cell: glyph change, A-B-A flip,
-// drive change (intensity level in mono, palette index in colour), reverse
-// video / white crossings, mean glyph PERSISTENCE in frames, the CW-93
-// VOCABULARY MISMATCH count (cells drawing a character their own surface is
-// not allowed to draw - the one column here with a right answer, and it is
-// zero), and whether the
-// cell is a churn cell (changed in more than half the frame pairs). Per class,
-// from the game's own class pass, with every cell whose class MOVED during the
+// What it measures: N consecutive converted frames under a scripted pose,
+// scored cell by cell on the converter's own grid by
+// src/js/game/seq-metrics.js - the same module the unit tests pin, imported
+// through the dev server so the code under test is the code that runs. Per
+// cell: glyph change, A-B-A flip, drive change (intensity level in mono,
+// palette index in colour), reverse video / white crossings, mean glyph
+// persistence in frames, the vocabulary mismatch count (cells drawing a
+// character their own surface is not allowed to draw - the one column here
+// with a right answer, and it is zero), and whether the cell is a churn
+// cell (changed in more than half the frame pairs). Per class, from the
+// game's own class pass, with every cell whose class moved during the
 // sequence split out into its own row: it swept a geometry edge, so its
 // flicker is real motion rather than a fracture.
 //
-// THE MODES, and what each is for:
+// The modes, and what each is for:
 //
 //   stand      the control. It must read zero. A non-zero stand row means the
 //              world is still moving and nothing else in the run means anything.
@@ -37,35 +37,35 @@
 //              frame. This is the walk a player does.
 //   walkclamp  the dt-clamped worst case, 0.48 m per frame - what a 10 fps
 //              machine steps between two conversions.
-//   look       1.5 deg of yaw per frame, a moderate mouse sweep. CW-81's
-//              eased camera follow does NOT smooth this: the instrument
+//   look       1.5 deg of yaw per frame, a moderate mouse sweep. The game's
+//              eased camera follow does not smooth this: the instrument
 //              writes the pose directly and the game adopts a direct write
 //              verbatim, so the yaw is exactly 1.5 deg per frame either way.
 //              (A player's hover-look lands on the same figure at 60 fps:
 //              90 deg/s eased with tau 0.1 s steps 1.45 deg/frame, measured.)
-//   creep      CW-52's 2 cm step, kept as the comparator to the old verdict.
-//   turn       CW-52's 0.05 deg sub-cell rotation, likewise.
+//   creep      a 2 cm step, kept as the comparator to the old verdict.
+//   turn       a 0.05 deg sub-cell rotation, likewise.
 //
-// WHAT IT REFUSES TO DO:
+// What it refuses to do:
 //
-//   * Run headless. Headless Chromium rasterises in software and this project
-//     has three rounds of confidently wrong answers from that. The GL string
-//     is printed on every table and a software renderer aborts the run.
+//   * Run headless. Headless Chromium rasterises in software, and that has
+//     given confidently wrong answers here before. The GL string is printed
+//     on every table and a software renderer aborts the run.
 //   * Measure a tree it cannot identify. It fetches one served module and
-//     requires a marker string. Point --base-url at YOUR server on YOUR port.
+//     requires a marker string. Point --base-url at your server on your port.
 //   * Believe a sequence it did not fully capture: every frame is asserted to
 //     have folded, the grid is asserted constant, and a sequence that saw no
 //     lit cell at all aborts rather than reporting a tidy zero.
 //   * Guess which GPU it ran on. Windows hands a non-fullscreen Chromium the
 //     power-saving adapter, so on a two-GPU laptop the default is the
-//     INTEGRATED one. --gpu-luid=<high>,<low> (from chrome://gpu) picks the
+//     integrated one. --gpu-luid=<high>,<low> (from chrome://gpu) picks the
 //     other, and the string that comes back is printed either way.
 //
 // The world's own clock is stopped for the duration (reduced motion halts the
 // traffic-light cycle and the weather step), so the only thing that moves in a
 // captured sequence is the pose this script sets.
 //
-// NUMBERS FROM DIFFERENT SESSIONS ARE COMPARABLE HERE in a way the frame-time
+// Numbers from different sessions are comparable here in a way the frame-time
 // bench's are not - these are the converter's decisions, not milliseconds -
 // but the GPU string still belongs on every table, because two drivers'
 // texture filtering moves about 1 % of the glyph picks.
@@ -83,7 +83,7 @@ const DEFAULTS = {
   modes: 'stand,walk,look',
   colour: 'off',
   // Three frames is the minimum an A-B-A flip can be seen in; 24 is what the
-  // Round 8 baseline tables are taken at.
+  // baseline tables are taken at.
   frames: 24,
   // 4.8 m/s at 30 conversions/s. Both halves of that are the game's own
   // numbers, not this script's.
@@ -101,59 +101,60 @@ const DEFAULTS = {
   json: '',
   width: 1600,
   height: 900,
-  // The marker is this module, which only a tree carrying CW-67 serves.
+  // The marker: an export of seq-metrics.js, which only a tree with this
+  // instrument serves.
   marker: 'createFold',
   markerPath: '/src/js/game/seq-metrics.js',
   // --video=0 skips the WebM (the contact sheet is the still record; the
-  // WebM is what the owner watches at a gate).
+  // WebM is what a person watches to check the motion).
   video: 1,
   sheetCols: 4,
   sheetScale: 0.5,
   flipScale: 3,
   classScale: 2,
-  // --hysteresis leaves the game's own CW-68 setting alone when empty (the
+  // --hysteresis leaves the game's own hysteresis setting alone when empty (the
   // default), turns it off with `off`, or sets the bands with
   // `glyph,drive,reverse,holdFrames`. A release measuring a converter change
-  // photographs before and after against ONE scene in ONE run this way; give
+  // photographs before and after against one scene in one run this way; give
   // each run its own --label so the pictures do not overwrite each other.
   hysteresis: '',
-  // --luminance selects the game's CW-70 treatment of the solid bright layer:
+  // --luminance selects the game's treatment of the solid bright layer:
   // stock | calm | off. Empty leaves whatever the game configured for itself.
   luminance: '',
-  // CW-86: --anchored=on takes the glyph for wall, roof, storefront, ground,
-  // sidewalk and green from the SURFACE rather than from the screen. Empty
+  // --anchored=on takes the glyph for wall, roof, storefront, ground,
+  // sidewalk and green from the surface rather than from the screen. Empty
   // leaves the game's own setting, which is off.
   //
-  // It is the third column of this release's table, beside the memory off
-  // and the memory on. Note that it currently forces the CPU glyph path
-  // (_hfm.js says why), so a bench line taken with it on is a CPU line.
+  // It is a third column beside the memory off and the memory on. Note that
+  // it currently forces the CPU glyph path (_hfm.js says why), so a bench
+  // line taken with it on is a CPU line.
   anchored: '',
   // --scheme=light runs the page in the light theme, which is how the AMBER
   // palette is reached; dark gives the green one. There are TWO palettes of
   // six colours each, not six palettes.
   scheme: 'dark',
-  // CW-85's two toggles, set before the page loads because both are read out
-  // of localStorage rather than off an API. `--day=on` is the backing the
-  // owner had on in every frame of the report CW-93 answers; `--empty=on`
-  // hides the people and the parked cars, which is how those frames were
-  // taken. Empty leaves the shipped default: Night, populated.
+  // The daylight and empty-street toggles, set before the page loads because
+  // both are read out of localStorage rather than off an API. `--day=on` is
+  // the backing that was on in every frame of the vocabulary mismatch report;
+  // `--empty=on` hides the people and the parked cars, which is how those
+  // frames were taken. Empty leaves the shipped default: Night, populated.
   day: '',
   empty: '',
-  // CW-93: `--cpu-sample=on` forces the CPU converter path through the same
-  // switch the bench uses. A defect that can land on either implementation
-  // has to be measured on both - the CW-68 lesson, and the reason the two
-  // paths carry the same rules in two languages. Empty leaves the game's own
-  // choice, which is the GPU path wherever it is available.
+  // `--cpu-sample=on` forces the CPU converter path through the same switch
+  // the bench uses. A defect that can land on either implementation has to be
+  // measured on both, which is also why the two paths carry the same rules in
+  // two languages. Empty leaves the game's own choice, which is the GPU path
+  // wherever it is available.
   cpuSample: '',
-  // CW-92: `--ink-families=off` reinstates the per-frame nearest-palette match
-  // that D-127 is about, so the face-flip row has a like-for-like BEFORE. Both
-  // arms then read the converter's own colour decision, which the painted-pixel
-  // fallback could not.
+  // `--ink-families=off` reinstates the per-frame nearest-palette match that
+  // let a cell change colour while its surface did not, so the face-flip row
+  // has a like-for-like before. Both arms then read the converter's own colour
+  // decision, which the painted-pixel fallback could not.
   inkFamilies: '',
-  // --ink-budget sets the CW-71 palette ink budget for the run: `off`, or
+  // --ink-budget sets the palette ink budget for the run: `off`, or
   // `floor,whiteLum,whiteChroma`. Empty leaves the game's own.
   inkBudget: '',
-  // --scene-exp neutralises ONE part of the scene before measuring, so a
+  // --scene-exp neutralises one part of the scene before measuring, so a
   // release can ask which part a churn number is coming from instead of
   // arguing about it. See SCENE_EXPERIMENTS below. It changes the scene in
   // the page only; nothing is written and nothing is committed by it.
@@ -176,9 +177,9 @@ const MODES = ['stand', 'walk', 'walkclamp', 'look', 'creep', 'turn']
 /**
  * What --scene-exp can take away, and from which mesh.
  *
- * These are DIAGNOSTIC, not settings: each one answers "how much of this
- * class's churn is coming from that?" by removing it and re-measuring. CW-69
- * used them to find that the ground's churn is the scattered dither itself
+ * These are diagnostic, not settings: each one answers "how much of this
+ * class's churn is coming from that?" by removing it and re-measuring. They
+ * showed that the ground's churn is the scattered dither itself
  * rather than the mip rings it had been blamed on - `no-ground-mipmaps` and
  * `no-cell-raster` each took 38 % per frame to 35 %, while
  * `no-ground-texture` took it to 0.25 %.
@@ -191,7 +192,7 @@ const SCENE_EXPERIMENTS = new Map([
   ['no-ground-texture', { meshes: ['ground'], drop: 'map' }],
   ['no-ground-mipmaps', { meshes: ['ground'], mipmaps: false }],
   ['no-window-texture', { meshes: ['buildings'], drop: 'map' }],
-  // The CW-41 cell-raster blur, off, on every material that took it.
+  // The cell-raster blur, off, on every material that took it.
   ['no-cell-raster', { meshes: ['ground', 'sidewalks', 'buildings'], bias: 0 }],
   // coarse-ground:N spreads the same tile over N times the metres.
   ['coarse-ground', { meshes: ['ground', 'sidewalks'], coarse: true }],
@@ -245,14 +246,14 @@ function isSoftwareRenderer(name) {
 }
 
 // ---------------------------------------------------------------------------
-// PAGE SIDE. Everything below installProbe runs inside the page: it reaches
-// the game through window.__cityWalkGame, folds each frame with the SERVED
+// Page side. Everything below installProbe runs inside the page: it reaches
+// the game through window.__cityWalkGame, folds each frame with the served
 // seq-metrics module, and draws the contact sheet, flip map and class map on
 // canvases of its own. Keeping the fold here (rather than shipping ~150,000
 // glyph indices per frame back over the bridge) is what lets the instrument
 // run at the converter's pace instead of the debugger's - and it means the
 // module the unit tests cover is literally the module that produced every
-// number in the round's tables.
+// number in the tables.
 // ---------------------------------------------------------------------------
 async function installProbe(modulePath) {
   const metrics = await import(/* @vite-ignore */ modulePath)
@@ -311,7 +312,7 @@ async function installProbe(modulePath) {
     },
 
     /**
-     * CW-93: the per-class glyph ladders the converter is really searching.
+     * The per-class glyph ladders the converter is really searching.
      * Read from the instance rather than from `glyph-vocabularies.js`, so the
      * mismatch counter cannot be checking a drawn glyph against a table the
      * converter never used.
@@ -426,17 +427,17 @@ async function installProbe(modulePath) {
     },
 
     /**
-     * ★★★ CW-92: THE CONVERTER'S OWN COLOUR DECISION, with blanks marked.
+     * The converter's own colour decision, with blanks marked.
      *
      * `readColours()` below recovers the decision by matching painted pixels
      * back to the palette, which reads the bloom and Day's backing as well as
      * the cell - so a cell whose palette index never moved could still be
      * reported as having changed colour, and "did this cell change colour
-     * while its surface did not" is the whole of D-127. Measured: that
+     * while its surface did not" is the whole question. Measured: that
      * fallback reported 3.17 % of wall cell-frames flipping where the
      * converter had not changed one.
      *
-     * ★ A CELL DRAWING THE SPACE IS MARKED -1, exactly as the painted-pixel
+     * A cell drawing the space is marked -1, exactly as the painted-pixel
      * fallback marked a cell with no opaque pixels. The lit share and the
      * white share are read off this column and both mean "carries ink"; the
      * converter assigns every classified cell an index whether it draws
@@ -463,11 +464,8 @@ async function installProbe(modulePath) {
         glyphs: probe.glyphs,
         intensity: probe.intensity,
         lum: probe.lum,
-        // ★★★ CW-92: THE CONVERTER'S OWN DECISION WHERE IT IS AVAILABLE. The
-        // painted-pixel fallback below reads the bloom and Day's backing as
-        // well as the cell, so a cell whose palette index never moved could
-        // still be reported as having changed colour - and "did this cell
-        // change colour while its surface did not" is the whole of D-127.
+        // The converter's own decision where it is available: colourDecisions()
+        // says why the painted-pixel fallback below is not enough.
         colour: a.fold.mono ? null : api.colourDecisions(probe),
         cls,
       })
@@ -613,7 +611,7 @@ async function enterCity(page, opts) {
   if (!ok) {
     throw new Error(
       'setCellProbe() is missing: this is not a dev-server build carrying ' +
-        'the CW-52 cell probe, so there is nothing to read.'
+        'the cell probe, so there is nothing to read.'
     )
   }
   return gl
@@ -662,7 +660,7 @@ async function applyInkBudget(page, arg) {
   )
   if (wanted && !set) {
     throw new Error(
-      'this tree has no setPaletteInkBudget() - --ink-budget needs CW-71'
+      'this tree has no setPaletteInkBudget(), which --ink-budget needs'
     )
   }
   return set
@@ -782,7 +780,7 @@ async function applyHysteresis(page, arg) {
   )
   if (wanted && !set) {
     throw new Error(
-      'this tree has no setTemporalHysteresis() - --hysteresis needs CW-68'
+      'this tree has no setTemporalHysteresis(), which --hysteresis needs'
     )
   }
   return set
@@ -896,9 +894,9 @@ async function runSequence(page, opts, out, tag, poses, cell, vocabularies) {
 }
 
 /**
- * CW-93: the mismatch block. Printed even when it is zero, because a counter
+ * The mismatch block. Printed even when it is zero, because a counter
  * nobody can see reporting nothing is indistinguishable from a counter that
- * was never wired up - and this round has shipped one of those before.
+ * was never wired up - and this project has shipped one of those before.
  */
 function printMismatch(res) {
   const mm = res.mismatch
@@ -943,10 +941,10 @@ function printSequence(res, mono) {
       `ghost ${res.ghostPct}% of ${res.classMoveLitEvents} inked class ` +
       `moves (${res.classMoveEvents} in all)`
   )
-  // The first eight AND the last, always. The planning session's tables
-  // recorded "58.5 -> 55.7" for a 24-frame walk because an earlier version of
-  // this line printed the first eight values and an ellipsis, and the eighth
-  // reads like the end of the sequence. It was not: that walk ends at 49.7.
+  // The first eight and the last, always. A table once recorded
+  // "58.5 -> 55.7" for a 24-frame walk because an earlier version of this
+  // line printed the first eight values and an ellipsis, and the eighth reads
+  // like the end of the sequence. It was not: that walk ends at 49.7.
   const shares = mono ? res.reverseShare : res.whiteShare
   const pc = (v) => (v * 100).toFixed(2)
   console.log(
@@ -1010,7 +1008,7 @@ async function main() {
 
   const args = [
     // Chromium throttles rAF to 1 Hz when it believes the window is occluded,
-    // which once turned a real measurement into a flat line (CW-12).
+    // which once turned a real measurement into a flat line.
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
@@ -1039,13 +1037,14 @@ async function main() {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
       localStorage.setItem('openscad-forge-city-walk-colour', on ? 'on' : 'off')
-      // CW-85's pair, read out of storage at launch. Left alone when the run
-      // did not ask, so the shipped defaults (Night, populated) stand.
+      // The daylight and empty-street pair, read out of storage at launch. Left
+      // alone when the run did not ask, so the shipped defaults (Night,
+      // populated) stand.
       if (day) localStorage.setItem('openscad-forge-city-walk-daylight', day)
       if (empty) {
         localStorage.setItem('openscad-forge-city-walk-empty-city', empty)
       }
-      // CW-42: the instrument measures the size IT sets. The inert forced-probe
+      // The instrument measures the size it sets. The inert forced-probe
       // map stops the entry calibration on its first frame and the cleared keys
       // keep a previous real calibration from seeding the landing.
       window.__cityWalkCalibrationForce = {}
@@ -1111,13 +1110,13 @@ async function main() {
     if (opts.luminance && luminance !== opts.luminance) {
       throw new Error(
         `--luminance=${opts.luminance}: this tree answered "${luminance}"` +
-          ` - either it predates CW-70 or the name is not one it knows`
+          ` - either it predates the luminance layer or the name is not one it knows`
       )
     }
     console.log(`luminance layer: ${luminance ?? 'not available on this tree'}`)
 
-    // ★ A COLUMN THAT QUIETLY MEASURED THE OTHER ONE WOULD BE WORSE THAN NO
-    // COLUMN. Anchored glyphs are two switches in two modules, and either
+    // A column that quietly measured the other one would be worse than no
+    // column. Anchored glyphs are two switches in two modules, and either
     // alone does nothing visible - so this asks the game what is actually in
     // force and refuses the run if it is not what was requested.
     const anchored = await page.evaluate((want) => {
@@ -1130,7 +1129,7 @@ async function main() {
     if (opts.anchored && anchored !== (opts.anchored === 'on')) {
       throw new Error(
         `--anchored=${opts.anchored}: this tree answered "${anchored}"` +
-          ' - either it predates CW-86 or the switch did not take'
+          ' - either it predates anchored glyphs or the switch did not take'
       )
     }
     console.log(
@@ -1140,16 +1139,16 @@ async function main() {
       `hysteresis: ${hysteresis ? JSON.stringify(hysteresis) : 'OFF'}` +
         (opts.hysteresis ? '' : " (the game's own setting, untouched)")
     )
-    // CW-93: the ladders the mismatch counter will judge against. A run that
-    // cannot read them measures nothing about D-128, so it says so loudly
-    // rather than reporting a tidy zero - this project's recorded failure
-    // mode is a guard that was green because its fixture was empty.
+    // The ladders the mismatch counter will judge against. A run that cannot
+    // read them measures nothing about the vocabulary mismatch, so it says so
+    // loudly rather than reporting a tidy zero - this project's recorded
+    // failure mode is a guard that was green because its fixture was empty.
     const vocabularies = await page.evaluate(() =>
       window.__seqApi.vocabularies()
     )
     if (!vocabularies) {
       throw new Error(
-        'getClassVocabularies() answered null - this tree predates CW-93 or ' +
+        'getClassVocabularies() answered null - this tree predates it or ' +
           'the atlas has no class ladders, and the mismatch counter would ' +
           'report zero for the wrong reason'
       )
@@ -1175,15 +1174,15 @@ async function main() {
       if (got !== want) {
         throw new Error(
           `--ink-families=${opts.inkFamilies}: the instance answered "${got}"` +
-            ' - either it predates CW-92 or the switch did not take'
+            ' - either it predates ink families or the switch did not take'
         )
       }
       console.log(`ink families: ${want ? 'AUTHORED' : 'off (the screen pick)'}`)
     }
 
-    // ★ ASK THE GAME WHAT IT IS ACTUALLY DOING, the way --anchored does. A
-    // path switch that quietly did not take would give this release a clean
-    // second column that measured the first one again.
+    // Ask the game what it is actually doing, the way --anchored does. A path
+    // switch that quietly did not take would give a clean second column that
+    // measured the first one again.
     if (opts.cpuSample) {
       const want = opts.cpuSample === 'on'
       const got = await page.evaluate(
@@ -1246,10 +1245,10 @@ async function main() {
     for (const size of sizes) {
       await setSize(page, size / 100)
       const cell = await page.evaluate(() => window.__seqApi.cell())
-      // AFTER the size change, every time. setSize() presses the size keys and
-      // the game's own syncCellRaster then re-applies the CW-41 blur, which
-      // silently undid a `no-cell-raster` experiment applied once before this
-      // loop: both runs came back byte-identical to the control, which is
+      // After the size change, every time. setSize() presses the size keys and
+      // the game's own syncCellRaster then re-applies the cell-raster blur,
+      // which silently undid a `no-cell-raster` experiment applied once before
+      // this loop: both runs came back byte-identical to the control, which is
       // exactly what a silently-undone experiment looks like.
       const applied = await applySceneExperiment(page, sceneExp)
       console.log(

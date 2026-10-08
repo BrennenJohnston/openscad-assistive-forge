@@ -1,52 +1,51 @@
 /**
  * @license GPL-3.0-or-later
  */
-// The ASCII City Walk TEMPORAL stability instrument (CW-52 P0).
+// The ASCII City Walk temporal stability instrument.
 //
-// The owner's report is about motion, not about a picture: "if you are just
-// getting screenshots and not analyzing a video sequence then you might not be
-// aware of the distracting, unintended sloppy effect of the fractured
-// flashes". A still cannot show a flash, so neither can a still-based metric.
-// This measures SEQUENCES: N consecutive converted frames under a scripted,
-// exactly repeatable motion, scored cell by cell on the converter's own grid.
+// The defect it measures is about motion, not about a picture: a screenshot
+// cannot show the distracting, unintended effect of fractured flashes, and a
+// still-based metric cannot either. This measures sequences: N consecutive
+// converted frames under a scripted, exactly repeatable motion, scored cell
+// by cell on the converter's own grid.
 //
 //   node scripts/stability-city-walk.mjs --base-url=http://localhost:5443
 //   node scripts/stability-city-walk.mjs --modes=turn --sizes=10 --frames=32
 //
-// WHAT IT MEASURES, and why each column is here:
+// What it measures, and why each column is here:
 //
-//   * FLIP (A-B-A) is the fracture signature. A cell that changes as the view
-//     slides is doing its job; a cell that goes back to what it was two frames
-//     ago while its neighbours slide on is FLASHING. The plain change rate is
-//     printed beside it, because a flip rate means nothing without the change
-//     rate it is a fraction of.
-//   * The score is taken on the converter's DECISIONS, not on the painted
+//   * A flip (A-B-A) is the fracture signature. A cell that changes as the
+//     view slides is doing its job; a cell that goes back to what it was two
+//     frames ago while its neighbours slide on is flashing. The plain change
+//     rate is printed beside it, because a flip rate means nothing without
+//     the change rate it is a fraction of.
+//   * The score is taken on the converter's decisions, not on the painted
 //     pixels. Reverse video paints a solid cell with the glyph knocked out,
 //     and no pixel statistic separates that from a dense glyph reliably - but
 //     the drive index says so exactly.
-//   * Per SURFACE CLASS, from the game's own class pass, so a lit storefront
+//   * Per surface class, from the game's own class pass, so a lit storefront
 //     band and the road under it are never averaged together.
-//   * A cell whose CLASS changed during the sequence is excluded from every
+//   * A cell whose class changed during the sequence is excluded from every
 //     class row and counted separately: it swept across a geometry edge, and
 //     its flicker is real motion rather than a fracture.
 //
-// WHAT IT REFUSES TO DO:
+// What it refuses to do:
 //
-//   * Run headless. Headless Chromium rasterises in software, and this project
-//     has three rounds of confidently wrong answers from that. The GL string
-//     is printed and a software renderer aborts the run - this instrument is
-//     entirely about texture filtering, which is the first thing a software
+//   * Run headless. Headless Chromium rasterises in software, and that has
+//     given confidently wrong answers here before. The GL string is printed
+//     and a software renderer aborts the run - this instrument is entirely
+//     about texture filtering, which is the first thing a software
 //     rasteriser does differently.
 //   * Measure a tree it cannot identify. It fetches one served module and
-//     requires a marker string. Point --base-url at YOUR server on YOUR port.
+//     requires a marker string. Point --base-url at your server on your port.
 //   * Believe a sequence it did not fully capture. Every run asserts the frame
 //     count, a constant grid, a non-empty lit population and a mono palette -
-//     a sweep that silently measured nothing is this project's recorded
-//     failure mode, four times over in this round alone.
+//     a sweep that silently measured nothing is a failure this project has
+//     recorded more than once.
 //
 // The world's own clock is stopped for the duration (reduced motion halts the
-// traffic-light cycle and the weather step), so the ONLY thing that moves in a
-// captured sequence is the pose this script sets. STAND is the control and
+// traffic-light cycle and the weather step), so the only thing that moves in a
+// captured sequence is the pose this script sets. `stand` is the control and
 // must read zero.
 
 import { chromium } from '@playwright/test'
@@ -57,8 +56,8 @@ const DEFAULTS = {
   baseUrl: process.env.PW_BASE_URL || 'http://localhost:5443',
   city: 'seattle',
   // stand = the control (nothing moves); turn = a 0.05 deg sub-cell rotation
-  // per frame, CW-41's view shift; creep = a 2 cm sub-cell step per frame;
-  // walk = the real walk key, recorded once and REPLAYED for every later
+  // per frame; creep = a 2 cm sub-cell step per frame;
+  // walk = the real walk key, recorded once and replayed for every later
   // variant so that an A/B sees the identical route.
   modes: 'stand,turn,creep',
   sizes: '10,30',
@@ -67,16 +66,16 @@ const DEFAULTS = {
   turnDeg: 0.05,
   creepM: 0.02,
   walkMs: 90,
-  // Runtime variants, measured back to back in ONE session - the only kind of
+  // Runtime variants, measured back to back in one session - the only kind of
   // comparison this shared machine supports. See VARIANTS below.
   variants: 'shipped',
   label: '',
   width: 1600,
   height: 900,
   // --pose=x,y,headingDeg starts the sequences somewhere other than the
-  // spawn. CW-54 needs it: the frozen traffic that carries the head and tail
-  // lamps stands on the arterials, and Seattle's spawn is on a residential
-  // street where there is none of it to measure.
+  // spawn. The car lamps need it: the frozen traffic that carries the head
+  // and tail lamps stands on the arterials, and Seattle's spawn is on a
+  // residential street where there is none of it to measure.
   pose: '',
   marker: 'CITY_PAVING',
   markerPath: '/src/js/game/city-scene.js',
@@ -86,7 +85,7 @@ const DEFAULTS = {
   // it is built, and dropped with its table if it measures badly.
   hyst: '0.02,0.04,0.06',
   // --shots=<dir> writes every captured frame of every sequence as a PNG of
-  // the ASCII canvas, which is what the eyes-on gate reads.
+  // the ASCII canvas, which is what a person checks by eye.
   shots: '',
   // --flipmap=<dir> writes one picture per sequence of WHERE it fractured.
   flipmap: '',
@@ -106,11 +105,11 @@ const CITY_BUTTONS = {
  *
  * 'shipped'       - every material that carries the cell-raster uniform is
  *                   driven, which is what the game's own size sync does.
- * 'no-<mesh>-bias'- that ONE layer's bias forced to zero, so each layer's
+ * 'no-<mesh>-bias'- that one layer's bias forced to zero, so each layer's
  *                   share of the filter's worth is separable.
- * 'no-cellraster' - every bias forced to zero (CW-41 undone): the upper bound
+ * 'no-cellraster' - every bias forced to zero: the upper bound
  *                   on what that filter is worth over a sequence.
- * 'flat-<mesh>'   - the CW-41 blur split, taken to its limit: one layer's
+ * 'flat-<mesh>'   - the blur split, taken to its limit: one layer's
  *                   texture is replaced by a single pixel of its own average
  *                   colour, so the layer keeps its brightness and contributes
  *                   no detail at all. Whichever flattening collapses the
@@ -362,7 +361,7 @@ function installProbe() {
 
       // The shipped baseline: every material that carries the uniform is
       // driven, which is exactly what the game's own setCellRaster does. The
-      // variants then turn ONE of them off, so each name says what it removes.
+      // variants then turn one of them off, so each name says what it removes.
       const biased = []
       g.scene.traverse((o) => {
         if (!o.isMesh || !o.name) return
@@ -482,10 +481,10 @@ function installProbe() {
         gOsc: new Int32Array(n),
         iOsc: new Int32Array(n),
         lumAbs: new Float64Array(n),
-        // A hysteresis lever, simulated before it is built (CW-30). For each
+        // A hysteresis lever, simulated before it is built. For each
         // candidate band width, run a sticky quantizer over the same cell
-        // luminances and count what it would have BOUGHT (drive changes it
-        // prevents) and what it would have COST (frames a cell spends held at
+        // luminances and count what it would have bought (drive changes it
+        // prevents) and what it would have cost (frames a cell spends held at
         // a level its own luminance is no longer anywhere near - the
         // screen-space smear a moving camera would produce).
         hyst: opts.hystBands.map((h) => ({
@@ -590,10 +589,10 @@ function installProbe() {
       return a.frames
     },
     /**
-     * A picture of WHERE the frame is fracturing: one pixel per cell, green
+     * A picture of where the frame is fracturing: one pixel per cell, green
      * for glyph flips and red for drive flips, upscaled so it can be looked
      * at. A table says how much; this says where, which is what decides
-     * whether a number is the defect the owner reported or a different one.
+     * whether a number is the reported defect or a different one.
      */
     flipImage(scale) {
       const a = window.__cw52
@@ -774,7 +773,7 @@ async function enterCity(page, opts) {
   if (!ok) {
     throw new Error(
       'setCellProbe() is missing: this is not a dev-server build of a tree ' +
-        'carrying the CW-52 probe, so there is nothing to read.'
+        'carrying the cell probe, so there is nothing to read.'
     )
   }
   return gl

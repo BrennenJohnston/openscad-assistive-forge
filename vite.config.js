@@ -76,55 +76,54 @@ function readProductionHeaders() {
 }
 
 /**
- * D-31: WebKit will not load the dev worker script after a page reload.
+ * WebKit will not load the dev worker script after a page reload.
  *
- * MEASURED. First load is fine - the request returns 200 with
+ * The first load is fine: the request returns 200 with
  * Cross-Origin-Embedder-Policy: require-corp on it, and the worker starts in
  * about a second. After `location.reload()` WebKit refuses it outright:
  *
  *   Refused to load '/src/worker/openscad-worker.js?worker_file&type=module'
  *   worker because of Cross-Origin-Embedder-Policy
  *
- * and NO response arrives at all - the block happens against the cached entry,
- * before the network. The app then sits at data-wasm-ready unset for ever.
- * Chromium reloads the same page in a fifth of a second.
+ * and no response arrives at all: the block happens against the cached
+ * entry, before the network. The app then sits at data-wasm-ready unset for
+ * ever. Chromium reloads the same page in a fifth of a second.
  *
- * The built app behind public/_headers does NOT have this problem: measured on
- * WebKit, first load 1.2s and reload 1.1s, worker attached both times. So this
- * is the dev server only, and never reached a user.
+ * The built app behind public/_headers does not have this problem (on
+ * WebKit, first load 1.2s and reload 1.1s, worker attached both times), so
+ * this is the dev server only, and never reached a user.
  *
  * `no-store` is what fixes it: nothing is cached, so there is no cached entry
- * to fail the check. It has to cover the worker's IMPORTS as well as its entry
- * - measured, pinning only the entry moved the failure one step along, to
+ * to fail the check. It has to cover the worker's imports as well as its
+ * entry: pinning only the entry moves the failure one step along, to
  * svg-validation.js, mount-content.js, mesh-stats.js and dxf-postprocess.js.
  * Hence /src/worker/ rather than the `worker_file` query alone. Still scoped
  * rather than global so the rest of dev keeps its caching, and `apply: 'serve'`
  * leaves the build untouched.
  *
- * D-133: the same failure, one directory over. The render worker also imports
- * four modules the main thread uses - file-param-resolver.js, font-manifest.js,
- * scad-param-formatter.js and the color-utils.js the last of those pulls in -
- * and those live in /src/js/, which this scope never covered. The main document
- * loads them first, WebKit caches them, and the worker's import of the same URL
- * is then refused against that cached entry, so the engine never starts:
+ * The same failure happens one directory over. The render worker also imports
+ * four modules the main thread uses (file-param-resolver.js, font-manifest.js,
+ * scad-param-formatter.js and the color-utils.js the last of those pulls in),
+ * and those live in /src/js/. The main document loads them first, WebKit
+ * caches them, and the worker's import of the same URL is then refused against
+ * that cached entry, so the engine never starts:
  *
  *   Refused to load '/src/js/scad-param-formatter.js' worker because of
  *   Cross-Origin-Embedder-Policy
  *   [RenderController] Init failed: Error: Worker error
  *
- * MEASURED on local WebKit at fbf52e2: every preview failed with "Preview
- * failed: Something Went Wrong", which is what the DP-32 announcement test was
- * really reporting. The built app is again unaffected - measured on WebKit
- * against dist behind these same headers, WASM ready in 855ms and a worker
- * restart succeeded - so this never reached a user either.
+ * On local WebKit every preview then fails with "Preview failed: Something
+ * Went Wrong". The built app is again unaffected (on WebKit against dist
+ * behind these same headers, WASM ready in 855ms and a worker restart
+ * succeeds), so this never reached a user either.
  *
- * The covered set is READ FROM THE WORKER'S OWN IMPORTS rather than listed by
- * hand, because a hand-written list is exactly what let the failure move one
- * step along last time. Add an import to the worker and it is covered.
+ * The covered set is read from the worker's own imports rather than listed by
+ * hand, because a hand-written list is exactly what lets the failure move one
+ * step along. Add an import to the worker and it is covered.
  *
- * This is NOT a relaxation of COOP/COEP. Those headers are unchanged and
- * cross-origin isolation stays on - `crossOriginIsolated` is true and
- * SharedArrayBuffer is available before and after, measured.
+ * This is not a relaxation of COOP/COEP. Those headers are unchanged and
+ * cross-origin isolation stays on: `crossOriginIsolated` is true and
+ * SharedArrayBuffer is available before and after.
  */
 export function devWorkerModuleGraph(entry = 'src/worker/openscad-worker.js') {
   const root = process.cwd();
@@ -164,12 +163,12 @@ export function devWorkerModuleGraph(entry = 'src/worker/openscad-worker.js') {
 }
 
 /**
- * Every module worker the app builds from src/, so none of them can be the one
- * that was forgotten. The render worker is D-31's; the trace worker is DP-34's
- * and would have hit the identical refusal on WebKit, since it imports
+ * Every module worker the app builds from src/, so none of them can be the
+ * one that was forgotten. The render worker is the one above; the trace
+ * worker would hit the identical refusal on WebKit, since it imports
  * image-import.js and ink-extraction.js, which the main thread loads first.
- * The braille worker became a module worker with the liblouis rebuild, and
- * its test reads this list, so a worker left off it fails there.
+ * The braille worker is a module worker too, and its test reads this list,
+ * so a worker left off it fails there.
  */
 export const DEV_WORKER_ENTRIES = [
   'src/worker/openscad-worker.js',
@@ -229,7 +228,7 @@ function injectSwCacheVersion() {
     closeBundle() {
       const injected = injectSwVersion('dist', swVersion);
       console.log(`[sw] cache version injected: ${injected}`);
-      // Audit 19: the capability index is copied from public/ verbatim, the
+      // The capability index is copied from public/ verbatim, the
       // same as sw.js, so the stamp has to be written into it here for the
       // same reason. Everything that says which build this is now says the
       // same string: the service worker's cache name, the About dialog, and
@@ -253,7 +252,7 @@ export default defineConfig({
     __COMMIT_SHA__: JSON.stringify(buildInfo.commitSha),
     // The same string the service worker names its cache after, so a person
     // reading the About dialog and a person reading DevTools are talking
-    // about the same build (audit 19).
+    // about the same build.
     __BUILD_STAMP__: JSON.stringify(buildInfo.swVersion),
     // path-bool references process.env.PATH_BOOL_DEV_ASSERTS (Node-only global).
     // Vite doesn't auto-replace arbitrary process.env.* in pre-bundled deps.
