@@ -1,20 +1,20 @@
 /**
- * Welcome tour nudge (U-27, UF-22)
+ * Welcome tour nudge.
  *
- * A centred dialog asks about the Welcome Page Tour on a fresh profile,
- * lights the tutorial menu behind it and outlines the Start button — which
- * MEASURED at P0 sits below the fold at 1400x1024 in Forge, the reason the
- * card's own tip was not noticed.
+ * A centered dialog asks about the Welcome Page Tour on a fresh profile,
+ * lights the tutorial menu behind it and outlines the Start button, which
+ * sits below the fold at 1400x1024 in Forge, where the card's own tip goes
+ * unnoticed.
  *
- * Q-52 (owner, 2026-08-15, with the mock on screen): it shows while the
- * welcome family is not completed and not suppressed; once per app load;
- * the card's tip stands down underneath it and takes over when the dialog is
- * answered; "Dismiss tip" on the card counts as a no and stops it for good.
+ * It shows while the welcome family is not completed and not suppressed;
+ * once per app load; the card's tip stands down underneath it and takes
+ * over when the dialog is answered; "Dismiss tip" on the card counts as a
+ * no and stops it for good.
  *
  * The nudge must never appear while the first-visit gate holds #app inert.
  *
- * These cases deliberately do NOT carry the global nudge suppression that
- * every other spec seeds — the nudge is the subject here.
+ * These cases deliberately do not carry the global nudge suppression that
+ * every other spec seeds: the nudge is the subject here.
  *
  * @license GPL-3.0-or-later
  */
@@ -30,7 +30,7 @@ const LIT = '.tour-nudge-lit';
 const TARGET = '.tour-nudge-target';
 const CARD_TIP = '.welcome-spotlight-tag';
 const START_BTN = '#startWelcomeTourBtn';
-// DP-2: the landing target after "no". #welcomeScreen is its own scroll
+// The landing target after "no". #welcomeScreen is its own scroll
 // container, not the document, so scrollTop is read from it and never window.
 const MAIN_HEADING = '#features-heading';
 
@@ -66,7 +66,7 @@ async function bootWelcome(page, { storage = {}, classic = false } = {}) {
   await page.waitForFunction(() => typeof window.startTutorial === 'function');
 }
 
-test.describe('Welcome tour nudge (U-27, UF-22)', () => {
+test.describe('Welcome tour nudge', () => {
   test.use({ viewport: { width: 1400, height: 1024 } });
 
   test('a fresh profile is asked, with the menu lit and the Start button brought on screen', async ({
@@ -79,10 +79,10 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     await expect(page.locator(LIT)).toHaveCount(1);
     await expect(page.locator(TARGET)).toHaveCount(1);
 
-    // Q-52c: the card's own tip stands down while the dialog is asking.
+    // The card's own tip stands down while the dialog is asking.
     await expect(page.locator(CARD_TIP)).toHaveCount(0);
 
-    // The whole point of the release. Without the scroll this button is at
+    // The whole point. Without the scroll this button is at
     // y=1026 in a 1024px window.
     const onScreen = await page.evaluate((sel) => {
       const box = document.querySelector(sel).getBoundingClientRect();
@@ -116,8 +116,8 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     await expect(page.locator(MODAL)).toHaveCount(0);
     await expect(page.locator(BACKDROP)).toHaveCount(0);
 
-    // Q-44a survives: a tour merely OPENED hands the tip over on the next
-    // visit, so nothing is decorated over the running tour.
+    // A tour merely opened hands the tip over on the next visit, so nothing
+    // is decorated over the running tour.
     await expect(page.locator(CARD_TIP)).toHaveCount(0);
 
     // And a completed family is not asked again on the next load.
@@ -147,14 +147,13 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     await expect(page.locator(MODAL)).toHaveCount(0);
     await expect(page.locator(CARD_TIP)).toHaveCount(1);
 
-    // DP-2 (directive line 3) supersedes Q-52c's LANDING: the visitor is put
-    // back at the top of the Main Page rather than welded to the tour button.
-    // Q-52's other parts are unchanged and still asserted below.
+    // After "no", the visitor is put back at the top of the Main Page rather
+    // than welded to the tour button.
     expect(await welcomeScrollTop(page)).toBe(0);
     await expect(page.locator(MAIN_HEADING)).toBeFocused();
     await expect(page.locator(START_BTN)).not.toBeFocused();
 
-    // The owner's named most-important menus are on screen, not just in the DOM.
+    // The most important menus are on screen, not just in the DOM.
     for (const sel of ['#saved-projects-heading', MAIN_HEADING]) {
       // boundingBox() is {x, y, width, height} in viewport coordinates.
       const box = await page.locator(sel).boundingBox();
@@ -172,7 +171,7 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     );
     expect(suppressed).toBeNull();
 
-    // Q-52b: once per app load, so a reload asks again.
+    // Once per app load, so a reload asks again.
     await page.reload();
     await page.waitForFunction(
       () => typeof window.startTutorial === 'function'
@@ -213,8 +212,8 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
   test('Start the tour is unchanged: no scroll move, focus back on the button', async ({
     page,
   }) => {
-    // The supersession is the NO half only. close(true) must behave exactly as
-    // Q-52c signed it, or starting the tour would fight its own first step.
+    // Only the "no" half moves the visitor. close(true) must keep the scroll
+    // and the focus, or starting the tour would fight its own first step.
     await bootWelcome(page);
     await expect(page.locator(MODAL)).toBeVisible({ timeout: 30_000 });
     const before = await welcomeScrollTop(page);
@@ -250,7 +249,7 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     await expect(page.locator(MODAL)).toHaveCount(0);
   });
 
-  test('the card tip dismissal counts as a no (Q-52c)', async ({ page }) => {
+  test('the card tip dismissal counts as a no', async ({ page }) => {
     // Asked as a contrast, so the case cannot pass merely because no such
     // dialog exists: the same boot with an untouched registry must be asked.
     await bootWelcome(page);

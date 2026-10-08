@@ -530,11 +530,10 @@ test.describe('Alt View unlock flow (?hfm=unlock)', () => {
   })
 })
 
-// U-4: the editor took its dark mode from the OS media query instead of the
-// app theme, so a dark-mode browser painted a dark editor island inside a
-// light app — the owner's screenshot condition. The editor must follow the
-// RESOLVED app theme, and Classic is always light (desktop parity).
-test.describe('Editor follows the app theme, not the OS (U-4)', () => {
+// The editor must follow the resolved app theme, not the OS media query: a
+// dark-mode browser must not paint a dark editor island inside a light
+// app. Classic is always light (desktop parity).
+test.describe('Editor follows the app theme, not the OS', () => {
   test.use({ colorScheme: 'dark' })
 
   const isCI = !!process.env.CI
@@ -588,8 +587,8 @@ test.describe('Editor follows the app theme, not the OS (U-4)', () => {
       timeout: 20_000,
     })
 
-    // The owner's exact condition: dark OS, light app, Classic. The editor
-    // painted rgb(30,30,30) before the fix.
+    // Dark OS, light app, Classic: the editor must be light (a dark editor
+    // here paints rgb(30,30,30)).
     expect(await editorBrightness(page)).toBeGreaterThan(200)
   })
 
@@ -616,10 +615,10 @@ test.describe('Editor follows the app theme, not the OS (U-4)', () => {
   })
 })
 
-test.describe('The header toggles describe the state they are in (D-60)', () => {
-  // Both labels used to be written only inside their own button's click
-  // handler, so every other route left them saying the opposite of the
-  // truth - to the one group of people who cannot see the button change.
+test.describe('The header toggles describe the state they are in', () => {
+  // Both labels must follow every route that changes the state, not only
+  // their own button's click handler, or they say the opposite of the truth
+  // to the one group of people who cannot see the button change.
   // The chords are Ctrl+Shift+T and Ctrl+Shift+H, not Ctrl+T / Ctrl+H:
   // DEFAULT_SHORTCUTS shifts them "to avoid OpenSCAD conflicts", and the
   // unshifted pair belongs to the opt-in LEGACY_FORGE_SHORTCUTS preset.
@@ -634,9 +633,9 @@ test.describe('The header toggles describe the state they are in (D-60)', () => 
     await page.goto('/')
     await page.locator('#contrastToggle').waitFor()
     // The chord is only live once the app has finished booting: the shortcut
-    // TABLE is registered early, but the handlers that act on it are
+    // table is registered early, but the handlers that act on it are
     // attached late, so an earlier press matches, calls preventDefault, and
-    // finds nothing to call. MEASURED: it starts working at about +1.4s, by
+    // finds nothing to call. It starts working at about +1.4s, by
     // which point this marker is set - the same gate this suite already uses.
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 60000,
@@ -675,9 +674,9 @@ test.describe('The header toggles describe the state they are in (D-60)', () => 
     await page.goto('/')
     await page.locator('#themeToggle').waitFor()
     // The chord is only live once the app has finished booting: the shortcut
-    // TABLE is registered early, but the handlers that act on it are
+    // table is registered early, but the handlers that act on it are
     // attached late, so an earlier press matches, calls preventDefault, and
-    // finds nothing to call. MEASURED: it starts working at about +1.4s, by
+    // finds nothing to call. It starts working at about +1.4s, by
     // which point this marker is set - the same gate this suite already uses.
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 60000,
@@ -687,7 +686,7 @@ test.describe('The header toggles describe the state they are in (D-60)', () => 
       'Current theme: light. Click to cycle themes.'
     )
 
-    // The label names the RESOLVED theme, so cycle until the resolved value
+    // The label names the resolved theme, so cycle until the resolved value
     // actually moves rather than assuming one press is enough.
     await page.keyboard.press('Control+Shift+t')
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
@@ -726,29 +725,28 @@ test.describe('The header toggles describe the state they are in (D-60)', () => 
 })
 
 /**
- * CW-66: the unlock door used to eat the fragment.
+ * The unlock door keeps the fragment.
  *
  * It strips `hfm` from the query so the link is not accidentally shared on,
- * and it composed the replacement URL from pathname and query ALONE - so a
- * link of the form `/?hfm=unlock#v=1&params=...` arrived, unlocked, and then
- * destroyed the payload it was carrying. The fragment is where state.js puts a
- * shared parameter set, so the door was breaking exactly the links most worth
- * sending.
+ * and it must compose the replacement URL from more than pathname and
+ * query: a link of the form `/?hfm=unlock#v=1&params=...` must not arrive,
+ * unlock, and then destroy the payload it was carrying. The fragment is
+ * where state.js puts a shared parameter set, so those are exactly the
+ * links most worth sending.
  *
- * ★★ ITS OWN DESCRIBE, WITH NO PRIOR NAVIGATION, AND THAT IS THE POINT. The
+ * Its own describe, with no prior navigation, and that is the point. The
  * unlock-flow block above opens `/?hfm=unlock` in a beforeEach, so a case
- * nested there ARRIVES ALREADY UNLOCKED and its second navigation measures
- * something else - which is exactly what happened, and it reported the door
- * broken while a direct trace of `history.replaceState` showed it working.
- * These cases are about what happens ON ARRIVAL, so they arrive.
+ * nested there arrives already unlocked and its second navigation measures
+ * something else. These cases are about what happens on arrival, so they
+ * arrive.
  *
- * ★★ AND THE FRAGMENT UNDER TEST IS DELIBERATELY NOT `#v=1&params=`, even
- * though that is the one that matters. state.js CONSUMES that payload and
- * clears it - measured, it is gone before the door has even run - so a test
- * written with it watches state.js and reports on the door. `#keep=me` is
- * inert, which is what makes it an instrument.
+ * And the fragment under test is deliberately not `#v=1&params=`, even
+ * though that is the one that matters. state.js consumes that payload and
+ * clears it before the door has even run, so a test written with it
+ * watches state.js and reports on the door. `#keep=me` is inert, which is
+ * what makes it an instrument.
  */
-test.describe('the unlock door keeps the fragment (CW-66)', () => {
+test.describe('the unlock door keeps the fragment', () => {
   test('keeps the URL fragment while still stripping the unlock', async ({
     page,
   }) => {
@@ -759,7 +757,7 @@ test.describe('the unlock door keeps the fragment (CW-66)', () => {
     await expect
       .poll(() => page.evaluate(() => window.location.search))
       .toBe('')
-    // ★ The `hfm` half matters too: a "fix" that kept the fragment by leaving
+    // The `hfm` half matters too: a "fix" that kept the fragment by leaving
     // the whole URL alone would pass a fragment-only check while quietly
     // re-sharing the unlock. The assertion above is `toBe('')`, not merely
     // "does not contain hfm", for that reason.
@@ -769,7 +767,7 @@ test.describe('the unlock door keeps the fragment (CW-66)', () => {
   test('keeps the fragment when other query parameters survive too', async ({
     page,
   }) => {
-    // The composition has TWO branches - one for a query with something left
+    // The composition has two branches - one for a query with something left
     // in it and one for a query left empty - and a fix applied to only one of
     // them would pass the case above and still break real links.
     await page.goto('/?hfm=unlock&keepme=1#keep=me')

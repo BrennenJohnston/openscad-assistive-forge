@@ -1,20 +1,13 @@
 /**
- * Tours that survive touch (UF-21: U-28, U-29, defects D-28 / D-32 / D-33).
+ * Tours that survive touch.
  *
- * The walk this file pins is the one the owner reported: press the control a
- * tour is pointing at and the tour should still be there. MEASURED at the
- * release base 24b76a2, pressing every spotlighted control in both welcome
- * tours, exactly one press ended a tour - the Forge Simplified/Standard
- * switch at its own step.
+ * Press the control a tour is pointing at, and the tour should still be
+ * there.
  *
- * Q-50 (owner, 2026-08-14) sets the boundary: a change inside the tour's own
- * interface family keeps the tour, crossing between Forge and Classic still
- * closes it. Q-51 moved the Simplified/Standard teaching out of the two
- * welcome tours and into the two box tours, where pressing the switch does
- * something.
- *
- * Red-proven on 24b76a2 by in-tree revert of src/js/tutorial-sandbox.js,
- * src/styles/layout.css and src/styles/classic.css.
+ * The boundary: a change inside the tour's own interface family keeps the
+ * tour, while crossing between Forge and Classic still closes it. The
+ * Simplified/Standard teaching lives in the two box tours, where pressing
+ * the switch does something, not in the two welcome tours.
  *
  * @license GPL-3.0-or-later
  */
@@ -55,11 +48,10 @@ async function boot(page, { classic = false } = {}) {
   await page.goto('/');
   await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 });
   // A visible welcome screen is not a wired one: on CI Firefox (cold, slow
-  // module evaluation) the Try/tour clicks fired before main.js attached
-  // their handlers, and the app sat on the welcome surface through 180
-  // seconds of polling. The tours load the sample through the engine
-  // anyway, so the engine-ready stamp is the honest gate - the same one
-  // every sibling suite boots on.
+  // module evaluation) the Try/tour clicks can fire before main.js attaches
+  // their handlers, leaving the app on the welcome surface. The tours load
+  // the sample through the engine anyway, so the engine-ready stamp is the
+  // honest gate, the same one every sibling suite boots on.
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: 180_000,
@@ -79,13 +71,13 @@ async function startWelcomeTour(page) {
 }
 
 /**
- * What the tour is still painting while a dialog is up (UF-36, D-61).
+ * What the tour is still painting while a dialog is up.
  *
  * `topmost` answers the only question that matters for WCAG 2.4.11: if a
  * person aims at the middle of this control, does the browser hand the press
  * to it? A veil with `pointer-events: none` passes that test while still
- * painting over the dialog, so the veil is checked separately - it is the
- * thing that dimmed the owner's dialog, not the thing that swallowed the tap.
+ * painting over the dialog, so the veil is checked separately: it dims the
+ * dialog without swallowing the tap.
  */
 function tourPaintingOver(page, selectors = []) {
   return page.evaluate((sels) => {
@@ -187,9 +179,8 @@ async function startBoxTour(page, { classic = false } = {}) {
 
 /**
  * Jump to the density step without satisfying every completion gate between
- * here and there: End goes to the last step, and two Backs reach step 16 of 18.
- * The tour gained its Main Page ending in UF-39 (U-45), so the walk back is one
- * step longer than it was.
+ * here and there: End goes to the last step (the Main Page ending), and two
+ * Backs reach step 16 of 18.
  */
 async function jumpToDensityStep(page) {
   await page.keyboard.press('End');
@@ -209,7 +200,7 @@ async function jumpToDensityStep(page) {
   );
 }
 
-test.describe('U-28: a tour survives the control it highlights', () => {
+test.describe('A tour survives the control it highlights', () => {
   test('Forge box tour: pressing Simplified/Standard keeps the tour on its step, and it still advances', async ({
     page,
   }) => {
@@ -274,7 +265,7 @@ test.describe('U-28: a tour survives the control it highlights', () => {
     );
   });
 
-  test('crossing between Forge and Classic still closes the tour (Q-28a preserved)', async ({
+  test('crossing between Forge and Classic still closes the tour', async ({
     page,
   }) => {
     await boot(page);
@@ -288,13 +279,13 @@ test.describe('U-28: a tour survives the control it highlights', () => {
     expect((await said(page)).join(' | ')).toContain(
       'because the interface changed'
     );
-    // progress saved, completion NOT recorded
+    // progress saved, completion not recorded
     const state = await registry(page);
     expect(state.welcome.opened).toEqual(expect.any(Number));
     expect(state.welcome.completed).toBeUndefined();
   });
 
-  test('Q-50c: a press that opens a dialog stands the tour aside, and closing it brings the tour back', async ({
+  test('A press that opens a dialog stands the tour aside, and closing it brings the tour back', async ({
     page,
   }) => {
     await boot(page);
@@ -308,10 +299,9 @@ test.describe('U-28: a tour survives the control it highlights', () => {
     await expect(page.locator('.tutorial-panel')).toBeHidden();
     await expect(page.locator('.tutorial-overlay')).toBeAttached();
 
-    // UF-36 (D-61). This case only ever asked whether the panel got out of the
-    // way, and shrinking to a bar is not standing down: at the base the veil
-    // kept painting the dialog at 0.3 and the target kept the elevation and
-    // ring its highlight class carries. That is the vacuous green this closes.
+    // Shrinking to a bar is not standing down: the veil must stop painting the
+    // dialog, and the target must give up the elevation and ring its highlight
+    // class carries.
     await page.waitForTimeout(400);
     const aside = await tourPaintingOver(page);
     expect(
@@ -322,10 +312,9 @@ test.describe('U-28: a tour survives the control it highlights', () => {
       aside.highlighted,
       'no target may keep its ring or its elevation while a dialog is up'
     ).toEqual([]);
-    // This dialog paints a centred box the pill's corner never reaches, so the
-    // pill must be left exactly where it lives. The assertion above it (the
-    // pill is visible) is the one CI Firefox used to catch an over-eager first
-    // cut of the placement rule.
+    // This dialog paints a centered box the pill's corner never reaches, so the
+    // pill must be left exactly where it lives; the visibility assertion above
+    // catches a placement rule that hides it too eagerly.
     expect(await pillOverlapsDialog(page, '#shortcutsModal')).toBe(false);
 
     // Escape belongs to the dialog first
@@ -336,7 +325,7 @@ test.describe('U-28: a tour survives the control it highlights', () => {
     await expect(page.locator('#tutorial-step-title')).toHaveText(
       'Keyboard shortcuts'
     );
-    // and the tour comes back WHOLE, not just visible
+    // and the tour comes back whole, not just visible
     await expect(page.locator('#shortcutsToggle')).toHaveClass(
       /tutorial-target-highlight/
     );
@@ -351,7 +340,7 @@ test.describe('U-28: a tour survives the control it highlights', () => {
 });
 
 test.describe('the spotlight itself', () => {
-  test('triage Table 1 #5: a tall target is scrolled clear of the chrome above its scroll container', async ({
+  test('a tall target is scrolled clear of the chrome above its scroll container', async ({
     page,
   }) => {
     await boot(page)
@@ -373,15 +362,14 @@ test.describe('the spotlight itself', () => {
     const geometry = await page.evaluate(() => {
       const target = document.querySelector('.tutorial-target-highlight')
       const style = getComputedStyle(target)
-      // the halo is drawn OUTSIDE the border box
+      // the halo is drawn outside the border box
       const halo =
         parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)
       const rect = target.getBoundingClientRect()
       const header = document.querySelector('.app-header')
 
       // Everything between the target and the root that clips or scrolls, so a
-      // failure on a runner I cannot reproduce locally explains itself instead
-      // of needing another round trip.
+      // failure on a runner that does not reproduce locally explains itself.
       const ancestors = []
       let parent = target.parentElement
       while (parent && parent !== document.documentElement) {
@@ -411,15 +399,15 @@ test.describe('the spotlight itself', () => {
       }
     })
 
-    // MEASURED at the base: haloTop 8 against a header bottom of 74, so the
-    // top edge of the halo and the panel's own heading were both hidden.
+    // A halo that starts behind the header (haloTop 8 against a header bottom
+    // of 74) hides its own top edge and the panel's own heading.
     expect(
       geometry.haloTop,
       `halo must clear the header: ${JSON.stringify(geometry)}`
     ).toBeGreaterThan(geometry.headerBottom)
   })
 
-  test('and still clears it when the target is TALLER than the box it lives in', async ({
+  test('and still clears it when the target is taller than the box it lives in', async ({
     page,
   }) => {
     // The CI Firefox runner's wider fonts wrap this panel to 648px inside a
@@ -468,8 +456,8 @@ test.describe('the spotlight itself', () => {
   })
 })
 
-test.describe('UF-21 defects: a tour must not claim it finished', () => {
-  test('D-28: a failure-driven skip past the last step does not record completion', async ({
+test.describe('A tour must not claim it finished', () => {
+  test('A failure-driven skip past the last step does not record completion', async ({
     page,
   }) => {
     await boot(page);
@@ -488,7 +476,7 @@ test.describe('UF-21 defects: a tour must not claim it finished', () => {
     expect(state.welcome.completed).toBeUndefined();
   });
 
-  test('D-32: the X exits without recording completion and keeps the progress', async ({
+  test('The X exits without recording completion and keeps the progress', async ({
     page,
   }) => {
     await boot(page);
@@ -510,16 +498,16 @@ test.describe('UF-21 defects: a tour must not claim it finished', () => {
       sessionStorage.getItem('tutorialProgress')
     );
     expect(JSON.parse(progress)).toMatchObject({ tutorialId: 'welcome' });
-    // and the spotlight has NOT handed over as though the tour were finished.
-    // Starting the tour already stripped the tag (UF-17: the 'opened' write
-    // does that), so the tell is that NO card wears it. MEASURED at the base,
-    // where the false completion fired the chain: 'Beginners Start Here'.
+    // and the spotlight has not handed over as though the tour were finished.
+    // Starting the tour already stripped the tag (the 'opened' write does
+    // that), so the tell is that no card wears it; a false completion would
+    // hand it to 'Beginners Start Here'.
     await expect(page.locator('.role-path-card.welcome-spotlight')).toHaveCount(
       0
     );
   });
 
-  test('D-33: starting a second tour replaces the first instead of crashing', async ({
+  test('Starting a second tour replaces the first instead of crashing', async ({
     page,
   }) => {
     const pageErrors = [];
@@ -543,7 +531,7 @@ test.describe('UF-21 defects: a tour must not claim it finished', () => {
   });
 });
 
-test.describe('U-29: the welcome page does not offer an inert switch', () => {
+test.describe('The welcome page does not offer an inert switch', () => {
   test('Forge: Simplified/Standard is absent on the welcome surface and present once a project opens', async ({
     page,
   }) => {
@@ -599,7 +587,7 @@ test.describe('U-29: the welcome page does not offer an inert switch', () => {
     });
   });
 
-  test('Q-51a: the welcome tours are one step shorter in both interfaces', async ({
+  test('The Forge welcome tour has no Simplified/Standard step', async ({
     page,
   }) => {
     await boot(page);
@@ -610,12 +598,12 @@ test.describe('U-29: the welcome page does not offer an inert switch', () => {
     await expect(page.locator('#tutorial-step-title')).toHaveText(
       'Welcome to the Forge!'
     );
-    // and the step it lost is gone, not merely renumbered
+    // and the step is gone, not merely renumbered
     await walkTo(page, 'High contrast');
     expect(await page.locator('#tutorial-step-current').textContent()).toBe('3');
   });
 
-  test('Q-51a: the Classic welcome tour is one step shorter too', async ({
+  test('The Classic welcome tour has no density step either', async ({
     page,
   }) => {
     await boot(page, { classic: true });
@@ -629,24 +617,21 @@ test.describe('U-29: the welcome page does not offer an inert switch', () => {
 });
 
 /**
- * U-40 / D-61 (owner, 2026-08-21): the curiosity path.
+ * The curiosity path: assume a curious new user presses what the tour
+ * highlights, and prove they can get back.
  *
- * The owner followed the Main Page tour to step 12 of 13 on their phone,
- * pressed the Clear Cache button it was pointing at, and could not answer the
- * dialog that opened. The tour had "stood aside" by shrinking to a bar, but the
- * veil still painted the dialog at 0.3, the button kept the z-index and ring
- * its highlight class carries, and the pill kept the dialog's footer corner.
- * Their words: "they will get stuck in a loop, deleting the app and starting
- * the tutorial again over and over."
- *
- * The round's standing test method: assume a curious new user CLICKS what the
- * tour highlights, and prove they can get back.
+ * On a phone, the Main Page tour points at Clear Cache near its end.
+ * Pressing it opens a dialog that must be answerable: shrinking the tour to
+ * a bar is not enough while the veil still paints the dialog at 0.3, the
+ * button keeps the z-index and ring its highlight class carries, or the
+ * pill sits on the dialog's footer corner. A user who cannot answer the
+ * dialog is stuck in a loop.
  */
-test.describe('UF-36: a dialog you can always answer', () => {
+test.describe('A dialog you can always answer', () => {
   test.describe('on a phone-shaped viewport', () => {
     test.use({ viewport: { width: 412, height: 915 } });
 
-    test('D-61: pressing the spotlighted Clear Cache leaves the dialog operable, and Cancel returns to the tour', async ({
+    test('Pressing the spotlighted Clear Cache leaves the dialog operable, and Cancel returns to the tour', async ({
       page,
     }) => {
       await pressTheSpotlightedClearCache(page);
@@ -687,7 +672,7 @@ test.describe('UF-36: a dialog you can always answer', () => {
         'the minimized pill must not overlap the dialog'
       ).toBe(false);
 
-      // and the way back is real: Cancel restores the tour WHERE IT WAS
+      // and the way back is real: Cancel restores the tour where it was
       await page.locator('#cacheClearCancelBtn').click();
       await expect(page.locator('.cache-clear-dialog')).toHaveCount(0, {
         timeout: 10_000,
@@ -705,14 +690,13 @@ test.describe('UF-36: a dialog you can always answer', () => {
     });
   });
 
-  test.describe("at the owner's device height, where the button lands ON the footer", () => {
+  test.describe("at a phone height where the button lands on the footer", () => {
     // 412px wide with the phone browser's chrome taken off the height. At the
-    // full 915 the elevated button sat just BELOW the dialog's footer and the
-    // occlusion did not reproduce; here it lands squarely on Cancel and the red
-    // confirm, which is the state the owner photographed.
+    // full 915 the elevated button sits just below the dialog's footer; here it
+    // lands squarely on Cancel and the red confirm.
     test.use({ viewport: { width: 412, height: 730 } });
 
-    test('D-61: the elevated button cannot bury the dialog it opened, and pressing where it was does not stack another', async ({
+    test('The elevated button cannot bury the dialog it opened, and pressing where it was does not stack another', async ({
       page,
     }) => {
       await pressTheSpotlightedClearCache(page);
@@ -739,13 +723,13 @@ test.describe('UF-36: a dialog you can always answer', () => {
         '#cacheClearCancelBtn',
         '#cacheClearConfirmBtn',
       ]);
-      // MEASURED at the base: both returned button#clearStorageBtn.
+      // An elevated page button would win both of these hit tests.
       expect(state.topmost['#cacheClearCancelBtn']).toBe('self');
       expect(state.topmost['#cacheClearConfirmBtn']).toBe('self');
 
-      // The loop itself. At the base a second press on the ringed button opened
-      // a SECOND dialog on top of the first, each with its Cancel buried under
-      // that same button, and every press added another.
+      // The loop itself: a second press on the ringed button must not open a
+      // second dialog on top of the first, its Cancel buried under that same
+      // button.
       //
       // Once the button is no longer elevated the press belongs to the dialog
       // lying over it, and what that means differs by engine: Chromium hands it
@@ -764,12 +748,11 @@ test.describe('UF-36: a dialog you can always answer', () => {
     });
   });
 
-  test.describe('on a short desktop, where the first placement rule went wrong', () => {
+  test.describe('on a short desktop', () => {
     // 1280x600 is where CI Firefox's fonts put the keyboard-shortcuts dialog:
     // it paints x 290-990 and leaves only ~51px above and below. The pill lives
-    // at x 1152, so it was never in danger - but a rule that looked only at
-    // vertical gaps hid it anyway, and the Q-50c case went red on that lane
-    // alone. MEASURED before the fix: pill display:none at this exact size.
+    // at x 1152, so it is never in danger, yet a rule that looked only at
+    // vertical gaps would hide it.
     test.use({ viewport: { width: 1280, height: 600 } });
 
     test('a dialog the pill does not touch leaves the pill exactly where it lives', async ({
@@ -809,7 +792,7 @@ test.describe('UF-36: a dialog you can always answer', () => {
     });
   });
 
-  test('D-61 on the desktop the tour was built for: the dialog is topmost there too', async ({
+  test('On the desktop the tour was built for: the dialog is topmost there too', async ({
     page,
   }) => {
     await pressTheSpotlightedClearCache(page);
@@ -830,7 +813,7 @@ test.describe('UF-36: a dialog you can always answer', () => {
     await expect(page.locator('#tutorial-step-title')).toHaveText('Clear Cache');
   });
 
-  test('D-67: the overlay stops re-raising itself above its own highlight', async ({
+  test('The overlay does not re-raise itself above its own highlight', async ({
     page,
   }) => {
     await boot(page);
@@ -849,8 +832,8 @@ test.describe('UF-36: a dialog you can always answer', () => {
         return el ? parseInt(getComputedStyle(el).zIndex, 10) : null;
       };
       return {
-        // MEASURED at the base: 10002/10003/10004, escalated off the engine's
-        // own ring on a page whose real ancestors all sit below 950.
+        // Escalating here would only answer the engine's own ring: the page's
+        // real ancestors all sit below 950.
         escalated:
           document.querySelector('.tutorial-overlay')?.style.getPropertyValue(
             '--z-index-tutorial-backdrop'
@@ -867,7 +850,7 @@ test.describe('UF-36: a dialog you can always answer', () => {
       stack.escalated,
       `no ordinary step may escalate the overlay: ${JSON.stringify(stack)}`
     ).toBe('');
-    // the ordering the escalation used to provide by accident, now stated
+    // the ordering, stated rather than left to escalation
     expect(stack.target).toBe(stack.highlightToken);
     expect(stack.overlay).toBeGreaterThan(stack.target);
     expect(stack.card).toBeGreaterThan(stack.veil);
@@ -875,28 +858,21 @@ test.describe('UF-36: a dialog you can always answer', () => {
 });
 
 /**
- * UF-37 (U-42: D-62, D-63). The owner's phone report: "step 3 does not
- * highlight anything for the user to interact with. Then when the user
- * attempts to press the Tutorial button to re open the dialog, the drawer's
- * auto open command overrides any other user attempts... no input or button
- * pressing registers."
+ * A tour that follows the user, on a phone. The step that teaches the
+ * panel must highlight something to interact with, and the user's own
+ * presses on the drawer and on the tour's pill must register instead of
+ * being overridden by the tour reopening the drawer.
  *
- * MEASURED at the release base d27c623, 412x915, Beginners card path - the
- * whole sequence these cases pin, and every line of it failed:
+ * The sequence these cases pin, at 412x915 on the Beginners card path:
  *
- *   step-3 arrival   drawer OPEN (the engine opened it), card HIDDEN, ring on
- *                    the Close button, veil 0.3, only a "Tutorial 3/17" pill
- *   pill +500ms      drawer closed, card back - the only way to read the step
- *   step-4 setup     drawer OPEN, card HIDDEN again
- *   pill +500ms      drawer STILL open, card STILL hidden, cutout 0x0
- *   pill +2000ms     unchanged: Restore is visibly dead
- *   user closes it   reopened inside 500ms, still open at 2000ms
+ *   step-3 arrival   drawer shut, card up, ring on the button that opens it
+ *   panel opened     card still up, ring on the Close button
+ *   Restore          the card comes back and stays, drawer untouched
+ *   user closes it   the drawer stays shut, and the tour asks instead
  *
- * The engine now leaves the drawer to the user and keeps the card up beside
- * it. These cases are written against the states above, so each one is red on
- * the base for the reason the owner photographed.
+ * The engine leaves the drawer to the user and keeps the card up beside it.
  */
-test.describe('UF-37: a tour that follows the user', () => {
+test.describe('A tour that follows the user', () => {
   const REQUIREMENT_PENDING = '↑ Complete the action above to continue';
 
   /** Boot the intro tour and stop on the step that teaches the panel. */
@@ -917,7 +893,7 @@ test.describe('UF-37: a tour that follows the user', () => {
   test.describe('on a phone-shaped viewport', () => {
     test.use({ viewport: { width: 412, height: 915 } });
 
-    test('D-62: step 3 arrives with the panel shut and the ring on the button that opens it', async ({
+    test('Step 3 arrives with the panel shut and the ring on the button that opens it', async ({
       page,
     }) => {
       test.setTimeout(240_000);
@@ -937,7 +913,7 @@ test.describe('UF-37: a tour that follows the user', () => {
       );
     });
 
-    test('D-62: opening the panel keeps the card up and walks the ring to the Close button', async ({
+    test('Opening the panel keeps the card up and walks the ring to the Close button', async ({
       page,
     }) => {
       test.setTimeout(240_000);
@@ -956,8 +932,8 @@ test.describe('UF-37: a tour that follows the user', () => {
         /tutorial-target-highlight/
       );
 
-      // The card must not be sitting on the drawer's only way out. MEASURED
-      // during this release: a top dock started at y 8 and covered the X.
+      // The card must not be sitting on the drawer's only way out: a top dock
+      // starting at y 8 would cover the X.
       const closeIsPressable = await page.evaluate(() => {
         const btn = document.getElementById('drawerCloseBtn');
         const r = btn.getBoundingClientRect();
@@ -970,7 +946,7 @@ test.describe('UF-37: a tour that follows the user', () => {
       expect(closeIsPressable).toBe(true);
     });
 
-    test('D-44 re-proved impossible: Restore restores, holds, and leaves the drawer alone', async ({
+    test('Restore restores, holds, and leaves the drawer alone', async ({
       page,
     }) => {
       test.setTimeout(240_000);
@@ -990,17 +966,17 @@ test.describe('UF-37: a tour that follows the user', () => {
       await page.locator('.tutorial-restore').click();
       await expect(page.locator('.tutorial-panel')).toBeVisible();
 
-      // D-44's symptom was a restore that lasted less than a frame. Two
-      // seconds is long enough for the watcher, the drawer transition and the
-      // reposition scheduler to have had their say.
+      // A restore must last, not vanish within a frame. Two seconds is long
+      // enough for the watcher, the drawer transition and the reposition
+      // scheduler to have had their say.
       await page.waitForTimeout(2000);
       await expect(page.locator('.tutorial-panel')).toBeVisible();
       await expect(page.locator('.tutorial-minimized')).toBeHidden();
-      // and Restore no longer has to shut the drawer to work
+      // and Restore does not have to shut the drawer to work
       expect(await drawerOpen(page)).toBe(true);
     });
 
-    test('D-63: closing the panel sticks, and the tour asks instead of fighting', async ({
+    test('Closing the panel sticks, and the tour asks instead of fighting', async ({
       page,
     }) => {
       test.setTimeout(240_000);
@@ -1022,8 +998,8 @@ test.describe('UF-37: a tour that follows the user', () => {
       );
       expect(await drawerOpen(page)).toBe(false);
 
-      // The base reopened it inside 500ms. Hold past that and past the 400ms
-      // transition wait the old branch used.
+      // Hold well past 500ms and past the drawer's 400ms transition, so any
+      // reopen would have happened by now.
       await page.waitForTimeout(2000);
       expect(await drawerOpen(page)).toBe(false);
       await expect(page.locator('.tutorial-panel')).toBeVisible();
@@ -1065,7 +1041,7 @@ test.describe('UF-37: a tour that follows the user', () => {
       );
     });
 
-    test('UF-21 exit table, new row: Escape closes the drawer first and the tour second', async ({
+    test('Escape closes the drawer first and the tour second', async ({
       page,
     }) => {
       test.setTimeout(240_000);
@@ -1093,10 +1069,10 @@ test.describe('UF-37: a tour that follows the user', () => {
 
   /**
    * The desktop half of the same two rules. The panel is a collapsing sidebar
-   * rather than a drawer, so Q-76 gives the requirement its own wording, and
-   * the engine still has to expand a collapsed panel on the way IN - the case
-   * a flat "every target lives inside" rule would have broken, because when
-   * the panel is shut the only candidate it has left is inside it.
+   * rather than a drawer, so the requirement has its own wording, and the
+   * engine still has to expand a collapsed panel on the way in: the case a
+   * flat "every target lives inside" rule would break, because when the
+   * panel is shut the only candidate it has left is inside it.
    */
   test('desktop: a collapse the user asked for holds, and the panel still opens for the step that needs it', async ({
     page,
@@ -1104,7 +1080,7 @@ test.describe('UF-37: a tour that follows the user', () => {
     test.setTimeout(240_000);
     await introTourAtStep3(page);
 
-    // Here the only control this step can point at IS inside the panel, so the
+    // Here the only control this step can point at is inside the panel, so the
     // ring lands there and the panel is left open.
     await expect(page.locator('#collapseParamPanelBtn')).toHaveClass(
       /tutorial-target-highlight/
@@ -1120,8 +1096,7 @@ test.describe('UF-37: a tour that follows the user', () => {
       page.locator('.param-group[data-group-id="Dimensions"] summary')
     ).toHaveClass(/tutorial-target-highlight/);
 
-    // Collapse it mid-step. The old branch expanded it again; the tour now
-    // says what it needs and leaves it shut.
+    // Collapse it mid-step: the tour says what it needs and leaves it shut.
     await page.locator('#collapseParamPanelBtn').click();
     await expect(page.locator('#tutorialRequirement')).toHaveText(
       'Expand the Customizer to continue.',
@@ -1145,18 +1120,17 @@ test.describe('UF-37: a tour that follows the user', () => {
 });
 
 /**
- * UF-38: cards that stay readable (U-43, U-47, D-65, D-66, D-69, D-70).
+ * Cards that stay readable.
  *
- * The viewport here is 412x**810**, not 412x915, and that is the whole reason
- * this family went unseen. The owner's frames are 1080x2520 at DPR ~2.62 = 960
- * CSS px of screen; status bar, URL bar and gesture nav take roughly 43 + 60 +
- * 48 of it. At 915 every card fits and nothing clips. At 810 the dock cap
- * `viewport.height * 0.45` lands on 364.5 and three steps of the intro tour
- * clip - MEASURED before the fix at 47px, 19px and 40px, none of them
- * announced.
+ * The viewport here is 412x810, not 412x915: a 1080x2520 phone screen at
+ * DPR ~2.62 is 960 CSS px tall, and its status bar, URL bar and gesture
+ * nav take roughly 43 + 60 + 48 of that. At 915 every card fits and
+ * nothing clips. At 810 the dock cap `viewport.height * 0.45` lands on
+ * 364.5, and three steps of the intro tour overflow (by 47px, 19px and
+ * 40px), so the card has to show that its body holds more.
  */
-test.describe('UF-38: cards that stay readable', () => {
-  /** Read the card's internals the way the P0 probe did. */
+test.describe('Cards that stay readable', () => {
+  /** Read the card's internals. */
   const cardGeometry = (page) =>
     page.evaluate(() => {
       const panel = document.querySelector('.tutorial-panel');
@@ -1198,15 +1172,16 @@ test.describe('UF-38: cards that stay readable', () => {
   test.describe('on a phone-shaped viewport of the height a phone has', () => {
     test.use({ viewport: { width: 412, height: 810 } });
 
-    test('D-65: a clipped body says so, and stops saying so at the end', async ({
+    test('A clipped body says so, and stops saying so at the end', async ({
       page,
     }) => {
       test.setTimeout(240_000);
       await startBoxTour(page);
       await stepBackTo(page, 'Preview Settings & Info');
 
-      // This is the owner's 164634: the body's last visible line was "You can
-      // resize this drawer using the handle. With", cut mid-glyph in silence.
+      // At this height the body's last visible line is "You can resize this
+      // drawer using the handle. With", cut mid-glyph: it must not be cut in
+      // silence.
       const clipped = await cardGeometry(page);
       expect(clipped.hiddenBelow).toBeGreaterThan(2);
       expect(clipped.hasMore).toBe(true);
@@ -1230,26 +1205,26 @@ test.describe('UF-38: cards that stay readable', () => {
       expect(atEnd.cueOpacity).toBe(0);
     });
 
-    test('D-65: the body keeps a floor, and the step title with it', async ({
+    test('The body keeps a floor, and the step title with it', async ({
       page,
     }) => {
       test.setTimeout(240_000);
       await startBoxTour(page);
       await stepBackTo(page, 'Preview Settings & Info');
 
-      // The photographed fold left the body at ~22px: the top of the title and
-      // nothing else. The floor is the title plus one line of text.
+      // A folded body can shrink to ~22px: the top of the title and nothing
+      // else. The floor is the title plus one line of text.
       const geo = await cardGeometry(page);
       expect(geo.bodyHeight).toBeGreaterThanOrEqual(72);
       expect(geo.titleBottom).toBeLessThanOrEqual(geo.bodyBottom + 0.5);
     });
 
-    test('D-65: a new step opens at the top of its own text', async ({
+    test('A new step opens at the top of its own text', async ({
       page,
     }) => {
       test.setTimeout(240_000);
       await startBoxTour(page);
-      // Both of these steps overflow at this height (MEASURED: 19px and 47px),
+      // Both of these steps overflow at this height (by 19px and 47px),
       // which is what makes the carried-over offset visible. Between two steps
       // where only the first overflows, the browser clamps the offset to 0 on
       // its own and the defect hides.
@@ -1288,7 +1263,7 @@ test.describe('UF-38: cards that stay readable', () => {
   test.describe('the Features Guide header at phone width', () => {
     test.use({ viewport: { width: 412, height: 810 } });
 
-    test('D-66: the hint takes its own row instead of printing over the title', async ({
+    test('The hint takes its own row instead of printing over the title', async ({
       page,
     }) => {
       test.setTimeout(240_000);
@@ -1307,10 +1282,9 @@ test.describe('UF-38: cards that stay readable', () => {
 
       // A pseudo-element has no rect to ask for, so this pins the two things
       // that decide whether it can collide: which rule is painting the words,
-      // and whether the header grew a row to hold them. On the base the hint
-      // hangs off the close button at `right: 100%` and the header stays one
-      // row high - the owner's 164657, "Close to continue" printed straight
-      // across "Features Guide".
+      // and whether the header grew a row to hold them. A hint hanging off the
+      // close button at `right: 100%`, in a header one row high, prints "Close
+      // to continue" straight across "Features Guide".
       const header = await page.evaluate(() => {
         const modal = document.querySelector(
           '#featuresGuideModal .modal-content'
@@ -1331,7 +1305,7 @@ test.describe('UF-38: cards that stay readable', () => {
 
       expect(header.onCloseButton).toBe('none');
       expect(header.onHeader).toBe('Close to continue');
-      // A second row: the header is now taller than its tallest first-row item
+      // A second row: the header is taller than its tallest first-row item
       // by at least a line of the hint's own text.
       const firstRow = Math.max(header.titleHeight, header.closeHeight);
       expect(header.headerHeight).toBeGreaterThan(firstRow + 12);
@@ -1339,15 +1313,15 @@ test.describe('UF-38: cards that stay readable', () => {
   });
 
   /**
-   * D-69, found by UF-36 and scheduled here. `.cache-clear-dialog` names the
-   * `.preset-modal` SCRIM, not the box inside it, so a `max-width` meant for
-   * the dialog was shrinking the full-screen centring container.
+   * `.cache-clear-dialog` names the `.preset-modal` scrim, not the box
+   * inside it, so a `max-width` meant for the dialog must not land on the
+   * full-screen centering container.
    */
   for (const width of [800, 1280]) {
-    test.describe(`D-69: the Clear Cache dialog at ${width}px`, () => {
+    test.describe(`The Clear Cache dialog at ${width}px`, () => {
       test.use({ viewport: { width, height: 800 } });
 
-      test('the backdrop covers the viewport and the dialog is centred', async ({
+      test('the backdrop covers the viewport and the dialog is centered', async ({
         page,
       }) => {
         test.setTimeout(240_000);
@@ -1371,9 +1345,8 @@ test.describe('UF-38: cards that stay readable', () => {
           };
         });
 
-        // MEASURED on the base at both widths: scrim w=500 pinned at x=0, so
-        // the dark backdrop was a strip and the dialog sat against the left
-        // edge.
+        // A scrim held to the dialog's width leaves the dark backdrop a strip
+        // and the dialog against the left edge.
         expect(geo.scrimLeft).toBe(0);
         expect(geo.scrimWidth).toBe(geo.viewportWidth);
         expect(Math.abs(geo.boxCentre - geo.viewportWidth / 2)).toBeLessThan(2);
@@ -1384,11 +1357,11 @@ test.describe('UF-38: cards that stay readable', () => {
   }
 
   /**
-   * D-70 (signed Q-77). The mobile drawer is a modal dialog and the tour card
-   * lives outside it, so the drawer's `aria-modal` hid the instructions from a
-   * screen reader and its focus trap made the card's buttons unreachable.
+   * The mobile drawer is a modal dialog and the tour card lives outside it,
+   * so the drawer's `aria-modal` would hide the instructions from a screen
+   * reader, and its focus trap would make the card's buttons unreachable.
    */
-  test.describe('D-70: the card is reachable and announced over the drawer', () => {
+  test.describe('The card is reachable and announced over the drawer', () => {
     test.use({ viewport: { width: 412, height: 915 } });
 
     async function introStep4WithDrawerOpen(page) {
@@ -1411,9 +1384,8 @@ test.describe('UF-38: cards that stay readable', () => {
       test.setTimeout(240_000);
       await introStep4WithDrawerOpen(page);
 
-      // Neither surface may claim `aria-modal` while both are up: whichever
-      // one does, assistive technology hides the other. MEASURED on the base:
-      // the drawer said "true" and the card was never announced.
+      // Neither surface may claim `aria-modal` while both are up: whichever one
+      // does, assistive technology hides the other.
       const drawer = page.locator('#paramPanel');
       await expect(drawer).toHaveAttribute('role', 'dialog');
       expect(await drawer.getAttribute('aria-modal')).toBeNull();
@@ -1440,10 +1412,9 @@ test.describe('UF-38: cards that stay readable', () => {
           return !!overlay && overlay.contains(document.activeElement);
         });
 
-      // MEASURED on the base: eight presses, then eighty, never left
-      // `#paramPanel`. Backwards is the short way round - the card's controls
-      // sit at the end of the document, so one Shift+Tab from the drawer's
-      // first control reaches them.
+      // Backwards is the short way round: the card's controls sit at the end of
+      // the document, so one Shift+Tab from the drawer's first control reaches
+      // them.
       await page.locator('#drawerCloseBtn').focus();
       await page.keyboard.press('Shift+Tab');
       expect(await inTour()).toBe(true);
@@ -1463,7 +1434,7 @@ test.describe('UF-38: cards that stay readable', () => {
   });
 });
 
-test.describe('UF-42 / D-77: a docked card does not sit on a control it is not pointing at', () => {
+test.describe('A docked card does not sit on a control it is not pointing at', () => {
   test.use({ viewport: { width: 412, height: 810 } });
 
   /** End clears every completion gate; ArrowLeft walks back through them. */
@@ -1485,12 +1456,10 @@ test.describe('UF-42 / D-77: a docked card does not sit on a control it is not p
   }
 
   /**
-   * Which app controls does the card's own box hit-test over? This is the
-   * measurement that minted D-77: at 412x810 on the step below, the card
-   * covered #uiModeToggle and document.elementFromPoint at that button's
-   * centre returned the card. It asks about every control in the top chrome,
-   * not only the one that was photographed, because the defect is the
-   * positioner never asking at all.
+   * Which app controls does the card's own box hit-test over? At 412x810 on
+   * the step below, a card over #uiModeToggle would win
+   * document.elementFromPoint at that button's center. This asks about every
+   * control in the top chrome, because the positioner has to clear them all.
    */
   const buriedControls = (page) =>
     page.evaluate(() => {
@@ -1516,7 +1485,7 @@ test.describe('UF-42 / D-77: a docked card does not sit on a control it is not p
       return buried;
     });
 
-  test('D-77: the card clears the header on a step that points at the bottom of the screen', async ({
+  test('The card clears the header on a step that points at the bottom of the screen', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1524,14 +1493,13 @@ test.describe('UF-42 / D-77: a docked card does not sit on a control it is not p
     await walkBackTo(page, 'Generate and download your file');
 
     // The step points at #primaryActionBtn, low on the screen, so the card
-    // docks upward — straight over the chrome, until UF-42 gave the top dock
-    // the app's own top chrome to clear.
+    // docks upward, and the top dock must clear the app's own top chrome.
     await expect(page.locator('#tutorial-step-title')).toHaveText(
       'Generate and download your file'
     );
     expect(await buriedControls(page)).toEqual([]);
 
-    // And the control it IS pointing at stays tappable.
+    // And the control it is pointing at stays tappable.
     const targetReachable = await page.evaluate(() => {
       const btn = document.getElementById('primaryActionBtn');
       const r = btn.getBoundingClientRect();
@@ -1543,7 +1511,7 @@ test.describe('UF-42 / D-77: a docked card does not sit on a control it is not p
     );
   });
 
-  test('D-77: the same holds on the camera step, which also docks upward', async ({
+  test('The same holds on the camera step, which also docks upward', async ({
     page,
   }) => {
     test.setTimeout(240_000);

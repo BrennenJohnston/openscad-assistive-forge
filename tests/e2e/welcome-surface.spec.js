@@ -1,10 +1,9 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 
-// W3: the welcome screen is ONE decluttered surface — a single "Main Page"
-// heading (renamed from "Get Started" by UF-40) over side-by-side start
-// actions and saved projects, with the guide cards demoted below. No
-// functionality was removed.
+// The welcome screen is one decluttered surface: a single "Main Page"
+// heading over side-by-side start actions and saved projects, with the
+// guide cards below.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
 const WASM_READY_TIMEOUT = 180_000
@@ -59,9 +58,9 @@ async function returnToMainPage(page) {
   await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 10_000 })
 }
 
-test.describe('welcome single surface (W3)', () => {
-  // UF-40 (U-44): the heading is the surface's own name now, so W3's "one
-  // heading over both halves" is asserted against "Main Page".
+test.describe('welcome single surface', () => {
+  // The heading is the surface's own name, so "one heading over both
+  // halves" is asserted against "Main Page".
   test('one Main Page heading; actions and saved projects share the surface', async ({
     page,
   }) => {
@@ -108,13 +107,12 @@ test.describe('welcome single surface (W3)', () => {
   })
 })
 
-// U-22 (UF-13): Classic's icon toolbar and status bar have nothing to act on
-// while the welcome screen shows, so they hide there — the same truth the
-// menu bar already models via applyToolbarModeVisibility — and return the
-// moment a project opens. The surface signal is body[data-app-surface],
-// stamped at every welcome/project flip site. Status bar included per
-// Q-39(a).
-test.describe('Classic welcome chrome (U-22, UF-13)', () => {
+// Classic's icon toolbar and status bar have nothing to act on while the
+// welcome screen shows, so they hide there (the same truth the menu bar
+// already models via applyToolbarModeVisibility) and return the moment a
+// project opens. The surface signal is body[data-app-surface], stamped at
+// every welcome/project flip site.
+test.describe('Classic welcome chrome', () => {
   test('classic welcome hides toolbar and status bar; a project shows them; Main Page hides them again', async ({
     page,
   }) => {

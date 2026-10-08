@@ -12,18 +12,12 @@ test.beforeEach(async ({ page }) => {
 })
 
 /**
- * UF-27: five of the six cases in this file wrapped their whole body in a
- * try/catch whose catch called a bare test.skip(). MEASURED: all five reported
- * SKIPPED on every run, so not one assertion in this file had executed in a
- * long time - the same swallow UF-25 found in accessibility.spec.js, where ten
- * tests skipped inside a catch and two of them were axe scans.
- *
- * With the catch removed the real cause showed in one run: the upload never
- * happened at all. The app was still on the Get Started page, because the file
- * input does not accept a file until WASM has initialised. Every other suite in
- * this repo waits for `body[data-wasm-ready="true"]` first; this one never did.
- *
- * The wait is now shared, and the assertions can fail like assertions.
+ * No case here wraps its body in a try/catch whose catch calls a bare
+ * test.skip(): such a case reports "skipped" on every run and asserts
+ * nothing. The file input does not accept a file until WASM has
+ * initialized, so every case waits for `body[data-wasm-ready="true"]`
+ * first, through the shared wait, and the assertions can fail like
+ * assertions.
  */
 async function waitForWasmReady(page) {
   await page.waitForSelector('body[data-wasm-ready="true"]', {
@@ -172,8 +166,8 @@ test.describe('Features Guide Modal', () => {
     const tabs = page.locator('.features-tab')
     const tabCount = await tabs.count()
 
-    // UF-27: a zero-tab modal would have walked this loop zero times and
-    // passed, which is the same nothing-asserted shape the catch was hiding.
+    // A zero-tab modal would walk this loop zero times and pass, asserting
+    // nothing.
     expect(tabCount).toBeGreaterThan(0)
 
     for (let i = 0; i < tabCount; i++) {
