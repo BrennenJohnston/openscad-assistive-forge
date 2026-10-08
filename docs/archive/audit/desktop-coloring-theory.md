@@ -32,7 +32,7 @@ From the OpenSCAD User Manual — Transformations section:
 > "Displays the child elements using the specified RGB color + alpha value. **This is only used for the F5 preview as CGAL and STL (F6) do not currently support color.** The alpha value defaults to 1.0 (opaque) if not specified."
 
 **Sources:**
-- OpenSCAD User Manual PDF: `OpenSCAD User Manual_Transformations`, page 11 (local: `C:\Users\WATAP\Documents\Research\OpenSCAD_AF\OpenSCAD Book\`)
+- OpenSCAD User Manual PDF: `OpenSCAD User Manual_Transformations`, page 11 (a local copy)
 - Wiki: https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Transformations#color
 
 ### Implications
@@ -144,7 +144,7 @@ From the OpenSCAD User Manual — Modifier Characters section:
 > "Note: The color changes triggered by character modifiers appear only in 'Compile' mode, not 'Compile and Render (CGAL)' mode. (As per the color section.)"
 
 **Sources:**
-- OpenSCAD User Manual PDF: `OpenSCAD User Manual_Modifier Characters`, pages 1–2 (local: `C:\Users\WATAP\Documents\Research\OpenSCAD_AF\OpenSCAD Book\`)
+- OpenSCAD User Manual PDF: `OpenSCAD User Manual_Modifier Characters`, pages 1–2 (a local copy)
 - Wiki: https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Modifier_Characters#Debug_Modifier
 
 ### Stakeholder Usage (S-005, S-006)
@@ -231,7 +231,8 @@ This is the primary question for Phase 4's Probe 1 (COFF Output Verification).
 
 ### OpenSCAD User Manual (local PDFs)
 
-Location: `C:\Users\WATAP\Documents\Research\OpenSCAD_AF\OpenSCAD Book\`
+Location: a local copy, kept with the private research notes; not part of
+this repository.
 
 - `OpenSCAD User Manual_Transformations` — color() specification (p.11)
 - `OpenSCAD User Manual_Modifier Characters` — # debug modifier specification (pp.1–2)

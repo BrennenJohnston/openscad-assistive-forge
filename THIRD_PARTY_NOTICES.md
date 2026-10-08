@@ -255,6 +255,16 @@ This tool was inspired by patterns from:
   source of realistic size (1,017 lines), used by the production-parity and
   editor specs — a 28-line sample cannot reproduce editor layout defects.
 
+### Keyguard (CC0-1.0)
+- **File**: `tests/fixtures/keyguard-v75/keyguard_v75.scad`, with a trimmed
+  copy for fast parser tests in `tests/fixtures/keyguard-minimal/`
+- **Author**: Volksswitch (https://www.volksswitch.org)
+- **License**: CC0 1.0 Universal (public domain dedication, stated in the file's own header)
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: Included as a test fixture. A real keyguard design with many
+  parameters, presets and a companion file, used by the parser, preset, ZIP
+  and parity tests.
+
 ---
 
 ## Your Model Files
