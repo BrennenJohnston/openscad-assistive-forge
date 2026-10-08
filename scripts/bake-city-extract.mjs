@@ -374,15 +374,15 @@ console.log(
     `  parsed: ${model.stats.buildingCount} buildings, ${model.stats.roadCount} roads,` +
     ` ${model.stats.treeCount} trees, ${model.stats.partCount} parts` +
     ` (${model.stats.orphanParts} orphaned)\n` +
-    `  CW-33: ${model.stats.greenCount} greens, ${model.stats.sidewalkCount} sidewalks,` +
+    `  ground: ${model.stats.greenCount} greens, ${model.stats.sidewalkCount} sidewalks,` +
     ` ${model.stats.surfacedRoadCount}/${model.stats.roadCount} roads with a surface tag\n` +
-    `  CW-43: ${furnitureLine || 'no furniture'};` +
+    `  street: ${furnitureLine || 'no furniture'};` +
     ` ${model.stats.wayfindingCount} wayfinding nodes;` +
     ` ${model.stats.attractionCount} named attractions\n` +
-    `  CW-55: ${plantingLine || 'no plantings'};` +
+    `  planting: ${plantingLine || 'no plantings'};` +
     ` ${model.stats.picnicTableCount} picnic tables;` +
     ` ${model.stats.leafTypedTreeCount} of ${model.stats.treeCount} trees have a leaf_type\n` +
-    `  CW-77: ${model.stats.lampNodeCount} mapped lamps ` +
+    `  lamps: ${model.stats.lampNodeCount} mapped lamps ` +
     `(${JSON.stringify(model.stats.lampNodesByOperator)});` +
     ` ${droppedUnderground} underground buildings dropped` +
     (model.elevation

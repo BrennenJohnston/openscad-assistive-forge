@@ -611,7 +611,7 @@ async function enterCity(page, opts) {
   if (!ok) {
     throw new Error(
       'setCellProbe() is missing: this is not a dev-server build carrying ' +
-        'the CW-52 cell probe, so there is nothing to read.'
+        'the cell probe, so there is nothing to read.'
     )
   }
   return gl
@@ -660,7 +660,7 @@ async function applyInkBudget(page, arg) {
   )
   if (wanted && !set) {
     throw new Error(
-      'this tree has no setPaletteInkBudget() - --ink-budget needs CW-71'
+      'this tree has no setPaletteInkBudget(), which --ink-budget needs'
     )
   }
   return set
@@ -780,7 +780,7 @@ async function applyHysteresis(page, arg) {
   )
   if (wanted && !set) {
     throw new Error(
-      'this tree has no setTemporalHysteresis() - --hysteresis needs CW-68'
+      'this tree has no setTemporalHysteresis(), which --hysteresis needs'
     )
   }
   return set
@@ -1110,7 +1110,7 @@ async function main() {
     if (opts.luminance && luminance !== opts.luminance) {
       throw new Error(
         `--luminance=${opts.luminance}: this tree answered "${luminance}"` +
-          ` - either it predates CW-70 or the name is not one it knows`
+          ` - either it predates the luminance layer or the name is not one it knows`
       )
     }
     console.log(`luminance layer: ${luminance ?? 'not available on this tree'}`)
@@ -1129,7 +1129,7 @@ async function main() {
     if (opts.anchored && anchored !== (opts.anchored === 'on')) {
       throw new Error(
         `--anchored=${opts.anchored}: this tree answered "${anchored}"` +
-          ' - either it predates CW-86 or the switch did not take'
+          ' - either it predates anchored glyphs or the switch did not take'
       )
     }
     console.log(
@@ -1148,7 +1148,7 @@ async function main() {
     )
     if (!vocabularies) {
       throw new Error(
-        'getClassVocabularies() answered null - this tree predates CW-93 or ' +
+        'getClassVocabularies() answered null - this tree predates it or ' +
           'the atlas has no class ladders, and the mismatch counter would ' +
           'report zero for the wrong reason'
       )
@@ -1174,7 +1174,7 @@ async function main() {
       if (got !== want) {
         throw new Error(
           `--ink-families=${opts.inkFamilies}: the instance answered "${got}"` +
-            ' - either it predates CW-92 or the switch did not take'
+            ' - either it predates ink families or the switch did not take'
         )
       }
       console.log(`ink families: ${want ? 'AUTHORED' : 'off (the screen pick)'}`)

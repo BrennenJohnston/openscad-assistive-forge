@@ -773,7 +773,7 @@ async function enterCity(page, opts) {
   if (!ok) {
     throw new Error(
       'setCellProbe() is missing: this is not a dev-server build of a tree ' +
-        'carrying the CW-52 probe, so there is nothing to read.'
+        'carrying the cell probe, so there is nothing to read.'
     )
   }
   return gl
