@@ -2137,7 +2137,7 @@ test.describe('ASCII City Walk — the converter remembers the last frame', () =
    * 931. A lever that does nothing must fail this, so the bar is a share.
    *
    * The share is the fraction of the stateless re-rolls that survive with
-   * the memory on (build/cw77-memory.mjs measures it per path, at 30 %, at
+   * the memory on (measured per path, at 30 %, at
    * the downtown pose). It depends on the memory's settings (a band of 0.06
    * and a hold of 5 frames, chosen to keep motion free of trails) and on how
    * many real edges the city puts in the frame, since the memory
