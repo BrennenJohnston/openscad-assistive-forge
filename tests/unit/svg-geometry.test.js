@@ -66,6 +66,24 @@ describe('the drawing geometry loader', () => {
     expect(typeof geometry.holes.checkHolePlacement).toBe('function');
     expect(geo.isSvgGeometryLoaded()).toBe(true);
   });
+
+  it('a background start never rejects: a failed load resolves to nothing', async () => {
+    vi.doMock('../../src/js/hole-placement.js', () => {
+      throw new Error('offline');
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const geo = await import('../../src/js/svg-geometry.js');
+    await expect(geo.preloadSvgGeometry()).resolves.toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(geo.isSvgGeometryLoaded()).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('a background start that succeeds hands over the same modules', async () => {
+    const geo = await import('../../src/js/svg-geometry.js');
+    const geometry = await geo.preloadSvgGeometry();
+    expect(geometry).toBe(geo.svgGeometry());
+  });
 });
 
 describe('the geometry stays out of the first download', () => {

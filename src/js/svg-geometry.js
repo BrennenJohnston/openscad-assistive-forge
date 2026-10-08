@@ -59,3 +59,22 @@ export function svgGeometry() {
 export function isSvgGeometryLoaded() {
   return geometry !== null;
 }
+
+/**
+ * Start the load in the background, for the moment a picture control
+ * appears or for a check that can wait. Resolves with the modules, or with
+ * null when the load fails. It never rejects: a background start must not
+ * reach the app's unhandled-rejection handler, whose "An unexpected error
+ * occurred." would arrive before the person has done anything. The failure
+ * is logged here, and the next real use loads again and tells the person.
+ * @returns {Promise<Object|null>}
+ */
+export function preloadSvgGeometry() {
+  return loadSvgGeometry().catch((err) => {
+    console.warn(
+      '[Design] the drawing tools did not load in the background; the next drawing tries again:',
+      err
+    );
+    return null;
+  });
+}
