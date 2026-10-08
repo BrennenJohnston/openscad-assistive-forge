@@ -32,6 +32,14 @@ import { gzipSync } from 'zlib';
 // Entries are dist-relative path prefixes (POSIX separators).
 const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
 
+// The vendored OpenSCAD libraries ship whole, but the app loads only their
+// .scad files (not weighed here) and each library's manifest.json. The rest
+// under libraries/ (a BOSL2 tool page, GitHub configuration, the metadata the
+// setup script keeps, example parts lists) is never fetched, so it is not
+// weighed either.
+const LIBRARY_DIR = 'libraries';
+const LIBRARY_MANIFEST = /^libraries\/([^/]+\/)?manifest\.json$/;
+
 // The OpenSCAD engine, which is 3.26 MB gzipped of vendored WebAssembly and
 // the one thing the app cannot work without. It is not code anybody here is
 // going to shrink, and weighing it would make the wasm line so loose it could
@@ -119,13 +127,11 @@ const BUDGETS = {
   },
   totalAssets: {
     name: 'Total Assets',
-    // 1,200,000 B, signed by the owner at the design round's close gate.
-    // MEASURED then: 1,051,173 B gzipped at 13b04ce (full npm run build) -
-    // the drawing editor's lazy chunks put the old 1 MiB line underwater,
-    // and the line is raised to the owner's number rather than trimmed
-    // quietly. D-121's lesson stands beside it: this weighs CODE the
+    // 1,250,000 B, the owner's number (2026-10-07), set when this line
+    // stopped weighing library files the app never loads. MEASURED then:
+    // 1,183,705 B gzipped, so about 5.6 percent of room. It weighs code the
     // browser may fetch, not the vendored WASM engine.
-    budget: 1200000,
+    budget: 1250000,
     pattern: null, // Sum all
     exclude: BRAILLE_ENGINE,
     critical: true,
@@ -220,8 +226,14 @@ function checkBudgets(distPath) {
 
   // Filter to assets (JS, CSS, HTML), excluding lazy-loaded static dirs
   const assetExtensions = ['.js', '.css', '.html', '.json'];
+  const neverLoaded = (f) =>
+    under(f, [LIBRARY_DIR]) &&
+    !LIBRARY_MANIFEST.test(relative(distPath, f).split(sep).join('/'));
   const assets = allFiles.filter(
-    (f) => assetExtensions.includes(extname(f)) && !under(f, EXCLUDED_DIRS)
+    (f) =>
+      assetExtensions.includes(extname(f)) &&
+      !under(f, EXCLUDED_DIRS) &&
+      !neverLoaded(f)
   );
 
   // WebAssembly is weighed on its own line (DP-Q43), not folded into the code
