@@ -107,8 +107,11 @@ test.describe('Terminology Consistency - Saved Projects', () => {
     
     await loadSimpleBoxExample(page)
 
-    // Look for save project button
-    const saveBtn = page.locator('button:has-text("Save"), button[aria-label*="Save"]').first()
+    // Look for save project button. Visible ones only: the memory banner keeps
+    // a hidden Save Project button in the page while memory is normal.
+    const saveBtn = page
+      .locator('button:has-text("Save"):visible, button[aria-label*="Save"]:visible')
+      .first()
     
     // The ban is the test: a save control may never say "saved design".
     await expect(saveBtn).toBeVisible()
@@ -136,7 +139,7 @@ test.describe('Terminology Consistency - Saved Projects', () => {
       expect(copy).toContain('project')
       await page.locator('#saveProjectNotNow').click()
     }
-    const saveBtn = page.locator('button:has-text("Save")').first()
+    const saveBtn = page.locator('button:has-text("Save"):visible').first()
     await expect(saveBtn).toBeVisible()
     const saveWords = `${(await saveBtn.textContent()) || ''} ${(await saveBtn.getAttribute('aria-label')) || ''}`.toLowerCase()
     expect(saveWords).not.toContain('design')
