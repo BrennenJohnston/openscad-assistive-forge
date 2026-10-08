@@ -13,41 +13,27 @@ import {
   RELIEF_COLOUR_SHARE_FLOOR,
 } from './image-import.js';
 import { isEnabled } from './feature-flags.js';
+// The drawing geometry loads when a picture first needs it; the numbers the
+// customizer needs while it renders come from svg-limits.js.
 import {
-  prepareSvg,
-  needsPreparation,
-  analyzeSvg,
-  countTracedShapes,
-  measureSvgAspect,
-  parseSvgElements,
-  classifyElements,
-  flattenLayers,
-  flattenSilhouette,
-  flattenToCompoundPath,
+  loadSvgGeometry,
+  svgGeometry,
+  isSvgGeometryLoaded,
+} from './svg-geometry.js';
+import {
   LAYER_EMIT_CAP,
-  analyzeSvgAsync,
-  isOverListCap,
-  shapeCapRefusal,
-} from './svg-preparer.js';
-import { buildNestingTree, LAYER_CAP, boundsOf } from './svg-nesting.js';
-import { removeCreditLineAsync } from './credit-line.js';
+  LAYER_CAP,
+  DEFAULT_DESIGN_WIDTH_MM,
+} from './svg-limits.js';
 import { cropImageDataRect, imageDataToDataUrl } from './image-crop.js';
 import { EDITOR_STRINGS as EDITOR_S } from './drawing-editor/strings.js';
-import {
-  createSvgPrepWorkspace,
-  extractSvgMeta,
-  flattenWithRings,
-  DEFAULT_DESIGN_WIDTH_MM,
-} from './svg-preparer-workspace.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createTraceProgress } from './trace-progress.js';
 import { createConversionJob, TraceRefused } from './conversion-job.js';
 import { createConversionDialog } from './conversion-dialog.js';
 import { quickLook, quickLookSentence, COST_BANDS } from './quick-look.js';
 import { startsBySelf } from './conversion-start-rule.js';
-import { checkHolePlacement } from './hole-placement.js';
 import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
-import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
   loadOpenGroupIds,
@@ -215,8 +201,11 @@ function createLabelContainer(param, options = {}) {
  */
 function maybePrepareForOpenScad(svgText) {
   try {
-    if (isEnabled('svg_preparer') && needsPreparation(svgText)) {
-      const prepared = prepareSvg(svgText);
+    if (
+      isEnabled('svg_preparer') &&
+      svgGeometry().preparer.needsPreparation(svgText)
+    ) {
+      const prepared = svgGeometry().preparer.prepareSvg(svgText);
       console.log(
         '[SVG Preparer] Auto-prepared multi-element SVG for OpenSCAD'
       );
@@ -476,6 +465,8 @@ export function appendUserSvgToGallery(paramName, svgOpt) {
         if (!res.ok) throw new Error(`Failed to fetch ${svgOpt.file}`);
         return res.text();
       })
+      // The file control reads the design as soon as it is chosen.
+      .then((svgText) => loadSvgGeometry().then(() => svgText))
       .then((svgText) => {
         const toUse = isEnabled('svg_preparer')
           ? svgText
@@ -1955,6 +1946,8 @@ function createSvgGallery(options, param, onSelect) {
         if (!res.ok) throw new Error(`Failed to fetch ${opt.file}`);
         return res.text();
       })
+      // The file control reads the design as soon as it is chosen.
+      .then((svgText) => loadSvgGeometry().then(() => svgText))
       .then((svgText) => {
         const toUse = isEnabled('svg_preparer')
           ? svgText
@@ -2293,7 +2286,13 @@ export function reportHolePlacement(values, parameters) {
       ? dataUrlToText(outline.data)
       : null;
 
-  const result = checkHolePlacement({
+  if (!isSvgGeometryLoaded()) {
+    // The check measures against the drawing's outline, so it waits for the
+    // geometry, which the outline's file control has already started.
+    loadSvgGeometry().then(() => reportHolePlacement(values, parameters));
+    return;
+  }
+  const result = svgGeometry().holes.checkHolePlacement({
     outlineSvg: svgText,
     widthMm: Number(values.charm_width) || 0,
     holeDiameterMm: Number(values.hole_diameter) || 0,
@@ -2416,6 +2415,9 @@ function createFileControl(
   let currentSvgAnalysis = null;
 
   const acceptsSvg = param.acceptedExtensions?.includes('svg');
+  // The drawing geometry starts on its way too, for the same reason; every
+  // path below that reads a drawing waits for this same load.
+  if (acceptsSvg) loadSvgGeometry();
 
   /**
    * Every change to this parameter's file value goes through here so the
@@ -2494,6 +2496,9 @@ function createFileControl(
       return out;
     }
 
+    const { classifyElements, parseSvgElements, flattenLayers } =
+      svgGeometry().preparer;
+    const { extractSvgMeta, flattenWithRings } = svgGeometry().workspace;
     let svgs = [];
     try {
       const elements = classifyElements(parseSvgElements(currentRawSvg));
@@ -2563,6 +2568,13 @@ function createFileControl(
     const out = { [file.name]: null };
     if (aspect) out[aspect.name] = aspect.default ?? 1;
     if (!value || !currentRawSvg) return out;
+    const {
+      parseSvgElements,
+      classifyElements,
+      flattenSilhouette,
+      measureSvgAspect,
+    } = svgGeometry().preparer;
+    const { extractSvgMeta } = svgGeometry().workspace;
     try {
       const raw = parseSvgElements(currentRawSvg);
       const roles = classifyElements(raw).map((el) => el.role);
@@ -2632,6 +2644,11 @@ function createFileControl(
       jigFits,
     } = stencilEngine;
 
+    const { classifyElements, parseSvgElements, flattenToCompoundPath } =
+      svgGeometry().preparer;
+    const { extractSvgMeta } = svgGeometry().workspace;
+    const { boundsOf, buildNestingTree } = svgGeometry().nesting;
+    const { buildBridges, bridgesToPathData } = svgGeometry().bridges;
     try {
       const els = classifyElements(parseSvgElements(currentRawSvg));
       const meta = extractSvgMeta(currentRawSvg);
@@ -2783,7 +2800,9 @@ function createFileControl(
         (value.type === 'image/svg+xml' ||
           (value.name || '').toLowerCase().endsWith('.svg'));
       if (isSvgValue) {
-        aspect = measureSvgAspect(dataUrlToText(value.data));
+        aspect = svgGeometry().preparer.measureSvgAspect(
+          dataUrlToText(value.data)
+        );
       }
       // Cleared or unmeasurable: back to the declared default so the
       // model's fallback stays deterministic.
@@ -2895,7 +2914,7 @@ function createFileControl(
    */
   function knownDesignWidthMm() {
     if (!designFitBoxMm || !currentRawSvg) return null;
-    const aspect = measureSvgAspect(currentRawSvg) || 1;
+    const aspect = svgGeometry().preparer.measureSvgAspect(currentRawSvg) || 1;
     const { w, h } = designFitBoxMm;
     return aspect >= w / h ? w : h * aspect;
   }
@@ -3001,6 +3020,7 @@ function createFileControl(
    */
   async function getEditor() {
     if (!acceptsSvg) return null;
+    await loadSvgGeometry();
     // The preview rebuilds its container when it re-initialises, and an
     // editor built inside the old one is a tree nothing is attached to.
     if (workspace && workspace._root && !workspace._root.isConnected) {
@@ -3048,7 +3068,8 @@ function createFileControl(
       });
       surfaceEl.__forgeDrawingEditor = workspace;
     } else {
-      workspace = createSvgPrepWorkspace(workspaceContainer);
+      workspace =
+        svgGeometry().workspace.createSvgPrepWorkspace(workspaceContainer);
     }
     return workspace;
   }
@@ -3161,7 +3182,8 @@ function createFileControl(
    * status region; the caller announces the sentence once.
    */
   function showRefusalCard(count) {
-    const { badge: badgeText, sentence } = shapeCapRefusal(count);
+    const { badge: badgeText, sentence } =
+      svgGeometry().preparer.shapeCapRefusal(count);
     statusCard.innerHTML = '';
     const badge = document.createElement('span');
     badge.className = 'svg-prep-status-badge';
@@ -3557,6 +3579,7 @@ function createFileControl(
    * nothing, so the editor is opened here with the sentence.
    */
   async function showCroppedDrawing(svg, sentence, trace) {
+    await loadSvgGeometry();
     reopenSentence = sentence;
     let processed;
     try {
@@ -3740,6 +3763,7 @@ function createFileControl(
    * @param {object|null} summary the ink summary that produced it
    */
   async function emitTracedSvg(svgText, summary) {
+    await loadSvgGeometry();
     const processedSvg = processSvgForOpenScad(svgText, {
       trace: { summary, creditRemoved: false },
     });
@@ -3749,7 +3773,7 @@ function createFileControl(
       type: 'image/svg+xml',
       data: svgToDataUrl(processedSvg),
     };
-    const pathCount = countTracedShapes(svgText);
+    const pathCount = svgGeometry().preparer.countTracedShapes(svgText);
     if (inkControls) inkControls.setSummary(summary, pathCount);
     if (layerParams.length > 0) await ensureRingEngine();
     emitFileValue(convertedFile);
@@ -3786,6 +3810,16 @@ function createFileControl(
     { announceResult = false, startedBy = 'self' } = {}
   ) {
     if (!inkSourceImageData) return;
+    const geometry = isSvgGeometryLoaded()
+      ? svgGeometry()
+      : await loadSvgGeometry();
+    const {
+      countTracedShapes,
+      isOverListCap,
+      shapeCapRefusal,
+      analyzeSvgAsync,
+    } = geometry.preparer;
+    const { removeCreditLineAsync } = geometry.creditLine;
     runningStartedBy = startedBy;
     // Read BEFORE Start is hidden: focus leaves a hidden button for the body,
     // and the dialog needs to know where to put it back.
@@ -4118,6 +4152,7 @@ function createFileControl(
       return maybePrepareForOpenScad(rawSvgText);
     }
 
+    const { analyzeSvg, prepareSvg } = svgGeometry().preparer;
     try {
       const stored = currentFileName
         ? getSvgPrepMetadata(currentFileName)
@@ -4322,6 +4357,19 @@ function createFileControl(
         fileInfo.className = 'file-info file-info--error';
         announceChange(`DXF conversion failed: ${err.message}`);
         console.error('[DXF] Conversion error:', err);
+        linkAsksEditor = false;
+        return;
+      }
+    }
+
+    if (acceptsSvg || fileExtensionOf(file.name) === 'svg') {
+      try {
+        await loadSvgGeometry();
+      } catch (err) {
+        fileInfo.textContent = `Could not read the drawing: ${err.message}`;
+        fileInfo.className = 'file-info file-info--error';
+        announceChange(`Could not read the drawing: ${err.message}`);
+        console.error('[Design] the drawing geometry did not load:', err);
         linkAsksEditor = false;
         return;
       }
@@ -4612,6 +4660,7 @@ function createFileControl(
     const rawSvg =
       (stored && stored.rawSvg) || (picture && picture.rawSvg) || null;
     if (rawSvg) {
+      const { analyzeSvgAsync } = (await loadSvgGeometry()).preparer;
       currentRawSvg = rawSvg;
       currentPlan = (stored && stored.prepPlan) || null;
       currentSvgAnalysis = await analyzeSvgAsync(rawSvg);

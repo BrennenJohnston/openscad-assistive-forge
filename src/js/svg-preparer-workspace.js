@@ -38,18 +38,15 @@ import { isEnabled } from './feature-flags.js';
 import { flattenWithRings, flattenCompoundRings } from './flatten-rings.js';
 import { createFlattenRunner, FlattenCancelled } from './flatten-runner.js';
 import { choicesKeyOf } from './reopen-key.js';
+import { DEFAULT_DESIGN_WIDTH_MM } from './svg-limits.js';
 
 export { flattenWithRings };
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/**
- * How wide the editor takes a design to be printed when the model does not
- * say. The Design width control offers it and the thin-line advisory
- * measures against it; it is one number in one place because two copies of
- * a default is this project's oldest bug.
- */
-export const DEFAULT_DESIGN_WIDTH_MM = 14;
+// How wide a design prints when the model does not say, defined once in
+// svg-limits.js, which the parameter UI reads without loading this module.
+export { DEFAULT_DESIGN_WIDTH_MM };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

@@ -34,14 +34,11 @@ import {
   pathToAbsolute,
   pathToCurve,
 } from 'svg-path-commander';
+import { LAYER_CAP } from './svg-limits.js';
 
-/**
- * The layer cap. Three passes is what the tiered charm model builds, so the
- * editor never offers a fourth even when the artwork could support one. The
- * limit a file earns is its nesting depth; this is the ceiling applied to
- * it.
- */
-export const LAYER_CAP = 3;
+// The layer cap, defined once in svg-limits.js, which the parameter UI
+// reads without loading this module.
+export { LAYER_CAP };
 
 /** Subdivisions per curve segment when flattening a path to a polygon. */
 const CURVE_STEPS = 16;
