@@ -1,5 +1,5 @@
 /**
- * Automated benchmark runner (DEBT-06)
+ * Automated benchmark runner
  *
  * Loads each of the 4 benchmark SCAD models through the app's manifest-loading
  * mechanism, records wall-clock render times, writes a JSON results artifact,

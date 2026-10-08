@@ -1591,7 +1591,7 @@ export function initFileHandler({
   }
 
   // ------------------------------------------------------------------
-  // F-26: Save user-uploaded SVGs to project and update gallery
+  // Save user-uploaded SVGs to project and update gallery
   // ------------------------------------------------------------------
 
   setFileUploadListener(async (paramName, fileObj) => {

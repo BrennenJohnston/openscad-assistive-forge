@@ -4,14 +4,14 @@ import fs from 'fs';
 
 // Production-parity smoke: the built app behind the shipped CSP.
 //
-// D4 — the editor renders line numbers but no code on the deployed site — is
+// An editor that renders line numbers but no code on the deployed site is
 // invisible to every other spec in this repository, because they all run
 // against the dev server, which sends no Content-Security-Policy. This spec
 // exists to make the shipped headers part of what "green" means.
 //
-// It uses the owner's real 1,017-line file, not sample.scad: the failure this
-// lane was built to catch is a layout collapse, and a 28-line toy makes the
-// resulting screenshot too small to compare against the owner's evidence.
+// It uses a real 1,017-line file, not sample.scad: the failure this lane was
+// built to catch is a layout collapse, and a 28-line toy makes the resulting
+// screenshot too small to compare against the reference screenshots.
 
 const FIXTURE = path.join(
   process.cwd(),
@@ -28,7 +28,7 @@ const SCREENSHOT_DIR = path.join(
 );
 
 // Line 4 of the fixture. Short enough to sit inside the editor pane, long
-// enough to be the line that wraps once P2 lands.
+// enough to be the line that wraps when line wrapping is on.
 const KNOWN_LINE =
   '// To the extent possible under law, the author(s) have dedicated all';
 
@@ -85,8 +85,8 @@ test.describe('Production build behind the shipped CSP', () => {
       // Save-project modal did not appear; nothing to dismiss.
     }
 
-    // Classic opens in Simplified, which hides the editor slot by design
-    // (D-7). Standard is the density this defect lives in.
+    // Classic opens in Simplified, which hides the editor slot by design.
+    // Standard is the density this defect lives in.
     await page.locator('#classicModeToggle').click();
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',
@@ -236,11 +236,11 @@ test.describe('Production build behind the shipped CSP', () => {
   test('prod-preferences: the 3D View panel is really styled behind the CSP', async ({
     page,
   }) => {
-    // R-I found TWO defects in this family, not one: CodeMirror's blocked
+    // This family has had two defects, not one: CodeMirror's blocked
     // stylesheet, and a dialog built by innerHTML whose inline style
     // attributes the policy stripped — which shipped a permanently visible
-    // false warning. P11 adds a new panel with new CSS to a modal, so it is
-    // the same shape. Dev-server green proves nothing about the deployed app.
+    // false warning. This panel adds new CSS to a modal, so it is the same
+    // shape. Dev-server green proves nothing about the deployed app.
     test.setTimeout(240_000);
 
     await page.addInitScript(() => {
@@ -276,7 +276,7 @@ test.describe('Production build behind the shipped CSP', () => {
     }
     await page.locator('#uiModeToggle').click();
 
-    // Q-41 (UF-15): the scheme group exists only in Classic now, so the
+    // The scheme group exists only in Classic now, so the
     // styling proof runs where the panel actually paints for a user.
     // Classic Standard keeps the menu bar (Simplified hides it).
     await page.locator('#classicModeToggle').click();
@@ -331,11 +331,11 @@ test.describe('Production build behind the shipped CSP', () => {
             )
           )
         ),
-        // No AUTHORED inline style in this panel: the policy refuses those,
+        // No authored inline style in this panel: the policy refuses those,
         // so a layout depending on one is broken only in production — the
-        // exact failure R-I shipped once.
+        // exact failure that shipped once.
         //
-        // Counts NON-EMPTY values only. MEASURED: all twelve inputs here
+        // Counts non-empty values only: all twelve inputs here
         // carry `style=""`, materialised by something touching el.style at
         // runtime rather than written by hand — index.html contains no
         // style= attribute anywhere. An empty attribute declares nothing and

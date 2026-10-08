@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// Which hosts a manifest may actually point at (IR-2 / D-96).
+// Which hosts a manifest may actually point at.
 //
 // The sharing guide told authors to put absolute `https://github.com/...`
 // release URLs and Cloudflare R2 / S3 URLs in `files.bundle`. `connect-src`

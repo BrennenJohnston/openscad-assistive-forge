@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// The zero-hosting lane, behind the shipped CSP (IR-3).
+// The zero-hosting lane, behind the shipped CSP.
 //
 // `?manifest=data:application/json;base64,…` lets someone share a project with
 // no repository and no account. It was measured against the dev server, which

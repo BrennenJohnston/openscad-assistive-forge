@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test';
 
-// DP-43: the Potrace wasm under the SHIPPED headers.
+// The Potrace wasm under the shipped headers.
 //
 // The dev lane proves the whole path - runner, module worker, trace - against
 // the dev server. This lane asks the narrower question the deployed site
 // decides: is the binary served where the app looks for it, does a same-origin
 // fetch survive COOP and COEP, and does the Content-Security-Policy allow the
 // browser to compile it? `wasm-unsafe-eval` is already required by the OpenSCAD
-// engine, so no header change was expected here - but expected is not measured,
-// and D-31 and D-133 were both a header refusing something nobody had checked.
+// engine, so no header change was expected here - but expected is not
+// measured, and two earlier failures were both a header refusing something
+// nobody had checked.
 //
 // It also checks the licence papers are actually reachable. Shipping GPL
 // software means the notice travels with the binary, and a file nobody can

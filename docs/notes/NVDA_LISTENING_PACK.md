@@ -180,7 +180,7 @@ only thing that says so.
 | While it combines, Apply and Save report themselves disabled, and the reason (the same sentence) is findable | ☐ | |
 | A second change made while it combines does not leave two sentences, one stale | ☐ | |
 | Cancel says "Combining canceled. Change anything to combine again." once | ☐ | |
-| ★ Cancel is the worst case of the doubling above, and the only one where the two copies are not identical: the press says its sentence and the stopped job says its own. Say whether you heard one or two, and which | ☐ | |
+| Cancel is the worst case of the doubling above, and the only one where the two copies are not identical: the press says its sentence and the stopped job says its own. Say whether you heard one or two, and which | ☐ | |
 | Finishing says "Preview ready. It took N seconds." once, and nothing says "Rendering" while it runs | ☐ | |
 | Changing a role while it combines does not leave a stale sentence about the role you replaced | ☐ | |
 | The editor's own sentences say "raised", not "foreground", and carry no em dash; say if any older wording is still heard | ☐ | |

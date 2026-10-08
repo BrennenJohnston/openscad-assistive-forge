@@ -8,9 +8,9 @@
 //   1. manifest.json has no "license".
 //   2. plate_shape has no comment above it, so the app has nothing to label
 //      the control with.
-//   3. logo_file defaults to undeclared-logo.svg, which IS in this folder and
-//      is NOT listed in manifest.json - the exact shape of D-97, where the
-//      file was right there and the app still could not find it.
+//   3. logo_file defaults to undeclared-logo.svg, which is in this folder and
+//      is not listed in manifest.json - the exact shape of an earlier bug,
+//      where the file was right there and the app still could not find it.
 //   4. dot_height is declared tactile in the manifest, has no documented
 //      range, and nothing asserts it.
 //
