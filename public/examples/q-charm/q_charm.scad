@@ -231,36 +231,35 @@ design_fit_h = face_x * design_scale / 100;
 design_fit_w_2 = face_y * design_scale_2 / 100;
 design_fit_h_2 = face_x * design_scale_2 / 100;
 // The app reads this line to learn how wide a design prints, so the drawing
-// editor can measure each shape against the nozzle (DP-54). The box, not the
+// editor can measure each shape against the nozzle. The box, not the
 // design: the app applies the design's own aspect the way resize() does.
 echo(str("design fit box mm: w=", design_fit_w, " h=", design_fit_h));
 assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
 assert(design_file_2_aspect > 0, "design_file_2_aspect must be positive (width divided by height)");
 // ── Layered design ──────────────────────────────────────────────────────────
-// The layers are height classes (D-160, D-163, the owner's rule, with the
-// braille dot as the picture: a trunk whose height one dial sets for every
-// dot, a dome that starts where the trunk ends). A raised layer N stands on
-// the charm face and rises to the sum of every raised depth up to and
-// including its own, so layer 1 at 0.5, layer 2 at 0.5 and layer 3 at 1.0
-// put a layer 3 shape 2.0 mm above the face, and changing layer 2 to 1.0
-// moves it to 2.5; an engraved layer N cuts from the face down to the sum of
-// every engraved depth up to its own, so a raised layer 1 at 1.0 beside an
-// engraved layer 2 at 1.0 leaves 2.0 mm between the two surfaces.
+// The layers are height classes, pictured as a braille dot: a trunk whose
+// height one dial sets for every dot, a dome that starts where the trunk
+// ends. A raised layer N stands on the charm face and rises to the sum of
+// every raised depth up to and including its own, so layer 1 at 0.5,
+// layer 2 at 0.5 and layer 3 at 1.0 put a layer 3 shape 2.0 mm above the
+// face, and changing layer 2 to 1.0 moves it to 2.5; an engraved layer N
+// cuts from the face down to the sum of every engraved depth up to its own,
+// so a raised layer 1 at 1.0 beside an engraved layer 2 at 1.0 leaves 2.0 mm
+// between the two surfaces.
 //
 // The app writes every shape on layer N or deeper into layer N's file, so the
-// shapes on EXACTLY layer n are file n minus file n+1 (layer_exact_2d). A
+// shapes on exactly layer n are file n minus file n+1 (layer_exact_2d). A
 // layer 3 shape is then built as three slabs, one per band: the layer 1 band
 // from the face to layer 1's top, the layer 2 band from there to layer 2's
 // top, the layer 3 band from there to its own top. Each band holds the shapes
 // of every layer at or above it that goes the same way, and nothing is drawn
 // twice: no slab overlaps another, no column is extruded from the floor
-// under a slab already there (D-163, "a fantastic waste"). When layer files
-// are present the stack IS the design: the single design pass is skipped,
-// or the design would print once more at Engrave depth beneath the stack
-// (D-135's mechanism, seen by the owner as a duplicate at another height).
+// under a slab already there. When layer files are present the stack is
+// the design: the single design pass is skipped, or the design would print
+// once more at Engrave depth beneath the stack.
 //
 // The app writes each layer file onto one shared canvas layer_canvas_span wide
-// (a CONTRACT with src/js/svg-preparer.js: change one and you change both), so
+// (a contract with src/js/svg-preparer.js: change one and you change both), so
 // every pass keeps its true size and place relative to the others. Fitting the
 // files separately would scale the smallest pass up to the largest.
 layer_canvas_span = 100;
@@ -406,8 +405,8 @@ module charm_body() {
 
 // SVG limitation: OpenSCAD import() renders all filled SVG elements as solid
 // geometry. Multi-element SVGs that rely on color layering (e.g., white shapes
-// over black to simulate cutouts) will appear solid. Use single-path SVGs or
-// the SVG preparer tool (F-11, planned) for compound designs.
+// over black to simulate cutouts) will appear solid. Use single-path SVGs, or
+// let the app's drawing tools prepare a compound design.
 module design_2d() {
     if (design_file != "") {
         // Contain-fit to the flat top face: anchor the resize to whichever
@@ -440,7 +439,7 @@ module design_2d_layer2() {
 
 // One pass of a layered design, placed exactly like the single design above so
 // the two surfaces agree. The file arrives on the shared canvas with its own
-// minimum corner at the origin, so it is centered here and then scaled by ONE
+// minimum corner at the origin, so it is centered here and then scaled by one
 // factor - never resize()d, which would fit each pass to the face separately
 // and scale the smallest one up to the size of the largest.
 module design_layer_2d(layer_file, layer_aspect) {
@@ -479,7 +478,7 @@ module layer_file_2d(n) {
     if (n == 3 && layer_3_on) design_layer_2d(design_layer_3, design_layer_3_aspect);
 }
 
-// The shapes on EXACTLY layer n: the app writes every shape on layer n or
+// The shapes on exactly layer n: the app writes every shape on layer n or
 // deeper into file n, so file n minus file n+1 is layer n's own shapes, with
 // a hole wherever a deeper layer's shape sits inside one of them.
 module layer_exact_2d(n) {
@@ -580,7 +579,7 @@ module q_charm_base() {
         union() {
             charm_body();
             bail_loop();
-            // With layer files present the stack is the design (D-163).
+            // With layer files present the stack is the design.
             if (!layered_mode && design_style == "raised") {
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = engrave_depth)
@@ -627,11 +626,9 @@ module q_charm_base() {
                     design_2d_layer2();
         }
         if (text_content != "" && text_style != "raised") {
-            // Clamped like the raised case. WIDER than the signed repair,
-            // which named raised text only: an engraved cut that runs off the
+            // Clamped like the raised case: an engraved cut that runs off the
             // flat face gouges the rounded edge instead of lettering it, and
-            // the Flat Pendant clamps both. Two models disagreeing is what
-            // this release exists to end.
+            // the Flat Pendant clamps both, so the two models agree.
             translate([profile_center_x, 0, charm_top_z - text_depth])
                 linear_extrude(height = text_depth + 0.01)
                     intersection() {
@@ -651,7 +648,7 @@ module q_charm_base() {
     }
 }
 
-// The layer stack around the base (D-160, D-163): the raised bands added,
+// The layer stack around the base: the raised bands added,
 // the engraved bands cut. The two never share a footprint (a shape is one
 // layer, and a layer goes one way), so the order does not matter.
 module q_charm() {

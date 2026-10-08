@@ -160,7 +160,7 @@ hole_margin = 4;
 // Auto-fit box: the plate minus a 4 mm margin each side. The old auto-fit
 // was width-only (plate_width - 8) and ignored plate_depth, so a tall
 // logo on a shallow plate overflowed it. The logo is anchored at 45% of
-// the depth, so the height is what fits around THAT point, staying a
+// the depth, so the height is what fits around that point, staying a
 // millimeter clear of the keychain hole when there is one.
 logo_center_y = plate_depth * 0.45;
 hole_bottom_y = plate_depth - hole_margin - hole_diameter / 2;
@@ -176,7 +176,7 @@ assert(auto_fit_h > 0, "plate too shallow for the logo margins");
 // what it was before this parameter existed.
 scaled_fit_w = auto_fit_w * logo_scale / 100;
 scaled_fit_h = auto_fit_h * logo_scale / 100;
-// The box the logo is fitted in, as the app reads it (DP-54): with Logo width
+// The box the logo is fitted in, as the app reads it: with Logo width
 // set, that width and the height the logo's own proportions give it; without,
 // the auto-fit box. The app applies the logo's own aspect the way resize()
 // does, so the box, not the logo, is what this line reports. The drawing
@@ -186,22 +186,21 @@ fit_box_h = logo_width > 0 ? logo_width / logo_file_aspect : scaled_fit_h;
 echo(str("design fit box mm: w=", fit_box_w, " h=", fit_box_h));
 
 // ── Layered design ───────────────────────────────────
-// The layers are height classes (D-160, D-163, the owner's rule, with the
-// braille dot as the picture: a trunk whose height one dial sets for every
-// dot, a dome that starts where the trunk ends). A raised layer N stands on
-// the plate face and rises to the sum of every raised depth up to and
-// including its own; an engraved layer N cuts from the face down to the sum
-// of every engraved depth up to its own.
+// The layers are height classes, pictured as a braille dot: a trunk whose
+// height one dial sets for every dot, a dome that starts where the trunk
+// ends. A raised layer N stands on the plate face and rises to the sum of
+// every raised depth up to and including its own; an engraved layer N cuts
+// from the face down to the sum of every engraved depth up to its own.
 //
 // The app writes every shape on layer N or deeper into layer N's file, so the
-// shapes on EXACTLY layer n are file n minus file n+1 (layer_exact_2d). A
+// shapes on exactly layer n are file n minus file n+1 (layer_exact_2d). A
 // layer 3 shape is then built as three slabs, one per band, and nothing is
-// drawn twice. When layer files are present the stack IS the logo: the
+// drawn twice. When layer files are present the stack is the logo: the
 // single logo pass is skipped, or the logo would print once more at Engraving
 // depth beneath the stack.
 //
 // The app writes each layer file onto one shared canvas layer_canvas_span wide
-// (a CONTRACT with src/js/svg-preparer.js: change one and you change both), so
+// (a contract with src/js/svg-preparer.js: change one and you change both), so
 // every pass keeps its true size and place relative to the others. Fitting the
 // files separately would scale the smallest pass up to the largest.
 layer_canvas_span = 100;
@@ -285,12 +284,12 @@ module logo_2d() {
         rotate([0, 0, logo_rotation])
             offset(r = logo_offset)
                 if (logo_width > 0) {
-                    // Manual mode: the number IS the width in mm; height
+                    // Manual mode: the number is the width in mm; height
                     // follows the logo's own proportions.
                     resize([logo_width, 0], auto = true)
                         import(logo_file, center = true);
                 } else {
-                    // Auto-fit: contain the logo in the fit box on BOTH axes,
+                    // Auto-fit: contain the logo in the fit box on both axes,
                     // anchored to whichever axis it hits first
                     // (logo_file_aspect carries the ratio OpenSCAD cannot
                     // measure from the import).
@@ -304,7 +303,7 @@ module logo_2d() {
 
 // One pass of a layered logo, placed exactly like the single logo above so the
 // two surfaces agree. The file arrives on the shared canvas with its own
-// minimum corner at the origin, so it is centered here and then scaled by ONE
+// minimum corner at the origin, so it is centered here and then scaled by one
 // factor - never resize()d, which would fit each pass to the box separately
 // and scale the smallest one up to the size of the largest. With Logo width
 // set, the canvas is that width; without, it is contained in the auto-fit
@@ -331,7 +330,7 @@ module layer_file_2d(n) {
     if (n == 3 && layer_3_on) logo_layer_2d(logo_layer_3, logo_layer_3_aspect);
 }
 
-// The shapes on EXACTLY layer n: the app writes every shape on layer n or
+// The shapes on exactly layer n: the app writes every shape on layer n or
 // deeper into file n, so file n minus file n+1 is layer n's own shapes, with
 // a hole wherever a deeper layer's shape sits inside one of them.
 module layer_exact_2d(n) {
@@ -484,7 +483,7 @@ module engraved_plate() {
         keychain_cutout();
 
         // Engrave logo into top surface. With layer files present the stack
-        // is the logo (D-163): the single pass would print once more under it.
+        // is the logo: the single pass would print once more under it.
         if (!layered_mode) {
             translate([plate_width / 2, logo_center_y, plate_thickness - cut_depth])
                 linear_extrude(height = cut_depth + 0.01)
@@ -518,7 +517,7 @@ module raised_plate() {
     }
 }
 
-// The layer stack around the plate (D-160, D-163): the raised bands added,
+// The layer stack around the plate: the raised bands added,
 // the engraved bands cut, and the keychain hole cut again through whatever
 // the stack raised over it. The two kinds of band never share a footprint (a
 // shape is one layer, and a layer goes one way), so the order does not matter.

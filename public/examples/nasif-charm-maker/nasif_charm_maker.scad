@@ -176,7 +176,7 @@ bail_inner_radius = 3; // [2:0.5:6]
 $fn = 64; // [24:8:128]
 
 /* [Hidden] */
-// The app writes the outline on a canvas this many units wide. A CONTRACT
+// The app writes the outline on a canvas this many units wide. A contract
 // with src/js/svg-preparer.js: change one and you change both.
 silhouette_canvas_span = 100;
 shape_is_design = charm_shape == "design" && design_silhouette != "";
@@ -200,27 +200,26 @@ assert(design_silhouette_aspect > 0, "design_silhouette_aspect must be positive 
 assert(charm_shape != "design" || design_silhouette != "",
        "charm_shape is \"design\" but no outline file is set - choose a design first");
 // The app reads this line to learn how wide a design prints, so the drawing
-// editor can measure each shape against the nozzle (DP-54). The box, not the
+// editor can measure each shape against the nozzle. The box, not the
 // design: the app applies the design's own aspect the way resize() does.
 echo(str("design fit box mm: w=", fit_w, " h=", fit_h));
 
 // ── Layered design ───────────────────────────────────
-// The layers are height classes (D-160, D-163, the owner's rule, with the
-// braille dot as the picture: a trunk whose height one dial sets for every
-// dot, a dome that starts where the trunk ends). A raised layer N stands on
-// the pendant face and rises to the sum of every raised depth up to and
-// including its own; an engraved layer N cuts from the face down to the sum
-// of every engraved depth up to its own.
+// The layers are height classes, pictured as a braille dot: a trunk whose
+// height one dial sets for every dot, a dome that starts where the trunk
+// ends. A raised layer N stands on the pendant face and rises to the sum of
+// every raised depth up to and including its own; an engraved layer N cuts
+// from the face down to the sum of every engraved depth up to its own.
 //
 // The app writes every shape on layer N or deeper into layer N's file, so the
-// shapes on EXACTLY layer n are file n minus file n+1 (layer_exact_2d). A
+// shapes on exactly layer n are file n minus file n+1 (layer_exact_2d). A
 // layer 3 shape is then built as three slabs, one per band, and nothing is
-// drawn twice. When layer files are present the stack IS the design: the
+// drawn twice. When layer files are present the stack is the design: the
 // single design pass is skipped, or the design would print once more at
 // Engrave depth beneath the stack.
 //
 // The app writes each layer file onto one shared canvas layer_canvas_span wide
-// (a CONTRACT with src/js/svg-preparer.js: change one and you change both), so
+// (a contract with src/js/svg-preparer.js: change one and you change both), so
 // every pass keeps its true size and place relative to the others. Fitting the
 // files separately would scale the smallest pass up to the largest.
 layer_canvas_span = 100;
@@ -293,7 +292,7 @@ charm_top_z = charm_thickness
 
 module charm_base_2d() {
     if (shape_is_design) {
-        // The drawing's own outline becomes the pendant. Scaled by ONE factor
+        // The drawing's own outline becomes the pendant. Scaled by one factor
         // and never resize()d: the outline and the relief files share a
         // canvas, and fitting them separately would size the detail against a
         // different box from the body it sits on.
@@ -328,7 +327,7 @@ module charm_base_2d() {
     }
 }
 
-// Body and raised border are carved from ONE extrusion: extruding a separate
+// Body and raised border are carved from one extrusion: extruding a separate
 // border ring and stacking it on the body leaves the two outer walls
 // coincident, and on curved outlines the 2D difference()'s re-tessellation
 // exports T-junction open edges (non-watertight STL). Cutting the face
@@ -368,7 +367,7 @@ module design_2d() {
 // One pass of a layered design, placed exactly like the single design above
 // so the two surfaces agree. The file arrives on the shared canvas with its
 // own minimum corner at the origin, so it is centered here and then scaled by
-// ONE factor - never resize()d, which would fit each pass to the face
+// one factor - never resize()d, which would fit each pass to the face
 // separately and scale the smallest one up to the size of the largest.
 module design_layer_2d(layer_file, layer_aspect) {
     canvas_h = layer_canvas_span / layer_aspect;
@@ -401,7 +400,7 @@ module layer_file_2d(n) {
     if (n == 3 && layer_3_on) design_layer_2d(design_layer_3, design_layer_3_aspect);
 }
 
-// The shapes on EXACTLY layer n: the app writes every shape on layer n or
+// The shapes on exactly layer n: the app writes every shape on layer n or
 // deeper into file n, so file n minus file n+1 is layer n's own shapes, with
 // a hole wherever a deeper layer's shape sits inside one of them.
 module layer_exact_2d(n) {
@@ -501,7 +500,7 @@ module attachment_cutout() {
     }
 }
 
-// The bail loop is ADDED to the pendant, never cut from it (D-166: it sat in
+// The bail loop is added to the pendant, never cut from it (it once sat in
 // the same difference as the hole and the slot, so choosing it carved a
 // half-torus groove into the edge and added no loop). A half ring lying in
 // the pendant's own plane, standing out of the top edge with both ends
@@ -554,7 +553,7 @@ module engraved_charm() {
             raised_text();
         }
         // Engrave design into top surface. With layer files present the stack
-        // is the design (D-163): the single pass would print once more under it.
+        // is the design: the single pass would print once more under it.
         if (!layered_mode) {
             translate([0, 0, charm_thickness - engrave_depth])
                 linear_extrude(height = engrave_depth + border_height + 0.02)
@@ -590,11 +589,11 @@ module raised_charm() {
     }
 }
 
-// The layer stack around the pendant (D-160, D-163): the raised bands added,
+// The layer stack around the pendant: the raised bands added,
 // the engraved bands cut, and the attachment cut again through whatever the
 // stack raised over it. The two kinds of band never share a footprint (a
 // shape is one layer, and a layer goes one way), so the order does not matter.
-// The bail loop joins the union here, once (D-166).
+// The bail loop joins the union here, once.
 module nasif_charm() {
     difference() {
         union() {
