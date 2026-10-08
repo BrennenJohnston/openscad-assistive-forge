@@ -53,7 +53,7 @@ jobs:
           name: coverage-report
           path: coverage/
 
-  # WASM smoke gate - BLOCKING. The one e2e job with zero test.skip(isCI):
+  # WASM smoke gate - blocking. The one e2e job with zero test.skip(isCI):
   # boot + WASM init, upload, preview render, full-render STL bytes, and
   # param-change re-render all run for real. If this job is red, the core
   # pipeline is broken no matter what the other (heavily skipped) jobs say.
@@ -78,7 +78,7 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
 
-      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # The browser download hung twelve CI jobs in two days (four at
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
@@ -115,7 +115,7 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  # Geometry parity gate - BLOCKING. Renders the CI parity fixtures in
+  # Geometry parity gate - blocking. Renders the CI parity fixtures in
   # headless Chromium via the app's own pipeline and compares against the
   # committed golden manifest (scripts/parity/golden/) with hash-exact
   # tolerance. Any change that alters exported geometry bytes fails here.
@@ -140,7 +140,7 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
 
-      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # The browser download hung twelve CI jobs in two days (four at
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
@@ -182,77 +182,33 @@ jobs:
           path: artifacts/parity/report.*
           retention-days: 30
 
-  # SHARDS. Chromium became the pinch point once Edge was split: it reached
-  # 29m18s of its 35-minute ceiling on UF-29's board, against the "~30 real
-  # minutes" trigger the note inside this job has named since Q-36. Two shards
-  # now run side by side, each with the whole 35 minutes, and the ceiling stays
-  # where it is.
+  # Chromium runs as six shards side by side, each with the whole ceiling
+  # below; a shard that comes close to it calls for another shard rather
+  # than a bigger ceiling. The shards get their own check names, and the
+  # small summary job below keeps the one name the rulesets require, "E2E
+  # Tests (Chromium)", so the shard count can change without a ruleset edit.
+  # The cost is one extra ~15s job.
   #
-  # DELIBERATELY UNLIKE EDGE in one respect. Splitting Edge renamed its check
-  # contexts, which meant editing ruleset 12059827 by hand and left PR #90
-  # blocked until that happened. Here the shards get their own contexts and the
-  # small aggregate job below keeps the name "E2E Tests (Chromium)" that the
-  # ruleset already requires, so nothing outside version control has to change
-  # and no PR is ever blocked mid-transition. The cost is one extra ~15s job.
-  #
-  # MEASURED before this was written, not after: `--shard=n/2 --list` divides
-  # the suite into 415 tests in 41 files and 414 in 31, totalling the 829 an
-  # unsharded run lists. A `--shard` run reports only its own shard in
-  # playwright-results.json with a result on each (proved for Edge in UF-27),
-  # so the never-started guard still works per shard rather than seeing the
-  # other half as missing.
-  #
-  # CW-62 (2026-08-27): CHROMIUM RUNS THREE SHARDS, not two, and the reason is
-  # a measurement rather than a preference. Re-weighted from run 33063099176's
-  # GREEN shards, two shards project to 32.9 minutes against Playwright's
-  # 35-minute ceiling - and the attempt before it, on a starved runner, hit
-  # that ceiling and was cut off at 2100s. Three shards project to 22.9.
-  # CW-59, CW-60 and CW-61 added fourteen cases to the most expensive files in
-  # this lane, and CW-63 through CW-66 will add more.
-  #
-  # Renaming the shard contexts is safe HERE AND ONLY HERE: ruleset 12059827
-  # requires "E2E Tests (Chromium)", the aggregator below, not the individual
-  # shards. The Edge lane's shards ARE each required contexts, so its split
-  # cannot change without the owner editing the ruleset first - and it
-  # projects to the same 32.9 minutes. That is on the owner ledger.
-  #
-  # D-72 (CW-29, 2026-08-22): --shard is no longer what divides these lanes.
-  # It balances the COUNT of tests, and the count was never the problem - the
-  # halves were 476 and 475 tests and 50.3 against 20.9 test-minutes, because
-  # the expensive files sort early in the path order --shard walks. Both lanes
-  # now take their file list from scripts/e2e-shard.mjs, which packs the suite
-  # by MEASURED cost; a run that gives a file list still reports exactly those
-  # tests, so the guard below is unaffected. The job names are untouched, so
-  # no ruleset context moves.
+  # Each shard's playwright-results.json holds only that shard's tests, each
+  # carrying a result, so the never-started guard works per shard rather
+  # than seeing the other shards' tests as missing.
   e2e-tests-chromium-shard:
     name: E2E Tests (Chromium ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    # Back to 45 after the CW-97 diagnostic window: the City Walk e2e
-    # suites are paused on CI (the skip in tests/e2e/helpers/city-walk.js
-    # says why), and the remaining suite fits the old budget with room.
+    # The City Walk e2e suites are paused on CI (the skip in
+    # tests/e2e/helpers/city-walk.js says why), and the rest of the suite
+    # fits 45 minutes with room.
     timeout-minutes: 45
 
     strategy:
-      # A red shard must not cancel its sibling: knowing whether the failure is
-      # in one half or both is most of the diagnosis.
+      # A red shard must not cancel its siblings: knowing which shard holds
+      # the failure is most of the diagnosis.
       fail-fast: false
       matrix:
-        # CW-80 (2026-08-31): a fourth shard, exactly as the note below
-        # promised - Round 8's city suites grew ~35 heavy cases after the
-        # 08-27 re-measure and both PR-R8C CI passes died on 'Timed out
-        # waiting 2100s'. Re-weighted from the green local board of
-        # 2026-08-31, three shards project 30.2 min against the 25-minute
-        # guard bar; four project 23.4. The shard CONTEXTS here are not
-        # required checks (only the aggregate 'E2E Tests (Chromium)' is),
-        # so this rename is safe per the ruleset note above.
-        # CW-83 aftercare (2026-08-31): SIX. The close-head run measured
-        # what the model could not - four shards still hit the 2100 s
-        # clock, because two workers on a two-core runner with software 3D
-        # rendering deliver nowhere near 2x parallelism on the city files
-        # (the D-78 note's own finding, now measured at lane scale). The
-        # ceiling stays where its note demands; the shard count is the
-        # prescribed lever, and chromium shard contexts are not required
-        # checks.
+        # Six, measured rather than modelled: four shards still hit the
+        # 2100 s clock, because two workers on a two-core runner with
+        # software 3D rendering deliver nowhere near 2x parallelism on the
+        # heaviest files.
         shard: [1, 2, 3, 4, 5, 6]
     
     steps:
@@ -271,7 +227,7 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
-      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # The browser download hung twelve CI jobs in two days (four at
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
@@ -294,13 +250,10 @@ jobs:
           fi
       
       - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 6)
-        # D-72: the division comes from scripts/e2e-shard.mjs, not from
-        # Playwright's --shard. --shard divides by TEST COUNT in path order,
+        # The division comes from scripts/e2e-shard.mjs, not from
+        # Playwright's --shard. --shard divides by test count in path order,
         # which balanced the counts (476 / 475) and not the work (50.3 / 20.9
-        # test-minutes), because the expensive files all sort early -
-        # ascii-city-walk.spec.js alone is 18 minutes of this lane and sorts
-        # under "a". That is why this shard failed on the ceiling three times
-        # at 32.5, 32.5 and 34.7 minutes while its sibling sat at 12.5. The
+        # test-minutes), because the expensive files all sort early. The
         # script reads tests/e2e itself, so a new spec cannot fall between the
         # shards; its header says how to re-measure the weights.
         run: |
@@ -308,48 +261,19 @@ jobs:
           echo "shard ${{ matrix.shard }}/6 runs: $FILES"
           npx playwright test --project=chromium $FILES
         env:
-          # R2a added 17 Classic e2e cases, each booting WASM and loading a
-          # project, which pushed this job past the default 10-minute global
-          # ceiling: the run ended in "Timed out waiting 600s" with 23 tests
-          # never started, not on any assertion. Same escape hatch the WASM
-          # smoke and WebKit jobs already use.
-          #
-          # Raised again to match Edge (25min) for the same reason, one tier
-          # up: at 900000 the last develop run reported "Timed out waiting
-          # 900s" with 352 passed, 0 failed and 11 never started. Edge runs
-          # the same suite in 19min and passes on this ceiling. Red here has
-          # meant the clock rather than a defect, which is precisely how a
-          # broken editor once shipped behind a green suite.
-          #
-          # Raised to 30min on the owner's order (2026-08-10, after UF-5 /
-          # PR #66): the job wall-clock reached 22m19s with ~2m41s of
-          # margin, and UF-6..UF-8 land before UF-9's health pass can trim
-          # the suite. Kept matched with Edge, as the raises above always
-          # were. The Q-23 never-started guard below stays the honesty
-          # backstop either way.
-          #
-          # Raised to 35min on the owner's order (Q-36, 2026-08-12, UF-12):
-          # Edge ran 26m25s / 27m3s of its 30min ceiling on the last two
-          # runs and Round 3 adds an estimated +6 to +9 minutes of specs.
-          # Kept matched with Edge as always; sharding is the next step if
-          # either lane crosses ~30 real minutes.
-          #
-          # 2026-08-16: it crossed it - 29m18s on UF-29's board - so the
-          # sharding this note promised is what happened, and the ceiling
-          # stayed where it is. Each shard now runs roughly half the suite
-          # against the whole 35 minutes. Raising this number is not the answer
-          # if a shard ever gets close again; a third shard is.
-          #
-          # CW-97: a diagnostic 50-minute window measured the lanes whole,
-          # then the City Walk e2e suites were paused on CI (the skip in
-          # tests/e2e/helpers/city-walk.js says why), so the clock returns
-          # to 35 for the suite that actually runs here.
+          # Playwright's whole-run clock: 35 minutes per shard. Under the
+          # default 10 minutes a run ended in "Timed out waiting 600s" with
+          # tests never started, not on any assertion. A red that means the
+          # clock rather than a defect is how a broken editor once shipped
+          # behind a green suite. The guard step below fails the shard if the
+          # clock ever cuts a run short; if a shard comes close, add a shard
+          # rather than raise this.
           PW_GLOBAL_TIMEOUT: '2100000'
 
-      # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
-      # release while two menu-parity tests were red, because tests the
-      # clock cut off report as never-started rather than failed. A green
-      # summary over an incomplete run must fail.
+      # This job once stayed green for a whole release while two
+      # menu-parity tests were red, because tests the clock cut off report as
+      # never-started rather than failed. A green summary over an incomplete
+      # run must fail.
       - name: Never-started tests fail this shard
         run: node scripts/check-e2e-complete.mjs playwright-results.json
 
@@ -363,13 +287,13 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  # THE REQUIRED CHECK. Ruleset 12059827 requires the context "E2E Tests
-  # (Chromium)", so that name has to keep existing and keep meaning "the whole
-  # Chromium suite passed".
+  # The required check. Both rulesets require "E2E Tests (Chromium)", so that
+  # name has to keep existing and keep meaning "the whole Chromium suite
+  # passed".
   #
   # `needs` on a matrix job resolves to a single result that is `success` only
-  # when EVERY leg succeeded, so this is a real gate rather than a rubber stamp.
-  # `if: always()` matters as much: without it a failed shard would SKIP this
+  # when every leg succeeded, so this is a real gate rather than a rubber stamp.
+  # `if: always()` matters as much: without it a failed shard would skip this
   # job, and a skipped required check is not the same thing as a failed one -
   # it would leave the merge waiting rather than refused.
   e2e-tests-chromium:
@@ -380,19 +304,19 @@ jobs:
     if: always()
 
     steps:
-      - name: Both Chromium shards must have passed
+      - name: Every Chromium shard must have passed
         run: |
           result='${{ needs.e2e-tests-chromium-shard.result }}'
           echo "Chromium shards reported: $result"
           if [ "$result" != "success" ]; then
-            echo "::error::Chromium did not pass ($result). The third that failed is in E2E Tests (Chromium 1/3), (2/3) or (3/3)."
+            echo "::error::Chromium did not pass ($result). The shard that failed is one of E2E Tests (Chromium 1/6) to (6/6)."
             exit 1
           fi
 
   # Production-parity E2E lane. Every other e2e job above runs against the Vite
   # dev server, which sends no Content-Security-Policy; the built app behind the
   # shipped public/_headers CSP had never been loaded by any test, and that is
-  # the gap a broken editor walked through to production (D4, PR #56).
+  # the gap a broken editor once walked through to production.
   #
   # Deliberately its own job rather than a step on Build Check: a failure here
   # is a test failure, and reporting it as a build failure would send whoever
@@ -418,7 +342,7 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
 
-      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # The browser download hung twelve CI jobs in two days (four at
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
@@ -488,7 +412,7 @@ jobs:
           du -sh dist/
           du -h dist/ | sort -h | tail -20
       
-      - name: Check bundle budget (M3)
+      - name: Check bundle budget
         run: node scripts/check-bundle-budget.js dist
       
       - name: Archive build artifacts
@@ -497,8 +421,7 @@ jobs:
           name: dist
           path: dist/
 
-  # Security checks - blocking per Milestone 0 requirements
-  # See: docs/planning/security-hardening-plan.md, docs/planning/LAYER_2_BUILD_PLAN.md
+  # Security checks - blocking.
   security-checks:
     name: Security Checks
     runs-on: ubuntu-latest
@@ -539,33 +462,21 @@ jobs:
           path: sbom-generated.json
           retention-days: 90
 
-  # Q-55 (owner, 2026-08-15): a REQUIRED check must be capable of failing.
-  # This job carried continue-on-error on its only real step, so "Lint
-  # Markdown" reported success no matter what markdownlint found - a green
-  # gate that could not go red. MEASURED before removing it: markdownlint-cli2
-  # reports 3 issues locally and all three live in .cursor/, which is
-  # gitignored and never checked out, so CI sees a clean tree.
+  # Docs link check: three dead links once survived years of green boards.
+  # Not required by design - a flaky external site must never block a merge -
+  # and no continue-on-error: when it is red, it is honestly red.
   #
-  # Verified before the change that passing `globs` here does NOT discard the
-  # ignore list in .markdownlint-cli2.jsonc: cli2 appends the config's ignores
-  # to the command-line globs, so node_modules and the vendored folders stay
-  # out either way. The input is kept as it was; only the gate changed.
-  # AF-8 (the UF-30 finding: three dead links survived years of green boards).
-  # NON-required by design - a flaky external site must never block a merge -
-  # and no continue-on-error: when it is red, it is honestly red (Q-55).
-  #
-  # SCOPE, declared: the LIVING documentation - README, docs top level and
-  # docs/guides. The records trees (docs/archive, docs/vpat evidence) are
-  # point-in-time documents. 403 is accepted
-  # because every one the first sweep found was a bot-wall on a LIVE site
-  # (w3.org's WCAG page included); three hosts that reject CI outright are
-  # excluded by name. The third is the OSM Foundation's operations site, which
-  # started refusing the runners in September 2026: two runs in a row, first as
-  # a 20-second timeout and then as a connection reset, on the single link to
-  # its Nominatim usage policy. That page answers 200 from an ordinary
-  # connection - measured at 12.7 seconds - so the link is good and the host is
-  # the problem. Excluding it costs exactly one link; nothing else in the
-  # checked docs points at that host.
+  # Scope, declared: the living documentation listed below. The records trees
+  # (docs/archive, the VPAT evidence) are point-in-time documents and stay
+  # out. 403 is accepted because every one the first sweep found was a
+  # bot-wall on a live site (w3.org's WCAG page included); the hosts that
+  # reject CI outright are excluded by name. One of them is the OSM
+  # Foundation's operations site, which refused the runners two runs in a
+  # row, first as a 20-second timeout and then as a connection reset, on the
+  # single link to its Nominatim usage policy. That page answers 200 from an
+  # ordinary connection - measured at 12.7 seconds - so the link is good and
+  # the host is the problem. Excluding it costs exactly one link; nothing else
+  # in the checked docs points at that host.
   link-check:
     name: Docs Link Check
     runs-on: ubuntu-latest
@@ -626,12 +537,18 @@ jobs:
       # red "Unable to render rich display" box on GitHub in place of the
       # picture, and nothing else in CI reads the fences: two such diagrams
       # sat in the architecture page through every green board until a
-      # reader saw them (DP-71, 2026-09-18). NON-required by design, like the
-      # link check: the parser is loaded from a CDN, and a CDN outage must
-      # never block a merge. When it is red, it is honestly red.
+      # reader saw them. Not required by design, like the link check: the
+      # parser is loaded from a CDN, and a CDN outage must never block a
+      # merge. When it is red, it is honestly red.
       - name: Parse every Mermaid diagram
         run: npm run check-mermaid
 
+  # A required check must be capable of failing. This job once carried
+  # continue-on-error on its only real step, so "Lint Markdown" reported
+  # success no matter what markdownlint found. Passing `globs` here does not
+  # discard the ignore list in .markdownlint-cli2.jsonc: cli2 appends the
+  # config's ignores to the command-line globs, so node_modules and the
+  # vendored folders stay out either way.
   lint-markdown:
     name: Lint Markdown
     runs-on: ubuntu-latest
@@ -646,15 +563,12 @@ jobs:
         with:
           globs: '**/*.md'
 
-  # Tile validator - ADDITIVE and NOT a required check. It runs
+  # Tile validator - additive, and not a required check. It runs
   # scripts/validate-example.mjs over the example folders a PR actually
   # touched, so a contributed tile is checked before a human reads it.
   #
-  # Deliberately not required: promoting it is the owner's call, and a check
-  # that starts out required is a check nobody can ever adjust. It also has a
-  # known pre-existing finding (q-charm's manifest lists six SVGs that live in
-  # a sibling tile's folder), so a PR touching that tile would go red for
-  # something it did not cause.
+  # Deliberately not required: a check that starts out required is a check
+  # nobody can ever adjust.
   validate-examples:
     name: Validate Examples (changed)
     runs-on: ubuntu-latest
