@@ -1,13 +1,11 @@
 /**
- * Shared fixtures for the ASCII City Walk suites (D-72).
+ * Shared fixtures for the ASCII City Walk suites.
  *
- * The City Walk's e2e cases used to live in one 3,000-line file that cost
- * eighteen CI minutes - a quarter of the whole browser lane, and half of one
- * shard once the lanes were packed by cost. Two workers then spent most of
- * that shard running 3D city sessions at the same time on a two-core runner
- * with software rendering, which made the city cases slower and flakier than
- * they had been. The suites are split so the packer can put them on different
- * shards; these helpers are what they had in common, moved verbatim.
+ * The City Walk's cases are split across several files so the shard packer
+ * can put them on different shards: in one file they cost eighteen CI
+ * minutes, and two workers running 3D city sessions at once on a two-core
+ * runner with software rendering made the city cases slower and flakier.
+ * These helpers are what the files have in common.
  */
 import { test, expect } from '@playwright/test'
 
@@ -37,7 +35,7 @@ export function expectOnlyAllowedViolations(results) {
 
 /**
  * Every City Walk suite starts past the first-visit chrome, and with the
- * CW-42 entry calibration INERT: an empty forced-probe map makes the pass
+ * entry calibration inert: an empty forced-probe map makes the pass
  * abort on its first frame - no probing, no stored floor, no applied
  * default - so every spec that is not about calibration keeps the
  * deterministic pre-calibration world. CI renders in software and must
@@ -46,26 +44,22 @@ export function expectOnlyAllowedViolations(results) {
  * so a plain assignment wins).
  */
 export function useCityWalkFixtures() {
-  // The City Walk end-to-end suites are PAUSED ON CI for now (2026-09-01):
-  // the CI runners render the 3D city in software at about two seconds per
-  // frame, and at that pace these suites need more wall clock than the
-  // lanes can carry. The full board runs locally on real hardware with
-  // every release (191 passed on the last one), the unit suites still run
-  // everywhere, and these tests remain visible here as SKIPPED rather
-  // than deleted so the debt stays on the record. Remove this one skip to
-  // bring them back.
+  // The City Walk end-to-end suites are skipped on CI: the runners render the
+  // 3D city in software at about two seconds per frame, and at that pace these
+  // suites need more wall clock than the lanes can carry. They run locally on
+  // real hardware, the unit suites still run everywhere, and these tests stay
+  // visible as skipped rather than deleted. Remove this one skip to bring them
+  // back.
   test.skip(
     !!globalThis.process?.env?.CI,
     'City Walk e2e is paused on CI - the local hardware board carries ' +
       'these suites for now.'
   )
-  // CW-97 batch 3: a running city on CI's software renderer measured about
-  // two SECONDS per converted frame, and Playwright's actionability cycle
-  // (stable-position checks, then the dispatch) could not land an ordinary
-  // toolbar click inside the global 10 s action budget - ten distinct reds
-  // on one run, axe cases among them, were this single mechanism. The
-  // budget follows the measured cost for the city suites alone; every
-  // other spec keeps the sharp 10 s.
+  // A running city on CI's software renderer measured about two seconds per
+  // converted frame, and Playwright's actionability cycle (stable-position
+  // checks, then the dispatch) could not land an ordinary toolbar click inside
+  // the global 10 s action budget. The budget follows the measured cost for
+  // the city suites alone; every other spec keeps the sharp 10 s.
   test.use({ actionTimeout: 30000 })
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -86,10 +80,10 @@ export async function launchGame(page) {
 /**
  * The game is WebGL-only: startGame() cannot build a scene without a GL
  * context, so the app shows its accessible fallback and leaves the viewport
- * hidden. Firefox on Linux CI has no WebGL AT ALL - the main 3D preview falls
+ * hidden. Firefox on Linux CI has no WebGL at all - the main 3D preview falls
  * back there too - so the in-city cases have nothing to exercise there.
  *
- * Gate on the CAPABILITY, never on a browser name. These cases run wherever
+ * Gate on the capability, never on a browser name. These cases run wherever
  * WebGL exists (local Firefox included, where they pass), and they start
  * running again by themselves if CI ever gains it - no stale skip to clean up.
  */
@@ -129,10 +123,10 @@ export async function enterCity(page, cityName = 'Seattle, Washington') {
   // is explicit: seven minutes unless the test already asked for more.
   // Hardware never uses it - a test ends when it ends.
   if (test.info().timeout < 420000) test.setTimeout(420000)
-  // noWaitAfter: the click handler BUILDS THE CITY, and on CI's two-core
+  // noWaitAfter: the click handler builds the city, and on CI's two-core
   // software renderer that synchronous build can outlast the 10 s action
   // timeout - the click then "fails" while the city is busy being born
-  // (measured at CW-97: Denver's entry, and at its worst even Seattle's).
+  // (measured on Denver's entry, and at its worst even Seattle's).
   // The viewport wait below is the real post-condition and carries the
   // budget - 90 s because the same build that outlives the click can
   // outlive 30 s wholesale on the slowest software shard.

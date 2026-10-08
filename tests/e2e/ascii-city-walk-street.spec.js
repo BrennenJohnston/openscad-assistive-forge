@@ -19,7 +19,7 @@ useCityWalkFixtures()
  * Split out of ascii-city-walk.spec.js; see helpers/city-walk.js for why.
  */
 
-test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
+test.describe('ASCII City Walk — trees and parked cars', () => {
   const propStats = (page) =>
     page.evaluate(() => window.__cityWalkGame?.props?.stats ?? null)
 
@@ -41,13 +41,11 @@ test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
   test('a parked car is solid: you press against it, never through it', async ({
     page,
   }) => {
-    // This case waits up to 90 s for 150 rendered frames, and says why in the
-    // comment at that poll. It never got to spend them: the test's own budget
-    // is 60 s by default, so the 90 s patience was unreachable and the case
-    // died at 60 with `keyboard.up: Test timeout of 60000ms exceeded` - the
-    // cleanup line, not the assertion. It measured 72 s on a loaded runner.
-    // The budget now covers the patience the poll asks for (D-79). The BAR is
-    // still the frame count; this only makes the waiting possible.
+    // This case waits up to 90 s for 150 rendered frames (the poll says why),
+    // so the test's own budget covers that patience: at the default 60 s the
+    // case would die in the cleanup line, not the assertion, on a loaded runner
+    // that takes about 72 s. The bar is still the frame count; this only makes
+    // the waiting possible.
     test.setTimeout(150_000)
     await launchGame(page)
     await enterCity(page)
@@ -126,19 +124,18 @@ test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
 
     await page.keyboard.down('ArrowUp')
     try {
-      // Waiting on FRAMES, never on the clock: a loaded runner renders them
-      // slowly, but each frame still advances the walk by up to the 0.1 s
-      // step clamp, so 150 frames is far more travel than the three meters
-      // it would take to cross an unsolid car. A runner that renders nothing
-      // fails here rather than passing vacuously.
+      // Waiting on frames, never on the clock: a loaded runner renders them
+      // slowly, but each frame still advances the walk by up to the 0.1 s step
+      // clamp, so 150 frames is far more travel than the three meters it would
+      // take to cross an unsolid car. A runner that renders nothing fails here
+      // rather than passing vacuously.
       //
       // The patience is 90 s, not 30. CI renders through SwiftShader, where
-      // triangle count is real time, and CW-18's street furniture took the
-      // Chromium runner from comfortably over 150 frames to 123 - about
-      // 4.1 fps where the old budget needed 5. The BAR is the frame count,
-      // which is the invariant; the timeout is only how long we are willing
-      // to wait for it, and on a software renderer drawing a furnished city
-      // it has to be longer. On a real GPU this takes about 5 s.
+      // triangle count is real time, and the street furniture keeps the
+      // Chromium runner at about 4.1 fps. The bar is the frame count, which is
+      // the invariant; the timeout is only how long we are willing to wait for
+      // it, and on a software renderer drawing a furnished city it has to be
+      // longer. On a real GPU this takes about 5 s.
       await expect
         .poll(() => page.evaluate(() => window.__cwCar?.frames ?? 0), {
           timeout: 90000,
@@ -183,15 +180,15 @@ test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
   })
 })
 
-test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
+test.describe('ASCII City Walk — the color toggle', () => {
   const colourBtn = (page) => page.locator('#cityWalkColourBtn')
   const contrastBtn = (page) => page.locator('#cityWalkContrastBtn')
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
 
-  /** CW-97 batch 5: the colour flip rebuilds the glyph atlas
-   * synchronously, and on CI software that handler can outlive even the
-   * 30 s action budget - dispatch without waiting, then wait on the
-   * pressed state actually flipping, which is the real post-condition. */
+  /** The color flip rebuilds the glyph atlas synchronously, and on CI
+   * software that handler can outlive even the 30 s action budget: dispatch
+   * without waiting, then wait on the pressed state actually flipping, which
+   * is the real post-condition. */
   const clickColour = async (page) => {
     const before = await colourBtn(page).getAttribute('aria-pressed')
     // force: even the dispatch's actionability checks starve when the
@@ -222,8 +219,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Nothing stored: the shipped behaviour is exactly what CW-Q2 gave -
-    // high contrast off means a single phosphor.
+    // Nothing stored: high contrast off means a single phosphor.
     expect(await storedChoice(page)).toBeNull()
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(colourBtn(page)).toHaveAttribute(
@@ -252,7 +248,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
       'Color on. The city is drawn in the retro palette.'
     )
     await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
-    // The point of CW-Q16: colour without high contrast.
+    // The point of the toggle: color without high contrast.
     await expect(page.locator('html')).not.toHaveAttribute(
       'data-high-contrast',
       'true'
@@ -292,7 +288,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Choose monochrome, then turn high contrast ON: the city stays a single
+    // Choose monochrome, then turn high contrast on: the city stays a single
     // phosphor, because the player asked for it. This is the whole point of
     // storing the choice, and it is the case that would silently regress if
     // colourIsOn() ever read the attribute first.
@@ -353,32 +349,21 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect(help).toContainText(
       'O: color on or off (off is a single-color retro screen)'
     )
-    // CW-64 moved this line: the row's count stopped being fixed when
-    // Fireworks joined it, so the sentence names the joiner and its
-    // condition instead of counting.
+    // The row's count is not fixed (Fireworks joins it), so the sentence
+    // names the joiner and its condition instead of counting.
     await expect(help).toContainText(
       'High contrast, theme and color: buttons at the top of the screen, ' +
         'with Fireworks joining them once you have found every landmark'
     )
 
     // And the header really is what that sentence says it is: the three
-    // toggles LEAD the row, in the order the help names them.
-    //
-    // ★★ THE PREVIOUS VERSION OF THIS ASSERTION TIGHTENED THE SLICE TO THE
-    // WHOLE ROW AND WAS WRONG ON A FACT ANYBODY COULD HAVE READ. Its reasoning
-    // was sound - a sliced check cannot notice a Fireworks button that leaked
-    // in early - but it was written without opening the row, which has SIX
-    // children: Fireworks, Help and Exit follow the three toggles and always
-    // have. It failed on both engines, which is the tell that a red is the
-    // code and not the runner.
-    //
-    // The leak it wanted to catch is guarded where it can actually be
-    // exercised: 'finishing a city plays the show, once, and leaves a button'
-    // in ascii-city-walk.spec.js drives a REAL city from unfound to found and
-    // asserts the button hidden before and visible after. Repeating a
-    // toBeHidden() here would be vacuous - this case never enters a city, and
-    // the button is created hidden, so it would pass with syncFireworksButton
-    // deleted entirely.
+    // toggles lead the row, in the order the help names them. The row has six
+    // children (Fireworks, Help and Exit follow the three toggles), so the
+    // check is on the leading slice. A Fireworks button leaking in early is
+    // guarded where it can actually be exercised: 'finishing a city plays the
+    // show, once, and leaves a button' in ascii-city-walk.spec.js drives a real
+    // city from unfound to found. Repeating a toBeHidden() here would be
+    // vacuous: this case never enters a city, and the button is created hidden.
     const ids = await page.evaluate(() =>
       Array.from(
         document.querySelectorAll('.city-walk-header-actions button')
@@ -427,10 +412,9 @@ test.describe('ASCII City Walk — accessibility', () => {
   test('axe: the city picker has no violations', async ({ page }) => {
     await launchGame(page)
 
-    // Deliberately scan WITH a hovered primary button: a hover state is
-    // invisible to a scan unless something happens to be hovering (D-55),
-    // and this scan is what caught the mono variant's primary-hover pair
-    // measuring 1.11:1 before variant.css completed the pair.
+    // Deliberately scan with a hovered primary button: a hover state is
+    // invisible to a scan unless something happens to be hovering, and the
+    // mono variant's primary-hover pair needs this scan to be measured.
     await page.getByRole('button', { name: 'Denver, Colorado' }).hover()
 
     const pickerResults = await new AxeBuilder({ page })
@@ -454,21 +438,22 @@ test.describe('ASCII City Walk — accessibility', () => {
 })
 
 /**
- * CW-22: the composite paint path is now THE paint path, at every character
- * size, and it reaches the main app's Alt View as well as the game. That is
- * only allowed because it paints the same pixels the per-cell blit path did —
+ * The composite paint path is the paint path, at every character size, and
+ * it reaches the main app's Alt View as well as the game. That is only
+ * allowed because it paints the same pixels the per-cell blit path does,
  * so this suite owns the proof, not a one-off bench script.
  *
  * The reference here is written out by hand rather than taken from the module,
  * so the test cannot pass by comparing the code against itself.
  */
-test.describe('ASCII City Walk — composite paint parity (CW-22)', () => {
-  /** charW is what used to choose the path; 4 and below was composited. */
+test.describe('ASCII City Walk — composite paint parity', () => {
+  /** Sizes that straddle the old per-cell gate (charW 4 and below was
+   * composited). */
   const SIZES = [
     { fontSizePx: 3, charW: 2, charH: 4 }, // the game's 10% floor
     { fontSizePx: 7, charW: 4, charH: 9 }, // the old gate's edge
-    { fontSizePx: 10, charW: 5, charH: 12 }, // the shipped 50% default
-    { fontSizePx: 12, charW: 6, charH: 15 }, // the slowest size before CW-22
+    { fontSizePx: 10, charW: 5, charH: 12 }, // the 50% size
+    { fontSizePx: 12, charW: 6, charH: 15 }, // the slowest size for the per-cell path
     { fontSizePx: 18, charW: 9, charH: 22 }, // the game's 100%
     { fontSizePx: 25, charW: 12, charH: 30 }, // the preview slider's ceiling
   ]
@@ -488,7 +473,7 @@ test.describe('ASCII City Walk — composite paint parity (CW-22)', () => {
       const cols = 40
       const rows = 20
 
-      // The FIRST getImageData on a 2D canvas reads back from a GPU-backed
+      // The first getImageData on a 2D canvas reads back from a GPU-backed
       // surface and can round a channel by one; the canvas is CPU-backed from
       // then on. Warm every canvas before it is measured, or this comparison
       // reports the readback rather than the painter.
@@ -739,11 +724,11 @@ test.describe('ASCII City Walk — composite paint parity (CW-22)', () => {
 })
 
 /**
- * CW-19: the signals are the only thing in this deliberately time-frozen city
+ * The signals are the only thing in this deliberately time-frozen city
  * that moves, so they are also the only thing that can move when it should
  * not — and the only thing that can stop looking like a signal when it stops.
  */
-test.describe('ASCII City Walk — traffic signals (CW-19)', () => {
+test.describe('ASCII City Walk — traffic signals', () => {
   /** The colour of every signal head, as one comparable string. */
   const headColours = (page) =>
     page.evaluate(() => {
@@ -770,13 +755,10 @@ test.describe('ASCII City Walk — traffic signals (CW-19)', () => {
     expect(lit, 'the city grew no traffic signals').toBeGreaterThan(0)
 
     const first = await headColours(page)
-    // Wait for the signals to CHANGE rather than for eight seconds to pass.
-    // The old fixed sleep was a wall-clock gate wearing a disguise: the
-    // signals are advanced by the frame loop, so sleeping asserts that the
-    // runner rendered enough frames in eight seconds, which on a loaded CI
-    // machine is not a fact about the signals at all. It has been the
-    // flakiest case in this suite for three rounds, and it went from flaky to
-    // failing outright the moment the shard around it got busier (D-78).
+    // Wait for the signals to change rather than for eight seconds to pass.
+    // The signals are advanced by the frame loop, so a fixed sleep asserts
+    // that the runner rendered enough frames in eight seconds, which on a
+    // loaded CI machine is not a fact about the signals at all.
     let second = first
     await expect
       .poll(async () => (second = await headColours(page)), {
@@ -825,11 +807,11 @@ test.describe('ASCII City Walk — traffic signals (CW-19)', () => {
 })
 
 /**
- * CW-20: photo mode. The picture a player sees is the overlay canvas, so a
+ * Photo mode. The picture a player sees is the overlay canvas, so a
  * photo is that canvas composed onto black — not a second render path and not
  * a screenshot of the page.
  */
-test.describe('ASCII City Walk — photo mode (CW-20)', () => {
+test.describe('ASCII City Walk — photo mode', () => {
   test('P saves a PNG of the city, named for the city and the day', async ({
     page,
   }) => {
@@ -875,10 +857,10 @@ test.describe('ASCII City Walk — photo mode (CW-20)', () => {
 })
 
 /**
- * CW-20: a reason to wander. The HUD counts the landmarks this session has
+ * A reason to wander. The HUD counts the landmarks this session has
  * walked past and the legend marks them off.
  */
-test.describe('ASCII City Walk — landmark tracker (CW-20)', () => {
+test.describe('ASCII City Walk — landmark tracker', () => {
   test('walking to a landmark counts it and marks the legend', async ({
     page,
   }) => {
@@ -922,14 +904,12 @@ test.describe('ASCII City Walk — landmark tracker (CW-20)', () => {
 })
 
 /**
- * CW-20: the weather belongs to the street.
+ * The weather belongs to the street.
  *
  * Seen from the overhead map the drops streak diagonally across the whole
- * picture and read as scratches on the screen rather than as rain — this was
- * caught by eye in the four-city tour, not by a test, which is why there is
- * now a test.
+ * picture and read as scratches on the screen rather than as rain.
  */
-test.describe('ASCII City Walk — rain stays in the street (CW-20)', () => {
+test.describe('ASCII City Walk — rain stays in the street', () => {
   test('the map view has no rain in it, and the street gets it back', async ({
     page,
   }) => {
@@ -960,18 +940,18 @@ test.describe('ASCII City Walk — rain stays in the street (CW-20)', () => {
 })
 
 /**
- * D-75: the thunder swell is driven frame by frame and only lands back on
- * zero when a frame arrives to bring it down. Both ways out of the rain skip
- * those frames - stopping the rain, and reduced motion turning on - so a
- * swell caught halfway through used to leave the whole city sitting under a
- * lifted ambient light until something unrelated happened to reset it.
+ * The thunder swell is driven frame by frame and only lands back on zero
+ * when a frame arrives to bring it down. Both ways out of the rain skip
+ * those frames (stopping the rain, and reduced motion turning on), so a
+ * swell caught halfway through must still be let go, or the whole city
+ * sits under a lifted ambient light until something unrelated resets it.
  *
- * The swell is a third of a second long, which is not a window a test can aim
- * at by hand. These cases lengthen it (the timing object is read fresh every
- * frame) and then take the two exits deliberately, which is the honest
- * reproduction: the bug is about the exit, not about the swell's length.
+ * The swell is a third of a second long, which is not a window a test can
+ * aim at by hand. These cases lengthen it (the timing object is read fresh
+ * every frame) and then take the two exits deliberately: the behavior is
+ * about the exit, not about the swell's length.
  */
-test.describe('ASCII City Walk — the thunder lets go (D-75)', () => {
+test.describe('ASCII City Walk — the thunder lets go', () => {
   const ambient = (page) =>
     page.evaluate(
       () =>
@@ -1049,8 +1029,8 @@ test.describe('ASCII City Walk — the thunder lets go (D-75)', () => {
     await expect
       .poll(() => ambient(page), {
         message: 'asking for less movement left the thunder lift on screen',
-        // The media-change handler lands on a FRAME (the D-76 rain case's
-        // own lesson), and CI software's frames are seconds apart.
+        // The media-change handler lands on a frame, and CI software's frames
+        // are seconds apart.
         timeout: 60000,
       })
       .toBeCloseTo(base, 6)
@@ -1058,14 +1038,13 @@ test.describe('ASCII City Walk — the thunder lets go (D-75)', () => {
 })
 
 /**
- * D-76: rain is motion, and G has always refused to START it while reduced
- * motion is on. Rain that was already falling was another matter: the frames
- * that move the drops simply stopped arriving, so the shower froze in mid-air
- * as a field of static diagonal streaks - the scratches-on-the-picture look
- * CW-20 took out of the map view, arriving in the street instead - and the
- * Rain button sat on in a toolbar where it no longer did anything.
+ * Rain is motion, and G refuses to start it while reduced motion is on.
+ * Rain already falling must stop too: otherwise the frames that move the
+ * drops stop arriving, the shower freezes in mid-air as a field of static
+ * diagonal streaks, and the Rain button sits on in a toolbar where it no
+ * longer does anything.
  */
-test.describe('ASCII City Walk — reduced motion ends the shower (D-76)', () => {
+test.describe('ASCII City Walk — reduced motion ends the shower', () => {
   test('turning reduced motion on mid-rain stops the rain and says so', async ({
     page,
   }) => {
@@ -1136,11 +1115,11 @@ test.describe('ASCII City Walk — reduced motion ends the shower (D-76)', () =>
 })
 
 /**
- * CW-26: the cities carry building:part volumes and pitched roofs, and both
+ * The cities carry building:part volumes and pitched roofs, and both
  * have to survive all the way into the rendered scene — not merely into the
  * parsed model.
  */
-test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
+test.describe('ASCII City Walk — real silhouettes', () => {
   test('a part-mapped tower is drawn as its parts, not as one box', async ({
     page,
   }) => {
@@ -1195,7 +1174,7 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
       const ys = target.outer.map((p) => p[1])
       const cx = xs.reduce((a, c) => a + c, 0) / xs.length
       const cy = ys.reduce((a, c) => a + c, 0) / ys.length
-      // CW-79: the building stands on its centroid's ground now.
+      // The building stands on its centroid's ground.
       const groundZ = g.surface?.terrain
         ? g.surface.terrain.heightAt(cx, cy)
         : 0
@@ -1206,25 +1185,20 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
       let aboveEaves = 0
       g.scene.traverse((o) => {
         if (!o.isMesh || !o.geometry?.getAttribute) return
-        // ★ THE BUILDINGS, AND ONLY THE BUILDINGS. This case asks whether a
-        // pitched roof CAPS its body or is stacked on a full-height box -
-        // a question about one mesh - and it used to answer it by sweeping
-        // every mesh in the city within 12 m. CW-77 nearly doubled Burnaby's
-        // lamps (531 -> 929) and put a crow on a lamp head 6.8 m from this
-        // house, at z 6.32 against the house's 6.00 m apex: 72 vertices
-        // "drawn above the roof apex", none of them the roof's. Measured, the
-        // `buildings` mesh's own maximum inside the radius is EXACTLY 6.00.
-        // A guard that a bird can fail is not measuring a roof.
+        // The buildings, and only the buildings. This case asks whether a
+        // pitched roof caps its body or is stacked on a full-height box, a
+        // question about one mesh, so it reads the `buildings` mesh alone: a
+        // sweep of every mesh within 12 m finds a crow on a lamp head 6.8 m
+        // from this house, at z 6.32 against the house's 6.00 m apex. A guard
+        // that a bird can fail is not measuring a roof.
         if (o.name !== 'buildings') return
         const pos = o.geometry.getAttribute('position')
         if (!pos) return
-        // CW-79: the sweep is scoped to THIS building's own footprint (a
-        // ray-cast against its outer ring, with a 0.3 m margin). The 12 m
-        // disc was tight enough on flat ground once the birds were
-        // excluded, but the hills put a NEIGHBOUR's ground a metre higher,
-        // and four of its wall vertices rose above this house's apex - the
-        // CW-77 bird lesson again, wearing a hill: a guard a neighbour can
-        // fail is not measuring a roof.
+        // The sweep is scoped to this building's own footprint (a ray-cast
+        // against its outer ring, with a 0.3 m margin). On hills a disc around
+        // the house takes in a neighbor's ground a meter higher, and its wall
+        // vertices rise above this house's apex: a guard a neighbor can fail is
+        // not measuring a roof.
         const inFootprint = (x, y) => {
           let inside = false
           const ring = target.outer
@@ -1282,9 +1256,9 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
 })
 
 /**
- * CW-27: the HUD knows where you are, and X says it out loud.
+ * The HUD knows where you are, and X says it out loud.
  */
-test.describe('ASCII City Walk — where you are (CW-27)', () => {
+test.describe('ASCII City Walk — where you are', () => {
   // Walk one real step so the street lookup, which runs on movement frames,
   // has actually run. Teleporting alone never moves the camera or the HUD.
   const stepOnce = async (page) => {
@@ -1386,18 +1360,15 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
 
     await page.keyboard.press('x')
     /**
-     * ★★ CW-65 CHANGED THE SHAPE OF THIS SENTENCE AND THIS PIN CAUGHT IT - on
-     * BOTH engines, which is the tell that a red is the code and not the
-     * runner. The where-sentence now carries an appended warmer/colder clause
-     * while the traveler is unfound, so an anchored `$` after "facing north."
-     * could no longer match.
+     * The where-sentence carries an appended warmer/colder clause while the
+     * traveler is unfound, so an anchored `$` right after "facing north." does
+     * not match.
      *
-     * The fix is NOT to drop the anchor. What this case guards is that the
-     * where-sentence is WHOLE and well formed, so it still requires exactly
-     * that, and allows AT MOST one further sentence after it - which is the
-     * composition CW-65 promises ("appended to whichever clause is true, never
-     * substituted for it"). A player must never lose the street name to the
-     * hint, and this is where that is enforced.
+     * The anchor stays. What this case guards is that the where-sentence is
+     * whole and well formed, so it still requires exactly that, and allows at
+     * most one further sentence after it: the clause is appended to whichever
+     * clause is true, never substituted for it. A player must never lose the
+     * street name to the hint, and this is where that is enforced.
      */
     await expect(announcer).toHaveText(
       /^You are .*, facing [a-z]+\.(?: [A-Z][^.]*\.)?$/
@@ -1422,17 +1393,17 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
 
     const btn = page.locator('#cityWalkWhereBtn')
     await expect(btn).toBeVisible()
-    // The CW-15 promise: every key also has a button, and the button says
+    // Every key also has a button, and the button says
     // which key it is.
     await expect(btn).toHaveAttribute('title', /X/)
     await btn.click()
-    // Same shape as the X case above, and the same reason (CW-65's clause).
+    // Same shape as the X case above, for the same reason.
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
       /^You are .*, facing [a-z]+\.(?: [A-Z][^.]*\.)?$/
     )
   })
 
-  test('the HUD stays one line at 1280 with the longest real names (D-71)', async ({
+  test('the HUD stays one line at 1280 with the longest real names', async ({
     page,
   }) => {
     test.setTimeout(90000)
@@ -1441,8 +1412,8 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
     await enterCity(page, 'Denver, Colorado')
     await stepOnce(page)
 
-    // Denver carries the longest landmark name in the four extracts, and it
-    // wrapped this line to two lines before CW-27 shortened both names.
+    // Denver carries the longest landmark name in the four extracts, so it is
+    // the one that would wrap this line.
     await page.evaluate(() => {
       const g = window.__cityWalkGame
       g.nearLandmark = g.landmarks.reduce((a, b) =>
@@ -1462,7 +1433,7 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
   })
 })
 
-test.describe('ASCII City Walk — people are people (CW-45)', () => {
+test.describe('ASCII City Walk — people are people', () => {
   test('the Seattle census is exact, varied, and deterministic', async ({
     page,
   }) => {
@@ -1470,68 +1441,23 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     await enterCity(page)
 
     // Hash-seeded placement against a versioned extract: these numbers are
-    // facts until the next rebake, never noise. The mix ratios are the
-    // CW-45 record's one-line-reversible choices.
+    // facts until the next rebake, never noise, and the mix ratios are
+    // one-line-reversible choices.
     //
-    // CW-50 re-pinned them. Widening the roads moved every pavement position
-    // outward, and thirty-one of the old spots landed against a building and
-    // were refused: 3,060 became 3,029. The seed did not change and nothing
-    // reshuffled - sitters are still exactly 105, because a sitter is placed
-    // on a mapped bench at its true position rather than at an offset from a
-    // road centreline, so no width could reach them. Standing is unmoved
-    // between the two width passes for the same reason it moved at all: it
-    // is the offsets, not the seed, that decide.
-    //
-    // CW-75 re-pinned them a second time, and for the same KIND of reason.
-    // A person is placed 1.1 m outside THEIR road's kerb, which at a junction
-    // is the middle of the road that crosses it: 141 figures stood on tarmac
-    // with no crossing mapped near them, and they are now refused. 3,029
-    // became 2,890, the refusals fall across all four poses, and sitters move
-    // for the first time (105 -> 102): FOURTEEN of Seattle's 280 mapped
-    // benches stand inside a drawn roadway, and three of them had been given
-    // a sitter. The bench stays where the map put it - CW-43 never invents or
-    // moves mapped furniture - and the sitter this build invents for it does
-    // not get to sit on tarmac. The seed still did not change: 2,890 is
-    // exactly what the shipped census reports for Seattle
-    // (scripts/census-city-walk.mjs), and the four poses sum to it.
-    //
-    // CW-76 re-pinned them a THIRD time, and this one is not a placement
-    // change at all: it is the collision grid. 42 of Seattle's canopies stop
-    // blocking their footprint (a `building=roof` is a slab overhead now, not
-    // a solid from the pavement) and one volume that used to hang in the air
-    // is drawn down to the street and starts blocking. 43 of 1,421 buildings
-    // changed their collision base, and PROVING that is the whole cause: the
-    // new model run against the OLD collision bases reproduces 2,890 and this
-    // exact pose table to the person. So 2,890 becomes 2,895, and the five
-    // are people standing where a canopy used to be a wall.
-    //
-    // ★★★ CW-77 RE-PINNED THEM A FOURTH TIME, AND THE RELEASE THAT DID IT
-    // WAS ABOUT LAMPS. `LAMP_ROAD_KINDS` in city-scene.js is a set named for
-    // one thing that gates two: `lampRng` AND `peopleRng`. CW-77 added
-    // `pedestrian` to it so that Post Alley would be lit - and Post Alley
-    // got its crowd in the same line. A four-cell run of the builders
-    // separates the three causes to the person:
-    //
-    //   pre-CW-77 code, pre-CW-77 extracts                    2895 <- the pin
-    //   CW-77 code, pedestrian NOT in the set, old extracts   2885
-    //   CW-77 code, pedestrian NOT in the set, new extracts   2652
-    //   CW-77 code as shipped, new extracts                   2999
-    //
-    // so: -10 people stand too close to the denser procedural poles, -233
-    // stand where City Light's surveyed register puts a real pole, and +347
-    // are the pedestrian streets that had nobody on them until this release.
-    // The seed law still holds - each road's people stream is its own - and
-    // a pedestrian street with lamps and no people would have been the
-    // stranger city. But the crowd arrived through a set named for lamps,
-    // which is worth a reader's minute: if you change what LAMP_ROAD_KINDS
-    // holds, you are changing the population.
-    // ★★ CW-95 RE-PINNED THEM A FIFTH TIME, by exactly the four people the
-    // release freed. Platform, corridor and construction ways stopped being
-    // roadways, so Seattle's in-road refusals fell 167 -> 163 - and all
-    // four of the freed spots planted: one sitter (a streetcar-platform
-    // bench), two standing, one jogging. Walking did not move. 2,999
-    // becomes 3,003, and the probe that measured the refusal delta
-    // (167 - 163 = 4) and this census delta (+4) agree to the person.
+    // When they move, find the cause before re-pinning; the seed does not
+    // change between builds. Things that legitimately move them:
+    //   - road widths (people stand at an offset from a road's centerline,
+    //     and a spot that lands against a building is refused);
+    //   - in-road refusals (a person 1.1 m outside their road's kerb can be
+    //     the middle of the road that crosses it at a junction; a mapped bench
+    //     inside a drawn roadway keeps its position but gets no sitter);
+    //   - the collision grid (a `building=roof` is a slab overhead, not a
+    //     solid from the pavement);
+    //   - LAMP_ROAD_KINDS in city-scene.js, which gates `peopleRng` as well as
+    //     `lampRng`: changing what it holds changes the population.
+    // Run the builders on the old and new inputs, one cause at a time, and
+    // the deltas should add up to the person. Sitters sit on mapped benches
+    // at their true position, so road widths cannot reach them.
     const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
       sitting: 102,
@@ -1544,22 +1470,20 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     ).toBe(3003)
 
     /**
-     * ★★ CW-65 ADDS A PERSON TO THE WORLD AND NOT TO THIS CENSUS, AND THAT IS
-     * A DECISION RATHER THAN AN OVERSIGHT.
+     * The traveler is a person in the world but not in this census, by
+     * decision.
      *
-     * The traveler is built STANDALONE, beside the fireworks, because the city
+     * The traveler is built standalone, beside the fireworks, because the city
      * group is built before the saved progress is read and because finding
-     * them MOVES them. So they never pass through buildStreetProps and
-     * peopleCount - which counts what the CITY BUILD planted - does not gain
-     * the traveler, whatever the pin above happens to read. (It read 3,029
-     * when this was written; five re-pins later it reads 3,003, and not one
-     * of the five was the traveler.)
+     * them moves them. So they never pass through buildStreetProps, and
+     * peopleCount, which counts what the city build planted, does not include
+     * them.
      *
      * Asserted rather than assumed, both halves: the crowd did not gain
      * anybody, and the traveler exists all the same. A silent +1 here would
      * mean the traveler had been planted into a road's rng stream, which would
-     * shift the pose and build of every figure planted after them (the
-     * CW-45/46 seed law) - so this pin is also how that mistake would surface.
+     * shift the pose and build of every figure planted after them, so this
+     * pin is also how that mistake would surface.
      */
     expect(
       await page.evaluate(() =>
@@ -1592,17 +1516,17 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     expect(check.sitters).toBeLessThanOrEqual(check.benches)
   })
 
-  test('every zone of a figure carries a scheme colour (CW-49)', async ({
+  test('every zone of a figure carries a scheme color', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
     // Read the tints the scene actually painted, not the pixels they end up
-    // as. A pixel test was tried first and could not tell a scheme hue from a
-    // monochrome phosphor - both are far from grey - and a sample box wide
-    // enough to cover a head also caught its coloured neighbours, so it
-    // passed on the release base. The vertex colours have no such ambiguity.
+    // as. A pixel test cannot tell a scheme hue from a monochrome phosphor
+    // (both are far from gray), and a sample box wide enough to cover a head
+    // also catches its colored neighbors. The vertex colors have no such
+    // ambiguity.
     const tints = await page.evaluate(() => {
       const g = window.__cityWalkGame
       let mesh = null
@@ -1617,7 +1541,7 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
         const r = col.getX(i)
         const gg = col.getY(i)
         const b = col.getZ(i)
-        // The one flat tone heads used to wear, to six decimals.
+        // The single flat tone a head must not fall back to, to six decimals.
         if (
           Math.abs(r - gg) < 1e-6 &&
           Math.abs(gg - b) < 1e-6 &&
@@ -1651,7 +1575,7 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
   })
 })
 
-test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
+test.describe('ASCII City Walk — cars are cars', () => {
   test('the parked classes stamp their own true footprints', async ({
     page,
   }) => {
@@ -1687,12 +1611,11 @@ test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Stand off the pickup's TAIL - the part the old 4.4 m footprint did
-    // not cover - facing it, and watch the approach in the pickup's OWN
-    // frame per frame, exactly the parked-car pattern above: an end-state
-    // distance check is not slide-proof (CI's dt-clamped frames cover ~6x
-    // the ground of a live GPU's, slid around the corner and away, and
-    // went red on two browsers - this watcher replaced it).
+    // Stand off the pickup's tail (the part a 4.4 m footprint would not
+    // cover), facing it, and watch the approach in the pickup's own frame per
+    // frame, the parked-car pattern above: an end-state distance check is not
+    // slide-proof, since CI's dt-clamped frames cover ~6x the ground of a live
+    // GPU's and can slide around the corner and away.
     const setup = await page.evaluate(() => {
       const game = window.__cityWalkGame
       const pickups = game.props.obstacles.filter(
@@ -1745,21 +1668,20 @@ test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
 
     await page.keyboard.down('ArrowUp')
     try {
-      // Arrival is a CONDITION, not a frame quota. A dt-clamped software
-      // runner covers the 2.5 m in ~17 frames where a 60 fps GPU needs
-      // ~100, and the slowest Edge runner painted 130 frames in 90 s - a
-      // fixed frames-versus-clock gate starves there while proving nothing
-      // the arrival itself does not.
+      // Arrival is a condition, not a frame quota. A dt-clamped software runner
+      // covers the 2.5 m in ~17 frames where a 60 fps GPU needs ~100, and a
+      // slow Edge runner paints about 130 frames in 90 s, so a fixed
+      // frames-versus-clock gate starves there while proving nothing the
+      // arrival itself does not.
       await expect
         .poll(() => page.evaluate(() => window.__cwPickup.closest), {
           timeout: 180_000,
         })
         .toBeLessThan(setup.halfLengthM + 1.0)
-      // Then keep pushing on the tail for 40 more OBSERVED frames - the
-      // old 4.4 m footprint lets the walker into the bed within a handful,
-      // which the watcher records as closest dipping under the tail plane.
-      // (CW-97 batch 3: 40 frames at CI software's measured ~2 s/frame is
-      // 80 s - the old 60 s bound starved a frame-gated wait.)
+      // Then keep pushing on the tail for 40 more observed frames: a 4.4 m
+      // footprint would let the walker into the bed within a handful, which the
+      // watcher records as closest dipping under the tail plane. At CI
+      // software's ~2 s per frame, 40 frames need about 80 s.
       const arrived = await page.evaluate(() => window.__cwPickup.frames)
       await expect
         .poll(() => page.evaluate(() => window.__cwPickup.frames), {
@@ -1783,16 +1705,16 @@ test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
 })
 
 /**
- * CW-50: the streets are true to scale and the kerb is a real step. The eye
+ * The streets are true to scale and the kerb is a real step. The eye
  * has to follow the ground under it, and the kerb must never be an obstacle.
  */
-test.describe('ASCII City Walk — the kerb (CW-50)', () => {
+test.describe('ASCII City Walk — the kerb', () => {
   test('the eye follows the ground across a kerb, and the kerb never blocks', async ({
     page,
   }) => {
-    // CW-97 batch 3: the crossing runs ~5-8 m at CI software's ~0.23 m/s
-    // and the entry itself costs tens of seconds there - the budget and
-    // the poll bound below both follow that measured pace.
+    // The crossing runs ~5-8 m at CI software's ~0.23 m/s, and the entry
+    // itself costs tens of seconds there: the budget and the poll bound below
+    // both follow that measured pace.
     test.setTimeout(300000)
     await launchGame(page)
     await enterCity(page)
@@ -1812,11 +1734,10 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
           const across = Math.atan2(x2 - x1, y2 - y1) + Math.PI / 2
           const sin = Math.sin(across)
           const cos = Math.cos(across)
-          // Everything here is decided from the ROAD's own geometry, never
-          // from the surface grid, so this setup runs identically on the
-          // release base where no such grid exists. That is what lets the
-          // case fail on base for the right reason - a camera that never
-          // moved - instead of on a missing property.
+          // Everything here is decided from the road's own geometry, never from
+          // the surface grid, so the setup does not depend on the thing under
+          // test, and a failure is a camera that never moved rather than a
+          // missing property.
           //
           // The midpoint of a segment is roadway by definition; pavement
           // begins past half its width. The run across has to be open, or
@@ -1833,7 +1754,7 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
           s.y = my
           s.headingRad = ((across % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
           s.pitchRad = 0
-          // The surface grid is the thing under test, so it is READ here for
+          // The surface grid is the thing under test, so it is read here for
           // the record but never used to choose the spot.
           if (g.surface) s.groundZ = g.surface.heightAt(mx, my)
           g.altView.invalidate()
@@ -1842,8 +1763,8 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
             y: my,
             needM,
             startGroundZ: s.groundZ ?? null,
-            // CW-79: the roadway question BY NAME - under terrain the
-            // roadway's absolute height is the hill's, not a negative.
+            // The roadway question by name: under terrain the roadway's
+            // absolute height is the hill's, not a negative.
             startsOnPavement: g.surface?.isPavement
               ? g.surface.isPavement(mx, my)
               : null,
@@ -1877,14 +1798,11 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
         if (s.stop) return
         const moved = Math.hypot(g.walkState.x - s.px, g.walkState.y - s.py)
         if (moved > 0) s.started = true
-        // A frame BEFORE the walk begins is not a stall. This watcher is
-        // installed a full round trip before the keypress, and on a slow
-        // runner that gap is one or more frames - which is what made this
-        // case red in CI on Chromium and Edge while it stayed green on a
-        // fast machine and on Firefox. MEASURED: inserting a 300 ms wait
-        // between the two here counts five of them. What the case is
-        // actually about is a walker who was MOVING and then stopped, which
-        // is the only thing a kerb that blocks could look like.
+        // A frame before the walk begins is not a stall. This watcher is
+        // installed a full round trip before the keypress, and on a slow runner
+        // that gap is one or more frames (a 300 ms wait here counts five of
+        // them). What the case is about is a walker who was moving and then
+        // stopped, which is the only thing a kerb that blocks could look like.
         else if (s.started) s.stalls++
         s.px = g.walkState.x
         s.py = g.walkState.y
@@ -1896,12 +1814,10 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
 
     await page.keyboard.down('ArrowUp')
     try {
-      // Arrival is a CONDITION, not a frame quota: the walker is done when
-      // they have crossed clear of the roadway, however many frames that took
-      // on this runner. Measured as DISTANCE from the start, which is a fact
-      // about the walk rather than about the surface grid - so this waits the
-      // same way on the release base, and the case reaches its assertions
-      // there instead of dying early on a property that does not exist.
+      // Arrival is a condition, not a frame quota: the walker is done when they
+      // have crossed clear of the roadway, however many frames that took on
+      // this runner. Measured as distance from the start, which is a fact about
+      // the walk rather than about the surface grid.
       await expect
         .poll(
           () =>
@@ -1915,9 +1831,8 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
           { timeout: 180_000 }
         )
         .toBeGreaterThan(setup.needM)
-      // Then a few more observed frames, so the climb finishes on screen.
-      // (CW-97 batch 4: twelve frames at CI software's ~2 s/frame is only
-      // 24 samples inside the old 30 s - measured exactly there.)
+      // Then a few more observed frames, so the climb finishes on screen
+      // (twelve frames at CI software's ~2 s per frame need more than 30 s).
       const from = await page.evaluate(() => window.__cwKerb.camZ.length)
       await expect
         .poll(() => page.evaluate(() => window.__cwKerb.camZ.length), {
@@ -1925,14 +1840,12 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
         })
         .toBeGreaterThan(from + 12)
     } finally {
-      // The watcher stops BEFORE the key is let go, never after. Releasing
-      // first leaves a full round trip in which the walker is standing still
-      // because nothing is asking it to move, and every frame of that gap was
-      // being counted as a stall. MEASURED under a 6x CPU throttle: twelve of
-      // them with the release first, none with the stop first, and the same
-      // at 10x. On a fast machine the gap is under one frame, which is why
-      // this was green locally and on Firefox and red on CI's Chromium and
-      // Edge.
+      // The watcher stops before the key is let go, never after. Releasing
+      // first leaves a full round trip in which the walker stands still because
+      // nothing is asking it to move, and every frame of that gap would count
+      // as a stall (twelve of them under a 6x CPU throttle with the release
+      // first, none with the stop first). On a fast machine the gap is under
+      // one frame, so the order only shows on a slow runner.
       await page.evaluate(() => {
         window.__cwKerb.stop = true
         cancelAnimationFrame(window.__cwKerbTick)
@@ -1944,9 +1857,9 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
     const lo = Math.min(...watch.camZ)
     const hi = Math.max(...watch.camZ)
 
-    // It climbed a whole kerb, and the climb showed on the camera. This is
-    // the assertion the release base fails: there the eye is a constant
-    // 1.7 m whatever it is standing on, so lo and hi are the same number.
+    // It climbed a whole kerb, and the climb showed on the camera: an eye at a
+    // constant 1.7 m whatever it stands on would read lo and hi as the same
+    // number.
     expect(hi - lo, `camera rose from ${lo} to ${hi}`).toBeGreaterThan(0.1)
     // It never stopped: a kerb is drawn and felt, but it is not an obstacle.
     // This is the directive's non-negotiable half.
@@ -1956,8 +1869,8 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
     // otherwise report zero stalls and pass while measuring nothing.
     expect(watch.started, 'the walker never moved at all').toBe(true)
     expect(watch.stalls).toBe(0)
-    // And it EASED rather than jumping. A single frame carrying the whole
-    // kerb is the step-jolt this release exists to avoid.
+    // And it eased rather than jumping: a single frame carrying the whole kerb
+    // is the step-jolt the ease exists to avoid.
     let worstJump = 0
     for (let i = 1; i < watch.camZ.length; i++) {
       worstJump = Math.max(worstJump, Math.abs(watch.camZ[i] - watch.camZ[i - 1]))
@@ -1965,30 +1878,30 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
     expect(worstJump, `biggest single-frame rise ${worstJump}`).toBeLessThan(
       hi - lo
     )
-    // And the walk really did start down in the roadway rather than already
-    // up on a pavement, which is what makes the climb above a kerb.
-    // CW-79: asked by name - the old 'groundZ < 0' read the kerb cut off an
-    // absolute height, and the hills put the roadway at +79 m here.
+    // And the walk really did start down in the roadway rather than already up
+    // on a pavement, which is what makes the climb above a kerb. Asked by
+    // name: on hills the roadway's absolute height is the hill's (+79 m here),
+    // so a height threshold cannot tell roadway from pavement.
     expect(setup.startsOnPavement).toBe(false)
   })
 })
 
 /**
- * CW-52: the owner's report is that lit surfaces flash while you move -
- * "distracting, unintended sloppy... fractured flashes" that a screenshot
- * cannot show. The cause was not brightness. A second, tiny render tells the
- * converter what each character cell is LOOKING AT, and that answer picks the
- * cell's glyph vocabulary; it dressed every mesh in a flat id material that
- * dropped the mesh's polygon offset, so surfaces that are deliberately
- * coplanar - a storefront strip on its wall - were coplanar again in the id
- * buffer and their winner was re-rolled by any view change at all.
+ * Lit surfaces must not flash while you move, the "fractured flashes" a
+ * screenshot cannot show. A second, tiny render tells the converter what
+ * each character cell is looking at, and that answer picks the cell's
+ * glyph vocabulary. If that render dressed every mesh in a flat id
+ * material without the mesh's polygon offset, deliberately coplanar
+ * surfaces (a storefront strip on its wall) would be coplanar again in the
+ * id buffer, and their winner would be re-rolled by any view change at
+ * all.
  *
- * A cell that changes class ONCE has swept across an edge. A cell that changes
- * again and again over a series of sub-cell turns is watching two surfaces
- * fight, and only the second is a defect - which is why this counts repeats
- * rather than changes.
+ * A cell that changes class once has swept across an edge. A cell that
+ * changes again and again over a series of sub-cell turns is watching two
+ * surfaces fight, and only the second is a defect, which is why this
+ * counts repeats rather than changes.
  */
-test.describe('ASCII City Walk — the surface map holds still (CW-52, D-110)', () => {
+test.describe('ASCII City Walk — the surface map holds still', () => {
   test('the storefront strip and the wall behind it stop trading places', async ({
     page,
   }) => {
@@ -2054,13 +1967,11 @@ test.describe('ASCII City Walk — the surface map holds still (CW-52, D-110)', 
       'not one cell changed surface over the whole series - the view never moved'
     ).toBeGreaterThan(0)
 
-    // The signature, rather than a magnitude. How BADLY two coplanar surfaces
-    // fight depends on the rasteriser's depth precision - measured over these
-    // eight steps at the Seattle spawn, this pair is 57% of every transition
-    // on the release base under CI's software renderer and 97% on a real GPU.
-    // Either way it is the pair that must not be fighting, and after the fix
-    // it is 9% and 0.3% of a much smaller total. A share is the assertion that
-    // holds on both.
+    // The signature, rather than a magnitude. How badly two coplanar surfaces
+    // fight depends on the rasterizer's depth precision: unfixed, this pair is
+    // 57% of every transition under CI's software renderer and 97% on a real
+    // GPU; fixed, 9% and 0.3% of a much smaller total. A share is the
+    // assertion that holds on both.
     const share = result.wallFront / result.transitions
     expect(
       share,
@@ -2070,7 +1981,7 @@ test.describe('ASCII City Walk — the surface map holds still (CW-52, D-110)', 
     ).toBeLessThan(0.25)
   })
 
-  test('the ground plane is filtered for the angle it is seen at (CW-52)', async ({
+  test('the ground plane is filtered for the angle it is seen at', async ({
     page,
   }) => {
     test.skip(!(await webglAvailable(page)), 'no WebGL on this machine')
@@ -2097,31 +2008,22 @@ test.describe('ASCII City Walk — the surface map holds still (CW-52, D-110)', 
   })
 })
 
-test.describe('ASCII City Walk — the converter remembers the last frame (CW-68)', () => {
+test.describe('ASCII City Walk — the converter remembers the last frame', () => {
   /**
    * Convert N frames along a small step and count how many cells changed
    * their glyph between consecutive frames.
    *
-   * The step is deliberately tiny (two centimetres, the CW-52 creep) because
-   * the claim is about a cell whose content BARELY moved. Everything else is
-   * held still: the world's own clock is stopped first, so the only thing
-   * that differs between two frames is the pose this sets.
-   */
-  /**
-   * ★★ FOUR CREEPS FROM FOUR PLACES, NOT ONE LONGER CREEP (CW-91). Anchoring
-   * took most of this guard's subject away: with it on the stateless pick
-   * re-rolls 790 lit cells over one creep where it re-rolled 3,881 before,
-   * because an anchored cell does not re-roll at all. Narrowing the population
-   * to the cells the memory still governs is right, and it leaves a few
-   * hundred events - not enough to read a 20 per cent effect off steadily.
+   * The step is deliberately tiny (two centimeters) because the claim is
+   * about a cell whose content barely moved. Everything else is held still:
+   * the world's own clock is stopped first, so the only thing that differs
+   * between two frames is the pose this sets.
    *
-   * ★★★ AND LENGTHENING THE CREEP IS NOT THE WAY TO FIX THAT, WHICH WAS
-   * MEASURED RATHER THAN ASSUMED. Ten steps instead of four took the reading
-   * from 79.1 % to 92.2 %: the memory has a HOLD EXPIRY, so a longer creep
-   * lets more holds run out and reports a weaker lever. Frame count is part of
-   * the physics this case is about, not a precision knob. So the sample is
-   * made WIDER instead - the same four-step creep, repeated from places a few
-   * metres apart, pooled. Every creep is the identical experiment on a
+   * Several short creeps from places a few meters apart, pooled, rather
+   * than one longer creep: the memory has a hold expiry, so a longer creep
+   * lets more holds run out and reports a weaker lever (ten steps instead of
+   * four moved the reading from 79.1 % to 92.2 %). Frame count is part of
+   * the physics this case is about, not a precision knob, so the sample is
+   * made wider instead: every creep is the identical experiment on a
    * different piece of city.
    */
   async function glyphChangesOverCreep(page, steps = 4, creeps = 4, gapM = 4) {
@@ -2142,40 +2044,25 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       }
       const start = { ...game.walkState }
       let changes = 0
-      // ★★★ CW-89: the memory's population, counted separately. The memory
-      // holds a cell's CHARACTER; since CW-89 it explicitly does not decide
-      // whether a cell has one, so a cell going blank or coming back is not a
-      // re-roll it was ever asked to prevent. Counting those made this guard
-      // measure more than it means - it read 81.8 % against its own 80 % bar
-      // the moment CW-89 stopped the trail, which would have looked like a
-      // regression and was the guard's population going stale.
+      // The memory's population, counted separately. The memory holds a cell's
+      // character; it does not decide whether a cell has one, so a cell going
+      // blank or coming back is not a re-roll it was ever asked to prevent.
       let litChanges = 0
-      // ★★★ CW-91: THE MEMORY'S POPULATION WENT STALE AGAIN, FOR THE SAME
-      // REASON AS AT CW-89 - the guard was measuring more than it means.
-      // Anchored cells take their glyph from the SURFACE and are deliberately
-      // never held (plan §10.3): holding one past the moment its lattice
-      // square slid is exactly the trail CW-84 cut. So they change identically
-      // with the memory on and off, and once the facade joined the anchored
-      // set at CW-91 they are most of the picture - the guard read 13 % of
-      // stateless re-rolls prevented against its own 20 % bar, which looks
-      // like a regression in the memory and is nothing of the kind.
+      // Anchored cells take their glyph from the surface and are deliberately
+      // never held: holding one past the moment its lattice square slid would
+      // be a trail. So they change identically with the memory on and off, and
+      // counting them would dilute the share until it looked like a regression
+      // in the memory. Tree cells are left out for a similar reason: a
+      // leaf-cube edge under a 2 cm creep re-rolls because the geometry slid
+      // across the cell, which is the anchoring question (trees are unanchored
+      // by design), not the hold question, and the memory deliberately drops a
+      // cell whose content moves under it.
       //
-      // ★ THE BAR DID NOT MOVE. It has been re-pinned once already (CW-77,
-      // 0.6 -> 0.8) and re-pinning it to match a result would leave it worth
-      // nothing. What moved is WHICH CELLS the question is asked about: the
-      // ones the memory still governs. Both numbers are logged so the
-      // dilution stays visible.
-      // ★★★ CW-94: THE POPULATION WENT STALE A THIRD TIME, SAME LESSON.
-      // The blob crowns became sparse ring-branch trees, and a leaf-cube
-      // edge under a 2 cm creep re-rolls because the GEOMETRY slid across
-      // the cell - which is the ANCHORING question (trees are unanchored by
-      // design, CW-91's set), not the hold question. The memory deliberately
-      // drops a cell whose content moves under it, so tree cells joined the
-      // pool as re-rolls no memory may hold: the guard read 81.0 % against
-      // its 80 % bar the day the trees landed, with the converter unchanged.
-      // TREE cells leave the governed pool as the anchored classes did at
-      // CW-91; their numbers are counted BESIDE the pool so the dilution
-      // stays visible, and the bar still does not move.
+      // The bar stays where it is; what is narrowed is which cells the question
+      // is asked about, the ones the memory still governs. Anchored and tree
+      // numbers are counted beside the pool and logged, so the dilution stays
+      // visible. Re-pinning the bar to match a result would leave it worth
+      // nothing.
       let governedChanges = 0
       let governedCells = 0
       let treeChanges = 0
@@ -2208,7 +2095,7 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
             // A pair counts as governed only if the cell was unanchored in
             // BOTH frames: one that crossed the boundary is not evidence
             // about the memory either way. Tree cells are counted apart -
-            // see the CW-94 note above.
+            // see the note above.
             const isTree = cls[c] === TREE_ID || previousCls[c] === TREE_ID
             const unanchored =
               !ANCHORED.has(cls[c]) && !ANCHORED.has(previousCls[c])
@@ -2244,52 +2131,32 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
   }
 
   /**
-   * The margin matters, and it is not a taste. RED-PROOFED by disabling the
-   * hold in the shader: the memory then prevented ONE glyph change out of
-   * 61,440 cell-frames, and a bare "fewer than" assertion passed on 930
-   * against 931. A lever that does nothing must fail this, so the bar is a
-   * SHARE. Measured on this machine with the lever working: 256 and 124
-   * against 931, i.e. 13 to 28 per cent.
+   * The margin matters, and it is not a taste. With the hold disabled in
+   * the shader the memory prevents one glyph change out of 61,440
+   * cell-frames, and a bare "fewer than" assertion passes on 930 against
+   * 931. A lever that does nothing must fail this, so the bar is a share.
    *
-   * ★★ RE-PINNED IN CW-77, AND THE BAR HAD STOPPED MEASURING THE LEVER.
-   * 0.6 was set against a memory that no longer ships and a city with a
-   * third of the edges, and by CW-77 the guard was reading 58 per cent
-   * against a 60 per cent bar - close enough that it passed or failed on how
-   * many frames had converted before the creep started, which is warm-up and
-   * not the thing this case is about. The four-cell probe
-   * (build/cw77-memory.mjs, Iris Xe, 30 %, the Seattle spawn, share of the
-   * stateless re-rolls that survive, default path / cpu path):
-   *
-   *                          pre-CW-77 map      CW-77 map
-   *   glyph 0.4, hold 30      5.1 / 4.5 %      18.0 / 14.8 %
-   *   glyph 0.06, hold 5     35.6 / 22.4 %     58.1 / 53.6 %   <- ships
-   *
-   * Both moved it and they compound. CW-84 cut the band 0.4 -> 0.06 and the
-   * hold 30 -> 5 ON PURPOSE, to buy back the trail the owner saw on the
-   * deployed build; a weaker memory prevents less, by design. CW-77 nearly
-   * TRIPLED the stateless baseline at this pose (2,156 -> 6,210 re-rolls
-   * over the same 2 cm creep) because it put thousands of lamps and a
-   * terrain grid into the frame, and the memory deliberately drops a cell
-   * whose surface class moves under it - so more real edges mean more real
-   * re-rolls that no memory may hold.
-   *
-   * The bar is therefore re-pinned to the lever that SHIPS, with room for
-   * the warm-up: 0.8 still fails the do-nothing lever by a mile (it measured
-   * 99.9 per cent) while the shipped one has 18 points of margin. The share
-   * is logged on every run so the next session reads the number without
-   * having to make the case fail first.
+   * The share is the fraction of the stateless re-rolls that survive with
+   * the memory on (build/cw77-memory.mjs measures it per path, at 30 %, at
+   * the downtown pose). It depends on the memory's settings (a band of 0.06
+   * and a hold of 5 frames, chosen to keep motion free of trails) and on how
+   * many real edges the city puts in the frame, since the memory
+   * deliberately drops a cell whose surface class moves under it. 0.8 fails
+   * the do-nothing lever by a mile (it measures 99.9 per cent) while the
+   * shipped lever passes with room for warm-up. The share is logged on
+   * every run, so a reader sees the number without making the case fail.
    */
   const MUST_PREVENT = 0.8
 
   test('a cell whose content barely moved keeps the glyph it had', async ({
     page,
   }) => {
-    // CW-97: this instrument takes 128 real conversions (4 runs x 8 creeps
-    // x 4 steps), and a software-GL renderer takes seconds per conversion
-    // on the full city - the default test budget cut the evaluate off
-    // mid-sample. The per-step liveness deadline inside convert() (15 s)
-    // still catches a genuinely stuck converter; this is time to MEASURE,
-    // not permission to hang.
+    // This instrument takes 128 real conversions (4 runs x 8 creeps x 4
+    // steps), and a software-GL renderer takes seconds per conversion on the
+    // full city, so the default test budget would cut the evaluate off
+    // mid-sample. The per-step liveness deadline inside convert() (15 s) still
+    // catches a genuinely stuck converter; this is time to measure, not
+    // permission to hang.
     test.setTimeout(360000)
     await launchGame(page)
     await enterCity(page)
@@ -2298,17 +2165,14 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       window.__cityWalkGame.altView.setCellProbe(true)
     })
 
-    // ★★ CW-78: THE MEASUREMENT SCENE IS PINNED. This guard's bar was
-    // calibrated on the downtown spawn (CW-89's rescope; CW-91's widened
-    // pool read 74.6 % there). CW-78 moved the SPAWN to the waterfront and
-    // the first board after it read 83 % of re-rolls surviving - the
-    // converter had not changed one line, the CITY under the creep had. A
-    // guard must not measure more than it means, and this one never meant
-    // "wherever the spawn happens to be", so the creep runs at the pinned
-    // downtown pose from here on, whatever a later release does to spawns.
-    // The pose is the OLD spawn exactly as the old flow produced it:
-    // (-17.26, 14.48) facing 315 degrees - findClearHeading over the
-    // props-stamped grid, re-derived offline rather than guessed.
+    // The measurement scene is pinned. The bar was calibrated on a downtown
+    // pose, and the share depends on the city under the creep: a different
+    // spawn changes the reading with the converter unchanged. A guard must not
+    // measure more than it means, and this one never meant "wherever the
+    // spawn happens to be", so the creep runs at the pinned downtown pose,
+    // whatever a later release does to spawns: (-17.26, 14.48) facing 315
+    // degrees, findClearHeading over the props-stamped grid, derived offline
+    // rather than guessed.
     await page.evaluate(() => {
       const st = window.__cityWalkGame.walkState
       st.x = -17.26
@@ -2324,24 +2188,22 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       expect.objectContaining({ glyph: expect.any(Number) })
     )
 
-    // BOTH converter paths, in one session. Which one a browser takes is not
-    // this test's to choose - CI renders in software and may land on either -
+    // Both converter paths, in one session. Which one a browser takes is not
+    // this test's to choose (CI renders in software and may land on either),
     // and the two carry the rules separately: the GPU path evaluates them in
     // its shader against the previous render target, the CPU path in
-    // _hfm-hysteresis.js. Each was red-proofed by disabling it alone, and
-    // each time the OTHER path still passed the test, which is how this case
-    // came to run both.
+    // _hfm-hysteresis.js. Disabling either one alone leaves the other path
+    // passing, so the case runs both.
     for (const cpuSample of [false, true]) {
       await page.evaluate(
         (cpu) => window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: cpu }),
         cpuSample
       )
-      // ★ CW-94 widened the pool from four creep places to eight - CW-91's
-      // own precedent, and for CW-91's own reason: never lengthen the creep
-      // (frame count is part of the physics), make the SAMPLE wider. With
-      // trees now real structure, a four-place pool at this corner came
-      // down to ~1,300 events and the two converter paths flapped either
-      // side of the bar on ~56 cells of pick noise (T50).
+      // Eight creep places, not four: never lengthen the creep (frame count is
+      // part of the physics), make the sample wider. With trees as real
+      // structure, a four-place pool at this corner comes down to ~1,300
+      // events, and the two converter paths flap either side of the bar on ~56
+      // cells of pick noise.
       const withMemory = await glyphChangesOverCreep(page, 4, 8)
       await page.evaluate(() =>
         window.__cityWalkGame.altView.setTemporalHysteresis(null)
@@ -2353,8 +2215,8 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       )
 
       const path = `${cpuSample ? 'cpu' : 'default'} path (usedGpu ${withMemory.usedGpu})`
-      // BOTH numbers are logged, because the difference between them is the
-      // whole of CW-89 and a reader of this line should be able to see it.
+      // Both numbers are logged, because the difference between them is what
+      // the lit-cell scope removes, and a reader of this line should see it.
       console.log(
         `[CW-68 memory] ${path}: GOVERNED (unanchored, lit, non-tree) ` +
           `${withMemory.governedChanges} of ${without.governedChanges} ` +
@@ -2379,16 +2241,12 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
         withMemory.governedCells,
         `${path}: cells the memory still governs`
       ).toBeGreaterThan(10000)
-      // ★★★ SCOPED TO LIT CELLS BY CW-89, AND THE BAR IS UNCHANGED AT 0.8.
-      // The memory holds a cell's CHARACTER. Since CW-89 it explicitly does
-      // not decide whether a cell HAS one - a blank answer is taken at once,
-      // in both paths - so a cell going blank or coming back was never a
-      // re-roll this guard was asking it to prevent. Counting those made the
-      // number jump to 81.8 % the moment the trail stopped, which reads as a
-      // regression and is nothing of the kind. This is CW-77's own trap paid
-      // again: a guard must not measure more than it means. The BAR did not
-      // move - it has been re-pinned once already (CW-77, 0.6 -> 0.8) and
-      // re-pinning it to match a result would leave it worth nothing.
+      // Scoped to lit cells, with the bar unchanged at 0.8. The memory holds a
+      // cell's character; it does not decide whether a cell has one (a blank
+      // answer is taken at once, in both paths), so a cell going blank or
+      // coming back is not a re-roll this guard asks it to prevent. A guard
+      // must not measure more than it means, and re-pinning the bar to match a
+      // result would leave it worth nothing.
       expect(
         withMemory.governedChanges,
         `${path}: memory ${withMemory.governedChanges} of ` +
@@ -2422,7 +2280,7 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
   })
 })
 
-test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', () => {
+test.describe('ASCII City Walk — the solid bright layer, three ways', () => {
   /** How many cells the converter painted solid in the frame on screen. */
   const solidCells = (page) =>
     page.evaluate(async () => {
@@ -2443,7 +2301,7 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       return { solid, cells: probe.cols * probe.rows }
     })
 
-  test('the game draws CAPPED solid cells, off draws none, stock draws most', async ({
+  test('the game draws capped solid cells, off draws none, stock draws most', async ({
     page,
   }) => {
     await launchGame(page)
@@ -2453,9 +2311,8 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       window.__cityWalkGame.altView.setCellProbe(true)
     })
 
-    // ★ What the game draws since CW-84: the owner's SECOND answer, given
-    // after playing the deployed build rather than reading photographs of it.
-    // `off` was chosen at G1 from stills and called sad in motion.
+    // What the game draws by default, chosen after playing it in motion:
+    // `off` looks fine in stills and sad in motion.
     expect(
       await page.evaluate(() => window.__cityWalkGame.getLuminanceLayer())
     ).toBe('calm')
@@ -2483,24 +2340,22 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       stock.solid,
       `stock painted ${stock.solid} of ${stock.cells} cells solid`
     ).toBeGreaterThan(0)
-    // ★ WHAT THIS POSE CANNOT SHOW, SAID OUT LOUD. `calm` differs from
-    // `stock` only through its share CAP, and a cap that is never exceeded is
+    // What this pose cannot show, said out loud. `calm` differs from `stock`
+    // only through its share cap, and a cap that is never exceeded is
     // indistinguishable from no cap. At this pose the solid share sits under
-    // the 1 % cap, so calm and stock paint about the same count and an
-    // ordering assertion between them would be measuring frame noise - it
-    // passed once here and then failed on a re-read of the same scene. The
-    // cap's effect is measured where it actually engages (the shopfront pose:
-    // 2,936 solid on stock against 2,261 on calm) and pinned by the unit
-    // tests over nextReverseLift, which need no GPU at all.
+    // the 1 % cap, so calm and stock paint about the same count, and an
+    // ordering assertion between them would measure frame noise. The cap's
+    // effect is measured where it engages (the shopfront pose: 2,936 solid on
+    // stock against 2,261 on calm) and pinned by the unit tests over
+    // nextReverseLift, which need no GPU at all.
 
     // ...and back, so the switch is a switch and not a one-way door.
     //
-    // ★ NOT the same COUNT, and that is a property rather than a wobble.
-    // `calm` carries a share cap whose lift settles over about five frames
-    // (CW-70), so a reading taken immediately after switching back is
-    // mid-settle by construction. Asserting the exact number here would have
-    // pinned one moment of a controller that is designed to move; what has to
-    // be true is that the layer came back at all, and still capped.
+    // Not the same count, and that is a property rather than a wobble: `calm`
+    // carries a share cap whose lift settles over about five frames, so a
+    // reading taken immediately after switching back is mid-settle by
+    // construction. What has to be true is that the layer came back at all,
+    // and still capped.
     await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
     expect((await solidCells(page)).solid).toBeGreaterThan(0)
 
@@ -2527,14 +2382,11 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
     await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
     expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
 
-    // A name nobody knows must land on the SHIPPED treatment, not on whatever
-    // was set last: this switch is reachable from a script and a typo in one
-    // would otherwise quietly measure the previous run.
-    // The fallback is the SHIPPED treatment, so it moved with it: this is
-    // deliberately asserted against the default rather than against a
-    // hard-coded name, because the point of the case is "a typo lands on what
-    // ships", and hard-coding the old answer would have made it pass while
-    // meaning the opposite.
+    // A name nobody knows must land on the shipped treatment, not on whatever
+    // was set last: this switch is reachable from a script, and a typo in one
+    // would otherwise quietly measure the previous run. It is asserted
+    // against the default rather than a hard-coded name, so it stays true when
+    // the default changes.
     await page.evaluate(() =>
       window.__cityWalkGame.setLuminanceLayer('brighter please')
     )
@@ -2542,7 +2394,7 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
   })
 })
 
-test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
+test.describe('ASCII City Walk — Day and Night', () => {
   /** Convert one frame and hand back the glyph grid the converter chose. */
   const glyphsNow = (page) =>
     page.evaluate(async () => {
@@ -2573,7 +2425,7 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
       }
     })
 
-  test('★★★ the backing changes NO glyph the converter chose', async ({
+  test('the backing changes no glyph the converter chose', async ({
     page,
   }) => {
     // The whole layer rests on this. The backing is computed at PAINT time,
@@ -2582,8 +2434,8 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     // kind of claim that quietly stops being true. Same pose, same frame,
     // Night then Day: the grids must match cell for cell.
     //
-    // RED PROOF (run by hand, CW-85): let buildBacking write into the glyph
-    // array it is handed, and this case names the first cell that moved.
+    // Red proof, by hand: let buildBacking write into the glyph array it is
+    // handed, and this case names the first cell that moved.
     await launchGame(page)
     await enterCity(page)
     const configuredHysteresis = await page.evaluate(() =>
@@ -2593,14 +2445,13 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
       window.__cityWalkGame.motionReduced = true
       window.__cityWalkGame.altView.setCellProbe(true)
       window.__cityWalkGame.altView.setFontScale(0.3)
-      // The CW-68 memory HOLDS a glyph for five converted frames and then
+      // The converter's memory holds a glyph for five converted frames and then
       // lets it go, so two captures taken at different points in that cycle
-      // differ by thousands of cells whatever else is true. Measured while
-      // writing this case: with the memory on, frames 1 and 2 after a toggle
-      // match and frame 3 moves 4,237 of 73,600 - the hold expiring, not the
-      // backing; with the memory off every frame matches. So it comes off for
-      // the measurement and goes back after. This case asks whether the
-      // BACKING moves a decision, and the memory's own clock is not an answer.
+      // differ by thousands of cells whatever else is true (with the memory on,
+      // frames 1 and 2 after a toggle match and frame 3 moves 4,237 of 73,600;
+      // with it off every frame matches). So it comes off for the measurement
+      // and goes back after. This case asks whether the backing moves a
+      // decision, and the memory's own clock is not an answer.
       window.__cityWalkGame.altView.setTemporalHysteresis(null)
     })
     await settle(page)
@@ -2617,12 +2468,10 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
       return { n, first }
     }
 
-    // ★★ THE SAME-CODE CONTROL FIRST (CW-31's rule, and this case needed it
-    // - written without one it blamed Day for 4,237 glyphs that the harness
-    // moved on its own before the scene had settled). Two conversions of an
-    // unchanged scene, nothing toggled: whatever this reads is what a
-    // comparison in this harness costs, and the real measurement is only
-    // meaningful against it.
+    // The same-code control first: two conversions of an unchanged scene,
+    // nothing toggled. Whatever this reads is what a comparison in this
+    // harness costs (before the scene settles it can be thousands of glyphs),
+    // and the real measurement is only meaningful against it.
     const nightA = await glyphsNow(page)
     const nightB = await glyphsNow(page)
     const control = countDiff(nightA, nightB)
@@ -2650,7 +2499,7 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     }, configuredHysteresis)
   })
 
-  test('★★ Day paints a backing, and Night paints none', async ({ page }) => {
+  test('Day paints a backing, and Night paints none', async ({ page }) => {
     // The companion to the case above. Proving nothing CHANGED would pass
     // just as well if the layer did nothing at all, so this one measures that
     // it does something. Painted PIXELS are the measure, because a backing is
@@ -2663,14 +2512,12 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     })
 
     await settle(page)
-    // CW-97: the old measure was a RATIO of total painted pixels, which
-    // entangles the backing with the night city's own ink density - a
-    // number that moves with every release and every rasteriser (Edge on
-    // CI's software renderer read 69.9 against a 73.7 bar with the
-    // backing working perfectly). The claim is that DAY paints a backing
-    // and NIGHT paints none, and the sibling case proves the backing
-    // changes no glyph - so with the pose frozen, the pixels painted at
-    // day and black at night ARE the backing, measured directly.
+    // The claim is that Day paints a backing and Night paints none, and the
+    // sibling case proves the backing changes no glyph, so with the pose
+    // frozen, the pixels painted at day and black at night are the backing,
+    // measured directly. A ratio of total painted pixels would entangle the
+    // backing with the night city's own ink density, which moves with every
+    // release and every rasterizer.
     await page.evaluate(() => {
       const cv = document.querySelector('canvas.hfm-overlay-canvas')
       const cx = cv.getContext('2d', { willReadFrequently: true })
@@ -2708,7 +2555,7 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     ).toBeLessThan(0.01)
   })
 
-  test('★★ B and the toolbar button agree, and the choice is remembered', async ({
+  test('B and the toolbar button agree, and the choice is remembered', async ({
     page,
   }) => {
     await launchGame(page)
@@ -2720,12 +2567,11 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     await expect(btn).toHaveAttribute('aria-pressed', 'true')
     await expect(page.locator('#cityWalkAnnouncer')).toContainText('Day')
 
-    // The button is the same action, not a second one: CW-60's promise is
-    // that every key has a button, and a button that disagreed with its key
-    // would be two features wearing one name. force: the day flip's
-    // repaint from the KeyB above can still be mid-frame on software
-    // rendering, starving the click's actionability checks (batch 6);
-    // the aria wait below is the claim.
+    // The button is the same action, not a second one: every key has a
+    // button, and a button that disagreed with its key would be two features
+    // wearing one name. force: the day flip's repaint from the KeyB above can
+    // still be mid-frame on software rendering, starving the click's
+    // actionability checks; the aria wait below is the claim.
     await btn.click({ force: true, noWaitAfter: true })
     await expect(btn).toHaveAttribute('aria-pressed', 'false', {
       timeout: 60000,
@@ -2737,14 +2583,12 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     ).toBe('night')
 
     await page.keyboard.press('KeyB')
-    // ★ LEAVE THE CITY THE WAY A PLAYER DOES, rather than bouncing the tab
-    // through about:blank. The bounce is this suite's usual second-visit
-    // recipe, but in Firefox it raced with a navigation of its own -
-    // 'Navigation to about:blank is interrupted by another navigation to
-    // about:blank' - and failed on every run. Escape closes the layer, which
-    // is what the calibration precedent's blank page was really buying: a
-    // same-URL navigation is only a problem from INSIDE the open layer.
-    // This is also the truer test, because it is what a player actually does.
+    // Leave the city the way a player does, rather than bouncing the tab
+    // through about:blank: in Firefox the bounce races with a navigation of
+    // its own ('Navigation to about:blank is interrupted by another navigation
+    // to about:blank'). Escape closes the layer, and a same-URL navigation is
+    // only a problem from inside the open layer. This is also the truer test,
+    // because it is what a player actually does.
     await expect
       .poll(() =>
         page.evaluate(() =>
@@ -2762,7 +2606,7 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     )
   })
 
-  test('★★★ an empty city takes the obstacles out with the people (CW-Q86)', async ({
+  test('an empty city takes the obstacles out with the people', async ({
     page,
   }) => {
     // The half that is easy to forget. Hiding a car and leaving its footprint
@@ -2839,15 +2683,15 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     const empty = await survey()
     expect(empty.visible, 'nobody is drawn').toBe(0)
 
-    // ★★ WHAT "NOBODY IS IN THE WAY" CAN HONESTLY MEAN. The collision grid is
-    // 1 m and `blockRect` blocks every cell a rect TOUCHES, so somebody
-    // standing beside a tree shares the tree's blocked cell and that cell
-    // stays blocked when they leave - correctly, because the tree is still
-    // there. Measured on Seattle: 7,359 population footprints, 7,315 freed,
-    // and every one of the 44 survivors within a cell and a half of a bench,
-    // a basket, a hydrant or a tree. So the claim is not "zero blocked" - it
-    // is that nothing stays blocked BECAUSE OF the population, and the
-    // survivors are named rather than tolerated.
+    // What "nobody is in the way" can honestly mean. The collision grid is
+    // 1 m and `blockRect` blocks every cell a rect touches, so somebody
+    // standing beside a tree shares the tree's blocked cell, and that cell
+    // stays blocked when they leave, correctly, because the tree is still
+    // there. On Seattle: 7,359 population footprints, 7,315 freed, and every
+    // one of the 44 survivors within a cell and a half of a bench, a basket,
+    // a hydrant or a tree. So the claim is not "zero blocked": it is that
+    // nothing stays blocked because of the population, and the survivors are
+    // named rather than tolerated.
     const freed = busy.populationBlocked - empty.populationBlocked
     expect(
       freed / busy.population,
@@ -2870,7 +2714,7 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
   })
 })
 
-test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86, CW-91)', () => {
+test.describe('ASCII City Walk — glyphs anchored to the surface', () => {
   const settle = (page) =>
     page.evaluate(async () => {
       const g = window.__cityWalkGame
@@ -2896,17 +2740,13 @@ test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86, CW-91)
     await settle(page)
   }
 
-  test('★★★ it is ON, and it runs on the GPU path (CW-91)', async ({ page }) => {
-    // CW-86 built this and asserted the OPPOSITE here, because anchoring
-    // forced the CPU glyph path and halved the frame rate - 59.6 fps to 29.6,
-    // measured A-B-B-A. CW-91 taught the shader to read the field byte out of
-    // the class texture's own green channel and index the ladder itself, so
-    // that reason is gone and the owner's pick (CW-Q90) ships.
-    //
-    // The two halves of this case are one claim: anchoring is on AND the
-    // converter is still on the GPU. Either alone would be worthless - a
-    // release that turned anchoring on and quietly fell back to the CPU would
-    // pass "it is on" while giving every player half the frame rate.
+  test('it is on, and it runs on the GPU path', async ({ page }) => {
+    // Anchoring is on and the converter is still on the GPU: the shader reads
+    // the field byte out of the class texture's own green channel and indexes
+    // the ladder itself. The two halves are one claim. Either alone would be
+    // worthless: a build that turned anchoring on and quietly fell back to
+    // the CPU (59.6 fps to 29.6) would pass "it is on" while giving every
+    // player half the frame rate.
     await enter(page)
     expect(
       await page.evaluate(() => window.__cityWalkGame.getAnchoredGlyphs())
@@ -2938,19 +2778,14 @@ test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86, CW-91)
     expect(field.nonZero).toBeGreaterThan(100)
   })
 
-  test('★★★ it moves the GROUND and the FACADE, and nothing else (CW-91)', async ({
+  test('it moves the ground and the facade, and nothing else', async ({
     page,
   }) => {
-    // The release's whole verdict in one case. CW-86 scoped anchoring to the
-    // surfaces whose texture is a dither and asserted here that the facade did
-    // NOT move; the owner then looked at the lattice photographs and picked 64
-    // for the facade as well (CW-Q90), knowing from CW-86's own table that it
-    // does not steady a wall. So the facade moves now - and the classes that
-    // were never in the set still must not.
+    // Anchoring covers the dithered surfaces and the facade, and the classes
+    // outside that set must not move.
     await enter(page)
-    // ★★★ HOLD THE PATH CONSTANT, OR THIS MEASURES TWO CHANGES AT ONCE. Since
-    // CW-91 both sides are on the GPU by default, which is the whole point;
-    // this line says so rather than assuming it.
+    // Hold the path constant, or this measures two changes at once. Both sides
+    // are on the GPU by default; this line says so rather than assuming it.
     expect(
       await page.evaluate(
         () => window.__cityWalkGame.altView.getConvertStats().usedGpu
@@ -3020,7 +2855,7 @@ test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86, CW-91)
     expect(moved.tree).toBe(0)
   })
 
-  test('★★ an anchored surface holds perfectly still while the walker does', async ({
+  test('an anchored surface holds perfectly still while the walker does', async ({
     page,
   }) => {
     // The standing control, which is the row that makes every other row
@@ -3057,7 +2892,7 @@ test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86, CW-91)
   })
 })
 
-test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-129)', () => {
+test.describe('ASCII City Walk — ink belongs to its surface', () => {
   const settle = (page) =>
     page.evaluate(async () => {
       const g = window.__cityWalkGame
@@ -3146,9 +2981,8 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
 
   /** What a run must contain before its zero means anything. */
   const expectRealFixture = (res) => {
-    // ★ A GUARD'S FIXTURE MUST CONTAIN THE THING IT GUARDS. Nought illegal
-    // characters out of nought classified cells is the shape of every guard
-    // this round has had to un-ship.
+    // A guard's fixture must contain the thing it guards: zero illegal
+    // characters out of zero classified cells proves nothing.
     expect(res.classified).toBeGreaterThan(2000)
     expect(res.classesSeen).toBeGreaterThan(3)
     // And the picture must be drawing a real range of characters, not one
@@ -3156,22 +2990,19 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
     expect(res.richest).toBeGreaterThan(3)
   }
 
-  test('★★★ in COLOUR every classified cell draws its own surface\'s character', async ({
+  test('in color every classified cell draws its own surface\'s character', async ({
     page,
   }) => {
-    // The owner's defect, as a number. Until CW-93 the GPU path was handed
-    // `useClassVocabularies: !usePalette`, so in colour every classified cell
-    // searched the full 95-glyph atlas: a tree canopy and a building facade
-    // were drawn with the same alphabet, and a window pattern landed on a
-    // tree's underside. Measured at 69 % of the grid before the fix.
+    // The defect, as a number. In color every classified cell must search its
+    // own class vocabulary, not the full 95-glyph atlas: with the full atlas a
+    // tree canopy and a building facade are drawn with the same alphabet, and
+    // a window pattern lands on a tree's underside (69 % of the grid, unfixed).
     //
-    // ★ AND THIS CASE EARNED ITS KEEP THE DAY IT WAS WRITTEN. It went red on
-    // a SECOND defect the first fix uncovered (D-129): reaching colour by
-    // CLICKING the button - which is how a player reaches it, and what this
-    // case does - left the GPU path's reverse-video threshold set to the mono
-    // value, so 119 bright cells were matched against an inverted vector and
-    // drew from the whole atlas. Setting the mode before the page loads never
-    // showed it. Do not "simplify" this into a localStorage seed.
+    // Color is reached by clicking the button, which is how a player reaches
+    // it: that path must also set the GPU path's reverse-video threshold for
+    // color, or bright cells are matched against an inverted vector and draw
+    // from the whole atlas. Setting the mode before the page loads does not
+    // show that, so do not "simplify" this into a localStorage seed.
     await enter(page)
     // noWaitAfter: the flip's synchronous atlas rebuild can outlive the
     // action budget on CI software; the aria wait below is the real
@@ -3196,7 +3027,7 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
     ).toBe(0)
   })
 
-  test('★★ and the two converter paths agree about it, in both modes', async ({
+  test('and the two converter paths agree about it, in both modes', async ({
     page,
   }) => {
     // The defect was one path disagreeing with the other, which is the one
@@ -3239,7 +3070,7 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
   })
 })
 
-test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)', () => {
+test.describe('ASCII City Walk — color belongs to its surface', () => {
   const settle = (page) =>
     page.evaluate(async () => {
       const g = window.__cityWalkGame
@@ -3254,15 +3085,15 @@ test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)'
       }
     })
 
-  test('★★★ a surface keeps its colour while the camera moves', async ({
+  test('a surface keeps its color while the camera moves', async ({
     page,
   }) => {
-    // D-127: the owner watched a wall flip wholesale between two palette
-    // entries as they walked toward it. The cause was that the colour index
-    // was a stateless nearest-palette match on the lit screen, re-taken every
-    // frame - and the city is achromatic, so that match was reading the last
-    // digit or two of a grey image. Each surface has an authored colour now
-    // (CW-Q96), and the lit screen decides only whether the cell is inked.
+    // A wall must not flip wholesale between two palette entries as the player
+    // walks toward it. A stateless nearest-palette match on the lit screen,
+    // re-taken every frame, would do that: the city is achromatic, so the
+    // match reads the last digit or two of a gray image. Each surface has an
+    // authored color, and the lit screen decides only whether the cell is
+    // inked.
     await launchGame(page)
     await enterCity(page)
     // noWaitAfter: the colour flip rebuilds the glyph atlas synchronously,
@@ -3287,8 +3118,8 @@ test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)'
       'the game installs an authored table in colour mode'
     ).toBe(true)
 
-    // Walk forward and ask, per class, how many cells changed COLOUR while the
-    // class under them did not. That is the owner's defect, exactly.
+    // Walk forward and ask, per class, how many cells changed color while the
+    // class under them did not. That is the defect, exactly.
     const flips = await page.evaluate(async () => {
       const g = window.__cityWalkGame
       const s = g.walkState
@@ -3349,10 +3180,10 @@ test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)'
     ).toBe(0)
   })
 
-  test('★★ no surface is ever painted white, which is what CW-71 guards', async ({
+  test('no surface is ever painted white, which is what the ink budget guards', async ({
     page,
   }) => {
-    // CW-71's ink budget gates the white entry on luminance and chroma, and
+    // The ink budget gates the white entry on luminance and chroma, and
     // that guard rests on a surface family never being white. This is the same
     // rule checked against the real palette the game installs rather than
     // against the table alone.

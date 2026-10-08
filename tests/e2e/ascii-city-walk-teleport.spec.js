@@ -10,25 +10,21 @@ import {
 useCityWalkFixtures()
 
 /**
- * ASCII City Walk - dropping yourself onto a street from the map. CW-36
- * built the mechanics (the segment snap, the trap guard, the naming);
- * CW-40 (CW-Q40) replaced its two-step pick-then-J gesture with a pin flow
- * where the Teleport button ARMED and a click travelled in one step; CW-61
- * (CW-Q58) retires the arming. Every sub-threshold map click now ASKS, in a
- * dialog that names the corner you would land on, and nothing moves until
- * Travel is pressed. J asks the same question about the middle of the map.
+ * ASCII City Walk: dropping yourself onto a street from the map. The
+ * mechanics are the segment snap, the trap guard and the naming. Every
+ * sub-threshold map click asks, in a dialog that names the corner you would
+ * land on, and nothing moves until Travel is pressed. J asks the same
+ * question about the middle of the map.
  *
- * ★ THE REVERSAL IS DELIBERATE AND IT IS RECORDED. CW-40's unarmed click did
- * nothing at all and its armed click was irreversible. Both are gone: the
- * cost is one extra press, and what it buys is a preview - which for a
- * screen-reader user is the only description of the destination there is.
+ * Asking first costs one extra press, and what it buys is a preview, which
+ * for a screen-reader user is the only description of the destination there
+ * is.
  *
- * Its own file rather than an addition to ascii-city-walk.spec.js: that file
- * was already a quarter of the browser lane before D-72 split it, and the
- * cost packer places a new spec automatically (scripts/e2e-shard.mjs).
+ * This is a file of its own so the cost packer (scripts/e2e-shard.mjs) can
+ * place it on a different shard from the other City Walk suites.
  */
 
-test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
+test.describe('ASCII City Walk — teleport', () => {
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
   const hud = (page) => page.locator('#cityWalkHudStatus')
   const teleportBtn = (page) => page.locator('#cityWalkTeleportBtn')
@@ -104,7 +100,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
-  test('★★ a click ASKS, and Travel goes; the map stays (CW-61)', async ({
+  test('a click asks, and Travel goes; the map stays', async ({
     page,
   }) => {
     await launchGame(page)
@@ -113,14 +109,12 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
 
     await openMap(page)
 
-    // ★ CW-78 moved the spawn to the waterfront, and the map opens centred
-    // on the player - so a magic viewport fraction that used to land on a
-    // downtown street now lands off it (the first board after the move
-    // landed on unnamed ground and the street-name assertion below went
-    // red). The clicked spot is DERIVED now: centre the map on a real
-    // named-road midpoint at least 100 m away, then click the middle of
-    // the viewport - still the real pointer path this case exists to
-    // exercise, on a spot that names its street wherever the spawn goes.
+    // The spawn is on the waterfront and the map opens centered on the player,
+    // so a fixed viewport fraction would land off any street. The clicked spot
+    // is derived instead: center the map on a real named-road midpoint at least
+    // 100 m away, then click the middle of the viewport. That keeps the real
+    // pointer path this case exists to exercise, on a spot that names its
+    // street wherever the spawn goes.
     await page.evaluate(() => {
       const g = window.__cityWalkGame
       const st = g.walkState
@@ -143,9 +137,8 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     })
     await page.waitForTimeout(400)
 
-    // The click opens the question and moves NOTHING. That second half is
-    // the reversal this release makes, so it is asserted rather than
-    // implied by the confirm succeeding afterwards.
+    // The click opens the question and moves nothing. That is asserted rather
+    // than implied by the confirm succeeding afterwards.
     await clickMap(page, 0.5, 0.5)
     await expect(dialog(page)).toBeVisible()
     expect(dist(await walk(page), start)).toBeLessThan(0.01)
@@ -164,7 +157,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
 
     const landed = await walk(page)
     // One click, one journey — and the game is still the map, because
-    // entering the street is the player's separate choice (CW-Q40).
+    // entering the street is the player's separate choice.
     expect(landed.mapView).toBe(true)
     expect(dist(landed, start)).toBeGreaterThan(50)
 
@@ -219,11 +212,10 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     // J, which lands on the middle of the screen. That is the whole keyboard
     // route, and it needs no key and no mode.
     //
-    // CW-97: hold the arrow until the MAP has genuinely moved past the
-    // landing assert's 50 m (60 for margin), not for a wall-clock 900 ms -
-    // panning integrates per frame with dt clamped, and a frame-starved
-    // software renderer delivered 20 m where the same hold pans hundreds
-    // on hardware.
+    // Hold the arrow until the map has genuinely moved past the landing
+    // assert's 50 m (60 for margin), not for a wall-clock 900 ms: panning
+    // integrates per frame with dt clamped, and a frame-starved software
+    // renderer delivers 20 m where the same hold pans hundreds on hardware.
     await page.keyboard.down('ArrowRight')
     await expect
       .poll(
@@ -245,9 +237,8 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
       return { x: c.centerX, y: c.centerY }
     })
 
-    // ★ J ASKS NOW, and that is a deliberate reversal of CW-Q40's one-step
-    // J. The keyboard could always reach any spot; what it could not do was
-    // hear where it was going first.
+    // J asks too. The keyboard could always reach any spot; what it needs is
+    // to hear where it is going first.
     await page.keyboard.press('KeyJ')
     await expect(dialog(page)).toBeVisible()
     await expect(goBtn(page)).toBeFocused()
@@ -258,13 +249,13 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     await expect(announcer(page)).toContainText(/Teleported /)
 
     const landed = await walk(page)
-    // J stays on the map too (CW-Q40): both routes end the same way.
+    // J stays on the map too: both routes end the same way.
     expect(landed.mapView).toBe(true)
     expect(dist(landed, center)).toBeLessThan(30)
     expect(dist(landed, start)).toBeGreaterThan(50)
   })
 
-  test('★★ Cancel and Escape move nothing, and the question dies with the map (CW-61)', async ({
+  test('Cancel and Escape move nothing, and the question dies with the map', async ({
     page,
   }) => {
     await launchGame(page)
@@ -273,7 +264,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
 
     await openMap(page)
     await expect(teleportBtn(page)).toBeVisible()
-    // ★ THE TWO BUTTONS HAVE DIFFERENT NAMES, and the reason is not
+    // The two buttons have different names, and the reason is not
     // cosmetic: the toolbar's opens the question and the dialog's answers
     // it, so one name across both would be two controls doing different
     // jobs under the same label.
@@ -284,8 +275,8 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     await expect(goBtn(page)).not.toHaveText(await teleportBtn(page).innerText())
     await page.keyboard.press('Escape')
     await expect(dialog(page)).toBeHidden()
-    // ★ NOT A TOGGLE ANY MORE. The arming it announced has retired, so a
-    // pressed state would be describing a mode that no longer exists.
+    // Not a toggle: there is no armed mode, so a pressed state would describe
+    // a mode that does not exist.
     await expect(teleportBtn(page)).not.toHaveAttribute('aria-pressed', 'true')
     await expect(teleportBtn(page)).not.toHaveAttribute('aria-pressed', 'false')
 
@@ -331,30 +322,26 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     expect(dist(await walk(page), start)).toBeLessThan(0.01)
   })
 
-  test('THE TRAP: the street view shows the landing, not the spawn', async ({
+  test('the street view shows the landing, not the spawn', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
-    // Round 4 (CW-20) recorded this one: the first-person camera is only
-    // re-posed inside a movement step, so a teleport that moves walkState
-    // alone leaves the camera standing where the player used to be and the
-    // street view photographs the spawn. Both halves are checked - where the
-    // camera IS, and that the picture actually changed.
+    // The first-person camera is only re-posed inside a movement step, so a
+    // teleport that moved walkState alone would leave the camera standing
+    // where the player was, and the street view would photograph the spawn.
+    // Both halves are checked: where the camera is, and that the picture
+    // actually changed.
     const before = await camera(page)
 
     // The control, measured in this run rather than assumed: two captures of
-    // the SAME place, a second apart, with nothing moved. In the trail era it
-    // measured ~0.024 (the composite fed each frame a fading copy of the
-    // last, so same-code frames never quite settled) and CW-30 nearly filed
-    // a false parity alarm for want of exactly this comparison. Since CW-39
-    // retired the trail, standing-still frames are deterministic - re-derived
-    // 2026-08-24: 0.0000 across five 1s samples, trail off AND on (standing
-    // still there is no motion to smear) - so the 0.05 epsilon below carries
-    // the whole threshold against a teleport's ~0.10 to ~0.14. The control
-    // stays measured anyway: if the picture ever starts moving on its own
-    // again, the 3x multiplier re-engages without anyone editing this test.
+    // the same place, a second apart, with nothing moved. Standing-still frames
+    // are deterministic (0.0000 across five 1 s samples, trail off and on), so
+    // the 0.05 epsilon below carries the whole threshold against a teleport's
+    // ~0.10 to ~0.14. The control stays measured anyway: if the picture ever
+    // starts moving on its own, the 3x multiplier re-engages without anyone
+    // editing this test.
     const control = signatureDistance(
       await inkSignature(page),
       await settledSignature(page)
@@ -364,7 +351,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     await openMap(page)
     expect(await clickAndTravel(page, 0.42, 0.34)).toBe(true)
     await expect(announcer(page)).toContainText(/Teleported /)
-    // CW-40: the commit itself stays on the map; the street view is the
+    // The commit itself stays on the map; the street view is the
     // player's next, separate press - which is exactly when a camera that
     // was never re-posed would photograph the spawn.
     await page.keyboard.press('KeyM')
@@ -393,9 +380,9 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     await enterCity(page)
     await openMap(page)
 
-    // Count what is WRITTEN into the live region, not how many times the
+    // Count what is written into the live region, not how many times the
     // node is touched: an announcer that clears itself and rewrites the same
-    // sentence mutates twice and speaks once (CW-27).
+    // sentence mutates twice and speaks once.
     await page.evaluate(() => {
       window.__cwSpoken = []
       const node = document.getElementById('cityWalkAnnouncer')
@@ -419,7 +406,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     expect(spoken.at(-1)).toBe(teleportLines[0])
   })
 
-  test('★★ the circle marks the asked spot, and retires either way (CW-61)', async ({
+  test('the circle marks the asked spot, and retires either way', async ({
     page,
   }) => {
     await launchGame(page)
@@ -450,7 +437,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     const open = await circle()
     expect(open.visible).toBe(true)
 
-    // ★ IT STANDS ON THE LANDING, NOT ON THE CLICK. The sentence beside it
+    // It stands on the landing, not on the click. The sentence beside it
     // describes where you would arrive - findLandingNear snaps to a street -
     // so a mark at the raw pointer position would contradict the words.
     const landing = await page.evaluate(() => {
@@ -464,12 +451,12 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
       0.01
     )
 
-    // ★★ THE HOLE IS THE MARK, and this pins it. The circle shipped first as
-    // a bare bright outline and was INVISIBLE in colour, HC-dark and
-    // HC-light - those palettes fill the map with white and grey glyphs, so
-    // a white ring is a white thing among white things. Exact black is the
-    // one value the converter renders as an empty cell (CW-5), and an empty
-    // patch inside a mark is a footprint no building in any palette has.
+    // The hole is the mark, and this pins it. A bare bright outline is
+    // invisible in color, HC-dark and HC-light: those palettes fill the map
+    // with white and gray glyphs, so a white ring is a white thing among white
+    // things. Exact black is the one value the converter renders as an empty
+    // cell, and an empty patch inside a mark is a footprint no building in any
+    // palette has.
     expect(open.coreHex, 'the circle lost its exact-black core').toBe('000000')
     expect(open.coreDepthTest, 'the core can be occluded by a building').toBe(
       false
@@ -500,7 +487,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     ).toBe(false)
   })
 
-  test('★★ the dialog names a REAL corner, at real corners (CW-61)', async ({
+  test('the dialog names a real corner, at real corners', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -508,7 +495,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     await enterCity(page)
     await openMap(page)
 
-    // ★ THE CORNERS ARE FOUND BY CROSSING THE ROAD GRAPH WITH ITSELF, not
+    // The corners are found by crossing the road graph with itself, not
     // chosen by hand. A hand-picked corner proves that one corner works; the
     // claim this sentence makes is about the city. Seattle's extract has
     // 1,661 crossings of two differently-named vehicle streets.
@@ -553,7 +540,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
       }
       const step = Math.max(1, Math.floor(out.length / 6))
       const picked = out.filter((_, k) => k % step === 0).slice(0, 6)
-      // ★ THE ARMS OF THE JUNCTION, not the pair that happened to be
+      // The arms of the junction, not the pair that happened to be
       // enumerated. 8th Avenue, Olive Way and Howell Street all meet at one
       // point, and which TWO the dialog names there is a ranking detail; that
       // both are streets which genuinely meet there is the claim.
@@ -616,7 +603,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     }
   })
 
-  test('★★ mid-block it names ONE street rather than inventing a corner (CW-61)', async ({
+  test('mid-block it names one street rather than inventing a corner', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -631,11 +618,10 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     const spots = await page.evaluate(() => {
       const g = window.__cityWalkGame
       const out = []
-      // ★ THE FIRST VERSION OF THIS ASKED FOR 140 m SEGMENTS AND FOUND
-      // NONE. OSM splits a way at every junction and a downtown Seattle
-      // block is about eighty metres, so nothing is that long. Sixty is
-      // enough: the midpoint of a 60 m segment is 30 m from either end,
-      // which is well outside the twelve-metre junction radius.
+      // Sixty-meter segments, not longer: OSM splits a way at every junction
+      // and a downtown Seattle block is about eighty meters, so nothing is 140
+      // m long. The midpoint of a 60 m segment is 30 m from either end, well
+      // outside the twelve-meter junction radius.
       for (const road of g.model.roads ?? []) {
         if (out.length >= 6) break
         if (typeof road?.name !== 'string' || road.name === '') continue
@@ -685,7 +671,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
       await expect(page.locator('#cityWalkTravelDialog')).toBeHidden()
     }
 
-    // ★ NON-VACUITY. If every mid-block probe happened to land on a corner
+    // Non-vacuity. If every mid-block probe happened to land on a corner
     // this case would prove nothing at all, so it insists that most of them
     // did not.
     expect(
@@ -694,7 +680,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     ).toBeGreaterThanOrEqual(Math.ceil(spots.length / 2))
   })
 
-  test('★★ landing beside a landmark MARKS it (CW-78) - the tick is the landing, not a later frame', async ({
+  test('landing beside a landmark marks it: the tick is the landing, not a later frame', async ({
     page,
   }) => {
     await launchGame(page)
@@ -735,7 +721,7 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     expect(after.visited).toContain('Seattle Great Wheel')
   })
 
-  test('axe: the map view, and the travel dialog open over it (CW-61)', async ({
+  test('axe: the map view, and the travel dialog open over it', async ({
     page,
   }) => {
     await launchGame(page)
@@ -779,12 +765,9 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
  * A coarse brightness fingerprint of the ASCII picture: mean luminance over
  * an 8x8 grid of the rendered canvas.
  *
- * Deliberately not a pixel diff. When this guard was written the ASCII
- * surface was a phosphor buffer that carried the previous frame, so exact
- * comparison was noisy by construction. CW-39 retired the trail and the
- * surface is deterministic now, but the coarse signature stays: "is this a
- * different place" is all this needs to answer, and an 8x8 average keeps
- * answering it whether or not some future effect makes pixels restless.
+ * Deliberately not a pixel diff: "is this a different place" is all this
+ * needs to answer, and an 8x8 average keeps answering it whether or not
+ * some effect makes pixels restless.
  */
 async function inkSignature(page) {
   return page.evaluate(() => {

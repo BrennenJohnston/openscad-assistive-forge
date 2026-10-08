@@ -8,19 +8,18 @@ import {
 useCityWalkFixtures()
 
 /**
- * CW-72 (CW-Q75, signed by the owner at G1): ONE default character size, and
- * calibration reduced to a FLOOR.
+ * One default character size, with calibration reduced to a floor.
  *
- * CW-42 measured this machine and LANDED it on its own size, so two players
- * saw two different games. Every case in this file was written for that
- * contract and is rewritten here for the new one:
+ * Calibration once measured each machine and settled it on its own size, so
+ * two players saw two different games. These cases hold the rule that
+ * replaced it:
  *
  *   - everybody opens at 30 %;
- *   - a machine that cannot hold 30 % is moved UP the ladder, never down;
- *   - a raise needs TWO consecutive passes to agree, so a busy afternoon
- *     cannot brand a machine (the R6 ledger's floor-flapping item);
- *   - a stored CW-42 landing BELOW the default is migrated up to it, or the
- *     machine that wrote it would keep its private game after this release.
+ *   - a machine that cannot hold 30 % is moved up the ladder, never down;
+ *   - a raise needs two consecutive passes to agree, so a busy afternoon
+ *     cannot brand a machine with a floor that flaps;
+ *   - a stored landing below the default is migrated up to it, or the
+ *     machine that wrote it would keep its private game.
  *
  * Nothing here times real frames: every case forces its probe readings
  * through the DEV hook the shared fixture leaves inert, because CI renders in
@@ -90,7 +89,7 @@ const enterAndCalibrate = async (page, { fresh = false } = {}) => {
   await calibrationDone(page)
 }
 
-test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
+test.describe('ASCII City Walk — one size, and a floor', () => {
   test('a machine that holds the default opens at the default, stored as a floor', async ({
     page,
   }) => {
@@ -104,7 +103,7 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     expect(await storedManual(page)).toBeNull()
   })
 
-  test('★★ a raise needs TWO passes, and does not flap on a third', async ({
+  test('a raise needs two passes, and does not flap on a third', async ({
     page,
   }) => {
     // This machine cannot hold 30% and is comfortable at 40%.
@@ -129,7 +128,7 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     expect(await scaleOf(page)).toBeCloseTo(0.4, 5)
   })
 
-  test('the floor NEVER goes down, however fast the machine measures', async ({
+  test('the floor never goes down, however fast the machine measures', async ({
     page,
   }) => {
     await seedStorage(page, [
@@ -144,11 +143,12 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     expect(await storedFloor(page)).toBe('0.5')
   })
 
-  test('★★ a CW-42 landing below the default is migrated up to it', async ({
+  test('an old calibration landing below the default is migrated up to it', async ({
     page,
   }) => {
-    // 10% was one of CW-42's two candidates. A machine that stored it would
-    // keep its own private game for ever if that value survived as a floor.
+    // 10% was one of the old calibration's two candidates. A machine that
+    // stored it would keep its own private game for ever if that value
+    // survived as a floor.
     await seedStorage(page, [
       ['openscad-forge-city-walk-calibrated-floor', '0.1'],
     ])
@@ -173,14 +173,13 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     expect(await storedManual(page)).toBe('0.6')
   })
 
-  test('★★ a saved size below the floor opens at the SAVED size (CW-88)', async ({
+  test('a saved size below the floor opens at the saved size', async ({
     page,
   }) => {
-    // This case is CW-72's, flipped. It used to assert 0.5, and CW-Q87
-    // reversed the clamp half of CW-Q68: the floor SEEDS a player who has
-    // never chosen and does not overrule one who has. Both halves of the old
-    // behaviour had to go for this to hold - the seed's Math.max, AND the
-    // calibration pass forcing the size up to the floor it had just measured.
+    // The floor seeds a player who has never chosen a size and does not
+    // overrule one who has. Two things hold that: the seed keeps the saved
+    // size instead of raising it to the floor, and the calibration pass does
+    // not force the size up to the floor it has just measured.
     await seedStorage(page, [
       ['openscad-forge-city-walk-font-scale', '0.3'],
       ['openscad-forge-city-walk-calibrated-floor', '0.5'],
@@ -193,13 +192,13 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     expect(await storedManual(page)).toBe('0.3')
   })
 
-  test('★★ stepping down from the default reaches 10 percent (CW-88)', async ({
+  test('stepping down from the default reaches 10 percent', async ({
     page,
   }) => {
-    // The owner's ask, in one case: unlock the ability to go as small as 10 %
-    // again. One step by KEY and one by BUTTON, because a single function
-    // serves the keyboard, the toolbar and the camera panel, and a release
-    // that only tried one of them would not know about the other two.
+    // Stepping down from the default reaches 10 %. One step by key and one by
+    // button, because a single function serves the keyboard, the toolbar and
+    // the camera panel, and a test that tried only one of them would not know
+    // about the other two.
     await forceCalibration(page, { 0.3: 20 })
     await enterAndCalibrate(page)
     expect(await scaleOf(page)).toBeCloseTo(DEFAULT_SCALE, 5)
@@ -212,7 +211,7 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     expect(await storedManual(page)).toBe('0.1')
 
     // The bottom of the range is the bottom: the control says so there, and
-    // only there - it used to say it at the calibrated floor instead.
+    // only there, not at the calibrated floor.
     await expect(page.locator('#cityWalkCharDownBtn')).toHaveAttribute(
       'aria-disabled',
       'true'
@@ -221,15 +220,14 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     expect(await scaleOf(page)).toBeCloseTo(0.1, 5)
   })
 
-  test('★★ a calibration raise leaves a saved size alone, and says so (CW-88)', async ({
+  test('a calibration raise leaves a saved size alone, and says so', async ({
     page,
   }) => {
     // A manual entry is measured where it stands and never flipped, so this
     // machine's one reading is the player's own 30 % failing the bar; the
-    // floor rises on the second agreeing pass. CW-88: the floor is
-    // information, not an override. The size stays where the player put it
-    // and the announcement OFFERS the larger size instead of taking the
-    // choice away. Before this release the pass moved them to 50 %.
+    // floor rises on the second agreeing pass. The floor is information, not
+    // an override: the size stays where the player put it, and the
+    // announcement offers the larger size instead of taking the choice away.
     await seedStorage(page, [
       ['openscad-forge-city-walk-font-scale', '0.3'],
       ['openscad-forge-city-walk-calibrated-floor', '0.3,1'],
@@ -243,16 +241,16 @@ test.describe('ASCII City Walk — one size, and a floor (CW-72)', () => {
     await expect(announcer(page)).toContainText('your size is unchanged')
   })
 
-  test('★★ a failing reading BELOW the ladder decides nothing (CW-88)', async ({
+  test('a failing reading below the ladder decides nothing', async ({
     page,
   }) => {
-    // The hazard CW-88 creates: 10 % is reachable now, a manual entry is
-    // measured where it stands, and 10 % is the most expensive size there is
-    // (a smaller cell means more of them). Reading it as a verdict on 30 %
-    // is backwards - cost RISES as the cells get smaller - and it used to
-    // send the stored floor to the top of the ladder, 50 %, off one reading
-    // of a size the ladder does not contain. The pass is now inconclusive:
-    // nothing stored, nothing announced, yesterday's floor left standing.
+    // 10 % is reachable and a manual entry is measured where it stands, and
+    // 10 % is the most expensive size there is (a smaller cell means more of
+    // them). Reading it as a verdict on 30 % would be backwards, since cost
+    // rises as the cells get smaller, and would send the stored floor to the
+    // top of the ladder off one reading of a size the ladder does not contain.
+    // So the pass is inconclusive: nothing stored, nothing announced, the
+    // previous floor left standing.
     await seedStorage(page, [
       ['openscad-forge-city-walk-font-scale', '0.1'],
       ['openscad-forge-city-walk-calibrated-floor', '0.3,1'],

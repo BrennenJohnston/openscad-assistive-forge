@@ -8,14 +8,13 @@ import {
 useCityWalkFixtures()
 
 /**
- * CW-43 (CW-Q43/CW-Q44): street furniture from real data, and attraction
- * nodes in the landmark legend.
+ * Street furniture from real data, and attraction nodes in the landmark
+ * legend.
  *
- * The owner's mission sentence governs this suite: the furniture is
- * wayfinding information for a blind traveler, so the counts are EXACT -
- * the extracts are versioned fixtures and the placement is hash-seeded
- * deterministic, so any drift here is a real change someone must own,
- * never noise.
+ * The furniture is wayfinding information for a blind traveler, so the
+ * counts are exact: the extracts are versioned fixtures and the placement is
+ * hash-seeded deterministic, so any drift here is a real change someone must
+ * own, never noise.
  */
 
 const modelStats = (page) =>
@@ -24,23 +23,17 @@ const modelStats = (page) =>
 const propStats = (page) =>
   page.evaluate(() => window.__cityWalkGame?.props?.stats ?? null)
 
-test.describe('ASCII City Walk — street furniture (CW-43)', () => {
+test.describe('ASCII City Walk — street furniture', () => {
   test('Seattle carries its real furniture, counted class by class', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
-    // The extract's own counts. CW-44's fallback bake (shifted center
-    // 47.612,-122.340, r=1300 - the signed rule) re-measured these from
-    // the shipped blob; the CW-43-era 707 m numbers were 71/31/155/309/43.
-    //
-    // CW-77 rebaked all four cities and two of these five moved: a waste
-    // basket and two bicycle stands, which is what a fortnight of OSM edits
-    // looks like. THE CAUSE IS THE MAP AND NOT THE CODE, and that is proved
-    // rather than assumed: CW-77's builders run against the PREVIOUS
-    // extracts reproduce 156 / 280 / 306 / 853 / 112 exactly, and the
-    // wayfinding count below with them.
+    // The extract's own counts. When a rebake moves them, check the cause
+    // before re-pinning: the current builders run against the previous
+    // extracts reproduce the previous numbers exactly when the change is the
+    // map's (OpenStreetMap edits) and not the code's.
     const model = await modelStats(page)
     expect(model.furnitureByKind).toEqual({
       bus_stop: 156,
@@ -49,35 +42,17 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
       bicycle_parking: 855,
       fire_hydrant: 112,
     })
-    // The data-only wayfinding layer rides the model untouched.
-    //
-    // CW-55 rebaked all four cities and this is the ONLY count that moved:
-    // 5354 -> 5355, one crossing or kerb node added to Seattle's OSM between
-    // 2026-08-24 and 2026-08-26. Every furniture count above, and every placed
-    // count below, came back identical - which is the reassuring half of a
-    // rebake and worth writing down, because a rebake that moved everything
-    // would mean the bake had changed rather than the map.
-    //
-    // CW-77's rebake moved it back: 5355 -> 5354, one node gone again.
+    // The data-only wayfinding layer rides the model untouched. A rebake that
+    // moves only this count by a node or two is the map changing; one that
+    // moved everything would mean the bake had changed.
     expect(model.wayfindingCount).toBe(5354)
 
     // What actually stands in the city: the same numbers minus nodes that
-    // fall inside a building footprint or duplicate one another - measured
-    // once, deterministic forever (hash-seeded placement, versioned data).
-    //
-    // CW-76 moved three of the five, and the cause is the collision grid
-    // rather than the placement: 42 canopies stopped blocking their
-    // footprints and one grounded volume started, so a bus stop, three
-    // benches and a waste basket that used to stand against a `building=roof`
-    // now have room. Re-derived from an independent Node run of the same
-    // builders - the new model against the OLD collision bases reproduces
-    // 154 / 268 / 285 exactly, which is what pins the cause.
-    //
-    // CW-77 moved three of them again, by the same two nodes the map lost
-    // and gained plus their neighbours: bench 271 -> 269, waste basket
-    // 286 -> 284, bicycle parking 811 -> 813. Same proof as above - CW-77's
-    // builders on the PREVIOUS extracts reproduce 155 / 271 / 286 / 811 /
-    // 109 to the item, so no placement rule changed here.
+    // fall inside a building footprint or duplicate one another, deterministic
+    // (hash-seeded placement, versioned data). These follow the collision grid
+    // as well as the map: a canopy that stops blocking its footprint gives a
+    // bench beside it room. Before re-pinning, run the builders against the old
+    // collision bases and the old extracts to find which one moved them.
     const props = await propStats(page)
     expect(props.furnitureByKind).toEqual({
       bus_stop: 155,
@@ -104,7 +79,7 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
   test('a bus shelter is solid: you press against it, never through it', async ({
     page,
   }) => {
-    // Same patience arithmetic as the parked-car case (D-79): the walk is
+    // Same patience arithmetic as the parked-car case: the walk is
     // measured in rendered frames, and the budget covers the poll's 90 s.
     test.setTimeout(150_000)
     await launchGame(page)
@@ -181,7 +156,7 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
   })
 })
 
-test.describe('ASCII City Walk — attractions in the legend (CW-44, CW-Q44)', () => {
+test.describe('ASCII City Walk — attractions in the legend', () => {
   test('the Seattle Great Wheel is findable by name on the map', async ({
     page,
   }) => {
@@ -189,8 +164,8 @@ test.describe('ASCII City Walk — attractions in the legend (CW-44, CW-Q44)', (
     await enterCity(page)
 
     // The Wheel is a point in OSM (attraction=big_wheel, height 53 m): it
-    // joins the legend as a named landmark, not as 3D geometry - the plan
-    // says that plainly, and this is the generic machinery proving it.
+    // joins the legend as a named landmark, not as 3D geometry, through the
+    // generic attraction machinery.
     const attractions = await page.evaluate(() =>
       window.__cityWalkGame.model.attractions.map((a) => a.name)
     )
@@ -200,12 +175,11 @@ test.describe('ASCII City Walk — attractions in the legend (CW-44, CW-Q44)', (
     const legend = page.locator('#cityWalkLegend')
     await expect(legend).toBeVisible()
     await expect(legend).toContainText('Seattle Great Wheel')
-    // The Wheel outranks every PLAIN hotel (base 6 + height beats their
+    // The Wheel outranks every plain hotel (base 6 + height beats their
     // tourism 3 + height 2). It does not have to be first: the Central
     // Library carries tourism=attraction on its own building and scores 8
-    // with its height and block-sized footprint - measured here, and the
-    // legend is honest about it. What matters is the Wheel sits above the
-    // hotel block it used to be invisible under.
+    // with its height and block-sized footprint. What matters is that the
+    // Wheel sits above the hotel block.
     const rows = await page
       .locator('.city-walk-legend-list li')
       .allInnerTexts()
@@ -217,23 +191,21 @@ test.describe('ASCII City Walk — attractions in the legend (CW-44, CW-Q44)', (
 })
 
 /**
- * CW-57 (CW-Q55): plantings and picnic tables, from the same real data.
+ * Plantings and picnic tables, from the same real data.
  *
  * Exact counts for the same reason the furniture's are exact: versioned
  * extracts and hash-seeded deterministic placement, so any drift here is a
- * change someone must own. And the split between data and fallback is pinned
- * separately, because the whole law is that REAL DATA WINS - a city with
- * mapped planters must never grow invented ones beside them.
+ * change someone must own. The split between data and fallback is pinned
+ * separately, because real data wins: a city with mapped planters must
+ * never grow invented ones beside them.
  */
-test.describe('ASCII City Walk — plantings (CW-57)', () => {
+test.describe('ASCII City Walk — plantings', () => {
   test('Seattle plants only what its map records', async ({ page }) => {
     await launchGame(page)
     await enterCity(page)
 
     const model = await modelStats(page)
-    // What CW-55's rebake actually holds. The plan's section 1f said 20
-    // planters and 69 flowerbeds; the extract says otherwise, and this is
-    // the extract.
+    // The extract's own planting counts.
     expect(model.plantingByKind).toEqual({ planter: 11, flowerbed: 56 })
     expect(model.picnicTableCount).toBe(26)
 
@@ -245,7 +217,7 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
       flowerbed: 36,
       picnic_table: 22,
     })
-    // ★ REAL DATA WINS: a city with mapped planters invents none.
+    // Real data wins: a city with mapped planters invents none.
     expect(props.fallbackPlanters).toBe(0)
   })
 
@@ -271,28 +243,20 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     expect(props.plantingPlaced.planter).toBe(props.fallbackPlanters)
   })
 
-  test('★ every city gets its own birds, on perches it actually has', async ({
+  test('every city gets its own birds, on perches it actually has', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
     const props = await propStats(page)
-    // CW-75 re-pinned these. An "open ground" perch is a spot a couple of
-    // metres off a LAMP POST, which is how the bird code finds pavement
-    // without a pavement polygon - so the roster follows the lamp count.
-    // Seattle's lamps went 2,560 -> 2,173 when every pole standing in a
-    // roadway was refused, and the birds went with the poles they were
-    // perched beside. What left the city is a bird standing on tarmac.
-    //
-    // ★ AND CW-77 RAN THE SAME ARITHMETIC THE OTHER WAY. Seattle stopped
-    // inventing every one of its lamps and took Seattle City Light's
-    // surveyed register instead: 2,174 poles became 4,221. The perch count
-    // followed the pole count, near enough proportionally (2,174 -> 4,221
-    // is x1.94; 309 birds -> 526 is x1.70, the shortfall being perches that
-    // now fall too close to a neighbour). This is the pin working as
-    // designed: it does not care which way the roster moves, only that it
-    // moves WITH the poles and never collapses.
+    // An "open ground" perch is a spot a couple of meters off a lamp post,
+    // which is how the bird code finds pavement without a pavement polygon, so
+    // the roster follows the lamp count: a city whose lamp count changes moves
+    // its open-ground birds with it, near enough proportionally (a little less,
+    // as more perches fall too close to a neighbour). The pin does not care
+    // which way the roster moves, only that it moves with the poles and never
+    // collapses.
     expect(props.birdsPlaced).toEqual({
       'house sparrow': 89,
       gull: 103,
@@ -305,95 +269,62 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     expect(props.birdsPlaced['greater roadrunner']).toBeUndefined()
   })
 
-  test('★★ Albuquerque keeps its roadrunner, which needed the ROADSIDE', async ({
+  test('Albuquerque keeps its roadrunner, which needed the roadside', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page, 'Albuquerque, New Mexico')
 
     const props = await propStats(page)
-    // ★ THIS PIN EXISTS BECAUSE THE NUMBER WAS ONCE 1. The roadrunner is
-    // Albuquerque's own bird and the whole argument for per-city rosters, and
-    // one of it in a city is the same as none. The cause was not the rate:
-    // the desert city has 24 mapped greens and only five over 400 m2, so
-    // parkland is structurally scarce. Separating pavement from parkland -
-    // which is where a roadrunner actually runs - took it to 15. If a later
+    // The roadrunner is Albuquerque's own bird and the whole argument for
+    // per-city rosters, and one of it in a city is the same as none. Parkland
+    // is structurally scarce in the desert city (24 mapped greens, only five
+    // over 400 m2), so the bird runs on pavement as well as parkland, and its
+    // count depends on the lamp spacing. An ordinary street's lamps are 18 m
+    // apart: Seattle Streets Illustrated has street lights alternating every
+    // 180 ft with pedestrian lights between them at 60 ft, which is also what
+    // Seattle City Light's surveyed register measures (a 16.7 m median over
+    // 3,679 poles). Read as 55 m, the spacing cut the roadrunner to five; if a
     // change quietly starves it again, this fails.
-    //
-    // ★ IT FIRED, AND IT WAS CHECKED RATHER THAN RE-PINNED. CW-75 took it to
-    // 13. An open-ground perch is a spot beside a LAMP POST, and Albuquerque's
-    // lamps fell 1,068 -> 915 (14 %) when every pole standing in a roadway was
-    // refused; the roadrunner fell 13 %, which is the same cut and no more.
-    // The perches that went were the ones hanging off poles that stood in the
-    // carriageway, so the bird did not lose habitat - it stopped standing in
-    // traffic. Thirteen is not one, and the pin below still guards the number
-    // that mattered.
-    //
-    // ★★ AND IT FIRED AGAIN, AND THAT TIME IT CHANGED THE RELEASE. CW-77's
-    // first spacing put an ordinary street's lamps 55 m apart, which is what
-    // the release plan quoted from Seattle Streets Illustrated. Albuquerque's
-    // lamps fell 915 -> 545 (40 %) and the roadrunner fell 13 -> 5 (62 %) - a
-    // DISPROPORTIONATE cut, and five is close to the one this pin exists to
-    // prevent. Reading the standard's whole sentence rather than half of it
-    // ("street lights alternating every 180 ft, PEDESTRIAN LIGHTS BETWEEN
-    // THEM AT 60 FT") gives an 18 m interval, which is also what Seattle City
-    // Light's surveyed register measures (16.7 m median over 3,679 poles).
-    // At 18 m Albuquerque has 1,507 lamps and the roadrunner has 23. The bird
-    // pin is the thing that caught a misread standard.
     expect(props.birdsPlaced['greater roadrunner']).toBe(23)
-    // ★ CW-95 moved the pigeon by ONE (105 -> 106): Albuquerque's nine
-    // corridor ways stopped being roadways, so one open-ground perch beside
-    // a lamp stopped counting as standing in traffic. The roadrunner - the
-    // number this pin exists for - did not move at all.
+    // Albuquerque's corridor ways are not roadways, so an open-ground perch
+    // beside a lamp on one does not count as standing in traffic.
     expect(props.birdsPlaced['rock pigeon']).toBe(106)
     // No crow and no gull on this roster, so none anywhere in the city.
     expect(props.birdsPlaced['american crow']).toBeUndefined()
     expect(props.birdsPlaced.gull).toBeUndefined()
   })
 
-  test('★ geese come in flocks, so a city with few lawns still has a gathering', async ({
+  test('geese come in flocks, so a city with few lawns still has a gathering', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page, 'Denver, Colorado')
 
     const props = await propStats(page)
-    // ★ AND THIS PIN EXISTS BECAUSE A FIX BROKE SOMETHING ELSE. Letting the
-    // crow onto lawns - which the proof gate said was right - handed it and
-    // the gull two thirds of every ground site and dropped Burnaby from nine
-    // geese to one. Geese gather on open grass, so they are placed as small
-    // flocks, which is both the fix and the fact.
+    // The crow and the gull may use lawns too, and without a counterweight
+    // they took two thirds of every ground site and left Burnaby one goose.
+    // Geese gather on open grass, so they are placed as small flocks.
     expect(props.birdsPlaced['canada goose']).toBe(51)
-    //
-    // ★★ AND THE COMPARISON BELOW USED TO BE ON THE TOTALS, WHICH IS NOT
-    // WHERE THE COMPETITION HAPPENS. A goose stands on ONE perch kind -
-    // `ground`, a mapped lawn (city-birds.js SPECIES_PERCHES) - while the
-    // crow also works parapets, lamp heads and the open ground beside a
-    // pole. So the crow's TOTAL moves with the city's lamp count and says
-    // nothing about lawns. CW-77 took Denver from 711 lamps to 1,336, the
-    // crow went 28 -> 54 on perches a goose can never use, and the goose
-    // stayed at exactly 51 - not one bird lost. The old line failed on a
-    // city where nothing it cared about had changed.
-    //
-    // Measured on the perch that matters (props.stats.birdsByPerch.ground):
-    // goose 51, crow 8, pigeon 7. The goose holds 77 % of Denver's lawn
-    // birds. Burnaby, the city that fell to one goose and prompted the
-    // flock fix, reads goose 8, gull 5, crow 3 - and went 3 -> 8 under
-    // CW-77 rather than down. This is the same worry, asked where it can
-    // be answered, and it is STRICTER: the failure it was written for
-    // (crow and gull taking two thirds of the ground sites) shows up here
-    // directly instead of through a total that four other perches move.
+    // The comparison is made on the perch where the competition happens. A
+    // goose stands on one perch kind, `ground`, a mapped lawn (city-birds.js
+    // SPECIES_PERCHES), while the crow also works parapets, lamp heads and the
+    // open ground beside a pole, so the crow's total moves with the city's
+    // lamp count and says nothing about lawns. On the ground perch Denver reads
+    // goose 51, crow 8, pigeon 7 (the goose holds 77 % of its lawn birds), and
+    // Burnaby goose 8, gull 5, crow 3. A crow and gull taking two thirds of the
+    // ground sites shows up here directly.
     const ground = props.birdsByPerch.ground
     expect(ground['canada goose']).toBe(51)
     expect(ground['canada goose']).toBeGreaterThan(ground['american crow'])
   })
 
   /**
-   * CW-63 (CW-Q56): the landmark dressings, in a browser.
+   * The landmark dressings, in a browser.
    *
    * The unit guards can count triangles but they run in jsdom, where
    * `getContext('2d')` is not implemented and every facade texture comes back
-   * null. Whether the diagrid CANVAS is actually painted - and painted at the
+   * null. Whether the diagrid canvas is actually painted - and painted at the
    * size its metre repeat assumes - is a fact only a real browser holds.
    */
   const facadeMeshes = (page) =>
@@ -410,7 +341,7 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
       return found
     })
 
-  test('★ Seattle wears exactly one diagrid, and it is a real canvas', async ({
+  test('Seattle wears exactly one diagrid, and it is a real canvas', async ({
     page,
   }) => {
     await launchGame(page)
@@ -422,9 +353,9 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     const diagrid = meshes.at(-1)
     // Five platforms and four flowing planes off a 12-point outline: five
     // extrusions of 44 triangles, four lofts of one quad per edge.
-    expect(diagrid.triangles).toBe(360) // CW-79: +44 = the Library's own skirt, its footprint and nobody else's
-    // ★ THE SIZE IS NOT DECORATION. The repeat is set as one over the tile's
-    // METRE span, so a canvas of a different size would run the lattice at a
+    expect(diagrid.triangles).toBe(360) // 44 of them are the Library's own skirt, its footprint and nobody else's
+    // The size is not decoration. The repeat is set as one over the tile's
+    // meter span, so a canvas of a different size would run the lattice at a
     // different scale than the member width was photographed at.
     expect(diagrid.texture).toEqual([256, 512])
     // Every generic family is a real share of the city and wears the 8x12
@@ -435,7 +366,7 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     }
   })
 
-  test('★ Denver has no dressed landmark, so it has no diagrid at all', async ({
+  test('Denver has no dressed landmark, so it has no diagrid at all', async ({
     page,
   }) => {
     await launchGame(page)
