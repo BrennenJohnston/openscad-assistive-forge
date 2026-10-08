@@ -84,6 +84,10 @@ export class AutoPreviewController {
     // values it is rendering waits for it instead of rendering them twice.
     this.renderingPreview = null;
 
+    // The values last asked for, so turning auto-preview back on can render
+    // a change that was made while it was off.
+    this.lastParameters = null;
+
     // Enabled libraries for rendering
     this.enabledLibraries = [];
 
@@ -188,11 +192,22 @@ export class AutoPreviewController {
    * @param {'user'|'complexity'|null} [pauseReason] - Why auto-preview is disabled
    */
   setEnabled(enabled, pauseReason = null) {
+    const wasEnabled = this.enabled;
     this.enabled = enabled;
     this.pauseReason = enabled ? null : pauseReason;
     if (!enabled && this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
+    }
+    // A change made while it was off left the preview outdated; catch up now
+    // rather than at the next change.
+    if (
+      enabled &&
+      !wasEnabled &&
+      this.state === PREVIEW_STATE.STALE &&
+      this.lastParameters
+    ) {
+      this.onParameterChange(this.lastParameters);
     }
   }
 
@@ -216,6 +231,7 @@ export class AutoPreviewController {
   onLibrariesChange(parameters) {
     if (!this.currentScadContent) return;
 
+    this.lastParameters = parameters;
     this.previewCache.clear();
     this.renderingPreview = null;
 
@@ -419,6 +435,7 @@ export class AutoPreviewController {
   onParameterChange(parameters) {
     if (!this.currentScadContent) return;
 
+    this.lastParameters = parameters;
     const paramHash = this.hashParams(parameters);
     const { qualityKey } = this.resolvePreviewQualityInfo(parameters);
     const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);
@@ -1694,6 +1711,22 @@ export class AutoPreviewController {
   }
 
   /**
+   * Whether the preview on screen already shows these values.
+   * @param {Object} parameters - Parameter values
+   * @returns {boolean}
+   */
+  isPreviewCurrentFor(parameters) {
+    if (this.state !== PREVIEW_STATE.CURRENT || !this.previewCacheKey) {
+      return false;
+    }
+    const { qualityKey } = this.resolvePreviewQualityInfo(parameters);
+    return (
+      this.getPreviewCacheKey(this.hashParams(parameters), qualityKey) ===
+      this.previewCacheKey
+    );
+  }
+
+  /**
    * Force an immediate preview render
    * @param {Object} parameters - Parameter values
    * @returns {Promise<boolean>} True if render was initiated, false if skipped
@@ -1739,6 +1772,7 @@ export class AutoPreviewController {
     this.pendingParameters = null;
     this.pendingParamHash = null;
     this.pendingPreviewKey = null;
+    this.lastParameters = null;
     this.clearCache();
     this.fullQualitySTL = null;
     this.fullQualityFormat = null;

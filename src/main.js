@@ -4438,11 +4438,7 @@ async function initApp() {
         shortcutAction: 'preview',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
-        handler: () => {
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(state.parameters);
-          }
-        },
+        handler: previewNow,
       },
       {
         type: 'action',
@@ -16252,12 +16248,28 @@ if (rounded) {
     }
   });
 
-  keyboardConfig.on('preview', () => {
-    const state = stateManager.getState();
-    if (state.uploadedFile && autoPreviewController) {
-      autoPreviewController.onParameterChange(state.parameters);
+  /**
+   * Design > Preview and F5: preview now, whether or not Automatic preview is
+   * on. With nothing changed there is nothing to render, and the status line
+   * says so.
+   */
+  function previewNow() {
+    if (!stateManager.getState().uploadedFile || !autoPreviewController) {
+      return;
     }
-  });
+    publishEditorEdits();
+    const { parameters } = stateManager.getState();
+    if (autoPreviewController.isPreviewCurrentFor(parameters)) {
+      updateStatus('Preview is current');
+      return;
+    }
+    autoPreviewController.forcePreview(parameters).catch((error) => {
+      console.error('[Preview] Preview failed:', error);
+      showErrorToast({ title: 'Preview Failed', message: error.message });
+    });
+  }
+
+  keyboardConfig.on('preview', previewNow);
 
   keyboardConfig.on('reloadAndPreview', () => {
     const state = stateManager.getState();
