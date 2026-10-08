@@ -80,7 +80,7 @@ import { applyToolbarModeVisibility } from './toolbar-menu-controller.js';
 import { setAppSurface } from './app-surface.js';
 import { isEnabled } from './feature-flags.js';
 import { exampleDefinitions, programDefinitions } from './tile-registry.js';
-import { prepareSvg, needsPreparation } from './svg-preparer.js';
+import { loadSvgGeometry } from './svg-geometry.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
 import { readScopedPref } from './ui-scoped-prefs.js';
@@ -1603,14 +1603,18 @@ export function initFileHandler({
         ? dataUrlToText(fileObj.data)
         : fileObj.data;
 
-      if (isEnabled('svg_preparer') && needsPreparation(svgText)) {
-        try {
-          svgText = prepareSvg(svgText);
-        } catch (prepErr) {
-          console.warn(
-            '[SVG Upload] Preparation failed, storing original:',
-            prepErr
-          );
+      if (isEnabled('svg_preparer')) {
+        const { needsPreparation, prepareSvg } = (await loadSvgGeometry())
+          .preparer;
+        if (needsPreparation(svgText)) {
+          try {
+            svgText = prepareSvg(svgText);
+          } catch (prepErr) {
+            console.warn(
+              '[SVG Upload] Preparation failed, storing original:',
+              prepErr
+            );
+          }
         }
       }
 

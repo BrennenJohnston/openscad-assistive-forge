@@ -32,6 +32,7 @@ import {
   applyToPoint,
 } from 'transformation-matrix';
 import { offsetDrawing } from './flatten-rings.js';
+import { LAYER_EMIT_CAP } from './svg-limits.js';
 import {
   polygonFromPathData,
   boundsOf,
@@ -68,11 +69,9 @@ const NON_RENDERING_CONTAINERS = new Set([
   'pattern',
 ]);
 
-/**
- * The tiered charm model builds three passes, so no more than three files
- * are ever written.
- */
-export const LAYER_EMIT_CAP = 3;
+// Defined once in svg-limits.js, which the parameter UI reads without
+// loading this module.
+export { LAYER_EMIT_CAP };
 
 /**
  * How many shapes the editor will list at once.
