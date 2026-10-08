@@ -3,23 +3,22 @@
 These JSON files are trimmed extracts of OpenStreetMap data (building
 footprints, heights, and roads) used by the hidden ASCII City Walk game.
 Each was generated with `scripts/bake-city-extract.mjs` from the public
-Overpass API around a city-center point. Three cities use a ~707 m radius —
-CW-Q9's decision: 707 m covers twice the ground area of the original 500 m,
-which is what "twice the city" means. Seattle is bigger since CW-44
-(CW-Q42): a 1,300 m circle on a center shifted toward the waterfront, which
-reaches the Space Needle, the Great Wheel and Pioneer Square in one walkable
-map. That is the plan's SIGNED fallback geometry: the first choice — the
-old center at 1,750 m — baked to 7,985 KB, well past the ~4.5 MB bar the
-owner set, and the rule named this circle as the answer (4,945 KB at CW-44; 5,000 KB
-since the CW-55 rebake).
+Overpass API around a city-center point. Three cities use a ~707 m radius,
+which covers twice the ground area of the original 500 m: that is what
+"twice the city" means. Seattle is bigger: a 1,300 m circle on a center
+shifted toward the waterfront, which reaches the Space Needle, the Great
+Wheel and Pioneer Square in one walkable map. The first choice, the old
+center at 1,750 m, baked to 7,985 KB, well past the ~4.5 MB limit for one
+city; this circle came to 4,945 KB, and to 5,000 KB once the plantings were
+added.
 
 ## License and attribution
 
 **Map data © OpenStreetMap contributors, available under the Open Database
 License (ODbL 1.0).**
 
-Since CW-77 the files also carry data from two other kinds of source, each
-with its own line in the file itself:
+The files also carry data from two other kinds of source, each with its own
+line in the file itself:
 
 - **Terrain.** USGS 3DEP through the EPQS point service for Seattle, Denver
   and Albuquerque - public domain, credited as "Map services and data
@@ -30,8 +29,8 @@ with its own line in the file itself:
   View are prohibited as a source for anything here.
 - **Seattle streetlight positions.** Seattle City Light's published pole
   register (City of Seattle). Its catalog page states no licence; it is used
-  on the project owner's explicit authorisation, and the file's `poleSource`
-  block says so in as many words. Those nodes carry negative ids so nothing
+  with my explicit authorisation, and the file's `poleSource` block says so
+  in as many words. Those nodes carry negative ids so nothing
   from that register can be mistaken for OpenStreetMap data.
 
 - Copyright and license: https://www.openstreetmap.org/copyright
@@ -65,18 +64,9 @@ The four bundled cities were baked with these parameters:
 | albuquerque | 35.0844,-106.6504 | 707 |
 | burnaby | 49.2276,-123.0076 | 707 |
 
-The script trims tags to what the game reads (`building`, `height`,
-`building:height`, `building:levels`, `min_height`, `building:min_level`,
-`name`, `highway`, `tourism`, `historic`, `amenity`, `natural`,
-since CW-26 `building:part`, `roof:shape`, `roof:height`, `roof:levels`,
-`roof:orientation` and `shop`, since CW-33 `surface`, `footway`, `lanes`,
-`width`, `landuse`, `leisure`, `building:material` and `building:colour`,
-and since CW-43 `emergency`, `shelter`, `bench`, `bin`, `backrest`, `seats`,
-`kerb`, `tactile_paving`, `crossing`, `crossing:island`, `crossing:markings`,
-`traffic_signals:sound`, `traffic_signals:vibration` and `attraction`,
-and since CW-55 `genus`, `species`, `leaf_type`, `denotation` and
-`man_made`), rounds coordinates to ~0.1 m, and self-checks that the game parser accepts the
-result. `KEPT_TAGS` in `src/js/game/city-data.js` is the authoritative list.
+The script trims tags to what the game reads (`KEPT_TAGS` in
+`src/js/game/city-data.js` is the list), rounds coordinates to ~0.1 m, and
+self-checks that the game parser accepts the result.
 
 ## What is in the four files
 
@@ -89,9 +79,8 @@ Measured from the files as they ship, not from the bake logs:
 | albuquerque | 727 KB | 639 | 35 | 15 | 24 | 260 | 130/1383 | 136 | 142 |
 | burnaby | 1025 KB | 537 | 182 | 24 | 80 | 256 | 1209/1717 | 534 | 244 |
 
-Street furniture and wayfinding data (CW-43, rebaked 2026-08-24 — true node
-positions from OSM, never decorative scatter), and named attraction nodes
-(CW-44):
+Street furniture and wayfinding data (true node positions from OSM, never
+decorative scatter), and named attraction nodes:
 
 | city | bus stops | benches | waste baskets | bicycle parking | hydrants | wayfinding points | named attractions |
 |---|---|---|---|---|---|---|---|
@@ -106,15 +95,15 @@ tags, plus bare `kerb=*` and `tactile_paving=*` nodes (Seattle's richness is
 OpenSidewalks-style mapping living in OSM itself). Nothing is drawn from
 them yet. Albuquerque is the deliberate near-zero control city. Seattle's
 named attractions include the Seattle Great Wheel — a point in OSM, so it
-appears in the landmark legend by name rather than as 3D geometry — and,
-since the CW-44 circle, the Space Needle as a real 184 m building whose 13
+appears in the landmark legend by name rather than as 3D geometry — and the
+Space Needle as a real 184 m building whose 13
 `building:part` volumes (legs, shaft, saucer decks) OSM itself carries: the
 generic parts pipeline draws a recognizable Needle with no special casing.
 
-## Plantings and picnic tables (CW-55)
+## Plantings and picnic tables
 
-One rebake carries the seeds three later releases render: what a tree IS, where
-the raised beds are, and where there is somewhere to sit down.
+The extracts say what a tree is, where the raised beds are, and where there
+is somewhere to sit down.
 
 | city | planters | flowerbeds | picnic tables | trees with a leaf_type |
 |---|---|---|---|---|
@@ -135,15 +124,16 @@ as a ring; a planter mapped as a bare node reports an area of 0 rather than
 guessing a footprint. A flowerbed is deliberately not greenspace — a park is a
 lawn to colour, a flowerbed is a planting to dress.
 
-## Building parts, and how Denver got its shape (CW-26, CW-33)
+## Building parts, and how Denver got its shape
 
 Whole-building `roof:shape` is nearly absent from US downtowns - about 1.5%
 of Seattle and 3.6% of Denver carry it - while residential Burnaby has it on
 26.8%. Downtown silhouettes are mapped a different way: as `building:part`
 volumes standing inside a plain outline. Those parts are what make a stepped
-tower look stepped, and until CW-26 the bake stripped every one of them.
+tower look stepped, and the bake once stripped every one of them.
 
-CW-26 rebaked three of the four cities with parts and left **Denver** out: it
+The first rebake with parts covered three of the four cities and left
+**Denver** out: it
 has 3,013 of them, mostly tiny — the median part covers 2.76 m2 and a quarter
 are under 0.59 m2 — and carrying them all took the extract to 2303 KB, well
 past the 1600 KB bar the bake script warns at. Denver was the one city still
@@ -157,8 +147,8 @@ drawn as plain boxes, and the measured trade looked like this:
 | 20 m2 | 677 | 1218 KB |
 | 50 m2 | 516 | 1161 KB |
 
-**CW-Q31 chose 10 m2 and CW-33 rebaked all four cities with it**, so every
-city now has its parts and its roofs. A ledge or setback smaller than ten
+**All four cities were rebaked with a 10 m2 floor**, so every city now has
+its parts and its roofs. A ledge or setback smaller than ten
 square metres is under a tenth of the area of a single character cell at the
 sizes this game is played at — nothing that small could ever be seen, which is
 what makes the floor a saving rather than a loss. Denver drops 2,118 slivers
