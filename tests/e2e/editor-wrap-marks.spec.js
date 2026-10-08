@@ -3,7 +3,7 @@ import path from 'path';
 import { readFileSync } from 'fs';
 
 /**
- * UF-28 — wrapped lines tell you where they go (U-37 ¶3).
+ * Wrapped lines tell you where they go.
  *
  * The desktop hangs continuation rows four columns in and marks every row
  * that continues with a return arrow at the right border. This proves both,
@@ -12,7 +12,7 @@ import { readFileSync } from 'fs';
  * whole reason the indent is CSS and the arrow lives in a layer outside
  * `.cm-content`.
  *
- * Measured against the owner's own file, because the behaviour only shows on
+ * Measured against a real model file, because the behavior only shows on
  * lines longer than the pane and sample.scad has none.
  */
 
@@ -38,7 +38,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-/** Classic, standard density, the owner's file open, editor on screen. */
+/** Classic, standard density, the fixture file open, editor on screen. */
 async function openClassicEditor(page) {
   await page.goto('/');
   await page.waitForSelector('body[data-wasm-ready="true"]', {

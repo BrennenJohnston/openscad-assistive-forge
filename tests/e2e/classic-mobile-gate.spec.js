@@ -1,30 +1,24 @@
 import { test, expect } from '@playwright/test';
 
-// U-10 (UF-5): Classic is desktop-only for now, and the header toggle gates on
-// viewport shape. U-46 (UF-42) changed what "gated" looks like: the owner's
-// 2026-08-21 order removes the button on mobile-shaped viewports instead of
-// greying it out, "since we will not be offering classic theme on mobile at
-// this time".
+// Classic is desktop-only for now, and the header toggle gates on viewport
+// shape. On a mobile-shaped viewport the button is removed rather than
+// grayed out: Classic is not offered on mobile at this time.
 //
-// Q-73c settled the boundary as ONE predicate, the same one the gate has
-// always used: the button is on screen exactly when pressing it would work
-// (>=1024 wide AND landscape), and absent otherwise. U-10's other half is
-// untouched — the way OUT of Classic is never gated, so a live Classic
-// session narrowed to a phone keeps its button.
+// The boundary is one predicate, the same one the gate has always used: the
+// button is on screen exactly when pressing it would work (>=1024 wide and
+// landscape), and absent otherwise. The way out of Classic is never gated,
+// so a live Classic session narrowed to a phone keeps its button.
 //
-// Consequence, recorded rather than hidden: aria-disabled on this control is
-// now unreachable, because the gated state and the hidden state are the same
-// state. The controller keeps its refusal path as a safety net (see
-// ui-mode-controller.js) and the dimmed-contrast case at the end of this file
-// is skipped with its reason rather than deleted.
+// A consequence: aria-disabled on this control is unreachable, because the
+// gated state and the hidden state are the same state. The controller keeps
+// its refusal path as a safety net (see ui-mode-controller.js), and the
+// dimmed-contrast case at the end of this file is skipped with its reason
+// rather than deleted.
 //
-// The original file asserted STATE and never visibility, because the header
-// row can wrap a button out of view at phone widths (UF-4) and being off the
-// visible scroll was not the same as being gated. Under this contract the two
-// have merged and the cases below do assert visibility — safely, because
-// Playwright's toBeHidden means "not rendered", not "scrolled out of view", so
-// a wrapped-but-present button still reads as visible. The other lesson
-// stands: the toggle is driven by keyboard, which is the path that matters.
+// The cases below assert visibility, and safely: Playwright's toBeHidden
+// means "not rendered", not "scrolled out of view", so a button the header
+// row wraps out of view at phone widths still reads as visible. The toggle
+// is driven by keyboard, which is the path that matters.
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -36,11 +30,9 @@ test.beforeEach(async ({ page }) => {
 /**
  * The button ships with the `hidden` class and the controller takes it off
  * during init, so focusing it the instant `goto` resolves can land before
- * there is anything to focus — Enter then goes nowhere and the mode never
- * changes. Seen once in 4 under three-way CPU contention, and green 6/6 on
- * the release base, which is exactly what a load-sensitive race looks like:
- * present in both, visible only when the machine is busy. Waiting for the
- * button costs nothing and removes it.
+ * there is anything to focus: Enter then goes nowhere and the mode never
+ * changes. It is a load-sensitive race, seen only when the machine is busy.
+ * Waiting for the button costs nothing and removes it.
  */
 async function pressToggle(page) {
   const toggle = page.locator('#classicModeToggle');
@@ -54,16 +46,15 @@ test.describe('Classic gate: phone viewport (375x812)', () => {
   // (the mobile-viewport.spec.js lesson).
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test('gate-header-absent: the toggle is removed, not greyed, and leaves nothing dangling', async ({
+  test('gate-header-absent: the toggle is removed, not grayed, and leaves nothing dangling', async ({
     page,
   }) => {
     await page.goto('/');
 
     const toggle = page.locator('#classicModeToggle');
     await expect(toggle).toBeHidden();
-    // The old contract's two attributes must be gone, not merely unread: an
-    // aria-describedby surviving on a display:none control is the kind of
-    // orphan that outlives the change that made it.
+    // Neither attribute of a gated toggle may survive, even unread: an
+    // aria-describedby left on a display:none control is an orphan.
     await expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
     await expect(toggle).not.toHaveAttribute('aria-describedby', /.+/);
 
@@ -93,9 +84,9 @@ test.describe('Classic gate: phone viewport (375x812)', () => {
   test('gate-information-survives: the reason reaches the user through the first-visit gate note', async ({
     page,
   }) => {
-    // The header button carried the explanation; removing it must not remove
-    // the explanation. UF-41's modal shows the gate note on exactly this
-    // predicate, so the sentence still meets a first-time visitor.
+    // Removing the header button must not remove its explanation: the
+    // first-visit modal shows the gate note on exactly this predicate, so the
+    // sentence still meets a first-time visitor.
     await page.addInitScript(() =>
       localStorage.removeItem('openscad-forge-first-visit-seen')
     );
@@ -148,8 +139,7 @@ test.describe('Classic gate: the way out is never locked', () => {
     );
 
     await page.setViewportSize({ width: 375, height: 812 });
-    // Inside Classic the button points OUT — it must stay visible and usable,
-    // which is the half of U-10 that U-46 did not touch.
+    // Inside Classic the button points out: it must stay visible and usable.
     await expect(toggle).toBeVisible();
     await expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
 
@@ -163,7 +153,7 @@ test.describe('Classic gate: the way out is never locked', () => {
   });
 });
 
-test.describe('Classic gate: detection boundaries (Q-25)', () => {
+test.describe('Classic gate: detection boundaries', () => {
   test.use({ viewport: { width: 1024, height: 768 } });
 
   test('gate-boundary: 1024px landscape shows the toggle; 1023px removes it', async ({
@@ -186,8 +176,7 @@ test.describe('Classic gate: detection boundaries (Q-25)', () => {
   }) => {
     await page.goto('/');
 
-    // The recorded Q-25 trade: 1080 wide but portrait counts as
-    // mobile-shaped.
+    // A deliberate trade: 1080 wide but portrait counts as mobile-shaped.
     await page.setViewportSize({ width: 1080, height: 1350 });
     const toggle = page.locator('#classicModeToggle');
     await expect(toggle).toBeHidden();
@@ -197,7 +186,7 @@ test.describe('Classic gate: detection boundaries (Q-25)', () => {
   });
 });
 
-test.describe('Persisted-classic phone boot (U-10, Q-24a)', () => {
+test.describe('Persisted-classic phone boot', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
   test.beforeEach(async ({ page }) => {
@@ -233,19 +222,15 @@ test.describe('Persisted-classic phone boot (U-10, Q-24a)', () => {
     await expect(banner).toBeHidden();
   });
 
-  test('gate-boot-deterministic: repeated phone boots never land in Classic (AF-D56)', async ({
+  test('gate-boot-deterministic: repeated phone boots never land in Classic', async ({
     page,
   }) => {
     test.setTimeout(180_000);
 
-    // AF-D56 proposed that a stored Classic preference could race Classic onto
-    // a phone screen before the viewport check ran. UF-42 looked for that race
-    // and did not find it: _loadPreferences() consults isViewportDesktopShaped()
-    // synchronously in the controller's constructor, before anything mounts, so
-    // there is no window for Classic to appear in. Measured 20/20 on Chromium
-    // and 20/20 on Firefox at the release base before this guard was written.
-    //
-    // This case is therefore a regression guard, not a fix. It records EVERY
+    // A stored Classic preference cannot race Classic onto a phone screen:
+    // _loadPreferences() consults isViewportDesktopShaped() synchronously in
+    // the controller's constructor, before anything mounts, so there is no
+    // window for Classic to appear in. This case guards that: it records every
     // value data-ui-mode ever holds rather than sampling the end state, so a
     // future flash of Classic fails here even if it heals itself.
     const boots = 12;
@@ -302,7 +287,7 @@ test.describe('Persisted-classic phone boot (U-10, Q-24a)', () => {
   });
 });
 
-test.describe('In-session narrowing keeps Classic alive (U-10, Q-24a)', () => {
+test.describe('In-session narrowing keeps Classic alive', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
   test('gate-live-notice: narrowing shows the dismissible notice, Classic stays; widening heals it', async ({
@@ -316,7 +301,7 @@ test.describe('In-session narrowing keeps Classic alive (U-10, Q-24a)', () => {
     );
 
     await page.setViewportSize({ width: 375, height: 812 });
-    // Q-24a pinned: the session STAYS Classic — no eject, no hard block.
+    // The session stays Classic: no eject, no hard block.
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',
       'classic'
@@ -368,7 +353,7 @@ test.describe('In-session narrowing keeps Classic alive (U-10, Q-24a)', () => {
   });
 });
 
-test.describe('Classic gate: the dimmed toggle stays legible (CW-Q13c)', () => {
+test.describe('Classic gate: the dimmed toggle stays legible', () => {
   test.use({ viewport: { width: 1023, height: 700 } });
 
   test('gate-dim-contrast: the gated label stays legible at rest and hovered, in every theme', async ({

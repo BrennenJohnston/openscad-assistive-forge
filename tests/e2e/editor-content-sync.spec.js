@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// Editor content pipeline (R5, sub-plan A).
+// Editor content pipeline.
 //
-// The editor used to be severed from the app in both directions: a loaded
-// project never reached it, and its edits never reached preview, render,
-// export or save. These tests pin the two-way channel, in Standard and in
-// Classic, on the CodeMirror path and on the textarea fallback.
+// The editor and the app talk in both directions: a loaded project reaches
+// the editor, and its edits reach preview, render, export and save. These
+// tests pin the two-way channel, in Standard and in Classic, on the
+// CodeMirror path and on the textarea fallback.
 
 const FIXTURE_A = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 const FIXTURE_B = path.join(
@@ -98,8 +98,8 @@ test.describe('Editor content sync (R5)', () => {
     const editor = await openEditor(page);
     await expect(editor).toContainText(MARKER_A, { timeout: 15_000 });
 
-    // The editor is already open — this is the case with no re-sync hook
-    // outside Classic, so nothing used to replace the buffer here.
+    // The editor is already open, and outside Classic no re-sync hook runs
+    // here: loading the project must replace the buffer itself.
     await loadProject(page, FIXTURE_B);
 
     await expect(editor).toContainText(MARKER_B, { timeout: 15_000 });
@@ -142,7 +142,7 @@ test.describe('Editor content sync (R5)', () => {
     await appendToEditor(page, editor, '\ntranslate([0,0,60]) sphere(12);');
     await expect(editor).toContainText('sphere(12);');
 
-    // triggerPreviewFromEditor() used to call itself, throwing RangeError
+    // triggerPreviewFromEditor() must not call itself: that threw RangeError
     // on every use of this button and of Ctrl+Enter.
     await page.locator('#expertRunPreviewBtn').click();
 
@@ -297,7 +297,7 @@ test.describe('Editor content sync (R5)', () => {
     expect(await page.evaluate(() => window.__resetClicks)).toBe(0);
   });
 
-  test('post-edit preview keeps the camera where the user put it (D-11)', async ({
+  test('post-edit preview keeps the camera where the user put it', async ({
     page,
     context,
     browserName,

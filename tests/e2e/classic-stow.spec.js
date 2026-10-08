@@ -2,13 +2,13 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import AxeBuilder from '@axe-core/playwright';
 
-// Field stow (release UF-2, U-6/Q-20): each side dock field stows toward its
-// own edge, growing the 3D view, leaving a labelled un-stow tab on the edge
-// rail. UF-2a machinery — the drawer chrome and the bottom strip's conversion
-// are UF-2b.
+// Field stow: each side dock field stows toward its own edge, growing the
+// 3D view and leaving a labeled un-stow tab on the edge rail. Below the
+// breakpoint a stowed section becomes a restore bar, and the bottom strip's
+// fold is the bottom field's stow.
 //
-// Its own file for the same reason classic-panels.spec.js is: classic-mode is
-// 2500 lines and the Chromium CI clock is the release's scarcest resource.
+// Its own file for the same reason classic-panels.spec.js is:
+// classic-mode.spec.js is already long, and the Chromium CI clock is scarce.
 
 const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 
@@ -89,7 +89,7 @@ async function watchAnnouncements(page, name = '__recordStowAnnouncement') {
   return seen;
 }
 
-test.describe('Field stow (UF-2a)', () => {
+test.describe('Field stow', () => {
   test('classic-stow-left: stowing frees the space, empties the tab order, and the tab restores it', async ({
     page,
   }) => {
@@ -106,8 +106,9 @@ test.describe('Field stow (UF-2a)', () => {
     await expect(stowBtn).toHaveAttribute('aria-expanded', 'true');
     await stowBtn.click();
 
-    // The field reports empty, its container leaves the layout AND the
-    // accessibility tree (the R-III lesson, asserted from day one).
+    // The field reports empty, and its container leaves the layout and the
+    // accessibility tree: a container that is only clipped keeps invisible Tab
+    // stops.
     await expect(page.locator('body')).toHaveAttribute(
       'data-classic-stow-left',
       'true'
@@ -241,13 +242,13 @@ test.describe('Field stow (UF-2a)', () => {
     expect(stored.stowLeft).toBe(false);
   });
 
-  test('classic-stow-stacked: below the breakpoint a stowed section becomes a restore bar (UF-2c)', async ({
+  test('classic-stow-stacked: below the breakpoint a stowed section becomes a restore bar', async ({
     page,
   }) => {
     test.setTimeout(300_000);
     await seedPanes(page, { stowLeft: true });
     await loadProject(page);
-    // U-10: enter at the desktop-shaped default viewport, then narrow —
+    // Enter at the desktop-shaped default viewport, then narrow:
     // below-breakpoint Classic is a live-session state, not an entry state.
     await enterClassicStandard(page);
     await page.setViewportSize({ width: 900, height: 800 });
@@ -339,7 +340,7 @@ test.describe('Field stow (UF-2a)', () => {
   });
 });
 
-test.describe('Bottom stow — the converted strip fold (UF-2b, Q-20c)', () => {
+test.describe('Bottom stow: folding the strip stows the bottom field', () => {
   test('classic-stow-bottom: the strip stows to a bottom bar tab, sparing the camera bar', async ({
     page,
   }) => {
@@ -414,9 +415,9 @@ test.describe('Bottom stow — the converted strip fold (UF-2b, Q-20c)', () => {
       .click();
     await expect(page.locator('.classic-bottom-strip')).toBeHidden();
 
-    // Before UF-2b, folding the strip flattened the lower-right field to a
-    // bare title bar because both share grid row 3 (measured in the Q-20
-    // probe). The row now keeps its size while the field is occupied.
+    // Folding the strip must not flatten the lower-right field to a bare title
+    // bar: both share grid row 3, so the row keeps its size while the field is
+    // occupied.
     const vpcAfter = await page
       .locator('.classic-dock-field--right-bottom')
       .boundingBox();
@@ -426,12 +427,12 @@ test.describe('Bottom stow — the converted strip fold (UF-2b, Q-20c)', () => {
     ).toBeGreaterThan(vpcBefore.height * 0.8);
   });
 
-  test('classic-stow-bottom-legacy: a pre-UF-2 folded profile hydrates as stowed', async ({
+  test('classic-stow-bottom-legacy: an older folded profile hydrates as stowed', async ({
     page,
   }) => {
     test.setTimeout(300_000);
-    // consoleCollapsed is the fold's historical key (D-8); Q-20c upgraded its
-    // presentation, so a folded preference must come back as the stow.
+    // consoleCollapsed is the fold's historical key, and the fold is now the
+    // bottom field's stow, so a folded preference must come back stowed.
     await seedPanes(page, { consoleCollapsed: true });
     await loadProject(page);
     await enterClassicStandard(page);
@@ -446,7 +447,7 @@ test.describe('Bottom stow — the converted strip fold (UF-2b, Q-20c)', () => {
     ).toBeVisible();
   });
 
-  test('classic-strip-default-height: Q-20e raised the default (0.65fr)', async ({
+  test('classic-strip-default-height: the default is 0.65fr', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -454,9 +455,9 @@ test.describe('Bottom stow — the converted strip fold (UF-2b, Q-20c)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // The owner chose a taller default strip over compressing the Console
-    // chrome (Q-20e). Pin the token, not pixels — fr resolution depends on
-    // the window, and a user drag rightly overrides the default.
+    // The default strip is tall enough that the Console chrome is not
+    // compressed. Pin the token, not pixels: fr resolution depends on the
+    // window, and a user drag rightly overrides the default.
     const token = await page.evaluate(() =>
       getComputedStyle(document.body)
         .getPropertyValue('--classic-row-bottom-default')

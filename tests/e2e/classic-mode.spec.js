@@ -177,13 +177,13 @@ test.describe('Classic chrome strip (C3)', () => {
 
     const hiddenInClassic = [
       '#uiModeToggle',
-      // Classic renders one fixed desktop appearance (owner decision)
+      // Classic renders one fixed desktop appearance
       '#themeToggle',
       '#contrastToggle',
       '#focusModeBtn',
       '#featuresGuideBtn',
-      // #clearFileBtn is NOT in this list any more: U-2 overruled the
-      // File > Close adapt — the Main Page button shows in BOTH themes.
+      // #clearFileBtn is not in this list: the Main Page button shows in both
+      // themes.
       '#actionsBar',
       '#previewInfoSection',
       '#previewDrawerToggle',
@@ -201,7 +201,7 @@ test.describe('Classic chrome strip (C3)', () => {
       ).toBeHidden();
     }
 
-    // U-2/Q-16: the way back to the main page stays visible in Classic,
+    // The way back to the main page stays visible in Classic,
     // reading its approved label.
     await expect(page.locator('#clearFileBtn')).toBeVisible();
     await expect(page.locator('#clearFileBtn')).toHaveText('← Main Page');
@@ -265,9 +265,9 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     await expect(densityToggle).toHaveAttribute('role', 'switch');
     await expect(densityToggle).toHaveAttribute('aria-checked', 'false');
 
-    // Simplified drops the code-facing docks and the authoring buttons.
-    // The parameter Undo/Redo pair is Simplified-ONLY since U-5/Q-18 —
-    // in Standard the editor toolbar shows its own Undo/Redo instead.
+    // Simplified drops the code-facing docks and the authoring buttons. The
+    // parameter Undo/Redo pair is Simplified-only; in Standard the editor
+    // toolbar shows its own Undo/Redo instead.
     await expect(page.locator('#classicEditorSlot')).toBeHidden();
     await expect(page.locator('#classicConsoleSlot')).toBeHidden();
     await expect(page.locator('#classicTbNewBtn')).toBeHidden();
@@ -296,7 +296,7 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     await expect(
       page.locator('#classicPresetRow #deletePresetBtn')
     ).toBeVisible();
-    // The Forge additions section is what Simplified drops (D-20/D-21)
+    // The Forge additions section is what Simplified drops
     await expect(page.locator('#classicForgeExtras')).toBeHidden();
     await expect(page.locator('#classicRenderBtn')).toBeVisible();
     await expect(page.locator('#classicTbExportStlBtn')).toBeVisible();
@@ -414,9 +414,9 @@ test.describe('Classic on mobile (375px, touch)', () => {
     hasTouch: true,
   });
 
-  // U-10 (UF-5): Classic ENTRY is gated at phone shapes, so stacked Classic
-  // is reached the way a user now must reach it — enter on a desktop-shaped
-  // window, then narrow. Everything asserted below is live-session behavior.
+  // Classic entry is gated at phone shapes, so stacked Classic is reached
+  // the way a user must reach it: enter on a desktop-shaped window, then
+  // narrow. Everything asserted below is live-session behavior.
   async function enterClassicThenNarrow(page) {
     await page.setViewportSize({ width: 1280, height: 800 });
     const toggle = page.locator('#classicModeToggle');
@@ -455,26 +455,19 @@ test.describe('Classic on mobile (375px, touch)', () => {
 
     await expect(page.locator('#drawerBackdrop')).toBeHidden();
 
-    // D-56 SOLVED (UF-42). The flake was never a boot race, and it was never
-    // this layout being too tight. Narrowing a live Classic session shows the
-    // Q-24a "phone-shaped" notice, which is IN FLOW and 165px tall at 375px,
-    // and it arrives 150ms late because subscribeViewportShape is debounced.
-    // Whichever side of that 150ms the scroll below lands on decides the
-    // result: scroll first and the notice then pushes #paramPanel down 161px,
-    // out of the viewport, and the poll that follows only re-reads geometry —
-    // it never scrolls again, so it can never recover.
+    // Narrowing a live Classic session shows the "phone-shaped" notice, which
+    // is in flow and 165px tall at 375px, and it arrives 150ms late because
+    // subscribeViewportShape is debounced. Whichever side of that 150ms the
+    // scroll below lands on decides the result: scroll first and the notice
+    // then pushes #paramPanel down 161px, out of the viewport, and a poll that
+    // only re-reads geometry never scrolls again, so it can never recover.
+    // (A stored Classic preference at 375x812 boots into Forge Standard,
+    // because _loadPreferences() consults isViewportDesktopShaped()
+    // synchronously in the controller's constructor, so this is not a boot
+    // race.)
     //
-    // Measured at the release base by replicating this flow: 6 of 6 runs
-    // failed when the scroll came first (panel top 492 -> 654, bottom 946
-    // against an 812 viewport), and 3 of 3 recovered when a second scroll
-    // followed the notice (top 457, bottom 749). The claimed boot race did not
-    // exist: 20/20 Chromium and 20/20 Firefox boots with a stored Classic
-    // preference at 375x812 landed in Forge Standard, because
-    // _loadPreferences() consults isViewportDesktopShaped() synchronously in
-    // the controller's constructor, before anything mounts.
-    //
-    // So: let the notice land, THEN scroll. The requirement below is unchanged
-    // and is asserted against the layout the user actually ends up with.
+    // So: let the notice land, then scroll. The requirement below is asserted
+    // against the layout the user actually ends up with.
     await expect(page.locator('#classicGateBanner')).toBeVisible({
       timeout: 10_000,
     });
@@ -484,15 +477,12 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await page.evaluate(() =>
       document.getElementById('paramPanel').scrollIntoView({ block: 'start' })
     );
-    // "Fully on screen" is the actual requirement. The previous proxy for it
-    // — top edge above the viewport midpoint — only held while the panel was
-    // tall enough to force extra scroll range; C2 shortened it by moving the
-    // preset controls into the dock header, so assert the requirement itself.
-    // The sampling below stays. It is what turned D-56 from "flaky" into a
-    // mechanism, and if this ever moves again the next occurrence should
-    // arrive with evidence rather than a bare predicate timeout. Do not soften
-    // it into a retry — a test that stops failing is worth less than one that
-    // explains itself.
+    // "Fully on screen" is the actual requirement, asserted as itself rather
+    // than through a proxy such as the top edge sitting above the viewport
+    // midpoint. The sampling below stays: if this ever moves again, the next
+    // failure arrives with evidence rather than a bare predicate timeout. Do
+    // not soften it into a retry; a test that stops failing is worth less than
+    // one that explains itself.
     const d56Samples = [];
     try {
       await expect
@@ -565,7 +555,7 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await expect(page.locator('#classicPreviewBtn')).toBeVisible();
     await expect(page.locator('#classicRenderBtn')).toBeVisible();
     await expect(page.locator('#classicViewHomeBtn')).toBeVisible();
-    // D-18: the bed grid and its size select are dropped from Classic
+    // The bed grid and its size select are dropped from Classic
     // entirely; both remain in Simplified and Standard
     await expect(page.locator('#classicGridToggle')).toHaveCount(0);
     await expect(page.locator('#classicGridSizeSelect')).toHaveCount(0);
@@ -608,20 +598,14 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await drawerToggle.click();
     await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
 
-    // This was the drawer-interlock case: entering Classic over an open
-    // drawer had to close it. U-10 removed the scenario — the drawer only
-    // exists below 768px, which is always mobile-shaped, so Classic can no
-    // longer take over here. The same DOM path (a programmatic click, the
-    // deep-link shape) now pins the REFUSAL: no mode change, the drawer
-    // still open and working, and the gate's announcement spoken.
-    //
-    // UF-42 removed the button here rather than greying it, which is why the
-    // click below is the only way to reach this path at all — and it is what
-    // very nearly took the announcement away with it. The refusal used to key
-    // off aria-disabled, which is now unreachable, and switchMode's own
-    // refusal is silent. This case is what caught it: the handler asks the
-    // gate directly now, so the spoken refusal survives whatever puts a click
-    // on this control.
+    // The drawer only exists below 768px, which is always mobile-shaped, so
+    // Classic cannot take over here. A programmatic click (the deep-link
+    // shape) pins the refusal: no mode change, the drawer still open and
+    // working, and the gate's announcement spoken. The button is removed here
+    // rather than grayed, so this click is the only way to reach the path, and
+    // the handler asks the gate directly, so the spoken refusal survives
+    // whatever puts a click on this control (switchMode's own refusal is
+    // silent).
     await page.evaluate(() =>
       document.getElementById('classicModeToggle').click()
     );
@@ -898,8 +882,8 @@ test.describe('Classic acceptance (C13)', () => {
     await loadSampleProject(page);
     // Standard density so every pane is in play for the stack assertions
     await switchToStandardMode(page);
-    // U-10: enter at the desktop-shaped default viewport, then narrow —
-    // 900px is mobile-shaped now, so the stacked layout is a live-session
+    // Enter at the desktop-shaped default viewport, then narrow —
+    // 900px is mobile-shaped, so the stacked layout is a live-session
     // state, not an entry state.
     await page.locator('#classicModeToggle').click();
     await expect(page.locator('body')).toHaveAttribute(
@@ -972,13 +956,11 @@ test.describe('Classic mode layout (C4)', () => {
     }
     await expect(firstGroup).toHaveJSProperty('open', true);
 
-    // Record the original DOM location of the panes to be moved.
-    //
-    // UF-35 wrapped both in an id-less .forge-disclosure-row so their header
-    // controls could leave the <summary>, so the immediate parent no longer
-    // HAS an id and this read returned "". Walk to the nearest ancestor that
-    // does: which region a panel goes home to is what this checks, and that
-    // survives a wrapper.
+    // Record the original DOM location of the panes to be moved. Both sit in
+    // an id-less .forge-disclosure-row (so their header controls can leave the
+    // <summary>), so this walks to the nearest ancestor that has an id: which
+    // region a panel goes home to is what this checks, and that survives a
+    // wrapper.
     const readHomes = () =>
       page.evaluate(() => {
         const home = (id) =>
@@ -1005,9 +987,9 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(consoleSlot.locator('#consolePanel')).toHaveCount(1);
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
 
-    // Presets: the individual desktop controls move INTO the Customizer
-    // dock's preset row (C2); the old standalone presets slot never existed
-    // and the whole #presetControls panel is no longer moved as a unit
+    // Presets: the individual desktop controls move into the Customizer dock's
+    // preset row; there is no standalone presets slot, and #presetControls is
+    // not moved as a unit.
     await expect(page.locator('#classicPresetsSlot')).toHaveCount(0);
     await expect(page.locator('#classicPresetRow #presetControls')).toHaveCount(
       0
@@ -1054,7 +1036,7 @@ test.describe('Classic mode layout (C4)', () => {
       ).toHaveCount(1);
     }
 
-    // The emptied husks stay in the DOM for exit() but never paint (D-22:
+    // The emptied husks stay in the DOM for exit() but never paint (and
     // this is also what drops the legacy preset search in Classic)
     await expect(page.locator('#customizerHeaderRow')).toBeHidden();
     await expect(page.locator('#presetSearchLegacy')).toBeHidden();
@@ -1075,10 +1057,9 @@ test.describe('Classic mode layout (C4)', () => {
       .count();
     expect(openGroups, 'all param groups collapsed in Classic').toBe(0);
 
-    // Icon toolbar (C6, reshaped by U-5/Q-18a): docked under the menu bar.
-    // The snap views, projection and overlays live on the 3D view toolbar
-    // (E3); the workflow triad + DXF live HERE in both densities, beside
-    // the file group and the Customizer toggle.
+    // Icon toolbar, docked under the menu bar. The snap views, projection and
+    // overlays live on the 3D view toolbar; the workflow triad and DXF live
+    // here in both densities, beside the file group and the Customizer toggle.
     const toolbar = page.locator('#classicToolbar');
     await expect(toolbar).toBeVisible();
     await expect(toolbar.locator('[data-classic-view]')).toHaveCount(0);
@@ -1135,7 +1116,7 @@ test.describe('Classic mode layout (C4)', () => {
           .evaluate((el) => el.textContent)
       );
 
-    // Bottom stow (C10, converted by UF-2b/Q-20c): the titlebar control stows
+    // Bottom stow: the titlebar control stows
     // the strip to its edge tab and the display pane grows into the freed row
     const consoleFold = page.locator(
       '.classic-stow-btn[data-classic-stow-field="bottom"]'
@@ -1306,7 +1287,7 @@ test.describe('Classic dock shell (B2)', () => {
       Math.abs(editorBox.y + editorBox.height - (stripBox.y + stripBox.height))
     ).toBeLessThanOrEqual(4);
 
-    // R7: the strip no longer runs under the editor
+    // The strip does not run under the editor
     expect(consoleBox.x).toBeGreaterThanOrEqual(
       editorBox.x + editorBox.width - 2
     );
@@ -1314,7 +1295,7 @@ test.describe('Classic dock shell (B2)', () => {
     // R8: the camera bar exists as its own row between view and strip
     await expect(page.locator('#classicCameraBar')).toHaveCount(1);
 
-    // D-9: Classic replaces the console tabs with panes, so the tablist goes
+    // Classic replaces the console tabs with panes, so the tablist goes
     await expect(page.locator('.console-view-tabs')).toBeHidden();
 
     // Every dock field is stamped for the grid to size from
@@ -1336,7 +1317,7 @@ test.describe('Classic dock shell (B2)', () => {
     await expect(page.locator('#classicViewportControlSlot')).toBeHidden();
   });
 
-  test('classic-console-tab-restore: a Structured selection is reset on entry and handed back on exit (D-9)', async ({
+  test('classic-console-tab-restore: a Structured selection is reset on entry and handed back on exit', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1532,8 +1513,8 @@ test.describe('Classic dock resizers (B4)', () => {
     const strip = page.locator('#classicBottomStrip');
     const resizedHeight = (await strip.boundingBox()).height;
 
-    // UF-2b (Q-20c): the fold became the bottom field's stow — same D-8
-    // park/restore contract, new chrome.
+    // The bottom field's stow control, with the same park/restore contract as
+    // any panel.
     const foldBtn = page.locator(
       '.classic-stow-btn[data-classic-stow-field="bottom"]'
     );
@@ -1557,8 +1538,8 @@ test.describe('Classic dock resizers (B4)', () => {
     // Back to the height the user chose, not the default. The contract is
     // WHICH height came back - the chosen one differs from the default by
     // three arrow steps - so the bar only has to separate those two, and
-    // CI's renderer restores with more rounding than local (MEASURED:
-    // 3.45 px there, sub-pixel here).
+    // CI's renderer restores with more rounding than local (3.45 px there,
+    // sub-pixel here).
     await expect
       .poll(async () =>
         Math.abs((await strip.boundingBox()).height - resizedHeight)
@@ -1764,9 +1745,9 @@ test.describe('Automatic Preview control (C4)', () => {
   });
 });
 
-test.describe('Classic editor toolbar (D1)', () => {
-  // U-5/Q-18a superseded DCR-1's full upstream transcription: the workflow
-  // buttons (Preview, Render, STL, DXF) live on the top Classic toolbar now.
+test.describe('Classic editor toolbar', () => {
+  // The workflow buttons (Preview, Render, STL, DXF) live on the top Classic
+  // toolbar, not in this one.
   const ORDER = [
     ['classicEdNewBtn', 'New file'],
     ['classicEdOpenBtn', 'Open file'],
@@ -1824,7 +1805,7 @@ test.describe('Classic editor toolbar (D1)', () => {
       expect(box.height, `${id} height`).toBeGreaterThanOrEqual(target - 1);
     }
 
-    // 3D Print is disabled-with-reason: focusable, and it says why (D-26)
+    // 3D Print is disabled-with-reason: focusable, and it says why
     const print = page.locator('#classicEdPrintBtn');
     await expect(print).toHaveAttribute('aria-disabled', 'true');
     await print.focus();
@@ -1833,7 +1814,7 @@ test.describe('Classic editor toolbar (D1)', () => {
       'not available in this browser version'
     );
 
-    // Since U-5/Q-18 the parameter Undo/Redo pair is Simplified-only, so
+    // The parameter Undo/Redo pair is Simplified-only, so
     // Standard never shows two visually identical Undo pairs at once. Its
     // full names are asserted in the density test, where it is visible.
     await expect(page.locator('#classicTbUndoBtn')).toBeHidden();
@@ -1841,7 +1822,7 @@ test.describe('Classic editor toolbar (D1)', () => {
   });
 });
 
-test.describe('Classic editor toolbar icons (D2)', () => {
+test.describe('Classic editor toolbar icons', () => {
   test('classic-editor-icons: every glyph resolves to a vendored SVG', async ({
     page,
   }) => {
@@ -1863,8 +1844,8 @@ test.describe('Classic editor toolbar icons (D2)', () => {
         url: getComputedStyle(s).backgroundImage,
       }))
     );
-    // Seven icon buttons since U-5/Q-18a moved Preview/Render/STL/DXF to
-    // the top toolbar; 3D Print is the deliberate no-glyph text button.
+    // Seven icon buttons (Preview, Render, STL and DXF are on the top
+    // toolbar); 3D Print is the deliberate no-glyph text button.
     expect(icons.length).toBe(7);
     for (const { icon, url } of icons) {
       expect(url, `${icon} has a background image`).toContain(
@@ -1887,7 +1868,7 @@ test.describe('Classic editor toolbar icons (D2)', () => {
   });
 });
 
-test.describe('Classic editor toolbar behaviour (D4/D5)', () => {
+test.describe('Classic editor toolbar behavior', () => {
   test('classic-editor-toolbar-actions: undo gating follows the editor', async ({
     page,
   }) => {
@@ -2029,10 +2010,10 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     expect(barBox.y).toBeGreaterThanOrEqual(viewBox.y + viewBox.height - 2);
     expect(barBox.y + barBox.height).toBeLessThanOrEqual(stripBox.y + 2);
 
-    // Preview and Render appear exactly once PER BAR: the top toolbar owns
-    // the workflow triad (U-5/Q-18a) and the camera bar keeps upstream's own
-    // pair (viewerToolBar, U3) — the desktop's own duplication, kept. The
-    // editor toolbar has neither since U-5.
+    // Preview and Render appear exactly once per bar: the top toolbar owns the
+    // workflow triad and the camera bar keeps upstream's own pair
+    // (viewerToolBar), the desktop's own duplication, kept. The editor toolbar
+    // has neither.
     for (const name of ['Preview', 'Render']) {
       for (const barId of ['classicToolbar', 'classicCameraBar']) {
         const count = await page.evaluate(
@@ -2046,10 +2027,10 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
       }
     }
 
-    // D-18: bed grid and its size select are gone from Classic entirely
+    // Bed grid and its size select are gone from Classic entirely
     await expect(page.locator('#classicGridToggle')).toHaveCount(0);
     await expect(page.locator('#classicGridSizeSelect')).toHaveCount(0);
-    // D-17: Crosshairs lives only in the View menu now
+    // Crosshairs lives only in the View menu
     await expect(page.locator('#classicCrosshairsToggle')).toHaveCount(0);
 
     // Leaving Classic hands the bar back rather than destroying it
@@ -2076,7 +2057,7 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     await expect(viewButtons).toHaveCount(6);
     await expect(page.locator('#classicResetViewBtn')).toBeVisible();
 
-    // Honest axes split (D-16): each button drives exactly its own flag
+    // Honest axes split: each button drives exactly its own flag
     const axes = page.locator('#classicAxesToggle');
     const markers = page.locator('#classicScaleMarkersToggle');
     await expect(axes).toHaveAccessibleName('Show Axes');
@@ -2150,7 +2131,7 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('#classicPreviewBtn')).toBeFocused();
 
-    // D-15: disabled-with-reason, focusable, and it says why
+    // Disabled-with-reason, focusable, and it says why
     const dist = page.locator('#classicMeasureDistBtn');
     await expect(dist).toHaveAttribute('aria-disabled', 'true');
     await expect(dist).toHaveAttribute(
@@ -2274,7 +2255,7 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     await enterClassicDesktop(page);
 
     // The move announcement is transient and preview chatter overwrites it
-    // (MEASURED on CI: the poll saw empty, then Preview ready, then empty).
+    // (on CI a poll can see empty, then Preview ready, then empty).
     // Record everything the live region says and assert from the record -
     // the file's announce-once idiom.
     await page.evaluate(() => {
@@ -2363,7 +2344,7 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     await enterClassicDesktop(page);
 
     // The merge announcement is transient (announcer auto-clear plus any
-    // later polite chatter overwrites it), so it is RECORDED before the
+    // later polite chatter overwrites it), so it is recorded before the
     // click and asserted from the record - the file's own
     // classic-window-announce-once idiom. Polling the live region raced
     // it on CI's slow lanes.
@@ -2434,7 +2415,7 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     await expect(page.locator('#classicConsoleSlot')).toBeVisible();
     await expect(page.locator('#classicErrorLogSlot')).toBeVisible();
     // The bottom stow control came back out of the shared bar with it
-    // (UF-2b: the fold became the field's stow control)
+    // (the field's stow control)
     await expect(
       page.locator(
         '#classicConsoleSlot .classic-stow-btn[data-classic-stow-field="bottom"]'
@@ -2511,11 +2492,10 @@ test.describe('Classic dock relocation (B6-B8)', () => {
       'empty'
     );
 
-    // UF-9 P1: 'Panel layout reset' sits in #srAnnouncer for at most 1.5s
-    // (announcer auto-clear) and any later polite announcement — preview
-    // chatter especially — overwrites it, so polling toContainText raced
-    // both and lost 4x/4x in isolated runs while staying green in suite
-    // context. Record everything the live region says instead (the
+    // 'Panel layout reset' sits in #srAnnouncer for at most 1.5s (announcer
+    // auto-clear), and any later polite announcement (preview chatter
+    // especially) overwrites it, so polling toContainText races both. Record
+    // everything the live region says instead (the
     // classic-window-announce-once idiom) and assert from the record.
     await page.evaluate(() => {
       window.__said = [];
@@ -2737,8 +2717,8 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
         .click();
 
       await expect(page.locator(bar.selector)).toBeHidden();
-      // The other two must be untouched: one toggle used to hide one bar and
-      // upstream's pair had no implementation at all.
+      // The other two must be untouched: each toggle drives exactly its own
+      // bar.
       for (const other of BARS.filter((b) => b !== bar)) {
         await expect(page.locator(other.selector)).toBeVisible();
       }
@@ -2793,7 +2773,7 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
     await enterClassicDesktop(page);
 
     // Count everything the live region says, not just the last line: the menu
-    // used to announce on top of the announcement the panel controller
+    // must not announce on top of the announcement the panel controller
     // already makes.
     await page.evaluate(() => {
       window.__said = [];
@@ -2848,11 +2828,10 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
   });
 });
 
-test.describe('Classic toggle placement and honest active label (U-7)', () => {
-  // Owner order 2026-08-09, post-UF-1 merge (supersedes U-7's in-Classic
-  // order): the Classic / A. Forge toggle holds the top RIGHTMOST corner in
-  // both themes, with the Simplified/Standard slider (Forge's and Classic's
-  // occupy the same slot, visibility-swapped) just to its left — so nothing
+test.describe('Classic toggle placement and honest active label', () => {
+  // The Classic / A. Forge toggle holds the top rightmost corner in both
+  // themes, with the Simplified/Standard slider (Forge's and Classic's
+  // occupy the same slot, visibility-swapped) just to its left, so nothing
   // jumps when the theme switches.
   test('holds the top-right corner with the density slider to its left', async ({
     page,
@@ -2895,8 +2874,8 @@ test.describe('Classic toggle placement and honest active label (U-7)', () => {
       true
     );
 
-    // Theme + high contrast left the banner for the workflow row, beside
-    // Full Screen and Help (the same owner order).
+    // Theme and high contrast sit in the workflow row, beside Full Screen and
+    // Help, not in the banner.
     const relocated = await page.evaluate(() => ({
       theme: Boolean(
         document.getElementById('themeToggle')?.closest('.workflow-actions')
@@ -2919,8 +2898,8 @@ test.describe('Classic toggle placement and honest active label (U-7)', () => {
       'data-ui-mode',
       'classic'
     );
-    // Active state: the visible label tells the user what pressing it DOES —
-    // it is the way back to the Assistive Forge interface (owner's order).
+    // Active state: the visible label tells the user what pressing it does:
+    // it is the way back to the Assistive Forge interface.
     await expect(label).toHaveText('A. Forge');
 
     // Corner-class tolerance, not pixel-perfect: Classic's compact
@@ -2952,7 +2931,7 @@ test.describe('Classic toggle placement and honest active label (U-7)', () => {
   });
 });
 
-test.describe('Return to Main Page control (U-2)', () => {
+test.describe('Return to Main Page control', () => {
   test('leads the header in both themes, keeps the confirm flow, hides on the welcome screen', async ({
     page,
   }) => {
@@ -2961,7 +2940,7 @@ test.describe('Return to Main Page control (U-2)', () => {
     await loadSampleProject(page);
 
     const btn = page.locator('#clearFileBtn');
-    // Forge: visible, approved label (Q-16), leading the header before the
+    // Forge: visible, approved label, leading the header before the
     // branding — nearest the browser's own Back button.
     await expect(btn).toBeVisible();
     await expect(btn).toHaveText('← Main Page');
@@ -2994,7 +2973,7 @@ test.describe('Return to Main Page control (U-2)', () => {
     );
     expect(box.width, 'touch-target width').toBeGreaterThanOrEqual(target - 1);
 
-    // Classic no longer loses it — the U-2 report.
+    // Classic keeps it.
     await page.locator('#classicModeToggle').click();
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',

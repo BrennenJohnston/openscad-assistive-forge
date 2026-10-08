@@ -1,14 +1,9 @@
 import { test, expect } from '@playwright/test';
 
-// UF-8 (U-12): a tutorial that belongs to Classic. The intro launched from
-// Classic runs the Classic tour in place (Q-29 entry decision); Forge-only
-// tours ask before switching interfaces (D-35 dialog); a mid-tutorial
-// interface switch wins, and a tutorial's forced mode never sticks to
-// Classic's density or the saved preference (Q-28a, the U-12 poisoning).
-//
-// All five cases were proven red on the release parent 5e81dd4 by
-// reverting src/js/tutorial-sandbox.js in-tree (the UF-4 method:
-// git checkout <parent> -- <file>, restore with git checkout HEAD -- ).
+// A tutorial that belongs to Classic. The intro launched from Classic runs
+// the Classic tour in place; Forge-only tours ask before switching
+// interfaces; a mid-tutorial interface switch wins, and a tutorial's forced
+// mode never sticks to Classic's density or the saved preference.
 
 const CLASSIC_STAMP = JSON.stringify({
   mode: 'classic',
@@ -33,7 +28,7 @@ async function nextTo(page, title) {
   });
 }
 
-test.describe('Classic tutorial (UF-8, U-12)', () => {
+test.describe('Classic tutorial', () => {
   test.use({ viewport: { width: 1280, height: 720 } });
 
   test('classic-tutorial-in-place: Start Tutorial from Classic runs the Classic tour with no interface switch', async ({
@@ -55,9 +50,8 @@ test.describe('Classic tutorial (UF-8, U-12)', () => {
     await expect(
       page.locator('[data-testid="tutorial-mode-choice-dialog"]')
     ).toHaveCount(0);
-    // 17 since UF-21: the Simplified/Standard step moved here from the
-    // welcome tour (U-29, Q-51b). 18 since UF-39: the tour ends by naming
-    // the way back to the Main Page (U-45).
+    // 18 steps: the Simplified/Standard step is part of this tour, and the tour
+    // ends by naming the way back to the Main Page.
     await expect(page.locator('.tutorial-progress')).toContainText(
       'Step 1 of 18'
     );
@@ -163,9 +157,9 @@ test.describe('Classic tutorial (UF-8, U-12)', () => {
   test('classic-tutorial-density-heals: the intro tour forced Simplified never sticks to Classic', async ({
     page,
   }) => {
-    // The exact U-12 poisoning chain, from a Forge Standard start: the intro
-    // forces Simplified; choosing Classic mid-tour must close the tour AND
-    // hand back the user's own density, dock layout and saved preference.
+    // The whole chain, from a Forge Standard start: the intro forces
+    // Simplified; choosing Classic mid-tour must close the tour and hand back
+    // the user's own density, dock layout and saved preference.
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');

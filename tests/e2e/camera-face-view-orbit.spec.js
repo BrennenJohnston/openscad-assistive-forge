@@ -2,32 +2,30 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import { skipWithoutWebGL } from './helpers/webgl.js';
 
-// UF-26 / D-48 (U-36): "select a camera face angle, then try to adjust the view
-// with a mouse ... instead of rotating around the z axes, it appears to rotate
-// the camera at random, not tied to a specific axis to rotate around, making it
-// un-navigable."
+// After a face view, dragging with the mouse must orbit around the Z axis,
+// not turn the camera about no particular axis at all.
 //
-// The mechanism. Every face view funnelled into PreviewManager.setCameraView,
-// and the CAMERA_VIEWS table gave Top up:[0,1,0] and Bottom up:[0,-1,0] while
-// the other five kept world Z. OrbitControls reads camera.up ONCE, when it is
-// constructed (the quat inside its update() IIFE), so a later up never reaches
-// the orbit maths — but the lookAt(target) that ends every frame's update does
-// read it. A left-behind up therefore could not re-aim the turntable; it only
-// rolled the picture, and the roll GREW with every drag.
+// The mechanism. Every face view goes through PreviewManager.setCameraView,
+// and a view that leaves camera.up off world Z (Top with up:[0,1,0], Bottom
+// with up:[0,-1,0]) breaks the orbit. OrbitControls reads camera.up once,
+// when it is constructed (the quat inside its update() IIFE), so a later up
+// never reaches the orbit math, but the lookAt(target) that ends every
+// frame's update does read it. A left-behind up therefore cannot re-aim the
+// turntable; it only rolls the picture, and the roll grows with every drag.
 //
 // The instrument, and why it needs no new debug hook. The Viewport-Control
-// panel publishes the live camera pose on `viewport-camera-change` in BOTH
+// panel publishes the live camera pose on `viewport-camera-change` in both
 // interfaces (it is connected at project open, not at Classic entry), and its
 // `rotation` is three's camera.rotation euler in XYZ order. Rebuilding the
 // rotation matrix from that euler gives the camera's world basis, and three's
-// lookAt() builds screen-right as normalize(up x forward) — so screen-right is
-// ALWAYS perpendicular to camera.up. In a Z-up app that makes
+// lookAt() builds screen-right as normalize(up x forward), so screen-right is
+// always perpendicular to camera.up. In a Z-up app that makes
 //
 //     |screenRight.z| == 0   <=>   the picture is not rolled
 //
-// and it is non-zero exactly when a stale up is steering the frame. MEASURED on
-// the release base, dragging sideways in 25px steps after Top: 0.426, 0.644,
-// 0.711. After the fix: 0 at every step, in both interfaces.
+// and it is non-zero exactly when a stale up is steering the frame. Dragged
+// sideways in 25px steps after Top, a stale up reads 0.426, 0.644 and
+// 0.711; a correct frame reads 0 at every step, in both interfaces.
 
 const STL_FIXTURE = path.join(
   process.cwd(),
@@ -44,8 +42,8 @@ const D2R = Math.PI / 180;
 // A second is ~3 time constants; the residue is under a tenth of a degree.
 const SETTLE_MS = 1200;
 
-// The roll the release base produced was 0.16 rad and up. Anything above a
-// thousandth here is a real frame tilt, not float noise.
+// A stale up rolls the frame by 0.16 rad and more. Anything above five
+// thousandths here is a real frame tilt, not float noise.
 const ROLL_TOLERANCE = 5e-3;
 
 const ALL_VIEWS = ['top', 'bottom', 'front', 'back', 'left', 'right'];
@@ -222,7 +220,7 @@ async function assertTurntableAfter(page, label) {
   expect(swept, `${label}: the drags never moved the camera`).toBeGreaterThan(30);
 }
 
-test.describe('UF-26 — a camera you can steer after a face view (D-48)', () => {
+test.describe('A camera you can steer after a face view', () => {
   test('Classic: Top then drag orbits around global Z without rolling', async ({
     page,
   }) => {
@@ -353,8 +351,8 @@ test.describe('UF-26 — a camera you can steer after a face view (D-48)', () =>
   });
 });
 
-test.describe('AF-11 - the pole is a door, not a wall', () => {
-  test('Forge: from Top, the previously dead downward drag crosses over', async ({
+test.describe('The pole is a door, not a wall', () => {
+  test('Forge: from Top, the downward drag crosses over', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -365,8 +363,8 @@ test.describe('AF-11 - the pole is a door, not a wall', () => {
     expect(atTop, 'no camera pose published at Top').not.toBeNull();
     expect(atTop.elevationDeg).toBeGreaterThan(89.5);
 
-    // UF-26 recorded this exact gesture as pressing a dead clamp: from Top,
-    // dragging DOWN did nothing while the desktop rolls straight over.
+    // From Top, dragging down must not press a dead clamp: the desktop rolls
+    // straight over.
     await dragCanvas(page, 0, 40);
     const crossed = await readCamera(page);
     expect(
@@ -374,15 +372,15 @@ test.describe('AF-11 - the pole is a door, not a wall', () => {
       'the downward drag still presses a dead clamp instead of crossing'
     ).toBeLessThan(85);
     expect(crossed.elevationDeg).toBeGreaterThan(45);
-    // Out the OTHER side: azimuth flipped half a turn (mod 360).
+    // Out the other side: azimuth flipped half a turn (mod 360).
     let dAz = Math.abs(crossed.azimuthDeg - atTop.azimuthDeg) % 360;
     if (dAz > 180) dAz = 360 - dAz;
     expect(dAz, 'the crossing did not come out the far side').toBeGreaterThan(150);
-    // And the frame is still a turntable: no roll (D-48 untouched).
+    // And the frame is still a turntable: no roll.
     expect(crossed.roll).toBeLessThan(ROLL_TOLERANCE);
   });
 
-  test('Forge: from Bottom, the previously dead upward drag crosses over', async ({
+  test('Forge: from Bottom, the upward drag crosses over', async ({
     page,
   }) => {
     test.setTimeout(300_000);

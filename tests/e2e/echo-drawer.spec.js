@@ -125,8 +125,8 @@ test.describe('echo drawer fold state (C9)', () => {
     await expect(drawer).toHaveClass(/collapsed/)
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
-    // Same warning count on the next render: the user's fold is respected
-    // (the old code force-reopened on every render)
+    // Same warning count on the next render: the user's fold is respected, not
+    // reopened on every render.
     await nudgeParamAndRender(page)
     await expect(drawer).toHaveClass(/collapsed/)
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')

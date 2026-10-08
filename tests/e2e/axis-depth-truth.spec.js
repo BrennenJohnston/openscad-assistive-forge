@@ -1,28 +1,27 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// UF-7 (U-11) — "Axes that lie flat and tell the truth."
+// Axes that lie flat and tell the truth.
 //
 // Two mechanical proofs the desktop references demand:
 //
-// 1. DEPTH: marks behind solid geometry do not draw over it. The pre-UF-7
-//    overlay billboarded its labels with depthTest:false and renderOrder=10,
-//    so every number drew THROUGH the model. The probe toggles the marks and
-//    compares canvas pixels inside a region the model occludes — honest depth
-//    means the toggle changes nothing there, while a sky region where labels
-//    live must change (that second assertion keeps the first from passing
+// 1. Depth: marks behind solid geometry do not draw over it. Labels
+//    billboarded with depthTest:false and renderOrder=10 would draw every
+//    number through the model. The probe toggles the marks and compares
+//    canvas pixels inside a region the model occludes: honest depth means
+//    the toggle changes nothing there, while a sky region where labels live
+//    must change (that second assertion keeps the first from passing
 //    vacuously on a mispositioned box).
 //
-// 2. ZOOM ADAPTATION: the overlay is a function of the camera distance
+// 2. Zoom adaptation: the overlay is a function of the camera distance
 //    (desktop showScalemarkers: tick = 10^floor(log10 l)/10). Driving the
 //    Viewport-Control panel's distance field through a decade boundary must
-//    rebuild the overlay with the new step — through the real controls
+//    rebuild the overlay with the new step, through the real controls
 //    'change' path, not by calling the builder.
 //
-// The camera pose is the desktop close-up reference (Screenshot 2026-08-10
-// 154809: translate [3.83 18.81 -4.09], rotate [71.80 0 14.50], distance
-// 140, fov 22.5), converted to the panel's euler exactly as UF-6 P0
-// validated: vpRx/Ry/Rz = 71.2425/13.7599/0.
+// The camera pose is a desktop close-up reference (translate [3.83 18.81
+// -4.09], rotate [71.80 0 14.50], distance 140, fov 22.5), converted to the
+// panel's euler: vpRx/Ry/Rz = 71.2425/13.7599/0.
 
 const UNIVERSAL_CUFF = path.join(
   process.cwd(),
@@ -102,13 +101,13 @@ async function skipWithoutRenderer(page) {
 }
 
 /**
- * The depth probe needs a MODEL in the scene — the whole claim is that
- * geometry occludes marks. CI WebKit's preview render fails environment-
- * wide (red on develop's own runs long before UF-7: auto-preview and
- * classic-mode show the same "Preview failed" there), and with no mesh
- * the occlusion box correctly finds zero model pixels. Skip on the
- * app's own error state instead of failing on the sanity guard; the
- * required Chromium and Edge lanes do render and do assert.
+ * The depth probe needs a model in the scene: the whole claim is that
+ * geometry occludes marks. CI WebKit's preview render fails
+ * environment-wide (auto-preview and classic-mode show the same "Preview
+ * failed" there), and with no mesh the occlusion box correctly finds zero
+ * model pixels. Skip on the app's own error state instead of failing on
+ * the sanity guard; the required Chromium and Edge lanes do render and do
+ * assert.
  */
 async function skipWithoutRenderedModel(page) {
   const indicator = page.locator('.preview-state-indicator');
@@ -170,9 +169,8 @@ async function toggleMarks(page) {
 function sampleRegion(page, box) {
   return page.evaluate((b) => {
     return new Promise((resolve) => {
-      // UF-9 P3: nested double-rAF — on CI WebKit a single rAF once ran
-      // BEFORE the app's render pass (run 31528677140, triad case, "no red
-      // arm pixels", retry-green), so the sample must follow a full frame.
+      // A nested double rAF: on CI WebKit a single rAF can run before the app's
+      // render pass, so the sample must follow a full frame.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const canvas = document.querySelector('.preview-panel canvas');
@@ -226,7 +224,7 @@ function changedSamples(a, b) {
 function countBoxColors(page, box) {
   return page.evaluate((b) => {
     return new Promise((resolve) => {
-      // UF-9 P3: nested double-rAF, same reason as sampleRegion above.
+      // Nested double rAF, same reason as sampleRegion above.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const canvas = document.querySelector('.preview-panel canvas');
@@ -269,7 +267,7 @@ function countBoxColors(page, box) {
 const OCCLUDED_BOX = { x0: 0.3, y0: 0.52, x1: 0.42, y1: 0.64 };
 const SKY_BOX = { x0: 0.55, y0: 0.06, x1: 0.85, y1: 0.32 };
 
-test.describe('UF-7 axis depth truth', () => {
+test.describe('Axis depth truth', () => {
   test('marks behind the model stay hidden; marks in the open stay visible', async ({
     page,
   }) => {
@@ -328,9 +326,9 @@ test.describe('UF-7 axis depth truth', () => {
       'toggling marks changed nothing in the sky box — probe is blind'
     ).toBeGreaterThan(5);
 
-    // The claim itself: nothing behind the model ever drew over it, so
-    // removing the marks changes nothing there. The pre-UF-7 sprites drew
-    // straight through and fail this. ≤1% tolerates antialiasing flicker.
+    // The claim itself: nothing behind the model ever draws over it, so
+    // removing the marks changes nothing there. Sprites that draw straight
+    // through fail this. ≤1% tolerates antialiasing flicker.
     expect(
       modelChanged,
       `depth violated: ${modelChanged} model-region samples changed when marks toggled`
