@@ -1141,6 +1141,10 @@ export class ToolbarMenuController {
       firstItem.setAttribute('tabindex', '0');
       firstItem.focus();
     }
+    // The list opens inline inside the menu's scrolling body. Focus brings
+    // only its first item into view; the rest would sit below the fold, over
+    // the overlay, where a click closes the menu instead.
+    triggerBtn.closest('li')?.scrollIntoView?.({ block: 'nearest' });
   }
 
   /** @private */
