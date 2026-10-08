@@ -181,10 +181,16 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* A disabled item still takes the pointer. With pointer-events off, a click
+   landed on the menu behind it, which cannot hold focus, so focus fell to
+   the page; and the reason in its title never showed on hover. */
 .menu-item-btn[aria-disabled='true'] {
   opacity: var(--opacity-disabled);
   cursor: not-allowed;
-  pointer-events: none;
+}
+
+.menu-item-btn[aria-disabled='true']:hover {
+  background: transparent;
 }
 
 .menu-item-label {
@@ -297,7 +303,10 @@
 .menu-radio-btn[aria-disabled='true'] {
   opacity: var(--opacity-disabled);
   cursor: not-allowed;
-  pointer-events: none;
+}
+
+.menu-radio-btn[aria-disabled='true']:hover {
+  background: transparent;
 }
 
 /* ============================================================================

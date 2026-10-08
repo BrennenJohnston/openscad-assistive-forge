@@ -216,6 +216,16 @@ export class ToolbarMenuController {
 
       btn.addEventListener('click', () => this._onBarItemClick(menuId));
 
+      // Wired once here, not in renderMenuContent: the list element survives
+      // every rebuild, so a listener added per opening would run once per
+      // opening for every key.
+      const listEl = modal.querySelector(`#${menuId}MenuItems`);
+      if (listEl) {
+        listEl.addEventListener('keydown', (e) =>
+          this._handleMenuKeydown(e, menuId)
+        );
+      }
+
       // Overlay click closes the menu
       const overlay = modal.querySelector('.toolbar-menu-overlay');
       if (overlay) {
@@ -278,7 +288,7 @@ export class ToolbarMenuController {
 
     // Close any currently open sibling menu first
     if (this._openMenuId !== null && this._openMenuId !== menuId) {
-      this._hideMenu(this._openMenuId);
+      this._hideMenu(this._openMenuId, { restoreFocus: false });
     }
 
     this._showMenu(menuId);
@@ -389,11 +399,6 @@ export class ToolbarMenuController {
         i++;
       }
     }
-
-    // Wire keyboard navigation within this menu list
-    listEl.addEventListener('keydown', (e) =>
-      this._handleMenuKeydown(e, menuId)
-    );
   }
 
   /**
@@ -460,10 +465,21 @@ export class ToolbarMenuController {
     announce(`${MENU_LABELS[menuId]} menu opened`, { clearDelayMs: 1500 });
   }
 
-  /** @private */
-  _hideMenu(menuId) {
+  /**
+   * @private
+   * @param {string} menuId
+   * @param {{restoreFocus?: boolean}} [options] - false when another menu is
+   *   about to take focus
+   */
+  _hideMenu(menuId, { restoreFocus = true } = {}) {
     const modal = this._modals.get(menuId);
     const btn = this._buttons.get(menuId);
+
+    // Read before hiding: a focused item inside a hidden menu is focus lost.
+    // Focus somewhere else on the page belongs to whoever put it there.
+    const active = document.activeElement;
+    const focusWasInMenu =
+      modal.contains(active) || !active || active === document.body;
 
     modal.classList.add('hidden');
     modal.setAttribute('aria-hidden', 'true');
@@ -471,6 +487,10 @@ export class ToolbarMenuController {
 
     if (this._openMenuId === menuId) {
       this._openMenuId = null;
+    }
+
+    if (restoreFocus && focusWasInMenu) {
+      btn.focus();
     }
   }
 
