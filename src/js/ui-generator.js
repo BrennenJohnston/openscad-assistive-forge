@@ -17,6 +17,7 @@ import { isEnabled } from './feature-flags.js';
 // customizer needs while it renders come from svg-limits.js.
 import {
   loadSvgGeometry,
+  preloadSvgGeometry,
   svgGeometry,
   isSvgGeometryLoaded,
 } from './svg-geometry.js';
@@ -2288,8 +2289,12 @@ export function reportHolePlacement(values, parameters) {
 
   if (!isSvgGeometryLoaded()) {
     // The check measures against the drawing's outline, so it waits for the
-    // geometry, which the outline's file control has already started.
-    loadSvgGeometry().then(() => reportHolePlacement(values, parameters));
+    // geometry, which the outline's file control has already started. If the
+    // geometry never arrives the check stays undone; choosing a drawing is
+    // where that is said.
+    preloadSvgGeometry().then((geometry) => {
+      if (geometry) reportHolePlacement(values, parameters);
+    });
     return;
   }
   const result = svgGeometry().holes.checkHolePlacement({
@@ -2416,8 +2421,9 @@ function createFileControl(
 
   const acceptsSvg = param.acceptedExtensions?.includes('svg');
   // The drawing geometry starts on its way too, for the same reason; every
-  // path below that reads a drawing waits for this same load.
-  if (acceptsSvg) loadSvgGeometry();
+  // path below that reads a drawing waits for this same load, and says so if
+  // it never arrives.
+  if (acceptsSvg) preloadSvgGeometry();
 
   /**
    * Every change to this parameter's file value goes through here so the
@@ -4366,9 +4372,13 @@ function createFileControl(
       try {
         await loadSvgGeometry();
       } catch (err) {
-        fileInfo.textContent = `Could not read the drawing: ${err.message}`;
+        // The browser's own message names a chunk file. It stays in the
+        // console; the person hears what to do.
+        const sentence =
+          'The drawing tools did not load. Check your connection, then choose the file again.';
+        fileInfo.textContent = sentence;
         fileInfo.className = 'file-info file-info--error';
-        announceChange(`Could not read the drawing: ${err.message}`);
+        announceChange(sentence);
         console.error('[Design] the drawing geometry did not load:', err);
         linkAsksEditor = false;
         return;
