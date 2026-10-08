@@ -1,6 +1,6 @@
 # svg-edit fixtures
 
-A stand-in for the acceptance story behind IR-4: a photographed tactile
+A stand-in for the case the editor was built for: a photographed tactile
 drawing of a bird, with the interior detail a laser cutter or a tactile
 printer can never show.
 
@@ -23,12 +23,12 @@ by keyboard alone.
 shapes) and `over-cap-1200.svg` (1,200 rects) exist to put a drawing on each
 side of a line the app draws.
 
-- **1,200** is over the LIST cap of 1,000 shapes and is refused outright.
+- **1,200** is over the list cap of 1,000 shapes and is refused outright.
 - **300 curved shapes** are 19,200 ring points, predicted at 8.8 seconds and
-  MEASURED at 923 ms, so they are over the 300 ms flatten budget (DP-Q33) and
+  measured at 923 ms, so they are over the 300 ms flatten budget and
   wait to be asked. They are curved on purpose: a drawing has to be slow
   enough that somebody can really press Cancel in the middle of combining it.
-- **210 rects** are 840 ring points and MEASURED at 80 to 110 ms, so they
+- **210 rects** are 840 ring points and measured at 80 to 110 ms, so they
   combine by themselves. They used to be the manual-band fixture, back when
   the band was a count of shapes rather than a measured cost.
 
@@ -41,5 +41,5 @@ it. Neither square is a frame around the whole drawing, so both are cut-outs
 by their luminance, and the automatic preparation subtracts them from the
 bars and keeps nothing. It exists so the app's answer to that, opening the
 drawing editor and saying so instead of applying an empty design, has a
-drawing to be measured on (D-167). Plain geometry, original to this
+drawing to be measured on. Plain geometry, original to this
 repository.

@@ -1,23 +1,23 @@
 # aac fixtures
 
-Two SYNTHETIC cards, original to this repository, standing in for the pictures
+Two synthetic cards, original to this repository, standing in for the pictures
 communication symbols are actually made of: black line work over a saturated
 fill, where the fill colour carries meaning (Fitzgerald coding).
 
 Nothing here comes from PCS, SymbolStix, ARASAAC, Mulberry or any other set.
 No proprietary symbol belongs in this repository, and checking Forge against a
-real licensed export is an owner-run acceptance, not a committed test.
+real licensed export is something I do by hand, not a committed test.
 
 - `blue-field-glyph.svg` / `.png` - a black person glyph inside a blue rounded
-  square with a black border. This is the failure case: MEASURED against the
-  tracer as it shipped, this picture came back as ONE path, the blue square,
+  square with a black border. This is the failure case: measured against the
+  tracer as it once shipped, this picture came back as one path, the blue square,
   with the person gone and nothing said about it. Line art mode keeps the
   glyph.
 - `fitzgerald-card.svg` / `.png` - one swatch per Fitzgerald colour band
   (yellow, blue, green, red), each with black line work over it. Yellow's line
   work survived the old tracer by luck, because yellow is light enough to land
   in the paper bucket; the other three swallowed theirs. It is also the case
-  where the colour-to-filament suggestion must stay QUIET, because four fills
+  where the colour-to-filament suggestion must stay quiet, because four fills
   average to a colour that is in none of them.
 
 The `.png` files are the `.svg` files rendered at their natural size, so the

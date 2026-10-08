@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// Rendering through a bundled library, in the built app (UF-24, U-33, D-40).
+// Rendering through a bundled library, in the built app.
 //
 // This lane is the only one that has the libraries at all. The four bundles
 // are gitignored and fetched by the `prebuild` hook, which runs before
@@ -123,7 +123,7 @@ test.describe('Rendering through a library bundle', () => {
     ).toEqual([]);
   });
 
-  test('prod-library-off: switching a needed library off says so (D-42)', async ({
+  test('prod-library-off: switching a needed library off says so', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -184,7 +184,7 @@ test.describe('Rendering through a library bundle', () => {
     expect(status).not.toContain('current settings');
   });
 
-  test('prod-library-off-after-mount: a library already in the filesystem still refuses when switched off (D-42)', async ({
+  test('prod-library-off-after-mount: a library already in the filesystem still refuses when switched off', async ({
     page,
   }) => {
     // The sibling case above unchecks while the first render is still in

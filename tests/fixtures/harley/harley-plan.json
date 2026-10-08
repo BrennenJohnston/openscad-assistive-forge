@@ -1,25 +1,24 @@
 {
   "$comment": [
-    "The reference colour plan for the Harley cat, MEASURED from the owner's",
-    "own artefacts by DP-15 - not typed from a description. Each region is",
-    "located by a point INSIDE it, in sketch4.svg user units (x right, y down,",
-    "content box 119.813 x 150.065). Points, not indices: DP-16 extracts the",
+    "The reference colour plan for the Harley cat, measured from my own",
+    "artefacts - not typed from a description. Each region is located by a",
+    "point inside it, in sketch4.svg user units (x right, y down, content box",
+    "119.813 x 150.065). Points, not indices: the stencil engine extracts the",
     "faces of the line network, and any index it hands out is its own.",
     "",
     "How each row was derived: the boundary loops of each reference plate's",
     "top face were read out of its STL, mapped into SVG user units through the",
     "silhouette of plate 1 (uniform scale 0.264525 mm per SVG unit, y flipped),",
     "and the interior of each loop was sampled against sketch4.png with every",
-    "region a LATER plate sprays over removed first. The picture shows the last",
+    "region a later plate sprays over removed first. The picture shows the last",
     "coat, so without that removal the eyes read black rather than green.",
-    "Script: New Research 2026_08_28/DP15-measurements/scripts/",
-    "harley-plan-derive.mjs; output harley-regions-measured.json.",
+    "The script lives in my private research notes, not in this repository.",
     "",
     "The point that names a region is not simply the interior point of the",
-    "reference cut. A reference cut is solid; the FACE it corresponds to is",
+    "reference cut. A reference cut is solid; the face it corresponds to is",
     "not, because whatever is drawn inside it is a face of its own. The eyes",
     "are the case: the widest span of plate 4's eye cut runs through the",
-    "middle, where the pupil is, so its interior point names the PUPIL's face",
+    "middle, where the pupil is, so its interior point names the pupil's face",
     "and the green plate comes out empty. Both eye points are therefore",
     "chosen inside their cut and outside every strictly smaller cut nested in",
     "it, which puts them in the iris."
@@ -65,9 +64,9 @@
     { "at": [89.67, 133.607], "colour": "pink", "plate": 6, "areaMm2": 4.017, "name": "tongue", "sampled": "#b0767d 84.0%" }
   ],
   "observations": [
-    "Sixteen regions, six plates. Plate 1 cuts the silhouette alone (882.23 mm2 of a 60 x 60 plate) and every later plate cuts only its own colour: the reference set is the 'own' rule, not the stacked one, which is why the owner had to paint black twice.",
-    "PLATE 6 WAS CORRECTED BY THE OWNER at gate G1 (2026-08-28). The plate first measured here repeated plate 5's two pupil cuts exactly - same areas to three decimals, same bounding boxes to 0.01 mm, same centres - so it carried openings for two colours at once. The owner confirmed that was a mistake, a leftover from editing plate 5, and supplied a corrected plate 6 that cuts only the nose and the tongue. `plate-6.stl` here IS the corrected one; the first version is not kept, because a fixture that is the answer sheet cannot also be a wrong answer.",
-    "The art has a grey (#978b84, 5.62% of the canvas: the sides of the muzzle) that NO reference plate cuts. Under this plan those faces keep the base coat. The reference set therefore realises five painted colours plus the base, not every colour in the drawing.",
+    "Sixteen regions, six plates. Plate 1 cuts the silhouette alone (882.23 mm2 of a 60 x 60 plate) and every later plate cuts only its own colour: the reference set is the 'own' rule, not the stacked one, which is why I had to paint black twice.",
+    "Plate 6 is a corrected plate. The plate first measured here repeated plate 5's two pupil cuts exactly - same areas to three decimals, same bounding boxes to 0.01 mm, same centres - so it carried openings for two colours at once. That was a mistake, a leftover from editing plate 5, and the corrected plate 6 cuts only the nose and the tongue. `plate-6.stl` here is the corrected one; the first version is not kept, because a fixture that is the answer sheet cannot also be a wrong answer.",
+    "The art has a grey (#978b84, 5.62% of the canvas: the sides of the muzzle) that no reference plate cuts. Under this plan those faces keep the base coat. The reference set therefore realises five painted colours plus the base, not every colour in the drawing.",
     "sketch4.png is 503 x 629 px for a 119.813 x 150.065 unit drawing: 4.1982 px per unit across and 4.1915 down, a 0.16% disagreement that comes from the export, not from the art."
   ]
 }

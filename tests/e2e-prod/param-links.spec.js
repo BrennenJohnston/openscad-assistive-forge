@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// Production-parity proof for the shared parameter link (IR-1).
+// Production-parity proof for the shared parameter link.
 //
 // The restore path reaches its validator through a dynamic
 // `import('./validation-schemas.js')` inside state.js. Every other test of this

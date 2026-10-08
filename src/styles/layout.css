@@ -4443,7 +4443,7 @@ details summary:focus,
 }
 
 /* ============================================================================
-   Expert Mode: Mobile Bottom-Sheet Layout (DEBT-13)
+   Expert Mode: Mobile Bottom-Sheet Layout
    ============================================================================
    On mobile, the param-panel is normally an off-canvas left drawer. When Expert
    Mode is active, the panel converts to a bottom sheet so the code editor sits
