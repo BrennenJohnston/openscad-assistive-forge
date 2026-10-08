@@ -12783,8 +12783,9 @@ if (rounded) {
 
   // ========== Render queue ==========
 
-  // Initialize render queue
-  renderQueue = new RenderQueue(renderController, {
+  // Initialize render queue. A getter, as for the comparison below: on a
+  // first visit the engine is built after the welcome, later than this line.
+  renderQueue = new RenderQueue(() => renderController, {
     maxQueueSize: 20,
   });
 
@@ -12834,6 +12835,15 @@ if (rounded) {
 
     const jobs = renderQueue.getAllJobs();
 
+    // Clear existing items, and recount, before the empty case too: removing
+    // the last job used to leave its row and its counts on screen.
+    Array.from(queueList.children).forEach((child) => {
+      if (!child.classList.contains('queue-empty')) {
+        child.remove();
+      }
+    });
+    updateQueueStats();
+
     if (jobs.length === 0) {
       queueEmpty.classList.remove('hidden');
       return;
@@ -12841,20 +12851,11 @@ if (rounded) {
 
     queueEmpty.classList.add('hidden');
 
-    // Clear existing items
-    Array.from(queueList.children).forEach((child) => {
-      if (!child.classList.contains('queue-empty')) {
-        child.remove();
-      }
-    });
-
     // Render each job
     jobs.forEach((job) => {
       const jobElement = createQueueJobElement(job);
       queueList.appendChild(jobElement);
     });
-
-    updateQueueStats();
   }
 
   // Create a queue job element
@@ -13003,6 +13004,9 @@ if (rounded) {
   // Process Queue button
   processQueueBtn?.addEventListener('click', async () => {
     try {
+      // Start the engine if it has not started; a job that still finds none
+      // fails with a sentence saying so.
+      await ensureWasmInitialized();
       await renderQueue.processQueue();
     } catch (error) {
       console.error('Queue processing error:', error);
