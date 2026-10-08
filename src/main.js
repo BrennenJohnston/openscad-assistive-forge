@@ -16065,8 +16065,13 @@ if (rounded) {
     const tabButton = document.getElementById(tabId);
     if (tabButton) {
       switchFeaturesTab(tabId);
-      // Focus the active tab
-      setTimeout(() => tabButton.focus(), 100);
+      // A second try, for a browser that dropped the dialog's first focus. It
+      // must not pull focus back from a tab the person has already moved to.
+      setTimeout(() => {
+        if (!featuresGuideModal.contains(document.activeElement)) {
+          tabButton.focus();
+        }
+      }, 100);
     }
   }
 

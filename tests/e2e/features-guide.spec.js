@@ -214,3 +214,28 @@ test.describe('Features Guide Modal', () => {
   })
 })
 
+
+test.describe('Features Guide focus', () => {
+  // The guide focuses its tab once the dialog shows, and tries again 100 ms
+  // later for a browser that dropped the first focus. The second try must not
+  // pull focus back from a tab the person has already moved to. No model is
+  // loaded, so this runs on CI too.
+  test('a tab moved to before the second focus try keeps the focus', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForFunction(() => typeof window.openFeaturesGuide === 'function')
+    const focused = await page.evaluate(async () => {
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+      // The dialog queues its first focus for the next frame while it opens;
+      // this frame callback is queued after it, so the focus has landed.
+      document.getElementById('featuresGuideBtn').click()
+      await frame()
+      const first = document.activeElement?.id
+      document.activeElement.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+      )
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      return { first, last: document.activeElement?.id }
+    })
+    expect(focused).toEqual({ first: 'tab-libraries', last: 'tab-colors' })
+  })
+})
