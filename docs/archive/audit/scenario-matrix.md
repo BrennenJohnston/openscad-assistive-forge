@@ -22,8 +22,8 @@
 | `feedback-6` | `2026-03-03 11-57-09 Feedback 6.txt` |
 | `tinker-tue` | `2026-02-17 16-13-00-Tinker Tuesday Audio Extracted 01.txt` |
 
-All files are in or under:
-`C:\Users\WATAP\Documents\Research\OpenSCAD_AF\Volkswitch Compatibility Feature Update Research\New feedback\`
+All files are in the private research notes, in the stakeholder feedback
+folder; they are not part of this repository.
 
 ---
 
@@ -413,7 +413,7 @@ The OpenSCAD User Manual does **not** document the automatic yellow/green face c
 - **GitHub Issue #5065** — "Display colors when rendering using F6" (opened by @kintel, March 2024)
 - **GitHub PR #5185** — "Color support in 3D rendering" (merged July 14, 2024) — formalized the yellow/green scheme and added Manifold OriginalID-based color tracking
 
-The User Manual PDFs (local: `C:\Users\WATAP\Documents\Research\OpenSCAD_AF\OpenSCAD Book\`) were consulted to validate this theory. They confirm Systems 1 and 3 explicitly, and their silence on System 2 is consistent with its undocumented status.
+The User Manual PDFs (a local copy) were consulted to validate this theory. They confirm Systems 1 and 3 explicitly, and their silence on System 2 is consistent with its undocumented status.
 
 ### Critical Unknown for Phase 3/4
 

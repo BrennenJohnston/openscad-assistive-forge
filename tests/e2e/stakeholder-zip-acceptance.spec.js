@@ -109,7 +109,7 @@ async function uploadZipAndWait(page, diag) {
 
 // expandPresetControls imported from ./helpers/preset-helpers.js
 
-test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
+test.describe('Stakeholder Acceptance Tests - the keyguard ZIP', () => {
   test.describe.configure({ timeout: 150_000 }) // WASM init may need ~120s
   let diag
 
