@@ -1,22 +1,19 @@
 /**
  * E2E: the person starts the conversion, watches it, and can always stop it.
  *
- * The acceptance story is the owner's own report, inverted. Before this, a
- * picture began converting the moment it was chosen, on the main thread, with
- * no way to stop it - so a device that struggled produced a page that could not
- * be used and could not be recovered, and a reload on a phone did not help.
+ * A picture that began converting the moment it was chosen, on the main
+ * thread, with no way to stop it, would leave a device that struggled with
+ * a page that could not be used or recovered.
  *
  * What is guarded here is not that a conversion succeeds. It is that:
  *
  *   - nothing heavy starts until the person asks for it,
- *   - the page still ANSWERS while it works, which is the thing that was
- *     actually broken,
+ *   - the page still answers while it works,
  *   - Cancel stops it at any moment and says so, once,
  *   - and a completed conversion speaks exactly once.
  *
- * The picture is a 2000 x 2000 noise PNG built inside the test. It is never
- * stored: a fixture that heavy has no business in the repository, and noise is
- * the honest worst case because it traces into thousands of shapes.
+ * The pictures are built inside the test and never stored: a fixture that
+ * heavy has no business in the repository.
  *
  * @license GPL-3.0-or-later
  */
@@ -48,8 +45,8 @@ async function choosePicture(page, size = 2000, kind = 'noise') {
         ctx.fillStyle = '#000000';
         ctx.fillRect(n * 0.25, n * 0.25, n * 0.5, n * 0.5);
       } else if (kind === 'lightOnDark') {
-        // The class of picture the owner brought (D-139): a light drawing on
-        // a dark, SATURATED ground. The navy is the one from their logo.
+        // A light drawing on a dark, saturated ground, the navy taken from a
+        // real logo.
         ctx.fillStyle = '#4b2e83';
         ctx.fillRect(0, 0, n, n);
         ctx.fillStyle = '#ffffff';
@@ -96,11 +93,9 @@ async function choosePicture(page, size = 2000, kind = 'noise') {
  * shape: a big picture (1400 px, 1.96 MP, so it waits to be started) whose
  * shape count a test can choose and whose parse is long. 30 x 30 with twelve
  * teeth is 900 shapes, under the cap of 1,000, so the whole conversion runs.
- * MEASURED on the charm host: 900 shapes, an 870 KB trace of 248,000 ring
- * points; at 4x the build before DP-78 spent 210 ms on the credit line and
- * 530 ms on the parse, in one task with the card. The noise field is the
- * picture for a trace OVER the cap, which DP-78 refuses before the page's
- * own stages.
+ * On the charm host: 900 shapes, an 870 KB trace of 248,000 ring points.
+ * The noise field is the picture for a trace over the cap, which is
+ * refused before the page's own stages.
  */
 async function chooseGearGrid(page, perSide, teeth) {
   await page.evaluate(
@@ -151,13 +146,12 @@ async function chooseGearGrid(page, perSide, teeth) {
 }
 
 /**
- * A grid of filled dots on flat white, one traced shape each: a FILE (no
- * grain, a flat ground, so the photo defaults of DP-79 leave it alone) whose
- * shape count a test can choose. 34 x 34 is 1,156, over the editor's cap of
- * 1,000, whatever the tracer does with the noise field: since DP-79 a
- * photograph is smoothed and floored before it is traced, and white noise
- * is a photograph by every measure, so it is no longer a picture that is
- * refused; this one is refused by construction.
+ * A grid of filled dots on flat white, one traced shape each: a file (no
+ * grain, a flat ground, so the photo defaults leave it alone) whose shape
+ * count a test can choose. 34 x 34 is 1,156, over the editor's cap of
+ * 1,000, refused by construction. (White noise is a photograph by every
+ * measure, so it is smoothed and floored before it is traced, and is not
+ * a picture that is refused.)
  */
 async function chooseDotGrid(page, perSide, size = 2000) {
   await page.evaluate(
@@ -231,7 +225,7 @@ async function openCharm(page) {
 }
 
 /** The design control's own panel; q-charm declares two design files. */
-// DP-52: the bar, the stage sentence and Cancel live in the conversion
+// The bar, the stage sentence and Cancel live in the conversion
 // dialog, which stands in front of the page while a job runs. `running` is
 // the dialog itself, on screen.
 const panel = (page) => ({
@@ -248,13 +242,13 @@ const panel = (page) => ({
 /**
  * Get a picture converted, whichever way this machine goes about it.
  *
- * A picture under half a megapixel usually starts by itself (DP-Q32) - but the
- * quick look makes that call from a PREDICTION, and on a slow machine it
- * declines and waits to be asked. MEASURED at 6x CPU throttling: the same
- * picture that converts by itself in 1.0 s at 4x sits at "Ready to convert"
- * with a Start button, ninety seconds later still. A test that presses Start
- * once, the instant the file goes in, is a test that passes on a fast machine
- * and times out on a CI runner - which is exactly what it did.
+ * A picture under half a megapixel usually starts by itself, but the
+ * quick look makes that call from a prediction, and on a slow machine it
+ * declines and waits to be asked (at 6x CPU throttling the same picture
+ * that converts by itself in 1.0 s at 4x sits at "Ready to convert" with
+ * a Start button, ninety seconds later still). A test that presses Start
+ * once, the instant the file goes in, passes on a fast machine and times
+ * out on a CI runner.
  */
 async function convertNow(page, p, timeout = 180_000) {
   const deadline = Date.now() + timeout;
@@ -269,32 +263,21 @@ async function convertNow(page, p, timeout = 180_000) {
   }
 }
 
-test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
-  // ★ RE-WRITTEN at DP-43, and the reason is a measurement worth keeping.
+test.describe('Start, a bar that moves, and Cancel', () => {
+  // The mid-conversion checks use one run each: one to prove the page
+  // answers while it works, one to prove Cancel stops it. All three in one
+  // run would have to land inside a window a slower runner can miss, since
+  // Potrace converts this picture in under two seconds.
   //
-  // This used to do both of its mid-conversion checks in one run: probe that
-  // the page answers a click, read the stage sentence, then press Cancel. That
-  // worked while a 2000 x 2000 noise picture took about thirteen seconds. With
-  // Potrace it takes under two, so all three had to land inside a window a
-  // slower runner could miss - and CI did miss it, reading an empty stage and
-  // then finding Cancel already gone.
+  // CPU throttling barely moves that number (1,872 ms at 4x, 1,677 at 10x,
+  // 1,591 at 20x), because Emulation.setCPUThrottlingRate throttles the main
+  // thread and the trace does not run there. Throttling is still the right
+  // way to ask "does the page answer", which is what it is used for below;
+  // it is not a way to make the conversion last longer.
   //
-  // MEASURED in the browser, the same picture, 4x CPU throttling:
-  //
-  //   imagetracerjs   13,401 ms       Potrace   1,872 ms
-  //
-  // And a second thing fell out of it: CPU throttling barely moves that number
-  // any more (1,872 ms at 4x, 1,677 at 10x, 1,591 at 20x), because
-  // Emulation.setCPUThrottlingRate throttles the MAIN THREAD and the trace no
-  // longer runs there. Throttling is still the right way to ask "does the page
-  // answer", which is what it is used for below; it is no longer a way to make
-  // the conversion last longer.
-  //
-  // So the window is used for one thing at a time: one run to prove the page
-  // answers while it works, one to prove Cancel stops it. The stage sentence
-  // is collected by an observer from before the start, because it is transient
-  // and sampling it is a race by construction.
-  test('★ a big picture waits to be started, and answers a click while it works', async ({
+  // The stage sentence is collected by an observer from before the start,
+  // because it is transient and sampling it is a race by construction.
+  test('a big picture waits to be started, and answers a click while it works', async ({
     page,
     browserName,
   }) => {
@@ -307,10 +290,10 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     // which is the device the report came from.
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-    // DP-78: the noise field this case used to convert traces into thousands
-    // of shapes, over the editor's cap, and is refused now before the page's
-    // own stages run (its own guard is below). A big picture that CONVERTS
-    // is the gear grid: 1.96 MP, so it waits to be started, and 900 shapes.
+    // A big picture that converts is the gear grid: 1.96 MP, so it waits to be
+    // started, and 900 shapes. (The noise field traces into thousands of
+    // shapes, over the editor's cap, and is refused before the page's own
+    // stages run; its own guard is below.)
     await chooseGearGrid(page, 30, 12);
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
@@ -349,15 +332,14 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     });
 
     await p.start.click();
-    // DP-52: a press on Start shows the dialog at once, in front of an inert
+    // A press on Start shows the dialog at once, in front of an inert
     // page, with Cancel holding focus.
     await expect(p.running).toBeVisible({ timeout: 30_000 });
     await expect(p.dialog).toHaveAttribute('aria-modal', 'true');
     await expect(page.locator('#app')).toHaveAttribute('inert', '');
     await expect(p.cancel).toBeFocused();
 
-    // ★ THE POINT: the page answers while the conversion runs. Before DP-34
-    // this was a frozen tab for as long as the trace took.
+    // The point: the page answers while the conversion runs.
     const answered = await page.evaluate(async () => {
       const t0 = performance.now();
       document.getElementById('themeToggle')?.click();
@@ -389,7 +371,7 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
         `stage read "${said}"`
       ).toContain(said);
     }
-    // DP-52: the page's own stages are shown, not only the worker's.
+    // The page's own stages are shown, not only the worker's.
     expect(stages, `stage line showed ${JSON.stringify(stages)}`).toContain(
       'Preparing the drawing'
     );
@@ -398,7 +380,7 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(page.locator('#app')).not.toHaveAttribute('inert', '');
   });
 
-  test('★ Cancel stops a conversion and says so, once', async ({
+  test('Cancel stops a conversion and says so, once', async ({
     page,
     browserName,
   }) => {
@@ -409,12 +391,11 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-    // The gear grid, a FILE of 900 shapes: seconds of trace and sliced
-    // stages at 4x, which is the window a Cancel needs. This used to be the
-    // noise field, and since DP-79 noise is a photograph that is smoothed
-    // and floored to almost nothing in the worker (which the throttle does
-    // not slow): on CI the dialog closed before the click could land, twice
-    // (PR #273's first board).
+    // The gear grid, a file of 900 shapes: seconds of trace and sliced stages
+    // at 4x, which is the window a Cancel needs. Noise would not do: it is a
+    // photograph, smoothed and floored to almost nothing in the worker (which
+    // the throttle does not slow), so the dialog can close before the click
+    // lands.
     await chooseGearGrid(page, 30, 12);
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
@@ -493,16 +474,16 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     ).toEqual([]);
   });
 
-  test('★ the quick look says what the picture is before anything is started, and never blocks it', async ({
+  test('the quick look says what the picture is before anything is started, and never blocks it', async ({
     page,
     browserName,
   }) => {
     test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
     test.setTimeout(300_000);
 
-    // DP-35. A person may choose a photograph without realising the work, or
+    // A person may choose a photograph without realising the work, or
     // that a simpler picture would give a better charm. The sentence says so
-    // BEFORE Start, and it is a paragraph rather than anything that has to be
+    // before Start, and it is a paragraph rather than anything that has to be
     // dismissed.
     await openCharm(page);
     await choosePicture(page, 2000, 'noise');
@@ -529,7 +510,7 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     expect(await p.note.getAttribute('role')).toBeNull();
   });
 
-  test('★ a light drawing on a dark ground is turned around, not thrown away (D-139)', async ({
+  test('a light drawing on a dark ground is turned around, not thrown away', async ({
     page,
   }) => {
     test.slow();
@@ -550,9 +531,9 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
       )
       .toContain('.svg');
 
-    // Before D-139 this traced to NOTHING: the chroma gate threw the navy
-    // away first, so the old "more than half is ink, turn it around" rule
-    // never fired, and an 85-byte empty drawing was emitted as the design.
+    // The navy must not be thrown away by the chroma gate before the "more
+    // than half is ink, turn it around" rule can fire, or this would emit an
+    // empty drawing as the design.
     const summary = await page
       .locator('.ink-controls-summary')
       .first()
@@ -561,7 +542,7 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     expect(summary).toMatch(/turned around/i);
   });
 
-  test('★ a conversion that keeps nothing is not emitted, and not called ready (D-139)', async ({
+  test('a conversion that keeps nothing is not emitted, and not called ready', async ({
     page,
   }) => {
     test.slow();
@@ -592,18 +573,17 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     expect(badges.join(' | ')).not.toMatch(/SVG Ready/);
   });
 
-  test('★ a setting changed while a conversion runs starts it over with the new setting (D-151)', async ({
+  test('a setting changed while a conversion runs starts it over with the new setting', async ({
     page,
     browserName,
   }) => {
     test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
     test.setTimeout(300_000);
 
-    // MEASURED on PR #238's board: on a slow runner the Stencil Maker's
-    // Colors switch landed while the first conversion still ran, and the job
-    // refused it - "Conversion failed: A conversion is already running" - so
-    // the switch was lost and the first conversion's result stood. The trace
-    // runner always superseded a running trace; the job must too.
+    // On a slow runner a Colors switch can land while the first conversion
+    // still runs, and a job that refused it ("A conversion is already
+    // running") would lose the switch and let the first conversion's result
+    // stand. The job supersedes a running conversion, as the trace runner does.
     await openCharm(page);
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -614,12 +594,11 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await p.start.click();
 
     // Colors, dispatched right behind the press. When the change lands while
-    // the first run is still going, the job supersedes it (the unit case
-    // pins that); on a runner where the plain square is over before the
-    // change's 180 ms debounce fires, the change waits for the person's press
-    // (DP-57, D-164) and the press is made here. Either way the conversion
-    // that finishes has to be the Colors one, and nothing may say "already
-    // running", which is the refusal D-151 removed.
+    // the first run is still going, the job supersedes it (the unit case pins
+    // that); on a runner where the plain square is over before the change's
+    // 180 ms debounce fires, the change waits for the person's press, and the
+    // press is made here. Either way the conversion that finishes has to be
+    // the Colors one, and nothing may say "already running".
     const colours = page.locator('input[type="radio"][value="colours"]');
     await colours.evaluate((el) => {
       el.checked = true;
@@ -663,19 +642,18 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
     test.setTimeout(300_000);
 
-    // DP-Q32, the owner's rule: at most 0.5 MP may start by itself, through
-    // the same job and the same Cancel - there is no second, invisible path.
-    // DP-52's grace: a conversion nobody pressed shows the dialog only once
-    // it has run for the quick band, so a sub-second one never flashes it.
-    // 400 x 400 is 0.16 MP.
+    // At most 0.5 MP may start by itself, through the same job and the same
+    // Cancel: there is no second, invisible path. A conversion nobody pressed
+    // shows the dialog only once it has run for the quick band, so a
+    // sub-second one never flashes it. 400 x 400 is 0.16 MP.
     await openCharm(page);
     await choosePicture(page, 400, 'plain');
     const p = panel(page);
 
-    // DP-Q32's other half: on a machine the quick look calls slow, nothing
-    // starts by itself, so the auto-start cannot be observed there. A slow
-    // CI runner is such a machine (PR #238's board, three attempts), and this
-    // test says so rather than fail for a rule it is not about.
+    // The rule's other half: on a machine the quick look calls slow, nothing
+    // starts by itself, so the auto-start cannot be observed there. A slow CI
+    // runner is such a machine, and this test says so rather than fail for a
+    // rule it is not about.
     let outcome = 'pending';
     const deadline = Date.now() + 240_000;
     while (outcome === 'pending' && Date.now() < deadline) {
@@ -697,22 +675,20 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.start).toBeVisible();
     await expect(p.start).toHaveText('Convert again');
   });
-  test('★ the page keeps answering while the charm takes a heavy design (D-143, DP-52 P4)', async ({
+  test('the page keeps answering while the charm takes a heavy design', async ({
     page,
     browserName,
   }) => {
     test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
     test.setTimeout(300_000);
 
-    // MEASURED before this: the logo's Line art design (211,700 triangles)
-    // held the main thread for 6.4 s at 4x while the preview parsed it,
-    // classified its faces and built its edges. A grid of 400 filled circles
-    // is a 25 KB drawing that renders to a mesh of the same kind (about
-    // 130,000 triangles at $fn=64), so this measures the preview's stage
-    // alone. A traced noise picture was tried first: its multi-megabyte SVG
-    // pays seconds more for its own hand-off (the data URL round trips, the
-    // URL hash sync and the storage save, D-150), which hid the preview's
-    // stage behind another defect.
+    // A heavy design (a logo's Line art: 211,700 triangles) can hold the main
+    // thread for seconds while the preview parses it, classifies its faces and
+    // builds its edges. A grid of 400 filled circles is a 25 KB drawing that
+    // renders to a mesh of the same kind (about 130,000 triangles at $fn=64),
+    // so this measures the preview's stage alone; a traced noise picture would
+    // add seconds of its own hand-off (data URL round trips, the URL hash sync
+    // and the storage save) and hide the preview's stage behind them.
     await openCharm(page);
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -767,18 +743,13 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
   });
 });
 
-// ── DP-57: a setting changed on a picture that is not quick waits for the
-// press (D-157) ──────────────────────────────────────────────────────────────
+// ── A setting changed on a picture that is not quick waits for the press ─────
 //
-// The owner's fourth walk: "The colors processing option … is still auto
-// processing rather than prompting the user to start the process which
-// results in long processing times that are not user driven." MEASURED at 6x
-// on a phone-sized page: Colors chosen, a conversion running 300 ms later,
-// with no dialog for its first second (a self-start's grace), on a picture
-// the same rule had just refused to start by itself when chosen. One rule
-// now, in both places. RED on the build before this release.
-test.describe('a changed setting waits for the press where the picture is not quick (DP-57, D-157)', () => {
-  test('★ D-157: after a slow conversion, Colors chosen offers Convert again and starts nothing', async ({
+// Choosing Colors on a picture that is not quick must offer Convert again,
+// not start a conversion by itself: the rule that keeps a chosen picture
+// from starting by itself applies to a changed setting too.
+test.describe('a changed setting waits for the press where the picture is not quick', () => {
+  test('after a slow conversion, Colors chosen offers Convert again and starts nothing', async ({
     page,
     browserName,
   }) => {
@@ -806,7 +777,7 @@ test.describe('a changed setting waits for the press where the picture is not qu
     await expect(p.running).toBeHidden();
     await expect(p.start).toHaveText('Convert again');
 
-    // The change: Colors, on the card, as the owner did.
+    // The change: Colors, on the card.
     const colours = page.locator('input[type="radio"][value="colours"]');
     await colours.evaluate((el) => {
       el.checked = true;
@@ -843,16 +814,13 @@ test.describe('a changed setting waits for the press where the picture is not qu
   });
 });
 
-// ── DP-58, D-164: a changed setting never starts by itself, quick or not ────
+// ── A changed setting never starts by itself, quick or not ───────────────────
 //
-// The owner's fifth walk: "if the user decides to select Colors after
-// rendering … it appears to cause a lot of confusion and autoprocesses the
-// image without the user input. The loading modal is not present and no
-// cancel button is available". D-157 had let a change run where a chosen
-// picture would have run by itself (small and quick), and on their desktop
-// the logo is both. A change is a decision now; the press is the person's.
-test.describe('a changed setting waits for the press, quick picture or not (DP-58, D-164)', () => {
-  test('★ D-164: on a small quick picture, Colors chosen after a conversion starts nothing and offers Convert again', async ({
+// Choosing Colors after a conversion must not reprocess the image without
+// the person's input, even on a small, quick picture: a change is a
+// decision, and the press is the person's.
+test.describe('a changed setting waits for the press, quick picture or not', () => {
+  test('on a small quick picture, Colors chosen after a conversion starts nothing and offers Convert again', async ({
     page,
     browserName,
   }) => {
@@ -861,7 +829,7 @@ test.describe('a changed setting waits for the press, quick picture or not (DP-5
     test.setTimeout(240_000);
     await openCharm(page);
     // 400 x 400 is 0.16 MP: under the half-megapixel line, and quick on a
-    // desktop, so it converts by itself when chosen (DP-Q32).
+    // desktop, so it converts by itself when chosen.
     await choosePicture(page, 400, 'plain');
     const p = panel(page);
     await expect(p.info).toContainText('converted from', { timeout: 120_000 });
@@ -890,19 +858,14 @@ test.describe('a changed setting waits for the press, quick picture or not (DP-5
   });
 });
 
-// ── DP-78: the shape gate, and a Cancel that lands (D-171, D-172) ───────────
+// ── The shape gate, and a Cancel that lands ──────────────────────────────────
 //
-// The owner's sixth walk, on a photograph of a printed AAC symbol: "the
-// cancel button on the processing modal for the drawing editor still does
-// not let the user cancel the process. I tried to click cancel several times
-// and it essentially did nothing." MEASURED (DP-77 P0b, the panel photo in
-// Colors at 4x): "Preparing the drawing" was ONE task of 5,144 ms, the click
-// could not land for two seconds, and the job finished with 1.89 MB emitted
-// under "Too complex (3939 elements)". Two defects: a trace over the cap was
-// analyzed for seconds, refused, and emitted anyway (D-172); and a Cancel had
-// nowhere to land inside the page's own stages (D-171). Both RED on the
-// build before this release.
-test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', () => {
+// A Cancel must land while the drawing is being prepared, and a trace over
+// the cap must be refused before anything is prepared. Preparing a large
+// trace as one long task (5,144 ms at 4x) leaves a Cancel click nowhere to
+// land for seconds, and analyzing a trace over the cap only to refuse it
+// and emit it anyway wastes all of that work.
+test.describe('the shape gate, and a Cancel that lands', () => {
   /** Every sentence the stage line shows, from before the dialog exists. */
   async function watchStages(page) {
     await page.evaluate(() => {
@@ -938,7 +901,7 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
       return v && typeof v === 'object' ? v.name : v;
     });
 
-  test('★ D-172: a trace over the cap is refused before anything is prepared: nothing emitted, the card says what to try', async ({
+  test('a trace over the cap is refused before anything is prepared: nothing emitted, the card says what to try', async ({
     page,
   }) => {
     test.slow();
@@ -949,9 +912,8 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     // the polite announcer replaces a sentence still inside its 350 ms
     // debounce with the next one, and the dot grid below is refused within
     // two seconds of Start, while the first preview can still be landing.
-    // MEASURED: run alone, the refusal was announced into that window and
-    // what was heard was "Preview ready" and the echo lines, never the
-    // sentence.
+    // Run alone, the refusal is announced into that window, and what is heard
+    // is "Preview ready" and the echo lines, never the sentence.
     await expect(page.locator('#statusArea')).toContainText('Preview ready', {
       timeout: 240_000,
     });
@@ -967,9 +929,8 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     });
     await watchStages(page);
 
-    // 1,156 dots, a file over the cap. (This used to be the noise field,
-    // which traced into 11,962 shapes; since DP-79 noise is a photograph and
-    // is smoothed and floored first, so it is no longer over the cap.)
+    // 1,156 dots, a file over the cap. (Noise would not do: it is a
+    // photograph, smoothed and floored first, so it comes in under the cap.)
     await chooseDotGrid(page, 34, 2000);
     const p = panel(page);
     await expect(p.start).toBeVisible({ timeout: 120_000 });
@@ -977,8 +938,7 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     await p.start.click();
 
     // The card says what happened, in the words of the text pack, with no
-    // editor button: there is no drawing to open. Before this it read "Too
-    // complex (N elements)" over a design that had been emitted.
+    // editor button: there is no drawing to open, and no design was emitted.
     const badge = page.locator('.svg-prep-status-badge').first();
     await expect(badge).toContainText('Too many shapes to work with (', {
       timeout: 240_000,
@@ -1031,7 +991,7 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     ).toEqual([]);
   });
 
-  test('★ D-171: Cancel pressed while the drawing is being prepared lands within a second, and nothing is emitted', async ({
+  test('Cancel pressed while the drawing is being prepared lands within a second, and nothing is emitted', async ({
     page,
     browserName,
   }) => {
@@ -1039,14 +999,13 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
     test.setTimeout(300_000);
     await openCharm(page);
     const cdp = await page.context().newCDPSession(page);
-    // Eight times slower, not four. MEASURED on this drawing at 4x: the
-    // whole stage on the build before this release was under a second (the
-    // credit line 210 ms, the parse 530 ms, the card), so a Cancel pressed
-    // there landed at the checkpoint DP-52 already had, and the guard could
-    // not tell the two builds apart. At 8x the old stage is one task of
-    // about 1.5 s, the emit's task 1.7 s behind it, and a click waits for
-    // both; the release's slices are a tenth of that each, whatever the
-    // throttle, and the label is painted before the first of them.
+    // Eight times slower, not four: at 4x the whole stage on a single-task
+    // build is under a second, so a Cancel there would land at an earlier
+    // checkpoint and the guard could not tell a sliced build from an unsliced
+    // one. At 8x an unsliced stage is one task of about 1.5 s with the emit's
+    // task 1.7 s behind it, and a click waits for both; sliced, each slice is
+    // a tenth of that, whatever the throttle, and the label is painted before
+    // the first of them.
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
 
     await chooseGearGrid(page, 30, 12);
@@ -1063,13 +1022,12 @@ test.describe('the shape gate, and a Cancel that lands (DP-78, D-171, D-172)', (
       })
       .toBe(true);
 
-    // Cancel, the moment the page says it is preparing: a pointer press at
-    // the button's center, with none of the actionability round trips a
-    // locator click makes (each of those waits for the thread too, and on
-    // the first try of this guard the stage was over before they were). The
-    // press lands at the next checkpoint inside the stage, and
-    // cancelConversion closes the dialog the instant it lands: how long that
-    // takes is the measurement.
+    // Cancel, the moment the page says it is preparing: a pointer press at the
+    // button's center, with none of the actionability round trips a locator
+    // click makes (each of those waits for the thread too, and can outlast
+    // the stage). The press lands at the next checkpoint inside the stage,
+    // and cancelConversion closes the dialog the instant it lands: how long
+    // that takes is the measurement.
     const box = await p.cancel.boundingBox();
     expect(box, 'the Cancel button was on screen to be pressed').not.toBeNull();
     const pressedAt = Date.now();

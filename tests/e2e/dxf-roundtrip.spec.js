@@ -1,15 +1,14 @@
 /**
- * E2E tests for the DXF lane (IR-12).
+ * E2E tests for the DXF lane.
  *
- * The partner pipelines this round exists to meet emit DXF as well as SVG, and
- * DXF is what a laser cutter's software usually wants back. Forge's own engine
- * is the converter: a one-line wrapper imports the drawing and re-emits it, so
+ * Partner pipelines emit DXF as well as SVG, and DXF is what a laser
+ * cutter's software usually wants back. Forge's own engine is the
+ * converter: a one-line wrapper imports the drawing and re-emits it, so
  * there is no new parser and no new dependency.
  *
- * MEASURED through the real engine while this was written: DXF to SVG in
- * 273-324 ms, SVG back to DXF in 254-262 ms, extents exact at 40 x 25 mm. The
- * five-minute figure in the ledger (AF-7) is whole-model 3D PROJECTION, which
- * is a different operation; nothing here re-runs one.
+ * Through the real engine: DXF to SVG in 273-324 ms, SVG back to DXF in
+ * 254-262 ms, extents exact at 40 x 25 mm. Whole-model 3D projection,
+ * which can take minutes, is a different operation; nothing here runs one.
  *
  * @license GPL-3.0-or-later
  */
@@ -22,7 +21,7 @@ import path from 'node:path'
 const FIXTURES = path.join(process.cwd(), 'tests', 'fixtures', 'dxf')
 const KNOWN = path.join(FIXTURES, 'known-extents.dxf')
 const TEXT_ONLY = path.join(FIXTURES, 'text-only.dxf')
-// The owner's own Fusion sketch: 31 SPLINE, 2 ELLIPSE, 1 LINE (D-123).
+// A real Fusion sketch: 31 SPLINE, 2 ELLIPSE, 1 LINE.
 const OWNER_SKETCH = path.join(
   process.cwd(),
   'tests',
@@ -118,11 +117,11 @@ test.describe('DXF in, DXF out', () => {
     await expect(page.locator('button[data-action="save-dxf"]')).toBeVisible()
   })
 
-  // D-123 (DP-26 P2): OpenSCAD's importer reads none of this file's curved
-  // entities, and before the fix 31 of its 34 vanished SILENTLY - the
-  // editor showed three shapes and said nothing was missing. The curves
-  // are evaluated to polylines before the engine sees the file.
-  test('★ D-123: the owner sketch arrives whole - its curves, not just its line', async ({
+  // OpenSCAD's importer reads none of this file's curved entities, so
+  // without help 31 of its 34 would vanish silently and the editor would
+  // show three shapes. The curves are evaluated to polylines before the
+  // engine sees the file.
+  test('a Fusion sketch arrives whole - its curves, not just its line', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -171,9 +170,9 @@ test.describe('DXF in, DXF out', () => {
     expect(result).not.toBeNull()
 
     // The conversion itself is exact - measured, twice, at 40 x 25 both ways.
-    // A round trip through the EDITOR's flatten is not: it came back 40.3 by
+    // A round trip through the editor's flatten is not: it comes back 40.3 by
     // 25.35 on this fixture. The tolerance below is that measurement plus
-    // room, and the size is announced precisely BECAUSE it is not exact.
+    // room, and the size is announced precisely because it is not exact.
     expect(Math.abs(result.width - source.width)).toBeLessThan(1)
     expect(Math.abs(result.height - source.height)).toBeLessThan(1)
 

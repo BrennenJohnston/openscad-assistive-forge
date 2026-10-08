@@ -1,8 +1,8 @@
 /**
- * The drawing editor, where the preview lives (DP-19), walked on the charm
- * host: the Drawing / Charm switch, the toolbar, the keyboard walk, the two
- * previews, the too-thin check, crop, the shapes left out, the dot inside the
- * figure. The stencil tile's own walk left with the tile (DP-63).
+ * The drawing editor, where the preview lives, walked on the charm host:
+ * the Drawing / Charm switch, the toolbar, the keyboard walk, the two
+ * previews, the too-thin check, crop, the shapes left out, the dot inside
+ * the figure.
  *
  * Loading a tile is the whole cost of a case on CI, and the two-shard lanes
  * were a third of a minute from their ceiling before this file existed
@@ -17,29 +17,26 @@ import AxeBuilder from '@axe-core/playwright'
 import path from 'node:path'
 
 // Every press in this file waits for the CI runner's page. A press lands at
-// once and then waits for the page to acknowledge it, and on the Chromium
-// shard-6 runner the page is held for tens of seconds by work a person also
-// waits for: the emit after Apply (D-150's family), and the close of the
-// editor, which marks the charm preview stale and brings its canvas back.
-// MEASURED in three traces (PRs #274 and #275, 2026-09-21): the Apply press
-// acknowledged after 23 s and 64 s; the Close press after a combine never
-// within ten seconds, the page silent for 78 s on one board and 31 s on the
-// next, the app's own memory alert on every snapshot. Locally the same
-// presses acknowledge in 10 to 80 ms, three of three with tracing. Nothing
-// in this file asserts a press's speed (the reopen's own timing assertion is
-// Apply ready within three seconds), so the presses get the runner's time
-// rather than the config's ten seconds.
+// once and then waits for the page to acknowledge it, and on a slow CI
+// runner the page can be held for tens of seconds by work a person also
+// waits for: the emit after Apply, and the close of the editor, which
+// marks the charm preview stale and brings its canvas back (Apply has
+// acknowledged after 23 s and 64 s in traces; locally the same presses
+// acknowledge in 10 to 80 ms). Nothing in this file asserts a press's
+// speed (the reopen's own timing assertion is Apply ready within three
+// seconds), so the presses get the runner's time rather than the config's
+// ten seconds.
 test.use({ actionTimeout: 120000 })
 
 const surface = (page) => page.locator('#drawingEditorSurface')
 const canvas = (page) => page.locator('#previewContainer canvas').first()
 
 /**
- * DP-38: the Drawing / Charm switch, and draft quality while editing.
+ * The Drawing / Charm switch, and draft quality while editing.
  *
- * The switch belongs to the CHARM, so it is walked on the charm host.
+ * The switch belongs to the charm, so it is walked on the charm host.
  */
-test.describe('the Drawing / Charm switch (DP-38)', () => {
+test.describe('the Drawing / Charm switch', () => {
   const NESTED = path.join(
     process.cwd(),
     'tests',
@@ -95,7 +92,7 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
   const charm = (page) => page.getByRole('radio', { name: 'Charm' })
   const drawing = (page) => page.getByRole('radio', { name: 'Drawing' })
 
-  test('★ it is a real radio group, and the drawing is what it opens on', async ({
+  test('it is a real radio group, and the drawing is what it opens on', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -115,7 +112,7 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     }
   })
 
-  test('★ Charm shows the model behind the editor, and Drawing puts it back', async ({
+  test('Charm shows the model behind the editor, and Drawing puts it back', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -146,13 +143,13 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     )
   })
 
-  test('★ the drawer gets out of the charm\'s way, and comes back as it was', async ({
+  test('the drawer gets out of the charm\'s way, and comes back as it was', async ({
     page,
   }) => {
     test.setTimeout(300000)
     await openCharmEditor(page)
 
-    // MEASURED at 1280: the drawer covers 310 px of the canvas and the charm
+    // At 1280 the drawer covers 310 px of the canvas and the charm
     // is 515 px wide, so leaving it open hides 206 px of the thing the switch
     // exists to show.
     const panel = page.locator('.drawing-editor-panel')
@@ -166,11 +163,11 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     await expect(panel).toBeVisible()
   })
 
-  test('★ the charm is framed in the window it is SEEN through', async ({
+  test('the charm is framed in the window it is seen through', async ({
     page,
   }) => {
     // The editor is laid OVER this canvas and covers a great deal of it.
-    // MEASURED with the charm view open, visible area against canvas area:
+    // Measured with the charm view open, visible area against canvas area:
     // 66 per cent at 1280, 57 at 900, 39 at 412 - and the shapes differ as
     // much as the sizes, because at 900 the canvas is 476 by 761 while the
     // window left over is 460 by 445. Framed for the canvas, the charm is
@@ -194,11 +191,9 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
         }
       })
     // The canvas sits on the window, not on the whole area behind the editor.
-    // D-170: the canvas is re-framed to the stage a beat after it becomes
-    // visible, and one sample taken in that beat read the previous layout's
-    // box (CI, twice: canvas [531,334,692,330] against stage
-    // [529,311,692,351]). So this waits for the two boxes to agree instead
-    // of reading them once.
+    // The canvas is re-framed to the stage a beat after it becomes visible,
+    // and a sample taken in that beat can read the previous layout's box, so
+    // this waits for the two boxes to agree instead of reading them once.
     await expect
       .poll(
         async () => {
@@ -276,13 +271,13 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     ).toEqual([])
   })
 
-  test('★ a preview drawn while you edit costs a quarter of what it did', async ({
+  test('a preview drawn while you edit costs a quarter of a full one', async ({
     page,
   }) => {
-    // DP-38 P2, and the whole point of it. The charm behind the editor is a
-    // thing somebody GLANCES at while they work on the drawing in front of
-    // it, and MEASURED on this charm it was costing 29,372 triangles and
-    // 1.2 MB a render because q_charm sets its own $fn = 64.
+    // The charm behind the editor is a thing somebody glances at while they
+    // work on the drawing in front of it, and at full quality this charm costs
+    // 29,372 triangles and 1.2 MB a render, because q_charm sets its own
+    // $fn = 64. So the editor's session renders at draft quality.
     test.setTimeout(600000)
     await openCharmEditor(page)
 
@@ -324,9 +319,9 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     const afterClosing = await triangles()
 
     // The session is cheaper, and the person's own setting comes back the
-    // moment it ends. MEASURED 2026-09-14: 7,500 while editing against 29,388
-    // after, a quarter of the work for a charm that differs only in how round
-    // the clip's edges are. Pinned as a RATIO, not as two counts: the numbers
+    // moment it ends (7,500 triangles while editing against 29,388 after, a
+    // quarter of the work for a charm that differs only in how round the
+    // clip's edges are). Pinned as a ratio, not as two counts: the numbers
     // belong to this charm and this model, and the rule is that editing is
     // cheaper than not editing.
     expect(
@@ -336,7 +331,7 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
     expect(afterClosing).toBeGreaterThan(20000)
   })
 
-  test('★ the switch is not offered where there is no charm to switch to', async ({
+  test('the switch is not offered where there is no charm to switch to', async ({
     page,
   }) => {
     // Through the standalone door there is no model behind the editor at all.
@@ -363,13 +358,12 @@ test.describe('the Drawing / Charm switch (DP-38)', () => {
   })
 })
 
-test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
-  // ★ This is where the defect the owner met actually lived. The door host
-  // fills the page, so its toolbar had room; the charm host's editor is
-  // 692 px at a 1280 window with the customizer open, and there the workspace
-  // footer wrapped to two lines because the Apply hint sentence is 418 px, and
-  // Close fell to a THIRD line of its own at y 279. MEASURED before this on
-  // the owner's own picture. The guard opens the editor where they open it.
+test.describe('the toolbar on the charm host', () => {
+  // The charm host is where a cramped toolbar shows: the door host fills the
+  // page, but the charm host's editor is 692 px at a 1280 window with the
+  // customizer open, where a toolbar holding the 418 px Apply hint wraps and
+  // drops Close to a third line. The guard opens the editor where people
+  // open it.
   const NESTED = path.join(
     process.cwd(),
     'tests',
@@ -422,7 +416,7 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
     ).toBeVisible({ timeout: 90000 })
   }
 
-  test('★ two rows, Close on the first, at the editor\'s real width', async ({
+  test('two rows, Close on the first, at the editor\'s real width', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -449,7 +443,7 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
       }
     })
 
-    // The width the owner sees, not the window's.
+    // The width a person sees, not the window's.
     expect(shape.editorWidth).toBeLessThan(800)
     expect(shape.rows.length).toBe(2)
     for (const height of shape.rows) expect(height).toBeLessThan(60)
@@ -458,7 +452,7 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
     expect(shape.closeOnRow1).toBe(true)
   })
 
-  test('★ the toolbar does not move when the Apply hint goes', async ({
+  test('the toolbar does not move when the Apply hint goes', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -475,10 +469,9 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
 
     // The hint comes and goes as the flatten finishes and as a choice
     // changes; on a small drawing it may be gone before the editor is even
-    // looked at. What matters is that the TOOLBAR does not care either way.
-    // It used to: the hint's 418 px sentence wrapped the button row, and when
-    // it went the row reflowed and lifted Close back up, so the layout moved
-    // while a person worked.
+    // looked at. What matters is that the toolbar does not care either way:
+    // a hint that wrapped the button row would lift Close back up when it
+    // went, so the layout would move while a person worked.
     const setHint = (hidden) =>
       page.evaluate((h) => {
         document.querySelector('.svg-prep-apply-hint').hidden = h
@@ -499,7 +492,7 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
     ).toHaveCount(1)
   })
 
-  test('★ the keyboard walk on the charm host: choose, Delete, Ctrl+A (DP-47, D-141)', async ({
+  test('the keyboard walk on the charm host: choose, Delete, Ctrl+A', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -517,7 +510,7 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
         i
       )
 
-    // Two rows, the way the owner tried to: click, then Ctrl-click.
+    // Two rows, the way a person would: click, then Ctrl-click.
     await rows.nth(0).locator('.svg-prep-object-name').click()
     await rows
       .nth(1)
@@ -525,8 +518,7 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
       .click({ modifiers: ['Control'] })
     await expect(chosen).toHaveCount(2)
 
-    // ★ The picture marks BOTH of them. Before DP-47 the only thing it ever
-    // drew was the hover mark of one shape.
+    // The picture marks both of them, not just the hover mark of one shape.
     await expect
       .poll(() =>
         page.evaluate(
@@ -535,15 +527,13 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
       )
       .toBeGreaterThanOrEqual(2)
 
-    // ★ Delete sets the selection to Ignore. Before DP-47 it did nothing at
-    // all: the surface returned before any key in the relief purpose.
+    // Delete sets the selection to Off, in the relief purpose too.
     await rows.nth(1).focus()
     await page.keyboard.press('Delete')
     await expect.poll(() => roleOf(0)).toBe('ignore')
     await expect.poll(() => roleOf(1)).toBe('ignore')
 
-    // ★ Ctrl+A selects every row, and NOT the page. Before DP-47 it selected
-    // 35,759 characters of page text and the whole app turned blue.
+    // Ctrl+A selects every row, and not the page's text.
     await page.keyboard.press('Control+a')
     await expect.poll(() => rows.count()).toBeGreaterThan(2)
     await expect(chosen).toHaveCount(await rows.count())
@@ -556,7 +546,7 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
     ).toBeLessThan(50)
   })
 
-  test('★ Ignore takes a shape out of the picture without a render (DP-47 P4)', async ({
+  test('Ignore takes a shape out of the picture without a render', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -608,17 +598,16 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
       .toBe(3)
   })
 
-  // ── Session 4 of DP-R5: the way back into the editor ──────────────────────
+  // ── The way back into the editor
+  // ─────────────────────────────────────────────
   //
-  // MEASURED on the built app with the owner's logo in Colors: after Apply
-  // (and after Close) the file control's status card was EMPTY - no badge and
-  // no "Open the drawing editor" - so once a person had applied they could
-  // never get back in to change one more shape, and Convert again did not
-  // reopen it either. The drawing analyzes as `ready` with `open_editor` (a
-  // sound drawing sent to the editor only because its combine outruns the
-  // budget), and the card had a branch for every status but that one. The
-  // fixture is the app's own Colors output from that logo.
-  test('★ after the editor closes, the file control still offers a way back in (a ready drawing sent to the editor for its size)', async ({
+  // After Apply (and after Close) the file control's status card must still
+  // show the badge and "Open the drawing editor", or a person who has applied
+  // can never get back in to change one more shape. The drawing analyzes as
+  // `ready` with `open_editor` (a sound drawing sent to the editor only because
+  // its combine outruns the budget), and the card needs a branch for that
+  // status too. The fixture is the app's own Colors output from a logo.
+  test('after the editor closes, the file control still offers a way back in (a ready drawing sent to the editor for its size)', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -667,11 +656,11 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
       .poll(() => page.locator('.svg-prep-object').count(), { timeout: 60000 })
       .toBeGreaterThan(10)
 
-    // Leave without applying, the way the owner did on their first look.
+    // Leave without applying, the way a first look does.
     await surface(page).locator('.drawing-editor-close').click()
     await expect(surface(page)).toBeHidden({ timeout: 30000 })
 
-    // ★ The card must still say what the drawing is and offer the editor.
+    // The card must still say what the drawing is and offer the editor.
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
     })
@@ -703,10 +692,10 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
     })
     await expect(door).toBeVisible()
 
-    // ★ Reopen to look, and leave with Close: the applied design STAYS. Close
-    // used to be wired as Keep original, so a look at an applied drawing
-    // ended with the charm reverting to the raw drawing - on the logo, a
-    // raised slab in place of the lettering (D-149).
+    // Reopen to look, and leave with Close: the applied design stays. Close
+    // is not Keep original, so a look at an applied drawing does not end with
+    // the charm reverting to the raw drawing (on the logo, a raised slab in
+    // place of the lettering).
     const designSize = () =>
       page.evaluate(() => {
         const v = window.stateManager?.getState()?.parameters?.design_file
@@ -728,16 +717,16 @@ test.describe('the toolbar on the charm host (D-140, DP-46)', () => {
   })
 })
 
-// ── DP-53: two previews - the drawing by itself, the charm on request ────────
+// ── Two previews: the drawing by itself, the charm on request ────────────────
 //
 // The drawing view combines by itself after every change (no Render button;
 // a sentence says the combine is coming and how long; Apply waits for the
-// result). The charm view has Render preview: a DRAFT of the charm with the
+// result). The charm view has Render preview: a draft of the charm with the
 // drawing as it is now, drawn through the preview alone, so nothing is
-// written until Apply - no undo entry, no project change - and Close leaves
+// written until Apply (no undo entry, no project change) and Close leaves
 // the committed design standing. The fixture is the app's own Colors output
-// from the owner's logo, which analyzes as `ready` with `open_editor`.
-test.describe('two previews: the drawing by itself, the charm on request (DP-53)', () => {
+// from a logo, which analyzes as `ready` with `open_editor`.
+test.describe('two previews: the drawing by itself, the charm on request', () => {
   const LOGO_TRACE = path.join(
     process.cwd(),
     'tests',
@@ -796,7 +785,7 @@ test.describe('two previews: the drawing by itself, the charm on request (DP-53)
       }
     })
 
-  test('★ the drawing combines by itself, the charm renders a draft on request, and Close leaves the design and its history alone', async ({
+  test('the drawing combines by itself, the charm renders a draft on request, and Close leaves the design and its history alone', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -867,15 +856,14 @@ test.describe('two previews: the drawing by itself, the charm on request (DP-53)
   })
 })
 
-// ── DP-54: the too-thin check, on the charm host ─────────────────────────────
+// ── The too-thin check, on the charm host ────────────────────────────────────
 //
 // Two things a person meets. The notice above the list counts the shapes
 // thinner than 0.5 mm at the width the charm really prints the design (the
-// model echoes its fit box, the host applies the design's aspect: D-144 was
-// that no host ever passed a width, so every sentence used the editor's 14
-// mm default), and "Ignore those" leaves them out in one press, each row
-// reversible. And the whole-drawing advisory, which the charm host never
-// showed (D-144), now speaks with the real width.
+// model echoes its fit box, and the host applies the design's aspect and
+// passes the width; without it every sentence would use the editor's 14 mm
+// default), and "Ignore those" leaves them out in one press, each row
+// reversible. And the whole-drawing advisory speaks with the real width.
 const LOGO_TRACE = path.join(
   process.cwd(),
   'tests',
@@ -931,8 +919,8 @@ async function openCharmHost(page) {
 }
 
 
-test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
-  test('★ the notice names the too-thin shapes at the width the charm prints, Ignore those leaves them out, and one comes back', async ({
+test.describe('the too-thin check on the charm host', () => {
+  test('the notice names the too-thin shapes at the width the charm prints, Ignore those leaves them out, and one comes back', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -952,8 +940,8 @@ test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
       /^\d+ shapes are thinner than 0\.5 mm at 12 mm wide and may not print\.$/
     )
     const count = Number((await notice.textContent()).match(/^(\d+)/)[1])
-    // D-159 made a traced region one row (111 for this logo, 206 before), and
-    // 109 of the 111 are under half a millimeter at 12 mm wide.
+    // A traced region is one row (111 for this logo), and 109 of the 111 are
+    // under half a millimeter at 12 mm wide.
     expect(count).toBeGreaterThan(100)
     await expect(editor.locator('.svg-prep-design-width-input')).toHaveValue(
       /^11\.9/
@@ -996,7 +984,7 @@ test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
     await expect(editor.locator('[data-action="undo-ignore"]')).toBeEnabled()
   })
 
-  test('★ D-144: the whole-drawing advisory appears on the charm host, at the width the charm prints', async ({
+  test('the whole-drawing advisory appears on the charm host, at the width the charm prints', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1023,7 +1011,7 @@ test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
     const control = page.locator('.param-control--file', {
       has: page.locator('#param-design_file'),
     })
-    // Converts by itself, or waits for Start on a slow machine (DP-Q32).
+    // Converts by itself, or waits for Start on a slow machine.
     const start = control.locator('.trace-progress-start')
     for (let i = 0; i < 60; i++) {
       const info = (await control.locator('.file-info').textContent()) || ''
@@ -1044,8 +1032,8 @@ test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
     const editor = surface(page)
     await expect(editor).toBeVisible({ timeout: 60000 })
 
-    // RED before this: the charm host passed no line widths and no width, so
-    // this sentence never existed here, and the width was the editor's own.
+    // The charm host passes its line widths and width, so this sentence
+    // exists here, at the charm's own width.
     // A square is height-limited in the charm's 11.97 by 9.3 mm box, so it
     // prints 9.3 mm wide, and the sentence says so.
     const advisory = editor.locator('.svg-prep-thin-lines')
@@ -1058,16 +1046,15 @@ test.describe('the too-thin check on the charm host (DP-54, D-144)', () => {
   })
 })
 
-// ── DP-49: crop, on the charm host ──────────────────────────────────────────
+// ── Crop, on the charm host ──────────────────────────────────────────────────
 //
 // The same crop view on the host the charm lives on. A vector drawing is
 // clipped rather than traced again: every shape's rings against the kept
-// rectangle, the shapes the clip empties gone, the box rewritten. The logo's
-// wall carries its flag through the clip, so the wall rule still applies
-// and the raised shapes are the lettering. RED on the build before this
-// release: no Crop button in the toolbar.
-test.describe('crop on the charm host (DP-49)', () => {
-  test('★ the logo trace loses its lower half: fewer shapes, raised ones left, and Undo crop brings them back', async ({
+// rectangle, the shapes the clip empties gone, the box rewritten. The
+// logo's wall carries its flag through the clip, so the wall rule still
+// applies and the raised shapes are the lettering.
+test.describe('crop on the charm host', () => {
+  test('the logo trace loses its lower half: fewer shapes, raised ones left, and Undo crop brings them back', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1120,14 +1107,12 @@ test.describe('crop on the charm host (DP-49)', () => {
   })
 })
 
-// ── DP-Q55: every slider row meets the 44 px floor ──────────────────────────
+// ── Every slider row meets the 44 px floor ───────────────────────────────────
 //
-// The customizer's slider row was reported under the touch floor at the
-// round 4 closeout (a 42 px box, a 6 px track), and the crop view reuses that
-// row. The owner answered DP-Q55 app-wide: the number box and the range's hit
-// box are 44 px tall everywhere, the 6 px track painted inside the box so the
-// look stays. RED before: 42 and 6.
-test.describe('every slider row meets the 44 px floor (DP-Q55)', () => {
+// The crop view reuses the customizer's slider row, and the number box and
+// the range's hit box are 44 px tall everywhere, with the 6 px track
+// painted inside the box so the look stays.
+test.describe('every slider row meets the 44 px floor', () => {
   // The row's own range, and the box beside it: the page carries hidden
   // panel sliders first in document order, so the range is named, not found.
   const heights = (page, rangeSelector) =>
@@ -1138,7 +1123,7 @@ test.describe('every slider row meets the 44 px floor (DP-Q55)', () => {
       return { range: h(range), spin: h(spin) }
     }, rangeSelector)
 
-  test('★ in the customizer and in the crop view, the range and the box are 44 px tall', async ({
+  test('in the customizer and in the crop view, the range and the box are 44 px tall', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1165,17 +1150,15 @@ test.describe('every slider row meets the 44 px floor (DP-Q55)', () => {
   })
 })
 
-// ── DP-56: the shapes you left out, and a view you can steer ────────────────
+// ── The shapes you left out, and a view you can steer ────────────────────────
 //
-// Two things the owner's walk found after #245 (2026-09-17). A shape set to
-// Ignore left the picture entirely, so there was nothing to point at to bring
-// it back (D-154): it stays now, painted in the left-out style, still under
-// the pointer. And once the picture was zoomed there was no way to move the
-// view on a desktop, and only two fingers on a phone (D-153): four buttons
-// beside Fit, and the arrow keys with the picture focused, move it a quarter
-// of a view at a time. RED on the build before this release.
-test.describe('the shapes you left out, and a view you can steer (DP-56)', () => {
-  test('★ D-154: a shape set to Ignore stays in the picture, can be chosen there, and comes back', async ({
+// A shape set to Off stays in the picture, painted in the left-out style
+// and still under the pointer, so there is something to point at to bring
+// it back. And a zoomed picture can be moved: four buttons beside Fit, and
+// the arrow keys with the picture focused, move the view a quarter at a
+// time (on a phone, two fingers as well).
+test.describe('the shapes you left out, and a view you can steer', () => {
+  test('a shape set to Ignore stays in the picture, can be chosen there, and comes back', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1217,7 +1200,7 @@ test.describe('the shapes you left out, and a view you can steer (DP-56)', () =>
       .toBe(0)
   })
 
-  test('★ D-153: once zoomed, the buttons move the view', async ({ page }) => {
+  test('once zoomed, the buttons move the view', async ({ page }) => {
     test.setTimeout(480000)
     await openCharmHost(page)
     await page.setInputFiles('#param-design_file', LOGO_TRACE)
@@ -1252,19 +1235,17 @@ test.describe('the shapes you left out, and a view you can steer (DP-56)', () =>
   })
 })
 
-// ── DP-57: the dot inside the figure's arm (D-159) ──────────────────────────
+// ── The dot inside the figure's arm ──────────────────────────────────────────
 //
-// The owner's fourth walk (2026-09-17): "a small black circle path on the
-// CREATE logo that is nested within the arm of the logo character that when
-// turned to ignore, achieved no difference in 2d representation or in 3d
-// rendering". MEASURED: the figure's own inner ring was split into a row of
-// its own, a solid Raised disc painted over the navy dot's Hole, so the
-// click on the dot found the disc and no role on it could change anything.
-// A traced region is one row now, its outer ring; the dot is the wall's
-// island, one Hole row; islands are painted last, so the click finds it; and
-// Ignore on it fills the figure. RED on the build before this release.
-test.describe('the dot inside the figure (DP-57, D-159)', () => {
-  test('★ D-159: the click on the dot finds one Hole row, and Ignore on it fills the figure', async ({
+// A small dot nested within the arm of a logo character must be a shape a
+// person can turn off. A traced region is one row, its outer ring; the dot
+// is the wall's island, one Hole row; islands are painted last, so the
+// click finds it; and turning it off fills the figure. (Splitting the
+// figure's inner ring into a row of its own would paint a solid disc over
+// the dot, so the click would find the disc and no role on it would change
+// anything.)
+test.describe('the dot inside the figure', () => {
+  test('the click on the dot finds one Hole row, and Ignore on it fills the figure', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1332,8 +1313,8 @@ test.describe('the dot inside the figure (DP-57, D-159)', () => {
   })
 })
 
-test.describe('the automatic preparation that keeps nothing (D-167)', () => {
-  test('★ D-167: when the automatic pass subtracts everything, the editor opens and says so', async ({
+test.describe('the automatic preparation that keeps nothing', () => {
+  test('when the automatic pass subtracts everything, the editor opens and says so', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -1370,20 +1351,19 @@ test.describe('the automatic preparation that keeps nothing (D-167)', () => {
   })
 })
 
-// ── DP-80: Crop first ────────────────────────────────────────────────────────
+// ── Crop first ───────────────────────────────────────────────────────────────
 //
-// The owner's report: "I wanted to crop the picture before it was processed
-// by the drawing editor, but it wouldn't let me." A photograph of a whole
-// page is mostly the page. Crop first sits beside Start from the moment the
+// A photograph of a whole page is mostly the page, so it can be cropped
+// before it is converted. Crop first sits beside Start from the moment the
 // pixels are read and opens the editor straight into the crop view on the
-// picture itself; Save crop converts the part that is kept, as the person's
-// press; Cancel or Escape closes the editor with nothing converted. RED on
-// the build before this release: no such button on the control.
-test.describe('Crop first (DP-80)', () => {
+// picture itself; Save crop converts the part that is kept, as the
+// person's press; Cancel or Escape closes the editor with nothing
+// converted.
+test.describe('Crop first', () => {
   /**
-   * A sheet like the owner's: four panels of outlined shapes on a lit,
-   * grainy paper, 1400 px (over the self-start line, so it waits for a
-   * press), a camera picture by the quick look's verdict (DP-79).
+   * A sheet of four panels of outlined shapes on a lit, grainy paper,
+   * 1400 px (over the self-start line, so it waits for a press), a camera
+   * picture by the quick look's verdict.
    */
   async function chooseSheet(page) {
     await page.evaluate(async () => {
@@ -1464,7 +1444,7 @@ test.describe('Crop first (DP-80)', () => {
       }).observe(node, { childList: true, characterData: true, subtree: true })
     })
 
-  test('★ the sheet: Crop first opens the crop view on the photograph before anything is converted, and Save crop converts the one panel', async ({
+  test('the sheet: Crop first opens the crop view on the photograph before anything is converted, and Save crop converts the one panel', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1537,7 +1517,7 @@ test.describe('Crop first (DP-80)', () => {
     await expect(cropFirst).toHaveAttribute('aria-label', 'Crop the picture')
   })
 
-  test('★ Escape in the crop view closes the editor, converts nothing, says so once, and puts focus back on Crop first', async ({
+  test('Escape in the crop view closes the editor, converts nothing, says so once, and puts focus back on Crop first', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -1579,23 +1559,23 @@ test.describe('Crop first (DP-80)', () => {
     ).toEqual([])
   })
 
-  test('★ a small quick picture that started converting by itself is stopped by Crop first, and the one conversion that lands is the crop', async ({
+  test('a small quick picture that started converting by itself is stopped by Crop first, and the one conversion that lands is the crop', async ({
     page,
   }) => {
     test.setTimeout(300000)
     await openCharmHost(page)
     await page.waitForTimeout(2000)
     await listen(page)
-    // The press has to land WHILE the self-started run is under way, and
-    // that window is the run itself. A CPU throttle cannot widen it: the
-    // quick look measures the device, and under a throttle it calls the
-    // picture slow, so DP-Q32's rule waits for a press and nothing starts
-    // by itself (MEASURED at 6x: Start stayed on screen for 30 s). So the
-    // press comes from inside the page, the moment Start goes away with
-    // Crop first still on offer, which is the moment the run began.
-    // The quick look's sentence is read by the same observer, because the
-    // Start panel hides it once a run begins and a run on this grid is over
-    // in under a second: read afterwards, the note is empty.
+    // The press has to land while the self-started run is under way, and that
+    // window is the run itself. A CPU throttle cannot widen it: the quick look
+    // measures the device, and under a throttle it calls the picture slow, so
+    // the start rule waits for a press and nothing starts by itself (at 6x,
+    // Start stays on screen for 30 s). So the press comes from inside the
+    // page, the moment Start goes away with Crop first still on offer, which
+    // is the moment the run began. The quick look's sentence is read by the
+    // same observer, because the Start panel hides it once a run begins and a
+    // run on this grid is over in under a second: read afterwards, the note
+    // is empty.
     await page.evaluate(() => {
       window.__cropPressed = false
       window.__quickLookSaid = null
@@ -1629,7 +1609,7 @@ test.describe('Crop first (DP-80)', () => {
       })
     })
     // 450 px, a grid of 400 dots on white: under the self-start line and
-    // quick, so it starts converting the moment it is chosen (DP-Q32).
+    // quick, so it starts converting the moment it is chosen.
     await page.evaluate(async () => {
       const n = 450
       const perSide = 20
@@ -1660,13 +1640,12 @@ test.describe('Crop first (DP-80)', () => {
       input.files = dt.files
       input.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    // DP-Q32's rule is measured on the device: only a picture the quick look
+    // The start rule is measured on the device: only a picture the quick look
     // calls quick starts by itself. On a starved CI runner the same 450 px
     // grid can be called "a few seconds", and then nothing starts and the
-    // press this guard waits for never comes (PR #274's board: the poll
-    // timed out at 120 s and the retry passed). A machine that does not
-    // self-start cannot test what a self-start does; the guard says so
-    // instead of failing on the runner's speed.
+    // press this guard waits for never comes. A machine that does not
+    // self-start cannot test what a self-start does; the guard says so instead
+    // of failing on the runner's speed.
     await expect
       .poll(
         () =>
@@ -1713,28 +1692,24 @@ test.describe('Crop first (DP-80)', () => {
   })
 })
 
-// ── DP-81: the editor reopens where it was left (D-175) ─────────────────────
+// ── The editor reopens where it was left ─────────────────────────────────────
 //
-// The owner's report: after a long conversion and a simplification, testing
-// the position on the charm and reopening the editor "did not save the
-// previous process of simplifying and had to run through the simplification
-// process all over again", on every visit. Two halves, both MEASURED at
-// DP-77 P0c. (a) On the ring road every reopen combined everything again
-// and Apply waited for all of it: now a reopen whose stored result was made
-// from the choices it restores, at the width it measures, paints that result
-// and arms Apply at once. (b) A customizer re-render (a preset, an undo, a
-// reset) built a new file control that knew only its file's name, so the
-// door into the editor, Start and the ink panel were gone: now the control
-// restores its drawing, its picture and its settings from the stores. Both
-// RED on the build before this release.
-test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
+// Reopening the editor after a long conversion and a simplification must
+// not run through the simplification again. Two halves. (a) A reopen whose
+// stored result was made from the choices it restores, at the width it
+// measures, paints that result and arms Apply at once, rather than
+// combining everything again. (b) A customizer re-render (a preset, an
+// undo, a reset) builds a new file control, and the control restores its
+// drawing, its picture and its settings from the stores, so the door into
+// the editor, Start and the ink panel stay.
+test.describe('the editor reopens where it was left', () => {
   const designName = (page) =>
     page.evaluate(() => {
       const v = window.stateManager?.getState()?.parameters?.design_file
       return v && typeof v === 'object' ? v.name : v || null
     })
 
-  test('★ Off, Apply, move the design, reopen: the editor opens as it was left with Apply ready at once, and no combine runs', async ({
+  test('Off, Apply, move the design, reopen: the editor opens as it was left with Apply ready at once, and no combine runs', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1776,9 +1751,8 @@ test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
       { timeout: 240000 }
     )
 
-    // Reopen. RED before this: "Drawing editor open. The model preview is
-    // behind it." and Apply disabled under "Combining N shapes, about N
-    // seconds" for the whole combine (14.7 s at 200 shapes, MEASURED).
+    // Reopen: no "Combining N shapes" wait (a full combine is 14.7 s at 200
+    // shapes), and Apply is ready at once.
     const door = control.getByRole('button', { name: 'Open the drawing editor' })
     await door.scrollIntoViewIfNeeded()
     await door.click()
@@ -1806,7 +1780,7 @@ test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
     await expect(editor).toBeHidden({ timeout: 30000 })
   })
 
-  test('★ a preset, an undo and a slider undo leave the door in place, and Convert again still works after the rebuild', async ({
+  test('a preset, an undo and a slider undo leave the door in place, and Convert again still works after the rebuild', async ({
     page,
   }) => {
     test.setTimeout(480000)
@@ -1850,12 +1824,11 @@ test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
       { timeout: 240000 }
     )
 
-    // The owner's order (DP-77 P0c): a change on the charm first, then a
-    // preset that clears the design, then Undo. Applying a preset records no
-    // undo step of its own (REPORTED at DP-81), so Undo restores the state
-    // from before the change that preceded it, which here holds the design;
-    // RED before this the control then showed its name with no card, no
-    // door, no Start and no ink panel (MEASURED twice at DP-77).
+    // A change on the charm first, then a preset that clears the design, then
+    // Undo. Applying a preset records no undo step of its own, so Undo
+    // restores the state from before the change that preceded it, which here
+    // holds the design; the control must then show its card, its door, Start
+    // and the ink panel.
     const scale = page.locator('#param-design_scale')
     await scale.fill('80')
     await scale.dispatchEvent('change')
@@ -1916,19 +1889,15 @@ test.describe('the editor reopens where it was left (DP-81, D-175)', () => {
   })
 })
 
-// ── DP-82: the offset, per ring with its own sign (D-174) ───────────────────
+// ── The offset, per ring with its own sign ───────────────────────────────────
 //
-// The owner: stepping the offset by 0.05 mm smoothed a hand-drawn line
-// usefully, "but even a 1mm offset completely broke the process". MEASURED
-// at DP-R6 planning and again at DP-77 P0d: the per-shape Offset offset ONE
-// RING, and a drawn line is two rows, so "+" on the outline thickened it
-// outward only, "+" on the inner ring THINNED it, and "+" on both moved the
-// line; past a neighbor, the even-odd concatenation inverted the neighbor.
-// Now "+" is more ink on every ring: the outer ring grows, the hole ring
-// shrinks, and a line thickens by twice the offset; an offset drawing is
-// combined by its rings' parity, never concatenated. RED on the build
-// before this release.
-test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
+// A drawn line is two rows (its outer ring and its hole ring), so an
+// offset applied to one ring at a time would thicken it outward only, thin
+// it, or move it, and past a neighbor the even-odd concatenation would
+// invert the neighbor. So "+" is more ink on every ring: the outer ring
+// grows, the hole ring shrinks, and a line thickens by twice the offset;
+// an offset drawing is combined by its rings' parity, never concatenated.
+test.describe('the offset thickens a drawn line', () => {
   // The rows' boxes in the combined result, largest first, in svg units,
   // and the units one millimeter is at the width the editor measures at.
   const measure = (page) =>
@@ -1965,7 +1934,7 @@ test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
       return { boxes, unitsPerMm: vbWidth / widthMm }
     })
 
-  test('★ +0.3 mm on both rows of a square line: the outer ring out, the inner ring in, the line 0.6 mm wider', async ({
+  test('+0.3 mm on both rows of a square line: the outer ring out, the inner ring in, the line 0.6 mm wider', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -2040,8 +2009,7 @@ test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
       await expect(apply).toBeEnabled({ timeout: 120000 })
     }
 
-    // RED before this: the inner ring GREW by 0.3 mm (the band 0.6 mm
-    // narrower than here, shifted outward, its width unchanged).
+    // The inner ring shrinks by 0.3 mm, so the band is 0.6 mm wider.
     const after = await measure(page)
     expect(after.boxes).toHaveLength(2)
     const [outer1, inner1] = after.boxes
@@ -2050,7 +2018,7 @@ test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
     expect(Math.abs(inner1.w - (inner0.w - 0.6 * mm))).toBeLessThan(tolerance)
     const band1 = (outer1.w - inner1.w) / 2
     expect(Math.abs(band1 - (band0 + 0.6 * mm))).toBeLessThan(tolerance)
-    // DP-Q74: the step the owner found useful.
+    // The 0.05 mm step that suits a hand-drawn line.
     await expect(
       rows.nth(0).locator('input[name="svg-prep-offset-0"]')
     ).toHaveAttribute('step', '0.05')
@@ -2059,17 +2027,14 @@ test.describe('the offset thickens a drawn line (DP-82, D-174)', () => {
   })
 })
 
-// ── DP-83: the review fixes ─────────────────────────────────────────────────
+// ── Reset, the width box and the bulk bar say what they do ───────────────────
 //
-// The review of every control (the plan's §1.5) found two sentences and one
-// button short of their words: Reset put roles and offsets back and left the
-// Layer column where it was, saying "Roles reset"; the Design width box
-// arrived filled by the charm with no word on where the number came from;
-// the bulk bar's help said its sizes were "the size the shape will really
-// print" when they are the box around each shape. RED on the build before
-// this release: the layer select still read 2 after Reset.
-test.describe('Reset puts the Layer column back and says so (DP-83)', () => {
-  test('★ a layer, an offset and an Off row all go back on Reset, the sentence names all three, and the width box says where its number came from', async ({
+// Reset puts roles, offsets and the Layer column back, and its sentence
+// names all three; the Design width box, filled by the charm, says where
+// the number came from; and the bulk bar's help says its sizes are the box
+// around each shape, not the size the shape will print.
+test.describe('Reset puts the Layer column back and says so', () => {
+  test('a layer, an offset and an Off row all go back on Reset, the sentence names all three, and the width box says where its number came from', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -2113,8 +2078,8 @@ test.describe('Reset puts the Layer column back and says so (DP-83)', () => {
     await rows.nth(4).locator('input[type="radio"][value="ignore"]').check()
     await expect(apply).toBeEnabled({ timeout: 240000 })
 
-    // Reset. RED before this: the layer select still read 2, and the
-    // sentence was "Roles reset to auto-classification".
+    // Reset: the layer select goes back to 1, and the sentence names roles,
+    // offsets and layers.
     await editor.locator('.svg-prep-footer [data-action="reset"]').click()
     await expect(layer).toHaveValue('1')
     await expect(offset).toHaveValue('0')

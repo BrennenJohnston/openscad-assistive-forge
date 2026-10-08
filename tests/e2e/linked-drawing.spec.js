@@ -1,5 +1,5 @@
 /**
- * E2E: a drawing sent by a link (DP-62).
+ * E2E: a drawing sent by a link.
  *
  * `?example=logo-plate&drawing=<url>` fetches a drawing from an allowed host,
  * hands it to the plate's logo parameter, converts it when it is a picture
@@ -90,7 +90,7 @@ async function openPlateWith(page, url) {
   await dismissSavePrompt(page);
 }
 
-test.describe('A drawing sent by a link (DP-62)', () => {
+test.describe('A drawing sent by a link', () => {
   test('an SVG lands in the Logo Plate and the editor opens on it', async ({
     page,
     browserName,

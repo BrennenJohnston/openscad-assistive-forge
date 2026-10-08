@@ -1,14 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * The editor decides the model (UF-18, U-30).
+ * The editor decides the model.
  *
- * Every render used to pass `-D name=value` for every parameter in a schema
- * parsed once when the file loaded. Editing a parameter's default in the code
- * therefore reached the worker but was overridden by the stale `-D`, and the
- * model never moved. `editor-content-sync.spec.js` already pins that an edit
- * reaches `uploadedFile.content`; nothing pinned that the OUTPUT changed, so
- * the app shipped this for the editor's whole life.
+ * A render must not pass `-D name=value` for every parameter in a schema
+ * parsed once when the file loaded: an edit to a parameter's default in
+ * the code would reach the worker and be overridden by the stale `-D`, and
+ * the model would never move. `editor-content-sync.spec.js` pins that an
+ * edit reaches `uploadedFile.content`; this pins that the output changes.
  *
  * These assert on the produced geometry and on the compiler's own echo,
  * because those are the only witnesses that cannot agree with a stale value.
@@ -124,7 +123,7 @@ async function replaceSource(page, editor, source) {
 const statsText = (page) => page.locator('#previewStatusStats').textContent();
 const echoText = (page) => page.locator('#echoMessages').textContent();
 
-test.describe('The editor decides the model (UF-18)', () => {
+test.describe('The editor decides the model', () => {
   test('forge: an edited default changes the geometry, and a geometry edit still flows', async ({
     page,
   }) => {
@@ -133,8 +132,8 @@ test.describe('The editor decides the model (UF-18)', () => {
     await waitForFirstPreview(page);
     const editor = await openForgeEditor(page);
 
-    // 1. The parameter default moves in code. The stale -D used to win here,
-    //    leaving the model at 24 triangles while the code asked for 60.
+    // 1. The parameter default moves in code. A stale -D would win here,
+    //    leaving the model at 24 triangles while the code asks for 60.
     await replaceSource(page, editor, EDITED_DEFAULT_SOURCE);
     await page.locator('#expertRunPreviewBtn').click();
 
@@ -215,7 +214,7 @@ test.describe('The editor decides the model (UF-18)', () => {
     await expect(sizeInput).toHaveValue('33');
   });
 
-  test('D-29: Render publishes an edit typed a moment earlier', async ({
+  test('Render publishes an edit typed a moment earlier', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -247,7 +246,7 @@ test.describe('The editor decides the model (UF-18)', () => {
     await expect(btn).toBeVisible({ timeout: 10_000 });
   }
 
-  test('AF-5: Add to Queue captures an edit typed a moment earlier', async ({
+  test('Add to Queue captures an edit typed a moment earlier', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -255,7 +254,7 @@ test.describe('The editor decides the model (UF-18)', () => {
     await waitForFirstPreview(page);
     const editor = await openForgeEditor(page);
 
-    // Same race shape as D-29's Render: the queue SNAPSHOTS content at the
+    // Same race shape as Render's: the queue snapshots content at the
     // click, so an unpublished edit would be missing from every render the
     // job ever does - the snapshot never heals when the debounce fires.
     await editor.click();
@@ -280,7 +279,7 @@ test.describe('The editor decides the model (UF-18)', () => {
       .toContain('36');
   });
 
-  test('AF-5: Add to Comparison captures an edit typed a moment earlier', async ({
+  test('Add to Comparison captures an edit typed a moment earlier', async ({
     page,
   }) => {
     test.setTimeout(300_000);
