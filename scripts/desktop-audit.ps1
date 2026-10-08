@@ -8,10 +8,11 @@
   against test scenarios or a full preset sweep, capturing console output,
   geometry stats, face colors (Nightly COFF), and screenshots.
 
-  In default (scenario) mode, runs the 6 hardcoded scenarios.
+  In default (scenario) mode, runs the 6 hardcoded scenarios; output
+  defaults to build\desktop-audit\scenarios.
   In preset sweep mode (-PresetSweep or -PresetFilter), dynamically loads
   presets from keyguard_v75.json and runs each matching preset through the
-  CLI pipeline. Output defaults to testing-round-8.
+  CLI pipeline; output defaults to build\desktop-audit\preset-sweep.
 
 .PARAMETER DryRun
   Print commands without executing OpenSCAD.
@@ -25,7 +26,7 @@
 
 .PARAMETER PresetSweep
   Run all (or filtered) presets from keyguard_v75.json instead of the
-  hardcoded scenarios. Output defaults to testing-round-8.
+  hardcoded scenarios. Output defaults to build\desktop-audit\preset-sweep.
 
 .PARAMETER BatchSize
   Process presets in batches of this size (0 = all at once).
@@ -354,9 +355,9 @@ if ($RunPresetSweep) {
 
 if (-not $OutputDir) {
     if ($RunPresetSweep) {
-        $OutputDir = Join-Path $RepoRoot "docs\audit\testing-round-8\reference-data\cli-extracts"
+        $OutputDir = Join-Path $RepoRoot "build\desktop-audit\preset-sweep"
     } else {
-        $OutputDir = Join-Path $RepoRoot "docs\audit\testing-round-7\reference-data\cli-extracts"
+        $OutputDir = Join-Path $RepoRoot "build\desktop-audit\scenarios"
     }
 }
 
