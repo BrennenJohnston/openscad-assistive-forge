@@ -98,7 +98,7 @@ async function assertSurvivorSet(page) {
   }
 }
 
-test('Simplified keeps exactly the approved survivor set', async ({
+test('Simplified keeps exactly the survivor set', async ({
   page,
 }) => {
   await loadFixture(page);

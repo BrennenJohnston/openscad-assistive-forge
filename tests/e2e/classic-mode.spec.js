@@ -202,7 +202,7 @@ test.describe('Classic chrome strip', () => {
     }
 
     // The way back to the main page stays visible in Classic,
-    // reading its approved label.
+    // reading its label.
     await expect(page.locator('#clearFileBtn')).toBeVisible();
     await expect(page.locator('#clearFileBtn')).toHaveText('← Main Page');
 
@@ -2940,7 +2940,7 @@ test.describe('Return to Main Page control', () => {
     await loadSampleProject(page);
 
     const btn = page.locator('#clearFileBtn');
-    // Forge: visible, approved label, leading the header before the
+    // Forge: visible, labeled, leading the header before the
     // branding — nearest the browser's own Back button.
     await expect(btn).toBeVisible();
     await expect(btn).toHaveText('← Main Page');
