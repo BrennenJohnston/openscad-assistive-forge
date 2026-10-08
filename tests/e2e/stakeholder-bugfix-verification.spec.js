@@ -24,13 +24,10 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear()
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    // UF-27: three cases in this file were RED before this line, and the
-    // failure screenshot said why in one glance - the app was in Simplified
-    // mode, where #consolePanel is defaultHiddenInBasic, so the Bug 1 cases
-    // clicked at a summary the mode controller had hidden and timed out after
-    // 10s. The warnings they were looking for were plainly on screen the whole
-    // time. Same finding and same fix as UF-25 made in render-stability: a
-    // suite that drives panels has to ask for Standard.
+    // A suite that drives panels has to ask for Standard: in Simplified,
+    // #consolePanel is defaultHiddenInBasic, so the console cases would click
+    // at a summary the mode controller has hidden and time out, with the
+    // warnings they look for plainly on screen.
     localStorage.setItem(
       'openscad-forge-ui-mode',
       JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
@@ -275,10 +272,9 @@ test.describe('Bug 3: include_screenshot overlay wiring', () => {
 
     await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
 
-    // F5: parameter groups load COLLAPSED, so every control is attached long
-    // before it is visible. UF-27: this case reached straight for the toggle
-    // and timed out on check() after 10s against a control inside a closed
-    // group - the same trap preset-workflow documents. Ask for them open.
+    // Parameter groups load collapsed, so every control is attached long
+    // before it is visible; a check() on a control inside a closed group
+    // times out (the same trap preset-workflow documents). Ask for them open.
     const expandAll = page.locator('#expandAllGroupsBtn')
     await expect(expandAll).toBeVisible()
     await expandAll.click()
@@ -492,7 +488,7 @@ test.describe('Bug 5: Preset compatibility warning', () => {
     await page.screenshot({ path: 'test-results/bug5-no-false-warning.png', fullPage: true })
   })
 
-  test('compatibility dialog does NOT list schema structural keys as parameters', async ({ page }) => {
+  test('compatibility dialog does not list schema structural keys as parameters', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     // Pre-seed a tampered preset into localStorage BEFORE the page loads.

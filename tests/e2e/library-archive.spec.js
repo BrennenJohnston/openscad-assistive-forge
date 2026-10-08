@@ -1,17 +1,16 @@
 /**
- * AF-12: a library mounts from ONE archive, not one request per file.
+ * A library mounts from one archive, not one request per file.
  *
- * Turning on dotSCAD used to be 695 sequential fetches. Each library now
- * ships an archive.zip (built by scripts/setup-libraries.js) that the
- * worker unpacks; the per-file path stays as the SPOKEN fallback, so an
- * old deployment keeps working.
+ * Turning on dotSCAD file by file would be 695 sequential fetches. Each
+ * library ships an archive.zip (built by scripts/setup-libraries.js) that
+ * the worker unpacks; the per-file path stays as the spoken fallback, so
+ * an old deployment keeps working.
  *
  * dotSCAD is the probe, deliberately: it is the 695-file poster child, and
  * an earlier render in the same page can leave MCAD-shaped leftovers
  * (mounted files plus a /tmp symlink) in the worker filesystem that make a
- * bare MCAD include resolve with no mount in sight - first misread as MCAD
- * being preloaded in the WASM image, actually the D-42 leftover-mount
- * defect fixed in this same release. dotSCAD keeps the measurement
+ * bare MCAD include resolve with no mount in sight, which reads like MCAD
+ * being preloaded in the WASM image. dotSCAD keeps the measurement
  * unambiguous.
  *
  * These cases need the real downloaded bundles (public/libraries/ is
@@ -25,10 +24,10 @@ import { test, expect } from '@playwright/test';
 const isCI = !!process.env.CI;
 
 const FIXTURE = {
-  name: 'af12-dotscad.scad',
+  name: 'archive-dotscad.scad',
   mimeType: 'text/plain',
   buffer: Buffer.from(
-    'include <dotSCAD/src/arc.scad>\necho("AF12_MOUNTED");\ncube(3);\n'
+    'include <dotSCAD/src/arc.scad>\necho("ARCHIVE_MOUNTED");\ncube(3);\n'
   ),
 };
 
@@ -67,7 +66,7 @@ async function renderWithDotscad(page) {
     .poll(() => page.locator('#console-output').textContent(), {
       timeout: 180_000,
     })
-    .toContain('AF12_MOUNTED');
+    .toContain('ARCHIVE_MOUNTED');
 }
 
 test('dotSCAD mounts from its archive: a handful of requests, not hundreds', async ({

@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 
-// U-8a: every Classic "Render" surface used to click the hidden
-// Generate↔Download transformer button. Once a full render was cached the
-// transformer's action is 'download', so pressing Render triggered an STL
-// save prompt instead of a render. Render must ALWAYS mean render.
+// Render must always mean render. Once a full render is cached, the hidden
+// Generate↔Download transformer button's action is 'download', so a Classic
+// "Render" surface that clicked it would open an STL save prompt instead of
+// rendering.
 //
-// sample.scad keeps the renders cheap: the defect is button logic, not
+// sample.scad keeps the renders cheap: this is about button logic, not
 // render observability, and a download event is a crisp signal either way.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('Render never downloads: all three Classic Render surfaces (U-8a)', async ({
+test('Render never downloads: all three Classic Render surfaces', async ({
   page,
 }) => {
   test.setTimeout(300_000)
@@ -48,9 +48,9 @@ test('Render never downloads: all three Classic Render surfaces (U-8a)', async (
     await d.cancel().catch(() => {})
   })
 
-  // First Render press: a real full render runs and ARMS the transformer
-  // (its hidden action becomes 'download') — the exact precondition under
-  // which the old proxy turned the next Render press into a save prompt.
+  // First Render press: a real full render runs and arms the transformer
+  // (its hidden action becomes 'download'), the exact state in which a Render
+  // press that went through the transformer would open a save prompt.
   await page.locator('#classicRenderBtn').click()
   await expect(page.locator('#primaryActionBtn')).toHaveAttribute(
     'data-action',
@@ -58,7 +58,7 @@ test('Render never downloads: all three Classic Render surfaces (U-8a)', async (
     { timeout: 120_000 }
   )
 
-  // Second press on the armed transformer state — the owner's report.
+  // Second press, on the armed transformer state.
   await page.locator('#classicRenderBtn').click()
   await page.waitForTimeout(3_000)
   expect(downloads, 'toolbar Render must not download').toBe(0)
@@ -75,7 +75,7 @@ test('Render never downloads: all three Classic Render surfaces (U-8a)', async (
   await page.waitForTimeout(2_000)
   expect(downloads, 'Design ▸ Render must not download').toBe(0)
 
-  // The top toolbar's own Render button (U-5 moved the triad here).
+  // The top toolbar's own Render button.
   await page.locator('#classicTbRenderBtn').click()
   await page.waitForTimeout(2_000)
   expect(downloads, 'top-toolbar Render must not download').toBe(0)
@@ -88,12 +88,10 @@ test('Render never downloads: all three Classic Render surfaces (U-8a)', async (
   )
 })
 
-// U-8b: the Classic STL buttons. The editor toolbar's button gated on the
-// full-render cache but its refresh() never ran on render events, so it
-// stayed gray forever; the top toolbar's button was not gated at all and
-// quietly started renders. Both now subscribe to render-state-change, gate
-// on the same shared helper, and export WITHOUT rendering.
-test('STL buttons gate on render state and export without rendering (U-8b)', async ({
+// The Classic STL button gates on render state like the desktop's Export
+// STL: it refreshes on render-state-change, and once enabled it exports the
+// existing full render without starting a fresh one.
+test('the Classic STL button gates on render state and exports without rendering', async ({
   page,
 }) => {
   test.setTimeout(300_000)
@@ -119,13 +117,13 @@ test('STL buttons gate on render state and export without rendering (U-8b)', asy
   const topStl = page.locator('#classicTbExportStlBtn')
   await expect(topStl).toBeVisible({ timeout: 10_000 })
 
-  // Before any render: gated, with the Classic-truthful reason (Q-19).
+  // Before any render: gated, with the Classic-truthful reason.
   await expect(topStl).toHaveAttribute('aria-disabled', 'true')
   await expect(page.locator('#classicTbExportStlReason')).toHaveText(
     'Render the model first (F6)'
   )
 
-  // Render, then — without any mode or density switch — both buttons enable.
+  // Render, then — without any mode or density switch — the button enables.
   await page.locator('#classicRenderBtn').click()
   await expect(page.locator('#primaryActionBtn')).toHaveAttribute(
     'data-action',
@@ -151,8 +149,8 @@ test('STL buttons gate on render state and export without rendering (U-8b)', asy
   await download.cancel().catch(() => {})
   expect(await page.evaluate(() => window.__renderStarts)).toBe(0)
 
-  // Parameter edit ⇒ both re-gray until the next render (Q-19: stricter than
-  // the desktop on purpose — never export geometry that no longer matches).
+  // Parameter edit ⇒ the button re-grays until the next render. Stricter than
+  // the desktop on purpose: never export geometry that no longer matches.
   await page.evaluate(() => {
     for (const group of document.querySelectorAll('details.param-group')) {
       group.open = true
@@ -179,12 +177,12 @@ test('STL buttons gate on render state and export without rendering (U-8b)', asy
   )
 })
 
-// U-5/Q-18a: one home for the workflow. The top Classic toolbar owns
-// Preview/Render/STL/DXF in BOTH densities; the editor toolbar keeps only
+// One home for the workflow. The top Classic toolbar owns
+// Preview/Render/STL/DXF in both densities; the editor toolbar keeps only
 // text-editing ops + 3D Print; parameter Undo/Redo is Simplified-only
 // (Standard shows the editor's own Undo/Redo pair instead). The camera
 // bar's Preview/Render duplication is the desktop's own and stays.
-test('one home per workflow action across the Classic toolbars (U-5)', async ({
+test('one home per workflow action across the Classic toolbars', async ({
   page,
 }) => {
   test.setTimeout(300_000)
@@ -242,7 +240,7 @@ test('one home per workflow action across the Classic toolbars (U-5)', async ({
     timeout: 10_000,
   })
 
-  // The moved Render fires the real render pipeline (P4's runFullRender).
+  // The top toolbar's Render fires the real render pipeline (runFullRender).
   await page.locator('#classicTbRenderBtn').click()
   await expect(page.locator('#primaryActionBtn')).toHaveAttribute(
     'data-action',

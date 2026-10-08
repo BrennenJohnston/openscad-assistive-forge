@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// Console fidelity (C4.3) — desktop-parity contract for the console log:
+// Console fidelity: the desktop-parity contract for the console log:
 //   1. Litmus: a missing include file must surface "Can't open include file".
 //   2. Append-only: a re-render never wipes the log; a "── Render N ──"
 //      separator marks the new run and earlier output stays visible.
@@ -24,7 +24,7 @@ const INVALID_SYNTAX_FIXTURE = path.join(
   'fixtures',
   'invalid-syntax.scad'
 );
-/** The owner's real file — the one whose clean render was reported as an error. */
+/** A real model file: its clean render must not read as an error. */
 const UNIVERSAL_CUFF_FIXTURE = path.join(
   process.cwd(),
   'tests',
@@ -92,7 +92,7 @@ async function openConsolePanel(page) {
   await expect(page.locator('#console-output')).toBeVisible();
 }
 
-test.describe('Console fidelity (C4.3)', () => {
+test.describe('Console fidelity', () => {
   test('missing include file surfaces "Can\'t open include file"', async ({
     page,
   }) => {
@@ -156,17 +156,17 @@ test.describe('Console fidelity (C4.3)', () => {
   });
 });
 
-// ─── P7: status chatter belongs to the Console, not the Error-Log ─────────────
+// ─── Status chatter belongs to the Console, not the Error-Log ────────────────
 
-test.describe('Renderer status routing (P7)', () => {
+test.describe('Renderer status routing', () => {
   test('a clean render fills the Console and leaves the Error-Log empty', async ({
     page,
   }) => {
     test.setTimeout(300_000);
 
-    // The owner's real file. Its clean render is what the deployed site was
-    // reporting as a red ERROR row — "Top level object is a 3D object
-    // (manifold):" — while the Console read "No console output yet".
+    // A real model file. Its clean render must fill the Console, not show as a
+    // red ERROR row ("Top level object is a 3D object (manifold):") beside a
+    // Console reading "No console output yet".
     await loadProject(page, UNIVERSAL_CUFF_FIXTURE);
     await waitForPreviewReady(page);
     await openConsolePanel(page);
@@ -222,9 +222,9 @@ test.describe('Renderer status routing (P7)', () => {
   });
 });
 
-// ─── P7b: upstream column labels and the Show filter (U6b) ───────────────────
+// ─── Upstream column labels and the Show filter ──────────────────────────────
 
-test.describe('Error-Log chrome (P7b)', () => {
+test.describe('Error-Log chrome', () => {
   test('the columns read Group | File | Line | Info and Show narrows the table', async ({
     page,
   }) => {
@@ -248,16 +248,15 @@ test.describe('Error-Log chrome (P7b)', () => {
       'Info',
     ]);
 
-    // Owner-approved 2026-08-08: the Group cell keeps the severity word as well
-    // as the group, so relabelling the column does not leave severity to the
-    // red row colour alone (WCAG 1.4.1). "Group" alone would have done that.
+    // The Group cell keeps the severity word as well as the group, so
+    // relabeling the column does not leave severity to the red row color alone
+    // (WCAG 1.4.1). "Group" alone would have done that.
     await openStructuredView(page);
     const groupCell = page.locator('#error-log-output tbody tr td').first();
     await expect(groupCell).toContainText('Error');
-    // "Compile", not "Parse": parseLine reaches the ERROR: branch first, so
+    // "Compile", not "Parse": parseLine reaches the ERROR: branch first, so
     // every prefixed error is grouped there whatever kind it is. Coarser than
-    // upstream, pre-existing, and only now visible — asserted as it is rather
-    // than as it ought to be, and reported to the owner instead.
+    // upstream, and asserted as it is rather than as it ought to be.
     await expect(groupCell).toContainText('Compile');
 
     // The Show select: a real visible label, and every option can match a row.

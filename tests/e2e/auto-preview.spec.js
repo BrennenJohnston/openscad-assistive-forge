@@ -2,17 +2,16 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 
 /**
- * Auto-preview, proved observably (T2-B8 / D-9).
+ * Auto-preview, proved observably.
  *
- * A case for this existed once, passed, and was deleted as vacuous: with the
- * 28-line sample fixture a render is so cheap and so quiet that the suite
- * could not tell "auto-preview is off" from "auto-preview ran and finished
- * before we looked". The owner's real 1,017-line file renders 2,562 facets
- * and reports every stage, so the difference is observable — which is the
+ * With the 28-line sample fixture a render is so cheap and so quiet that a
+ * suite cannot tell "auto-preview is off" from "auto-preview ran and
+ * finished before we looked". A real 1,017-line file renders 2,562 facets
+ * and reports every stage, so the difference is observable, which is the
  * only reason this spec can exist at all.
  *
- * What it proves: turning auto-preview OFF stops a parameter change from
- * starting a render, and turning it back ON starts one again. What it does
+ * What it proves: turning auto-preview off stops a parameter change from
+ * starting a render, and turning it back on starts one again. What it does
  * not prove: anything about NVDA, or about the production build.
  */
 
@@ -113,7 +112,7 @@ test('auto-preview off stops a parameter change from rendering; on starts one', 
   // #autoPreviewToggle OWNS the state but is not on screen — it sits inside
   // the Preview Settings panel, and the Classic Customizer checkbox and the
   // Design menu item both drive it. Drive the menu item: it is the surface a
-  // user reaches, and asserting its documented effect is the P10 protocol.
+  // user reaches, and its documented effect is what is asserted.
   const toggle = page.locator('#autoPreviewToggle');
   await expect(toggle).toBeChecked();
 

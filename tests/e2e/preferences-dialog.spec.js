@@ -5,15 +5,16 @@ import { skipWithoutWebGL } from './helpers/webgl.js';
 const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 
 /**
- * Preferences dialog — P11a shell.
+ * Preferences dialog: the shell.
  *
- * Desktop OpenSCAD's Preferences is a six-tab dialog; Edit ▸ Preferences here
- * used to open the keyboard-shortcuts editor under an honest but different
- * name. This covers the shell: the dialog, the APG tab bar, focus handling,
- * and every tab being present and honest about its own state.
+ * Desktop OpenSCAD's Preferences is a six-tab dialog, and Edit ▸
+ * Preferences here opens one too, not the keyboard-shortcuts editor under
+ * a different name. This covers the shell: the dialog, the APG tab bar,
+ * focus handling, and every tab being present and honest about its own
+ * state.
  *
- * What it proves: structure, roles, keyboard behaviour and focus return in
- * Chromium against the dev server. What it does NOT prove: anything about
+ * What it proves: structure, roles, keyboard behavior and focus return in
+ * Chromium against the dev server. What it does not prove: anything about
  * NVDA, or about the production build (the prod lane covers CSP separately).
  */
 
@@ -115,10 +116,9 @@ test('the tab bar follows the APG pattern', async ({ page }) => {
   // Exactly one panel is showing.
   expect(state.filter((t) => t.panelHidden === false)).toHaveLength(1);
 
-  // Arrows reach EVERY tab, including the unavailable ones: their panel is
+  // Arrows reach every tab, including the unavailable ones: their panel is
   // where the reason lives, so a keyboard user who cannot arrow onto them
-  // cannot read it. (R-III skipped them; owner decision 2026-08-09 reversed
-  // that once the reason became visible rather than description-only.)
+  // cannot read it.
   await page.locator('#prefs-tab-3dview').click();
   const walked = [];
   for (let i = 0; i < TAB_ORDER.length; i++) {
@@ -165,16 +165,16 @@ test('every unavailable tab is disabled and names its reason', async ({
     ).toBeGreaterThan(20);
   }
 
-  // The reason must be VISIBLE, not description-only. MEASURED in R-III:
-  // selecting was refused, so the panel never showed and a sighted user got a
-  // tab that did nothing. Being in the accessibility tree is not the same as
-  // being on screen.
+  // The reason must be visible, not description-only: a tab whose selection
+  // is refused never shows its panel, so a sighted user gets a tab that does
+  // nothing. Being in the accessibility tree is not the same as being on
+  // screen.
   // Reached with the arrow keys rather than .click(): Playwright treats
   // aria-disabled="true" as not-actionable and refuses to click it, though a
   // real browser dispatches the event. Arrowing is also the path that matters
-  // here — it is how a keyboard user gets to the explanation at all.
-  // Advanced left this list in UF-11: it hosts the engine and cache
-  // controls now, so it is a live tab like 3D View.
+  // here: it is how a keyboard user gets to the explanation at all.
+  // Advanced is not in this list: it hosts the engine and cache controls, so
+  // it is a live tab like 3D View.
   const STEPS = { '3dprint': 2, axes: 4, buttons: 5 };
   for (const [id, steps] of Object.entries(STEPS)) {
     await page.locator('#prefs-tab-3dview').click();
@@ -193,7 +193,7 @@ test('every unavailable tab is disabled and names its reason', async ({
   }
 });
 
-test('the 3D View tab is live and the scheme group exists only in Classic (Q-41)', async ({
+test('the 3D View tab is live and the scheme group exists only in Classic', async ({
   page,
 }) => {
   test.setTimeout(240_000);
@@ -207,10 +207,10 @@ test('the 3D View tab is live and the scheme group exists only in Classic (Q-41)
 
   await tab.click();
 
-  // Q-41 (UF-15, owner decision): outside Classic the radios repainted
-  // nothing while looking live — the app theme drives the viewport there
-  // so high contrast keeps working. The group now exists only where it
-  // works: display:none in Forge, out of the accessibility tree.
+  // Outside Classic the app theme drives the viewport (so high contrast keeps
+  // working), and radios there would repaint nothing while looking live. The
+  // group exists only where it works: display:none in Forge, out of the
+  // accessibility tree.
   await expect(page.locator('#prefsColorSchemeGroup')).toBeAttached();
   await expect(page.locator('#prefsColorSchemeList')).toBeHidden();
 
@@ -255,7 +255,7 @@ test('the 3D View tab is live and the scheme group exists only in Classic (Q-41)
   ]);
 });
 
-test('the Advanced tab is live and hosts the engine and cache rows (UF-11)', async ({
+test('the Advanced tab is live and hosts the engine and cache rows', async ({
   page,
 }) => {
   test.setTimeout(240_000);
@@ -305,7 +305,7 @@ test('picking a scheme repaints the viewport, and it survives a reopen', async (
   await page.locator('#prefs-tab-3dview').click();
   await page.locator('#prefsScheme-starnight').check();
 
-  // Proven through the SCENE, not through the control: asserting that the
+  // Proven through the scene, not through the control: asserting that the
   // radio moved would prove only that a radio moved.
   await expect.poll(scheme, { timeout: 5_000 }).toBe('starnight');
 
@@ -319,12 +319,12 @@ test('picking a scheme repaints the viewport, and it survives a reopen', async (
   await expect(page.locator('#prefsScheme-starnight')).toBeChecked();
 });
 
-test('the mouse-centric zoom checkbox drives the viewport setting (UF-11)', async ({
+test('the mouse-centric zoom checkbox drives the viewport setting', async ({
   page,
 }) => {
   // One setting with two controls is this project's most repeated bug shape.
-  // UF-11 removed the viewport's copy, so this checkbox is the one home and
-  // the proof reads the preview manager's own state, not another control.
+  // This checkbox is the one home, and the proof reads the preview manager's
+  // own state, not another control.
   test.setTimeout(240_000);
   await openPreferences(page);
   await page.locator('#prefs-tab-3dview').click();
@@ -376,7 +376,7 @@ test('Escape closes and returns focus to the menu that opened it', async ({
 
   // openModal restores focus to whatever was focused when it opened, and a
   // menu item is destroyed when its menu closes — restoring to a detached
-  // node drops the user on <body>. MEASURED before the fix.
+  // node drops the user on <body>.
   expect(await page.evaluate(() => document.activeElement.id)).toBe(
     'editMenuBtn'
   );
@@ -396,9 +396,8 @@ test('the Keyboard tab reaches the shortcuts editor', async ({ page }) => {
 test('Help ▸ Keyboard Shortcuts still opens the editor directly', async ({
   page,
 }) => {
-  // The shortcuts modal had FOUR copy-pasted open blocks; three survive the
-  // Preferences change and now share one helper. This is the regression that
-  // would catch a fix applied to some of them.
+  // Three routes open the shortcuts modal through one helper; this catches a
+  // fix applied to only some of them.
   test.setTimeout(240_000);
   await gotoWithFile(page);
 
@@ -488,10 +487,10 @@ test('the Editor tab names what it cannot do', async ({ page }) => {
     await expect(page.locator(`#${id}`)).toBeVisible();
   }
 
-  // UF-28 built the wrap marks, so they are no longer something this tab
-  // cannot do. Its old reason ("Not built here. Wrapped lines continue at the
-  // left edge with no marker and no hanging indent.") would now be a lie, and
-  // a built feature behind a lying row is a defect in its own right.
+  // The wrap marks exist, so they are not something this tab cannot do. A
+  // reason claiming they are not built ("Wrapped lines continue at the left
+  // edge with no marker and no hanging indent.") would be a lie, and a built
+  // feature behind a lying row is a defect in its own right.
   await expect(page.locator('#prefs-reason-wrapmarkers')).toHaveCount(0);
   for (const id of ['prefsEditorWrapIndent', 'prefsEditorWrapArrow']) {
     await expect(page.locator(`#${id}`)).toBeEnabled();
@@ -501,9 +500,9 @@ test('the Editor tab names what it cannot do', async ({ page }) => {
 test('in Classic the dialog leaves the viewport visible while arrow keys live-apply schemes', async ({
   page,
 }, testInfo) => {
-  // U-15a: the apply wiring predates this test; what was broken was SEEING
-  // it. The centered dialog plus a dimming, blurring backdrop covered 100%
-  // of the canvas, so the live preview repainted behind an opaque wall.
+  // The apply wiring is not the subject; seeing it is. A centered dialog
+  // plus a dimming, blurring backdrop covering 100% of the canvas would leave
+  // the live preview repainting behind an opaque wall.
   test.setTimeout(240_000);
   await gotoWithFile(page);
 
@@ -534,7 +533,7 @@ test('in Classic the dialog leaves the viewport visible while arrow keys live-ap
   await expect(page.locator('#preferencesModal')).not.toHaveClass(/hidden/);
   await page.locator('#prefs-tab-3dview').click();
 
-  // The visibility half (red before Q-31a): the dialog leaves most of the
+  // The visibility half: the dialog leaves most of the
   // canvas uncovered, and the backdrop neither dims nor blurs what shows.
   const geometry = await page.evaluate(() => {
     const canvas = document
@@ -579,8 +578,8 @@ test('in Classic the dialog leaves the viewport visible while arrow keys live-ap
   await page.keyboard.press('ArrowDown');
   await expect.poll(scheme, { timeout: 5_000 }).toBe('starnight');
 
-  // The deliverable U-15a asked for: the changed viewport visible BESIDE
-  // the open dialog, in one frame.
+  // The point of it all: the changed viewport visible beside the open
+  // dialog, in one frame.
   await testInfo.attach('classic-live-preview-beside-dialog', {
     body: await page.screenshot(),
     contentType: 'image/png',
@@ -590,10 +589,9 @@ test('in Classic the dialog leaves the viewport visible while arrow keys live-ap
 test('the input-device tabs describe the gamepad support that exists', async ({
   page,
 }) => {
-  // Both tabs used to say "This build has no input-device engine" while
-  // gamepad-controller.js was running and bound to real handlers. A reason
-  // that is false is worse than no reason: it tells a user to stop looking
-  // for a feature they already have.
+  // Both tabs describe the gamepad support gamepad-controller.js provides. A
+  // reason that is false is worse than no reason: it tells a user to stop
+  // looking for a feature they already have.
   test.setTimeout(240_000);
   await openPreferences(page);
 
@@ -604,7 +602,7 @@ test('the input-device tabs describe the gamepad support that exists', async ({
   await expect(axes).not.toContainText(/no input-device engine/i);
   await expect(axes).toContainText(/stick/i);
 
-  // Q-32a: the read-only status line says what the engine actually sees.
+  // The read-only status line says what the engine actually sees.
   // Headless Chromium has the Gamepad API with no devices, so the honest
   // report is the no-controller invitation — never a fabricated pad, and
   // never the unsupported-browser claim.

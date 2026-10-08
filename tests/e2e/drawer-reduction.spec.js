@@ -1,13 +1,12 @@
 /**
- * UF-11 "Room to breathe" — proof of the Preview Settings & Info reduction.
- *
- * The owner-approved Q-34 mapping keeps eleven first-session controls in the
- * drawer (both densities) and moves everything else to its logical home:
- * View menu (grid/measurements/status-bar toggles, edge detail), Preferences
- * 3D View (grid appearance, auto-bed, zoom-to-cursor), Preferences Advanced
+ * The Preview Settings & Info drawer keeps eleven first-session controls
+ * (both densities) and moves everything else to its logical home: View
+ * menu (grid/measurements/status-bar toggles, edge detail), Preferences 3D
+ * View (grid appearance, auto-bed, zoom-to-cursor), Preferences Advanced
  * (engine, app cache), the Camera panel (auto-rotate speed) and the File
- * menu (export quality). These cases pin the survivor set in BOTH densities
- * and prove a relocated control stays keyboard-operable in its new home.
+ * menu (export quality). These cases pin the survivor set in both
+ * densities and prove a relocated control stays keyboard-operable in its
+ * new home.
  */
 import { test, expect } from '@playwright/test';
 import { skipWithoutWebGL } from './helpers/webgl.js';
@@ -15,7 +14,7 @@ import path from 'path';
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 
-/** The approved Simplified/Standard survivor set (Q-34, 2026-08-11). */
+/** The Simplified/Standard survivor set. */
 const SURVIVORS = [
   '#autoPreviewToggle',
   '#previewQualitySelect',
@@ -99,7 +98,7 @@ async function assertSurvivorSet(page) {
   }
 }
 
-test('Simplified keeps exactly the approved survivor set', async ({
+test('Simplified keeps exactly the survivor set', async ({
   page,
 }) => {
   await loadFixture(page);
@@ -174,25 +173,25 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
     if (onIt) break;
     await page.keyboard.press('ArrowDown');
   }
-  // The announcement is TRANSIENT: the polite live region debounces, sets,
+  // The announcement is transient: the polite live region debounces, sets,
   // and then auto-clears itself (announcer.js clearDelayMs), so a poll of
   // its current text on a slow shard can begin after the wipe and only
   // ever read "" — measured on CI with the toggle itself working. Watch
-  // with an observer armed BEFORE the toggle: what a screen reader hears,
+  // with an observer armed before the toggle: what a screen reader hears,
   // accumulated.
   await page.evaluate(() => {
-    window.__uf11Heard = [];
+    window.__gridHeard = [];
     const node = document.getElementById('srAnnouncer');
     new MutationObserver(() => {
       const t = node.textContent.trim();
-      if (t) window.__uf11Heard.push(t);
+      if (t) window.__gridHeard.push(t);
     }).observe(node, { childList: true, characterData: true, subtree: true });
   });
   await page.keyboard.press('Enter');
 
   // The grid preference flipped from its default (on) and the change was
-  // announced — state truth plus what a screen reader hears. Since UF-14
-  // the toggle writes the Forge namespace's own copy (U-25).
+  // announced: state truth plus what a screen reader hears. The toggle
+  // writes the Forge namespace's own copy.
   await expect
     .poll(() =>
       page.evaluate(() => localStorage.getItem('openscad-forge-grid--forge'))
@@ -200,7 +199,7 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
     .toBe('false');
   await expect
     .poll(() =>
-      page.evaluate(() => (window.__uf11Heard ?? []).join(' | '))
+      page.evaluate(() => (window.__gridHeard ?? []).join(' | '))
     )
     .toContain('Grid hidden');
 });

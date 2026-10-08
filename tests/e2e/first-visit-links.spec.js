@@ -1,16 +1,17 @@
 /**
  * A project opened by a link, as the person who receives the link meets it:
- * a first visit, the welcome dialog, then the project (D-181).
+ * a first visit, the welcome dialog, then the project.
  *
  * The engine download waits for the welcome dialog, so a small shared
- * project arrives while the engine is still starting. The first preview used
- * to run against a worker that was not ready: the person was told "Preview
- * failed: Something Went Wrong", out loud by both announcers, about a project
- * that had not had a chance, and on a slower engine the preview never came.
+ * project arrives while the engine is still starting. The first preview
+ * must not run against a worker that is not ready, or the person is told
+ * "Preview failed: Something Went Wrong", out loud by both announcers,
+ * about a project that has not had a chance, and on a slower engine the
+ * preview never comes.
  *
- * A direct link to an archive (`?project=`) opened it while the welcome
- * dialog was still asking: its processing overlay stood over the dialog, and
- * then "Save this file for quick access?" stacked on top of it (D-188).
+ * A direct link to an archive (`?project=`) must wait for the welcome
+ * dialog: its processing overlay must not stand over the dialog, and "Save
+ * this file for quick access?" must not stack on top of it.
  *
  * No case here pre-sets the first-visit flag. The manifest suite always
  * does, which is why it never saw this road.
@@ -93,7 +94,7 @@ async function expectPreviewWithoutAFailure(page) {
   return history
 }
 
-test.describe('A shared link on a first visit (D-181)', () => {
+test.describe('A shared link on a first visit', () => {
   test("a first-time visitor's manifest link previews after Download & Continue", async ({
     page,
   }) => {
@@ -110,7 +111,7 @@ test.describe('A shared link on a first visit (D-181)', () => {
     test.skip(isCI, 'WASM processing is slow/unreliable in CI')
     test.skip(
       browserName !== 'chromium',
-      "Routing cannot hold the render worker's engine request on Firefox (measured in IR-R2 A0)"
+      "Routing cannot hold the render worker's engine request on Firefox"
     )
 
     // The render worker fetches the engine; only a context route holds it.
@@ -132,7 +133,7 @@ test.describe('A shared link on a first visit (D-181)', () => {
   })
 })
 
-// ── D-188: a direct project link waits for the welcome dialog ─────────────
+// ── A direct project link waits for the welcome dialog ────────────────────
 
 const PROJECT_URL = `${MOCK_BASE}/project.zip`
 const CORS = { 'Access-Control-Allow-Origin': '*' }
@@ -167,7 +168,7 @@ async function prepareProjectLink(page) {
   return archive
 }
 
-test.describe('A direct project link on a first visit (D-188)', () => {
+test.describe('A direct project link on a first visit', () => {
   test('nothing the link opens stands over the welcome dialog, and the archive waits for it', async ({
     page,
   }) => {

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 
-// Parameter-group accordion geometry (C12): the hide '✕' is a full 44px
+// Parameter-group accordion geometry: the hide '✕' is a full 44px
 // target anchored far right (chevron moved LEFT of the label), mis-presses
 // no longer hide groups, focus lands on the restore bar after hiding, and
 // per-group chips restore a single group. Hidden sets persist per model.
@@ -19,13 +19,13 @@ test.beforeEach(async ({ page }) => {
 })
 
 /**
- * UF-35: the ✕ moved out of the <summary>. A <summary> IS the disclosure's
- * own button, so a control inside it was a control inside a control - axe's
- * nested-interactive, once per group, so the count grew with the model. It
- * now sits in an actions layer beside the <details>, and the two share one
- * .forge-disclosure-row, so the button is reached through the row rather than
- * through the group. Its box and its place in the header are unchanged; the
- * geometry assertions below are what proves that.
+ * The ✕ sits outside the <summary>. A <summary> is the disclosure's own
+ * button, so a control inside it would be a control inside a control
+ * (axe's nested-interactive, once per group, so the count grows with the
+ * model). It sits in an actions layer beside the <details>, and the two
+ * share one .forge-disclosure-row, so the button is reached through the
+ * row rather than through the group. The geometry assertions below prove
+ * its box and its place in the header.
  */
 function groupRow(page, index = 0) {
   return page
@@ -56,7 +56,7 @@ async function loadSample(page) {
   })
 }
 
-test.describe('param group hide geometry (C12)', () => {
+test.describe('param group hide geometry', () => {
   test('hide button is 44px, far right, and does not collide with the toggle', async ({
     page,
   }) => {

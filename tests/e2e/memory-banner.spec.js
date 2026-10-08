@@ -210,8 +210,8 @@ test('banner Reduce Quality lowers both settings without starting a render', asy
   await page.locator('#memoryBannerReduceFn').click();
   await page.waitForTimeout(4_000);
 
-  // UF-11: export quality's control is File ▸ Export Quality now; the mode
-  // has no DOM element, so the debug hook is the readable truth.
+  // Export quality's control is File ▸ Export Quality; the mode has no DOM
+  // element, so the debug hook is the readable truth.
   expect(await page.evaluate(() => window.__forgeDebug.exportQuality())).toBe(
     'low'
   );
@@ -221,9 +221,8 @@ test('banner Reduce Quality lowers both settings without starting a render', asy
     )
   ).toBe('fast');
 
-  // The recorded trap: rendering is the memory-hungry operation this banner
-  // is warning about, so the button that conserves memory must not cause one.
-  // MEASURED before the fix: four render starts.
+  // Rendering is the memory-hungry operation this banner is warning about,
+  // so the button that conserves memory must not cause one.
   expect(await page.evaluate(() => window.__renderStarts)).toBe(0);
 });
 
@@ -272,9 +271,8 @@ test('banner Disable Auto-Preview actually turns auto-preview off', async ({
   test.setTimeout(240_000);
   await setup(page);
 
-  // Left deliberately dead in R1: it targets #autoPreviewToggle, which did
-  // not exist until phase C4 created it. This is the case that proves the
-  // convergence happened.
+  // The banner's action and the auto-preview control converge on
+  // #autoPreviewToggle; this is the case that proves it.
   const toggle = page.locator('#autoPreviewToggle');
   await expect(toggle).toHaveCount(1);
   await expect(toggle).toBeChecked();
@@ -369,11 +367,11 @@ const expectSaidExactlyOnce = async (page, readCount, settleMs = 1500) => {
   expect(await readCount()).toBe(1);
 };
 
-// The two announcement sites R-III measured but left, recorded in the plan's
-// §6c. updateStatus already speaks through stateManager.announceChange, so
-// pairing it with a second announce call says everything to a screen-reader
-// user twice. These live here rather than in a new spec because the setup and
-// the subject — advisory messaging the user cannot see coming — are the same.
+// Two announcement sites: updateStatus already speaks through
+// stateManager.announceChange, so pairing it with a second announce call
+// says everything to a screen-reader user twice. These live here rather
+// than in a new spec because the setup and the subject (advisory
+// messaging the user cannot see coming) are the same.
 
 test('a storage-quota failure is announced once, assertively', async ({
   page,
@@ -445,15 +443,14 @@ test('the complexity advisory is announced once', async ({ page }) => {
     .toBe(true);
 });
 
-// ── D-190: a banner that is not showing is not there for anyone ───────────
+// ── A banner that is not showing is not there for anyone ──────────────────
 //
-// The banner was hidden only by sliding it above the window. Its "Save
-// Project" and "Dismiss" buttons stayed in the Tab order on every page, two
-// presses on buttons nobody could see, and its role="alert" text, "High
-// memory usage detected", stayed where a screen reader could reach it while
-// memory was normal. Measured on 2026-09-23 in Chrome 150: the banner at
-// y = -46 px, 46 px tall, two focusable buttons between "Classic" and "High
-// contrast".
+// Hidden only by sliding it above the window, the banner would keep its
+// "Save Project" and "Dismiss" buttons in the Tab order on every page (two
+// presses on buttons nobody can see) and its role="alert" text, "High
+// memory usage detected", where a screen reader can reach it while memory
+// is normal. Slid away, it sits at y = -46 px, 46 px tall, with two
+// focusable buttons between "Classic" and "High contrast".
 
 async function mainPage(page) {
   await page.goto('/');
@@ -480,7 +477,7 @@ async function tabStops(page, count) {
   return stops;
 }
 
-test.describe('the memory banner when memory is normal (D-190)', () => {
+test.describe('the memory banner when memory is normal', () => {
   test('Tab never lands in it, and it is hidden, not only slid away', async ({
     page,
   }) => {

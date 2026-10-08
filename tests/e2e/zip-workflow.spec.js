@@ -156,9 +156,9 @@ test.describe('ZIP Upload Workflow', () => {
     const fileItems = page.locator('#projectFilesList .project-file-item')
     const count = await fileItems.count()
 
-    // UF-27: this needs at least 2 files to have anything to switch between,
-    // and the fixture provides them. It used to skip in silence instead, so a
-    // fixture that quietly lost a file would have read as a pass.
+    // This needs at least 2 files to have anything to switch between, and the
+    // fixture provides them; asserted rather than guarded, so a fixture that
+    // quietly lost a file cannot read as a pass.
     expect(count).toBeGreaterThanOrEqual(2)
 
     // Click on second file
@@ -178,21 +178,17 @@ test.describe('ZIP Upload Workflow', () => {
     
     await uploadZipProject(page)
 
-    // UF-27: there used to be a "verify parameters are available" check here
-    // that skipped the test when it found none. It always found none, so this
-    // case never ran. MEASURED, and it is not a defect: createZipFixture above
-    // builds main.scad + parts/part.scad with no customizable variable in
-    // either, so there is nothing for the Customizer to render. Rendering an
-    // STL does not need parameters, and that is what this case is about, so
-    // the precondition is gone rather than propped up.
+    // No parameters precondition: createZipFixture above builds main.scad +
+    // parts/part.scad with no customizable variable in either, so there is
+    // nothing for the Customizer to show. Rendering an STL does not need
+    // parameters, and that is what this case is about.
 
     // Wait for any auto-preview to complete
     await page.waitForTimeout(3000)
 
-    // Find and click Generate/Download button. UF-27: .first() is not
-    // cosmetic - that selector resolves to THREE buttons, so the bare click
-    // was a strict-mode violation that would have failed this case every time
-    // it ran. It never ran, so nobody found out.
+    // Find and click Generate/Download button. .first() is not cosmetic: that
+    // selector resolves to three buttons, so a bare click would be a
+    // strict-mode violation.
     const generateButton = page
       .locator('button:has-text("Generate"), button:has-text("Download")')
       .first()
@@ -222,10 +218,8 @@ test.describe('ZIP Upload Workflow', () => {
   })
 
   /*
-   * UF-27: these two have never run and never will as written - each is a
-   * title with a bare test.skip() under it. The reason was in a comment,
-   * where no report could show it, so the board counted two silent skips it
-   * could not explain. The reason is now in the skip itself.
+   * These two are titles with a bare test.skip() under each, and the reason
+   * sits in the skip itself, where a report shows it.
    *
    * The claim that unit tests cover both paths is the original author's and
    * is carried forward verbatim rather than verified here; whoever takes

@@ -1,19 +1,20 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// UF-14 (U-25): the per-interface preference matrix. Forge and Classic hold
-// independently saved VIEWING preferences; code, parameters and camera stay
-// shared by explicit owner order. The signed Q-40 table's 23 PER-UI keys
-// live as <base>--forge / <base>--classic; a Forge<->Classic flip reloads
-// the target namespace live.
+// The per-interface preference matrix. Forge and Classic hold
+// independently saved viewing preferences; code, parameters and camera
+// stay shared. The per-interface keys live as <base>--forge /
+// <base>--classic; a Forge<->Classic flip reloads the target namespace
+// live.
 //
-// Budget note (Q-36): two WASM loads total. The first case drives the
-// flagship rows through their real controls and ends with the reload-
-// persistence walk; the second pre-seeds EVERY row's two namespaces with
-// distinct values and proves the live swap serves each side's own state in
-// both directions. Per-row write routing is unit-proven (ui-scoped-prefs,
-// display-options-controller, preview suites); what only e2e can prove is
-// the live flip, and that is what these cases spend their minutes on.
+// WASM loads are this file's cost, so it has few cases. The first drives
+// the flagship rows through their real controls and ends with the
+// reload-persistence walk; the second pre-seeds every row's two namespaces
+// with distinct values and proves the live swap serves each side's own
+// state in both directions. Per-row write routing is unit-tested
+// (ui-scoped-prefs, display-options-controller, preview suites); what only
+// e2e can prove is the live flip, and that is what these cases spend their
+// minutes on.
 
 const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 const WASM_READY_TIMEOUT = 180_000;
@@ -150,8 +151,8 @@ async function openViewMenuCheckbox(page, name) {
   await page.keyboard.press('Escape');
 }
 
-test.describe('UF-14 per-interface preference matrix', () => {
-  test('uf14-matrix-flagship: real controls write their own namespace and every flip restores it', async ({
+test.describe('Per-interface preference matrix', () => {
+  test('matrix-flagship: real controls write their own namespace and every flip restores it', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -166,7 +167,7 @@ test.describe('UF-14 per-interface preference matrix', () => {
     test.skip(canvases === 0, 'no WebGL renderer: no scene to assert on');
 
     // FORGE: axes on, status bar hidden — through the View menu, the real
-    // Forge home for these toggles (UF-11).
+    // Forge home for these toggles.
     await openViewMenuCheckbox(page, 'Show Axes');
     await openViewMenuCheckbox(page, 'Show Status Bar');
     let forge = await probe(page);
@@ -177,7 +178,7 @@ test.describe('UF-14 per-interface preference matrix', () => {
 
     // CLASSIC: its own desktop defaults appear (nothing written), then a
     // divergent Classic reality: axes off, grid on at 256x256 and the
-    // Nature scheme — all through Classic Preferences, its Q-40c home.
+    // Nature scheme — all through Classic Preferences.
     await enterClassicStandard(page);
     let classic = await probe(page);
     expect(classic.ticksInScene, 'Classic ticks default on').toBe(true);
@@ -277,13 +278,13 @@ test.describe('UF-14 per-interface preference matrix', () => {
     expect(persisted[`${K.statusBar}--forge`]).toBe('false');
   });
 
-  test('uf14-matrix-all-rows: every signed PER-UI row serves its own side across flips', async ({
+  test('matrix-all-rows: every per-interface row serves its own side across flips', async ({
     page,
   }) => {
     test.setTimeout(300_000);
-    // Pre-seed EVERY row's two namespaces with distinct values (the seed
+    // Pre-seed every row's two namespaces with distinct values (the seed
     // marker set so the one-time split cannot overwrite them). What this
-    // proves is the READ half of every row: boot serves Forge's copy, a
+    // proves is the read half of every row: boot serves Forge's copy, a
     // flip serves Classic's, a flip back serves Forge's again.
     await page.addInitScript(
       ([keys, marker]) => {
@@ -421,19 +422,17 @@ test.describe('UF-14 per-interface preference matrix', () => {
     expectForgeSide(p);
   });
 
-  // UF-15 P3 (U-26d): the cross-wire candidates OUTSIDE the per-UI set.
-  // The signed Q-40 table marks auto-preview, preview quality and the
-  // editor prefs APP-LEVEL (one value, both interfaces), and projection is
-  // live camera state SHARED BY ORDER (never persisted at all). MEASURED
-  // while writing this: auto-preview enablement is itself live session
-  // state — its storage key is written only by memory recovery and read by
-  // nothing — so its sharing proof is the live control state, not storage.
-  // This case proves the sharing is sanctioned and whole: values set in
-  // Classic arrive in Forge, no row grows a --forge/--classic sibling, and
-  // nothing invents a projection key. It also pins UF-15 P2's promise: a
-  // scheme choice persists at once, announces, and the reopened control
-  // shows it. One WASM load.
-  test('uf15-matrix-app-level: shared rows stay shared and a scheme choice is never lost', async ({
+  // The rows outside the per-interface set. Auto-preview, preview quality
+  // and the editor preferences are app-level (one value, both interfaces),
+  // and projection is live camera state, shared and never persisted.
+  // Auto-preview enablement is itself live session state: its storage key is
+  // written only by memory recovery and read by nothing, so its sharing proof
+  // is the live control state, not storage. This case proves the sharing is
+  // whole: values set in Classic arrive in Forge, no row grows a
+  // --forge/--classic sibling, and nothing invents a projection key. It also
+  // pins that a scheme choice persists at once, announces, and the reopened
+  // control shows it. One WASM load.
+  test('matrix-app-level: shared rows stay shared and a scheme choice is never lost', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -448,8 +447,8 @@ test.describe('UF-14 per-interface preference matrix', () => {
     const canvases = await page.locator('.preview-panel canvas').count();
     test.skip(canvases === 0, 'no WebGL renderer: no scene to assert on');
 
-    // ── The scheme choice is saved and announced the moment it is made
-    // (UF-15 P2), and the reopened dialog shows it (the multi-copy rule).
+    // ── The scheme choice is saved and announced the moment it is made, and
+    // the reopened dialog shows it (the multi-copy rule).
     await page.locator('#editMenuBtn').click();
     await page.getByRole('menuitem', { name: /preferences/i }).click();
     await page.locator('#prefs-tab-3dview').click();
@@ -545,7 +544,7 @@ test.describe('UF-14 per-interface preference matrix', () => {
     await page.getByRole('menuitem', { name: /preferences/i }).click();
     await page.locator('#prefs-tab-editor').click();
     await expect(page.locator('#prefsEditorFontSize')).toHaveValue('18');
-    // And the scheme group is Classic-only here (Q-41).
+    // And the scheme group is Classic-only here.
     await page.locator('#prefs-tab-3dview').click();
     await expect(page.locator('#prefsColorSchemeList')).toBeHidden();
     await page.locator('#preferencesModalDone').click();

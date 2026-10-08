@@ -1,25 +1,25 @@
 /**
- * E2E tests for saving into the connected folder (IR-5).
+ * E2E tests for saving into the connected folder.
  *
- * WHAT THIS CAN AND CANNOT PROVE, stated up front.
+ * What this can and cannot prove, stated up front.
  *
  * The File System Access API's directory picker cannot be opened by a test,
  * and a handle seeded into IndexedDB comes back from a reload as "Needs
- * permission" - the app correctly refuses to claim a connection it does not
- * have. So no automated test can reach the state where a real folder is live
- * AND the watcher is running. That is why IR-Q11 makes the flag's activation
- * an OWNER-WITNESSED test, and why this file covers the two halves a machine
- * genuinely can:
+ * permission": the app correctly refuses to claim a connection it does not
+ * have. So no automated test can reach the state where a real folder is
+ * live and the watcher is running, which is why turning the flag on needs
+ * a person to watch it work, and why this file covers the two halves a
+ * machine genuinely can:
  *
- *   1. With the flag dark - which is the shipped default - none of the saving
+ *   1. With the flag dark (the shipped default), none of the saving
  *      affordances exist. Proven in the real app.
- *   2. The write paths themselves, driven against REAL OPFS directory handles:
- *      the bytes land at the right path, the main design is left alone, and
- *      the watcher is told before and after every write so the loop cannot
- *      feed itself.
+ *   2. The write paths themselves, driven against real OPFS directory
+ *      handles: the bytes land at the right path, the main design is left
+ *      alone, and the watcher is told before and after every write so the
+ *      loop cannot feed itself.
  *
- * The owner's walk covers what is left: a real folder, a real grant, a real
- * editor watching. It is written into the round's return package.
+ * A manual walk covers what is left: a real folder, a real grant, a real
+ * editor watching.
  *
  * @license GPL-3.0-or-later
  */
@@ -109,7 +109,7 @@ test.describe('Saving into the connected folder', () => {
         // A real directory handle: OPFS ones behave like picked ones for
         // everything except the grant.
         const opfs = await navigator.storage.getDirectory()
-        const root = await opfs.getDirectoryHandle('ir5-writeback', {
+        const root = await opfs.getDirectoryHandle('writeback-test', {
           create: true,
         })
         // Start from a known state, so a rerun cannot read a stale file.
@@ -181,8 +181,8 @@ test.describe('Saving into the connected folder', () => {
         }
       })
 
-      console.log('[ir5] announced:', JSON.stringify(result.announced))
-      console.log('[ir5] watcher:', JSON.stringify(result.watcherCalls))
+      console.log('[writeback] announced:', JSON.stringify(result.announced))
+      console.log('[writeback] watcher:', JSON.stringify(result.watcherCalls))
 
       // The companions are on disk, byte for byte.
       expect(result.saved.ok).toBe(true)

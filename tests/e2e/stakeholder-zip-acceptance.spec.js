@@ -153,7 +153,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.screenshot({ path: 'test-results/phase1-bootstrap.png', fullPage: true })
   })
 
-  test('PHASE 2: ZIP Upload - SCAD parsed, presets auto-imported (Items 1, 14)', async ({ page }) => {
+  test('PHASE 2: ZIP Upload - SCAD parsed, presets auto-imported', async ({ page }) => {
     await uploadZipAndWait(page, diag)
 
     // Verify parameter controls appear
@@ -181,7 +181,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.screenshot({ path: 'test-results/phase2-zip-upload.png', fullPage: true })
   })
 
-  test('PHASE 3: Design Default Values - first option, immutable (Item 13)', async ({ page }) => {
+  test('PHASE 3: Design Default Values - first option, immutable', async ({ page }) => {
     await uploadZipAndWait(page, diag)
     await expandPresetControls(page)
 
@@ -282,7 +282,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.screenshot({ path: 'test-results/phase4-partial-loading.png', fullPage: true })
   })
 
-  test('PHASE 5: Spinbox Independence - type exact value without rounding (Item 10)', async ({ page }) => {
+  test('PHASE 5: Spinbox Independence - type exact value without rounding', async ({ page }) => {
     await uploadZipAndWait(page, diag)
 
     const paramControls = page.locator('.param-control')
@@ -328,7 +328,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.screenshot({ path: 'test-results/phase5-spinbox.png', fullPage: true })
   })
 
-  test('PHASE 6: Button Labels - correct tooltips and text (Item 11)', async ({ page }) => {
+  test('PHASE 6: Button Labels - correct tooltips and text', async ({ page }) => {
     await uploadZipAndWait(page, diag)
     await expandPresetControls(page)
 
@@ -361,7 +361,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.screenshot({ path: 'test-results/phase6-labels.png', fullPage: true })
   })
 
-  test('PHASE 7: Import/Export Modal - correct layout (Item 12)', async ({ page }) => {
+  test('PHASE 7: Import/Export Modal - correct layout', async ({ page }) => {
     await uploadZipAndWait(page, diag)
     await expandPresetControls(page)
 
@@ -397,7 +397,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.waitForTimeout(500)
   })
 
-  test('PHASE 8: OpenSCAD Output - ECHO auto-expands panel (Item 4)', async ({ page }) => {
+  test('PHASE 8: OpenSCAD Output - ECHO auto-expands panel', async ({ page }) => {
     await uploadZipAndWait(page, diag)
 
     // After parsing, check if console panel exists
@@ -423,7 +423,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.screenshot({ path: 'test-results/phase8-console.png', fullPage: true })
   })
 
-  test('PHASE 9: Companion File Section - openings_and_additions.txt listed (Item 8)', async ({ page }) => {
+  test('PHASE 9: Companion File Section - openings_and_additions.txt listed', async ({ page }) => {
     await uploadZipAndWait(page, diag)
     await page.waitForTimeout(2000)
 
@@ -444,7 +444,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.screenshot({ path: 'test-results/phase9-companion.png', fullPage: true })
   })
 
-  test('PHASE 10: Round-Trip Workflow - upload, modify, save, export, verify (V41)', async ({ page }) => {
+  test('PHASE 10: Round-Trip Workflow - upload, modify, save, export, verify', async ({ page }) => {
     await uploadZipAndWait(page, diag)
     await expandPresetControls(page)
 

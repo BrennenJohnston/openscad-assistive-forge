@@ -1,10 +1,9 @@
 /**
- * E2E tests for the Publish dialog (IR-2).
+ * E2E tests for the Publish dialog.
  *
- * The dialog writes a forge-manifest.json for the loaded project. It used to
- * hand out manifests the app's own loader refuses: a ZIP project put the
- * ARCHIVE name in files.main, which validateManifest rejects because it is not
- * a .scad path. Nothing checked, so nobody found out until the link failed.
+ * The dialog writes a forge-manifest.json for the loaded project, and the
+ * app's own loader must accept it: for a ZIP project files.main must be
+ * the .scad path, not the archive name, which validateManifest rejects.
  *
  * @license GPL-3.0-or-later
  */

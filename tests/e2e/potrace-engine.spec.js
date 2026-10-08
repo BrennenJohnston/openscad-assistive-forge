@@ -1,12 +1,11 @@
 import { test, expect } from '@playwright/test';
 
-// DP-43 P2: the Potrace engine, in a real browser, through the real worker.
+// The Potrace engine, in a real browser, through the real worker.
 //
 // The unit tests run the wasm in node, which proves it traces. They cannot
-// prove the thing that actually breaks here: a module worker importing a wasm
-// module off the same origin, under this app's COOP and COEP headers. D-31 and
-// D-133 were both exactly that failure, in that place, and neither showed up
-// anywhere but a browser.
+// prove the thing that breaks here: a module worker importing a wasm
+// module off the same origin, under this app's COOP and COEP headers,
+// which only fails in a browser.
 //
 // So this drives `createTraceRunner` - the same runner the file control uses -
 // and asks for each engine in turn on the same picture.
@@ -109,8 +108,8 @@ test.describe('the Potrace engine in the browser', () => {
     expect(Math.min(...ys)).toBeGreaterThanOrEqual(11);
     expect(Math.max(...ys)).toBeLessThanOrEqual(53);
 
-    // ★ Nothing was refused on the way. This is the measurement D-31 and D-133
-    // would each have failed.
+    // Nothing was refused on the way: no CSP violation while the worker and
+    // its wasm load.
     expect(await page.evaluate(() => window.__cspViolations)).toEqual([]);
     expect(refusals).toEqual([]);
   });

@@ -1,12 +1,12 @@
 /**
- * E2E tests for the drawing editor's own door (IR-4).
+ * E2E tests for the drawing editor's own door.
  *
  * The acceptance story: a photographed tactile drawing of a bird, traced with
  * interior detail no tactile printer can show, cleaned in Forge's SVG
  * Preparation Editor, and returned as a file. The editor already existed; the
- * way IN without an OpenSCAD project and the way OUT as a file did not.
+ * way in without an OpenSCAD project and the way out as a file did not.
  *
- * The walk below is done with the KEYBOARD ONLY - Tab, Enter, Arrow - because
+ * The walk below is done with the keyboard only - Tab, Enter, Arrow - because
  * that is the product thesis, not a nice-to-have.
  *
  * @license GPL-3.0-or-later
@@ -21,22 +21,20 @@ import path from 'node:path'
 const FIXTURES = path.join(process.cwd(), 'tests', 'fixtures', 'svg-edit')
 const BIRD_PNG = path.join(FIXTURES, 'bird-drawing.png')
 const BIRD_SVG = path.join(FIXTURES, 'bird-drawing.svg')
-// 1200 is over the LIST cap of 1,000 and is refused outright.
+// 1200 is over the list cap of 1,000 and is refused outright.
 //
-// 210 plain rects USED to sit in the manual-render band, back when the band
-// was a count. DP-Q33 retired the counts: those 210 rects are 840 ring points
-// between them and MEASURED they flatten in 80-110 ms, so they combine by
-// themselves now and pressing a button for them was never right.
-//
-// over-budget-300 is what the manual band needs instead: 300 curved shapes,
-// 19,200 ring points, predicted at 8.8 seconds and MEASURED at 923 ms - over
-// the 300 ms budget with room, and long enough that a person can really press
-// Cancel in the middle of it. All three are built from plain geometry so the
-// fixtures say what they test without a drawing program in the loop.
+// 210 plain rects are 840 ring points between them and flatten in 80-110
+// ms, so they combine by themselves: what makes a drawing slow is its ring
+// points, not its count. over-budget-300 is the slow case: 300 curved
+// shapes, 19,200 ring points, predicted at 8.8 seconds and measured at
+// 923 ms, over the 300 ms budget with room, and long enough that a person
+// can really press Cancel in the middle of it. All three are built from
+// plain geometry so the fixtures say what they test without a drawing
+// program in the loop.
 const MANY_210 = path.join(FIXTURES, 'many-shapes-210.svg')
 const OVER_BUDGET_300 = path.join(FIXTURES, 'over-budget-300.svg')
 const OVER_CAP_1200 = path.join(FIXTURES, 'over-cap-1200.svg')
-// D-118: paint declared by CSS class, the way every CAD export writes it.
+// Paint declared by CSS class, the way every CAD export writes it.
 const CLASS_STYLED = path.join(FIXTURES, 'class-styled-strokes.svg')
 
 test.beforeEach(async ({ page }) => {
@@ -140,11 +138,10 @@ async function openEditorByKeyboard(page, fixture) {
   await expectPickerOpened(page)
   await page.locator('#svgEditFileInput').setInputFiles(fixture)
 
-  // Waits on the PICTURE, not the shape list. The list is inside the side
-  // panel, and below 640 that panel is a drawer which now starts shut
-  // (DP-Q46a) - so a wait on a row never returns at phone width. The picture
-  // is in the editor at every width, which is DP-37 P1's whole subject, and a
-  // case that needs the list asserts it for itself.
+  // Waits on the picture, not the shape list. The list is inside the side
+  // panel, and below 640 that panel is a drawer which starts shut, so a wait
+  // on a row never returns at phone width. The picture is in the editor at
+  // every width, and a case that needs the list asserts it for itself.
   await page
     .locator('.svg-prep-result-pane svg')
     .first()
@@ -190,7 +187,7 @@ test.describe('The drawing editor door', () => {
       true
     )
 
-    // And it never opens itself over a first-run surface (D-92's lesson):
+    // And it never opens itself over a first-run surface:
     // reload, wait, and it is still shut.
     await page.reload()
     await page.waitForSelector('body[data-wasm-ready="true"]', {
@@ -215,11 +212,11 @@ test.describe('The drawing editor door', () => {
     // The door is the first stop inside the disclosure, not buried in it.
     expect(reach.doorPresses).toBeLessThanOrEqual(2)
 
-    // The editor took focus. RE-PINNED at DP-19: the surface that hosts the
-    // workspace now puts focus on its own name (the "Drawing editor" heading)
-    // rather than on a close button, so a screen reader meets the name of
-    // the thing it just arrived on. The trap hands focus over on a short
-    // delay, so this polls rather than racing it.
+    // The editor took focus: the surface that hosts the workspace puts focus
+    // on its own name (the "Drawing editor" heading) rather than on a close
+    // button, so a screen reader meets the name of the thing it just arrived
+    // on. The trap hands focus over on a short delay, so this polls rather
+    // than racing it.
     await expect
       .poll(async () => (await focused(page))?.className ?? '', {
         timeout: 10000,
@@ -233,20 +230,16 @@ test.describe('The drawing editor door', () => {
 
     // Every shape reads as a named row with its role spoken.
     //
-    // RE-PINNED at DP-43: a traced picture now arrives from Potrace as one
-    // compound path, so the editor opens in its compound mode - the same mode
-    // that has always handled a single-path drawing, which the Harley fixture
-    // reaches too. Two things follow, both signed at DP-Q45: the rows are
-    // named "Shape N" (not "Subpath N", which is SVG's word for a detail of a
-    // `d` attribute), and the role choice is Include/Exclude rather than
-    // Foreground/Hole/Ignore, because Potrace draws in one colour and its
-    // holes are already holes by even-odd nesting - there is nothing for a
-    // person to re-judge. The element flow is walked by "an SVG goes in
-    // directly" below.
+    // A traced picture arrives from Potrace as one compound path, so the
+    // editor opens in its compound mode, the same mode a single-path drawing
+    // gets. The rows are named "Shape N" (not "Subpath N", which is SVG's word
+    // for a detail of a `d` attribute), and a shape is only on or off: Potrace
+    // draws in one color and its holes are already holes by even-odd nesting,
+    // so there is nothing for a person to re-judge. The element flow is walked
+    // by "an SVG goes in directly" below.
     await expect(rows.first()).toHaveAttribute(
       'aria-label',
-      // RE-PINNED at DP-39 P2: the name reads the word a sighted person reads,
-      // and in compound mode that word is Include.
+      // The name reads the word a sighted person reads, here On.
       /Shape 1, On/
     )
 
@@ -274,7 +267,7 @@ test.describe('The drawing editor door', () => {
       ).toHaveAttribute('aria-label', /Off$/)
     }
 
-    // DP-53: the combine follows the last change once it settles, and Save
+    // The combine follows the last change once it settles, and Save
     // is not a Tab stop until there is a result to save.
     await expect(page.locator('button[data-action="save"]')).toBeEnabled({
       timeout: 60000,
@@ -323,17 +316,15 @@ test.describe('The drawing editor door', () => {
 
     await expect(page.locator('.svg-prep-object').first()).toBeVisible()
 
-    // ★ The OTHER mode, kept walked. A drawing that arrives as several DOM
-    // elements opens in element mode, which is what the bird walk above tested
-    // until DP-43 made Potrace the default and traced pictures started
-    // arriving as one compound path. Both flows ship; both are walked.
+    // The other mode, kept walked. A drawing that arrives as several DOM
+    // elements opens in element mode, while traced pictures arrive as one
+    // compound path. Both flows ship; both are walked.
     const rows = page.locator('.svg-prep-object')
     expect(await rows.count()).toBeGreaterThan(1)
     const firstLabel = await rows.first().getAttribute('aria-label')
     // Element mode names a row for what the element IS, not by position.
     expect(firstLabel).not.toMatch(/^Shape \d/)
-    // RE-PINNED at DP-39 P2: the word, not the value. DP-Q40 made the visible
-    // word "Raised" and the accessible name has to say the same thing.
+    // The word, not the value: the accessible name says the visible word.
     expect(firstLabel).toMatch(/(On|Cut out|Off)$/)
 
     // And it offers the full role choice, which compound mode cannot. Read off
@@ -350,9 +341,8 @@ test.describe('The drawing editor door', () => {
     expect(download.suggestedFilename()).toBe('bird-drawing-edited.svg')
   })
 
-  // G0 2026-09-01 (DP-24): "one picture svg that you are seeing the elements
-  // turning on or off. A side by side of original to edited is offed in a
-  // button toggle if the user wishes but is not default."
+  // One picture, with the shapes turning on or off in it; a side-by-side of
+  // the original and the edit is a button toggle, never the default.
   test('one picture by default; Compare brings the original beside it', async ({
     page,
   }) => {
@@ -366,8 +356,8 @@ test.describe('The drawing editor door', () => {
 
     await expect(resultWrap).toBeVisible()
     await expect(sourceWrap).toBeHidden()
-    // DP-46: Compare is one of the three tools behind More, so the working
-    // row holds its actions on one line (DP-Q52, signed with pictures).
+    // Compare is one of the three tools behind More, so the working row holds
+    // its actions on one line.
     await page.locator('.drawing-editor-more-btn').click()
     await expect(compareBtn).toBeVisible()
     await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')
@@ -439,24 +429,22 @@ test.describe('The drawing editor door', () => {
 
 
   /**
-   * DP-3: the cap became three tiers (DP-Q9: A=50, B=200, C=1000), because
-   * DP-0 measured that the TABLE is free and the BOOLEAN is the whole cost.
-   * Before this, anything over 50 got no table at all - the exact inverse of
-   * being able to delete elements down to something usable.
+   * The cap is in three tiers (50, 200, 1000), because the table is free and
+   * the boolean is the whole cost: a drawing over the old cap of 50 still
+   * gets its table, so elements can be deleted down to something usable.
    */
-  test('★ a drawing over the old cap opens, with its table, and combines by itself (DP-53)', async ({
+  test('a drawing over the old cap opens, with its table, and combines by itself', async ({
     page,
   }) => {
     test.setTimeout(180000)
     await openApp(page)
 
-    // RE-PINNED at DP-53: this used to assert the boolean had NOT run and a
-    // Render button waited. The combine runs by itself now, whatever the
-    // drawing is predicted to cost; what a person sees meanwhile is the
-    // drawing itself marked as not yet combined, Apply and Save refused, and
-    // a sentence saying the combine is coming and how long. All of that is
-    // over in about a second on this drawing, so it is recorded as it
-    // happens rather than looked for afterwards.
+    // The combine runs by itself, whatever the drawing is predicted to cost;
+    // what a person sees meanwhile is the drawing itself marked as not yet
+    // combined, Apply and Save refused, and a sentence saying the combine is
+    // coming and how long. All of that is over in about a second on this
+    // drawing, so it is recorded as it happens rather than looked for
+    // afterwards.
     await page.evaluate(() => {
       window.__seen = { hints: [], standIn: false, busy: false }
       new MutationObserver(() => {
@@ -469,7 +457,7 @@ test.describe('The drawing editor door', () => {
     })
     await openEditorByKeyboard(page, OVER_BUDGET_300)
 
-    // The whole table is there. It used to be nothing.
+    // The whole table is there.
     await expect(page.locator('.svg-prep-object')).toHaveCount(300)
 
     // And the result arrives with nobody asked: no button, a result, Save.
@@ -488,11 +476,11 @@ test.describe('The drawing editor door', () => {
     ).toBe(true)
   })
 
-  // DP-53: the door's Render preview button is gone - the combine runs by
-  // itself - and its keyboard, target-floor and announcement pins moved with
-  // the button to the charm view's Render preview, in drawing-editor.spec.js.
+  // The door has no Render preview button (the combine runs by itself); the
+  // keyboard, target-floor and announcement checks for Render preview live
+  // with the charm view's, in drawing-editor.spec.js.
 
-  test('above the cap it says the real reason, with the real numbers (D-117)', async ({
+  test('above the cap it says the real reason, with the real numbers', async ({
     page,
   }) => {
     await openApp(page)
@@ -504,10 +492,10 @@ test.describe('The drawing editor door', () => {
     await expectPickerOpened(page)
     await page.locator('#svgEditFileInput').setInputFiles(OVER_CAP_1200)
 
-    // analyzeSvg had already written this sentence; showSvg used to throw it
-    // away and say "has no shapes Forge can work with. A photo needs dark
-    // lines on a light background to trace." - photo advice for a vector
-    // file, naming a cause that was not the cause.
+    // analyzeSvg writes this sentence, and showSvg must pass it on rather
+    // than swap in photo advice ("A photo needs dark lines on a light
+    // background to trace") for a vector file, naming a cause that is not the
+    // cause.
     const toast = page.locator('.toast, [role="alert"]', {
       hasText: 'Forge can work with',
     })
@@ -520,7 +508,7 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('.svg-prep-object')).toHaveCount(0)
   })
 
-  test('★ a photo that traces over the cap is turned away before it is parsed, in words for a photo (DP-78, D-172)', async ({
+  test('a photo that traces over the cap is turned away before it is parsed, in words for a photo', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -533,10 +521,10 @@ test.describe('The drawing editor door', () => {
     await expectPickerOpened(page)
 
     // A grid of 1,156 dots on flat white, 1400 px, built here and never
-    // stored: a FILE over the editor's cap of 1,000, the same picture
-    // trace-start-cancel.spec.js draws for the charm host. (It used to be a
-    // noise field; since DP-79 noise is a photograph and is smoothed and
-    // floored before it is traced, so it is no longer over the cap.)
+    // stored: a file over the editor's cap of 1,000, the same picture
+    // trace-start-cancel.spec.js draws for the charm host. (Noise would not
+    // do: a photograph is smoothed and floored before it is traced, so it
+    // comes in under the cap.)
     await page.evaluate(async () => {
       const n = 1400
       const perSide = 34
@@ -568,10 +556,9 @@ test.describe('The drawing editor door', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
-    // Before this the trace reached showSvg, was parsed for seconds, and was
-    // refused with the vector file's sentence - "Simplify it in a vector
-    // editor" - for a photograph. The refusal now comes the moment the
-    // worker is done, in words for a photo.
+    // The refusal comes the moment the worker is done, in words for a photo,
+    // not after seconds of parsing in showSvg with the vector file's sentence
+    // ("Simplify it in a vector editor").
     const toast = page.locator('.toast, [role="alert"]', {
       hasText: 'This picture traced into',
     })
@@ -586,15 +573,15 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('.conversion-dialog:not(.hidden)')).toHaveCount(0)
   })
 
-  test('paint declared in a <style> block is read, so line art stays line art (D-118)', async ({
+  test('paint declared in a <style> block is read, so line art stays line art', async ({
     page,
   }) => {
     await openApp(page)
     await openEditorByKeyboard(page, CLASS_STYLED)
 
-    // Three stroke-only shapes whose fill:none lives in a class rule. They
-    // used to be read as solid black - which is how the owner's own artwork
-    // became one hole the shape of its outer boundary.
+    // Three stroke-only shapes whose fill:none lives in a class rule. Read as
+    // solid black, they would make a drawing one hole the shape of its outer
+    // boundary.
     await expect(page.locator('.svg-prep-object')).toHaveCount(3)
     await expect(page.locator('.svg-prep-warnings')).toContainText(
       'stroked path(s) converted to filled outline(s)'
@@ -603,13 +590,12 @@ test.describe('The drawing editor door', () => {
 
 
   /**
-   * DP-4's acceptance, and the directive's own ask: take a drawing that is
-   * far too complex and get it down to something usable WITHOUT leaving the
-   * app, by keyboard alone.
+   * Take a drawing that is far too complex and get it down to something
+   * usable without leaving the app, by keyboard alone.
    *
-   * "Ignore" already removed a shape from the OUTPUT. This removes it from the
-   * LIST, which at several hundred rows is the difference between a table you
-   * can work in and one you only scroll past.
+   * Off removes a shape from the output. Delete removes it from the list,
+   * which at several hundred rows is the difference between a table you can
+   * work in and one you only scroll past.
    */
   test('a too-complex drawing can be cut down to size by keyboard alone', async ({
     page,
@@ -662,10 +648,9 @@ test.describe('The drawing editor door', () => {
     await openEditorByKeyboard(page, CLASS_STYLED)
     await expect(page.locator('.svg-prep-object')).toHaveCount(3)
 
-    // DP-39 P2 (row model A, signed at DP-Q36): Delete lives behind the row's
-    // own More menu now, so the walk has one more step - which is the cost of
-    // the row holding one line down to the drawer's 280 px floor. The menu is
-    // opened the way a keyboard opens it.
+    // Delete lives behind the row's own More menu, so the walk has one more
+    // step, which is the cost of the row holding one line down to the
+    // drawer's 280 px floor. The menu is opened the way a keyboard opens it.
     const firstMore = page.locator('.svg-prep-more-btn').first()
     await firstMore.focus()
     await page.keyboard.press('Enter')
@@ -725,8 +710,8 @@ test.describe('The drawing editor door', () => {
   })
 })
 
-test.describe('the preview is never blank (DP-37 P1)', () => {
-  test('★ a drawing above the auto budget shows itself where its result will go', async ({
+test.describe('the preview is never blank', () => {
+  test('a drawing above the auto budget shows itself where its result will go', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -734,12 +719,12 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     await openEditorByKeyboard(page, OVER_BUDGET_300)
     await expect(page.locator('.svg-prep-object').first()).toBeVisible()
 
-    // MEASURED before this release: the pane was 1268 x 160 with no svg in it
-    // at all. "Will print as", an empty rectangle, two zoom buttons floating
-    // in it, and a sentence telling you to press a button.
-    // RE-PINNED at DP-53: the combine follows by itself and replaces the
-    // stand-in in about a second on this drawing, so the stand-in is read the
-    // moment it appears, by an observer, rather than looked for afterwards.
+    // The stand-in is the drawing, not an empty pane: an empty rectangle with
+    // two zoom buttons floating in it and a sentence telling you to press a
+    // button would be the failure. The combine follows by itself and replaces
+    // the stand-in in about a second on this drawing, so the stand-in is read
+    // the moment it appears, by an observer, rather than looked for
+    // afterwards.
     const standIn = await page.evaluate(
       () =>
         new Promise((resolve) => {
@@ -763,8 +748,8 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
         })
     )
     expect(standIn, 'the drawing never stood in for its result').not.toBeNull()
-    // DP-47 P4: the name counts what is in the picture, because the picture is
-    // painted from the roles now and an ignored shape leaves it at once.
+    // The name counts what is in the picture, because the picture is
+    // painted from the roles and an ignored shape leaves it at once.
     expect(standIn.label).toMatch(
       /^The drawing as it is now: \d+ raised, \d+ holes?, \d+ left out, not yet combined$/
     )
@@ -772,7 +757,7 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     // refused while it stood, because there was no result yet.
     expect(standIn.saveDisabled).toBe(true)
     // And it is the drawing, not an empty frame: the tints are on it, and so
-    // are the painted shapes themselves (DP-47 P4).
+    // are the painted shapes themselves.
     expect(standIn.tinted).toBe(300)
     expect(standIn.painted).toBe(300)
     // Then the result follows, with nobody asked.
@@ -794,13 +779,11 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     await expect(picture).not.toHaveClass(/svg-prep-standin/)
   })
 
-  test('★ 210 shapes combine by themselves now, because a count was the wrong question (DP-Q33)', async ({
+  test('210 shapes combine by themselves, because a count is the wrong question', async ({
     page,
   }) => {
-    // This is the drawing the re-sign is FOR. Under DP-Q9 it was refused the
-    // automatic combine for being 210 shapes, and a person had to press a
-    // button and wait. Those 210 rects are 840 ring points between them and
-    // MEASURED they flatten in 80 to 110 ms: the button was asking somebody to
+    // 210 rects are 840 ring points between them and flatten in 80 to 110 ms,
+    // so this drawing combines by itself: a button here would ask somebody to
     // decide about a tenth of a second.
     test.setTimeout(120000)
     await openApp(page)
@@ -817,19 +800,18 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
   })
 })
 
-test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
-  // ★ The panel is position:absolute over the editor body, and nothing
-  // reserved room for it. MEASURED before this: at 1280 the stage ran
-  // x 6..1274 and the panel x 814..1274, so 453 px of the drawing was painted
-  // underneath the shapes list; at 900, 384 px; at 412, 271 px of a 400 px
-  // picture, with the sentence beneath it cut mid-word.
+test.describe('the side panel does not sit on the drawing', () => {
+  // The panel is position:absolute over the editor body, so the stage must
+  // reserve room for it: without that, at 1280 the panel covers 453 px of
+  // the drawing, at 900 384 px, and at 412 271 px of a 400 px picture, with
+  // the sentence beneath it cut mid-word.
 
   async function openAt(page, width) {
     await page.setViewportSize({ width, height: 900 })
     await openApp(page)
     await openEditorByKeyboard(page, MANY_210)
     // The picture, not the list: below 640 the list is inside a drawer that
-    // starts shut (DP-Q46a).
+    // starts shut.
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
   }
 
@@ -847,7 +829,7 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
   }
 
   for (const width of [1280, 900]) {
-    test(`★ none of the drawing is under the panel at ${width}`, async ({
+    test(`none of the drawing is under the panel at ${width}`, async ({
       page,
     }) => {
       test.setTimeout(120000)
@@ -856,15 +838,13 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     })
   }
 
-  // ★ D-136: closing the panel gave the drawing NOTHING. Two halves of one
-  // feature shipped without meeting: DP-37 P1 reserved the stage's right
-  // padding with an unconditional container query, and DP-24's toggle only
-  // hides the panel. MEASURED on the charm host before this: panel hidden,
-  // `padding-right` stayed 304.469 px and the drawing stayed 374 x 279, with
-  // an empty column where the list had been. The owner pressed Shapes to get
-  // room and the picture did not move.
+  // Closing the panel must give the drawing the room. The stage reserves
+  // its right padding for the panel, so hiding the panel has to release that
+  // padding too; otherwise the drawing stays 374 x 279 beside an empty
+  // column where the list was, and pressing Shapes to get room moves
+  // nothing.
   for (const width of [1280, 900]) {
-    test(`★ D-136 closing the panel widens the drawing at ${width}`, async ({
+    test(`closing the panel widens the drawing at ${width}`, async ({
       page,
     }) => {
       test.setTimeout(120000)
@@ -896,20 +876,18 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     })
   }
 
-  test('★ at phone width the panel is a drawer, and one press gives the drawing back', async ({
+  test('at phone width the panel is a drawer, and one press gives the drawing back', async ({
     page,
   }) => {
     test.setTimeout(120000)
     await openAt(page, 412)
 
-    // The drawer rule is written for this width and never fired here, because
-    // no ancestor of the stage was a container. It fires now - but the drawer
-    // starts shut (DP-Q46a), so this opens it first and then checks the two
-    // things that matter: it takes the WHOLE width rather than lying across
-    // the drawing as a strip, and closing it gives the drawing back.
-    // By its class, not its text. The word changed at DP-Q40 (Regions ->
-    // Shapes) and "Shapes" also matches the door button on the page behind,
-    // so the text is ambiguous here. What the word IS has its own guard.
+    // The drawer rule is written for this width. The drawer starts shut, so
+    // this opens it first and then checks the two things that matter: it takes
+    // the whole width rather than lying across the drawing as a strip, and
+    // closing it gives the drawing back. By its class, not its text: "Shapes"
+    // also matches the door button on the page behind, so the text is
+    // ambiguous here. What the word is has its own guard.
     const regions = page.locator('.drawing-editor-panel-toggle').first()
     await regions.click()
     await expect(page.locator('.drawing-editor-panel')).toBeVisible()
@@ -922,10 +900,10 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     await expect(page.locator('.drawing-editor-panel')).toBeHidden()
     const drawing = page.locator('.svg-prep-result-pane svg').first()
     await expect(drawing).toBeVisible()
-    // The pane is repainted when the combine lands, and a box read ONCE
-    // between the visibility check and the read came back null (1 in 3 on
-    // DP-78's faster door, 0 in 3 on the build before it). Polled, the way
-    // D-170 polls the stage's boxes: the locator resolves again each time.
+    // The pane is repainted when the combine lands, and a box read once
+    // between the visibility check and the read can come back null. Polled,
+    // the way the stage's boxes are polled: the locator resolves again each
+    // time.
     await expect
       .poll(async () => (await drawing.boundingBox())?.width ?? 0, {
         timeout: 15000,
@@ -934,18 +912,17 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
   })
 })
 
-test.describe('the picture is the first thing (DP-37 P1, audit 21)', () => {
-  // ★ The ink panel used to come before the picture, and it is tall.
-  // MEASURED with a traced icon: the panel ran 694 px at 1280, 853 at 900 and
-  // 1,242 at 412, which put "Will print as" at y 862, y 1,024 and y 1,590. On
-  // a 900-tall window the person's own picture was below the fold at every
-  // width - so the first thing they met after choosing a picture was a column
-  // of settings for a drawing they could not see.
+test.describe('the picture is the first thing', () => {
+  // The picture comes before the ink panel, which is tall: with a traced
+  // icon the panel runs 694 px at 1280, 853 at 900 and 1,242 at 412, so with
+  // the panel first a person's own picture would be below the fold of a
+  // 900-tall window at every width, and the first thing they met after
+  // choosing a picture would be settings for a drawing they could not see.
 
   const RING = path.join(process.cwd(), 'tests', 'fixtures', 'icons', 'outline-ring.png')
 
   for (const width of [1280, 900]) {
-    test(`★ the picture comes before the settings at ${width}`, async ({ page }) => {
+    test(`the picture comes before the settings at ${width}`, async ({ page }) => {
       test.setTimeout(120000)
       await page.setViewportSize({ width, height: 900 })
       await openApp(page)
@@ -976,8 +953,8 @@ test.describe('the picture is the first thing (DP-37 P1, audit 21)', () => {
     await page.setViewportSize({ width: 412, height: 900 })
     await openApp(page)
     await openEditorByKeyboard(page, RING)
-    // Waits on the PICTURE, not the shape list: at this width the list is
-    // inside a drawer that now starts shut (DP-Q46a), which is the point.
+    // Waits on the picture, not the shape list: at this width the list is
+    // inside a drawer that starts shut, which is the point.
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
 
     // Reading order is the one thing that holds at every width, drawer open or
@@ -995,10 +972,10 @@ test.describe('the picture is the first thing (DP-37 P1, audit 21)', () => {
   })
 })
 
-test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
+test.describe('the drawer starts shut on a phone', () => {
   const RING_PNG = path.join(process.cwd(), 'tests', 'fixtures', 'icons', 'outline-ring.png')
 
-  test('★ the picture is the first thing SEEN, not only the first thing read', async ({
+  test('the picture is the first thing seen, not only the first thing read', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -1006,9 +983,9 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
     await openApp(page)
     await openEditorByKeyboard(page, RING_PNG)
 
-    // MEASURED before this: the drawer opened by default and took 396 px of a
-    // 412 px screen, so the first thing after choosing a picture was a list of
-    // shapes drawn on top of the picture.
+    // A drawer open by default would take 396 px of a 412 px screen, so the
+    // first thing after choosing a picture would be a list of shapes drawn on
+    // top of the picture.
     await expect(page.locator('.drawing-editor-panel')).toBeHidden()
     const picture = page.locator('.svg-prep-result-pane svg').first()
     await expect(picture).toBeVisible()
@@ -1016,9 +993,9 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
     expect(box.width).toBeGreaterThan(300)
 
     // And the list is one press away, on a button that was already there.
-    // By its class, not its text. The word changed at DP-Q40 (Regions ->
-    // Shapes) and "Shapes" also matches the door button on the page behind,
-    // so the text is ambiguous here. What the word IS has its own guard.
+    // By its class, not its text: "Shapes" also matches the door button on
+    // the page behind, so the text is ambiguous here. What the word is has its
+    // own guard.
     const regions = page.locator('.drawing-editor-panel-toggle').first()
     await expect(regions).toBeVisible()
     await expect(regions).toHaveAttribute('aria-expanded', 'false')
@@ -1039,14 +1016,12 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
   })
 })
 
-test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () => {
-  test('★ the Design width box combines by itself, like everything else (DP-53)', async ({
+test.describe("the flatten budget's loose ends", () => {
+  test('the Design width box combines by itself, like everything else', async ({
     page,
   }) => {
-    // RE-PINNED at DP-53. Before, every change asked first on a drawing this
-    // size and a width change that combined straight away was the odd one
-    // out. Now every change combines by itself once it settles, and the width
-    // box is no different: it waits its 300 ms, then the settle, then runs.
+    // Every change combines by itself once it settles, and the width box is
+    // no different: it waits its 300 ms, then the settle, then runs.
     test.setTimeout(300000)
     await openApp(page)
     await openEditorByKeyboard(page, OVER_BUDGET_300)
@@ -1069,7 +1044,7 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
       }).observe(pane, { attributes: true, attributeFilter: ['aria-busy'] })
     })
 
-    // DP-46: Design width is one of the three tools behind More.
+    // Design width is one of the three tools behind More.
     await page.locator('.drawing-editor-more-btn').click()
     await page.locator('.svg-prep-design-width-input').fill('20')
     // The box waits 300 ms, the settle 350 ms; well past both.
@@ -1084,20 +1059,20 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
     await expect(page.locator('button[data-action="save"]')).toBeEnabled({ timeout: 120000 })
   })
 
-  test('★ what a real combine measured is remembered for the next visit', async ({
+  test('what a real combine measured is remembered for the next visit', async ({
     page,
   }) => {
-    // DP-Q33 signed a calibration because the cost per (shape x ring point)
-    // spans five-fold between classes of drawing. Forgetting it at the end of
-    // every session means the first drawing of every visit is judged by the
-    // cautious default.
+    // The calibration is kept between visits because the cost per (shape x
+    // ring point) spans five-fold between classes of drawing: forgetting it at
+    // the end of every session would judge the first drawing of every visit by
+    // the cautious default.
     test.setTimeout(300000)
     await openApp(page)
     const KEY = 'openscad-forge-flatten-cost'
     await page.evaluate((k) => localStorage.removeItem(k), KEY)
 
     await openEditorByKeyboard(page, OVER_BUDGET_300)
-    // DP-53: the combine runs by itself on open; it is over when Save is.
+    // The combine runs by itself on open; it is over when Save is.
     await expect(page.locator('button[data-action="save"]')).toBeEnabled({
       timeout: 300000,
     })
@@ -1106,20 +1081,20 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
     expect(stored, 'nothing was remembered').not.toBeNull()
     const value = Number(stored)
     // A millisecond-per-unit constant, inside the bounds a stored value has to
-    // be in to be believed. MEASURED range across every class of drawing:
+    // be in to be believed. The measured range across every class of drawing:
     // 1.6e-4 to 1.5e-3.
     expect(Number.isFinite(value)).toBe(true)
     expect(value).toBeGreaterThan(1e-6)
     expect(value).toBeLessThan(1e-1)
   })
 
-  test('the combining sentence gives the wait without the extra word (DP-53)', async ({
+  test('the combining sentence gives the wait without the extra word', async ({
     page,
   }) => {
-    // "here" wrapped the old sentence to a fourth line and overran the charm
-    // host's panel by 6 px. The sentence is the status line's now, while the
-    // combine runs, and it is recorded as it shows since the combine is over
-    // in about a second on this drawing.
+    // The sentence is the status line's while the combine runs (in the panel
+    // it would wrap to a fourth line and overrun the charm host's panel), and
+    // it is recorded as it shows, since the combine is over in about a second
+    // on this drawing.
     test.setTimeout(180000)
     await openApp(page)
     await page.evaluate(() => {
@@ -1139,13 +1114,11 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
   })
 })
 
-test.describe('on a phone the list is a sheet, not a cover (DP-39 P4)', () => {
-  // ★ The panel is laid ABSOLUTELY over the editor's body, which is right
-  // beside a wide picture and wrong on a phone, where it is the full width.
-  // MEASURED at 412 x 915 with the drawer open, before this: the panel covered
-  // 107,163 of the picture's 107,352 square pixels. 99.8 per cent. Opening the
-  // list to see which shape is which hid the very thing you were trying to
-  // name.
+test.describe('on a phone the list is a sheet, not a cover', () => {
+  // The panel is laid over the editor's body, which is right beside a wide
+  // picture and wrong on a phone, where it is the full width: at 412 x 915
+  // with the drawer open it would cover 99.8 per cent of the picture, hiding
+  // the very thing a person opened the list to name.
 
   /**
    * What is actually on screen, and what sits on top of it.
@@ -1186,7 +1159,7 @@ test.describe('on a phone the list is a sheet, not a cover (DP-39 P4)', () => {
       }
     })
 
-  test('★ at 412 the drawing stays on screen with the list open', async ({
+  test('at 412 the drawing stays on screen with the list open', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1197,8 +1170,8 @@ test.describe('on a phone the list is a sheet, not a cover (DP-39 P4)', () => {
       timeout: 60000,
     })
 
-    // The drawer starts shut at this width (DP-Q46a), so this is the press
-    // that used to hide the drawing.
+    // The drawer starts shut at this width, so this is the press that must
+    // not hide the drawing.
     await page.locator('.drawing-editor-panel-toggle').click()
     await expect(page.locator('.drawing-editor-panel')).toBeVisible()
 
@@ -1209,9 +1182,9 @@ test.describe('on a phone the list is a sheet, not a cover (DP-39 P4)', () => {
     expect(c.panelTop).toBeGreaterThanOrEqual(c.stageBottom - 2)
   })
 
-  test('★ and the whole drawing, not the top of it', async ({ page }) => {
+  test('and the whole drawing, not the top of it', async ({ page }) => {
     // Shrinking the stage on its own left the picture at its old size and
-    // simply scrolled the rest away: MEASURED, a 284 px drawing in a 197 px
+    // simply scrolled the rest away: a 284 px drawing in a 197 px
     // stage, so what a person saw with the list open was half a bird.
     test.setTimeout(180000)
     await page.setViewportSize({ width: 412, height: 915 })
@@ -1243,8 +1216,8 @@ test.describe('on a phone the list is a sheet, not a cover (DP-39 P4)', () => {
   })
 })
 
-test.describe('the word on the panel (DP-Q40)', () => {
-  test('★ the charm says Shapes, because that is what is on it', async ({
+test.describe('the word on the panel', () => {
+  test('the charm says Shapes, because that is what is on it', async ({
     page,
   }) => {
     // A region is a thing the stencil lane cuts and paints. What somebody is
@@ -1264,12 +1237,10 @@ test.describe('the word on the panel (DP-Q40)', () => {
   })
 })
 
-test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
-  // "Click selects, Shift and Ctrl extend" was signed as part of row model A.
-  // The ROW is the target and nothing is added to it - which is not only tidy,
-  // it is the only thing that fits: MEASURED, the signed row has no spare
-  // width at the drawer's 280 px floor, so a checkbox per row would have cost
-  // the one line this release just bought.
+test.describe('choosing rows', () => {
+  // Click selects, and Shift and Ctrl extend. The row is the target and
+  // nothing is added to it: at the drawer's 280 px floor the row has no
+  // spare width, so a checkbox per row would cost it its one line.
 
   async function openBird(page) {
     await page.setViewportSize({ width: 1280, height: 900 })
@@ -1287,14 +1258,14 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
    *
    * Not the row's own centre, which is what clicking the row gives you - that
    * point lands wherever the layout happens to put it, and in a row this full
-   * of controls it can land ON one. MEASURED: it does on CI, where the fonts
+   * of controls it can land on one, as it does on CI, where the fonts
    * are wider, and four of these walks failed because a click meant for the
    * row set a role instead. Clicking a control is a press on that control, on
    * purpose; the name is the part of the row that is only the row.
    */
   const rowName = (page, n) => row(page, n).locator('.svg-prep-object-name')
 
-  test('★ click chooses one, Shift extends, Ctrl adds', async ({ page }) => {
+  test('click chooses one, Shift extends, Ctrl adds', async ({ page }) => {
     test.setTimeout(180000)
     await openBird(page)
     await expect(chosen(page)).toHaveCount(0)
@@ -1314,7 +1285,7 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
     await expect(chosen(page)).toHaveCount(1)
   })
 
-  test('★ a keyboard chooses the same way, and says what it chose', async ({
+  test('a keyboard chooses the same way, and says what it chose', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1335,7 +1306,7 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
     expect(said).toMatch(/1 of 7 shapes selected/)
   })
 
-  test('★ a press on a control in the row is not a press on the row', async ({
+  test('a press on a control in the row is not a press on the row', async ({
     page,
   }) => {
     // The radios, More and everything in it are controls with their own jobs.
@@ -1351,7 +1322,7 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
     await expect(chosen(page), 'opening a menu moved the selection').toHaveCount(1)
   })
 
-  test('★ Remove from list takes exactly those rows, and the choice goes with them', async ({
+  test('Remove from list takes exactly those rows, and the choice goes with them', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1367,10 +1338,10 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
     await rowName(page, 2).click({ modifiers: ['Control'] })
     await expect(button).toBeVisible()
     // It says how many, because that count is the whole reason somebody chose
-    // rather than deleting one at a time.
-    // DP-47: "Remove from list", because the Delete KEY now sets a shape to
-    // Ignore and LEAVES it in the list. Two controls called Delete, one press
-    // apart, meaning opposite things, is how the owner lost shapes.
+    // rather than deleting one at a time. "Remove from list", because the
+    // Delete key sets a shape to Off and leaves it in the list: two controls
+    // called Delete, one press apart, meaning opposite things, would lose
+    // shapes.
     await expect(button).toHaveText('Remove from list (2)')
 
     await button.click()
@@ -1395,14 +1366,10 @@ test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
   })
 })
 
-test.describe('the picture can be pointed at (DP-40)', () => {
-  // Directive item 6, signed at DP-Q37. DP-39 P3 let the LIST point at the
-  // picture; this is the other direction.
-  //
-  // ★ Built on the SVG picture, not on the DP-20 canvas the plan named. That
-  // line was written before DP-37 P1 made one picture the default, and
-  // mounting a second one to be able to touch it would undo the release that
-  // got this editor down to a single drawing.
+test.describe('the picture can be pointed at', () => {
+  // The list can point at the picture; this is the other direction, the
+  // picture pointing at the list. Built on the SVG picture rather than on a
+  // second canvas, since the editor shows a single drawing.
 
   async function openBird(page) {
     await page.setViewportSize({ width: 1280, height: 900 })
@@ -1416,7 +1383,7 @@ test.describe('the picture can be pointed at (DP-40)', () => {
   const shape = (page, i) =>
     page.locator(`.svg-prep-result-pane .svg-prep-hit-path[data-index="${i}"]`)
 
-  test('★ every shape in the drawing can be pointed at, painted or not', async ({
+  test('every shape in the drawing can be pointed at, painted or not', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1429,7 +1396,7 @@ test.describe('the picture can be pointed at (DP-40)', () => {
     // Invisible, and still hittable. `pointer-events: all` is what buys that:
     // it means "answer for your fill and your stroke whatever they are
     // painted", which is the only way a stroke-only drawing - every CAD
-    // export, D-118's whole subject - can be pointed at at all.
+    // export - can be pointed at at all.
     const paint = await shape(page, 2).evaluate((el) => {
       const c = getComputedStyle(el)
       return { fill: c.fill, stroke: c.stroke, events: c.pointerEvents }
@@ -1439,7 +1406,7 @@ test.describe('the picture can be pointed at (DP-40)', () => {
     expect(paint.events).toBe('all')
   })
 
-  test('★ hovering the drawing marks the row, and pressing it chooses', async ({
+  test('hovering the drawing marks the row, and pressing it chooses', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1462,7 +1429,7 @@ test.describe('the picture can be pointed at (DP-40)', () => {
     )
   })
 
-  test('★ a small shape on top of a big one is the one you get', async ({
+  test('a small shape on top of a big one is the one you get', async ({
     page,
   }) => {
     // The bird sits on a paper rectangle that fills the whole drawing. If the
@@ -1491,7 +1458,7 @@ test.describe('the picture can be pointed at (DP-40)', () => {
   })
 })
 
-test.describe('two fingers on the drawing (DP-40 P3, signed at DP-Q37)', () => {
+test.describe('two fingers on the drawing', () => {
   // The unit suites cannot answer this one. A pinch is two pointers arriving
   // and leaving independently and a browser deciding what it keeps for
   // scrolling, and none of that exists in jsdom - so it is walked here, with
@@ -1509,24 +1476,22 @@ test.describe('two fingers on the drawing (DP-40 P3, signed at DP-Q37)', () => {
   const picture = (page) => page.locator('.svg-prep-result-pane svg').first()
   const viewBox = (page) => picture(page).getAttribute('viewBox')
 
-  test('★ one finger belongs to the page, two belong to the drawing', async ({
+  test('one finger belongs to the page, two belong to the drawing', async ({
     page,
   }) => {
     test.setTimeout(240000)
     await openBird(page)
 
-    // DP-Q37's split, and it lives on the picture and nowhere else: a page you
-    // cannot scroll is a worse bargain than a picture you cannot pinch.
+    // touch-action lives on the picture and nowhere else: a page you cannot
+    // scroll is a worse bargain than a picture you cannot pinch.
     await expect(picture(page)).toHaveCSS('touch-action', 'pan-y')
 
     const before = await viewBox(page)
 
-    // Two fingers, dispatched as the POINTER events the editor listens to.
-    //
-    // Not Chromium's touch dispatch, which is what this started as and which
-    // fails outright on the other browsers - "CDP session is only available in
-    // Chromium", found by CI after it passed here. This way the walk runs
-    // everywhere and exercises the thing the release actually wrote: a cache
+    // Two fingers, dispatched as the pointer events the editor listens to,
+    // not through Chromium's touch dispatch, which fails outright on the other
+    // browsers ("CDP session is only available in Chromium"). This way the
+    // walk runs everywhere and exercises what the editor implements: a cache
     // keyed by pointerId, and the arithmetic that turns two moving fingers
     // into a viewBox.
     await page.evaluate(() => {
@@ -1564,7 +1529,7 @@ test.describe('two fingers on the drawing (DP-40 P3, signed at DP-Q37)', () => {
     expect(w(after)).toBeLessThan(w(before))
   })
 
-  test('★ a tap still chooses a shape', async ({ page }) => {
+  test('a tap still chooses a shape', async ({ page }) => {
     test.setTimeout(240000)
     await openBird(page)
     // A FILLED shape, on purpose. A tap lands in the middle of what it aims
@@ -1599,15 +1564,11 @@ test.describe('two fingers on the drawing (DP-40 P3, signed at DP-Q37)', () => {
   })
 })
 
-test.describe('the list can point at the picture (DP-39 P3)', () => {
-  // ★ It could, and then it could not, and nothing said so. Hovering or
-  // focusing a row draws that shape's outline into an overlay - and the
-  // overlay was in the SOURCE pane, which was the picture until DP-37 P1 made
-  // one picture the default and put the source behind Compare.
-  //
-  // MEASURED at 1280 before this: source pane 0 by 0, result pane 808 by 354,
-  // and the highlight path drawn on hover was 0 px wide. A feature that is
-  // still running, still drawing, and painting into a pane nobody can see.
+test.describe('the list can point at the picture', () => {
+  // Hovering or focusing a row draws that shape's outline into an overlay,
+  // and the overlay must be on the picture a person can see: with one
+  // picture by default the source pane sits behind Compare at 0 by 0, so an
+  // outline drawn there would be invisible while still running.
 
   async function openBird(page) {
     await page.setViewportSize({ width: 1280, height: 900 })
@@ -1627,7 +1588,7 @@ test.describe('the list can point at the picture (DP-39 P3)', () => {
       })
     )
 
-  test('★ hovering a row outlines that shape in the picture a person is looking at', async ({
+  test('hovering a row outlines that shape in the picture a person is looking at', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1642,16 +1603,16 @@ test.describe('the list can point at the picture (DP-39 P3)', () => {
       `every highlight had no size: ${JSON.stringify(drawn)}`
     ).toBe(true)
 
-    // And it goes away again. Away means the TOOLBAR: since DP-40 the picture
-    // answers a pointer too, so moving "off the row" onto the drawing lights
-    // a shape up rather than clearing it - which is the feature, not a leak.
+    // And it goes away again. Away means the toolbar: the picture answers a
+    // pointer too, so moving "off the row" onto the drawing lights a shape up
+    // rather than clearing it, which is the feature, not a leak.
     await page.locator('.drawing-editor-toolbar').first().hover()
     await expect
       .poll(async () => (await marks(page)).filter((a) => a > 0).length)
       .toBe(0)
   })
 
-  test('★ a keyboard gets the same pointing as a mouse', async ({ page }) => {
+  test('a keyboard gets the same pointing as a mouse', async ({ page }) => {
     // The list is walked by Tab in this editor, and somebody who never touches
     // a mouse needs the drawing to answer the same way.
     test.setTimeout(180000)
@@ -1669,7 +1630,7 @@ test.describe('the list can point at the picture (DP-39 P3)', () => {
   }) => {
     test.setTimeout(180000)
     await openBird(page)
-    // DP-46: Compare moved behind More.
+    // Compare is behind More.
     await page.locator('.drawing-editor-more-btn').click()
     await page.getByRole('button', { name: /Compare/ }).click()
     await expect(page.locator('.svg-prep-source-pane svg')).toBeVisible()
@@ -1680,16 +1641,11 @@ test.describe('the list can point at the picture (DP-39 P3)', () => {
   })
 })
 
-test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
-  // DP-Q36 was asked with the three candidates drawn at this panel's real
-  // widths and A was confirmed: colour tag, name, a role control with the
-  // words on it, and one More menu holding offset, Layer and Delete.
-  //
-  // What A buys is the line P1 had to give up. MEASURED after building it,
-  // standalone door, bird, first row: the role control went from 199 px to
-  // 138 and the offset box and Delete left the line entirely, so at 1280 the
-  // name goes from 72 px to 210 - which is the whole of "Rectangle 1
-  // (600x450)" rather than six characters of it.
+test.describe('the shapes row', () => {
+  // The row is a color tag, a name, a role control with the words on it,
+  // and one More menu holding offset, Layer and Delete. That buys the name
+  // its room: at 1280 the name has 210 px, which is the whole of "Rectangle
+  // 1 (600x450)" rather than six characters of it.
 
   async function openRows(page, width) {
     await page.setViewportSize({ width, height: 900 })
@@ -1729,7 +1685,7 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
       })
     )
 
-  test('★ at 1280 the whole row is one line', async ({ page }) => {
+  test('at 1280 the whole row is one line', async ({ page }) => {
     // This is the width the name gain is FOR: the role control went from
     // 199 px to 138 and the offset box and Delete left the line, so
     // "Rectangle 1 (600x450)" reads as itself rather than as six characters
@@ -1742,21 +1698,17 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
   })
 
   for (const width of [768, 412]) {
-    test(`★ at ${width} the row stays tidy, one line or two`, async ({
+    test(`at ${width} the row stays tidy, one line or two`, async ({
       page,
     }) => {
-      // ★ NOT "one line" here, and the difference is the font. MEASURED on
-      // this machine the row holds one line at every width; MEASURED on CI,
-      // where the fonts are wider, it takes two at 768 - which is the
-      // TIGHTEST panel of the three, 312 px against 412's 376. Model A was
-      // signed as fitting one line down to the drawer's floor, and that was
-      // measured with one set of fonts; it is not a promise the layout can
-      // keep on every machine.
+      // Not "one line" here, and the difference is the font: with wider fonts
+      // the row takes two lines at 768, the tightest panel of the three (312 px
+      // against 412's 376). One line down to the drawer's floor is not a
+      // promise the layout can keep on every machine.
       //
       // What it can keep is this: when the words are too wide the row wraps
-      // tidily rather than eating the name or clipping Delete, which is
-      // exactly what DP-39 P1 built the wrap for. Two lines is the graceful
-      // path. Three would mean something is wrong.
+      // tidily rather than eating the name or clipping Delete. Two lines is the
+      // graceful path; three would mean something is wrong.
       test.setTimeout(180000)
       await openRows(page, width)
       for (const [i, lines] of (await lineCounts(page)).entries()) {
@@ -1765,7 +1717,7 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
     })
   }
 
-  test('★ the whole name fits where it never used to', async ({ page }) => {
+  test('the whole name fits', async ({ page }) => {
     test.setTimeout(180000)
     await openRows(page, 1280)
     const name = page.locator('.svg-prep-object-name').first()
@@ -1774,16 +1726,15 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
     expect(cut, 'the name is still being cut off').toBe(false)
   })
 
-  test('★ the role control says the same three words to everybody', async ({
+  test('the role control says the same three words to everybody', async ({
     page,
   }) => {
     test.setTimeout(180000)
     await openRows(page, 1280)
     const row = page.locator('.svg-prep-object').first()
 
-    // Still a radio group: DP-Q36 signed a control drawn as a switch, not a
-    // different control. Arrow keys walk it because it never stopped being
-    // three radios in a fieldset.
+    // Still a radio group: the control is drawn as a switch, but arrow keys
+    // walk it because it is three radios in a fieldset.
     await expect(row.getByRole('radio', { name: 'On' })).toBeVisible()
     await expect(row.getByRole('radio', { name: 'Cut out' })).toBeVisible()
     await expect(row.getByRole('radio', { name: 'Off' })).toBeVisible()
@@ -1791,13 +1742,13 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
 
     // And the row's own accessible name reads the word on screen, so a
     // screen reader and an eye get the same answer to "what is this shape".
-    // The rectangle is the bird's paper, and D-167 starts it Off.
+    // The rectangle is the bird's paper, and it starts Off.
     await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Off/)
     await row.getByRole('radio', { name: 'Cut out' }).check()
     await expect(row).toHaveAttribute('aria-label', /Rectangle 1.*Cut out/)
   })
 
-  test('★ More holds what left the line, and gives the row back', async ({
+  test('More holds what left the line, and gives the row back', async ({
     page,
   }) => {
     test.setTimeout(180000)
@@ -1874,17 +1825,15 @@ test.describe('the signed shapes row (DP-39 P2, row model A)', () => {
   })
 })
 
-test.describe('the shapes row keeps its name and its Delete (DP-39 P1)', () => {
-  // ★ The row could not fit on one line and had no way to say so, so it took
-  // the space out of the NAME and then out of Delete. MEASURED in this door on
-  // the bird, at 768: the name rendered at ZERO pixels wide and Delete ran
-  // 38 px past the list, 40 px of the row clipped away. Seven rows of a dot,
-  // three radios and a number box, with nothing to tell one shape from
-  // another - which is the complaint DP-39 exists for.
+test.describe('the shapes row keeps its name and its Delete', () => {
+  // A row that cannot fit on one line must not take the space out of the
+  // name and then out of Delete: at 768 on the bird that rendered the name
+  // at zero pixels wide and ran Delete 38 px past the list, rows of a dot,
+  // three radios and a number box with nothing to tell one shape from
+  // another.
   //
-  // 768 is the width that showed it, and it is not an unusual one: it is a
-  // tablet, and it is also what a 1280 window gives this panel once the
-  // customizer has taken its half.
+  // 768 is not an unusual width: it is a tablet, and it is also what a 1280
+  // window gives this panel once the customizer has taken its half.
 
   /** Every row's name width, and how far any row overflows its list. */
   const rowFacts = (page) =>
@@ -1905,14 +1854,14 @@ test.describe('the shapes row keeps its name and its Delete (DP-39 P1)', () => {
     })
 
   for (const width of [1280, 768, 412]) {
-    test(`★ at ${width} every row shows a name and a whole Delete`, async ({
+    test(`at ${width} every row shows a name and a whole Delete`, async ({
       page,
     }) => {
       test.setTimeout(180000)
       await page.setViewportSize({ width, height: 900 })
       await openApp(page)
       await openEditorByKeyboard(page, BIRD_SVG)
-      // Below 640 the drawer starts shut (DP-Q46a).
+      // Below 640 the drawer starts shut.
       const toggle = page.locator('.drawing-editor-panel-toggle')
       if (await toggle.isVisible().catch(() => false)) {
         if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
@@ -1926,7 +1875,7 @@ test.describe('the shapes row keeps its name and its Delete (DP-39 P1)', () => {
       const rows = await rowFacts(page)
       expect(rows.length).toBeGreaterThan(0)
       for (const [i, row] of rows.entries()) {
-        // Six characters and an ellipsis is the floor the row is signed to
+        // Six characters and an ellipsis is the floor the row is meant to
         // keep. 30 px is that floor with room for the font to differ.
         expect(
           row.nameWidth,
@@ -1943,19 +1892,17 @@ test.describe('the shapes row keeps its name and its Delete (DP-39 P1)', () => {
   }
 })
 
-test.describe('the combine runs off the main thread (DP-37 P2)', () => {
-  // ★ MEASURED before this, in Chromium, on the same drawing: the flatten took
-  // 3,818 ms on the main thread and the page rendered TWO frames in all of it.
-  // Through the worker the same drawing takes about the same wall time and the
-  // page renders about 250 frames. DP-34 moved the trace off this thread; this
-  // is the same defect one stage later.
+test.describe('the combine runs off the main thread', () => {
+  // On the main thread this flatten takes 3,818 ms and the page renders two
+  // frames in all of it. Through the worker the same drawing takes about the
+  // same wall time and the page renders about 250.
 
-  test('★ the page keeps answering while a big drawing is combined', async ({
+  test('the page keeps answering while a big drawing is combined', async ({
     page,
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    // DP-53: the combine starts by itself the moment the editor opens, so the
+    // The combine starts by itself the moment the editor opens, so the
     // watcher is set before the open and reads what it saw afterwards.
     await page.evaluate(() => {
       window.__answered = null
@@ -1998,12 +1945,12 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     expect(answered).toBeLessThan(1000)
   })
 
-  test('★ a choice changed mid-combine is not answered with the one it replaced', async ({
+  test('a choice changed mid-combine is not answered with the one it replaced', async ({
     page,
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    // DP-53: the combine starts on open. Every busy stretch is counted, so the
+    // The combine starts on open. Every busy stretch is counted, so the
     // one that answers the change can be told from the one it replaced.
     await page.evaluate(() => {
       window.__busyRuns = 0
@@ -2032,7 +1979,7 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     // It has to be dropped, not left to land: a result built from the choice
     // that was just replaced is the "picture of older choices" the stale pane
     // exists to prevent, and it must never arm Apply. What arms Apply is the
-    // combine that follows the change, once it has settled (DP-53).
+    // combine that follows the change, once it has settled.
     await expect(page.locator('button[data-action="save"]')).toBeEnabled({ timeout: 120000 })
     await expect(cancel).toBeHidden()
     await expect(page.locator('.svg-prep-result-pane')).toHaveAttribute(
@@ -2043,25 +1990,23 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     await expect(page.locator('.svg-prep-render-btn')).toBeHidden()
   })
 
-  test('★ closing the editor mid-combine stops the work it was doing', async ({
+  test('closing the editor mid-combine stops the work it was doing', async ({
     page,
   }) => {
     test.setTimeout(300000)
     await openApp(page)
     await openEditorByKeyboard(page, OVER_BUDGET_300)
 
-    // Closing mid-combine is another thing that was impossible while the
-    // thread was taken. Only `destroy` stopped the work, and the surface's
-    // Close calls `close`, so the worker carried on with a drawing nobody was
-    // looking at any more - MEASURED at 419 ms on this fixture, and minutes on
-    // the biggest drawings this app accepts - and then drew its result into
-    // the closed editor and announced it.
-    // DP-53: the combine is already running, from the open.
+    // Closing mid-combine must stop the work: otherwise the worker carries on
+    // with a drawing nobody is looking at (419 ms on this fixture, minutes on
+    // the biggest drawings this app accepts) and then draws its result into
+    // the closed editor and announces it. The combine is already running,
+    // from the open.
     await expect(page.locator('.svg-prep-render-cancel')).toBeVisible()
     await page.locator('.drawing-editor-close').click()
 
     // A closed editor draws nothing and says nothing. 419 ms is the whole
-    // window, so two seconds is well past when the old result would land.
+    // window, so two seconds is well past when a result would land.
     await page.waitForTimeout(2000)
     await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(0)
     await expect(page.locator('.svg-prep-result-pane')).toHaveAttribute(
@@ -2070,14 +2015,14 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     )
   })
 
-  test('★ Cancel stops a combine and leaves the drawing where it was', async ({
+  test('Cancel stops a combine and leaves the drawing where it was', async ({
     page,
   }) => {
     test.setTimeout(300000)
     await openApp(page)
     await openEditorByKeyboard(page, OVER_BUDGET_300)
 
-    // DP-53: the combine is already running, from the open.
+    // The combine is already running, from the open.
     const cancel = page.locator('.svg-prep-render-cancel')
     await expect(cancel).toBeVisible()
     await cancel.click()
@@ -2099,14 +2044,12 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   })
 })
 
-test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
-  // ★ Before this the header row held the title, Shapes, the workspace footer
-  // (Apply, its 418 px hint sentence, Save, Keep original, Reset) and Close.
-  // MEASURED at the editor's real 692 px: the footer wrapped to two lines and
-  // Close landed on a THIRD line of its own at y 279 - and climbed back up
-  // when the hint disappeared after a render, so the toolbar moved while a
-  // person worked. At 412 the same pile was 401 px of a 753 px screen and the
-  // picture was cut 26 px short.
+test.describe('the toolbar is two rows that never move', () => {
+  // The header row holds the title, Shapes and Close only. With the
+  // workspace footer (Apply, its 418 px hint sentence, Save, Keep original,
+  // Reset) in it, at the editor's real 692 px the row wrapped to three lines
+  // and moved when the hint disappeared after a render, and at 412 it took
+  // 401 px of a 753 px screen.
   async function openEditorAt(page, width, height) {
     await page.setViewportSize({ width, height })
     await openApp(page)
@@ -2130,18 +2073,18 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
     [900, 900],
     [412, 915],
   ]) {
-    test(`★ two rows, each one line, at ${width}`, async ({ page }) => {
+    test(`two rows, each one line, at ${width}`, async ({ page }) => {
       test.setTimeout(120000)
       await openEditorAt(page, width, height)
 
       const rows = await toolbarRows(page)
       expect(rows.length).toBe(2)
       // One line of controls is a 44 px target plus the row's own padding.
-      // Two lines would be 90 or more, which is what the wrap used to make.
+      // Two lines would be 90 or more.
       for (const row of rows) expect(row.height).toBeLessThan(60)
     })
 
-    test(`★ Close is on the first row at ${width}`, async ({ page }) => {
+    test(`Close is on the first row at ${width}`, async ({ page }) => {
       test.setTimeout(120000)
       await openEditorAt(page, width, height)
 
@@ -2161,7 +2104,7 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
     })
   }
 
-  test('★ the hint sentence is out of the button row and in the status line', async ({
+  test('the hint sentence is out of the button row and in the status line', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -2177,7 +2120,7 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
     ).toHaveCount(0)
   })
 
-  test('★ More holds the tools that left the row, and says so', async ({
+  test('More holds the tools that left the row, and says so', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -2197,7 +2140,7 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
     await expect(panel.locator('.svg-prep-design-width')).toBeVisible()
   })
 
-  test('★ on a phone the picture is whole and the stage does not scroll', async ({
+  test('on a phone the picture is whole and the stage does not scroll', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -2218,15 +2161,14 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
         ),
       }
     })
-    // The picture's bottom edge is INSIDE the stage: it used to be 26 px past
-    // it, with the Render row below that again.
+    // The picture's bottom edge is inside the stage.
     expect(fit.roomUnderPicture).toBeGreaterThanOrEqual(0)
     expect(fit.scrolls).toBe(false)
     expect(fit.toolbar).toBeLessThan(120)
   })
 
 
-  test('★ Escape shuts More before it shuts the editor', async ({ page }) => {
+  test('Escape shuts More before it shuts the editor', async ({ page }) => {
     test.setTimeout(120000)
     await openEditorAt(page, 1280, 900)
 
@@ -2235,9 +2177,9 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
     await more.click()
     await expect(panel).toBeVisible()
 
-    // The innermost thing open is what Escape ends. Before DP-39 put a row's
-    // menu in this chain, one press with a menu open left the editor
-    // entirely; this menu is in the same chain for the same reason.
+    // The innermost thing open is what Escape ends: a row's menu is in this
+    // chain, and so is this menu, so one press with a menu open does not leave
+    // the editor.
     await page.keyboard.press('Escape')
     await expect(panel).toBeHidden()
     await expect(more).toHaveAttribute('aria-expanded', 'false')
@@ -2245,7 +2187,7 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
     // And the editor is still here.
     await expect(page.locator('.drawing-editor-toolbar')).toBeVisible()
   })
-  test('★ below the drawer band the actions move into More, and come back', async ({
+  test('below the drawer band the actions move into More, and come back', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -2280,16 +2222,15 @@ test.describe('the toolbar is two rows that never move (D-140, DP-46)', () => {
   })
 })
 
-// ── DP-49: crop, at the door ────────────────────────────────────────────────
+// ── Crop, at the door ────────────────────────────────────────────────────────
 //
 // A photograph of a page is mostly page. The crop view takes the drawing's
 // place: the picture itself with the kept rectangle clear, four rows in the
 // customizer's own slider classes, Save crop and Cancel. The door owns the
 // pixels, so it crops them and traces again through the same dialog; Undo
-// crop puts the picture back. RED on the build before this release: no Crop
-// button in the toolbar.
-test.describe('crop at the door (DP-49)', () => {
-  test('★ the bird loses its bottom band: the crop view, Save crop, the trace again; Undo crop brings it back', async ({
+// crop puts the picture back.
+test.describe('crop at the door', () => {
+  test('the bird loses its bottom band: the crop view, Save crop, the trace again; Undo crop brings it back', async ({
     page,
   }) => {
     test.setTimeout(300000)
@@ -2384,15 +2325,13 @@ test.describe('crop at the door (DP-49)', () => {
   })
 })
 
-// ── DP-80: the crop view after a refused trace ──────────────────────────────
+// ── The crop view after a refused trace ──────────────────────────────────────
 //
-// The refusal's sentence says "a closer crop", and this door had no way to
-// take one before the trace: the toast was the end of it. Now the crop view
-// opens on the picture itself the moment a trace is refused, and Save crop
-// traces the part that is kept. RED on the build before this release: the
-// toast, and nothing after it.
-test.describe('the crop view after a refused trace (DP-80)', () => {
-  test('★ the dot grid is refused, the crop view opens on it, and a quarter of it traces into the editor', async ({
+// The refusal's sentence says "a closer crop", so the crop view opens on
+// the picture itself the moment a trace is refused, and Save crop traces
+// the part that is kept.
+test.describe('the crop view after a refused trace', () => {
+  test('the dot grid is refused, the crop view opens on it, and a quarter of it traces into the editor', async ({
     page,
   }) => {
     test.setTimeout(300000)

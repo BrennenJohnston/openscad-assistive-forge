@@ -17,7 +17,7 @@ useCityWalkFixtures()
  * Split out of ascii-city-walk.spec.js; see helpers/city-walk.js for why.
  */
 
-test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
+test.describe('ASCII City Walk — the mouse-only toolbar', () => {
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
   const btn = (page, id) => page.locator('#' + id)
 
@@ -30,35 +30,31 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
   /**
-   * Watch the walk from INSIDE the page and report METRES PER SECOND over a
+   * Watch the walk from inside the page and report meters per second over a
    * leg that is gated by the game's own frames.
    *
-   * Two things had to be true at once, and getting either alone is what made
-   * earlier versions of this lie.
+   * Two things must be true at once.
    *
-   * IT CANNOT BE A WALL-CLOCK HOLD. The game only moves inside animation
-   * frames, and a loaded runner can render NONE inside a 700 ms window - which
-   * is exactly how the first version went red on Edge in CI while passing
-   * three times over locally. So the leg is gated on frames: it closes itself
-   * at `sampleFrames` frames that actually moved the walker, inside the same
-   * callback that counts them. Closing it from the test side cannot work,
-   * because the decision would arrive through a poll and a poll observes the
-   * counter whenever it happens to run - measured at CW-54's frame rate, two
-   * legs asked for six frames each came back with 33 and 18.
+   * It cannot be a wall-clock hold. The game only moves inside animation
+   * frames, and a loaded runner can render none inside a 700 ms window, so a
+   * timed hold goes red on CI while passing locally. So the leg is gated on
+   * frames: it closes itself at `sampleFrames` frames that actually moved the
+   * walker, inside the same callback that counts them. Closing it from the
+   * test side cannot work, because the decision would arrive through a poll,
+   * and a poll observes the counter whenever it happens to run (two legs
+   * asked for six frames each came back with 33 and 18).
    *
-   * ★ BUT THE QUANTITY CANNOT BE METRES PER FRAME. This watcher is a SEPARATE
+   * And the quantity cannot be meters per frame. This watcher is a separate
    * requestAnimationFrame from the one the game steps the walker in, and two
-   * rAF callbacks interleave in an order nobody controls (CW-53 paid for that
-   * lesson from the other direction). A frame this watcher misses still has
-   * its ground counted, on the next tick, as if it were one frame's worth - so
-   * per-frame reads high exactly when the watcher is being starved. MEASURED:
-   * with legs matched to the frame, a real 2.2x sprint read 0.068 m/frame
-   * against a stroll's 0.091, four runs out of four, the comparison upside
-   * down and perfectly stable.
+   * rAF callbacks interleave in an order nobody controls. A frame this
+   * watcher misses still has its ground counted, on the next tick, as if it
+   * were one frame's worth, so per-frame reads high exactly when the watcher
+   * is starved: a real 2.2x sprint read 0.068 m/frame against a stroll's
+   * 0.091, four runs out of four.
    *
-   * Distance and elapsed time are taken from the SAME callback, so a missed
-   * tick contributes both its metres and its milliseconds to the next sample
-   * and the ratio survives. Metres per second is also the quantity a player
+   * Distance and elapsed time are taken from the same callback, so a missed
+   * tick contributes both its meters and its milliseconds to the next sample
+   * and the ratio survives. Meters per second is also the quantity a player
    * experiences, which is the thing the toggle claims to change.
    *
    * The first moving frame is thrown away: its dt spans the mouse-down round
@@ -82,12 +78,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       const tick = (now) => {
         if (s.stop) return
         const d = Math.hypot(w.x - s.px, w.y - s.py)
-        // CW-81: count only STEADY frames. The walk ramp means the first
-        // quarter second moves at a rising fraction of the claimed speed,
-        // and the decel glide after a released hold is still movement - a
-        // leg that starts while the previous leg's glide is dying samples
-        // decaying scales and read a real 1.6x sprint as 1.01x (2.08 vs
-        // 2.10 m/s, one board in two). The toggle's claim is about the
+        // Count only steady frames. The walk ramp means the first quarter
+        // second moves at a rising fraction of the claimed speed, and the decel
+        // glide after a released hold is still movement, so a leg that starts
+        // while the previous leg's glide is dying samples decaying scales (a
+        // real 1.6x sprint read as 1.01x). The toggle's claim is about the
         // steady stride, so the leg waits for the ramp to be full.
         const steady = (window.__cityWalkGame.walkRamp ?? 1) >= 1
         if (d > 0 && steady) {
@@ -108,9 +103,9 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     }, sampleFrames)
 
   /** Settle function: hold until the leg has the sample it asked for.
-   * CW-97 batch 3: the bound follows CI software's measured ~2 s frames -
-   * ten sampled frames plus the quarter-second ramp sat exactly at the
-   * old 20 s. The leg is frame-gated either way; hardware ends early. */
+   * The bound follows CI software's measured ~2 s frames: ten sampled frames
+   * plus the quarter-second ramp need more than 20 s there. The leg is
+   * frame-gated either way; hardware ends early. */
   const untilLegFull = (page) => async () => {
     await expect
       .poll(() => page.evaluate(() => window.__cwLeg?.done === true), {
@@ -129,10 +124,10 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     })
 
   /**
-   * Point the walker down a corridor the game's OWN collision grid says is
+   * Point the walker down a corridor the game's own collision grid says is
    * clear, and report how far it runs. Any test that compares how far two
    * holds travelled needs this: a leg that runs into a wall reads as slow, and
-   * at the CW-48 speeds a leg covers enough ground to find one. Returns 0 when
+   * at these speeds a leg covers enough ground to find one. Returns 0 when
    * the spawn has no clear run at all, which is a reason to skip rather than
    * to measure noise.
    */
@@ -192,13 +187,12 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
    * Press and hold a toolbar button with the real mouse until `settle`
    * resolves, then release and park the pointer clear of everything.
    *
-   * NEVER hold for a wall-clock duration and then assert. The game only
-   * moves inside animation frames, and a loaded CI runner can render NONE
-   * inside a 700 ms window - which is exactly how the first version of this
-   * suite went red on Edge in CI while passing three times over locally, on
-   * the same browser, and again under a 25x CPU throttle. Parking the mouse
-   * matters too: Playwright leaves it where it last acted, and an overlay
-   * flow silently hovers whatever is under it.
+   * Never hold for a wall-clock duration and then assert. The game only
+   * moves inside animation frames, and a loaded CI runner can render none
+   * inside a 700 ms window, so a timed hold goes red on CI while passing
+   * locally, even under a 25x CPU throttle. Parking the mouse matters too:
+   * Playwright leaves it where it last acted, and an overlay flow silently
+   * hovers whatever is under it.
    */
   async function holdButton(page, id, settle) {
     await btn(page, id).hover()
@@ -219,10 +213,10 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await waitForFrames(page, 3)
 
     const start = await walkPos(page)
-    // CW-97 batch 3: the poll bounds follow CI software's measured pace
-    // (the city walks at ~0.23 m/s and turns at ~3 deg/s there - a full
-    // sector change can need the better part of a minute). Polls end
-    // early when satisfied, so hardware pays nothing.
+    // The poll bounds follow CI software's measured pace (the city walks at
+    // ~0.23 m/s and turns at ~3 deg/s there, so a full sector change can need
+    // the better part of a minute). Polls end early when satisfied, so
+    // hardware pays nothing.
     await holdButton(page, 'cityWalkCamPanUp', () =>
       expect
         .poll(async () => distance(start, await walkPos(page)), {
@@ -231,10 +225,10 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
         .toBeGreaterThan(0.5)
     )
 
-    // Holding Turn right moves the compass off the spawn heading - to ANY
-    // other sector. Exact label, not substring (see hudHeading). CW-44:
-    // the spawn faces the clearest street, so the reference is captured,
-    // never assumed to be north.
+    // Holding Turn right moves the compass off the spawn heading, to any other
+    // sector. Exact label, not substring (see hudHeading). The spawn faces the
+    // clearest street, so the reference is captured, never assumed to be
+    // north.
     const restHeading = await hudHeading(page)
     await holdButton(page, 'cityWalkCamRotateRight', () =>
       expect
@@ -270,24 +264,24 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await startFrameCounter(page)
     await waitForFrames(page, 3)
 
-    // CW-35 retired the toolbar's Camera and Move groups into the Camera
-    // panel, so what swaps here is only what is still ON the toolbar: Fast
-    // and Rain mean nothing overhead, and the map's own three arrive.
+    // The Camera and Move controls live in the Camera panel, so what swaps
+    // here is only what is on the toolbar: Fast and Rain mean nothing overhead,
+    // and the map's own three arrive.
     const streetOnly = ['cityWalkFastBtn', 'cityWalkRainBtn']
     const mapOnly = [
       'cityWalkCenterBtn',
       'cityWalkZoomOutBtn',
       'cityWalkZoomInBtn',
-      // CW-60: the map style button lives in the same zone, last.
+      // The map style button lives in the same zone, last.
       'cityWalkMapStyleBtn',
     ]
 
     for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
     for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
 
-    // The panel does NOT swap. It stays put and re-labels, because the same
-    // D-pad drives both views (CW-Q32) - and a control that vanished under
-    // the pointer would cost the map the only mouse route it has to pan.
+    // The panel does not swap. It stays put and re-labels, because the same
+    // D-pad drives both views, and a control that vanished under the pointer
+    // would cost the map the only mouse route it has to pan.
     await expect(btn(page, 'cityWalkCamPanUp')).toHaveAttribute(
       'aria-label',
       'Walk forward'
@@ -299,16 +293,15 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     for (const id of mapOnly) await expect(btn(page, id)).toBeVisible()
 
     await expect(btn(page, 'cityWalkCamPanUp')).toBeVisible()
-    // CW-60: this pad panned the map exactly as the one above it did, which
-    // is four buttons for a job four other buttons were already doing. Over
-    // the map it is the style pad now; the Rotate pad above still pans, so
-    // the mouse route to panning is untouched.
+    // Over the map this pad is the style pad: panning with it would duplicate
+    // the Rotate pad above, which still pans, so the mouse route to panning is
+    // untouched.
     await expect(btn(page, 'cityWalkCamPanUp')).toHaveAttribute(
       'aria-label',
       'Previous map style'
     )
     // Face north/east/south/west have no meaning with no walker on screen,
-    // so they stand down rather than take a second job (CW-35 P3).
+    // so they stand down rather than take a second job.
     await expect(btn(page, 'cityWalkCamViewFront')).toBeHidden()
 
     // The map buttons drive the map: held Zoom in zooms exponentially…
@@ -328,7 +321,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     )
 
     // The 250 ms minimum step keeps the pan running for a moment after
-    // the release - and a pan is what turns follow OFF - so let it finish
+    // the release - and a pan is what turns follow off - so let it finish
     // before asking Center on you to turn it back on.
     await page.waitForTimeout(400)
     await waitForFrames(page, 2)
@@ -347,20 +340,17 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await expect(btn(page, 'cityWalkCamViewFront')).toBeVisible()
   })
 
-  test('★★ switching view moves NO shared toolbar button (CW-59)', async ({
+  test('switching view moves no shared toolbar button', async ({
     page,
   }) => {
-    // ★★ THE DEFECT THIS REPLACES WAS MEASURED, NOT IMAGINED. On a 1280px
-    // window every one of the NINE shared buttons moved when the view
-    // switched - up to 186 px - and they moved in BOTH directions: Slower
-    // went 138 px left while Previous went 138 px right. A player reaching
-    // for Larger in the street found Photo under the cursor on the map.
-    //
-    // Two things caused it together, and only fixing both works. View-only
-    // buttons sat INSIDE the group they belonged to by meaning, so hiding
-    // them changed the width of a group in the middle of the strip; and the
-    // strip CENTRED itself, which turns any width change anywhere into a
-    // position change everywhere. The buttons that moved never changed at all.
+    // No shared button may move when the view switches. Two things together
+    // would move them: view-only buttons sitting inside the group they belong
+    // to by meaning, so hiding them changes the width of a group in the middle
+    // of the strip; and a strip that centers itself, which turns any width
+    // change anywhere into a position change everywhere. On a 1280px window
+    // that moved all nine shared buttons by up to 186 px, in both directions,
+    // so a player reaching for Larger in the street found Photo under the
+    // cursor on the map.
     await launchGame(page)
     await enterCity(page)
 
@@ -377,17 +367,17 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       )
 
     /**
-     * ★ "PAST" CANNOT BE A BARE x ONCE THE STRIP WRAPS (CW-60). The fifth
-     * map-only button no longer fits on one row between about 1280px and
-     * 1365px, so the view zone takes a line of its own - and the strip is
-     * bottom-anchored, so the new line goes ABOVE (flex-wrap: wrap-reverse,
-     * which is what keeps the shared row where it was; without it the nine
-     * shared buttons measured a 50px move, y=820 to y=770, on a view switch).
+     * "Past" cannot be a bare x once the strip wraps. The fifth map-only
+     * button does not fit on one row between about 1280px and 1365px, so the
+     * view zone takes a line of its own, and the strip is bottom-anchored, so
+     * the new line goes above (flex-wrap: wrap-reverse, which keeps the shared
+     * row where it was; without it the nine shared buttons move 50px on a view
+     * switch).
      *
-     * What the zone claim actually means is that nothing view-only sits in
-     * the shared row ahead of a shared button. That is neutral about which
-     * way lines stack, and the 1600px pass below - asserted to be ONE row -
-     * is what keeps it from going soft.
+     * What the zone claim means is that nothing view-only sits in the shared
+     * row ahead of a shared button. That is neutral about which way lines
+     * stack, and the 1600px pass below, asserted to be one row, keeps it from
+     * going soft.
      */
     const past = (a, b) => a.y !== b.y || a.x > b.x
 
@@ -423,7 +413,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
         }
       }
 
-      // ★ AND AT 1600 THE WHOLE STRIP IS ONE ROW, which is what makes the
+      // At 1600 the whole strip is one row, which is what makes the
       // pass above an x comparison rather than a free one. Without this the
       // wrapped case could pass on nothing but "it is on another line".
       const rows = new Set(Object.values(map).map((p) => p.y))
@@ -443,7 +433,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     }
   })
 
-  test('★★ a drag pans the map, and the threshold keeps click and drag apart (CW-59)', async ({
+  test('a drag pans the map, and the threshold keeps click and drag apart', async ({
     page,
   }) => {
     await launchGame(page)
@@ -487,12 +477,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // broken rather than ignored.
     expect(afterY.follow).toBe(false)
 
-    // ★★ THE BOUNDARY, AND CW-61'S MODAL NOW HANGS ON IT, exactly as this
-    // case predicted it would. Under DRAG_THRESHOLD_PX the press was a click:
-    // the map must not move AND the travel dialog must open. Over it the
-    // press was a drag: the map must move AND the dialog must stay shut.
-    // Both halves on both sides, because a boundary asserted from one side
-    // only cannot tell a threshold from a control that never fires.
+    // The boundary, and the travel dialog hangs on it. Under DRAG_THRESHOLD_PX
+    // the press is a click: the map must not move and the travel dialog must
+    // open. Over it the press is a drag: the map must move and the dialog must
+    // stay shut. Both halves on both sides, because a boundary asserted from
+    // one side only cannot tell a threshold from a control that never fires.
     const dialog = page.locator('#cityWalkTravelDialog')
 
     const wobbleFrom = await cam()
@@ -514,20 +503,12 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await expect(dialog).toBeHidden()
   })
 
-  test('★ an over-threshold drag pans and never travels (CW-59, CW-61)', async ({
+  test('an over-threshold drag pans and never travels', async ({
     page,
   }) => {
-    // ★★ THIS CASE OUTLIVED THE MODE IT WAS WRITTEN AGAINST, AND THAT IS THE
-    // FINDING. It used to ARM pin mode first, because under CW-40 a click
-    // only acted on an armed map. CW-61 retired the arming - every click
-    // asks now - and the retirement sweep MISSED this case, because it
-    // reached for the mode through its OBSERVABLE (`aria-pressed` on the
-    // Teleport button) rather than through any of the names the sweep
-    // grepped for. It went red on BOTH engines, which is what said it was a
-    // real miss and not a runner.
-    //
-    // Sweep a retired feature by what it LOOKS like, not only by what it is
-    // called.
+    // A click acts on any map; there is no armed mode to enter first. When a
+    // feature is retired, sweep the tests for it by what it looks like (here,
+    // `aria-pressed` on the Teleport button) as well as by its names.
     await launchGame(page)
     await enterCity(page)
     await page.keyboard.press('KeyM')
@@ -542,17 +523,17 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     const cx = box.x + box.width / 2
     const cy = box.y + box.height / 2
 
-    // ★ THIS IS WHY THE TELEPORT MOVED TO THE POINTER-UP. It used to fire on
-    // the way DOWN, and the press that begins a pan is the same press - so
-    // the map would have jumped away the instant anyone tried to drag it.
+    // This is why the teleport fires on pointer-up: the press that begins a
+    // pan is the same press, so firing on the way down would jump the map
+    // away the instant anyone tried to drag it.
     const before = await walkerAt()
     await page.mouse.move(cx, cy)
     await page.mouse.down()
     for (let i = 1; i <= 10; i++) await page.mouse.move(cx + i * 20, cy)
     await page.mouse.up()
     expect(await walkerAt()).toEqual(before)
-    // Nor does it even ASK: under CW-61 an over-threshold press is a drag
-    // and a drag never clicks, so there is no question to dismiss either.
+    // Nor does it ask: an over-threshold press is a drag and a drag never
+    // clicks, so there is no question to dismiss either.
     await expect(page.locator('#cityWalkTravelDialog')).toBeHidden()
 
     // And a real click still asks, and answering it still travels, so the
@@ -569,19 +550,13 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     }).toBeGreaterThan(1)
   })
 
-  test('★★ W A S D pan the map, exactly as the arrows do (CW-59, a PIN)', async ({
+  test('W A S D pan the map, exactly as the arrows do', async ({
     page,
   }) => {
-    // ★★ THIS PASSES ON BASE, AND SAYING SO IS THE POINT. The plan for this
-    // release assumed W A S D did not pan the map and had to be made to.
-    // They always did: KeyW binds the same 'forward' action ArrowUp binds,
-    // and the map's panY reads that action, not the key. Measured before any
-    // code changed - W moved the camera 302 m where ArrowUp moved it 302 m,
-    // and A, S and D matched their arrows too.
-    //
-    // So this is NOT proof of a fix. It is a pin against a binding that was
-    // never written down, and the honest record of an inverted premise: what
-    // CW-59 actually changed was the SENTENCE that told players arrows only.
+    // A pin, not a fix: W A S D have always panned the map. KeyW binds the
+    // same 'forward' action ArrowUp binds, and the map's panY reads that
+    // action, not the key (W and ArrowUp each moved the camera 302 m, and A,
+    // S and D matched their arrows too). This writes the binding down.
     await launchGame(page)
     await enterCity(page)
     await page.keyboard.press('KeyM')
@@ -600,9 +575,9 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       c.follow = false
     })
 
-    // Held until the map has MOVED, never for a number of milliseconds: the
+    // Held until the map has moved, never for a number of milliseconds: the
     // map only pans inside animation frames, and a loaded runner can render
-    // none inside a window (the trap this round has paid for four times).
+    // none inside a window.
     const panBy = async (key) => {
       await page.evaluate(() => {
         const c = window.__cityWalkGame.mapCam
@@ -648,15 +623,13 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await btn(page, 'cityWalkCamPanUp').focus()
     await expect(btn(page, 'cityWalkCamPanUp')).toBeFocused()
 
-    // ★ THE DISTANCE IS A FRAME-RATE READING, NOT A PROMISE. The app
-    // stretches a keyboard activation to a fixed TOOLBAR_STEP_MS window (250
-    // ms), so how far the walker gets inside it depends entirely on how many
-    // frames render there: about fifteen at 60 fps, but ONE on a loaded
-    // machine, and one frame is 4.8 m/s / 60 = 0.08 m. Asserting 0.15 m went
-    // red on Firefox at CW-55 and again on Chromium at CW-57 - two engines,
-    // so it is the assertion that is wrong and not the browser. What the app
-    // actually promises is the two halves in this test's name: it takes a
-    // step, and the step ENDS. Both are asserted; the metres are not.
+    // The distance is a frame-rate reading, not a promise. The app stretches a
+    // keyboard activation to a fixed TOOLBAR_STEP_MS window (250 ms), so how
+    // far the walker gets inside it depends entirely on how many frames render
+    // there: about fifteen at 60 fps, but one on a loaded machine, and one
+    // frame is 4.8 m/s / 60 = 0.08 m. What the app promises is the two halves
+    // in this test's name: it takes a step, and the step ends. Both are
+    // asserted; the meters are not.
     await page.keyboard.press('Enter')
     await expect
       .poll(async () => distance(before, await walkPos(page)), {
@@ -690,7 +663,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await btn(page, 'cityWalkSpeedDownBtn').click()
     await expect(announcer(page)).toHaveText(/Walking speed 100 percent/)
 
-    // The game opens at the ONE default, 30% (CW-72), in ten-point steps.
+    // The game opens at the one default, 30%, in ten-point steps.
     await btn(page, 'cityWalkCharDownBtn').click()
     await expect(announcer(page)).toHaveText(/Character size 20 percent/)
     await btn(page, 'cityWalkCharUpBtn').click()
@@ -708,11 +681,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   })
 
   /**
-   * CW-48 rebased the walking-speed scale. The storage key NAME never moved
-   * (UF-14); the values under it did, from a 0.5-3.0 multiplier of a 1.6 m/s
-   * walk to a 50-300 label. Seeded through addInitScript rather than written
-   * by the game and read back: a round trip only ever proves the new format
-   * can read its own output, which is not what migration means.
+   * The walking-speed scale was rebased under the same storage key: the
+   * values went from a 0.5-3.0 multiplier of a 1.6 m/s walk to a 50-300
+   * label. Seeded through addInitScript rather than written by the game and
+   * read back: a round trip only ever proves the new format can read its own
+   * output, which is not what migration means.
    */
   const withStoredSpeed = async (page, raw) => {
     await page.addInitScript((value) => {
@@ -725,7 +698,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   test('a speed saved by the old scale comes back rebased', async ({
     page,
   }) => {
-    // The old top of the range was 300 percent of 1.6 m/s. That IS the new
+    // The old top of the range was 300 percent of 1.6 m/s. That is the new
     // default: same 4.8 m/s, now announced as 100.
     await withStoredSpeed(page, '3')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('speed 100%')
@@ -736,7 +709,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   }) => {
     // An old 100 percent was 1.6 m/s, which is slower than anything this
     // scale offers. It clamps to the floor, and that player comes back
-    // walking 2.4 m/s - faster than they left, which is the signed
+    // walking 2.4 m/s - faster than they left, which is the intended
     // consequence of the rebase rather than a rounding accident.
     await withStoredSpeed(page, '1')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('speed 50%')
@@ -754,28 +727,26 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     const fast = btn(page, 'cityWalkFastBtn')
     await expect(fast).toHaveAttribute('aria-pressed', 'false')
 
-    // Both legs are gated on the game's own frames and compared in METRES PER
-    // SECOND - see watchLeg for why it has to be both, and why metres per
-    // FRAME read a real 2.2x sprint as slower than the stroll.
+    // Both legs are gated on the game's own frames and compared in meters per
+    // second; see watchLeg for why it has to be both, and why meters per frame
+    // read a real 2.2x sprint as slower than the stroll.
     //
     // Down a corridor the collision grid says is clear: a leg that runs into a
-    // wall reads as slow, and at the CW-48 speeds a leg covers enough ground
-    // to find one. That was measured both ways - it made a real sprint look
-    // slower than the stroll, and it made a DISABLED sprint pass.
-    // Ten sampled frames. Overshoot costs nothing now the leg closes itself,
-    // so the sample can be wide enough that no single frame decides the
-    // answer, and ten frames of sprint is well under the twelve metres of
-    // clear run this skips without.
+    // wall reads as slow, and at these speeds a leg covers enough ground to
+    // find one (that made a real sprint look slower than the stroll, and a
+    // disabled sprint pass). Ten sampled frames: overshoot costs nothing now
+    // the leg closes itself, so the sample can be wide enough that no single
+    // frame decides the answer, and ten frames of sprint is well under the
+    // twelve meters of clear run this skips without.
     const SAMPLE_FRAMES = 10
     const clearRun = await faceClearRun(page, 24)
     test.skip(clearRun < 12, `spawn has only ${clearRun} m of clear run`)
 
-    // CW-81: a leg is longer than its ten sampled frames now - the ramp
-    // spends a quarter second below full stride before the steady sample
-    // opens, and the released hold glides another quarter second - so two
-    // legs walked end to end can outrun the measured corridor, and the
-    // second one presses the far wall and dribbles (measured 0.43-0.72 m/s
-    // against a 4.80 stroll). Each leg starts from the same corridor mouth.
+    // A leg is longer than its ten sampled frames: the ramp spends a quarter
+    // second below full stride before the steady sample opens, and the
+    // released hold glides another quarter second, so two legs walked end to
+    // end can outrun the measured corridor, and the second one presses the far
+    // wall and dribbles. Each leg starts from the same corridor mouth.
     const mouth = await page.evaluate(() => {
       const w = window.__cityWalkGame.walkState
       return { x: w.x, y: w.y, headingRad: w.headingRad }
@@ -825,7 +796,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await expect(announcer(page)).toHaveText('Fast walking off.')
   })
 
-  test('a click in the toolbar leaves the keyboard working (D-59 pattern)', async ({
+  test('a click in the toolbar leaves the keyboard working', async ({
     page,
   }) => {
     await launchGame(page)
@@ -848,13 +819,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       () => window.__cityWalkGame.walkState.headingRad
     )
     await page.keyboard.down('ArrowRight')
-    // CW-97: hold until the game has genuinely turned past a compass
-    // sector (>1 rad clears any 45 degree sector from any start), instead
-    // of a wall-clock 1.3 s. Turn rates integrate per FRAME with dt
-    // clamped, so on a frame-starved fresh entry a fixed wall-time hold
-    // undercounts - a measurement artifact the heavier crown build
-    // exposed, not a key-routing failure (the D-59 claim, which the final
-    // assert still makes on the visible HUD).
+    // Hold until the game has genuinely turned past a compass sector (>1 rad
+    // clears any 45 degree sector from any start), not for a wall-clock 1.3 s.
+    // Turn rates integrate per frame with dt clamped, so on a frame-starved
+    // fresh entry a fixed wall-time hold undercounts. The final assert still
+    // makes the key-routing claim on the visible HUD.
     await expect
       .poll(
         async () => {
@@ -864,9 +833,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
           const d = Math.abs(h - h0) % (2 * Math.PI)
           return Math.min(d, 2 * Math.PI - d)
         },
-        // CI software turns at ~3 deg/s (measured: 0.56-0.75 rad landed
-        // inside the old 15 s bound) - the radian still decides, the
-        // bound just fits the slowest turner.
+        // CI software turns at ~3 deg/s, so the bound fits the slowest turner;
+        // the radian still decides.
         { timeout: 120000 }
       )
       .toBeGreaterThan(1.0)
@@ -880,13 +848,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Focus a street-only button, then switch views with the key. The
-    // button disappears under the focus; if focus fell to <body> every key
-    // would die for the rest of the session (D-59).
-    //
-    // CW-35: Fast, not a camera button. The Camera panel's controls now
-    // survive the swap, so the only buttons that can still vanish under a
-    // focus ring are the toolbar's own street-only pair.
+    // Focus a street-only button, then switch views with the key. The button
+    // disappears under the focus; if focus fell to <body> every key would die
+    // for the rest of the session. Fast is used because the Camera panel's
+    // controls survive the swap, so the only buttons that can still vanish
+    // under a focus ring are the toolbar's own street-only pair.
     await btn(page, 'cityWalkFastBtn').focus()
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
@@ -928,8 +894,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   test('the toolbar stays legible at rest and hovered, in every in-game state', async ({
     page,
   }) => {
-    // The longest measurement in the lane - four states across three targets,
-    // most of them hovered too. Same reason as CW-14's: length, not a step.
+    // The longest measurement in the lane (four states across three targets,
+    // most of them hovered too): the timeout is for its length, not a step.
     test.setTimeout(180_000)
     // Every interaction below pays a longer action timeout than the 10 s
     // default. That default is a budget for finding and reaching a control,
@@ -937,7 +903,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // every frame, and on a software-rendering CI runner both a click and a
     // hover have failed at 10 s with Playwright's own log saying the element
     // was already visible and stable - a starved main thread, not a control
-    // anyone could not reach (D-79). Nothing being asserted changes.
+    // anyone could not reach. Nothing being asserted changes.
     const SLOW = { timeout: 45000 }
     await launchGame(page)
     await enterCity(page)
@@ -984,11 +950,10 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       const targets = [
         ['plain button', btn(page, 'cityWalkSpeedDownBtn'), true],
         ['pressed Fast', btn(page, 'cityWalkFastBtn'), true],
-        // CW-35: the Camera group retired into the Camera panel, so its
-        // caption is gone and Speed's is the one to measure. The panel is a
-        // mouse route too now, and its hover pair broke the moment it
-        // arrived (black accent-text on the mono hover surface, 1.12:1), so
-        // it is measured here rather than trusted.
+        // The Camera controls live in the Camera panel, so Speed's group
+        // caption is the one to measure. The panel is a mouse route too, and
+        // its hover pair once failed contrast (black accent-text on the mono
+        // hover surface, 1.12:1), so it is measured here rather than trusted.
         ['group caption', page.locator('#cityWalkToolbarSpeedLabel'), false],
         ['camera panel button', btn(page, 'cityWalkCamRotateLeft'), true],
       ]
@@ -999,7 +964,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
           await page.waitForTimeout(200)
           const m = await measure(locator)
           console.log(
-            `[cw15] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
+            `[contrast] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
           )
           expect(
             m.ratio,
@@ -1009,8 +974,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       }
     }
 
-    // Fast is measured in its pressed state, which is the pair CW-14's rule
-    // repaints and the one nothing else in the suite covers.
+    // Fast is measured in its pressed state: the pair the pressed-state
+    // rule repaints, which nothing else in the suite covers.
     await btn(page, 'cityWalkFastBtn').click(SLOW)
     await expect(btn(page, 'cityWalkFastBtn')).toHaveAttribute(
       'aria-pressed',
@@ -1035,8 +1000,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   }) => {
     await launchGame(page)
     await enterCity(page)
-    // A hover state is invisible to a scan unless something is hovering
-    // (D-55), and the pressed pair is repainted on hover.
+    // A hover state is invisible to a scan unless something is hovering, and
+    // the pressed pair is repainted on hover.
     await btn(page, 'cityWalkMapBtn').click()
     await expect(btn(page, 'cityWalkMapBtn')).toHaveAttribute(
       'aria-pressed',
@@ -1052,7 +1017,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   })
 })
 
-test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
+test.describe('ASCII City Walk — the Camera panel', () => {
   const btn = (page, id) => page.locator('#' + id)
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
 
@@ -1060,7 +1025,7 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
    * Every control the panel offers, in the order a Tab key would reach
    * them. Sorted by document position, not by the order querySelectorAll
    * happens to return - a panel is nested markup and the two are not the
-   * same walk (UF-38).
+   * same walk.
    */
   const panelControls = (page) =>
     page.evaluate(() => {
@@ -1197,17 +1162,17 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
     )
   })
 
-  test('a collapsed panel keeps its reopen control, and the keyboard (CW-38)', async ({
+  test('a collapsed panel keeps its reopen control, and the keyboard', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
-    // The owner collapsed the panel and could not get it back: layout.css's
-    // collapsed rule hid every header action except the FORGE panel's toggle,
-    // matched by id, so the game's own reopen button vanished - and the
-    // focused button going display:none dropped focus to <body>, outside the
-    // layer's key listener, which killed every game key with it.
+    // A collapsed panel must keep its reopen button. A collapsed rule that
+    // hid every header action but one panel's toggle would hide the game's
+    // own reopen button, and the focused button going display:none drops focus
+    // to <body>, outside the layer's key listener, which kills every game key
+    // with it.
     const toggle = btn(page, 'cityWalkCameraToggle')
     await toggle.click()
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -1228,7 +1193,7 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
     expect(box.height).toBeGreaterThanOrEqual(min - 0.5)
 
     // And the keyboard survives with it: M straight after collapsing must
-    // still open the map. This is the regression that made the stow a trap.
+    // still open the map.
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
 
@@ -1238,15 +1203,14 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
     await expect(btn(page, 'cityWalkCamReset')).toBeVisible()
   })
 
-  test('high contrast keeps the whole panel on screen at 1600x900 (CW-38, CW-Q47)', async ({
+  test('high contrast keeps the whole panel on screen at 1600x900', async ({
     page,
   }) => {
-    // High contrast grows every control - 44px targets, thicker borders,
-    // wider gaps - and before CW-38 the panel's content outgrew its box by
-    // 178px at the directive's screen size: Reset View sat below the fold
-    // behind a scrollbar the owner never found. Smaller windows may still
-    // scroll the body (Firefox tab-stops it by design, and that is its
-    // scroll route); at 1600x900 the whole panel must be on screen.
+    // High contrast grows every control (44px targets, thicker borders, wider
+    // gaps), and the panel's content must still fit its box at 1600x900, with
+    // Reset View above the fold rather than behind a scrollbar. Smaller
+    // windows may still scroll the body (Firefox tab-stops it by design, and
+    // that is its scroll route).
     await page.setViewportSize({ width: 1600, height: 900 })
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-high-contrast', 'true')
@@ -1309,8 +1273,8 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
           'map view'
         )
       }
-      // A hover state is invisible to a scan unless something is hovering
-      // (D-55), and the panel's buttons repaint their pair on hover.
+      // A hover state is invisible to a scan unless something is hovering, and
+      // the panel's buttons repaint their pair on hover.
       await btn(page, 'cityWalkCamPanUp').hover()
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -1322,7 +1286,7 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
   })
 })
 
-test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
+test.describe('ASCII City Walk — C and T reach the toggles', () => {
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
 
   const paletteSize = (page) =>
@@ -1441,15 +1405,13 @@ test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
 })
 
 /**
- * ASCII City Walk - the map styles and the pad that cycles them (CW-60,
- * CW-Q57).
+ * ASCII City Walk: the map styles and the pad that cycles them.
  *
- * P1 built the four styles and the first ever rendering of CW-43's
- * wayfinding data. These are the CONTROLS: the pad that had nothing of its
- * own to do over the map, the key, the toolbar button, and the choice
- * outliving the session.
+ * These are the controls: the pad that had nothing of its own to do over
+ * the map, the key, the toolbar button, and the choice outliving the
+ * session.
  */
-test.describe('ASCII City Walk — four map styles (CW-60)', () => {
+test.describe('ASCII City Walk — four map styles', () => {
   const btn = (page, id) => page.locator('#' + id)
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
 
@@ -1507,7 +1469,7 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
       .toBeGreaterThanOrEqual(from + n)
   }
 
-  test('★★ the Walk pad cycles the styles over the map (CW-60)', async ({
+  test('the Walk pad cycles the styles over the map', async ({
     page,
   }) => {
     await launchGame(page)
@@ -1518,11 +1480,10 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     // touches this sees no change at all.
     expect(await styleName(page)).toBe('Standard')
 
-    // ★★ ONE CLICK IS ONE STEP, and this is the assertion that says so. With
-    // four styles, "click four times and land back on Standard" would pass
-    // just as happily if every click moved two - eight steps is also a whole
-    // lap. A single click from Standard has to be Roads only and nothing
-    // else. D-113 is the defect that made that worth writing down.
+    // One click is one step, and this is the assertion that says so. With four
+    // styles, "click four times and land back on Standard" would pass just as
+    // happily if every click moved two (eight steps is also a whole lap). A
+    // single click from Standard has to be Roads only and nothing else.
     await btn(page, 'cityWalkCamPanRight').click()
     await expect(announcer(page)).toHaveText(/^Map style: Roads only\./)
     expect(await styleName(page)).toBe('Roads only')
@@ -1547,18 +1508,16 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     expect(await styleName(page)).toBe('Wayfinding')
   })
 
-  test('★★ one mouse click on a Camera panel button is ONE step (D-113)', async ({
+  test('one mouse click on a Camera panel button is one step', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
-    // A mouse press fires pointerdown, pointerup AND click, and the panel's
-    // hold buttons served the press action from pointerdown and again from
-    // the click. On the hold path it only stretched the step; on the PRESS
-    // path it did the job twice. MEASURED on the base of this release: one
-    // click moved the character size 0.5 -> 0.7 where Enter on the same
-    // button moved it 0.5 -> 0.6.
+    // A mouse press fires pointerdown, pointerup and click, and a hold button
+    // that served the press action from pointerdown and again from the click
+    // would do a press job twice (one click moved the character size 0.5 ->
+    // 0.7 where Enter on the same button moved it 0.5 -> 0.6).
     const size = () =>
       page.evaluate(() => window.__cityWalkGame.altView.getFontScale())
 
@@ -1580,13 +1539,13 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     expect((await size()) - beforeKey).toBeCloseTo(0.1, 5)
   })
 
-  test('K, Shift+K and the toolbar button reach the same styles (CW-60)', async ({
+  test('K, Shift+K and the toolbar button reach the same styles', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
-    // ★ A STYLE IS A MAP STATE. K in the street says nothing and changes
+    // A style is a map state. K in the street says nothing and changes
     // nothing, the same shape Home and the zoom keys already have.
     await page.keyboard.press('KeyK')
     await page.waitForTimeout(300)
@@ -1613,7 +1572,7 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     expect(await styleName(page)).toBe('Standard')
 
     // Back in the street the key is inert again - and this is not a vacuous
-    // claim, because the style it must NOT move is no longer the default.
+    // claim, because the style it must not move is no longer the default.
     await btn(page, 'cityWalkMapStyleBtn').click()
     expect(await styleName(page)).toBe('Roads only')
     await page.keyboard.press('KeyM')
@@ -1626,15 +1585,15 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     expect(await styleName(page)).toBe('Roads only')
   })
 
-  test('★ only the Wayfinding style draws the wayfinding layer, and it draws every point (CW-60)', async ({
+  test('only the Wayfinding style draws the wayfinding layer, and it draws every point', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
     await openMap(page)
 
-    // CW-43 parsed crossings, kerbs and tactile paving and drew none of it.
-    // The layer exists in every style and shows in exactly one.
+    // The wayfinding layer (crossings, kerbs and tactile paving) exists in
+    // every style and shows in exactly one.
     const standard = await wayfindDrawn(page)
     expect(
       standard.points,
@@ -1661,13 +1620,13 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     expect(way.quads).toBe(way.points)
   })
 
-  test('axe: no violations with the styles reachable, wrapped strip and not (CW-60)', async ({
+  test('axe: no violations with the styles reachable, wrapped strip and not', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
 
-    // Both widths, because CW-60 made them structurally different layouts:
+    // Both widths, because they are structurally different layouts:
     // at 1280 the view zone takes a line of its own above the shared row and
     // at 1600 the whole strip is one line. A scan of one says nothing about
     // the other.
@@ -1682,8 +1641,8 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
       }
       expect(await styleName(page), `${width}px`).toBe('Wayfinding')
 
-      // A hover state is invisible to a scan unless something is hovering
-      // (D-55), and both new controls repaint on hover.
+      // A hover state is invisible to a scan unless something is hovering, and
+      // both new controls repaint on hover.
       await btn(page, 'cityWalkMapStyleBtn').hover()
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -1704,7 +1663,7 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
       expect(box.height, `${width}px`).toBeGreaterThanOrEqual(43.5)
       expect(box.width, `${width}px`).toBeGreaterThanOrEqual(43.5)
 
-      // ★ AND THE STRIP STAYS INSIDE THE WINDOW. Wrapping is the answer to a
+      // The strip stays inside the window. Wrapping is the answer to a
       // strip too wide for its window; a button hanging off the end is not.
       const right = await page.evaluate(() =>
         Math.max(
@@ -1722,7 +1681,7 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     }
   })
 
-  test('★★ a map style does not follow you back into the street (D-114)', async ({
+  test('a map style does not follow you back into the street', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -1730,9 +1689,9 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     await enterCity(page)
 
     // The whole converted frame's mean luminance. The street has people and
-    // cars in it, so this is banded rather than compared exactly - but the
-    // band is narrow enough that the defect it guards (a THIRTY-NINE PER
-    // CENT drop) sails through it by a factor of eight.
+    // cars in it, so this is banded rather than compared exactly, but the band
+    // is narrow enough that the defect it guards (a 39 percent drop) sails
+    // through it by a factor of eight.
     const ink = () =>
       page.evaluate(() => {
         const c = document.querySelector(
@@ -1765,7 +1724,7 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     expect(await tints()).toEqual(['ffffff'])
 
     // Wayfinding is the darkest style and therefore the worst leak: it tints
-    // the buildings to 0x181818, and before the fix the street stayed that
+    // the buildings to 0x181818, and a leaked style would leave the street that
     // way for the rest of the session.
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
@@ -1786,10 +1745,10 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     )
     await waitForConversions(page, 4)
 
-    // ★ THE EFFECT FIRST, THE MECHANISM SECOND, and the order is deliberate:
-    // whichever assertion fires first is the one the red proof exercises, so
-    // the one that must fire is the one a player would notice. Measured with
-    // the fix reverted, this comes back 39.2% against a 5% band.
+    // The effect first, the mechanism second, deliberately: whichever
+    // assertion fires first is the one a red run exercises, so the one that
+    // must fire is the one a player would notice (with the fix reverted this
+    // reads 39.2% against a 5% band).
     const after = await ink()
     const drift = Math.abs(after - before) / before
     expect(
@@ -1802,7 +1761,7 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     ])
   })
 
-  test('the chosen map style outlives the session (CW-60)', async ({
+  test('the chosen map style outlives the session', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -1819,7 +1778,7 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
   })
 })
 
-test.describe('ASCII City Walk — look without dragging, walk without holding (CW-81)', () => {
+test.describe('ASCII City Walk — look without dragging, walk without holding', () => {
   const DEG = Math.PI / 180
   const gaze = (page) =>
     page.evaluate(() => ({
@@ -1832,14 +1791,13 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     }))
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
 
-  test('★★ WCAG 2.5.7: a single pointer with NO drag looks in every direction', async ({
+  test('WCAG 2.5.7: a single pointer with no drag looks in every direction', async ({
     page,
   }) => {
     test.setTimeout(120000)
-    // CW-96: hover-follow is opt-in now (the owner set the default back to
-    // drag after playing it), so this case selects the mode the way a
-    // player would have to - and the WCAG 2.5.7 claim it guards is that
-    // the no-drag path EXISTS and works, which an opt-in satisfies.
+    // Hover-follow is opt-in (the default is drag), so this case selects the
+    // mode the way a player would, and the WCAG 2.5.7 claim it guards is that
+    // the no-drag path exists and works, which an opt-in satisfies.
     await page.addInitScript(() =>
       localStorage.setItem('openscad-forge-city-walk-look', 'follow')
     )
@@ -1870,15 +1828,13 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
       .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
       .toBeGreaterThan(5 * DEG)
 
-    // Dead centre: the view settles and stays put. The camera owes a
-    // damped glide toward wherever the target raced (the CW-81 lag, about
-    // 4.5 degrees off a full-rate edge look), and that tail is exponential
-    // in the game's own integrated time - on a frame-starved renderer it
-    // stretches over wall time, so a fixed wait samples mid-glide (CW-97:
-    // measured 0.53 deg residual on software GL, 3.1 deg early on
-    // hardware). Wait until a PROPERLY SPACED pair of samples agrees -
-    // never a poll whose first pair is milliseconds apart - then prove it
-    // stays.
+    // Dead center: the view settles and stays put. The camera owes a damped
+    // glide toward wherever the target raced (about 4.5 degrees off a
+    // full-rate edge look), and that tail is exponential in the game's own
+    // integrated time: on a frame-starved renderer it stretches over wall
+    // time, so a fixed wait samples mid-glide. Wait until a properly spaced
+    // pair of samples agrees (never a poll whose first pair is milliseconds
+    // apart), then prove it stays.
     const settleUntilStill = async (label) => {
       for (let i = 0; i < 60; i++) {
         const a = await gaze(page)
@@ -1911,7 +1867,7 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     expect(Math.abs(out1.heading - out0.heading)).toBeLessThan(0.2 * DEG)
   })
 
-  test('★★ auto-walk moves without a held key, and every stop rule stops it', async ({
+  test('auto-walk moves without a held key, and every stop rule stops it', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -1953,17 +1909,16 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     expect((await gaze(page)).autoWalk).toBe(false)
   })
 
-  test('★★ auto-walk follows the street: an obstacle steers it, never stops it (CW-87)', async ({
+  test('auto-walk follows the street: an obstacle steers it, never stops it', async ({
     page,
   }) => {
     test.setTimeout(120000)
     await launchGame(page)
     await enterCity(page)
 
-    // Face the nearest obstacle along a CARDINAL bearing, using the game's
-    // own collision grid - the pose that USED to trigger the blocked stop
-    // before street-following (CW-81's original wall case). Now the fan
-    // must steer along the clearest pavement and keep walking.
+    // Face the nearest obstacle along a cardinal bearing, using the game's own
+    // collision grid. The fan must steer along the clearest pavement and keep
+    // walking.
     const posed = await page.evaluate(() => {
       const g = window.__cityWalkGame
       const st = g.walkState
@@ -1985,15 +1940,13 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     const start = await gaze(page)
     await page.keyboard.press('KeyN')
     await expect(announcer(page)).toContainText('Auto-walk on')
-    // The walker must keep covering ground past the obstacle it was aimed
-    // at - proof it went around, not into. CW-97: the measure is the PATH
-    // (an odometer over samples), not displacement. Street-following
-    // around downtown blocks can curl or pace: photographed once with the
-    // walker still walking at 90 s, auto on, no stop sentence - the claim
-    // intact - while displacement idled below the bar. A stopped walker
-    // racks up no path, so the odometer still catches walking INTO. The
-    // bar is capped: on a software-GL renderer the walk itself runs at a
-    // tenth speed, and 27 m of path is proof enough of going around.
+    // The walker must keep covering ground past the obstacle it was aimed at:
+    // proof it went around, not into. The measure is the path (an odometer
+    // over samples), not displacement, since street-following around downtown
+    // blocks can curl or pace while still walking. A stopped walker racks up
+    // no path, so the odometer still catches walking into. The bar is capped:
+    // on a software-GL renderer the walk itself runs at a tenth speed, and
+    // 27 m of path is proof enough of going around.
     let odoPrev = { x: start.x, y: start.y }
     let odo = 0
     await expect
@@ -2004,9 +1957,8 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
           odoPrev = { x: g.x, y: g.y }
           return odo
         },
-        // CI software walks at ~0.23 m/s (measured: 20.4 m landed inside
-        // the old 90 s bound) - 27 m of path needs the outer bound to say
-        // four minutes; the odometer still decides.
+        // CI software walks at ~0.23 m/s, so 27 m of path needs a four-minute
+        // outer bound; the odometer still decides.
         { timeout: 240000 }
       )
       .toBeGreaterThan(Math.min(posed.d, 25) + 2)
@@ -2018,7 +1970,7 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     await page.keyboard.press('KeyN')
   })
 
-  test('★★ a true dead end still stops auto-walk, and says so (CW-87)', async ({
+  test('a true dead end still stops auto-walk, and says so', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -2027,10 +1979,9 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
 
     // Build the dead end with the game's own obstacle stamp: a U of walls
     // 1.1 m out on three sides, the opening behind, where the forward fan
-    // never looks. This is the one case the blocked sentence is for now.
-    // (A settle first: one observed flake had the pose written before the
-    // spawn finished settling, and street-following then walked the old
-    // bearing out through the U's open side.)
+    // never looks. This is the one case the blocked sentence is for. (A settle
+    // first: a pose written before the spawn finishes settling lets
+    // street-following walk the old bearing out through the U's open side.)
     await page.waitForTimeout(600)
     await page.evaluate(() => {
       const g = window.__cityWalkGame
@@ -2081,10 +2032,9 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     await page.keyboard.press('KeyN')
     await expect(announcer(page)).toContainText('Auto-walk on')
     const p0 = (await gaze(page)).pitch
-    // CW-97: hold the arrow until the GAME's pitch answers, not for a
-    // wall-clock 700 ms - look rates integrate per frame with dt clamped,
-    // and a frame-starved renderer under-delivers a fixed-time hold (the
-    // same measurement law as the D-59 rescope).
+    // Hold the arrow until the game's pitch answers, not for a wall-clock
+    // 700 ms: look rates integrate per frame with dt clamped, and a
+    // frame-starved renderer under-delivers a fixed-time hold.
     await page.keyboard.down('ArrowUp')
     await expect
       .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
@@ -2103,7 +2053,7 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     await launchGame(page)
     await enterCity(page)
 
-    // CW-96: the default is drag now; one press reaches off, and that
+    // The default is drag; one press reaches off, and that
     // choice must survive the reload.
     expect((await gaze(page)).mode).toBe('drag')
     await page.locator('#cityWalkLookModeBtn').click()
@@ -2145,7 +2095,7 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
 
   test('a dialog freezes hover-look until it closes', async ({ page }) => {
     test.setTimeout(120000)
-    // CW-96: hover is opt-in; this case opts in.
+    // Hover is opt-in; this case opts in.
     await page.addInitScript(() =>
       localStorage.setItem('openscad-forge-city-walk-look', 'follow')
     )
@@ -2174,7 +2124,7 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     await page.keyboard.press('KeyH')
   })
 
-  test('axe: the toolbar with the CW-81 controls, and their hit targets', async ({
+  test('axe: the toolbar with the look and auto-walk controls, and their hit targets', async ({
     page,
   }) => {
     await launchGame(page)
@@ -2194,7 +2144,7 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
   })
 })
 
-test.describe('ASCII City Walk — the tour: take me there (CW-87)', () => {
+test.describe('ASCII City Walk — the tour: take me there', () => {
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
   const tourState = (page) =>
     page.evaluate(() => {
@@ -2206,12 +2156,12 @@ test.describe('ASCII City Walk — the tour: take me there (CW-87)', () => {
       }
     })
 
-  test('★★ I walks the player to the Great Wheel, and arrival is the waypoint touch', async ({
+  test('I walks the player to the Great Wheel, and arrival is the waypoint touch', async ({
     page,
   }) => {
-    // T7: the live region is watched over the whole route; the sim-time
-    // window is sized for the software renderer (CW-78's lesson - a
-    // dt-clamped walker covers sim metres at a fraction of real time).
+    // The live region is watched over the whole route; the sim-time window is
+    // sized for the software renderer (a dt-clamped walker covers sim meters at
+    // a fraction of real time).
     test.setTimeout(180000)
     await launchGame(page)
     await enterCity(page)
@@ -2238,7 +2188,7 @@ test.describe('ASCII City Walk — the tour: take me there (CW-87)', () => {
     expect(d).toBeLessThan(3)
   })
 
-  test('★★ every stop rule stops the tour: I again, Escape, a walk key', async ({
+  test('every stop rule stops the tour: I again, Escape, a walk key', async ({
     page,
   }) => {
     test.setTimeout(120000)
@@ -2286,7 +2236,7 @@ test.describe('ASCII City Walk — the tour: take me there (CW-87)', () => {
     await expect(announcer(page)).toContainText('Tour stopped.')
   })
 
-  test('★★ a real bend on the route is spoken as a turn', async ({ page }) => {
+  test('a real bend on the route is spoken as a turn', async ({ page }) => {
     test.setTimeout(120000)
     await launchGame(page)
     await enterCity(page)

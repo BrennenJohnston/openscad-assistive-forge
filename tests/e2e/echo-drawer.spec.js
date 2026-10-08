@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-// Echo drawer fold correctness (C9): class and aria never desync, manual
+// Echo drawer fold correctness: class and aria never desync, manual
 // folds survive re-renders with unchanged problems, echo-only output does
 // not auto-expand. (Reopen-on-NEW-error is unit-covered logic — growing the
 // problem count mid-test would need editor access.)
@@ -71,7 +71,7 @@ async function nudgeParamAndRender(page) {
   )
 }
 
-test.describe('echo drawer fold state (C9)', () => {
+test.describe('echo drawer fold state', () => {
   test('echo-only output stays collapsed with truthful aria', async ({
     page,
   }) => {
@@ -125,8 +125,8 @@ test.describe('echo drawer fold state (C9)', () => {
     await expect(drawer).toHaveClass(/collapsed/)
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
-    // Same warning count on the next render: the user's fold is respected
-    // (the old code force-reopened on every render)
+    // Same warning count on the next render: the user's fold is respected, not
+    // reopened on every render.
     await nudgeParamAndRender(page)
     await expect(drawer).toHaveClass(/collapsed/)
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')

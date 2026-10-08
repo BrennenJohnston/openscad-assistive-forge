@@ -73,7 +73,7 @@ async function waitForPreviewReady(page) {
     { timeout: PREVIEW_TIMEOUT }
   )
   // Stats read "12.3 KB | 1,234 triangles". OFF previews (the render-colors
-  // default) now report a real triangle count parsed from the header (F-1),
+  // default) now report a real triangle count parsed from the header,
   // so both the size and the count must be non-zero for a 3D fixture.
   const statsText = await page.locator('#previewStatusStats').textContent()
   expect(statsText, 'preview stats should be populated').toMatch(/\d/)

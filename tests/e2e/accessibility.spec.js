@@ -7,9 +7,8 @@ const isCI = !!process.env.CI
 
 async function waitForWasmReady(page) {
   // Wait for the data-wasm-ready attribute set by src/main.js after
-  // successful WASM initialisation.  This is free of the race condition
-  // where the old overlay check returned instantly because the overlay
-  // DOM element hadn't been created yet.
+  // successful WASM initialization. Unlike an overlay check, it cannot pass
+  // before the overlay's DOM element exists.
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: 120_000,
@@ -17,24 +16,19 @@ async function waitForWasmReady(page) {
 }
 
 /**
- * THE LIST IS EMPTY, AND THAT IS THE POINT.
+ * The list is empty, and that is the point.
  *
- * UF-25 put `nested-interactive` here with its reasoning written out, beside
- * a warning that an entry buys green and hides a defect. UF-35 paid that back
- * by fixing what it covered rather than explaining it again: the help control
- * in three panel headers and the Hide button on every parameter group each
- * sat inside a <summary>, which IS the disclosure's own button, so each was a
- * control inside a control. The group family scaled with the model - three
- * groups measured three violations, eleven measured eleven - and the cost was
- * concrete: the Console header's accessible name was the word "Console"
- * followed by the help button's entire 180-character sentence.
+ * An entry here buys green and hides a defect, so what axe finds is fixed,
+ * not explained. A help control or a Hide button inside a <summary> (which
+ * is the disclosure's own button) is a control inside a control; the group
+ * family scales with the model, so eleven groups give eleven violations,
+ * and the cost is concrete: the Console header's accessible name would be
+ * the word "Console" followed by the help button's entire 180-character
+ * sentence. A panel help button at 16.3px fails WCAG 2.2 AA's 24px floor
+ * and target-offset, and a green "Preview ready" pill at 3.07:1 fails the
+ * 4.5:1 that 14px text needs.
  *
- * Two other violations surfaced at UF-25 and were fixed the same way rather
- * than allowed: D-45 (the panel help button measured 16.3px against WCAG 2.2
- * AA's 24px floor, and failed target-offset) and D-46 (the green "Preview
- * ready" pill measured 3.07:1 where 14px text needs 4.5:1).
- *
- * Anything added here needs a measurement and a reason, not a shrug - and an
+ * Anything added here needs a measurement and a reason, not a shrug, and an
  * empty list is what lets this board fail on a real regression.
  */
 const ALLOWED_AXE_VIOLATIONS = []
@@ -60,13 +54,12 @@ function expectOnlyAllowedViolations(results) {
 }
 
 /**
- * UF-25: the app has no #fileInfo element. It carries #fileInfoSummary, an
- * sr-only live region holding the file NAME only, so the old
- * `#fileInfo:has-text("parameters")` wait could never match. Twelve waits in
- * this file still asked for it and ten of them sat inside a catch that turned
- * the timeout into test.skip(), so ten tests - two of them axe scans -
- * reported "skipped" instead of running. Wait for what actually proves a
- * model loaded: the parameter controls the app generated from it.
+ * The app has no #fileInfo element. It carries #fileInfoSummary, an sr-only
+ * live region holding the file name only, so a
+ * `#fileInfo:has-text("parameters")` wait could never match, and a wait
+ * inside a catch that turns its timeout into test.skip() would report
+ * "skipped" instead of running. Wait for what actually proves a model
+ * loaded: the parameter controls the app generated from it.
  */
 async function waitForModelLoaded(page, { expandGroups = true, timeout = 30000 } = {}) {
   await expect(page.locator('#mainInterface')).toBeVisible({ timeout })
@@ -82,8 +75,8 @@ async function waitForModelLoaded(page, { expandGroups = true, timeout = 30000 }
     // Save prompt did not appear for this source
   }
   if (expandGroups) {
-    // F5 (owner, 2026-05-15): parameter groups load collapsed, so a control is
-    // attached long before it is visible.
+    // Parameter groups load collapsed, so a control is attached long before
+    // it is visible.
     const expandAll = page.locator('#expandAllGroupsBtn')
     if (await expandAll.isVisible().catch(() => false)) {
       await expandAll.click()
@@ -142,12 +135,12 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     await fileInput.setInputFiles(fixturePath)
     await waitForModelLoaded(page)
 
-    // UF-25: the preview state pill carries `transition: all 240ms`, so a scan
-    // that arrives while it is still moving from the rendering colour to the
-    // ready colour measures a BLEND of the two and reports a contrast figure
-    // belonging to neither. MEASURED: #f8f8f9 on #258557 at 4.32:1, where the
-    // resting pair is --slate-1 on --color-success-solid at 4.67:1. Let it
-    // land before scanning.
+    // The preview state pill carries `transition: all 240ms`, so a scan that
+    // arrives while it is still moving from the rendering color to the ready
+    // color measures a blend of the two and reports a contrast figure
+    // belonging to neither (#f8f8f9 on #258557 at 4.32:1, where the resting
+    // pair is --slate-1 on --color-success-solid at 4.67:1). Let it land
+    // before scanning.
     await expect(page.locator('.preview-state-indicator.state-current')).toBeVisible({
       timeout: 90_000,
     })
@@ -270,8 +263,7 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
 
     // #libraryControls is defaultHiddenInBasic, and Simplified is the default
     // mode, so this test has to ask for Standard or it measures a panel the
-    // mode controller has deliberately hidden (UF-25; same shape as UF-23's
-    // project-files finding).
+    // mode controller has deliberately hidden.
     await page.addInitScript(() => {
       localStorage.setItem(
         'openscad-forge-ui-mode',
@@ -299,11 +291,11 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     console.log('Library controls are visible after upload')
   })
 
-  // BR-4: the memory indicator no longer announces a fictional percentage.
-  // The previous role="progressbar" with aria-valuenow="47" was a lie —
-  // the underlying number was (heapBytes / 1 GB) * 100, not a real fraction
-  // of any limit. The indicator now exposes only the absolute MB value.
-  test('memory indicator should not advertise a fake percent (BR-4)', async ({ page }) => {
+  // The memory indicator announces no fictional percentage: a
+  // role="progressbar" with aria-valuenow="47" would be a lie, since the
+  // underlying number is (heapBytes / 1 GB) * 100, not a real fraction of
+  // any limit. The indicator exposes only the absolute MB value.
+  test('memory indicator should not advertise a fake percent', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -311,7 +303,7 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     await expect(indicator).toHaveCount(1)
     await expect(indicator).not.toHaveAttribute('role', 'progressbar')
 
-    // The progressbar wrapper has been removed entirely.
+    // There is no progressbar wrapper at all.
     await expect(page.locator('#memoryBar')).toHaveCount(0)
     await expect(page.locator('#memoryBarFill')).toHaveCount(0)
 
@@ -324,11 +316,11 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     expect(valueAttrCount).toBe(0)
   })
 
-  // D-227: the indicator is a polite live region, and NVDA said its tooltip,
-  // "0 MB allocated to the OpenSCAD engine", every ten seconds for as long as
-  // the app was open, because each poll rewrote the same text, classes and
-  // tooltip. A poll that finds the same value must write nothing.
-  test('memory indicator writes nothing when its value has not changed (D-227)', async ({ page }) => {
+  // The indicator is a polite live region, so a poll that rewrites the same
+  // text, classes and tooltip has NVDA say "0 MB allocated to the OpenSCAD
+  // engine" every ten seconds for as long as the app is open. A poll that
+  // finds the same value must write nothing.
+  test('memory indicator writes nothing when its value has not changed', async ({ page }) => {
     test.setTimeout(120_000)
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
@@ -779,12 +771,11 @@ test.describe('Screen Reader Support', () => {
     // which conflicts with other tests that need it dismissed
     test.skip(({ }, testInfo) => isCI, 'First-visit modal tests conflict with other E2E tests in CI')
 
-    // UF-25: these tests are about the BEGINNER path. The welcome grid is
-    // ordered by product decision and has changed twice, so every locator
-    // here names the beginner card explicitly. `.btn-role-try` first() is
-    // the Welcome Page Tour button (UF-17), which starts a tour of the
-    // welcome page and loads no example - a test that used it silently
-    // measured the wrong tour.
+    // These tests are about the beginner path. The welcome grid is ordered by
+    // product decision and changes, so every locator here names the beginner
+    // card explicitly. `.btn-role-try` first() is the Welcome Page Tour
+    // button, which starts a tour of the welcome page and loads no example: a
+    // test that used it would silently measure the wrong tour.
     const BEGINNER_CARD = '.role-path-card[data-tutorial-target="beginners-card"]'
     const BEGINNER_TRY_BTN = `${BEGINNER_CARD} .btn-role-try`
     // The spotlights section contains cards that carry their own <details>,
@@ -792,13 +783,12 @@ test.describe('Screen Reader Support', () => {
     // summary is the direct child.
     const SPOTLIGHTS_SUMMARY = '#accessibilitySpotlights > summary'
 
-    // Q-50c (owner, 2026-08-14): while any app dialog is up the tour shrinks
-    // to its bar. On a phone viewport the parameter drawer IS a dialog
-    // (#paramPanel carries role="dialog" when open), so the tour minimizes
-    // itself as soon as a drawer step opens it, and the Next button goes with
-    // it. Pressing Restore is how a person gets it back - and until defect
-    // D-44 was fixed here, that button did nothing at all while the drawer
-    // was open, so this walk is also D-44's regression guard.
+    // While any app dialog is up the tour shrinks to its bar. On a phone
+    // viewport the parameter drawer is a dialog (#paramPanel carries
+    // role="dialog" when open), so the tour minimizes itself as soon as a
+    // drawer step opens it, and the Next button goes with it. Pressing
+    // Restore is how a person gets it back, and this walk also guards that
+    // Restore works while the drawer is open.
     async function bringTourBack(page) {
       const bar = page.locator('.tutorial-minimized:not(.hidden) .tutorial-restore')
       if ((await bar.count()) === 0) return
@@ -847,8 +837,8 @@ test.describe('Screen Reader Support', () => {
         return
       }
       // Programmatically click the continue button (bypasses overlay pointer-events).
-      // UF-3: the modal now requires an interface choice before Continue works,
-      // so pick the default recommendation first.
+      // The modal requires an interface choice before Continue works, so pick
+      // the default recommendation first.
       await page.evaluate(() => {
         const forge = document.getElementById('firstVisitChoiceForge')
         if (forge) forge.click()
@@ -868,10 +858,9 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
 
-      // UF-25: address the beginner card by its own attribute, never by
-      // position or by a card count. The grid has gained cards twice (the
-      // welcome-tour card at UF-17, the braille card earlier) and a
-      // positional locator silently retargets when that happens.
+      // Address the beginner card by its own attribute, never by position or by
+      // a card count: the grid gains cards, and a positional locator silently
+      // retargets when that happens.
       const beginnerCard = page.locator(BEGINNER_CARD)
       await expect(beginnerCard).toBeVisible()
 
@@ -971,13 +960,13 @@ test.describe('Screen Reader Support', () => {
       expect(linkText.length).toBeGreaterThan(0)
     })
     
-    test('should meet touch target size requirements (44├ù44px)', async ({ page }) => {
+    test('should meet touch target size requirements (44×44px)', async ({ page }) => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // Check EVERY visible role path Try button, not just whichever card
-      // happens to lead the grid: a positional check let three of the four
-      // go unmeasured (UF-25).
+      // Check every visible role path Try button, not just whichever card
+      // happens to lead the grid: a positional check would leave three of the
+      // four unmeasured.
       const tryButtons = page.locator('.btn-role-try:visible')
       const tryCount = await tryButtons.count()
       expect(tryCount).toBeGreaterThan(0)
@@ -1031,9 +1020,8 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // The beginner card is present, visible, and says so. Its position in
-      // the grid is a product decision that has moved twice, so it is not
-      // asserted here (UF-25).
+      // The beginner card is present, visible, and says so. Its position in the
+      // grid is a product decision that moves, so it is not asserted here.
       const beginnerCard = page.locator(BEGINNER_CARD)
       await expect(beginnerCard).toBeVisible()
 
@@ -1128,13 +1116,12 @@ test.describe('Screen Reader Support', () => {
     })
     
     test('should close tutorial with Escape key and restore focus', async ({ page }) => {
-      // D-134: this used to be skipped on CI, and that is how a real Safari
-      // accessibility defect lived unseen. The skip's stated reason was example
-      // loading, and this test loads no example - it waits for the engine and
-      // opens the welcome tour, which every other case in this file does too.
-      // It runs everywhere now. If it ever fails on CI for time rather than for
-      // behaviour, that is the pure-timeout class and takes a skip with the
-      // measurement written next to it; this is not that.
+      // This runs on CI too: a skip here once hid a real Safari accessibility
+      // defect. It loads no example; it waits for the engine and opens the
+      // welcome tour, which every other case in this file does too. If it ever
+      // fails on CI for time rather than for behavior, that is the pure-timeout
+      // class and takes a skip with the measurement written next to it; this is
+      // not that.
       test.setTimeout(180_000)
 
       await page.goto('/')
@@ -1159,11 +1146,10 @@ test.describe('Screen Reader Support', () => {
       const tutorialOverlay = page.locator('.tutorial-overlay')
       await expect(tutorialOverlay).not.toBeVisible()
 
-      // Focus must return to the control that opened the tour. A keyboard
-      // or screen-reader user who presses Escape has to land where they
-      // were, not at the top of the document. The old assertion here only
-      // asked that SOMETHING was focused, which is why defect D-43 - focus
-      // falling to <body> on every tour close - survived under it.
+      // Focus must return to the control that opened the tour. A keyboard or
+      // screen-reader user who presses Escape has to land where they were, not
+      // at the top of the document; asking only that something is focused would
+      // let focus fall to <body> on every tour close.
       await expect(triggerBtn).toBeFocused()
     })
     
@@ -1223,8 +1209,8 @@ test.describe('Screen Reader Support', () => {
       expect(progressText).toMatch(/Step \d+ of \d+/)
     })
 
-    // Named for the step, not its number: the intro tour has gained and lost
-    // steps twice, and 'Actions menu' is step 9 today (UF-25).
+    // Named for the step, not its number: the intro tour gains and loses
+    // steps.
     test('should spotlight Actions drawer toggle on the Actions menu step (mobile)', async ({ page }) => {
       // Skip in CI - requires WASM for example loading
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
@@ -1236,10 +1222,10 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click the beginner card's "Start Tutorial" button. This case walks
-      // the intro tour by step title, so it must start the intro tour: the
-      // grid's first button starts the welcome-page tour, whose step 2 is
-      // "Keyboard shortcuts" (UF-25).
+      // Click the beginner card's "Start Tutorial" button. This case walks the
+      // intro tour by step title, so it must start the intro tour: the grid's
+      // first button starts the welcome-page tour, whose step 2 is "Keyboard
+      // shortcuts".
       await page.locator(BEGINNER_TRY_BTN).click()
 
       // Wait for tutorial to appear
@@ -1376,11 +1362,10 @@ test.describe('Screen Reader Support', () => {
   })
 })
 
-// UF-9 P2: on CI Firefox, axe sometimes evaluated color-contrast before the
-// app stylesheets were applied — ~187 nodes failing at ratio 1.17, a
-// different theme pair on each of three otherwise-identical runs. Block
-// until the design tokens actually resolve on <body> so every axe scan in
-// this describe sees painted styles.
+// On CI Firefox, axe can evaluate color-contrast before the app
+// stylesheets are applied (~187 nodes failing at ratio 1.17, a different
+// theme pair on each run). Block until the design tokens actually resolve
+// on <body> so every axe scan in this describe sees painted styles.
 async function waitForStylesApplied(page) {
   await page.waitForFunction(
     () =>
@@ -2098,7 +2083,7 @@ test.describe('New Color Tokens (Teal Info Color)', () => {
   });
 });
 
-test.describe('Tutorial Button Contrast - CRITICAL REGRESSION TEST', () => {
+test.describe('Tutorial Button Contrast', () => {
   test('tutorial Back button is readable in dark theme', async ({ page }) => {
     // Skip in CI - requires WASM for example loading
     test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
@@ -2321,7 +2306,7 @@ test.describe('Drawer Accessibility', () => {
   });
 });
 
-test.describe('Tutorial Responsive Behavior - Phase 6.2', () => {
+test.describe('Tutorial Responsive Behavior', () => {
   test('tutorial repositions correctly after orientation change', async ({ page }) => {
     // Skip - this test requires WASM and real tutorial, mock doesn't work reliably
     test.skip(isCI, 'Orientation testing requires WASM and is unreliable in CI');
@@ -2394,7 +2379,7 @@ test.describe('Tutorial Responsive Behavior - Phase 6.2', () => {
   });
 });
 
-test.describe('Tutorial State Management - Phase 6.3', () => {
+test.describe('Tutorial State Management', () => {
   test('tutorial body scroll locking works', async ({ page }) => {
     test.skip(isCI, 'Tutorial interaction requires WASM');
     
@@ -2462,7 +2447,7 @@ test.describe('Tutorial State Management - Phase 6.3', () => {
   });
 });
 
-test.describe('Tutorial CSS and Styling - Phase 6.4', () => {
+test.describe('Tutorial CSS and Styling', () => {
   test('tutorial uses CSS custom properties for z-index', async ({ page }) => {
     await page.goto('/');
     
@@ -2827,9 +2812,7 @@ test.describe('UI Uniformity Regression', () => {
   });
 });
 
-// UF-25: this describe used to carry its own dismissSaveProjectModal helper.
-// waitForModelLoaded does that step now, so the duplicate is gone.
-test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
+test.describe('Axe-Core Scans for Missing Views', () => {
   test('should run axe scan with Expert Mode active', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
@@ -2839,10 +2822,9 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
 
     await page.setInputFiles('#fileInput', fixturePath)
-    // UF-25: this waited for `.param-control` to be VISIBLE, and F5 loads the
-    // parameter groups collapsed, so it timed out at 30s on a control that
-    // was present and correct. The catch that used to wrap this test turned
-    // that into a skip.
+    // Parameter groups load collapsed, so a wait for a visible
+    // `.param-control` would time out on a control that is present and
+    // correct; waitForModelLoaded expands them.
     await waitForModelLoaded(page)
 
     const uiModeToggle = page.locator('#uiModeToggle')
@@ -2909,26 +2891,21 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
   })
 
   /**
-   * D-38 (UF-31). Diagnosed in UF-23 and measured again on this release's
-   * base: axe reports aria-required-children (CRITICAL) on #projectFilesList
-   * in BOTH interfaces —
+   * axe must not report aria-required-children (critical) on
+   * #projectFilesList, in either interface:
    *
    *   "Element has children which are not allowed: nav[aria-label], [role=list]"
    *
-   * index.html declares the container a list; the renderer then writes a <nav>
-   * breadcrumb bar and a second role="list" into it. A list may own only
-   * listitems.
-   *
-   * The "?" help link that used to sit inside this clickable <summary> and
-   * reported nested-interactive moved out at UF-35; ALLOWED_AXE_VIOLATIONS is
-   * empty now.
+   * A container declared a list in index.html, into which the renderer
+   * writes a <nav> breadcrumb bar and a second role="list", fails it: a list
+   * may own only listitems.
    */
   test('companion files panel has no aria-required-children violation', async ({ page }) => {
     test.skip(isCI, 'Needs a real multi-file project, so needs WASM')
 
     // Companion Files is defaultHiddenInBasic and Simplified is the default
     // mode, so the panel is not in the page at all until Standard is asked
-    // for. Confirmed by eye on the first run's failure screenshot.
+    // for.
     await page.addInitScript(() => {
       localStorage.setItem(
         'openscad-forge-ui-mode',
@@ -2944,13 +2921,13 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
     )
 
     // The panel ships with its disclosure closed; opening it directly is
-    // setup, not the behaviour under test.
+    // setup, not the behavior under test.
     await page.evaluate(() => {
       const d = document.querySelector('#projectFilesControls details')
       if (d && !d.open) d.open = true
     })
-    // UF-25: an axe scan taken during the disclosure's transition measures a
-    // blend of two states. Let it settle before scanning.
+    // An axe scan taken during the disclosure's transition measures a blend
+    // of two states. Let it settle before scanning.
     await expect(page.locator('#projectFilesList')).toBeVisible()
     await page.waitForTimeout(700)
 
@@ -3017,27 +2994,26 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
 })
 
 /**
- * D-57: a hover rule that repaints the background and nothing else.
+ * A hover rule that repaints the background and nothing else.
  *
- * `.btn-secondary:hover` set `background-color: var(--color-border)` — a BORDER
- * colour used as a SURFACE — and left whatever text colour was already there.
- * MEASURED before the fix, on a real hover of a real button:
+ * A hover that sets `background-color: var(--color-border)` (a border
+ * color used as a surface) and leaves whatever text color is already there
+ * measures, on a real hover of a real button:
  *
  *   Forge light          #1c2024 on #80838d    4.33:1   fail
  *   Forge dark           #edeef0 on #777b84    3.65:1   fail
- *   High contrast light  #000000 on #000000    1.00:1   THE LABEL VANISHED
- *   High contrast dark   #ffffff on #ffffff    1.00:1   THE LABEL VANISHED
+ *   High contrast light  #000000 on #000000    1.00:1   the label vanishes
+ *   High contrast dark   #ffffff on #ffffff    1.00:1   the label vanishes
  *
- * High contrast was the worst of it, and it is the mode people turn on
- * *because* they need contrast: `--color-border` there is pure black or pure
- * white, which is exactly the button's text colour, so hovering erased the
- * label completely. That had never been measured because nothing in the suite
- * hovered anything.
+ * High contrast is the worst of it, and it is the mode people turn on
+ * *because* they need contrast: `--color-border` there is pure black or
+ * pure white, which is exactly the button's text color, so hovering erases
+ * the label completely. Only a suite that hovers can see it.
  *
  * This runs on the welcome screen and needs no WASM, so unlike most of this
  * file it executes on every CI lane rather than being skipped.
  */
-test.describe('Hover contrast (D-57)', () => {
+test.describe('Hover contrast', () => {
   const THEMES = [
     ['Forge light', { theme: 'light' }],
     ['Forge dark', { theme: 'dark' }],
@@ -3104,17 +3080,17 @@ test.describe('Hover contrast (D-57)', () => {
   })
 })
 
-test.describe('One action, one announcement (DP-32)', () => {
+test.describe('One action, one announcement', () => {
   test('an auto-preview speaks its completion, not its progress', async ({
     page,
   }) => {
     // An auto-preview fires on every parameter change. Announcing the
-    // transient "Rendering preview..." AND "Preview ready" spoke twice per
-    // tweak through the polite live region - a session of thirty changes
-    // was sixty utterances. The progress line stays visible on the status
+    // transient "Rendering preview..." and "Preview ready" would speak twice
+    // per tweak through the polite live region: a session of thirty changes
+    // would be sixty utterances. The progress line stays visible on the status
     // surfaces; only the completion (or an error) speaks. Watched with an
-    // observer armed BEFORE the change, because the announcer auto-clears
-    // its region and a poll can start after the wipe.
+    // observer armed before the change, because the announcer auto-clears its
+    // region and a poll can start after the wipe.
     test.setTimeout(240_000)
     await page.goto('/')
     await page.waitForSelector('body[data-wasm-ready="true"]', {
@@ -3141,11 +3117,11 @@ test.describe('One action, one announcement (DP-32)', () => {
     )
 
     await page.evaluate(() => {
-      window.__dp32Heard = []
+      window.__previewHeard = []
       const node = document.getElementById('srAnnouncer')
       new MutationObserver(() => {
         const t = node.textContent.trim()
-        if (t) window.__dp32Heard.push(t)
+        if (t) window.__previewHeard.push(t)
       }).observe(node, {
         childList: true,
         characterData: true,
@@ -3171,13 +3147,13 @@ test.describe('One action, one announcement (DP-32)', () => {
       .poll(
         () =>
           page.evaluate(() =>
-            (window.__dp32Heard ?? []).some((t) => t.includes('Preview ready'))
+            (window.__previewHeard ?? []).some((t) => t.includes('Preview ready'))
           ),
         { timeout: 120_000 }
       )
       .toBe(true)
     // And the transient progress line must not have spoken.
-    const heard = await page.evaluate(() => window.__dp32Heard ?? [])
+    const heard = await page.evaluate(() => window.__previewHeard ?? [])
     expect(
       heard.filter((t) => t.includes('Rendering preview')),
       `heard: ${heard.join(' | ')}`

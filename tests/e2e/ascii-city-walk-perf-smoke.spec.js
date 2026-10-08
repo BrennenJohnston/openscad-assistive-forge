@@ -8,35 +8,31 @@ import {
 useCityWalkFixtures()
 
 /**
- * ASCII City Walk - the acceptance path keeps running (CW-37).
+ * ASCII City Walk: the acceptance path keeps running.
  *
- * ★ THIS SPEC CANNOT TELL YOU THE GAME IS FAST, AND DOES NOT TRY.
+ * This spec cannot tell you the game is fast, and does not try.
  *
- * Round 5's bar (CW-Q28) is 30 frames a second at the smallest character size
- * with heavy rain, under a 4x CPU throttle. That number is measured by
- * `scripts/bench-city-walk.mjs`, HEADED, on a real GPU, with the renderer
- * string printed and read - because headless Chromium rasterises in software
- * through SwiftShader and reads about a third of the real frame rate. Three
- * separate confident wrong answers in this project have come from timing a
- * headless browser.
+ * The speed bar is 30 frames a second at the smallest character size with
+ * heavy rain, under a 4x CPU throttle. That number is measured by
+ * `scripts/bench-city-walk.mjs`, headed, on a real GPU, with the renderer
+ * string printed and read, because headless Chromium rasterizes in software
+ * through SwiftShader and reads about a third of the real frame rate.
+ * Timing a headless browser has given confident wrong answers before.
  *
- * So the division of labour is: **the local bench proves it is fast, and this
- * spec proves it still RUNS.** What CI can honestly check is that the hardest
- * configuration the round targets - the 10% floor, rain falling, a city
- * loaded - still converts frame after frame instead of stalling, throwing, or
- * silently falling back to nothing. That is a real regression guard: the
- * round rebuilt the converter's sampling (CW-31), moved glyph choice onto the
- * GPU (CW-32), and added two surface classes and new facades (CW-33, CW-34),
- * any of which could stop the pipeline dead without a single unit test
- * noticing.
+ * So the local bench proves it is fast, and this spec proves it still runs.
+ * What CI can honestly check is that the hardest configuration (the 10%
+ * floor, rain falling, a city loaded) still converts frame after frame
+ * instead of stalling, throwing, or silently falling back to nothing. That
+ * guards the converter's sampling, the glyph choice on the GPU, and the
+ * surface classes and facades, any of which could stop the pipeline dead
+ * without a single unit test noticing.
  *
- * Every gate here counts FRAMES, never milliseconds. A loaded CI runner can
- * render zero frames inside a 700 ms window, which is exactly how an earlier
- * version of the City Walk suite went red on Edge while passing three times
- * over locally on the same browser.
+ * Every gate here counts frames, never milliseconds. A loaded CI runner can
+ * render zero frames inside a 700 ms window, and a timed gate goes red on CI
+ * while passing locally on the same browser.
  */
 
-test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
+test.describe('ASCII City Walk — the acceptance path runs', () => {
   /** The converter's own counters, DEV-only, read from the page. */
   const stats = (page) =>
     page.evaluate(
@@ -44,11 +40,10 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
     )
 
   /** Wait until the converter has produced n more frames than it had.
-   * CW-97: the outer bound widened 90 to 150 s - the slowest software
-   * shard measured ~3.1 s per conversion at the floor with heavy rain on
-   * the heavier crown-cluster city, and 30 frames at that pace is ~93 s.
-   * The gate stays frames; only the outer bound moved, exactly as this
-   * file's own header prescribes. */
+   * The outer bound is 150 s: the slowest software shard measured about 3.1 s
+   * per conversion at the floor with heavy rain on the heavier crown-cluster
+   * city, and 30 frames at that pace is about 93 s. The gate stays frames;
+   * only the outer bound follows the measured cost. */
   async function waitForConversions(page, n) {
     const from = (await stats(page))?.samples ?? 0
     await expect
@@ -99,7 +94,7 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
 
     const after = await stats(page)
     console.log(
-      `[cw37] floor=${floor} rain=${rain} cells=${after.cells} ` +
+      `[perf] floor=${floor} rain=${rain} cells=${after.cells} ` +
         `gpu=${after.usedGpu} avg=${after.avgMs.toFixed(1)}ms ` +
         `interval=${after.dynamicIntervalMs}ms`
     )
@@ -127,15 +122,15 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
 
     const s = await stats(page)
     console.log(
-      `[cw37] gpuAvailable=${s.gpuAvailable} usedGpu=${s.usedGpu} ` +
+      `[perf] gpuAvailable=${s.gpuAvailable} usedGpu=${s.usedGpu} ` +
         `failure=${s.gpuFailure || 'none'}`
     )
 
-    // CW-32 put glyph choice in a fragment shader and made it the default.
-    // On a runner whose GL cannot do it the CPU path is the correct answer,
-    // so this asserts the CONSISTENCY of the two flags rather than demanding
-    // a GPU that CI may not have: if the pass reports itself available, it
-    // must actually be what converted the frame.
+    // Glyph choice runs in a fragment shader by default. On a runner whose GL
+    // cannot do it the CPU path is the correct answer, so this asserts the
+    // consistency of the two flags rather than demanding a GPU that CI may not
+    // have: if the pass reports itself available, it must actually be what
+    // converted the frame.
     if (s.gpuAvailable) {
       expect(s.usedGpu).toBe(true)
     } else {

@@ -2,13 +2,11 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import AxeBuilder from '@axe-core/playwright';
 
-// Classic panels (sub-plan F, release R3a) — the Error-Log's keyboard route
-// and the three panels the desktop has that Classic did not: Font List,
-// Viewport-Control and Animate.
+// Classic panels: the Error-Log's keyboard route and the three panels the
+// desktop has: Font List, Viewport-Control and Animate.
 //
-// Kept out of classic-mode.spec.js on purpose: that file is already 2500
-// lines and 46 WASM-loading cases, and R2a had to raise the Chromium job's
-// globalTimeout once already. Animation cases are slow by nature.
+// Kept out of classic-mode.spec.js on purpose: that file is already long
+// and loads WASM in most cases, and animation cases are slow by nature.
 
 const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 const FONT_TEXT = path.join(
@@ -24,9 +22,10 @@ const ANIMATE_SPIN = path.join(
   'animate-spin.scad'
 );
 /**
- * The owner's real 1,017-line file. Used where the FILE's own content is what
- * is being asserted — its parameter groups, its line lengths — rather than as a
- * cheap way to get the interface on screen. sample.scad stays for the latter.
+ * A real 1,017-line file, used where the file's own content is what is
+ * being asserted (its parameter groups, its line lengths) rather than as a
+ * cheap way to get the interface on screen. sample.scad stays for the
+ * latter.
  */
 const UNIVERSAL_CUFF = path.join(
   process.cwd(),
@@ -187,9 +186,9 @@ function readTitlebars(page) {
   });
 }
 
-// ─── P3: title-bar control order (D1/D2) ─────────────────────────────────────
+// ─── Title-bar control order ─────────────────────────────────────────────────
 
-test.describe('Title-bar control order (P3)', () => {
+test.describe('Title-bar control order', () => {
   test('classic-titlebar-order: the close button is hard right, the move menu sits before it', async ({
     page,
   }) => {
@@ -217,11 +216,11 @@ test.describe('Title-bar control order (P3)', () => {
       const menu = bar.controls.find((c) => c.kind === 'menu');
       const close = bar.controls.find((c) => c.kind === 'close');
 
-      // D1: on the desktop every dock title bar's ✕ is hard against the right
-      // edge. Ours may sit one padding token in, no further. Q-20b (UF-2a)
-      // extends the order: a right-edge field-stow control may hold the outer
-      // corner PAST the ✕ — the ✕ is then hard against the stow control, and
-      // the stow control is hard against the edge.
+      // On the desktop every dock title bar's ✕ is hard against the right edge.
+      // Ours may sit one padding token in, no further. A right-edge field-stow
+      // control may hold the outer corner past the ✕: the ✕ is then hard
+      // against the stow control, and the stow control is hard against the
+      // edge.
       const trailingStow =
         bar.controls.length &&
         bar.controls[bar.controls.length - 1].kind === 'stow'
@@ -268,7 +267,7 @@ test.describe('Title-bar control order (P3)', () => {
         ).toBeLessThan(order.indexOf('close'));
       }
 
-      // Q-1 order: the ⋮ follows the bar's disclosures.
+      // The ⋮ follows the bar's disclosures.
       if (menu) {
         const order = bar.controls.map((c) => c.kind);
         const lastDisclosure = order.lastIndexOf('disclosure');
@@ -279,7 +278,7 @@ test.describe('Title-bar control order (P3)', () => {
           ).toBeGreaterThan(lastDisclosure);
         }
 
-        // D2: the ⋮ was a sliver flush against the bar edge. It carries the
+        // The ⋮ carries the
         // touch-target token like every other pane button; 36px is that token
         // on a fine pointer, which is what Playwright's Chromium reports as.
         expect(
@@ -307,10 +306,10 @@ test.describe('Title-bar control order (P3)', () => {
   });
 });
 
-// ─── P4: per-panel collapse (D3) ─────────────────────────────────────────────
+// ─── Per-panel collapse ──────────────────────────────────────────────────────
 
 /**
- * Record everything the polite live region says from here on. Installed BEFORE
+ * Record everything the polite live region says from here on. Installed before
  * the action, because a disclosure that announces twice is only visible as a
  * count.
  */
@@ -330,7 +329,7 @@ async function watchAnnouncements(page, name = '__recordP4Announcement') {
   return seen;
 }
 
-test.describe('Per-panel collapse (P4)', () => {
+test.describe('Per-panel collapse', () => {
   test('classic-collapse-keyboard: Enter folds a panel to its title bar and says so once', async ({
     page,
   }) => {
@@ -368,7 +367,7 @@ test.describe('Per-panel collapse (P4)', () => {
     await expect(btn).toHaveAttribute('aria-label', 'Collapse Editor');
     await expect(btn).toHaveText('▸');
 
-    // The point of the whole phase: the body is gone, the title bar is not.
+    // The whole point: the body is gone, the title bar is not.
     await expect(
       page.locator('#classicEditorSlot .classic-pane-titlebar')
     ).toBeVisible();
@@ -399,7 +398,7 @@ test.describe('Per-panel collapse (P4)', () => {
     await expect(btn).toHaveAttribute('aria-expanded', 'true');
     await expect(btn).toHaveText('▾');
 
-    // Owner-approved wording, 2026-08-08. Polled, not read straight off: the
+    // Polled, not read straight off: the
     // announcer writes inside a requestAnimationFrame, so asserting on the very
     // next statement measured the frame before the message landed.
     await expect
@@ -436,7 +435,7 @@ test.describe('Per-panel collapse (P4)', () => {
     );
 
     // `collapsed<Panel>`, not `<panel>Collapsed`: `consoleCollapsed` already
-    // exists and means the whole strip is folded (D-8).
+    // exists and means the whole strip is folded.
     const stored = await page.evaluate(() =>
       JSON.parse(localStorage.getItem('openscad-forge-classic-panes'))
     );
@@ -468,7 +467,7 @@ test.describe('Per-panel collapse (P4)', () => {
     page,
   }) => {
     test.setTimeout(300_000);
-    // Exactly the shape R3a wrote — no collapse keys at all.
+    // The shape saved before collapse existed: no collapse keys at all.
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
@@ -504,7 +503,7 @@ test.describe('Per-panel collapse (P4)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // Merge Error-Log into Console's cell, so one shared bar serves both (B7).
+    // Merge Error-Log into Console's cell, so one shared bar serves both.
     await page.locator('#classicErrorLogSlot .classic-panel-menu-btn').click();
     await page
       .getByRole('menuitem', { name: 'Merge with Console', exact: true })
@@ -514,7 +513,7 @@ test.describe('Per-panel collapse (P4)', () => {
 
     const shared = group.locator('.classic-pane-collapse-btn');
     await expect(shared).toHaveCount(1);
-    // Named for the group, not for whichever tab happens to be selected (Q-1).
+    // Named for the group, not for whichever tab happens to be selected.
     await expect(shared).toHaveAttribute('aria-label', 'Collapse panels');
 
     const announcements = await watchAnnouncements(
@@ -602,9 +601,9 @@ test.describe('Per-panel collapse (P4)', () => {
   });
 });
 
-// ─── P5: Customizer header rows ──────────────────────────────────────────────
+// ─── Customizer header rows ──────────────────────────────────────────────────
 
-test.describe('Customizer header rows (P5)', () => {
+test.describe('Customizer header rows', () => {
   test('classic-customizer-rows: Reset ends row 1 and save preset ends row 2', async ({
     page,
   }) => {
@@ -684,8 +683,8 @@ test.describe('Customizer header rows (P5)', () => {
     await expect(row1.locator('#resetAllBtn')).toBeEnabled();
 
     // Narrow: three controls do not fit one line in a 343px column, so the row
-    // wraps. That is the wanted answer — the same one R2a gave the toolbars
-    // rather than letting them overflow. What must NOT happen is clipping.
+    // wraps. That is the wanted answer, as for the toolbars, rather than
+    // letting them overflow. What must not happen is clipping.
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.waitForTimeout(400);
     const narrow = await readRows();
@@ -708,9 +707,9 @@ test.describe('Customizer header rows (P5)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // Owner-approved 2026-08-08: leaving Forge additions means these two no
-    // longer vanish with it in Simplified. Simplified already shows the preset
-    // box with its + and −, so hiding only save would be the odd pairing.
+    // These two stay visible in Simplified: Simplified already shows the
+    // preset box with its + and −, so hiding only save would be the odd
+    // pairing.
     await page.locator('#classicDensityToggle').click();
     await expect(page.locator('body')).toHaveAttribute(
       'data-classic-density',
@@ -726,16 +725,16 @@ test.describe('Customizer header rows (P5)', () => {
   });
 });
 
-// ─── P6: Forge extras out of the Customizer column (Q-4) ─────────────────────
+// ─── Forge extras out of the Customizer column ───────────────────────────────
 
-/** The five panels Q-4 makes Window-menu-only in Classic, in column order. */
+/** The five panels that are Window-menu-only in Classic, in column order. */
 const FORGE_EXTRAS = [
   { selector: '#measureSection', label: 'Image Measurement' },
   { selector: '#overlaySection', label: 'Reference Image' },
   { selector: '#libraryControls > details', label: 'Libraries' },
-  // UF-35 wrapped Companion Files in a .forge-disclosure-row so its help
-  // control could leave the <summary>, so this is no longer a direct child.
-  // Libraries carries no header control and is unwrapped.
+  // Companion Files sits in a .forge-disclosure-row (so its help control
+  // can leave the <summary>), so it is not a direct child. Libraries carries
+  // no header control and is unwrapped.
   {
     selector: '#projectFilesControls .project-files-details',
     label: 'Companion Files',
@@ -743,7 +742,7 @@ const FORGE_EXTRAS = [
   { selector: '#advancedMenu', label: 'Advanced' },
 ];
 
-test.describe('Forge extras out of the Customizer column (P6)', () => {
+test.describe('Forge extras out of the Customizer column', () => {
   test('classic-forge-extras-hidden: parameter groups come straight after the header', async ({
     page,
   }) => {
@@ -757,11 +756,11 @@ test.describe('Forge extras out of the Customizer column (P6)', () => {
     for (const { selector, label } of FORGE_EXTRAS) {
       await expect(
         page.locator(selector),
-        `${label} should not be in the Classic column by default (Q-4)`
+        `${label} should not be in the Classic column by default`
       ).toBeHidden();
     }
 
-    // The point of the phase: nothing to walk past before the parameters.
+    // The point: nothing to walk past before the parameters.
     const gap = await page.evaluate(() => {
       const container = document.getElementById('parametersContainer');
       const firstGroup = container.querySelector('details.param-group');
@@ -795,8 +794,8 @@ test.describe('Forge extras out of the Customizer column (P6)', () => {
     });
     console.log('[p6] before the parameters:', JSON.stringify(gap));
 
-    // Five disclosures stood here before this phase. "Forge additions" is a
-    // deliberate Forge extra (D-20) and stays, so it is the only stop left.
+    // "Forge additions" is a deliberate Forge extra and stays, so it is the
+    // only stop here.
     expect(
       gap.stopsBetween.length,
       `stops before the parameters: ${gap.stopsBetween.join(' | ')}`
@@ -862,7 +861,7 @@ test.describe('Forge extras out of the Customizer column (P6)', () => {
     await loadProject(page);
     await switchToStandardMode(page);
 
-    // Q-4 is a Classic decision. Forge is where these panels live.
+    // This is a Classic decision. Forge is where these panels live.
     await expect(page.locator('body')).not.toHaveAttribute(
       'data-ui-mode',
       'classic'
@@ -931,7 +930,7 @@ test.describe('Error Log reach (F1)', () => {
     }));
     expect(landed.insideSlot).toBe(true);
 
-    // Classic must NEVER click the hidden Structured tab (D-9).
+    // Classic must never click the hidden Structured tab.
     await expect(page.locator('#console-tab-structured')).toHaveAttribute(
       'aria-selected',
       'false'
@@ -950,7 +949,7 @@ test.describe('Error Log reach (F1)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // UF-2b (Q-20c): the strip fold became the bottom field's stow.
+    // The strip fold is the bottom field's stow.
     await page
       .locator('.classic-stow-btn[data-classic-stow-field="bottom"]')
       .click();
@@ -981,11 +980,11 @@ test.describe('Error Log reach (F1)', () => {
       'true'
     );
 
-    // The R-III lesson, carried into the stow (UF-2b): the pre-fix fold kept
-    // grid-template-rows: 0fr, which only CLIPS — the strip was 0px tall but
-    // still visibility:visible, and eleven Tab stops landed on invisible
-    // 13x13 checkboxes and 36x36 buttons inside it. WCAG 2.2 2.4.11.
-    // The stow display:nones the whole strip, title bars included.
+    // The stow must take the strip out of the Tab order, not just clip it: a
+    // fold that kept grid-template-rows: 0fr made the strip 0px tall but still
+    // visibility:visible, and eleven Tab stops landed on invisible 13x13
+    // checkboxes and 36x36 buttons inside it (WCAG 2.2 2.4.11). The stow
+    // display:nones the whole strip, title bars included.
     const reachable = await page.evaluate(
       () =>
         [
@@ -1014,8 +1013,7 @@ test.describe('Error Log reach (F1)', () => {
     }
     expect(landings, 'Tab landed inside the stowed strip').toEqual([]);
 
-    // The way back is the labelled edge tab (Q-20c superseded the fold's
-    // keep-the-titlebars look).
+    // The way back is the labeled edge tab.
     await expect(
       page.locator('.classic-stow-tab[data-classic-stow-field="bottom"]')
     ).toBeVisible();
@@ -1354,7 +1352,7 @@ test.describe('Viewport-Control panel (F4)', () => {
     expect(liveRegions).toBe(0);
 
     // Record every announcement made while orbiting. Asserting the announcer
-    // is globally EMPTY over-reaches — unrelated parts of the app legitimately
+    // is globally empty over-reaches — unrelated parts of the app legitimately
     // announce, and on Firefox "Preview ready" landed inside the window. What
     // must be true is that the PANEL says nothing.
     const announcements = [];
@@ -1662,7 +1660,7 @@ test.describe('Window-menu toggles (F6)', () => {
     }
   });
 
-  test('classic-viewport-menu-live: Viewport-Control is no longer a disabled action', async ({
+  test('classic-viewport-menu-live: Viewport-Control is a live action', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -1720,7 +1718,7 @@ test.describe('Window-menu toggles (F6)', () => {
     await expect(page.locator('#classicFontListSlot')).toBeAttached();
   });
 
-  test('classic-panel-forge-clean: the panels stay out of the Forge layouts (D-32)', async ({
+  test('classic-panel-forge-clean: the panels stay out of the Forge layouts', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -1752,7 +1750,7 @@ test.describe('Window-menu toggles (F6)', () => {
 
 // ─── The dock: each new panel moves and merges like the ones already there ───
 
-test.describe('New panels inside the dock (B6-B9)', () => {
+test.describe('New panels inside the dock', () => {
   test.beforeEach(async ({ page }) => {
     await seedPanes(page, {
       animateVisible: true,
@@ -1821,7 +1819,7 @@ test.describe('New panels inside the dock (B6-B9)', () => {
 
     // Splitting is the same move operation with a different target — but the
     // menu now lives on the group's SHARED bar, because a merged group shows
-    // the active panel's title bar moved into it (B7). The button is renamed
+    // the active panel's title bar moved into it. The button is renamed
     // for the group and its items name their subject.
     await page
       .getByRole('button', { name: 'Move panels', exact: true })
@@ -1911,7 +1909,7 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     }
   });
 
-  test('classic-panels-narrow: below 1024px the panels stack, capped at 40vh (D-6)', async ({
+  test('classic-panels-narrow: below 1024px the panels stack, capped at 40vh', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -1934,7 +1932,7 @@ test.describe('Panels CSS and accessibility (F7)', () => {
       );
     }
 
-    // Viewport-Control is desktop-only (D-7) and its field goes with it.
+    // Viewport-Control is desktop-only and its field goes with it.
     await expect(page.locator('#classicViewportControlSlot')).toBeHidden();
   });
 
@@ -1946,7 +1944,7 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     await enterClassicStandard(page);
 
     // sr-only spans are position:absolute; in a static container they resolve
-    // against <html> and poke past the viewport — the 31px bug R2a paid for.
+    // against <html> and poke past the viewport, a 31px overflow.
     for (const width of [375, 900]) {
       await page.setViewportSize({ width, height: 800 });
       await page.waitForTimeout(400);
@@ -1966,33 +1964,22 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // This case runs on every browser, including ones with no WebGL. It used
-    // to fail there on a third violation, heading-order: the
-    // "3D preview unavailable" notice carried a hardcoded <h3>, which Forge
-    // hid under its "Preview Settings & Info" <h2> but Classic did not, so the
-    // page ran <h1> straight to <h3>. That was defect D-30, a real one, and it
-    // is fixed in src/js/preview.js rather than allowed for here. MEASURED
-    // after the fix, against a Firefox launched with webgl.disabled=true:
-    // Classic reports exactly the two violations below and nothing else.
+    // This case runs on every browser, including ones with no WebGL, so the
+    // "3D preview unavailable" notice must keep the heading order: a hardcoded
+    // <h3> under Classic's <h1> would be a heading-order violation. Against a
+    // Firefox launched with webgl.disabled=true, Classic reports exactly the
+    // violations below and nothing else.
     const results = await new AxeBuilder({ page })
       .include('#mainInterface')
       .analyze();
 
-    // Classic once reported two pre-existing violations, neither of them
-    // Classic's doing. ONE IS LEFT.
-    //
-    // nested-interactive is GONE. Its node count tells the story: 11 in R2b,
-    // 2 after R-II's P6 took five Forge panels out of the Classic column, and
-    // 3 by UF-35 - one per parameter group, because that family scales with
-    // the model. UF-35 moved every header control out of its <summary> and
-    // MEASURED 0 here. It is off this list, so it can fail.
-    //
-    // The one that stays is a false positive, measured in P2: axe does not
-    // count a contenteditable child as focusable content, but .cm-content is
-    // reached by Tab and PageDown scrolls the region (scrollTop 0 -> 4365).
+    // One known violation is allowed, and it is a false positive: axe does
+    // not count a contenteditable child as focusable content, but .cm-content
+    // is reached by Tab and PageDown scrolls the region (scrollTop 0 -> 4365).
     // Putting tabindex="0" on the scroller would silence axe at the cost of a
-    // second, redundant tab stop on a region the keyboard already reaches.
-    // Do not.
+    // second, redundant tab stop on a region the keyboard already reaches. Do
+    // not. (nested-interactive is not on this list: every header control sits
+    // outside its <summary>, so it can fail.)
     const allowed = ['scrollable-region-focusable'];
     const unexpected = results.violations
       .map((v) => v.id)
@@ -2004,9 +1991,9 @@ test.describe('Panels CSS and accessibility (F7)', () => {
   });
 });
 
-// ─── P8: status-bar viewport telemetry ───────────────────────────────────────
+// ─── Status-bar viewport telemetry ───────────────────────────────────────────
 
-test.describe('Status-bar viewport telemetry (P8)', () => {
+test.describe('Status-bar viewport telemetry', () => {
   test('classic-status-telemetry: the pose is on the bar and matches the camera', async ({
     page,
   }) => {
@@ -2065,7 +2052,7 @@ test.describe('Status-bar viewport telemetry (P8)', () => {
       })
       .toMatch(/^Viewport:/);
 
-    // The whole point of the phase. The camera's feed fires ~118 times per
+    // The whole point. The camera's feed fires ~118 times per
     // drag; if the telemetry were inside the bar's live region a screen reader
     // would read a pose ten times a second.
     const placement = await page.evaluate(() => {
@@ -2128,11 +2115,11 @@ test.describe('Status-bar viewport telemetry (P8)', () => {
   });
 });
 
-// ─── P9: Classic 3D-view defaults (per-interface since UF-14) ────────────────
-// The one-time classic-view-defaults-v2 stamp is gone: Classic's desktop
-// look (axes+ticks on, grid off) now lives as the Classic NAMESPACE
-// defaults in ui-scoped-prefs.js, served on every entry without writing
-// anything, while Forge keeps its own saved copy of every toggle (U-25).
+// ─── Classic 3D-view defaults ────────────────────────────────────────────────
+// Classic's desktop look (axes and ticks on, grid off) lives as the
+// Classic namespace defaults in ui-scoped-prefs.js, served on every entry
+// without writing anything, while Forge keeps its own saved copy of every
+// toggle.
 
 const AXES_PREF = 'openscad-forge-display-axes';
 const AXIS_MARKS_PREF = 'openscad-forge-display-axisMarks';
@@ -2153,7 +2140,7 @@ function readViewPrefs(page) {
   );
 }
 
-test.describe('Classic 3D-view defaults (P9)', () => {
+test.describe('Classic 3D-view defaults', () => {
   test('classic-view-defaults: a fresh profile gets axes and ticks on, grid off', async ({
     page,
   }) => {
@@ -2288,9 +2275,9 @@ test.describe('Classic 3D-view defaults (P9)', () => {
   });
 });
 
-// ─── P13: small-defect sweep ─────────────────────────────────────────────────
+// ─── Small-defect sweep ──────────────────────────────────────────────────────
 
-test.describe('Small-defect sweep (P13)', () => {
+test.describe('Small-defect sweep', () => {
   test('classic-delete-contrast: the destructive button meets WCAG AA', async ({
     page,
   }) => {
@@ -2298,7 +2285,7 @@ test.describe('Small-defect sweep (P13)', () => {
     await seedFirstVisit(page);
     await loadProject(page);
 
-    // T2-A1. The real .btn.btn-danger in the app's own stylesheet — the class
+    // The real .btn.btn-danger in the app's own stylesheet — the class
     // dialogs.js gives the confirm button of every destructive action. Rendered
     // here rather than reached through the preset flow, which needs a saved
     // preset before Delete is even enabled.
@@ -2338,7 +2325,7 @@ test.describe('Small-defect sweep (P13)', () => {
     });
     console.log('[p13] danger button:', JSON.stringify(measured));
 
-    // 4.5:1 is AA for normal text. It measured 3.82:1 before this phase.
+    // 4.5:1 is AA for normal text.
     expect(
       measured.ratio,
       `Delete is ${measured.color} on ${measured.background} = ${measured.ratio}:1`
@@ -2347,24 +2334,24 @@ test.describe('Small-defect sweep (P13)', () => {
   });
 
   /**
-   * D-55: the header toggles lost their own hover colour.
+   * The header toggles keep their own hover color.
    *
-   * `.btn-secondary:hover:not(:disabled)` in components.css sets a BACKGROUND
-   * and nothing else. At (0,3,0) in a file that loads AFTER layout.css it beat
-   * both `.classic-toggle:hover` (0,2,0) and
+   * `.btn-secondary:hover:not(:disabled)` in components.css sets a
+   * background and nothing else. At (0,3,0) in a file that loads after
+   * layout.css it can beat both `.classic-toggle:hover` (0,2,0) and
    * `.classic-toggle[aria-pressed='true']:hover` (0,3,0, losing the tie on
-   * source order), so these controls hovered to `--color-border` — a BORDER
-   * token used as a surface — while keeping whatever text colour another rule
-   * had set. MEASURED before the fix: Forge #1c2024 on #80838d = 4.33:1, and
-   * the pressed Classic toggle #ffffff on #858585 = 3.69:1, against AA's 4.5:1
+   * source order), so these controls would hover to `--color-border` (a
+   * border token used as a surface) while keeping whatever text color
+   * another rule had set: Forge #1c2024 on #80838d = 4.33:1, and the
+   * pressed Classic toggle #ffffff on #858585 = 3.69:1, against AA's 4.5:1
    * for 14px text.
    *
-   * This measures the PAIR the user actually sees rather than asserting a
-   * selector, so it still fails if the markup, the tokens or the cascade move.
-   * The rest states always passed (15.58:1 and 5.67:1) and are checked too, so
-   * a fix to hover cannot quietly cost the resting state.
+   * This measures the pair the user actually sees rather than asserting a
+   * selector, so it still fails if the markup, the tokens or the cascade
+   * move. The rest states (15.58:1 and 5.67:1) are checked too, so a fix to
+   * hover cannot quietly cost the resting state.
    */
-  test('d55-toggle-hover-contrast: the header toggles stay legible while hovered', async ({
+  test('toggle-hover-contrast: the header toggles stay legible while hovered', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -2429,17 +2416,15 @@ test.describe('Small-defect sweep (P13)', () => {
 });
 
 /**
- * P12 — the axis-tick overlay draws.
+ * The axis-tick overlay draws.
  *
- * R-II turned axis marks ON by default on first Classic entry, so this
- * shipped as a preference that claimed to do something and did nothing.
- * MEASURED on the parent commit: buildAxisTickOverlay threw
- * "three.CanvasTexture is not a constructor" — getThreeModule() exports
- * eleven classes and the overlay needs three it does not export — and
- * _applyAxisMarks caught it, logged a console.warn and returned. The
- * preference stayed on, the camera-bar button stayed pressed, and the scene
- * got nothing. Its own 20 unit tests pass because they inject a mock THREE
- * that DOES define the three missing classes.
+ * A preference that claims to do something must do it. The overlay needs
+ * three classes that getThreeModule() must export: without them
+ * buildAxisTickOverlay throws ("three.CanvasTexture is not a
+ * constructor"), _applyAxisMarks catches it, logs a console.warn and
+ * returns, and the scene gets nothing while the preference stays on and
+ * the camera-bar button stays pressed. The overlay's own unit tests inject
+ * a mock THREE that defines those classes, so only a browser can tell.
  */
 test('Classic draws the axis tick overlay it says is on', async ({ page }) => {
   test.setTimeout(240_000);

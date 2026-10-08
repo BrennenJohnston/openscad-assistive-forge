@@ -1,14 +1,13 @@
 /**
- * E2E tests for ink extraction (IR-11).
+ * E2E tests for ink extraction.
  *
  * Professional communication symbols are black line work over a saturated
- * fill, and the fill colour carries meaning. Forge's tracer quantized to two
- * colours by luminance, which puts a blue field and the black glyph drawn on it
- * in the SAME bucket: MEASURED on `tests/fixtures/aac/blue-field-glyph.png`,
- * the shipped pipeline returns ONE path - the blue square - and the person is
- * gone. Nothing said so.
+ * fill, and the fill color carries meaning. A tracer that quantizes to two
+ * colors by luminance puts a blue field and the black glyph drawn on it in
+ * the same bucket: on `tests/fixtures/aac/blue-field-glyph.png` that
+ * returns one path, the blue square, and the person is gone.
  *
- * These tests pin the fix by counting shapes, not pixels.
+ * These tests pin the ink extraction by counting shapes, not pixels.
  *
  * @license GPL-3.0-or-later
  */
@@ -43,10 +42,10 @@ async function openPicture(page, fixture) {
     .first()
     .waitFor({ state: 'visible', timeout: 60000 });
   await expect(page.locator('.ink-controls')).toBeVisible();
-  // The editor's focus trap takes focus on a short delay. Driving the keyboard
-  // before it lands means the trap steals the first keypress back.
-  // RE-PINNED at DP-19: the surface that hosts the editor puts focus on its
-  // own name (the "Drawing editor" heading), not on a close button.
+  // The editor's focus trap takes focus on a short delay. Driving the
+  // keyboard before it lands means the trap steals the first keypress back.
+  // The surface that hosts the editor puts focus on its own name (the
+  // "Drawing editor" heading), not on a close button.
   await expect
     .poll(
       async () =>
@@ -65,27 +64,19 @@ const summaryText = (page) =>
   page.locator('.ink-controls-summary').textContent();
 
 /**
- * Switch mode and wait for the re-trace to REPORT, not merely to start.
+ * Switch mode and wait for the re-trace to report, not merely to start.
  *
- * This used to wait for the summary to differ from what it said before, and
- * that was only ever reliable by accident: setBusy writes "Re-reading the
- * picture..." into the same element, and the trace used to finish inside the
- * same turn because it ran on the main thread, so the waiting line was
- * overwritten before Playwright could read it.
- *
- * Since the trace moved into a worker (DP-34) the gap is real, and this
- * returned on the waiting line with the PREVIOUS mode's shapes still on
- * screen - passing locally, failing on a slower CI runner. The waiting line is
- * not an answer; wait past it.
+ * setBusy writes "Re-reading the picture..." into the summary element, and
+ * the trace runs in a worker, so there is a real gap in which the summary
+ * shows the waiting line with the previous mode's shapes still on screen.
+ * The waiting line is not an answer; wait past it.
  */
 const BUSY_LINE = /Re-reading the picture/;
 
 /**
- * Wait for a re-trace to REPORT, given what the summary said before it started.
- *
- * Every wait on this element has to go through here. There were two copies of
- * the old "wait until it differs" idiom, and both broke the same way once the
- * trace stopped blocking the page.
+ * Wait for a re-trace to report, given what the summary said before it
+ * started. Every wait on this element goes through here, so none of them
+ * can return on the waiting line.
  */
 async function waitForRetrace(page, before) {
   await expect
@@ -102,8 +93,8 @@ async function waitForRetrace(page, before) {
 /**
  * Press Start if the design control is offering it.
  *
- * A picture chosen on a file PARAMETER waits to be started unless it is both
- * small and quick on this device (DP-Q32). The drawing editor's own door has no
+ * A picture chosen on a file parameter waits to be started unless it is both
+ * small and quick on this device. The drawing editor's own door has no
  * Start - opening the door is the deliberate act there - so only the file
  * parameter path needs this.
  *
@@ -126,7 +117,7 @@ async function chooseMode(page, value) {
 }
 
 test.describe('What to keep from a picture', () => {
-  test('Line art keeps the glyph the coloured field used to swallow', async ({
+  test('Line art keeps the glyph a colored field would swallow', async ({
     page,
   }) => {
     test.setTimeout(150000);
@@ -140,7 +131,7 @@ test.describe('What to keep from a picture', () => {
     expect(lineArtShapes).toBeGreaterThan(1);
     expect(await summaryText(page)).toMatch(/shapes traced/);
 
-    // The same picture through the old path: one shape, the field, glyph gone.
+    // The same picture through Standard: one shape, the field, glyph gone.
     await chooseMode(page, 'standard');
     const standardShapes = await shapeCount(page);
     console.log('[ink] standard shapes:', standardShapes);
@@ -182,7 +173,7 @@ test.describe('What to keep from a picture', () => {
     const standard = await shapeCount(page);
 
     console.log('[ink] bird line art:', lineArt, 'standard:', standard);
-    // The signed default changes behaviour for photographs, so the case that
+    // The chosen default changes behavior for photographs, so the case that
     // already worked has to keep working. Both find the same drawing.
     expect(lineArt).toBeGreaterThan(1);
     expect(standard).toBeGreaterThan(1);
@@ -230,7 +221,7 @@ test.describe('What to keep from a picture', () => {
     await number.dispatchEvent('change');
     await expect(lightness).toHaveValue('12');
     // And back, because the next step needs the lightness gate open. This
-    // ordering is the point: a pixel has to pass BOTH gates to be ink, so
+    // ordering is the point: a pixel has to pass both gates to be ink, so
     // leaving lightness at 12 would keep the blue field out (L* about 42) no
     // matter what the colourfulness gate said.
     await number.fill(String(90));
@@ -272,14 +263,13 @@ test.describe('What to keep from a picture', () => {
     await expect(page.locator('#svg-edit-ink-mode-silhouette')).toBeChecked();
     await waitForRetrace(page, before);
 
-    // And the re-trace did not throw the keyboard out of the panel. Changing
-    // the picture re-opens the editor underneath, which used to move the panel
-    // in the DOM and blur whatever was focused - on every slider step.
+    // And the re-trace did not throw the keyboard out of the panel: changing
+    // the picture re-opens the editor underneath, and that must not move the
+    // panel in the DOM and blur whatever is focused on every slider step.
     await expect(page.locator('#svg-edit-ink-mode-silhouette')).toBeFocused();
-    // It also stayed expanded rather than dropping back behind the page.
-    // RE-PINNED at DP-19: the door hosts the editor surface over the whole
-    // page (#svgEditStandaloneHost); the workspace's own fullscreen class is
-    // no longer how that happens, so the host staying visible is the pin.
+    // It also stayed expanded rather than dropping back behind the page: the
+    // door hosts the editor surface over the whole page
+    // (#svgEditStandaloneHost), so the host staying visible is the pin.
     await expect(page.locator('#svgEditStandaloneHost')).toBeVisible();
     await expect(page.locator('.svg-prep-fullscreen')).toHaveCount(0);
 
@@ -392,19 +382,19 @@ test.describe('A model that takes an image', () => {
   });
 });
 
-test.describe('the credit line a stock icon carries (DP-36)', () => {
+test.describe('the credit line a stock icon carries', () => {
   // The fixture is drawn by scripts/make-icon-fixtures.mjs: an outline under a
   // two-line caption of letter-sized marks, which is the shape measured across
   // nine real stock icons. No stock icon is in this repository.
 
-  test('★ the icon converts to the icon, and the panel says what it took off', async ({
+  test('the icon converts to the icon, and the panel says what it took off', async ({
     page,
   }) => {
     test.setTimeout(120000);
     await openPicture(page, RING_WITH_CAPTION);
 
     // The sentence is one sentence: what was traced and what was removed.
-    // DP-32's law - choosing a picture is one action, so it gets one
+    // Choosing a picture is one action, so it gets one
     // announcement, not a second arriving behind the first.
     await expect
       .poll(async () => summaryText(page), { timeout: 60000 })
@@ -418,7 +408,7 @@ test.describe('the credit line a stock icon carries (DP-36)', () => {
     await expect(page.locator('.svg-prep-object')).toHaveCount(2);
   });
 
-  test('★ Undo is offered, named by the sentence, and puts the caption back', async ({
+  test('Undo is offered, named by the sentence, and puts the caption back', async ({
     page,
   }) => {
     test.setTimeout(120000);
@@ -476,8 +466,8 @@ test.describe('the credit line a stock icon carries (DP-36)', () => {
   });
 });
 
-test.describe('how thin the lines are (DP-36 P3)', () => {
-  test('★ says the width in millimetres at the size it will be printed', async ({
+test.describe('how thin the lines are', () => {
+  test('says the width in millimetres at the size it will be printed', async ({
     page,
   }) => {
     test.setTimeout(120000);
@@ -502,7 +492,7 @@ test.describe('how thin the lines are (DP-36 P3)', () => {
     );
   });
 
-  test('★ nothing is changed by it: the advisory is a sentence, not an action', async ({
+  test('nothing is changed by it: the advisory is a sentence, not an action', async ({
     page,
   }) => {
     test.setTimeout(120000);
@@ -516,19 +506,18 @@ test.describe('how thin the lines are (DP-36 P3)', () => {
   });
 });
 
-// ── DP-79: a photograph of a printed symbol (D-173, D-176) ──────────────────
+// ── A photograph of a printed symbol ─────────────────────────────────────────
 //
-// The owner's sixth walk: a phone photo of a printed AAC panel "only resulted
-// in either a too complicated to process shape, or a noisy result". MEASURED
-// (DP-77, the panel photo through the app): Line art 1,270 shapes, Solid shape
-// 341, Light and dark 3,686, Colors 3,939, and since DP-78 anything over 1,000
-// is refused before the page's own stages. A camera picture is worked at the
-// print's cell now, smoothed, and floored at 0.1 mm² (DP-79): the same panel
-// measures 25 / 6 / 274 / 42 (build/dp-r6/dp-79/p0.log). The picture below is
-// drawn in the test in the panel's own kind: lit paper with grain, and five
-// filled crayon shapes with black outlines. RED on the build before DP-79:
-// every mode traced its grain into thousands of shapes and the gate refused it.
-test.describe('a photograph of a printed symbol (DP-79)', () => {
+// A phone photo of a printed AAC panel must trace into a usable drawing,
+// not into a shape too complicated to process or a noisy result. Its grain
+// traced into thousands of shapes in every mode (Line art 1,270, Solid
+// shape 341, Light and dark 3,686, Colors 3,939), and anything over 1,000
+// is refused before the page's own stages. A camera picture is worked at
+// the print's cell, smoothed, and floored at 0.1 mm², and the same panel
+// measures 25 / 6 / 274 / 42. The picture below is drawn in the test in
+// the panel's own kind: lit paper with grain, and five filled crayon
+// shapes with black outlines.
+test.describe('a photograph of a printed symbol', () => {
   /** Lit, grainy paper with five outlined crayon shapes, 1400 x 1200, as a File. */
   async function choosePanelPhoto(page) {
     await page.evaluate(async () => {
@@ -541,9 +530,8 @@ test.describe('a photograph of a printed symbol (DP-79)', () => {
       // The paper: brighter on the left than the right, the way a lamp
       // lights a page, with per-pixel grain on top, and paper fibers: a
       // scatter of dark two-pixel clusters, the texture a camera sees in
-      // crayon and paper. MEASURED (DP-77): that texture is what traced the
-      // real panel into thousands of shapes; here it is what makes the build
-      // before DP-79 refuse this picture, and what the median removes.
+      // crayon and paper. That texture is what traces a real panel into
+      // thousands of shapes, and it is what the median removes.
       const img = ctx.createImageData(w, h);
       let seed = 4242;
       for (let y = 0; y < h; y++) {
@@ -651,7 +639,7 @@ test.describe('a photograph of a printed symbol (DP-79)', () => {
       return `${v.name}:${v.size}:${h}`;
     });
 
-  test('★ every mode gives tens of shapes, the panel says the worked size, and the editor is offered', async ({
+  test('every mode gives tens of shapes, the panel says the worked size, and the editor is offered', async ({
     page,
   }) => {
     test.slow();
@@ -694,10 +682,9 @@ test.describe('a photograph of a printed symbol (DP-79)', () => {
     const summary = page.locator('.ink-controls-summary').first();
     const info = page.locator('.file-info').first();
     const badge = page.locator('.svg-prep-status-badge').first();
-    // Line art. The defect first: before DP-79 this photo traced into
-    // thousands of shapes and was refused at the gate, and the info line
-    // never read "converted from". Either outcome ends the wait, so a RED
-    // says the card's words instead of timing out.
+    // Line art. The info line must read "converted from"; a photo traced into
+    // thousands of shapes would be refused at the gate instead. Either outcome
+    // ends the wait, so a red run says the card's words instead of timing out.
     await expect
       .poll(async () => `${await info.textContent()} | ${await badge.textContent()}`, {
         timeout: 240000,

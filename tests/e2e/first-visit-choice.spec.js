@@ -1,20 +1,17 @@
 /**
- * First-visit interface choice (U-9, UF-3b)
+ * First-visit interface choice.
  *
- * The first-visit modal carries a Forge/Classic choice: two labelled radio
- * cards with screenshots, Assistive Forge PRESELECTED, a remember-my-choice
- * checkbox that ships UNCHECKED, and one Download & Continue action that still
- * gates the WASM download.
+ * The first-visit modal carries a Forge/Classic choice: two labeled radio
+ * cards with screenshots, Assistive Forge preselected, a remember-my-choice
+ * checkbox that ships unchecked, and one Download & Continue action that
+ * still gates the WASM download.
  *
- * DP-1 (owner directive line 2, 2026-08-27) supersedes Q-21's "no
- * pre-selection (recommendation badge only)" and its checked-by-default
- * remember box; Q-21's other parts are untouched. The consequence these cases
- * pin: a visitor who simply presses Continue lands in Forge and is asked AGAIN
+ * A visitor who simply presses Continue lands in Forge and is asked again
  * next visit, because the marker is written only when remember is ticked.
  *
- * These cases deliberately do NOT stamp
- * openscad-forge-first-visit-seen — the modal appearing is the point — and
- * none of them needs WASM, so they assert against the blocked state only.
+ * These cases deliberately do not stamp openscad-forge-first-visit-seen
+ * (the modal appearing is the point), and none of them needs WASM, so they
+ * assert against the blocked state only.
  *
  * @license GPL-3.0-or-later
  */
@@ -31,10 +28,10 @@ async function waitForModal(page) {
 }
 
 test.describe('First-visit interface choice', () => {
-  // UF-22: the gate is this file's subject, and the tour nudge arrives right
-  // behind it once the choice is made. Suppressed here so it cannot land in
-  // the middle of a case about the modal. The nudge's own behaviour at this
-  // gate is covered in tour-nudge.spec.js.
+  // The gate is this file's subject, and the tour nudge arrives right behind
+  // it once the choice is made. Suppressed here so it cannot land in the
+  // middle of a case about the modal. The nudge's own behavior at this gate
+  // is covered in tour-nudge.spec.js.
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
@@ -50,7 +47,7 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).toHaveClass(/first-visit-blocking/);
     await expect(page.locator('#app')).toHaveAttribute('aria-hidden', 'true');
 
-    // DP-1: Forge is the preselected recommendation; remember ships unchecked.
+    // Forge is the preselected recommendation; remember ships unchecked.
     await expect(page.locator('#firstVisitChoiceForge')).toBeChecked();
     await expect(page.locator('#firstVisitChoiceClassic')).not.toBeChecked();
     await expect(page.locator('#firstVisitRemember')).not.toBeChecked();
@@ -69,17 +66,16 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).toHaveClass(/first-visit-blocking/);
   });
 
-  test('the no-choice error still guards the U-10 race, and recovers', async ({
+  test('the no-choice error still guards the viewport race, and recovers', async ({
     page,
   }) => {
-    // DP-1: with Forge preselected, a user can no longer reach "nothing
-    // chosen" by pressing Continue on a fresh modal - radios cannot be
-    // user-unchecked. The error path is NOT dead code, though: the U-10
-    // viewport gate unchecks a CHECKED Classic radio when the window turns
-    // mobile-shaped (main.js updateFirstVisitClassicGate), and
-    // handleFirstVisitClose has a belt-and-braces branch for the same race.
-    // That is the route this case now drives, so the alert, its re-announce
-    // and its focus move stay pinned.
+    // With Forge preselected, a user cannot reach "nothing chosen" by pressing
+    // Continue on a fresh modal: radios cannot be user-unchecked. The error
+    // path is not dead code, though: the viewport gate unchecks a checked
+    // Classic radio when the window turns mobile-shaped (main.js
+    // updateFirstVisitClassicGate), and handleFirstVisitClose has a
+    // belt-and-braces branch for the same race. That is the route this case
+    // drives, so the alert, its re-announce and its focus move stay pinned.
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
     await waitForModal(page);
@@ -110,12 +106,12 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).not.toHaveClass(/first-visit-blocking/);
   });
 
-  test('pressing Continue with no interaction lands in Forge and does NOT remember', async ({
+  test('pressing Continue with no interaction lands in Forge and does not remember', async ({
     page,
   }) => {
-    // DP-1's whole point: the recommendation is already made, so the shortest
-    // possible path through the modal is one click - and because remember
-    // ships unchecked, that click does not commit the visitor to anything.
+    // The recommendation is already made, so the shortest possible path through
+    // the modal is one click, and because remember ships unchecked, that click
+    // does not commit the visitor to anything.
     await page.goto('/');
     await waitForModal(page);
 
@@ -157,9 +153,9 @@ test.describe('First-visit interface choice', () => {
     await waitForModal(page);
 
     await page.locator('#firstVisitChoiceClassic').check();
-    // DP-1: remember now ships unchecked, so this case ticks it deliberately -
-    // it is asserting that the marker AND the ui-mode both land, which is only
-    // the remembered path.
+    // Remember ships unchecked, so this case ticks it deliberately: it asserts
+    // that the marker and the ui-mode both land, which is only the remembered
+    // path.
     await page.locator('#firstVisitRemember').check();
     await page.locator('#first-visit-continue').click();
     await expect(page.locator(MODAL)).toBeHidden();
@@ -179,8 +175,8 @@ test.describe('First-visit interface choice', () => {
   test('unchecked remember proceeds this session and prompts again next visit', async ({
     page,
   }) => {
-    // DP-1 made unchecked the DEFAULT; the explicit uncheck() below is kept so
-    // the case still states its own precondition rather than leaning on it.
+    // Unchecked is the default; the explicit uncheck() below is kept so the
+    // case still states its own precondition rather than leaning on it.
     await page.goto('/');
     await waitForModal(page);
 
@@ -200,7 +196,7 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).toHaveClass(/first-visit-blocking/);
   });
 
-  test('the modal speaks the approved copy and the remember-hint is gone (UF-12, U-19)', async ({
+  test('the modal speaks its own copy and has no remember-hint', async ({
     page,
   }) => {
     await page.goto('/');
@@ -219,7 +215,7 @@ test.describe('First-visit interface choice', () => {
       "Clearing the browser's site data"
     );
 
-    // One-line interface descriptions (the owner's approved strings).
+    // One-line interface descriptions.
     await expect(page.locator('#firstVisitForgeGuide')).toHaveText(
       'Choose Assistive Forge for the most accessible experience.'
     );
@@ -227,16 +223,16 @@ test.describe('First-visit interface choice', () => {
       'Choose this if you already use the OpenSCAD desktop application or are following an OpenSCAD tutorial.'
     );
 
-    // The follow-up statement is the approved one-liner.
+    // The one-line follow-up statement.
     await expect(page.locator('.first-visit-compromise')).toHaveText(
       'On a desktop, you can switch between interfaces at any time with the button in the top right corner of the app.'
     );
 
-    // The redundant remember-hint is deleted outright.
+    // No redundant remember-hint.
     await expect(page.locator('.first-visit-remember-hint')).toHaveCount(0);
   });
 
-  test('card links are siblings of the labels and cannot toggle the radios (UF-12, U-19)', async ({
+  test('card links are siblings of the labels and cannot toggle the radios', async ({
     page,
   }) => {
     await page.goto('/');
@@ -262,11 +258,10 @@ test.describe('First-visit interface choice', () => {
     );
     await expect(classicLink).toHaveAttribute('href', /CLASSIC_UI_GUIDE\.md/);
 
-    // Click each link (navigation suppressed - no network in this suite)
-    // and prove neither radio picked up the click. DP-1: the assertion is
-    // "the selection did not MOVE", which since preselection means Forge is
-    // still the checked one and Classic is still not - a link that toggled a
-    // radio would show up as Classic becoming checked.
+    // Click each link (navigation suppressed: no network in this suite) and
+    // prove neither radio picked up the click. The assertion is "the selection
+    // did not move": Forge is still the checked one and Classic is still not,
+    // so a link that toggled a radio would show up as Classic becoming checked.
     await page.evaluate(() => {
       document
         .querySelectorAll('.first-visit-option-more a')
@@ -280,7 +275,7 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('#firstVisitChoiceClassic')).not.toBeChecked();
   });
 
-  test('modal links look like links in light and dark (UF-12, U-20)', async ({
+  test('modal links look like links in light and dark', async ({
     page,
   }) => {
     await page.goto('/');
@@ -310,20 +305,18 @@ test.describe('First-visit interface choice', () => {
     await probe();
   });
 
-  test('dark theme shows the dark Forge capture; Classic stays light (UF-12, U-21)', async ({
+  test('dark theme shows the dark Forge capture; Classic stays light', async ({
     page,
   }) => {
     // Order matters on Firefox, and this is the sequence that works there.
-    // Emulating BEFORE a fresh page's first navigation does not take: Firefox
+    // Emulating before a fresh page's first navigation does not take: Firefox
     // still answers matchMedia light, the app resolves light, and the light
-    // capture loads - which is why this case failed on the Firefox lane, not
-    // anything the app got wrong. MEASURED on this app, three ways: emulate
-    // then goto gives dark=false on Firefox (true on Chromium); the
-    // colorScheme context option gives false too; goto, then emulate, then
-    // reload gives true on both, and Firefox then sets data-theme=dark and
-    // swaps to the dark capture by itself. The modal still opens on the
-    // reload: the first-visit flag is written when a choice is made, not when
-    // the modal is shown.
+    // capture loads. Three ways on this app: emulate then goto gives
+    // dark=false on Firefox (true on Chromium); the colorScheme context option
+    // gives false too; goto, then emulate, then reload gives true on both, and
+    // Firefox then sets data-theme=dark and swaps to the dark capture by
+    // itself. The modal still opens on the reload: the first-visit flag is
+    // written when a choice is made, not when the modal is shown.
     await page.goto('/');
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.reload();
@@ -348,7 +341,7 @@ test.describe('First-visit interface choice', () => {
     expect(width).toBeGreaterThan(0);
   });
 
-  test('light theme keeps the light Forge capture (UF-12, U-21)', async ({
+  test('light theme keeps the light Forge capture', async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme: 'light' });
@@ -380,7 +373,7 @@ test.describe('First-visit interface choice', () => {
   });
 });
 
-test.describe('First-visit choice on a phone-shaped viewport (U-10, UF-5)', () => {
+test.describe('First-visit choice on a phone-shaped viewport', () => {
   // Plain viewport only — Firefox rejects isMobile at browser-context
   // creation (the mobile-viewport.spec.js lesson).
   test.use({ viewport: { width: 375, height: 812 } });
@@ -397,8 +390,8 @@ test.describe('First-visit choice on a phone-shaped viewport (U-10, UF-5)', () =
     await page.goto('/');
     await waitForModal(page);
 
-    // C-15 shape: a real disabled attribute (the label click does nothing,
-    // no snap-back) plus a VISIBLE reason inside the card.
+    // A real disabled attribute (the label click does nothing,
+    // no snap-back) plus a visible reason inside the card.
     const classicRadio = page.locator('#firstVisitChoiceClassic');
     await expect(classicRadio).toBeDisabled();
     const note = page.locator('#firstVisitClassicGate');
@@ -442,19 +435,17 @@ test.describe('First-visit choice on a phone-shaped viewport (U-10, UF-5)', () =
 });
 
 /*
- * UF-41 (U-39): a modal that fits the phone.
+ * A modal that fits the phone.
  *
- * The owner's own first-run session on a real phone found the interface
- * pictures far too large, no indication of any kind that the modal scrolled,
- * and both the Download button and the entire Classic card below the fold.
- * The measurement behind these cases (release record §8f): Download &
- * Continue sat below an UNMARKED internal fold at all six sizes tested,
- * 1366x768 included, because the whole box scrolled as one.
+ * On a real phone the interface pictures must not crowd the screen, the
+ * modal must show that it scrolls, and neither the Download button nor the
+ * Classic card may sit below the fold. A box that scrolls as one puts
+ * Download & Continue below an unmarked internal fold even at 1366x768.
  *
- * These assert by HIT TEST, never by rectangle. UF-12's trap: a control can
- * have a perfectly good boundingBox and still be under the fold of an
- * internal scroller, so `toBeVisible` and a rect both pass on a button
- * nobody can press.
+ * These assert by hit test, never by rectangle: a control can have a
+ * perfectly good boundingBox and still be under the fold of an internal
+ * scroller, so `toBeVisible` and a rect both pass on a button nobody can
+ * press.
  */
 async function continueFit(page) {
   return page.evaluate(() => {
@@ -486,31 +477,25 @@ async function continueFit(page) {
   });
 }
 
-test.describe('UF-41: Download & Continue is reachable without scrolling', () => {
+test.describe('Download & Continue is reachable without scrolling', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
   });
 
-  // The two sizes the acceptance oracle names. 412x915 is the emulated
-  // phone; 1280x800 is the laptop the §2.5 table proved was also failing,
-  // which is the half of this defect nobody had reported.
+  // Two sizes: 412x915 is the emulated phone, and 1280x800 is a laptop.
   //
-  // WHAT THIS ASSERTS, AND WHY IT IS NOT "nothing scrolls". The first cut of
-  // this case demanded `bodyOverflow <= 0` here and went RED on the Linux
-  // Firefox lane at 38px, while passing on Windows Firefox, Windows Chromium
-  // and Linux Chromium. Linux font metrics are simply taller, and no amount
-  // of CSS makes a text block the same height on every platform. That number
-  // was a MEASUREMENT FROM ONE MACHINE being asserted as a promise.
+  // What this asserts, and why it is not "nothing scrolls": Linux font
+  // metrics are simply taller, and no amount of CSS makes a text block the
+  // same height on every platform, so a body overflow of zero is a
+  // measurement from one machine, not a promise. Linux Firefox overflows by
+  // 38px where Windows Firefox, Windows Chromium and Linux Chromium do not.
   //
-  // The promise is the button, and it survives everywhere: on that same red
-  // run the hit-test assertions passed. So the invariants below are the ones
-  // that are actually engine-independent — the primary action is reachable
+  // The promise is the button, and it holds everywhere. So the invariants
+  // below are the engine-independent ones: the primary action is reachable
   // without scrolling, the modal box itself never scrolls whatever the body
-  // does, and the cue tells the truth about the body. Whether a given size
-  // reaches zero overflow is recorded in the release record as a measurement,
-  // which is what it is.
+  // does, and the cue tells the truth about the body.
   for (const [width, height] of [
     [412, 915],
     [1280, 800],
@@ -548,12 +533,11 @@ test.describe('UF-41: Download & Continue is reachable without scrolling', () =>
     });
   }
 
-  // 412x810 is the height a phone REALLY has once the address bar, status
-  // bar and gesture nav are taken off a 412x915 emulation (UF-38's finding).
-  // No-scroll is out of reach here — the release record's arithmetic shows
-  // the remaining 65px cannot come out of anything but words or a touch
-  // target — but the primary action must still be on screen, because the
-  // footer no longer scrolls with the body.
+  // 412x810 is the height a phone really has once the address bar, status
+  // bar and gesture nav are taken off a 412x915 emulation. No-scroll is out
+  // of reach here (the remaining 65px can only come out of words or a touch
+  // target), but the primary action must still be on screen, because the
+  // footer does not scroll with the body.
   test('the primary action stays on screen at 412x810, the height a phone really has', async ({
     page,
   }) => {
@@ -579,12 +563,12 @@ test.describe('UF-41: Download & Continue is reachable without scrolling', () =>
     ).toBe(fit.bodyOverflow > 0);
   });
 
-  // The title clip (164304) is a 100vh bug: 100vh is the LARGE viewport
-  // height, so on a phone showing its browser chrome the box was taller
-  // than the space it is centred in, and align-items:center cuts an
-  // overflowing item off at both ends. Emulation has no dynamic chrome, so
-  // the closest reproduction available here is the flush-top case — the
-  // title must never sit above the top of the viewport at any size.
+  // A title clip is a 100vh bug: 100vh is the large viewport height, so on
+  // a phone showing its browser chrome a 100vh box is taller than the space
+  // it is centered in, and align-items:center cuts an overflowing item off
+  // at both ends. Emulation has no dynamic chrome, so the closest
+  // reproduction available here is the flush-top case: the title must never
+  // sit above the top of the viewport at any size.
   for (const [width, height] of [
     [360, 640],
     [412, 810],
@@ -607,9 +591,9 @@ test.describe('UF-41: Download & Continue is reachable without scrolling', () =>
   }
 });
 
-test.describe('UF-41: the fold is visible when there is one', () => {
-  // The smallest size in the §2.5 table, and the one the plan proved could
-  // never reach no-scroll without deleting whole blocks.
+test.describe('The fold is visible when there is one', () => {
+  // The smallest size measured, and one that can never reach no-scroll
+  // without deleting whole blocks.
   test.use({ viewport: { width: 360, height: 640 } });
 
   test.beforeEach(async ({ page }) => {
@@ -650,7 +634,7 @@ test.describe('UF-41: the fold is visible when there is one', () => {
     await waitForModal(page);
 
     // Zero-height by construction, so it can never be the reason something
-    // is cut off — the shape UF-38 reviewed for the tutorial card.
+    // is cut off (the same shape as the tutorial card's cue).
     const h = await page
       .locator('.first-visit-scroll-cue')
       .evaluate((el) => el.getBoundingClientRect().height);
@@ -660,17 +644,16 @@ test.describe('UF-41: the fold is visible when there is one', () => {
   test('a content-height change no listener watches still moves the cue', async ({
     page,
   }) => {
-    // FOUND BY MEASUREMENT, not by reasoning: booting into high contrast at
-    // 1280x800 leaves 22px below the fold, and with only scroll/toggle/
-    // resize listeners the cue never appeared — nothing any of them watches
-    // for had happened. A ResizeObserver on the scroller AND its children
-    // closes it; the children matter because content growing inside a
-    // fixed-height scroller never changes that scroller's own box.
+    // Booting into high contrast at 1280x800 leaves 22px below the fold, and
+    // with only scroll/toggle/resize listeners the cue would never appear:
+    // nothing any of them watches for has happened. A ResizeObserver on the
+    // scroller and its children closes that; the children matter because
+    // content growing inside a fixed-height scroller never changes that
+    // scroller's own box.
     //
-    // The trigger here is NOT high contrast, even though that is what caught
-    // it. High contrast grew the content 22px on Chromium and not at all on
-    // WebKit, so a case built on it asserted one engine's metrics and went
-    // red on another — the same over-claim as the fit cases above. Root
+    // The trigger here is not high contrast: it grows the content 22px on
+    // Chromium and not at all on WebKit, so a case built on it would assert
+    // one engine's metrics, the same over-claim as the fit cases above. Root
     // font-size is the honest trigger: it grows the content by a wide margin
     // on every engine, fires none of scroll, toggle or resize, and it is one
     // of the real-world causes this observer exists for (a reader who has
@@ -691,9 +674,8 @@ test.describe('UF-41: the fold is visible when there is one', () => {
       document.documentElement.style.fontSize = '28px';
     });
 
-    // The content really did grow — otherwise the assertion below would pass
-    // by describing nothing, which is the vacuous green this suite keeps
-    // being bitten by.
+    // The content really did grow; otherwise the assertion below would pass
+    // by describing nothing.
     const after = await continueFit(page);
     expect(after.bodyOverflow).toBeGreaterThan(0);
 
@@ -733,7 +715,7 @@ test.describe('UF-41: the fold is visible when there is one', () => {
   });
 });
 
-test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => {
+test.describe('The collapsible intro on a mobile-shaped viewport', () => {
   test.use({ viewport: { width: 412, height: 810 } });
 
   test.beforeEach(async ({ page }) => {
@@ -742,7 +724,7 @@ test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => 
     });
   });
 
-  test('four native details rows, stowed on first view, with the signed headlines', async ({
+  test('four native details rows, stowed on first view, with their headlines', async ({
     page,
   }) => {
     await page.goto('/');
@@ -751,8 +733,8 @@ test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => 
     const rows = page.locator('.first-visit-note-row');
     await expect(rows).toHaveCount(4);
 
-    // Native disclosure, not an ARIA reconstruction: the element IS
-    // <details> and the control IS its <summary>.
+    // Native disclosure, not an ARIA reconstruction: the element is
+    // <details> and the control is its <summary>.
     for (let i = 0; i < 4; i += 1) {
       await expect(rows.nth(i)).toHaveJSProperty('tagName', 'DETAILS');
       await expect(rows.nth(i)).not.toHaveAttribute('open', '');
@@ -807,9 +789,9 @@ test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => 
     await page.goto('/');
     await waitForModal(page);
 
-    // Q-69 keeps the full bullets on desktop and gives mobile the stowed
-    // rows, which means the four approved sentences are in the DOM twice.
-    // That is only safe while the two copies say exactly the same thing.
+    // Desktop keeps the full bullets and mobile gets the stowed rows, so the
+    // four sentences are in the DOM twice. That is only safe while the two
+    // copies say exactly the same thing.
     const normalise = (s) => s.replace(/\s+/g, ' ').trim();
     const bullets = (
       await page.locator('.first-visit-note-list li').allTextContents()
@@ -827,14 +809,13 @@ test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => 
     await page.goto('/');
     await waitForModal(page);
 
-    // Q-68a: no screenshots where no choice is offered.
+    // No screenshots where no choice is offered.
     await expect(page.locator('#firstVisitForgeShot')).toBeHidden();
     await expect(page.locator('#firstVisitClassicShot')).toBeHidden();
 
-    // ...and the layout description each picture used to carry is still
-    // what the radio is described by, because it moved to an sr-only span
-    // that is in the DOM at every size. This is the whole reason the
-    // pictures were allowed to go.
+    // ...and the layout description each picture carries is still what the
+    // radio is described by, because it lives in an sr-only span that is in
+    // the DOM at every size. That is what lets the pictures go.
     for (const [radio, descId, fragment] of [
       [
         '#firstVisitChoiceForge',
@@ -883,13 +864,12 @@ test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => 
     await waitForModal(page);
 
     // #srAnnouncer is inert while this modal blocks, so the in-modal
-    // role=alert is the only voice here (UF-3). The rebuild must not have
-    // moved it out of the scrolling body or muted it.
+    // role=alert is the only voice here, and it must keep speaking.
     //
-    // DP-1: on a mobile-shaped viewport Forge is preselected and Classic is
-    // gated, so no sequence of user actions reaches "nothing chosen" here.
-    // The no-choice STATE is still what this alert exists for (the U-10 race
-    // clears a gated Classic radio), so it is entered directly - this case is
+    // On a mobile-shaped viewport Forge is preselected and Classic is gated,
+    // so no sequence of user actions reaches "nothing chosen" here. The
+    // no-choice state is still what this alert exists for (the viewport race
+    // clears a gated Classic radio), so it is entered directly: this case is
     // about where the alert lives and whether it speaks, not about how the
     // state is reached. The reachable-by-hand route is pinned in the desktop
     // describe above.

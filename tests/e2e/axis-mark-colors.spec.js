@@ -4,14 +4,13 @@ import path from 'path';
 const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 
 /**
- * Axis mark colors follow the viewport scheme, not the app theme (U-13).
+ * Axis mark colors follow the viewport scheme, not the app theme.
  *
- * The defect: with the app theme resolved dark, entering Classic rebuilt
- * the axis lines and tick labels with the dark theme's light text color —
- * near-invisible on Cornfield's cream background, and no toggle could heal
- * it because every rebuild re-read the same html-scoped token. The fix
- * resolves scheme-first from the transcribed upstream axes colors, and
- * reads the app-theme token off body otherwise.
+ * With the app theme resolved dark, entering Classic must not rebuild the
+ * axis lines and tick labels with the dark theme's light text color: that
+ * is near-invisible on Cornfield's cream background. The color resolves
+ * scheme-first from the transcribed upstream axes colors, and reads the
+ * app-theme token off body otherwise.
  *
  * Proven through `__forgeDebug.axisTickOverlay().colorHex` — the color the
  * overlay actually baked — not through any control state, and not through
@@ -31,8 +30,8 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-    // The dark leg of the owner's recipe, seeded instead of clicked so the
-    // resolved theme is dark regardless of the machine running the test.
+    // The dark app theme, seeded instead of clicked so the resolved theme is
+    // dark regardless of the machine running the test.
     localStorage.setItem('openscad-forge-theme', 'dark');
   });
 });
@@ -82,8 +81,8 @@ test('dark Forge theme cannot bleed into Classic axis marks, and the scheme choi
     .poll(async () => (await overlay())?.inScene, { timeout: 10_000 })
     .toBe(true);
 
-  // The U-13 assertion: Cornfield axes are the desktop's black, not the
-  // dark theme's light foreground (the defect baked 0xedeef0 here).
+  // Cornfield axes are the desktop's black, not the dark theme's light
+  // foreground (0xedeef0).
   await expect
     .poll(async () => (await overlay())?.colorHex, { timeout: 10_000 })
     .toBe(CORNFIELD_AXES);
@@ -106,11 +105,11 @@ test('dark Forge theme cannot bleed into Classic axis marks, and the scheme choi
   await page.locator('#preferencesModalDone').click();
 
   // --- Leave Classic: the dark app theme resolves its own light marks ------
-  // Since UF-14 the marks are a PER-UI preference (U-25): Classic's
-  // defaults no longer leak into Forge, so the overlay leaves the scene on
-  // the flip and Forge shows marks only when Forge turns them on — which
-  // is exactly what this leg does, through Forge's own View menu, before
-  // judging the color the Forge rebuild bakes.
+  // The marks are a per-interface preference: Classic's defaults do not leak
+  // into Forge, so the overlay leaves the scene on the flip and Forge shows
+  // marks only when Forge turns them on, which is exactly what this leg
+  // does, through Forge's own View menu, before judging the color the Forge
+  // rebuild bakes.
   await page.locator('#classicModeToggle').click();
   await expect(page.locator('body')).not.toHaveAttribute(
     'data-ui-mode',

@@ -1,5 +1,5 @@
 /**
- * E2E: a design built as a STACK of passes (DP-7, DP-8).
+ * E2E: a design built as a stack of passes.
  *
  * The acceptance story: three nested squares go in as one drawing, the app
  * works out that they are nested three deep, writes one compound-path SVG per
@@ -7,7 +7,7 @@
  * pass standing on the one before it rather than on air.
  *
  * The thing worth guarding is not that files appear. It is that they appear
- * TOGETHER with their aspects, at their true relative sizes, and that the
+ * together with their aspects, at their true relative sizes, and that the
  * charm actually renders from them.
  *
  * @license GPL-3.0-or-later
@@ -65,15 +65,13 @@ const layerState = (page, prefix = 'design') =>
   }, prefix);
 
 /**
- * Build the stack the way a person does: open the editor, SET a layer on each
- * shape that is meant to stand on another, and apply.
+ * Build the stack the way a person does: open the editor, set a layer on
+ * each shape that is meant to stand on another, and apply.
  *
- * D-135 (the owner at DP-Q44) stopped the app assigning layers on the plain
- * upload path; D-142 (DP-51, the owner's second walk) finished the job in the
- * EDITOR, where the column used to arrive pre-filled from nesting depth. It
- * now starts at all ones, so building a stack means choosing the layers - and
- * this helper does what the person does, rather than pressing Apply over a
- * column the app filled in.
+ * The app does not assign layers on anyone's behalf, on the upload path or
+ * in the editor, where the column starts at all ones. So building a stack
+ * means choosing the layers, and this helper does what a person does,
+ * rather than pressing Apply over a column the app filled in.
  */
 async function openTheEditor(page, fileParam = 'design_file') {
   // The editor's door lives in the design control's status card, inside the
@@ -100,7 +98,7 @@ async function buildStackInTheEditor(page, fileParam = 'design_file') {
   await expect
     .poll(() => layerSelects.count(), { timeout: 60000 })
     .toBeGreaterThan(0);
-  // The column starts at all ones (D-142). The middle square goes on layer 2
+  // The column starts at all ones. The middle square goes on layer 2
   // and the inner one on layer 3, which is the stack the rest of this file
   // measures: each pass standing on the one before it.
   //
@@ -127,7 +125,7 @@ async function buildStackInTheEditor(page, fileParam = 'design_file') {
   return chosen;
 }
 
-test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
+test.describe('A design built as a stack of passes', () => {
   test('the charm declares three passes, and none is on by default', async ({
     page,
   }) => {
@@ -164,7 +162,7 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
     await expect(page.locator('#param-design_layer_1_style')).toHaveCount(1);
   });
 
-  test('★ a drawing nobody assigned layers to builds NO stack (D-135)', async ({
+  test('a drawing nobody assigned layers to builds no stack', async ({
     page,
   }) => {
     test.slow();
@@ -176,11 +174,11 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
       .poll(async () => (await layerState(page)).design, { timeout: 90000 })
       .toBe('nested-squares.svg');
 
-    // And the passes stay empty. This used to fill them from nesting depth on
-    // every upload, and the model treats any filled layer file as "the stack is
-    // on" - so the charm printed 0.80 mm taller than it was asked for, measured
-    // from the STL, with 17,742 extra facets. The depth suggestion is still
-    // offered; it is just not applied on anyone's behalf.
+    // And the passes stay empty. The model treats any filled layer file as
+    // "the stack is on", so a filled pass prints the charm taller than it was
+    // asked for (0.80 mm, measured from the STL, with 17,742 extra facets).
+    // The depth suggestion is still offered; it is just not applied on
+    // anyone's behalf.
     await page.waitForTimeout(1500);
     // Empty is empty whether it is the model's declared "" or the null the app
     // emits to CLEAR a previous design's stack. What matters is that no layer
@@ -191,16 +189,15 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
     );
   });
 
-  test('★ the editor opens on layer 1, and Apply alone builds NO stack (D-142)', async ({
+  test('the editor opens on layer 1, and Apply alone builds no stack', async ({
     page,
   }) => {
-    // The owner's second walk, 2026-09-16: "the inside of the R and the A in
-    // CREATE came out as a layer 3 shape". MEASURED on their logo before the
-    // fix, on this same host: 394 of 553 rows opened on layer 2, 158 on layer
-    // 3, and an untouched Apply emitted three layer files of 197,898, 234,598
-    // and 53,402 bytes. The column is where the phantom stack was built, so
-    // the guard is here: open the editor on a drawing that nests three deep,
-    // touch nothing, Apply, and the passes stay empty.
+    // Inner counters of letters (the inside of an R or an A) must not arrive
+    // as layer 3 shapes. A column pre-filled from nesting depth would open a
+    // logo with hundreds of rows on layers 2 and 3, and an untouched Apply
+    // would emit three layer files. So the guard is here: open the editor on a
+    // drawing that nests three deep, touch nothing, Apply, and the passes stay
+    // empty.
     test.slow();
     await openCharm(page);
     await page.setInputFiles('#param-design_file', SQUARES);
@@ -248,18 +245,17 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
     ).toEqual([]);
   });
 
-  test('★ Apply is not offered while the shapes are still being combined', async ({
+  test('Apply is not offered while the shapes are still being combined', async ({
     page,
   }) => {
-    // Firefox on CI found this one by pressing Apply faster than the combine
-    // could finish. The combine left the main thread at DP-37 P2, so between
-    // the editor opening and the result landing there are now seconds of
-    // worker start-up - and Apply's handler refuses a null result by
-    // RETURNING. The button was enabled the whole time and did nothing at all
-    // when pressed: no stack, no message, no closed editor.
+    // Apply must not be offered before the combine lands. The combine runs in
+    // a worker, so between the editor opening and the result landing there
+    // are seconds of worker start-up, and an enabled Apply whose handler
+    // refuses a null result by returning would do nothing at all when
+    // pressed: no stack, no message, no closed editor.
     //
     // The window is milliseconds on a fast machine, so this watches the
-    // MUTATION rather than polling for a state that would be over before the
+    // mutation rather than polling for a state that would be over before the
     // first sample. The observer is armed before the editor exists.
     test.slow();
     await openCharm(page);
@@ -312,7 +308,7 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
       .toBeEnabled({ timeout: 90000 });
   });
 
-  test('★ three nested squares become three passes when asked, and the charm renders', async ({
+  test('three nested squares become three passes when asked, and the charm renders', async ({
     page,
   }) => {
     test.slow();
@@ -342,9 +338,9 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
       'nested-squares_layer_2.svg',
       'nested-squares_layer_3.svg',
     ]);
-    // Every pass carries a measured aspect in the SAME state as its file
-    // (D-108's law): a file whose companion has not caught up would be fitted
-    // against the wrong ratio.
+    // Every pass carries a measured aspect in the same state as its file: a
+    // file whose companion has not caught up would be fitted against the wrong
+    // ratio.
     for (const a of after.aspects) expect(a).toBeCloseTo(1, 2);
 
     // And the model builds from them. The engine is the judge here, not a
@@ -354,7 +350,7 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
     });
   });
 
-  test('the passes are written at their TRUE relative sizes', async ({
+  test('the passes are written at their true relative sizes', async ({
     page,
   }) => {
     test.slow();
@@ -461,10 +457,10 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DP-60: the Logo Plate builds the same stack under its own prefix.
+// The Logo Plate builds the same stack under its own prefix.
 // ---------------------------------------------------------------------------
 
-test.describe('The Logo Plate builds a stack too (DP-60)', () => {
+test.describe('The Logo Plate builds a stack too', () => {
   test('the plate declares three passes, and none is on by default', async ({
     page,
   }) => {
@@ -537,10 +533,10 @@ test.describe('The Logo Plate builds a stack too (DP-60)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DP-61: the Flat Pendant builds the same stack under the design prefix.
+// The Flat Pendant builds the same stack under the design prefix.
 // ---------------------------------------------------------------------------
 
-test.describe('The Flat Pendant builds a stack too (DP-61)', () => {
+test.describe('The Flat Pendant builds a stack too', () => {
   test('the pendant declares three passes, and none is on by default', async ({
     page,
   }) => {

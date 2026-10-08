@@ -88,9 +88,9 @@ async function uploadFile(page, filePath) {
 }
 
 /**
- * UF-9 P1: the app boots Simplified, which hides the project-files panel and
- * the reference-image overlay section (ui-mode-hidden). These tests predate
- * that mode split; take the app to Standard the way a user does.
+ * The app boots Simplified, which hides the project-files panel and the
+ * reference-image overlay section (ui-mode-hidden). Take the app to
+ * Standard the way a user does.
  */
 async function switchToStandardMode(page) {
   const toggle = page.locator('#uiModeToggle');
@@ -102,9 +102,9 @@ async function switchToStandardMode(page) {
 }
 
 /**
- * UF-9 P1: parameter groups render as <details> collapsed by default
- * (F5, owner decision 2026-05-15), so a .param-control is attached yet
- * hidden. Prove the load, expand the groups, then assert visibility.
+ * Parameter groups render as <details> collapsed by default, so a
+ * .param-control is attached yet hidden. Prove the load, expand the
+ * groups, then assert visibility.
  */
 async function expectParamsLoaded(page) {
   await expect(page.locator('.param-control').first()).toBeAttached({
@@ -191,9 +191,8 @@ test.describe('Keyguard SVG Export', () => {
     await expect(format2dGuidance).toBeHidden({ timeout: 2000 });
   });
 
-  // Re-enabled 2026-08-19 (AF-7). The 2026-07-05 "no download" was the
-  // one-click premise: the primary action is Generate THEN Download since
-  // the transformer. Flow updated; passes in ~40s.
+  // The primary action is Generate, then Download (the transformer button),
+  // so the flow presses both; it passes in about 40s.
   test('should export valid SVG from simple 2D model', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
@@ -207,8 +206,8 @@ test.describe('Keyguard SVG Export', () => {
     const outputFormatSelect = page.locator('#outputFormat');
     await outputFormatSelect.selectOption('svg');
     
-    // UF-2 put parameters in drawers that ship closed; open them before
-    // asking for a control to be VISIBLE (the auto-preview spec's idiom).
+    // Parameters sit in drawers that ship closed; open them before asking for
+    // a control to be visible (the auto-preview spec's idiom).
     await page.evaluate(() => {
       for (const g of document.querySelectorAll('details.param-group')) g.open = true;
     });
@@ -252,13 +251,10 @@ test.describe('Keyguard SVG Export', () => {
     expect(hasGeometry).toBe(true);
   });
 
-  // Re-enable attempt 2026-08-19 (AF-7): the 2026-07-05 upload-phase failure
-  // is GONE (stale selectors from before the UF-2 drawers / UF-31 tree; both
-  // repaired below, and the flow now reaches the render). What remains is a
-  // PRODUCT measurement: the real keyguard's first-layer SVG sat at
-  // "Generating SVG..." for FIVE minutes without finishing - projection() of
-  // the whole model in single-threaded WASM. Reported to the owner; the skip
-  // below carries the reason into the report instead of a comment.
+  // The real keyguard's first-layer SVG sits at "Generating SVG..." for more
+  // than five minutes without finishing: projection() of the whole model in
+  // single-threaded WASM. That is a product-level cost, so the skip below
+  // carries the reason into the report.
   test('should export valid SVG from keyguard with Laser-Cut settings', async ({ page }) => {
     test.skip(
       true,
@@ -273,16 +269,15 @@ test.describe('Keyguard SVG Export', () => {
     const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
     
-    // "Project recognized" used to be asserted on the companion panel, but
-    // that panel is defaultHiddenInBasic - hidden by design in Simplified -
-    // and was never this test's subject. The keyguard's own parameter
-    // arriving IS the recognition signal.
+    // The companion panel is defaultHiddenInBasic (hidden by design in
+    // Simplified) and is not this test's subject. The keyguard's own parameter
+    // arriving is the recognition signal.
     await expect(
       page.locator('.param-control[data-param-name="type_of_keyguard"] select')
     ).toBeAttached({ timeout: 30000 });
     
-    // UF-2 put parameters in drawers that ship closed; open them before
-    // asking for a control to be VISIBLE (the auto-preview spec's idiom).
+    // Parameters sit in drawers that ship closed; open them before asking for
+    // a control to be visible (the auto-preview spec's idiom).
     await page.evaluate(() => {
       for (const g of document.querySelectorAll('details.param-group')) g.open = true;
     });
@@ -348,11 +343,10 @@ test.describe('Companion File Handling', () => {
     await uploadFile(page, zipPath);
     await switchToStandardMode(page);
 
-    // UF-9 P1: the old .file-tree/.project-files markup no longer exists.
-    // Today the companion-files UI is #projectFilesControls: the badge
-    // counts EVERY project file (main + companions) and the list holds
-    // the companions only — badge '2' plus the TXT in the list is the
-    // modern proof that both ZIP files were recognized.
+    // The companion-files UI is #projectFilesControls: the badge counts every
+    // project file (main + companions) and the list holds the companions only,
+    // so badge '2' plus the TXT in the list proves both ZIP files were
+    // recognized.
     await expect(page.locator('#projectFilesControls')).toBeVisible({ timeout: 15000 });
     await expect(page.locator('#projectFilesBadge')).toHaveText('2');
     const fileNames = await page.locator('#projectFilesList').textContent();
@@ -369,7 +363,7 @@ test.describe('Companion File Handling', () => {
     await uploadFile(page, zipPath);
     await switchToStandardMode(page);
 
-    // UF-9 P1: modern companion-files markup (see the test above).
+    // The companion-files markup (see the test above).
     await expect(page.locator('#projectFilesControls')).toBeVisible({ timeout: 15000 });
 
     // Wait a bit for any rendering/parsing to occur
@@ -400,12 +394,11 @@ test.describe('Multi-Preset JSON Import/Export', () => {
     // Wait for parameters to load
     await expectParamsLoaded(page);
     
-    // UF-25: this test skipped itself with the reason "No manage-presets
-    // trigger in this build". That reason was false - #managePresetsBtn is
-    // right there. The old union locator's first() resolved to something
-    // hidden, so the guard fired and the case stopped running, and the skip
-    // message made it look deliberate. Import lives inside the Manage Presets
-    // dialog as data-action="import".
+    // #managePresetsBtn is the trigger, asserted rather than guarded: a union
+    // locator whose first() resolves to something hidden would fire a skip
+    // guard and stop the case, with a skip message that makes it look
+    // deliberate. Import lives inside the Manage Presets dialog as
+    // data-action="import".
     const presetButton = page.locator('#managePresetsBtn');
     await expect(presetButton).toBeVisible();
     await presetButton.click();
@@ -494,9 +487,8 @@ test.describe('Parameter Switching Stability', () => {
     const allPresets = await getPresetOptions(page);
     const nonEmpty = allPresets.filter(o => o.trim() !== '');
 
-    // UF-27: this used to skip in silence when the fixture offered fewer than
-    // two presets. It offers them, so the guard was dead code that would have
-    // turned a broken fixture into a pass.
+    // The fixture offers two presets or more, asserted rather than guarded, so
+    // a broken fixture cannot pass.
     expect(nonEmpty.length).toBeGreaterThanOrEqual(2);
 
     // Switch presets at least 5 times (cycle through available presets)
@@ -514,11 +506,11 @@ test.describe('Parameter Switching Stability', () => {
     // Pixel histogram check: the preview canvas should have non-trivial content
     const canvas = page.locator('#previewContainer canvas');
     if (await canvas.isVisible({ timeout: 5000 }).catch(() => false)) {
-      // UF-9 P1: readPixels only sees the draw buffer inside the frame
-      // (no preserveDrawingBuffer) — the bare read returned all zeros while
-      // the failure screenshot showed a healthy rendered model. Read under
-      // a nested double-rAF (the axis-depth-truth pattern) so the sample
-      // always follows a full app frame.
+      // readPixels only sees the draw buffer inside the frame (no
+      // preserveDrawingBuffer), so a bare read can return all zeros over a
+      // healthy rendered model. Read under a nested double rAF (the
+      // axis-depth-truth pattern) so the sample always follows a full app
+      // frame.
       const pixelStats = await canvas.evaluate((el) => {
         return new Promise((resolve) => {
           requestAnimationFrame(() => {
@@ -558,8 +550,6 @@ test.describe('Parameter Switching Stability', () => {
 });
 
 test.describe('OpenSCAD Output Exposure', () => {
-  // Re-enabled 2026-08-19 (AF-7): the console-panel failure it blamed was
-  // fixed by UF-19's console work - the case simply works now.
   test('should display echo output from OpenSCAD', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     

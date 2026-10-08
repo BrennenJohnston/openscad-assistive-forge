@@ -40,10 +40,9 @@ const loadSimpleBoxExample = async (page, { expandGroups = false } = {}) => {
 
   await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
 
-  // F5 (owner, 2026-05-15): parameter groups load collapsed, so controls are
-  // attached long before they are visible. Tests that reach for a slider ask
-  // for this; the rest are left with the app's own default state (UF-9
-  // established the idiom, UF-25 applies it here).
+  // Parameter groups load collapsed, so controls are attached long before
+  // they are visible. Tests that reach for a slider ask for this; the rest
+  // are left with the app's own default state.
   if (expandGroups) {
     const expandAll = page.locator('#expandAllGroupsBtn')
     if (await expandAll.isVisible().catch(() => false)) {
@@ -56,18 +55,17 @@ const loadSimpleBoxExample = async (page, { expandGroups = false } = {}) => {
 }
 
 /**
- * UF-25: seven tests in this file looked for the Save Preset control with
- * `button:has-text("Save Preset"), button[aria-label*="Save preset"]`, and that
- * matches nothing. #savePresetBtn is icon-only, so it carries no such text, and
- * its aria-label reads "Save Preset: overwrites current preset" - CSS
- * attribute matching is case-sensitive, so the lowercase "preset" in the old
- * selector missed it too. It is also disabled until a preset is selected, since
- * it OVERWRITES. Each of those tests then hit `if (!visible) test.skip()` and
- * stopped running, reporting skipped rather than red.
+ * The Save Preset control is not the way to create a preset in a test.
+ * #savePresetBtn is icon-only, so `button:has-text("Save Preset")` matches
+ * nothing, and its aria-label reads "Save Preset: overwrites current
+ * preset"; CSS attribute matching is case-sensitive, so
+ * `button[aria-label*="Save preset"]` misses it too. It is also disabled
+ * until a preset is selected, since it overwrites. A test guarded by
+ * `if (!visible) test.skip()` on it would stop running and report skipped
+ * rather than red.
  *
- * Creating a new named preset is the "+" button, which is what the two tests
- * that kept working already used. This helper is that flow, asserted rather
- * than guarded.
+ * Creating a new named preset is the "+" button. This helper is that flow,
+ * asserted rather than guarded.
  */
 const createPreset = async (page, name) => {
   const addPresetBtn = page.locator('#addPresetBtn')
@@ -86,12 +84,12 @@ const createPreset = async (page, name) => {
 test.describe('Preset Workflow', () => {
   test.beforeEach(async ({ page }) => {
     // Clear localStorage before each test, but preserve first-visit-seen to avoid blocking modal.
-    // UF-25: the clear is ONE-SHOT. addInitScript runs before EVERY document
-    // load, including page.reload(), so an unguarded clear wiped the saved
-    // presets that the reload-persistence test then went looking for - the
-    // test destroyed its own subject and the failure read like a lost-data
-    // bug in the app. sessionStorage survives a reload in the same tab, so it
-    // is what remembers that this context has already been cleared.
+    // The clear is one-shot. addInitScript runs before every document load,
+    // including page.reload(), so an unguarded clear would wipe the saved
+    // presets the reload-persistence test then goes looking for: the test
+    // would destroy its own subject, and the failure would read like a
+    // lost-data bug in the app. sessionStorage survives a reload in the same
+    // tab, so it is what remembers that this context has already been cleared.
     await page.addInitScript(() => {
       if (!sessionStorage.getItem('pw-storage-cleared')) {
         localStorage.clear()
@@ -230,7 +228,7 @@ test.describe('Preset Workflow', () => {
 
     // The per-preset rows live inside a collapsed "Individual presets"
     // disclosure, so the export button is present but not visible until it is
-    // opened (UF-25; same shape as the collapsed parameter groups).
+    // opened (the same shape as the collapsed parameter groups).
     const listDetails = page.locator('details.preset-list-details')
     await expect(listDetails).toBeVisible()
     await listDetails.locator('summary').click()
@@ -255,8 +253,6 @@ test.describe('Preset Workflow', () => {
     await loadSimpleBoxExample(page)
 
     // Import lives inside the Manage Presets modal, as data-action="import".
-    // The old `button[aria-label*="Import preset"]` matched nothing on the
-    // page, so this test skipped itself rather than checking anything (UF-25).
     const manageBtn = page.locator('#managePresetsBtn')
     await expect(manageBtn).toBeVisible()
     await manageBtn.click()
@@ -266,7 +262,7 @@ test.describe('Preset Workflow', () => {
     await expect(importAction).toBeEnabled()
   })
 
-  test('Replace-mode import runs without TypeError and imports designs (F-5 regression)', async ({ page }) => {
+  test('Replace-mode import runs without TypeError and imports designs', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await loadSimpleBoxExample(page)
@@ -333,7 +329,7 @@ test.describe('Preset Workflow', () => {
     await page.waitForTimeout(300)
 
     // #deletePresetBtn is icon-only and enables once a deletable preset is
-    // selected. The old text/aria selectors matched nothing (UF-25).
+    // selected.
     const deleteButton = page.locator('#deletePresetBtn')
     await expect(deleteButton).toBeVisible()
     await expect(deleteButton).toBeEnabled()
@@ -365,9 +361,8 @@ test.describe('Preset Workflow', () => {
     const initialCount = initialOptions.length
     expect(initialCount).toBeGreaterThanOrEqual(1)
 
-    // Save a preset. This block used to sit inside `if (saveButton.isVisible())`
-    // against a selector that matched nothing, so the test passed having
-    // asserted only the initial count (UF-25).
+    // Save a preset, asserted rather than guarded, so the test cannot pass
+    // having asserted only the initial count.
     await createPreset(page, 'Count Test')
 
     const newOptions = await getPresetOptions(page)
@@ -379,11 +374,10 @@ test.describe('Preset Workflow', () => {
     
     await loadSimpleBoxExample(page)
 
-    // UF-25: this used to accept any outcome ("either the preset exists or
-    // validation prevented it, both are acceptable") and assert only that at
-    // least one option existed, which is true before the test does anything.
-    // A name with quotes and brackets has to round-trip intact - that is the
+    // A name with quotes and brackets has to round-trip intact: that is the
     // property worth guarding, and it is where an escaping bug would show.
+    // Accepting any outcome would assert nothing the page did not already
+    // show before the test began.
     const trickyName = 'Test "Preset" (v1.0) & <b>'
     await createPreset(page, trickyName)
 
@@ -669,23 +663,22 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
   })
 
   /*
-   * KNOWN RED, and deliberately left red: defect D-47, reported to the owner
-   * on 2026-08-15 and not fixed here.
+   * Known red, and deliberately left red: an open defect.
    *
    * User-saved presets are filed under state.uploadedFile.name, and for a ZIP
-   * that is the ARCHIVE's filename - file-handler.js passes `file.name` as
+   * that is the archive's filename: file-handler.js passes `file.name` as
    * originalFileName on the ZIP path. This test opens the same project from
    * two differently named archives, so the second upload looks up a different
    * key and cannot see the preset saved under the first. The presets are not
    * lost; they are filed elsewhere.
    *
-   * The sibling case above proves project-NATIVE presets (from the sidecar
-   * JSON) DO follow the project across a rename, so the two kinds of preset
+   * The sibling case above proves project-native presets (from the sidecar
+   * JSON) do follow the project across a rename, so the two kinds of preset
    * behave differently. Whether a user's own presets should follow a project
-   * across a rename is a product decision about how people organise their
-   * work, and it needs a storage migration, so it is the owner's call and its
-   * own release. This test states the behaviour it expects; when D-47 is
-   * settled it either goes green or is rewritten to the decision.
+   * across a rename is a product decision about how people organize their
+   * work, and it needs a storage migration. This test states the behavior it
+   * expects; once that is decided it either goes green or is rewritten to
+   * the decision.
    */
   test('user-saved presets in localStorage survive project reload', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
@@ -752,29 +745,28 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     await page.goto(`/?${COMBOBOX_FLAG_PARAM}`)
   })
 
-  test('AF-10: the resting selection is design default values, like the desktop', async ({ page }) => {
+  test('The resting selection is design default values, like the desktop', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await loadSimpleBoxExample(page)
 
-    // R-II P5b: before any choice, the desktop's combobox shows the active
-    // "design default values" - not a search placeholder. Display parity
-    // only: nothing is applied, and Save stays disabled (defaults are
-    // immutable, desktop-correct).
+    // Before any choice, the desktop's combobox shows the active "design
+    // default values", not a search placeholder. Display parity only: nothing
+    // is applied, and Save stays disabled (defaults are immutable,
+    // desktop-correct).
     await expect(page.locator('#presetComboboxInput')).toHaveValue(
       'design default values'
     )
     await expect(page.locator('#savePresetBtn')).toBeDisabled()
   })
 
-  test('AF-10: the save control is a text button, like the desktop', async ({ page }) => {
+  test('The save control is a text button, like the desktop', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await loadSimpleBoxExample(page)
 
-    // R-II P10: the desktop has a text "save preset" button where we shipped
-    // a floppy icon. The accessible name never changed; the VISIBLE label is
-    // the parity subject.
+    // The desktop has a text "save preset" button, so the visible label is the
+    // parity subject; the accessible name is the same either way.
     await expect(page.locator('#savePresetBtn')).toHaveText('Save Preset')
   })
 

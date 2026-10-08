@@ -63,7 +63,7 @@ test.describe('Stakeholder Acceptance Tests', () => {
     expect(uploadAreaExists || presetControlsExists || viewerAreaExists).toBe(true)
   })
 
-  test('TEST 2: Button Labels (Item 11)', async ({ page }) => {
+  test('TEST 2: Button Labels', async ({ page }) => {
     console.log('=== TEST 2: Button Labels ===')
     
     await loadSimpleBoxExample(page)
@@ -120,7 +120,7 @@ test.describe('Stakeholder Acceptance Tests', () => {
     await page.screenshot({ path: 'test-results/test3-model-loaded.png', fullPage: true })
   })
 
-  test('TEST 4: Design Default Values (Item 13)', async ({ page }) => {
+  test('TEST 4: Design Default Values', async ({ page }) => {
     console.log('=== TEST 4: Design Default Values ===')
     
     await loadSimpleBoxExample(page)
@@ -137,7 +137,7 @@ test.describe('Stakeholder Acceptance Tests', () => {
     expect(firstRealOption?.toLowerCase()).toContain('design default')
   })
 
-  test('TEST 5: Import / Export Modal (Item 12)', async ({ page }) => {
+  test('TEST 5: Import / Export Modal', async ({ page }) => {
     console.log('=== TEST 5: Import / Export Modal ===')
     
     await loadSimpleBoxExample(page)
@@ -178,7 +178,7 @@ test.describe('Stakeholder Acceptance Tests', () => {
     }
   })
 
-  test('TEST 6: Console Panel (Item 4)', async ({ page }) => {
+  test('TEST 6: Console Panel', async ({ page }) => {
     console.log('=== TEST 6: Console Panel ===')
     
     await loadSimpleBoxExample(page)

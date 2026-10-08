@@ -5,11 +5,11 @@ const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 
 /**
  * The camera bar's Preview must show what is typed, not what was last
- * published (E3-era defect, re-reported UF-1 §L, fixed UF-6 P6).
+ * published.
  *
  * Mechanism: editor edits publish through a 500 ms write-back debounce.
  * The plain preview path re-serves the cached preview of the last
- * PUBLISHED source, so pressing the camera-bar Preview inside that window
+ * published source, so pressing the camera-bar Preview inside that window
  * rendered the pre-edit model. The top toolbar's Preview always flushed
  * first; this pins the camera bar to the same trigger.
  *
@@ -21,7 +21,7 @@ const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
  */
 
 const WASM_READY_TIMEOUT = 180_000;
-const MARKER = 'UF6_P6_FLUSH_MARKER';
+const MARKER = 'CAMERA_BAR_FLUSH_MARKER';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -57,7 +57,7 @@ test('camera-bar Preview renders an unblurred edit typed moments before', async 
   await page.locator('#classicModeToggle').click();
   await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
 
-  // The initial auto-preview must be CURRENT first: the defect path is a
+  // The initial auto-preview must be current first: the defect path is a
   // cache hit re-serving exactly this render, so it has to exist.
   await expect(page.locator('#previewContainer')).toHaveClass(
     /preview-current/,
@@ -76,10 +76,9 @@ test('camera-bar Preview renders an unblurred edit typed moments before', async 
   await page.locator('#classicPreviewBtn').click();
 
   // The render that follows carries the edit only if the button flushed
-  // the write-back before previewing. CI's software renderer needs more
-  // wall clock than local hardware for the same render (MEASURED: the
-  // marker missed a 60 s window on a starved shard while the same walk
-  // passes locally in seconds); the contract stays binary - a stale
-  // render never contains the marker at any timeout.
+  // the write-back before previewing. CI's software renderer needs far more
+  // wall clock than local hardware for the same render, hence the long
+  // timeout; the contract stays binary: a stale render never contains the
+  // marker at any timeout.
   await expect(consoleLog).toContainText(MARKER, { timeout: 120_000 });
 });

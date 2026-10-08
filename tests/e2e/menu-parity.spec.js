@@ -12,9 +12,10 @@ const RECENT_KEY = 'openscad-forge-recent-files'
 const RECENT_UNAVAILABLE_REASON =
   'Not saved in this browser. Open the file again to reload it'
 
-// Appendix U2, with the adaptations recorded in main.js's File-menu comment:
-// Save All and Python omitted (D-24); Quit's slot dropped and the single Close
-// named "Close Project" (D-27); "Open Local Folder…" is a kept Forge extra.
+// The desktop's File menu, with the adaptations recorded in main.js's
+// File-menu comment: Save All and Python omitted; Quit's slot dropped and
+// the single Close named "Close Project"; "Open Local Folder…" is a kept
+// Forge extra.
 const FILE_MENU_ORDER = [
   'New File',
   'Open File…',
@@ -32,8 +33,8 @@ const FILE_MENU_ORDER = [
   'Save a Copy',
   '---',
   'Export',
-  // Forge-only (UF-11): the export-quality mode's one home since the drawer
-  // select retired; Classic's File menu keeps its audited upstream shape.
+  // Forge-only: the export-quality mode's one home (there is no drawer
+  // select); Classic's File menu keeps its audited upstream shape.
   'Export Quality',
   '---',
   'Show Library Folder…',
@@ -53,7 +54,7 @@ const EDIT_MENU_ORDER = [
   'Uncomment',
   'Convert Tabs to Spaces',
   // Upstream reaches this by Alt+Ins only, with no menu entry; it ships here
-  // disabled-with-reason so it can at least say why it does nothing (D-43).
+  // disabled-with-reason so it can at least say why it does nothing.
   'Insert Template',
   'Toggle Bookmark',
   'Jump to next bookmark',
@@ -76,10 +77,8 @@ const EDIT_MENU_ORDER = [
   '---',
   'Increase Font Size',
   'Decrease Font Size',
-  // Renamed in R-III (29ec7e1) when Edit ▸ Preferences stopped being a
-  // synonym for the shortcuts editor and opened the real dialog. This
-  // expectation was not updated then, so these cases have been failing on
-  // develop ever since. Owner confirmed the label stands, 2026-08-09 (Q-12).
+  // Edit ▸ Preferences opens the real preferences dialog, not the shortcuts
+  // editor, and its label is "Preferences…".
   'Preferences…',
 ]
 
@@ -187,8 +186,8 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test.describe('File menu parity (G1)', () => {
-  test('order and labels follow upstream U2', async ({ page }) => {
+test.describe('File menu parity', () => {
+  test('order and labels follow upstream', async ({ page }) => {
     await loadFixture(page)
 
     await page.locator('#fileMenuBtn').click()
@@ -196,7 +195,7 @@ test.describe('File menu parity (G1)', () => {
 
     expect(items.map((i) => i.label)).toEqual(FILE_MENU_ORDER)
 
-    // R11: File > Close appeared twice and Save All duplicated Save.
+    // File > Close appears once, and there is no Save All beside Save.
     expect(items.filter((i) => /close/i.test(i.label))).toHaveLength(1)
     expect(items.some((i) => i.label === 'Save All')).toBe(false)
 
@@ -245,7 +244,7 @@ test.describe('File menu parity (G1)', () => {
     const uploaded = entries.find((e) => e.label === 'sample.scad')
     expect(uploaded.disabled).toBe(true)
 
-    // Clear Recent sits last, after a separator, per U2.
+    // Clear Recent sits last, after a separator, as upstream has it.
     expect(labels[labels.length - 1]).toBe('Clear Recent')
     expect(labels[labels.length - 2]).toBe('---')
     expect(entries[entries.length - 1].disabled).toBe(false)
@@ -330,8 +329,8 @@ test.describe('File menu parity (G1)', () => {
   })
 })
 
-test.describe('Edit menu parity (G2)', () => {
-  test('order and labels follow upstream U2', async ({ page }) => {
+test.describe('Edit menu parity', () => {
+  test('order and labels follow upstream', async ({ page }) => {
     await loadFixture(page)
     await openEditor(page)
 
@@ -339,7 +338,7 @@ test.describe('Edit menu parity (G2)', () => {
     const items = await readMenu(page, 'edit')
     expect(items.map((i) => i.label)).toEqual(EDIT_MENU_ORDER)
 
-    // D-24: no editor tabs in a one-document app.
+    // No editor tabs in a one-document app.
     const insertTemplate = items.find((i) => i.label === 'Insert Template')
     expect(insertTemplate.disabled).toBe(true)
     expect(insertTemplate.title).toContain('not built yet')
@@ -479,12 +478,12 @@ test.describe('Edit menu parity (G2)', () => {
     await item.click()
 
     // The selection becomes the search term and the view moves to the next
-    // occurrence of it. This only works with the search() extension
-    // installed: without it CodeMirror creates its search state lazily when
-    // the panel first opens, so the query was silently dropped.
-    // Strictly LATER in the document, and still inside the editor: the old
-    // code opened a search panel and left the selection in its Find field,
-    // which is not the same thing as searching.
+    // occurrence of it. This needs the search() extension installed: without
+    // it CodeMirror creates its search state lazily when the panel first
+    // opens, and the query is silently dropped. Strictly later in the
+    // document, and still inside the editor: opening a search panel and
+    // leaving the selection in its Find field is not the same thing as
+    // searching.
     await expect.poll(selectedLine).toBeGreaterThan(before)
     expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
       'width'
@@ -518,7 +517,7 @@ test.describe('Edit menu parity (G2)', () => {
   })
 })
 
-test.describe('Editor folding (G2, D-40)', () => {
+test.describe('Editor folding', () => {
   test('blocks are foldable and Fold All hides them', async ({ page }) => {
     await loadFixture(page)
     await openEditor(page)
@@ -547,7 +546,7 @@ test.describe('Editor folding (G2, D-40)', () => {
   })
 })
 
-test.describe('Grown menus stay reachable (G1/G2)', () => {
+test.describe('Grown menus stay reachable', () => {
   test('the Edit menu scrolls and its last item is reachable by keyboard', async ({
     page,
   }) => {
@@ -560,7 +559,7 @@ test.describe('Grown menus stay reachable (G1/G2)', () => {
     // menu. The item count does not depend on the editor either way.
     await page.locator('#editMenuBtn').click()
 
-    // 33 items no longer fit a 900px window, so the panel has to scroll
+    // 33 items do not fit a 900px window, so the panel has to scroll
     // rather than clip its tail off the bottom of the screen.
     const scrolls = await page.evaluate(() => {
       const body = document
@@ -630,13 +629,13 @@ const EXPORT_SUBMENU_ORDER = [
   'Export as Image…',
 ]
 
-// Appendix U2's View menu. Preview (F9) and Thrown Together (F12) are omitted
-// (D-24 — this renderer has no display-mode concept). The projection radios
-// render as one role="group" li, which readMenu reports as '(group)'. The
-// per-toolbar Hide items are Classic-only markup and are asserted there.
-// Show Grid / Show Measurements / Show Status Bar and the Edge Detail Limit
-// submenu are Forge-only (UF-11): they replaced drawer controls Classic
-// never showed, and Classic's View menu keeps its audited desktop shape.
+// The desktop's View menu. Preview (F9) and Thrown Together (F12) are
+// omitted: this renderer has no display-mode concept. The projection
+// radios render as one role="group" li, which readMenu reports as
+// '(group)'. The per-toolbar Hide items are Classic-only markup and are
+// asserted there. Show Grid / Show Measurements / Show Status Bar and the
+// Edge Detail Limit submenu are Forge-only: Classic's View menu keeps its
+// audited desktop shape.
 const VIEW_MENU_ORDER = [
   'Show Edges',
   'Show Axes',
@@ -681,8 +680,8 @@ async function cameraPose(page) {
   return page.evaluate(() => window.__forgeDebug?.cameraPose() ?? null)
 }
 
-test.describe('View menu parity (G4)', () => {
-  test('order follows U2 and every registered shortcut is displayed', async ({
+test.describe('View menu parity', () => {
+  test('order follows upstream and every registered shortcut is displayed', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -691,8 +690,8 @@ test.describe('View menu parity (G4)', () => {
     const items = await readMenu(page, 'view')
     expect(items.map((i) => i.label)).toEqual(VIEW_MENU_ORDER)
 
-    // The renderer has no Preview/Thrown Together display modes (D-24), and
-    // the old Forge-only label for the mm ticks is gone.
+    // The renderer has no Preview/Thrown Together display modes, and there is
+    // no separate Forge-only label for the mm ticks.
     expect(items.some((i) => /Thrown Together/i.test(i.label))).toBe(false)
     expect(items.some((i) => /Axis Markings/i.test(i.label))).toBe(false)
 
@@ -717,7 +716,7 @@ test.describe('View menu parity (G4)', () => {
     expect(items.find((i) => i.label === 'Reset View').disabled).toBe(false)
   })
 
-  test('a preview is enough for the commands that act on the viewport (P10)', async ({
+  test('a preview is enough for the commands that act on the viewport', async ({
     page,
   }) => {
     test.setTimeout(300_000)
@@ -740,11 +739,11 @@ test.describe('View menu parity (G4)', () => {
       'this case is about the preview-only state'
     ).toBe(false)
 
-    // MEASURED before the fix: all three were disabled off Boolean(state.stl),
-    // which only a full Generate sets. Center and View All fit the camera to
-    // previewManager.mesh, and Export as Image photographs the canvas -- none
-    // of them needs an STL. Export as Image compounded it by saying "Load and
-    // preview a file first" to a user who had done exactly that.
+    // None of the three may be disabled off Boolean(state.stl), which only a
+    // full Generate sets: Center and View All fit the camera to
+    // previewManager.mesh, and Export as Image photographs the canvas, so none
+    // of them needs an STL, and Export as Image must not tell a user who has
+    // loaded and previewed a file to "Load and preview a file first".
     await page.locator('#viewMenuBtn').click()
     const viewItems = await readMenu(page, 'view')
     for (const label of ['Center', 'View All']) {
@@ -801,8 +800,8 @@ test.describe('View menu parity (G4)', () => {
     const panned = await cameraPose(page)
     expect(distance(panned.target, modelCentre)).toBeGreaterThan(1)
 
-    // Ctrl+] is new in G4. Three presses must move the camera three steps
-    // closer — not six, which is what a second live path would produce.
+    // Ctrl+] zooms in one step. Three presses must move the camera three
+    // steps closer, not six, which is what a second live path would produce.
     const ZOOM_STEP = 15
     for (let i = 0; i < 3; i++) await page.keyboard.press('Control+]')
     const zoomed = await cameraPose(page)
@@ -816,14 +815,13 @@ test.describe('View menu parity (G4)', () => {
       return cameraPose(page)
     }
 
-    // Center used to throw: resetCamera() was called at three sites and never
-    // existed. It brings the view back onto the model and changes nothing else.
+    // Center brings the view back onto the model and changes nothing else.
     const centered = await runViewItem('Center')
     expect(distance(centered.target, modelCentre)).toBeLessThan(0.5)
     expect(radius(centered)).toBeCloseTo(radius(zoomed), 3)
 
     // View All undoes the zoom by refitting; Reset View ignores the model and
-    // returns to the startup pose. These were the same command before G4.
+    // returns to the startup pose. They are separate commands.
     const fitted = await runViewItem('View All')
     expect(radius(fitted)).toBeCloseTo(fittedRadiusAtStart, 3)
     expect(radius(fitted) - radius(centered)).toBeGreaterThan(3 * ZOOM_STEP - 5)
@@ -835,9 +833,10 @@ test.describe('View menu parity (G4)', () => {
   })
 })
 
-// Upstream builds this menu from the docks, so its order is the dock order
-// (U2). Next/Previous Window are omitted — one window (D-24). Outside Classic
-// there are no Animate/Font List docks, so Standard shows the Forge set.
+// Upstream builds this menu from the docks, so its order is the dock
+// order. Next/Previous Window are omitted (there is one window). Outside
+// Classic there are no Animate/Font List docks, so Standard shows the
+// Forge set.
 const WINDOW_MENU_ORDER_STANDARD = [
   'Editor',
   'Console',
@@ -851,12 +850,12 @@ const WINDOW_MENU_ORDER_STANDARD = [
   'Companion Files',
   'Image Measurement',
   'Reference Image',
-  // Classic's Q-4 tail slot, mirrored in Forge since UF-10.
+  // Classic's tail slot, mirrored in Forge.
   'Advanced',
 ]
 
-test.describe('Window menu parity (G5)', () => {
-  test('order follows U2 and Jump To moves focus into the panel it names', async ({
+test.describe('Window menu parity', () => {
+  test('order follows upstream and Jump To moves focus into the panel it names', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -897,8 +896,8 @@ test.describe('Window menu parity (G5)', () => {
       .first()
       .click()
 
-    // MEASURED: with the debounced announce(), a competing announcement inside
-    // 350ms cancelled this outright and the user heard nothing at all.
+    // With a debounced announce(), a competing announcement inside 350ms would
+    // cancel this outright and the user would hear nothing at all.
     await page.evaluate(() =>
       window.stateManager.announceChange('Preview ready')
     )
@@ -964,7 +963,7 @@ test.describe('Window menu parity (G5)', () => {
   })
 })
 
-// Appendix U2's Help menu, then the Forge extras this app keeps.
+// The desktop's Help menu, then the Forge extras this app keeps.
 const HELP_MENU_ORDER = [
   'About',
   'OpenSCAD Homepage',
@@ -979,8 +978,8 @@ const HELP_MENU_ORDER = [
   'Report Issue',
 ]
 
-test.describe('Help menu parity (G6)', () => {
-  test('order follows U2, no two items share a target, and About is honest', async ({
+test.describe('Help menu parity', () => {
+  test('order follows upstream, no two items share a target, and About is honest', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -989,7 +988,7 @@ test.describe('Help menu parity (G6)', () => {
     const items = await readMenu(page, 'help')
     expect(items.map((i) => i.label)).toEqual(HELP_MENU_ORDER)
 
-    // Nothing offline is bundled this round (D-39), so both say why and
+    // Nothing offline is bundled, so both say why and
     // point at the online item beside them.
     for (const label of ['Offline Documentation', 'Offline Cheat Sheet']) {
       const item = items.find((i) => i.label === label)
@@ -1014,8 +1013,8 @@ test.describe('Help menu parity (G6)', () => {
     await page.locator('#aboutModalDone').click()
     await expect(about).toBeHidden()
 
-    // Library info and Features Guide both opened the same tab of the same
-    // modal — the duplicate this plan exists to remove.
+    // Library info and Features Guide must not open the same tab of the same
+    // modal.
     await page.locator('#helpMenuBtn').click()
     await menuItem(page, 'help', 'Library info').click()
     await expect(page.locator('#tab-libraries')).toHaveAttribute(
@@ -1037,8 +1036,8 @@ test.describe('Help menu parity (G6)', () => {
   })
 })
 
-test.describe('Mnemonics and one path per shortcut (G7)', () => {
-  test('menus underline the access keys U2 marks, and only those', async ({
+test.describe('Mnemonics and one path per shortcut', () => {
+  test('menus underline the access keys upstream marks, and only those', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -1078,7 +1077,7 @@ test.describe('Mnemonics and one path per shortcut (G7)', () => {
     const view = await underlined('view')
     expect(view['Back']).toBe('k') // Bac&k
     expect(view['Center']).toBe('n') // Ce&nter
-    // U2 marks no access key on the display toggles.
+    // Upstream marks no access key on the display toggles.
     expect(view['Show Edges']).toBeNull()
     expect(view['View All']).toBeNull()
 
@@ -1095,8 +1094,8 @@ test.describe('Mnemonics and one path per shortcut (G7)', () => {
     await page.locator('#helpMenuBtn').click()
     const item = menuItem(page, 'help', 'Offline Cheat Sheet')
 
-    // The reason used to live INSIDE the button, so it was part of the
-    // accessible NAME and the description both (D-14).
+    // The reason lives outside the button, so it is the description and not
+    // part of the accessible name.
     const name = await item.evaluate((el) => el.textContent)
     expect(name).toBe('Offline Cheat Sheet')
 
@@ -1115,8 +1114,8 @@ test.describe('Mnemonics and one path per shortcut (G7)', () => {
     test.setTimeout(240_000)
     await loadFixture(page)
 
-    // It is now a registry action, so it appears in the shortcuts modal and
-    // can be rebound. It used to be invisible there.
+    // It is a registry action, so it appears in the shortcuts modal and can be
+    // rebound.
     await page.keyboard.press('Control+Shift+K')
     await expect(page.locator('#shortcutsModal')).toBeVisible()
     await expect(page.locator('#shortcutsModalBody')).toContainText(
@@ -1161,8 +1160,8 @@ test.describe('Mnemonics and one path per shortcut (G7)', () => {
   })
 })
 
-test.describe('Design menu and Export submenu parity (G3)', () => {
-  test('Design order follows U2 and unavailable items say why', async ({
+test.describe('Design menu and Export submenu parity', () => {
+  test('Design order follows upstream and unavailable items say why', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -1192,7 +1191,7 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     )
   })
 
-  test('Export submenu follows U2 and never gates on a prior render', async ({
+  test('Export submenu follows upstream and never gates on a prior render', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -1203,8 +1202,7 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     expect(items.map((i) => i.label)).toEqual(EXPORT_SUBMENU_ORDER)
 
     // Nothing has been rendered in this session, yet every format this build
-    // can produce is offered: the old build disabled them all behind a
-    // "Press Generate" notice.
+    // can produce is offered, not disabled behind a "Press Generate" notice.
     for (const item of items) {
       if (item.label === '---' || item.label === 'Export as Image…') continue
       if (item.label === 'Export as 3MF…') continue
@@ -1219,11 +1217,11 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     expect(
       items.some((i) => /Press Generate/.test(i.label))
     ).toBe(false)
-    // POV is omitted and documented (D-24).
+    // POV is omitted and documented.
     expect(items.some((i) => /POV/i.test(i.label))).toBe(false)
   })
 
-  test('the output-format select tells the same 3MF story as the menu (T2-B2)', async ({
+  test('the output-format select tells the same 3MF story as the menu', async ({
     page,
   }) => {
     // No fixture: the select is static markup, and the point is that the two
@@ -1245,9 +1243,9 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     test.setTimeout(180_000)
     await loadFixture(page)
 
-    // Only the auto-preview has run — no full render, and certainly not OBJ.
-    // The old build answered this with a "Format Mismatch" toast and a dead
-    // end; it now renders what was asked for.
+    // Only the auto-preview has run (no full render, and certainly not OBJ),
+    // so the export renders what was asked for rather than refusing with a
+    // "Format Mismatch" toast.
     await page.locator('#fileMenuBtn').click()
     await menuItem(page, 'file', 'Export').click()
     const downloadPromise = page.waitForEvent('download', { timeout: 150_000 })
@@ -1285,15 +1283,15 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
   })
 })
 
-test.describe('Forge direction (UF-10)', () => {
+test.describe('Forge direction: Window and Edit menu items', () => {
   test('Window ▸ Editor opens and closes the Editor in Forge', async ({
     page,
   }) => {
     await loadFixture(page)
 
-    // The old route toggled the hidden-panels class on the editor's TOGGLE
-    // BUTTON: the entry point vanished while the editor stayed shut. Assert
-    // all three: the editor appears, the button never vanishes, and the
+    // The route must not toggle the hidden-panels class on the editor's
+    // toggle button, or the entry point vanishes while the editor stays shut.
+    // Assert all three: the editor appears, the button never vanishes, and the
     // tick answers "is the editor open".
     await clickMenuItem(page, 'window', 'Editor')
     await expect(page.locator('#expertModePanel .cm-content')).toBeVisible({
@@ -1381,16 +1379,16 @@ test.describe('Forge direction (UF-10)', () => {
   })
 })
 
-test.describe('Forge direction (UF-11)', () => {
-  test('View ▸ Preview Quality radios drive the select (defect D-24)', async ({
+test.describe('Forge direction: View menu radios', () => {
+  test('View ▸ Preview Quality radios drive the select', async ({
     page,
   }) => {
     await loadFixture(page)
 
     await page.locator('#viewMenuBtn').click()
     await menuItem(page, 'view', 'Preview Quality').click()
-    // Radios in submenus rendered as plain menuitems with no click wiring
-    // before UF-11 (defect D-24) — this click silently did nothing.
+    // Radios in submenus are wired for clicks; a plain menuitem with no click
+    // wiring would make this click silently do nothing.
     await page
       .getByRole('menuitemradio', { name: 'Fast (lower resolution)' })
       .click()
@@ -1414,7 +1412,7 @@ test.describe('Forge direction (UF-11)', () => {
       .getByRole('menuitemradio', { name: 'High (250,000 edges)' })
       .click()
 
-    // Since UF-14 the budget persists in the Forge namespace's own copy (U-25).
+    // The budget persists in the Forge namespace's own copy.
     await expect
       .poll(() =>
         page.evaluate(() =>
@@ -1432,7 +1430,7 @@ test.describe('Forge direction (UF-11)', () => {
   })
 })
 
-test.describe('Forge direction (UF-11, File menu)', () => {
+test.describe('Forge direction: File menu', () => {
   test('File ▸ Export Quality sets the export mode and ticks on reopen', async ({
     page,
   }) => {

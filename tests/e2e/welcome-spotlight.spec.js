@@ -1,16 +1,16 @@
 /**
- * Welcome spotlight (U-23 UF-16, U-24 UF-17)
+ * Welcome spotlight.
  *
- * ONE welcome card at a time carries a passive spotlight (halo + tag +
- * dismiss) — recorded in the persistent registry under
- * openscad-forge-tutorial-state. Precedence (Q-44a): the Welcome Page
- * Tour card wears it while its family was never opened, completed, or
- * dismissed; afterwards the Beginners Start Here card wears it while the
- * intro family is untouched. The spotlight may only exist after the
- * first-visit gate resolves (inside the inert #app it would be
- * unreachable), announces exactly one polite tip, and clears live on its
- * own family's registry write. Dismissal is permanent (Q-43a) and hands
- * over on the NEXT visit, not instantly.
+ * One welcome card at a time carries a passive spotlight (halo + tag +
+ * dismiss), recorded in the persistent registry under
+ * openscad-forge-tutorial-state. Precedence: the Welcome Page Tour card
+ * wears it while its family was never opened, completed, or dismissed;
+ * afterwards the Beginners Start Here card wears it while the intro family
+ * is untouched. The spotlight may only exist after the first-visit gate
+ * resolves (inside the inert #app it would be unreachable), announces
+ * exactly one polite tip, and clears live on its own family's registry
+ * write. Dismissal is permanent and hands over on the next visit, not
+ * instantly.
  *
  * @license GPL-3.0-or-later
  */
@@ -28,7 +28,7 @@ async function stampFirstVisitSeen(page) {
   });
 }
 
-// UF-9's observer idiom: live-region text clears itself (announcer.js wipes
+// The observer idiom: live-region text clears itself (announcer.js wipes
 // after ~1.5s), so record every non-empty write instead of probing late.
 async function watchAnnouncements(page) {
   await page.addInitScript(() => {
@@ -59,12 +59,12 @@ const readRegistry = (page) =>
     return raw ? JSON.parse(raw) : null;
   }, REGISTRY_KEY);
 
-test.describe('Welcome spotlight (U-23, UF-16)', () => {
+test.describe('Welcome spotlight', () => {
   test('fresh profile: absent while the first-visit modal blocks, present after acceptance, announced once', async ({
     page,
   }) => {
     await watchAnnouncements(page);
-    // Deliberately NO first-visit stamp — the gate sequencing is the point.
+    // Deliberately no first-visit stamp: the gate sequencing is the point.
     await page.goto('/');
     await page
       .locator('#first-visit-modal:not(.hidden)')
@@ -78,18 +78,18 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await page.locator('#first-visit-continue').click();
     await expect(page.locator('#first-visit-modal')).toBeHidden();
 
-    // Q-52c (UF-22): on a genuinely fresh profile the tour nudge asks first
-    // and the card's tip stands down underneath it. Answering the dialog is
-    // what hands the tip over. The nudge's own behaviour lives in
-    // tour-nudge.spec.js; here it is one step of the real first-run walk.
+    // On a genuinely fresh profile the tour nudge asks first and the card's
+    // tip stands down underneath it. Answering the dialog is what hands the
+    // tip over. The nudge's own behavior lives in tour-nudge.spec.js; here it
+    // is one step of the real first-run walk.
     await expect(page.locator('.tour-nudge-modal')).toBeVisible({
       timeout: 30_000,
     });
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(0);
     await page.locator('.tour-nudge-dismiss').click();
 
-    // Now exactly ONE card carries the halo — the Main Page Tour card
-    // (Q-44a precedence), with the tag and a real dismiss button.
+    // Now exactly one card carries the halo, the Main Page Tour card (it
+    // comes first), with the tag and a real dismiss button.
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
     const card = page.locator(SPOTLIGHT_CARD);
     await expect(card.locator('.role-path-title')).toHaveText(
@@ -127,7 +127,7 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await page.goto('/');
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
 
-    // The real U-24 path: the card's own Start button. No example loads,
+    // The real path: the card's own Start button. No example loads,
     // so no WASM wait is needed — the tour lives on the welcome surface.
     await page.locator('button[data-tutorial="welcome"]').click();
 
@@ -143,9 +143,8 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
       })
       .toEqual(expect.any(Number));
 
-    // Q-44a soft handoff: the NEXT visit hands the tip to the Beginners
-    // card, because the welcome family now carries a record and intro
-    // does not.
+    // Soft handoff: the next visit hands the tip to the Beginners card,
+    // because the welcome family now carries a record and intro does not.
     await page.reload();
     await expect(page.locator('#welcomeScreen')).toBeVisible({
       timeout: 30_000,
@@ -156,7 +155,7 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     ).toHaveText('Beginners Start Here');
   });
 
-  test('Dismiss tip is permanent (Q-43a) and hands over on the next visit, not instantly (Q-44a)', async ({
+  test('Dismiss tip is permanent and hands over on the next visit, not instantly', async ({
     page,
   }) => {
     await stampFirstVisitSeen(page);
@@ -205,9 +204,9 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await page.goto('/');
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
 
-    // voice-input: five steps, no completion gates — a pure Next walk to
-    // the real closeTutorial(true). Fire-and-forget (the UF-8 evaluate
-    // trap: awaiting startTutorial's promise deadlocks if a dialog opens).
+    // voice-input: five steps, no completion gates, a pure Next walk to the
+    // real closeTutorial(true). Fire-and-forget: awaiting startTutorial's
+    // promise inside evaluate deadlocks if a dialog opens.
     await page.waitForFunction(
       () => typeof window.startTutorial === 'function',
       { timeout: 10_000 }

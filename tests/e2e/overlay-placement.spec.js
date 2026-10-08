@@ -1,12 +1,12 @@
 /**
- * Where the reference image sits, and whether the project remembers (DP-5).
+ * Where the reference image sits, and whether the project remembers.
  *
  * Two things are being proved here, and neither can be seen in a screenshot:
  *
- *  1. The height is chosen by NAMING A SURFACE, not by typing -0.25. "Top of
+ *  1. The height is chosen by naming a surface, not by typing -0.25. "Top of
  *     the model" asks the model, so it follows the object as it changes.
- *  2. That placement belongs to the PROJECT. Opacity and colour stay
- *     app-level (the UF-14 key facade); offsets, rotation, size and the z
+ *  2. That placement belongs to the project. Opacity and colour stay
+ *     app-level; offsets, rotation, size and the z
  *     preset are measured against one design and are saved with it.
  *
  * @license GPL-3.0-or-later
@@ -90,7 +90,7 @@ async function openOverlayPanel(page) {
 const placement = (page) =>
   page.evaluate(() => window.__forgeDebug?.overlayPlacement?.() ?? null);
 
-test.describe('Reference image placement (DP-5)', () => {
+test.describe('Reference image placement', () => {
   test.use({ viewport: { width: 1400, height: 1024 } });
 
   test('the height is chosen by naming a surface, and the choice is not gated', async ({
@@ -129,7 +129,7 @@ test.describe('Reference image placement (DP-5)', () => {
       .toBeGreaterThan(0);
   });
 
-  test('cropping saves a COPY, keyboard-first, and hands focus back', async ({
+  test('cropping saves a copy, keyboard-first, and hands focus back', async ({
     page,
   }) => {
     test.setTimeout(240000);
@@ -181,16 +181,16 @@ test.describe('Reference image placement (DP-5)', () => {
   });
 
   /**
-   * DP-6: the picture you have been tracing against is usually the picture you
-   * want ON the model.
+   * The picture you have been tracing against is usually the picture you
+   * want on the model.
    *
-   * The handoff goes in through the parameter's OWN file input, as a real File
-   * on a real change event. That is the whole point: the upload path already
-   * traces a raster, opens the editor when the drawing needs it, and emits the
-   * aspect companion in the SAME state update (the D-108 law). A second path
-   * would have to copy all of that and then stay copied - so the case below
-   * asserts the aspect landed, which is the cheapest proof it really is one
-   * path and not two.
+   * The handoff goes in through the parameter's own file input, as a real
+   * File on a real change event. That is the whole point: the upload path
+   * already traces a raster, opens the editor when the drawing needs it, and
+   * emits the aspect companion in the same state update. A second path would
+   * have to copy all of that and then stay copied, so the case below asserts
+   * the aspect landed, which is the cheapest proof it really is one path and
+   * not two.
    */
   test('the reference image can be handed to a design, aspect and all', async ({
     page,
@@ -238,20 +238,17 @@ test.describe('Reference image placement (DP-5)', () => {
     expect(aspect).toBeGreaterThan(0);
   });
 
-  test('★ Use as design converts even when the picture would not start itself', async ({
+  test('Use as design converts even when the picture would not start itself', async ({
     page,
   }) => {
     test.setTimeout(240000);
-    // DP-34 stopped a chosen picture converting on its own, and "Use as design"
-    // hands the picture over by dispatching a change on the file input - so it
-    // looked exactly like choosing a file, and stopped converting too. The
-    // design parameter simply stayed empty until the person found a Start
-    // button in a control they may not have open.
-    //
-    // It only showed on CI, because the quick look there is slower to call a
-    // small picture quick, so the auto-start rule did not fire. This pins the
-    // contract instead of the weather: with the flag the hand-off sets, a
-    // picture that would NEVER start itself still converts.
+    // A chosen picture does not convert on its own, and "Use as design" hands
+    // the picture over by dispatching a change on the file input, so it looks
+    // exactly like choosing a file. The hand-off sets a flag so the picture
+    // converts anyway; otherwise the design parameter would stay empty until
+    // the person found a Start button in a control they may not have open.
+    // This pins the contract rather than the machine's speed: with the flag,
+    // a picture that would never start itself still converts.
     await boot(page);
     await openCharm(page);
     await saveProject(page);
@@ -348,8 +345,8 @@ test.describe('Reference image placement (DP-5)', () => {
     );
     await openOverlayPanel(page);
 
-    // Manual calibration is what unlocks size and offset; the release does not
-    // change that, it just has to work through it.
+    // Manual calibration is what unlocks size and offset, so this works
+    // through it.
     await page.evaluate(() => {
       const t = document.getElementById('overlayManualOverrideToggle');
       if (t && !t.checked) {

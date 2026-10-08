@@ -29,11 +29,10 @@ async function loadSampleFile(page) {
 
   const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
   await page.setInputFiles('#fileInput', fixturePath);
-  // F5 (owner decision 2026-05-15): parameter groups render collapsed by
-  // default, and at the mobile viewport the params also sit inside the
-  // closed drawer — .param-control is attached but never "visible" here.
-  // Attached is the load-complete signal; each test opens the drawer
-  // itself (UF-9 P1: this wait was the whole file's 13/13 local red).
+  // Parameter groups render collapsed by default, and at the mobile viewport
+  // the params also sit inside the closed drawer: .param-control is attached
+  // but never "visible" here. Attached is the load-complete signal; each
+  // test opens the drawer itself.
   await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
 
   // Dismiss the "Save this file for quick access?" modal if it appears.
@@ -77,13 +76,12 @@ test.describe('Mobile Drawer', () => {
     
     // Close with backdrop click.
     //
-    // Q-78 (UF-38): a bare `backdrop.click()` aims at the element's centre,
-    // and the backdrop is the whole 375x667 viewport while the drawer covers
-    // 337.5 of those 375px - so the centre IS the drawer, the actionability
-    // check never passes, and this timed out on local Firefox. MEASURED: at
-    // the backdrop's centre `elementFromPoint` returns the drawer's summary;
-    // at x=369 it returns `#drawerBackdrop`, and tapping there closes the
-    // drawer on every repeat. The app was never at fault, the aim was.
+    // A bare `backdrop.click()` aims at the element's center, and the backdrop
+    // is the whole 375x667 viewport while the drawer covers 337.5 of those
+    // 375px, so the center is the drawer and the actionability check never
+    // passes. At the backdrop's center `elementFromPoint` returns the drawer's
+    // summary; at x=369 it returns `#drawerBackdrop`, and tapping there closes
+    // the drawer on every repeat.
     await backdrop.click({ position: { x: 369, y: 333 } });
     await expect(drawer).not.toHaveClass(/drawer-open/);
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -108,11 +106,10 @@ test.describe('Mobile Drawer', () => {
     // Focus is moved into the drawer after the open transition
     await page.waitForTimeout(400);
 
-    // The drawer focuses its first FOCUSABLE element; the first matching
-    // button in DOM order is the disabled Undo toolbar button, so assert
-    // the a11y contract directly — focus landed inside the drawer
-    // (UF-9 P1: the literal-first assertion went stale when the
-    // Undo/Redo toolbar row was added).
+    // The drawer focuses its first focusable element; the first matching
+    // button in DOM order is the disabled Undo toolbar button, so assert the
+    // a11y contract directly: focus landed inside the drawer, whatever row
+    // comes first.
     const focusInsideDrawer = await page.evaluate(
       () => document.activeElement.closest('#paramPanel') !== null
     );

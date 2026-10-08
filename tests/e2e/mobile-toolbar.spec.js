@@ -1,37 +1,35 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// UF-42 (U-46): "A header that earns its rows".
+// A header that earns its rows.
 //
-// At 412px with a project open the app spent four stacked rows before any
-// content — 147px in Simplified, 187px in Standard — and one of them was a
-// 54px band holding four 44px icons in a 396px width. Q-73a chose option C:
-// those four controls join the Customizer row, which had the space once its
-// visible heading stood down, and the row they leave collapses.
+// At 412px with a project open, four stacked rows before any content would
+// cost 147px in Simplified and 187px in Standard, one of them a 54px band
+// holding four 44px icons in a 396px width. Instead those four controls
+// join the Customizer row, which has the space once its visible heading
+// stands down, and the row they would have used collapses.
 //
-// Q-73b moved the preview status line to the top of the preview on mobile,
-// where it is readable in both camera-pad states.
+// On mobile the preview status line sits at the top of the preview, where
+// it is readable in both camera-pad states.
 //
-// Everything asserted here was measured before it was written, and the
-// measurements are in the messages. What is ASSERTED is the structure — the
-// four icons' row is gone and they are in the Customizer row — plus a ceiling
-// against what the base spent. The px totals are deliberately NOT asserted
-// exactly: the header row wraps rather than clips when a platform's fonts need
-// more width than 412px allows (see layout.css), so its height is
-// font-dependent by design, and a lane with wider glyphs must fail here on a
-// lost row and not on a font. That is UF-41's "do not assert a measurement as
-// a promise", applied before CI could teach it again.
+// What is asserted is the structure (the four icons' row is gone and they
+// are in the Customizer row) plus a ceiling at the four-row cost, with the
+// measurements in the messages. The px totals are deliberately not
+// asserted exactly: the header row wraps rather than clips when a
+// platform's fonts need more width than 412px allows (see layout.css), so
+// its height is font-dependent by design, and a lane with wider glyphs
+// must fail here on a lost row and not on a font.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 const WASM_READY_TIMEOUT = 180_000;
 
-// The owner's 1080x2520 phone at DPR ~2.62 leaves about 810 CSS px once the
-// address bar, status bar and gesture nav are counted (the UF-38 finding), so
-// both heights are exercised: 915 is what emulation defaults to, 810 is what a
-// phone actually has.
+// A 1080x2520 phone at DPR ~2.62 leaves about 810 CSS px once the address
+// bar, status bar and gesture nav are counted, so both heights are
+// exercised: 915 is what emulation defaults to, 810 is what a phone
+// actually has.
 const HEIGHTS = [915, 810];
 
-// What Chromium measures after UF-42, and what the release base spent.
+// What Chromium measures, and the ceiling: what four stacked rows cost.
 const TOP_CHROME = { simplified: 93, standard: 135 };
 const BASE_TOP_CHROME = { simplified: 147, standard: 187 };
 const QUARTET = [
@@ -88,7 +86,7 @@ const topChrome = (page) =>
   );
 
 for (const height of HEIGHTS) {
-  test.describe(`UF-42: the top chrome's px budget (412x${height})`, () => {
+  test.describe(`The top chrome's px budget (412x${height})`, () => {
     test.use({ viewport: { width: 412, height } });
 
     test(`toolbar-budget: Simplified spends ${TOP_CHROME.simplified}px and Standard ${TOP_CHROME.standard}px before any content`, async ({
@@ -97,16 +95,15 @@ for (const height of HEIGHTS) {
       test.setTimeout(240_000);
       await loadSampleProject(page);
 
-      // UF-41's lesson, taken to heart: do not assert a measurement as a
-      // promise. The header row WRAPS rather than clips when a platform's
-      // fonts need more width than 412px allows (see layout.css), so its
-      // height is font-dependent and a lane with 2px wider glyphs would fail
-      // here on a font rather than on a lost row.
+      // Do not assert a measurement as a promise. The header row wraps rather
+      // than clips when a platform's fonts need more width than 412px allows
+      // (see layout.css), so its height is font-dependent, and a lane with 2px
+      // wider glyphs would fail here on a font rather than on a lost row.
       //
-      // What UF-42 actually promises is the structure: the four icons' row is
-      // gone, they are in the Customizer row, and the top chrome costs less
-      // than the 147px / 187px it cost before. Chromium measures 93 and 135;
-      // those numbers are the record, and the ceiling is the promise.
+      // What is promised is the structure: the four icons' row is gone, they
+      // are in the Customizer row, and the top chrome costs less than the
+      // 147px / 187px of four stacked rows. Chromium measures 93 and 135; those
+      // numbers are the record, and the ceiling is the promise.
       const simplified = await topChrome(page);
       expect(
         simplified,
@@ -187,10 +184,10 @@ for (const height of HEIGHTS) {
         return { offscreen, overlaps };
       });
 
-      // The Classic button used to end 60.4px past the right edge here.
+      // Nothing may end past the right edge, the Classic button included.
       expect(geometry.offscreen, 'no control runs off the screen').toEqual([]);
-      // D-82: #clearFileBtn and the GitHub link overlapped by 18.8px, and a
-      // hit test across "Main Page" returned the GitHub link from x=90 on.
+      // #clearFileBtn and the GitHub link must not overlap: an overlap makes a
+      // hit test across "Main Page" return the GitHub link.
       expect(geometry.overlaps, 'no control sits on a neighbour').toEqual([]);
     });
 
@@ -210,13 +207,13 @@ for (const height of HEIGHTS) {
         }
         return [...seen];
       });
-      expect(hits, 'D-82: the tail of the label was the GitHub link').toEqual([
+      expect(hits, 'the tail of the label was the GitHub link').toEqual([
         'clearFileBtn',
       ]);
     });
   });
 
-  test.describe(`UF-42: the four controls in their new row (412x${height})`, () => {
+  test.describe(`The four controls in the Customizer row (412x${height})`, () => {
     test.use({ viewport: { width: 412, height } });
 
     test('toolbar-quartet: all four keep 44px, a name, and keyboard reach in the Customizer row', async ({
@@ -251,17 +248,15 @@ for (const height of HEIGHTS) {
 
         // Reachable and operable from the keyboard, with a visible ring.
         //
-        // Reachable, and honestly: measured at 412x810, these four moved from
-        // tab stops 9-12 to 28-31, because the Customizer row sits after
-        // #paramPanel in the document. They are now immediately after the two
-        // controls they share that row with (26, 27), so the ORDER agrees with
-        // the layout — which is what WCAG 2.4.3 asks. The distance is D-90's
-        // doing, not this release's: 18 of the stops in between are inside the
-        // CLOSED off-canvas Customizer, which is fully tabbable on the base
-        // too (20 of the first 40 stops are off screen, identically, before
-        // and after). Fix D-90 and these four land around stop 10, earlier
-        // than the base. Both chords are advertised now (see the case below),
-        // which is the direct route in the meantime.
+        // Reachable, and honestly: at 412x810 these four sit at tab stops
+        // 28-31, because the Customizer row sits after #paramPanel in the
+        // document. They come immediately after the two controls they share
+        // that row with (26, 27), so the order agrees with the layout, which is
+        // what WCAG 2.4.3 asks. The distance comes from the closed off-canvas
+        // Customizer: 18 of the stops in between are inside it, and it is fully
+        // tabbable while closed. Making the closed drawer untabbable would
+        // bring these four to around stop 10. Both chords are advertised (see
+        // the case below), which is the direct route in the meantime.
         const reachable = await control.evaluate((el) => {
           el.focus();
           return document.activeElement === el;
@@ -332,10 +327,10 @@ for (const height of HEIGHTS) {
     });
   });
 
-  test.describe(`UF-42: the status line can be read (412x${height})`, () => {
+  test.describe(`The status line can be read (412x${height})`, () => {
     test.use({ viewport: { width: 412, height } });
 
-    test('status-line-clear: legible with the camera pad shut AND open', async ({
+    test('status-line-clear: legible with the camera pad shut and open', async ({
       page,
     }) => {
       test.setTimeout(240_000);
@@ -360,8 +355,8 @@ for (const height of HEIGHTS) {
 
       const shut = await measure();
       expect(shut.padOpen).toBe(false);
-      // Measured on the release base: y 829..854 against an actions bar
-      // starting at y 816 — the line was not visible at all.
+      // A line at y 829..854 against an actions bar starting at y 816 is not
+      // visible at all.
       expect(shut.behindActionsBar, 'clear of the actions bar').toBe(false);
       // Both edges must be written or the box stretches the whole preview.
       expect(shut.height, 'one line tall, not stretched').toBeLessThan(60);
@@ -370,8 +365,8 @@ for (const height of HEIGHTS) {
       await expect(page.locator('#cameraDrawerBody')).toBeVisible();
       const open = await measure();
       expect(open.padOpen).toBe(true);
-      // Measured on the release base: y 665..690 inside the pad's 498..811
-      // band, washed out with the pad's own heading printed through it.
+      // A line at y 665..690 inside the pad's 498..811 band is washed out, with
+      // the pad's own heading printed through it.
       expect(open.behindPad, 'clear of the camera pad').toBe(false);
       expect(open.behindActionsBar, 'still clear of the actions bar').toBe(
         false
@@ -380,7 +375,7 @@ for (const height of HEIGHTS) {
   });
 }
 
-test.describe('UF-42: high contrast grows the row rather than hiding it', () => {
+test.describe('High contrast grows the row rather than hiding it', () => {
   test.use({ viewport: { width: 412, height: 810 } });
 
   test('toolbar-high-contrast: nothing slides off the left edge, and #app gains no hidden scroll', async ({
@@ -414,11 +409,10 @@ test.describe('UF-42: high contrast grows the row rather than hiding it', () => 
     );
 
     // High contrast thickens every border, so the header's own controls grow:
-    // the Main Page button 100.8 -> 116.6px and the interface switch
-    // 193.6 -> 213.8px. Measured on the release base, the row then overflowed
-    // to the LEFT — #app held 100px of hidden scroll range and the Classic
-    // button sat 96px off the right edge. There is no scrollbar on a
-    // display:hidden overflow, so those pixels were simply gone.
+    // the Main Page button 100.8 -> 116.6px and the interface switch 193.6 ->
+    // 213.8px. A row that then overflows to the left gives #app 100px of
+    // hidden scroll range and puts the Classic button 96px off the right edge;
+    // hidden overflow has no scrollbar, so those pixels are simply gone.
     const state = await page.evaluate(() => {
       const app = document.getElementById('app');
       const clipped = [];
@@ -452,7 +446,7 @@ test.describe('UF-42: high contrast grows the row rather than hiding it', () => 
   });
 });
 
-test.describe('UF-42: the row goes home when the window grows', () => {
+test.describe('The row goes home when the window grows', () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
   test('toolbar-restore: a desktop-shaped resize puts the four controls back, live', async ({
@@ -493,7 +487,7 @@ test.describe('UF-42: the row goes home when the window grows', () => {
   });
 });
 
-test.describe('UF-42: the row follows the surface, not just the viewport', () => {
+test.describe('The row follows the surface, not just the viewport', () => {
   test.use({ viewport: { width: 412, height: 810 } });
 
   test('toolbar-surface-round-trip: Main Page, into a project, and back again', async ({
@@ -572,7 +566,7 @@ test.describe('UF-42: the row follows the surface, not just the viewport', () =>
   });
 });
 
-test.describe('UF-42: the welcome surface is left alone', () => {
+test.describe('The welcome surface is left alone', () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
   test('toolbar-welcome-untouched: high contrast and theme stay in the workflow row before a file is open', async ({

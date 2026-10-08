@@ -7,7 +7,7 @@
  *
  * WASM-dependent dialog interaction tests require the WASM binary to
  * be installed locally. WASM initialization is slow/unreliable in
- * headless mode. Per the Phase 6 fallback gate, interactive dialog
+ * headless mode, so interactive dialog
  * validation uses the manual testing checklist below.
  *
  * Client-side page.evaluate() tests are not feasible because path-bool
@@ -17,8 +17,8 @@
  *
  * ## Manual Testing Checklist — SVG Preparer Dialog
  *
- * Prerequisites: WASM binary installed (`pixi run setup-wasm`), dev server
- * running (`pixi run dev`).
+ * Prerequisites: WASM binary installed (`npm run setup-wasm`), dev server
+ * running (`npm run dev`).
  *
  * 1. Navigate to `/?example=q-charm&flag_svg_preparer=true`
  * 2. Wait for Bracelet Clip Charm to load and parameters to appear

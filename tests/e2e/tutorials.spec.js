@@ -1,5 +1,5 @@
 /**
- * Tutorial Spotlight Regression Tests (E5)
+ * Tutorial Spotlight Regression Tests
  *
  * Validates that all 6 tutorials run correctly across desktop and mobile
  * viewports, with spotlight targeting, panel positioning, completion
@@ -348,9 +348,9 @@ test('tutorial: no infinite retry loop when target is missing', async ({ page })
   ).toBe(true)
 })
 
-// ── Welcome page tour (U-24, UF-17) ──────────────────────────────────────────
+// ── Welcome page tour ────────────────────────────────────────────────────────
 
-test.describe('Welcome page tour (U-24, UF-17)', () => {
+test.describe('Welcome page tour', () => {
   const REGISTRY_KEY = 'openscad-forge-tutorial-state'
 
   const readRegistry = (page) =>
@@ -396,7 +396,7 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
     // The family rule: nothing records under the variant id
     expect(registry['welcome-classic']).toBeUndefined()
 
-    // The U-24 chain: exactly one spotlight, now on the Beginners card
+    // The chain: exactly one spotlight, on the Beginners card
     await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(1)
     await expect(
       page.locator('.role-path-card.welcome-spotlight .role-path-title')
@@ -467,8 +467,7 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
       timeout: 180_000,
     })
 
-    // Watch the live regions: the close announcement is this case's subject
-    // now that Q-50d approved its wording.
+    // Watch the live regions: the close announcement is this case's subject.
     await page.evaluate(() => {
       window.__said = []
       for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
@@ -486,8 +485,8 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
     await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
 
     // Walk to the Open-or-start step, whose cutout exposes Start New Project.
-    // By title, not by a click count: UF-21 shortened this tour by one step
-    // (U-29) and a fixed count silently overshot.
+    // By title, not by a click count, so a change in the tour's length cannot
+    // make the walk overshoot.
     for (let i = 0; i < 12; i++) {
       const title = await page.locator('#tutorial-step-title').textContent()
       if (title === 'Open or start a project') break
@@ -507,15 +506,14 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
     expect(registry.welcome.opened).toEqual(expect.any(Number))
     expect(registry.welcome.completed).toBeUndefined()
 
-    // Q-50d (owner, 2026-08-14): this sentence is approved as drafted, so it
-    // is pinned rather than left as a D-35 flag in the code.
+    // The close announcement is pinned word for word.
     const announcements = await page.evaluate(() => window.__said)
     expect(announcements.join(' | ')).toContain(
       'Main Page Tour closed because a project opened. Progress saved.'
     )
   })
 
-  test('the closing step names the Main Page button as the way back (U-45)', async ({
+  test('the closing step names the Main Page button as the way back', async ({
     page,
   }) => {
     await setBaseline(page)
@@ -549,12 +547,11 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
 })
 
 /**
- * U-45 (UF-39): the box tour used to stop at "You're ready!" and never say how
- * to get out of a project. The way people reached for was the browser's Back
- * button, which closed the app. The tour now ends on the button that does the
- * job, and pressing it there is a first-class path, not an accident.
+ * The box tour ends by naming the way out of a project: the button that
+ * does the job, not the browser's Back button, which closes the app.
+ * Pressing it there is a first-class path, not an accident.
  */
-test.describe('U-45: the box tour ends by naming the way back', () => {
+test.describe('The box tour ends by naming the way back', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   async function startBoxTourAtTheEnd(page) {
@@ -605,7 +602,7 @@ test.describe('U-45: the box tour ends by naming the way back', () => {
     })
 
     // The curiosity path: the cutout stays clickable, so press what the step
-    // points at (U-24, Q-66a). The tour stands down for the confirm dialog.
+    // points at. The tour stands down for the confirm dialog.
     await page.locator('#clearFileBtn').click()
     await expect(page.locator('.confirm-modal')).toBeVisible({ timeout: 10_000 })
     await page.locator('.confirm-modal [data-action="confirm"]').click()
@@ -613,8 +610,8 @@ test.describe('U-45: the box tour ends by naming the way back', () => {
     await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome', {
       timeout: 30_000,
     })
-    // The tour closes with its surface, the same rule the welcome tours have
-    // obeyed since UF-17, now mirrored for the surface a box tour lives on.
+    // The tour closes with its surface, the same rule the welcome tours obey,
+    // mirrored for the surface a box tour lives on.
     await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
     const announcements = await page.evaluate(() => window.__said)
     expect(announcements.join(' | ')).toContain(

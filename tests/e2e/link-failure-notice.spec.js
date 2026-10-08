@@ -1,15 +1,13 @@
 /**
- * A shared link that fails says so, where the person is (D-187).
+ * A shared link that fails says so, where the person is.
  *
- * When a link's download failed, the app returned to the Main Page and put
- * its explanation only into the visually hidden status region and the polite
- * announcer, and removed the link from the address bar. A sighted person saw
- * the Main Page and nothing else, which is exactly what was reported:
- * "It only opened the main page of the Assistive Forge UI and then nothing
- * else opened."
+ * When a link's download fails, the app returns to the Main Page and
+ * removes the link from the address bar. An explanation only in the
+ * visually hidden status region and the polite announcer leaves a sighted
+ * person seeing the Main Page and nothing else.
  *
- * These cases assert what is VISIBLE and what is SAID, never that the page
- * "has text": a hidden sentence passed the older error cases for months.
+ * These cases assert what is visible and what is said, never that the page
+ * "has text": a hidden sentence passes that kind of check.
  *
  * @license GPL-3.0-or-later
  */
@@ -62,7 +60,7 @@ async function noticeAfterTheFailure(page) {
   return page.locator('[role="alert"]', { hasText: HEADING })
 }
 
-test.describe('A shared link that fails says so on the Main Page (D-187)', () => {
+test.describe('A shared link that fails says so on the Main Page', () => {
   test.beforeEach(async ({ page }) => {
     await asReturningVisitor(page)
     await recordLiveRegions(page, { extraIds: [NOTICE_MESSAGE_ID] })
@@ -134,7 +132,7 @@ test.describe('A shared link that fails says so on the Main Page (D-187)', () =>
   })
 })
 
-test.describe('The failed-link notice at phone width (D-187)', () => {
+test.describe('The failed-link notice at phone width', () => {
   test.use({ viewport: { width: 412, height: 915 } })
 
   test('the notice fits a phone screen and its buttons are full-size targets', async ({ page }) => {
@@ -155,7 +153,7 @@ test.describe('The failed-link notice at phone width (D-187)', () => {
   })
 })
 
-test.describe('The failed-link notice on a first visit (D-187)', () => {
+test.describe('The failed-link notice on a first visit', () => {
   test('a first-time visitor whose link fails meets the notice after Download & Continue', async ({
     page,
   }) => {

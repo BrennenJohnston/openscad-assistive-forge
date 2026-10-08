@@ -71,7 +71,7 @@ async function backToWelcome(page) {
   await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 10_000 })
 }
 
-// ── Multi-folder welcome screen (sub-plan H / R3c) ───────────────────────
+// ── Multi-folder welcome screen ──────────────────────────────────────────
 //
 // Real FileSystemDirectoryHandles come from OPFS (navigator.storage
 // .getDirectory()): they structured-clone into IndexedDB, report
@@ -189,7 +189,7 @@ test.describe('linked folders on the welcome screen', () => {
   )
   test.skip(
     ({ channel }) => channel === 'msedge',
-    'D-189: Edge 153 closes its whole browser when a page reads an OPFS folder handle back from IndexedDB, which every case here does; they run on Chromium'
+    'Edge 153 closes its whole browser when a page reads an OPFS folder handle back from IndexedDB, which every case here does; they run on Chromium'
   )
 
   const rows = (page) => page.locator('#linkedFoldersList li.linked-folder')

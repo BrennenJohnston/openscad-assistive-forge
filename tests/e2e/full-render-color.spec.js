@@ -1,5 +1,5 @@
 /**
- * Full Render Color Passthrough — E2E Verification (Phase 2)
+ * Full Render Color Passthrough — E2E Verification
  *
  * Verifies that clicking the Generate button with color passthrough active
  * produces a full-quality multi-color COFF preview in the 3D viewer, and
@@ -118,7 +118,7 @@ async function waitForPreviewIdle(page, { timeout = 120_000 } = {}) {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-test.describe('Full Render Color Passthrough (Phase 2)', () => {
+test.describe('Full Render Color Passthrough', () => {
   test.describe.configure({ timeout: 180_000 });
 
   test.beforeEach(async ({ page }) => {

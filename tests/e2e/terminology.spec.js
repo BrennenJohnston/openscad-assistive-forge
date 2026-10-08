@@ -110,8 +110,7 @@ test.describe('Terminology Consistency - Saved Projects', () => {
     // Look for save project button
     const saveBtn = page.locator('button:has-text("Save"), button[aria-label*="Save"]').first()
     
-    // AF-7: this used to console.warn and pass regardless. The ban is the
-    // test - a save control may never say "saved design".
+    // The ban is the test: a save control may never say "saved design".
     await expect(saveBtn).toBeVisible()
     const text = await saveBtn.textContent()
     const ariaLabel = await saveBtn.getAttribute('aria-label')
@@ -128,8 +127,8 @@ test.describe('Terminology Consistency - Saved Projects', () => {
     
     await loadSimpleBoxExample(page)
 
-    // AF-7: this used to assert only that <body> was visible. The save
-    // modal fires on load for an unsaved example - its copy is the check.
+    // The save modal fires on load for an unsaved example, and its copy is
+    // the check.
     const modal = page.locator('.save-project-modal')
     if (await modal.isVisible().catch(() => false)) {
       const copy = ((await modal.textContent()) || '').toLowerCase()
@@ -144,9 +143,9 @@ test.describe('Terminology Consistency - Saved Projects', () => {
   })
 
   test('delete confirmation uses "Saved Project" terminology', async ({ page }) => {
-    // AF-7: this used to assert only that <body> was visible - while the
-    // shipped dialog title said "Delete Saved Design". The title string is
-    // owned by saved-projects-ui; drive the module boundary directly.
+    // The dialog title must say "Saved Project", never "Saved Design". The
+    // title string is owned by saved-projects-ui; drive the module boundary
+    // directly.
     await page.goto('/')
     const title = await page.evaluate(async () => {
       const mod = await import('/src/js/saved-projects-ui.js')
@@ -256,7 +255,7 @@ test.describe('Terminology - No Old Terms', () => {
   })
 })
 
-test.describe('Customizer terminology (C11)', () => {
+test.describe('Customizer terminology', () => {
   test('the pane is named Customizer, not Parameters', async ({ page }) => {
     await page.goto('/')
 
@@ -268,16 +267,16 @@ test.describe('Customizer terminology (C11)', () => {
     await expect(page.locator('[aria-label*="parameters panel" i]')).toHaveCount(0)
     await expect(page.locator('[title="Parameters"]')).toHaveCount(0)
 
-    // UF-40 (Q-70): the button that opens the pane wears the pane's name.
-    // Static markup, so this holds before a project is ever loaded.
+    // The button that opens the pane wears the pane's name. Static markup, so
+    // this holds before a project is ever loaded.
     await expect(page.locator('#mobileDrawerToggle .btn-label')).toHaveText(
       'Customizer'
     )
   })
 
-  // UF-40 (U-44). The landing surface is the Main Page, and it says so on
-  // itself rather than only inside the tours and the header button that
-  // send people back to it.
+  // The landing surface is the Main Page, and it says so on itself rather
+  // than only inside the tours and the header button that send people back
+  // to it.
   test('the Main Page names itself and its tours', async ({ page }) => {
     await page.goto('/')
 
@@ -289,16 +288,16 @@ test.describe('Customizer terminology (C11)', () => {
       page.locator('.role-path-card').first().locator('.role-path-title')
     ).toHaveText('Main Page Tour')
 
-    // The superseded vocabulary is gone from everything the surface shows.
+    // Neither "welcome page" nor "welcome screen" appears on the surface.
     const shown = await page.locator('#welcomeScreen').innerText()
     expect(shown).not.toMatch(/welcome page/i)
     expect(shown).not.toMatch(/welcome screen/i)
   })
 
-  // Q-71 (owner, 2026-08-23) moved these five from parameter-value naming to
-  // the Customizer, superseding the recorded C11 boundary for them. Each is
-  // static markup, so none of this needs WASM or a loaded project.
-  test('the Q-71 controls speak Customizer, not Params', async ({ page }) => {
+  // These five controls belong to the Customizer, so they name it rather
+  // than "Params". Each is static markup, so none of this needs WASM or a
+  // loaded project.
+  test('five controls speak Customizer, not Params', async ({ page }) => {
     await page.goto('/')
 
     await expect(page.locator('#exportParamsBtn .btn-text')).toHaveText(
@@ -320,15 +319,15 @@ test.describe('Customizer terminology (C11)', () => {
     await expect(page.locator('#tab-colors')).toHaveText('Color Settings')
   })
 
-  // WCAG 2.5.3 Label in Name: what a control READS must be contained in what
-  // it is CALLED, or speech input cannot act on the words on screen. Both of
-  // these failed before UF-40 - the header button read "Main Page" and was
-  // named "Return to the main projects page", and the toggle read "Params"
-  // and was named "Open customizer panel".
+  // WCAG 2.5.3 Label in Name: what a control reads must be contained in what
+  // it is called, or speech input cannot act on the words on screen. A
+  // header button reading "Main Page" named "Return to the main projects
+  // page", or a toggle reading "Params" named "Open customizer panel", fails
+  // it.
   //
   // Scoped to the naming family deliberately: a general sweep still flags 11
   // unrelated controls (Keys, HC, Help, Full Screen, Back and the welcome
-  // actions), reported rather than quietly widened into this release.
+  // actions).
   test('the renamed controls contain their visible label in their name', async ({
     page,
   }) => {
@@ -375,8 +374,8 @@ test.describe('Accessibility Labels Terminology', () => {
       
       const lowerLabel = ariaLabel.toLowerCase()
       
-      // AF-7: both checks used to console.warn and pass regardless - while
-      // index.html shipped aria-label="Project files" on the companion list.
+      // Both checks fail rather than warn, so an aria-label="Project files" on
+      // the companion list cannot ship.
       expect(lowerLabel, `aria-label bans "saved design": "${ariaLabel}"`).not.toContain('saved design')
       expect(
         lowerLabel.includes('project files'),
@@ -397,7 +396,7 @@ test.describe('Accessibility Labels Terminology', () => {
       
       const lowerTitle = title.toLowerCase()
       
-      // AF-7: used to warn and pass. Banned outright.
+      // Banned outright.
       expect(lowerTitle, `title bans "saved design": "${title}"`).not.toContain('saved design')
     }
   })
@@ -414,8 +413,8 @@ test.describe('Status Messages Terminology', () => {
     // Check status area for any messages
     const statusArea = page.locator('#statusArea, .status-message, [role="status"]')
     
-    // AF-7: used to warn and pass - while loading a saved project ANNOUNCED
-    // "Loaded saved design". Banned outright, on every status surface found.
+    // Banned outright, on every status surface found: loading a saved project
+    // must never announce "Loaded saved design".
     for (const area of await statusArea.all()) {
       const statusText = (await area.textContent().catch(() => '')) || ''
       expect(statusText.toLowerCase()).not.toContain('saved design')

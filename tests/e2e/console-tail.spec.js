@@ -1,17 +1,16 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
-// UF-19 (U-31) — the console shows its newest output, in both interfaces.
+// The console shows its newest output, in both interfaces.
 //
-// The repo's first Classic console coverage. Until UF-19 no spec looked at the
-// Classic console at all, which is how it shipped showing nothing: the Log
-// view's box carried a fixed max-height, the Classic pane clipped it, and the
-// scroll-to-newest drove every arriving message into the clipped part (D-27).
+// A clipped console can show nothing at all: a Log box with a fixed
+// max-height inside a Classic pane that clips it, and a scroll-to-newest
+// that drives every arriving message into the clipped part.
 //
-// Presence is not the assertion here — console-fidelity.spec.js already covers
-// what reaches the log. These cases assert POSITION: that the newest line is
-// inside the box a reader is looking at, that in Classic the box is inside the
-// pane, and that a reader who has scrolled up is not yanked back.
+// Presence is not the assertion here: console-fidelity.spec.js already
+// covers what reaches the log. These cases assert position: that the newest
+// line is inside the box a reader is looking at, that in Classic the box is
+// inside the pane, and that a reader who has scrolled up is not yanked back.
 
 const MANY_ECHO = path.join(
   process.cwd(),
@@ -81,7 +80,7 @@ async function waitForNewestLine(page) {
 /**
  * Where the log is scrolled to, and whether its last entry is inside the box.
  * `paneSelector` additionally reports whether the box itself is inside the
- * pane that holds it, which is the Classic failure D-27 named.
+ * pane that holds it, the way a clipped Classic console fails.
  */
 function readLogGeometry(page, paneSelector = null) {
   return page.evaluate((pane) => {
@@ -125,7 +124,7 @@ function readLogGeometry(page, paneSelector = null) {
   }, paneSelector);
 }
 
-test.describe('Console shows its newest output (UF-19, U-31)', () => {
+test.describe('Console shows its newest output', () => {
   test('Assistive Forge: the log is scrolled to the newest line, single spaced', async ({
     page,
   }) => {
@@ -148,9 +147,9 @@ test.describe('Console shows its newest output (UF-19, U-31)', () => {
     ).toBeLessThanOrEqual(TAIL_SLACK);
     expect(geo.newestLineInsideBox, 'the newest line is on screen').toBe(true);
 
-    // The modal's stylesheet used to win on this element and gave it
-    // white-space: pre-wrap, which rendered the entry generator's own
-    // indentation as three blank lines between every message (63px measured).
+    // No stylesheet may give this element white-space: pre-wrap: that renders
+    // the entry generator's own indentation as three blank lines between every
+    // message.
     expect(
       geo.gapBetweenEntries,
       'no blank lines are injected between messages'
@@ -165,10 +164,10 @@ test.describe('Console shows its newest output (UF-19, U-31)', () => {
     // A defined window, not whatever the lane defaults to. The Classic console
     // pane is a fixed slice of the window, and its filter row takes a fixed
     // amount off the top of that slice, so how many lines the log gets depends
-    // on the window's HEIGHT. At 1280x720 with the wider fonts of a Linux CI
+    // on the window's height. At 1280x720 with the wider fonts of a Linux CI
     // runner the filter row wraps to three rows and leaves the log less than
-    // one line — a real residual of the pane's chrome density, reported to the
-    // owner rather than tuned away here, and not what this case is about.
+    // one line: a known cost of the pane's dense chrome, and not what this
+    // case is about.
     await page.setViewportSize({ width: 1400, height: 900 });
 
     await loadProject(page);

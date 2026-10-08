@@ -2,12 +2,11 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 
 /**
- * UF-29 — the fold gutter drawn the desktop's way (U-37 ¶1, Q-59a).
+ * The fold gutter, drawn the desktop's way.
  *
- * Folding already worked; this is fidelity. What matters to guard is that
- * restyling the marker did not make the marker the ONLY way to fold — a
+ * Restyling the marker must not make it the only way to fold: a
  * pointer-only control would be an accessibility regression, not a cosmetic
- * one — and that the glyph really does say what pressing it will do.
+ * one. And the glyph must say what pressing it will do.
  */
 
 const FIXTURE = path.join(
@@ -138,9 +137,8 @@ test('fold-markers: the gutter draws boxes, and the glyph says what it will do',
       ),
       textInside: all.filter((b) => b.textContent.trim().length > 0).length,
       // Every marker must keep a title. CodeMirror's default marker sets one;
-      // supplying markerDOM replaces that element and silently drops it, which
-      // is how this restyle first shipped with no accessible name on the
-      // control at all.
+      // supplying markerDOM replaces that element and silently drops it,
+      // leaving the control with no accessible name.
       titled: all.filter((b) => (b.getAttribute('title') || '').trim()).length,
       openTitle: all
         .find((b) => b.classList.contains('cm-foldBox-open'))
@@ -214,10 +212,10 @@ test('fold-markers: pressing a marker collapses, and the box becomes a plus', as
   expect(after.strokesOnClosed, 'a closed box should draw two strokes').toBe(2);
   expect(after.placeholders, 'no fold placeholder appeared').toBeGreaterThan(0);
 
-  // Content really went away, shown the way the desktop shows it: the gutter's
-  // numbers skip across the hidden block (the owner's screenshot 122650 has
-  // them jumping 177 to 185). Counting rendered lines does NOT work here —
-  // CodeMirror simply renders further down the file to refill the viewport.
+  // Content really went away, shown the way the desktop shows it: the
+  // gutter's numbers skip across the hidden block. Counting rendered lines
+  // does not work here: CodeMirror simply renders further down the file to
+  // refill the viewport.
   const numbersAfter = await lineNumbers();
   const gapsBefore = numbersBefore.filter(
     (n, i) => i > 0 && n !== numbersBefore[i - 1] + 1
