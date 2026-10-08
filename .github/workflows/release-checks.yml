@@ -16,7 +16,7 @@ on:
 jobs:
   # Edge E2E tests - Tier 1 browser.
   #
-  # The suite runs as three shards side by side, each with the whole ceiling
+  # The suite runs as four shards side by side, each with the whole ceiling
   # below, so a shard that comes close to the ceiling calls for another
   # shard rather than a bigger ceiling. The summary job after this one gives
   # the lane a single check name, whatever the shard count.
@@ -26,7 +26,7 @@ jobs:
   # There are no serial-mode describes in tests/e2e, so nothing depends on
   # two cases landing on the same machine.
   e2e-tests-edge:
-    name: E2E Tests (Edge ${{ matrix.shard }}/3)
+    name: E2E Tests (Edge ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     # The City Walk e2e suites are paused on CI (the skip in
     # tests/e2e/helpers/city-walk.js says why), and the rest of the suite
@@ -38,9 +38,10 @@ jobs:
       # is in one half or both is most of the diagnosis.
       fail-fast: false
       matrix:
-        # Three, because the cost model put two Edge shards at 43.7
-        # projected minutes, past any honest ceiling.
-        shard: [1, 2, 3]
+        # Four: the cost model put two Edge shards at 43.7 projected
+        # minutes, past any honest ceiling, and three at 34.9 of 35 once the
+        # suite grew again.
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Checkout code
@@ -84,7 +85,7 @@ jobs:
           fi
           npx playwright install ffmpeg
       
-      - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 3)
+      - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 4)
         # scripts/e2e-shard.mjs divides the files, as on Chromium and for the
         # same reason: Playwright's own --shard follows the alphabet, which
         # left this lane lopsided (32m32s against 15m14s on one green board).
@@ -92,8 +93,8 @@ jobs:
         # but the packing works off the ratios between files, and those are a
         # property of what the tests do rather than of the browser.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3 msedge)
-          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 4 msedge)
+          echo "shard ${{ matrix.shard }}/4 runs: $FILES"
           npx playwright test --project=msedge $FILES
         env:
           # Playwright's whole-run clock: 40 minutes, inside the 45-minute
@@ -147,11 +148,12 @@ jobs:
   # Edge lanes do it: Playwright's own --shard divides by test count in path
   # order, which balances the counts and not the work.
   e2e-tests-firefox-shard:
-    # Three shards: at two, the lane projected to 49.4 minutes against the
-    # 35-minute ceiling. The per-shard job names are not check names anything
-    # requires (the summary job below carries the lane's name), so the shard
-    # count can change without a ruleset edit.
-    name: E2E Tests (Firefox ${{ matrix.shard }}/3)
+    # Four shards: at two, the lane projected to 49.4 minutes against the
+    # 35-minute ceiling, and at three to 34.8 once the suite grew again. The
+    # per-shard job names are not check names anything requires (the summary
+    # job below carries the lane's name), so the shard count can change
+    # without a ruleset edit.
+    name: E2E Tests (Firefox ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -160,7 +162,7 @@ jobs:
       # the failure is most of the diagnosis.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     
     steps:
       - name: Checkout code
@@ -209,13 +211,13 @@ jobs:
             npx playwright install --with-deps firefox
           fi
       
-      - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 3)
+      - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 4)
         run: |
           # The shard count is said once, in the matrix above, and repeated
           # here; the project name makes the planner book only what this
           # lane will actually run (PROJECT_IGNORES).
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3 firefox)
-          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 4 firefox)
+          echo "shard ${{ matrix.shard }}/4 runs: $FILES"
           npx playwright test --project=firefox $FILES
         env:
           # Playwright's whole-run clock: 35 minutes per shard. Under the
@@ -257,7 +259,7 @@ jobs:
           result='${{ needs.e2e-tests-firefox-shard.result }}'
           echo "Firefox shards reported: $result"
           if [ "$result" != "success" ]; then
-            echo "::error::Firefox did not pass ($result). The shard that failed is in E2E Tests (Firefox 1/3), (2/3) or (3/3)."
+            echo "::error::Firefox did not pass ($result). The shard that failed is one of E2E Tests (Firefox 1/4) to (4/4)."
             exit 1
           fi
 

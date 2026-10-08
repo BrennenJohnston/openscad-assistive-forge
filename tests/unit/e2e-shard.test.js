@@ -86,7 +86,7 @@ describe('e2e shard planner', () => {
   })
 
   it('says out loud how little room the ceiling-bound lanes have left', () => {
-    // Edge and Firefox run three shards each, behind one required summary
+    // Edge and Firefox run four shards each, behind one required summary
     // check per lane, so a re-split needs no ruleset change. This does not
     // demand the room Chromium has; what it does is refuse to let a lane
     // quietly cross the real ceiling, and name the margin when it is asked.
@@ -94,13 +94,14 @@ describe('e2e shard planner', () => {
     // lane's shape still trips here.
     const CEILING_MIN = 35
     // Each lane is booked for what it runs at the shard count it actually
-    // has: three each (at two, Firefox would project to 49.4 of these 35
-    // minutes). Firefox leaves out wasm-smoke, and both leave out the drawing
-    // editor's own walk - that ignore is re-visited only from a green CI
-    // board, never from a projection.
+    // has: four each (at two, Firefox would project to 49.4 of these 35
+    // minutes; at three both lanes reached 34.9 and the next new spec file
+    // crossed the ceiling). Firefox leaves out wasm-smoke, and both leave
+    // out the drawing editor's own walk - that ignore is re-visited only
+    // from a green CI board, never from a projection.
     for (const [project, laneShards] of [
-      ['msedge', 3],
-      ['firefox', 3],
+      ['msedge', 4],
+      ['firefox', 4],
     ]) {
       const lane = filesForProject(files, project)
       for (const shard of planShards(lane, MEASURED_SECONDS, laneShards)) {
