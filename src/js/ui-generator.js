@@ -2281,6 +2281,14 @@ export function reportHolePlacement(values, parameters) {
   );
   if (!outlineParam) return;
 
+  // The charm model cuts its outline from the drawing only for the "design"
+  // shape (its shape_is_design); on a circle or a heart the drawing decorates
+  // a body of its own, so the drawing's outline says nothing about the hole.
+  if ('charm_shape' in values && values.charm_shape !== 'design') {
+    showHoleWarning(null);
+    return;
+  }
+
   const outline = values[outlineParam];
   const svgText =
     outline && typeof outline === 'object' && outline.data
@@ -2306,7 +2314,11 @@ export function reportHolePlacement(values, parameters) {
   });
 
   const attached = values.attachment_type && values.attachment_type !== 'none';
-  const message = attached && !result.ok ? result.message : null;
+  showHoleWarning(attached && !result.ok ? result.message : null);
+}
+
+/** Show the hole warning, or take it away; said once per change. */
+function showHoleWarning(message) {
   if (message === lastHoleWarning) return;
   lastHoleWarning = message;
 
