@@ -343,12 +343,11 @@ test.describe('Companion File Handling', () => {
     await uploadFile(page, zipPath);
     await switchToStandardMode(page);
 
-    // The companion-files UI is #projectFilesControls: the badge counts every
-    // project file (main + companions) and the list holds the companions only,
-    // so badge '2' plus the TXT in the list proves both ZIP files were
-    // recognized.
+    // The companion-files UI is #projectFilesControls: the badge counts the
+    // companions, as the list shows them, so badge '1' plus the TXT in the
+    // list proves the ZIP's second file was recognized as a companion.
     await expect(page.locator('#projectFilesControls')).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('#projectFilesBadge')).toHaveText('2');
+    await expect(page.locator('#projectFilesBadge')).toHaveText('1');
     const fileNames = await page.locator('#projectFilesList').textContent();
     expect(fileNames).toContain('openings_and_additions.txt');
   });

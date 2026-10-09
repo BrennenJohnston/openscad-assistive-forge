@@ -1303,6 +1303,38 @@ test.describe('Viewport-Control panel (F4)', () => {
     ).toBeGreaterThan(0);
   });
 
+  // The rotation is the desktop's $vpr: [tilt, 0, turn]. Rotation Z turns
+  // the view round the vertical axis, and the number typed is the number
+  // the panel and the status line read back.
+  test('classic-viewport-turn: a typed Rotation Z turns the view and stays', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await loadProject(page);
+    await enterClassicStandard(page);
+    await skipWithoutRenderer(page);
+
+    const rx = page.locator('#vpRx');
+    const rz = page.locator('#vpRz');
+    await expect
+      .poll(async () => (await rz.inputValue()).length)
+      .toBeGreaterThan(0);
+    const tilt = Number(await rx.inputValue());
+
+    await rz.fill('120');
+    await rz.press('Tab');
+
+    // The status line is read from the camera, whatever the field shows: a
+    // field with focus is never overwritten, so it would keep a typed number
+    // the camera did not take.
+    await expect(page.locator('#classicStatusViewport')).toContainText(
+      ' 0.00 120.00 ]'
+    );
+    expect(Number(await rz.inputValue())).toBeCloseTo(120, 1);
+    expect(Number(await rx.inputValue())).toBeCloseTo(tilt, 1);
+    await expect(page.locator('#vpRy')).toHaveAttribute('readonly', '');
+  });
+
   test('classic-viewport-ortho: orthographic disables FOV', async ({
     page,
   }) => {

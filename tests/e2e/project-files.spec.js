@@ -192,7 +192,7 @@ test.describe('Project Files Manager', () => {
     if (await badge.isVisible()) {
       const badgeText = await badge.textContent()
       const count = parseInt(badgeText, 10)
-      expect(count).toBeGreaterThanOrEqual(2) // Should have at least main + 1 companion
+      expect(count).toBe(2) // helpers.scad and settings.txt; the main file is not a companion
     }
   })
 

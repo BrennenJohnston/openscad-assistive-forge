@@ -13,13 +13,12 @@ import { skipWithoutWebGL } from './helpers/webgl.js';
 // frame's update does read it. A left-behind up therefore cannot re-aim the
 // turntable; it only rolls the picture, and the roll grows with every drag.
 //
-// The instrument, and why it needs no new debug hook. The Viewport-Control
-// panel publishes the live camera pose on `viewport-camera-change` in both
-// interfaces (it is connected at project open, not at Classic entry), and its
-// `rotation` is three's camera.rotation euler in XYZ order. Rebuilding the
-// rotation matrix from that euler gives the camera's world basis, and three's
-// lookAt() builds screen-right as normalize(up x forward), so screen-right is
-// always perpendicular to camera.up. In a Z-up app that makes
+// The instrument. `__forgeDebug.cameraPose()` gives the camera's own world
+// axes, right and up, read from its matrix. (The rotation the Viewport-Control
+// panel publishes is OpenSCAD's $vpr, worked out from where the camera sits,
+// so it cannot show a roll.) three's lookAt() builds screen-right as
+// normalize(up x forward), so screen-right is always perpendicular to
+// camera.up. In a Z-up app that makes
 //
 //     |screenRight.z| == 0   <=>   the picture is not rolled
 //
@@ -52,12 +51,6 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-    // Read-only tap on a feed the app already publishes. Declared here rather
-    // than added to the app: nothing in src/ changes to make this spec possible.
-    window.__cameraPoses = [];
-    document.addEventListener('viewport-camera-change', (ev) => {
-      window.__cameraPoses.push(ev.detail.pose);
-    });
   });
 });
 
@@ -97,40 +90,22 @@ async function enterClassic(page) {
   await page.waitForTimeout(600);
 }
 
-/** three's Matrix4.makeRotationFromEuler, order XYZ — columns 1 and 2. */
-function screenBasis({ x, y, z }) {
-  const a = Math.cos(x * D2R);
-  const b = Math.sin(x * D2R);
-  const c = Math.cos(y * D2R);
-  const d = Math.sin(y * D2R);
-  const e = Math.cos(z * D2R);
-  const f = Math.sin(z * D2R);
-  return {
-    right: [c * e, a * f + b * e * d, b * f - a * e * d],
-    up: [-c * f, a * e - b * f * d, b * e + a * f * d],
-  };
-}
-
 /**
  * The live camera as this spec judges it: how rolled the frame is, and where
  * the camera sits on its turntable.
  */
 async function readCamera(page) {
-  const raw = await page.evaluate(() => ({
-    pose: window.__cameraPoses?.length
-      ? window.__cameraPoses[window.__cameraPoses.length - 1]
-      : null,
-    cam: window.__forgeDebug?.cameraPose?.() ?? null,
-  }));
-  if (!raw.pose || !raw.cam) return null;
-  const basis = screenBasis(raw.pose.rotation);
-  const t = raw.cam.target || [0, 0, 0];
-  const p = raw.cam.position;
+  const cam = await page.evaluate(
+    () => window.__forgeDebug?.cameraPose?.() ?? null
+  );
+  if (!cam?.right || !cam?.up) return null;
+  const t = cam.target || [0, 0, 0];
+  const p = cam.position;
   const off = [p[0] - t[0], p[1] - t[1], p[2] - t[2]];
   const len = Math.hypot(...off) || 1;
   return {
-    roll: Math.abs(basis.right[2]),
-    screenUp: basis.up,
+    roll: Math.abs(cam.right[2]),
+    screenUp: cam.up,
     elevationDeg: Math.asin(off[2] / len) / D2R,
     azimuthDeg: Math.atan2(off[0], -off[1]) / D2R,
   };

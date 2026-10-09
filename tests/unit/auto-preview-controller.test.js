@@ -373,8 +373,28 @@ describe('AutoPreviewController', () => {
           parseMs: 0,
           renderMs: 0,
           wasmInitMs: 0,
-        })
+        }),
+        ''
       )
+    })
+
+    // A preview shown again from the cache brings the messages its render
+    // printed, so a stale error from other values does not stay on screen.
+    it("hands back the cached render's console output", async () => {
+      const params = { width: 10 }
+      const hash = controller.hashParams(params)
+      const cacheKey = `${hash}|model`
+      controller.addToCache(cacheKey, {
+        stl: new ArrayBuffer(4),
+        stats: { triangles: 5 },
+        consoleOutput: 'ECHO: "ten wide"',
+      })
+      const previewReady = vi.fn()
+      controller.onPreviewReady = previewReady
+
+      await controller.loadCachedPreview(hash, cacheKey, 'model')
+
+      expect(previewReady.mock.calls[0][5]).toBe('ECHO: "ten wide"')
     })
 
     it('adds results to cache and evicts old entries', () => {
@@ -2511,6 +2531,84 @@ describe('AutoPreviewController', () => {
 
       expect(result.cached).toBeUndefined()
       expect(result.format).toBe('stl')
+    })
+  })
+
+  // With Automatic preview off a change only marks the preview outdated.
+  // Turning it back on has to catch up with that change.
+  describe('Turning Automatic preview back on', () => {
+    function showPreviewOf(params) {
+      controller.previewParamHash = controller.hashParams(params)
+      controller.previewCacheKey = `${controller.previewParamHash}|model`
+      controller.state = PREVIEW_STATE.CURRENT
+    }
+
+    it('renders the change made while it was off', () => {
+      vi.useFakeTimers()
+      const renderSpy = vi.spyOn(controller, 'renderPreview').mockResolvedValue()
+      showPreviewOf({ width: 10 })
+      controller.setEnabled(false, 'user')
+      controller.onParameterChange({ width: 20 })
+      expect(controller.state).toBe(PREVIEW_STATE.STALE)
+
+      controller.setEnabled(true)
+      vi.advanceTimersByTime(10)
+
+      expect(renderSpy).toHaveBeenCalledWith(
+        { width: 20 },
+        controller.hashParams({ width: 20 })
+      )
+    })
+
+    it('renders after a library change made while it was off', () => {
+      vi.useFakeTimers()
+      const renderSpy = vi.spyOn(controller, 'renderPreview').mockResolvedValue()
+      showPreviewOf({ size: 10 })
+      controller.setEnabled(false, 'user')
+      controller.onLibrariesChange({ size: 10 })
+      expect(controller.state).toBe(PREVIEW_STATE.STALE)
+
+      controller.setEnabled(true)
+      vi.advanceTimersByTime(10)
+
+      expect(renderSpy).toHaveBeenCalledWith(
+        { size: 10 },
+        controller.hashParams({ size: 10 })
+      )
+    })
+
+    it('renders nothing when nothing changed while it was off', () => {
+      vi.useFakeTimers()
+      const renderSpy = vi.spyOn(controller, 'renderPreview').mockResolvedValue()
+      controller.onParameterChange({ width: 10 })
+      vi.advanceTimersByTime(10)
+      renderSpy.mockClear()
+      showPreviewOf({ width: 10 })
+      controller.setEnabled(false, 'user')
+
+      controller.setEnabled(true)
+      vi.advanceTimersByTime(10)
+
+      expect(renderSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('isPreviewCurrentFor', () => {
+    it('is true only for the values the current preview shows', () => {
+      controller.previewParamHash = controller.hashParams({ width: 10 })
+      controller.previewCacheKey = `${controller.previewParamHash}|model`
+      controller.state = PREVIEW_STATE.CURRENT
+
+      expect(controller.isPreviewCurrentFor({ width: 10 })).toBe(true)
+      expect(controller.isPreviewCurrentFor({ width: 11 })).toBe(false)
+    })
+
+    it('is false while the preview is outdated, even for its own values', () => {
+      controller.previewParamHash = controller.hashParams({ width: 10 })
+      controller.previewCacheKey = `${controller.previewParamHash}|model`
+      controller.state = PREVIEW_STATE.STALE
+
+      expect(controller.isPreviewCurrentFor({ width: 10 })).toBe(false)
     })
   })
 })

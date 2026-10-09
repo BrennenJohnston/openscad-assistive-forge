@@ -648,6 +648,46 @@ function toggleErrorLog() {
   }
 }
 
+/** Where focus was before Window > Console sent it into the Classic dock. */
+let consoleReturnFocus = null;
+
+/** Classic: is the Console dock on screen right now? */
+function isConsoleShowingClassic() {
+  if (getUIModeController().getClassicDensity() === 'simplified') return false;
+  if (getClassicLayoutController()?.isConsoleCollapsed()) return false;
+  return !document.getElementById('classicConsoleSlot')?.hidden;
+}
+
+/**
+ * Ctrl+Alt+1 / Window > Console. Forge opens and closes the console. In
+ * Classic the Console is a dock pane that stays open (a closed one is an
+ * empty frame), so, like the Error-Log beside it, the toggle sends focus into
+ * the pane and back out again. Classic's Simplified view drops the strip;
+ * there the Forge behavior stands.
+ */
+function toggleConsole() {
+  const layout = getClassicLayoutController();
+  const docked =
+    document.body.dataset.uiMode === 'classic' &&
+    Boolean(layout) &&
+    getUIModeController().getClassicDensity() !== 'simplified';
+  if (!docked) {
+    getUIModeController().togglePanelVisibility('consoleOutput');
+    return;
+  }
+
+  const slot = document.getElementById('classicConsoleSlot');
+  const active = document.activeElement;
+  if (slot?.contains(active) || active?.id === tabIdFor('console')) {
+    const prior = consoleReturnFocus;
+    consoleReturnFocus = null;
+    if (prior?.isConnected && typeof prior.focus === 'function') prior.focus();
+    return;
+  }
+  if (layout.isConsoleCollapsed()) layout.setConsoleCollapsed(false);
+  if (focusDockPanel('console')) consoleReturnFocus = active;
+}
+
 /**
  * The toolbars Classic can hide, each with the body attribute `classic.css`
  * keys off and the preference key it persists under.
@@ -2846,7 +2886,40 @@ async function initApp() {
   let hasUserAcceptedDownload = !isFirstVisit();
   let pendingWasmInit = false;
   let pendingDraft = null;
+  // The end of initApp: until then parts of the page that loading a project
+  // reaches (the preview drawer's state among them) do not exist yet.
+  let startupDone = false;
   const firstVisitReadyResolvers = [];
+
+  /**
+   * Ask about a saved draft and open it if wanted. One path for both roads in,
+   * straight after start-up or after the welcome dialog, and never before
+   * start-up has finished: a restore run mid-way reached a variable declared
+   * further down and lost the project.
+   */
+  function restorePendingDraft() {
+    if (!pendingDraft || !startupDone) return;
+    const draftToRestore = pendingDraft;
+    pendingDraft = null;
+
+    const shouldRestore = confirm(
+      `Found a saved draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
+    );
+
+    if (shouldRestore) {
+      console.log('Restoring draft...');
+      fileHandler.handleFile(
+        { name: draftToRestore.fileName },
+        draftToRestore.fileContent,
+        null,
+        null,
+        'saved'
+      );
+      updateStatus('Draft restored');
+    } else {
+      stateManager.clearLocalStorage();
+    }
+  }
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
@@ -3120,28 +3193,7 @@ async function initApp() {
     }
 
     // Restore pending draft if one was deferred
-    if (pendingDraft) {
-      const draftToRestore = pendingDraft;
-      pendingDraft = null;
-
-      const shouldRestore = confirm(
-        `Found a saved draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
-      );
-
-      if (shouldRestore) {
-        console.log('Restoring deferred draft...');
-        fileHandler.handleFile(
-          { name: draftToRestore.fileName },
-          draftToRestore.fileContent,
-          null,
-          null,
-          'saved'
-        );
-        updateStatus('Draft restored');
-      } else {
-        stateManager.clearLocalStorage();
-      }
-    }
+    restorePendingDraft();
   };
 
   if (firstVisitContinue && firstVisitModal) {
@@ -3539,12 +3591,7 @@ async function initApp() {
 
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
-    onNew: () => {
-      stateManager.resetState();
-      const container = document.getElementById('parametersContainer');
-      if (container) container.textContent = '';
-      if (previewManager) previewManager.clearScene();
-    },
+    onNew: () => void startNewProject(),
     onReload: () => {
       const state = stateManager.getState();
       if (state.uploadedFile) {
@@ -4369,10 +4416,16 @@ async function initApp() {
     getWorker: () => renderController?.worker || null,
     getScadContent: () => stateManager.getState()?.uploadedFile?.content || '',
     extractParameters,
+    // The caches are flushed, not the project, as on the desktop: the same
+    // project is previewed again from scratch.
     onFlushComplete: () => {
-      stateManager.resetState();
-      const container = document.getElementById('parametersContainer');
-      if (container) container.textContent = '';
+      const state = stateManager.getState();
+      if (!autoPreviewController || !state.uploadedFile) return;
+      autoPreviewController.clearPreviewCache();
+      autoPreviewController.forcePreview(state.parameters).catch((error) => {
+        console.error('[Flush] Preview after flushing failed:', error);
+        showErrorToast({ title: 'Preview Failed', message: error.message });
+      });
     },
   });
   designPanelController.init();
@@ -4438,11 +4491,7 @@ async function initApp() {
         shortcutAction: 'preview',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
-        handler: () => {
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(state.parameters);
-          }
-        },
+        handler: previewNow,
       },
       {
         type: 'action',
@@ -4948,7 +4997,15 @@ async function initApp() {
             : CODE_EDITOR_UNAVAILABLE_REASON,
         handler: () => toggleEditorPanel(),
       },
-      panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      {
+        type: 'toggle',
+        label: 'Console',
+        shortcutAction: 'toggleConsole',
+        checked: inClassic
+          ? isConsoleShowingClassic()
+          : uiCtrl.isPanelShowing('consoleOutput'),
+        handler: () => toggleConsole(),
+      },
       {
         type: 'toggle',
         label: 'Customizer',
@@ -7361,7 +7418,7 @@ async function initApp() {
           // Update dimensions display
           updateDimensionsDisplay();
           // Console fidelity: preview runs surface their echo()/WARNING
-          // output too, not just full renders (cache hits carry none)
+          // output too, not just full renders (a cache hit brings its own)
           if (
             consoleOutput &&
             typeof window.updateConsoleOutput === 'function'
@@ -7586,6 +7643,7 @@ async function initApp() {
     setCanonicalProjectFiles,
     renderLibraryUI,
     getEnabledLibrariesForRender,
+    resetProjectUiState,
   });
 
   // Check for saved draft - but only if first-visit modal is not blocking
@@ -7600,32 +7658,9 @@ async function initApp() {
       : null;
 
   if (draft) {
-    // If first-visit modal is blocking, defer draft restoration
-    if (firstVisitBlocking) {
-      console.log(
-        'Draft found, but deferring until first-visit modal is dismissed'
-      );
-      pendingDraft = draft; // Will be restored in handleFirstVisitClose
-    } else {
-      const shouldRestore = confirm(
-        `Found a saved draft of "${draft.fileName}" from ${new Date(draft.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
-      );
-
-      if (shouldRestore) {
-        console.log('Restoring draft...');
-        // Treat draft as uploaded file
-        fileHandler.handleFile(
-          { name: draft.fileName },
-          draft.fileContent,
-          null,
-          null,
-          'saved'
-        );
-        updateStatus('Draft restored');
-      } else {
-        stateManager.clearLocalStorage();
-      }
-    }
+    // Restored by restorePendingDraft(): at the end of start-up, or, while
+    // the first-visit modal blocks, once it is dismissed.
+    pendingDraft = draft;
   }
 
   /**
@@ -8141,6 +8176,11 @@ async function initApp() {
   // button's listener so File > Close Project can ask its own dirty-aware
   // question and still reach this one path without a second dialog.
   async function closeProjectToWelcome() {
+    resetProjectUiState();
+    // The name of a closed project is not the page's any more.
+    const fileInfoSummary = document.getElementById('fileInfoSummary');
+    if (fileInfoSummary) fileInfoSummary.textContent = '';
+
     // Reset file input
     fileInput.value = '';
 
@@ -8296,11 +8336,22 @@ async function initApp() {
 
   // ========== Start new project ==========
   // A way to start a new project from scratch.
-  const startNewProjectBtn = document.getElementById('startNewProjectBtn');
-  if (startNewProjectBtn) {
-    startNewProjectBtn.addEventListener('click', async () => {
-      // Create a starter template
-      const starterTemplate = `// New OpenSCAD Project
+  /**
+   * A new project from the starter template: the Main Page's Start New
+   * Project and File > New File. From the menu a project can be open, so
+   * that asks first, as loading an example does.
+   */
+  async function startNewProject() {
+    if (stateManager.getState().uploadedFile) {
+      const confirmed = await showConfirmDialog(
+        'This will replace the current file. Continue?',
+        'New File'
+      );
+      if (!confirmed) return;
+    }
+
+    // Create a starter template
+    const starterTemplate = `// New OpenSCAD Project
 // Created with OpenSCAD Assistive Forge
 // https://github.com/BrennenJohnston/openscad-assistive-forge
 
@@ -8332,32 +8383,34 @@ if (rounded) {
 }
 `;
 
-      try {
-        const fileName = 'new_project.scad';
-        // Process it like a regular file upload, but pass content directly.
-        // `handleFile()` uses FileReader for `File`/Blob inputs; passing a plain object
-        // without content will throw. This path intentionally avoids FileReader.
-        await fileHandler.handleFile(
-          { name: fileName },
-          starterTemplate,
-          null,
-          null,
-          'user',
-          fileName
-        );
+    try {
+      const fileName = 'new_project.scad';
+      // Process it like a regular file upload, but pass content directly.
+      // `handleFile()` uses FileReader for `File`/Blob inputs; passing a plain object
+      // without content will throw. This path intentionally avoids FileReader.
+      await fileHandler.handleFile(
+        { name: fileName },
+        starterTemplate,
+        null,
+        null,
+        'user',
+        fileName
+      );
 
-        // Announce to screen readers
-        announceImmediate(
-          'New project created. You can customize the parameters or edit the code.'
-        );
+      // Announce to screen readers
+      announceImmediate(
+        'New project created. You can customize the parameters or edit the code.'
+      );
 
-        console.log('[App] New project created from template');
-      } catch (error) {
-        console.error('[App] Failed to create new project:', error);
-        updateStatus('Failed to create new project', 'error');
-      }
-    });
+      console.log('[App] New project created from template');
+    } catch (error) {
+      console.error('[App] Failed to create new project:', error);
+      updateStatus('Failed to create new project', 'error');
+    }
   }
+
+  const startNewProjectBtn = document.getElementById('startNewProjectBtn');
+  startNewProjectBtn?.addEventListener('click', () => void startNewProject());
 
   // Load examples - unified handler
   // IMPORTANT: Keep this as the single click handler for all example buttons.
@@ -9377,6 +9430,29 @@ if (rounded) {
   }
 
   /**
+   * Draw the Customizer for the open project, wired the way every redraw is:
+   * each change is recorded for Undo, clears the preset selection and asks
+   * for a preview.
+   * @param {Object|null} [values] - The values to show; null shows the state's
+   */
+  function renderCustomizer(values = null) {
+    renderParameterUI(
+      stateManager.getState().schema,
+      document.getElementById('parametersContainer'),
+      (changed) => {
+        stateManager.recordParameterState();
+        stateManager.setState({ parameters: changed });
+        clearPresetSelection(changed);
+        if (autoPreviewController && stateManager.getState().uploadedFile) {
+          autoPreviewController.onParameterChange(changed);
+        }
+        updatePrimaryActionButton();
+      },
+      values
+    );
+  }
+
+  /**
    * Perform undo: restores previous parameter state, re-renders UI, and
    * triggers auto-preview.  Called by Edit toolbar menu, Undo button,
    * and keyboard shortcut.
@@ -9385,24 +9461,7 @@ if (rounded) {
     const previousParams = stateManager.undo();
     if (previousParams) {
       const state = stateManager.getState();
-
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(
-        state.schema,
-        parametersContainer,
-        (values) => {
-          stateManager.recordParameterState();
-          stateManager.setState({ parameters: values });
-          clearPresetSelection(values);
-          if (autoPreviewController && state.uploadedFile) {
-            autoPreviewController.onParameterChange(values);
-          }
-          updatePrimaryActionButton();
-        },
-        previousParams
-      );
+      renderCustomizer(previousParams);
 
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(previousParams);
@@ -9421,24 +9480,7 @@ if (rounded) {
     const nextParams = stateManager.redo();
     if (nextParams) {
       const state = stateManager.getState();
-
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(
-        state.schema,
-        parametersContainer,
-        (values) => {
-          stateManager.recordParameterState();
-          stateManager.setState({ parameters: values });
-          clearPresetSelection(values);
-          if (autoPreviewController && state.uploadedFile) {
-            autoPreviewController.onParameterChange(values);
-          }
-          updatePrimaryActionButton();
-        },
-        nextParams
-      );
+      renderCustomizer(nextParams);
 
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(nextParams);
@@ -9479,20 +9521,7 @@ if (rounded) {
       clearPresetSelection(state.defaults);
 
       // Re-render UI with defaults
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(state.schema, parametersContainer, (values) => {
-        stateManager.recordParameterState();
-        stateManager.setState({ parameters: values });
-        // Clear preset selection when parameters are manually changed
-        clearPresetSelection(values);
-        // Trigger auto-preview on parameter change
-        if (autoPreviewController && state.uploadedFile) {
-          autoPreviewController.onParameterChange(values);
-        }
-        updatePrimaryActionButton();
-      });
+      renderCustomizer();
 
       // Trigger auto-preview with reset params
       if (autoPreviewController && state.uploadedFile) {
@@ -12783,8 +12812,9 @@ if (rounded) {
 
   // ========== Render queue ==========
 
-  // Initialize render queue
-  renderQueue = new RenderQueue(renderController, {
+  // Initialize render queue. A getter, as for the comparison below: on a
+  // first visit the engine is built after the welcome, later than this line.
+  renderQueue = new RenderQueue(() => renderController, {
     maxQueueSize: 20,
   });
 
@@ -12834,6 +12864,15 @@ if (rounded) {
 
     const jobs = renderQueue.getAllJobs();
 
+    // Clear existing items, and recount, before the empty case too: removing
+    // the last job used to leave its row and its counts on screen.
+    Array.from(queueList.children).forEach((child) => {
+      if (!child.classList.contains('queue-empty')) {
+        child.remove();
+      }
+    });
+    updateQueueStats();
+
     if (jobs.length === 0) {
       queueEmpty.classList.remove('hidden');
       return;
@@ -12841,20 +12880,11 @@ if (rounded) {
 
     queueEmpty.classList.add('hidden');
 
-    // Clear existing items
-    Array.from(queueList.children).forEach((child) => {
-      if (!child.classList.contains('queue-empty')) {
-        child.remove();
-      }
-    });
-
     // Render each job
     jobs.forEach((job) => {
       const jobElement = createQueueJobElement(job);
       queueList.appendChild(jobElement);
     });
-
-    updateQueueStats();
   }
 
   // Create a queue job element
@@ -12876,26 +12906,75 @@ if (rounded) {
     const formatName =
       OUTPUT_FORMATS[job.outputFormat]?.name || job.outputFormat.toUpperCase();
 
-    div.innerHTML = `
-      <div class="queue-item-header">
-        <span class="queue-item-icon">${stateIcon}</span>
-        <span class="queue-item-name" contenteditable="${job.state === 'queued' ? 'true' : 'false'}" data-job-id="${job.id}">${job.name}</span>
-        <span class="queue-item-format">${formatName}</span>
-        <span class="queue-item-state">${job.state}</span>
-      </div>
-      <div class="queue-item-body">
-        ${job.error ? `<div class="queue-item-error">${job.error}</div>` : ''}
-        ${job.renderTime ? `<div class="queue-item-time">Render time: ${(job.renderTime / 1000).toFixed(1)}s</div>` : ''}
-        ${job.result?.stats?.triangles ? `<div class="queue-item-stats">${job.result.stats.triangles.toLocaleString()} triangles</div>` : ''}
-      </div>
-      <div class="queue-item-actions">
-        ${job.state === 'complete' ? `<button class="btn btn-sm btn-primary" data-action="download" data-job-id="${job.id}" aria-label="Download ${job.name}">📥 Download</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="edit" data-job-id="${job.id}" aria-label="Edit ${job.name} parameters">✏️ Edit</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="cancel" data-job-id="${job.id}" aria-label="Cancel ${job.name}">⏹️ Cancel</button>` : ''}
-        ${job.state !== 'rendering' ? `<button class="btn btn-sm btn-outline" data-action="remove" data-job-id="${job.id}" aria-label="Remove ${job.name}">🗑️ Remove</button>` : ''}
-      </div>
-    `;
+    // Built as text: a job's name can come from an imported queue file.
+    const part = (tag, className, text = '') => {
+      const el = document.createElement(tag);
+      el.className = className;
+      el.textContent = text;
+      return el;
+    };
 
+    const name = part('span', 'queue-item-name', job.name);
+    name.setAttribute(
+      'contenteditable',
+      job.state === 'queued' ? 'true' : 'false'
+    );
+    name.dataset.jobId = job.id;
+    const header = part('div', 'queue-item-header');
+    header.append(
+      part('span', 'queue-item-icon', stateIcon),
+      name,
+      part('span', 'queue-item-format', formatName),
+      part('span', 'queue-item-state', job.state)
+    );
+
+    const body = part('div', 'queue-item-body');
+    if (job.error) body.append(part('div', 'queue-item-error', job.error));
+    if (job.renderTime) {
+      body.append(
+        part(
+          'div',
+          'queue-item-time',
+          `Render time: ${(job.renderTime / 1000).toFixed(1)}s`
+        )
+      );
+    }
+    if (job.result?.stats?.triangles) {
+      body.append(
+        part(
+          'div',
+          'queue-item-stats',
+          `${job.result.stats.triangles.toLocaleString()} triangles`
+        )
+      );
+    }
+
+    const action = (kind, style, label, text) => {
+      const button = part('button', `btn btn-sm ${style}`, text);
+      button.dataset.action = kind;
+      button.dataset.jobId = job.id;
+      button.setAttribute('aria-label', label);
+      return button;
+    };
+    const actions = part('div', 'queue-item-actions');
+    if (job.state === 'complete') {
+      actions.append(
+        action('download', 'btn-primary', `Download ${job.name}`, '📥 Download')
+      );
+    }
+    if (job.state === 'queued') {
+      actions.append(
+        action('edit', 'btn-outline', `Edit ${job.name} parameters`, '✏️ Edit'),
+        action('cancel', 'btn-outline', `Cancel ${job.name}`, '⏹️ Cancel')
+      );
+    }
+    if (job.state !== 'rendering') {
+      actions.append(
+        action('remove', 'btn-outline', `Remove ${job.name}`, '🗑️ Remove')
+      );
+    }
+
+    div.append(header, body, actions);
     return div;
   }
 
@@ -13003,6 +13082,9 @@ if (rounded) {
   // Process Queue button
   processQueueBtn?.addEventListener('click', async () => {
     try {
+      // Start the engine if it has not started; a job that still finds none
+      // fails with a sentence saying so.
+      await ensureWasmInitialized();
       await renderQueue.processQueue();
     } catch (error) {
       console.error('Queue processing error:', error);
@@ -13303,18 +13385,45 @@ if (rounded) {
 
     if (variant) {
       // Exit comparison mode and load variant parameters
-      exitComparisonMode();
+      exitComparisonMode({ quiet: true });
+      stateManager.recordParameterState();
       stateManager.setState({ parameters: { ...variant.parameters } });
 
       // Re-render parameter UI
-      const state = stateManager.getState();
-      if (state.schema) {
-        renderParameterUI(state.schema, state.parameters);
+      if (stateManager.getState().schema) {
+        renderCustomizer(variant.parameters);
       }
+      if (autoPreviewController) {
+        autoPreviewController.onParameterChange(variant.parameters);
+      }
+      updatePrimaryActionButton();
 
       updateStatus(`Editing ${variant.name}`);
     }
   });
+
+  /**
+   * What belonged to the project being replaced, cleared as another loads or
+   * the project closes: its comparison variants (which would render as the
+   * new project under their old names), its generated file and the link to
+   * download it, and the notices about its values.
+   */
+  function resetProjectUiState() {
+    if (comparisonController) {
+      if (stateManager.getState().comparisonMode) {
+        exitComparisonMode({ quiet: true });
+      }
+      comparisonController.clearAll();
+    }
+    lastGeneratedParamsHash = null;
+    stateManager.setState({ stl: null, stlStats: null, generatedOutput: null });
+    document.getElementById('downloadFallbackLink')?.classList.add('hidden');
+    const notices = document.getElementById('parameterNotices');
+    if (notices) {
+      notices.replaceChildren();
+      notices.hidden = true;
+    }
+  }
 
   function enterComparisonMode() {
     const state = stateManager.getState();
@@ -13339,7 +13448,11 @@ if (rounded) {
     console.log('[Comparison] Entered comparison mode');
   }
 
-  function exitComparisonMode() {
+  /**
+   * @param {{quiet?: boolean}} [options] - quiet when the caller says what
+   *   happened itself (Edit, a project load), so one action is one message
+   */
+  function exitComparisonMode({ quiet = false } = {}) {
     const state = stateManager.getState();
     stateManager.setState({ comparisonMode: false });
 
@@ -13362,7 +13475,7 @@ if (rounded) {
     // Variants are kept: leaving comparison mode does not clear them.
 
     console.log('[Comparison] Exited comparison mode');
-    updateStatus('Exited comparison mode');
+    if (!quiet) updateStatus('Exited comparison mode');
   }
 
   // Handle browser back/forward button while in comparison mode
@@ -14337,8 +14450,12 @@ if (rounded) {
       } else if (action === 'delete') {
         const presetToDelete = presetManager.loadPreset(modelName, presetId);
         const presetLabel = presetToDelete?.name || 'this preset';
+        // Plain words: the dialog shows its message as text, so markup here
+        // was read out as tags.
         const confirmed = await showConfirmDialog(
-          `Are you sure you want to delete "<strong>${presetLabel}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+          presetToDelete?.name
+            ? `Delete the preset "${presetLabel}"? This cannot be undone.`
+            : 'Delete this preset? This cannot be undone.',
           'Delete Preset',
           'Delete',
           'Cancel',
@@ -14735,7 +14852,7 @@ if (rounded) {
 
     // Show warning modal — deletion is irreversible
     const confirmed = await showConfirmDialog(
-      `Are you sure you want to delete the preset "<strong>${preset.name}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+      `Delete the preset "${preset.name}"? This cannot be undone.`,
       'Delete Preset',
       'Delete',
       'Cancel',
@@ -16248,12 +16365,28 @@ if (rounded) {
     }
   });
 
-  keyboardConfig.on('preview', () => {
-    const state = stateManager.getState();
-    if (state.uploadedFile && autoPreviewController) {
-      autoPreviewController.onParameterChange(state.parameters);
+  /**
+   * Design > Preview and F5: preview now, whether or not Automatic preview is
+   * on. With nothing changed there is nothing to render, and the status line
+   * says so.
+   */
+  function previewNow() {
+    if (!stateManager.getState().uploadedFile || !autoPreviewController) {
+      return;
     }
-  });
+    publishEditorEdits();
+    const { parameters } = stateManager.getState();
+    if (autoPreviewController.isPreviewCurrentFor(parameters)) {
+      updateStatus('Preview is current');
+      return;
+    }
+    autoPreviewController.forcePreview(parameters).catch((error) => {
+      console.error('[Preview] Preview failed:', error);
+      showErrorToast({ title: 'Preview Failed', message: error.message });
+    });
+  }
+
+  keyboardConfig.on('preview', previewNow);
 
   keyboardConfig.on('reloadAndPreview', () => {
     const state = stateManager.getState();
@@ -16502,9 +16635,7 @@ if (rounded) {
   keyboardConfig.on('toggleCrosshairs', () =>
     displayOptionsController.toggle('crosshairs')
   );
-  keyboardConfig.on('toggleConsole', () =>
-    getUIModeController().togglePanelVisibility('consoleOutput')
-  );
+  keyboardConfig.on('toggleConsole', () => toggleConsole());
   // 'errorLog' is not in PANEL_REGISTRY, so togglePanelVisibility would
   // return early and Ctrl+Alt+2 would do nothing. The Error-Log is a console
   // tab in Forge and a strip pane in Classic; registry semantics fit
@@ -16594,6 +16725,9 @@ if (rounded) {
   }
 
   updateStatus('Ready - Upload a file to begin');
+
+  startupDone = true;
+  if (!firstVisitBlocking) restorePendingDraft();
 }
 
 // Library UI Rendering
@@ -16963,14 +17097,21 @@ if (typeof window !== 'undefined') {
      * parity test can prove that Center, View All and Reset View each moved
      * the view differently rather than merely that the item was clickable.
      * `target` is null when the browser has no WebGL, so there are no controls.
-     * @returns {{position: number[], target: number[]|null}|null}
+     * `right` and `up` are the camera's own world axes, which show a roll;
+     * the rotation the viewport panel publishes is OpenSCAD's $vpr and
+     * cannot.
+     * @returns {{position: number[], target: number[]|null, right: number[], up: number[]}|null}
      */
     cameraPose() {
       const camera = previewManager?.getActiveCamera?.();
       if (!camera) return null;
+      camera.updateMatrixWorld();
+      const m = camera.matrixWorld.elements;
       return {
         position: camera.position.toArray(),
         target: previewManager.controls?.target?.toArray() ?? null,
+        right: [m[0], m[1], m[2]],
+        up: [m[4], m[5], m[6]],
       };
     },
 

@@ -19,7 +19,9 @@ import {
   findSilhouetteParams,
   findPlateParams,
   isLayerCompanionParam,
+  reportHolePlacement,
 } from '../../src/js/ui-generator.js';
+import { loadSvgGeometry } from '../../src/js/svg-geometry.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isEnabled } from '../../src/js/feature-flags.js';
@@ -2661,5 +2663,120 @@ describe('layerCanvasAspect', () => {
     expect(layerCanvasAspect('<svg viewBox="0 0 100 100"><path d="M0 0h1v1z"/></svg>')).toBe(1);
     expect(layerCanvasAspect('<svg><path d="M0 0h1v1z"/></svg>')).toBeNull();
     expect(layerCanvasAspect('')).toBeNull();
+  });
+});
+
+// The charm model cuts its outline from the drawing only for the "design"
+// shape. On a circle or a heart the drawing decorates a round body, so a hole
+// measured against the drawing's outline would be warned about for nothing.
+describe('the hole warning follows the shape the model cuts', () => {
+  // A drawing that fills only the canvas's bottom-left corner: a hole near
+  // the top is outside it.
+  const corner =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" ' +
+    'viewBox="0 0 100 100"><path d="M0 80 H20 V100 H0 Z" fill="black"/></svg>';
+  const outline = {
+    name: 'outline.svg',
+    data: `data:image/svg+xml;base64,${btoa(corner)}`,
+  };
+  const params = buildParams({
+    params: [
+      { name: 'design_silhouette', uiType: 'file', type: 'string', default: '' },
+      { name: 'charm_width', uiType: 'number', type: 'number', default: 40 },
+    ],
+  });
+  const valuesFor = (charm_shape) => ({
+    design_silhouette: outline,
+    charm_shape,
+    charm_width: 40,
+    hole_diameter: 4,
+    attachment_type: 'keychain',
+    attachment_x: 0,
+    attachment_y: 0,
+  });
+
+  let el;
+  beforeEach(async () => {
+    await loadSvgGeometry();
+    el = document.createElement('div');
+    document.body.appendChild(el);
+    renderParameterUI(params, el, vi.fn(), {});
+  });
+  afterEach(() => el.remove());
+
+  const warning = () => el.querySelector('.hole-placement-warning');
+
+  it('warns when the drawing is the outline', () => {
+    reportHolePlacement(valuesFor('design'), params.parameters);
+    expect(warning().hidden).toBe(false);
+  });
+
+  it('says nothing on a circle, whatever the drawing', () => {
+    reportHolePlacement(valuesFor('circle'), params.parameters);
+    expect(warning().hidden).toBe(true);
+  });
+
+  it('takes the warning back when the shape changes to a circle', () => {
+    reportHolePlacement(valuesFor('design'), params.parameters);
+    reportHolePlacement(valuesFor('circle'), params.parameters);
+    expect(warning().hidden).toBe(true);
+  });
+});
+
+// A pointer press focuses the button before its click. The focus used to
+// open the tip and the click then closed it, so the mouse never saw it.
+describe('the "?" help button', () => {
+  let el;
+  let button;
+  const expanded = () => button.getAttribute('aria-expanded');
+  const press = () => {
+    button.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    button.focus();
+    button.click();
+  };
+
+  beforeEach(() => {
+    el = document.createElement('div');
+    document.body.appendChild(el);
+    renderParameterUI(
+      buildParams({
+        params: [
+          {
+            name: 'width',
+            type: 'number',
+            default: 50,
+            minimum: 0,
+            maximum: 100,
+            uiType: 'slider',
+            description: 'The width of the object',
+          },
+        ],
+      }),
+      el,
+      vi.fn(),
+      {}
+    );
+    button = el.querySelector('.param-help-button');
+  });
+  afterEach(() => el.remove());
+
+  it('opens with a pointer press', () => {
+    press();
+    expect(expanded()).toBe('true');
+  });
+
+  it('closes with a second pointer press', () => {
+    press();
+    press();
+    expect(expanded()).toBe('false');
+  });
+
+  it('opens when the keyboard reaches it, and Escape closes it', () => {
+    button.focus();
+    expect(expanded()).toBe('true');
+    button.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(expanded()).toBe('false');
   });
 });

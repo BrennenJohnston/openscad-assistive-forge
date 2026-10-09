@@ -300,6 +300,13 @@ test.describe('The drawing editor door', () => {
     expect(saved).toContain('evenodd')
     expect(saved.startsWith('<svg')).toBe(true)
     expect(saved).toContain('viewBox')
+    // The bird's own size is bare numbers, which other programs read as
+    // pixels; the saved file says millimeters, at the design width.
+    const designWidth = await page
+      .locator('.svg-prep-design-width-input')
+      .inputValue()
+    const rootTag = saved.slice(0, saved.indexOf('>') + 1)
+    expect(rootTag).toContain(`width="${Number(designWidth)}mm"`)
 
     testInfo.attach?.('bird-edited.svg', {
       body: saved,

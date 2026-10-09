@@ -109,10 +109,10 @@ export const MEASURED_SECONDS = {
   'ascii-city-walk-furniture.spec.js': 164,
   'classic-panels.spec.js': 442.5,
   'classic-mode.spec.js': 400.8,
-  'menu-parity.spec.js': 224.8,
+  'menu-parity.spec.js': 253.9,
   'accessibility.spec.js': 195.8,
   'camera-face-view-orbit.spec.js': 165.5,
-  'tutorials.spec.js': 122.2,
+  'tutorials.spec.js': 142.1,
   'tour-interaction.spec.js': 269.2,
   'preferences-dialog.spec.js': 90.6,
   'responsive-audit.spec.js': 91.9,
@@ -148,7 +148,7 @@ export const MEASURED_SECONDS = {
   // slightly conservative. Re-measure from a CI shard log next time this file
   // is touched.
   'wasm-smoke.spec.js': 33.4,
-  'auto-preview.spec.js': 21.1,
+  'auto-preview.spec.js': 61.8,
   'library-panel.spec.js': 19.6,
   'terminology.spec.js': 28.3,
   'keyguard-compilation-smoke.spec.js': 13.4,
@@ -199,7 +199,7 @@ export const MEASURED_SECONDS = {
   'publish-dialog.spec.js': 23.4,
   'share-settings.spec.js': 53.5,
   'ink-modes.spec.js': 45.5,
-  'dxf-roundtrip.spec.js': 19.7,
+  'dxf-roundtrip.spec.js': 26.9,
 
   // Summed from the Chromium shards of one run, the same method. svg-edit-door
   // had grown from 6 cases to 12 and was still booked at 34.1, a 3.8x
@@ -236,12 +236,12 @@ export const MEASURED_SECONDS = {
   // The editor's door spec: layout, ordering and worker cases, two of which
   // combine a 210-shape drawing for real, then the flatten worker, the
   // budget, the shapes row, choosing rows, the row-to-picture link, the phone
-  // sheet and the touch walks, 62 cases in all. A green CI board measured
-  // 242.8 s, and 280 is that measurement with the headroom the entries above
-  // carry. Local is not the number to book: the same file runs 156 s on a
-  // local machine, and booking that would hide an overrun instead of finding
-  // it.
-  'svg-edit-door.spec.js': 280.0,
+  // sheet and the touch walks. At 62 cases a green CI board measured 242.8 s
+  // and it was booked at 280; at 79 cases a pull-request run's Chromium
+  // shards (2026-10-09) measured 400.9, booked as measured. Local is not the
+  // number to book: the same file runs 205 s on a local machine, and booking
+  // that would hide an overrun instead of finding it.
+  'svg-edit-door.spec.js': 400.9,
   // From the same green board: layered-design 51.2 s, ink-modes 76.6 s,
   // trace-start-cancel 59.4 s, dxf-roundtrip 22.4 s, potrace-engine 3.3 s.
   // Only ink-modes is over its booking, by 6.6 s against a 70 that was itself
@@ -274,10 +274,19 @@ export const MEASURED_SECONDS = {
   // and no engine. Nine cases in 3.8 s locally; booked at 10, the rounding
   // potrace-engine carries.
   'invariants-selftest.spec.js': 10.0,
-  // Three cases, each a first visit that downloads the engine: 4.2, 7.6 and
-  // 11.4 s locally. No CI measurement yet, so it keeps the default, written
-  // down rather than left implicit. Chromium only (PROJECT_IGNORES).
-  'real-start.spec.js': 60.0,
+  // Four cases, each a first visit that downloads the engine.
+  'real-start.spec.js': 39.1,
+  // Summed from the Chromium shards of one pull-request run (2026-10-09), the
+  // method above; real-start.spec.js just before is from the same run. The
+  // grown files above it in this table (menu-parity, tutorials, auto-preview,
+  // dxf-roundtrip, svg-edit-door) carry numbers from the same run.
+  // classic-mode (403.9), classic-panels (392.4) and preferences-dialog
+  // (88.9) measured within their bookings and are left alone.
+  'comparison.spec.js': 16.2,
+  // Measured at five cases (30.0); a sixth, at 1280 x 600, scales it to 36.
+  'menu-reach.spec.js': 36.0,
+  'project-switch.spec.js': 52.2,
+  'render-queue.spec.js': 10.6,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
@@ -307,10 +316,9 @@ export const DEFAULT_WEIGHT_S = 60;
  * of two earlier WebKit worker failures. It passes there in 3.6 s. Reverse
  * with the others.
  *
- * real-start.spec.js runs on Chromium only, for the same arithmetic: booked at
- * the default, it and the shared checks' self-test put the three-shard Edge
- * lane at 35.2 of its 35 minutes. What it guards is the app's own start-up
- * order, the same code in every browser. Reverse with the others.
+ * real-start.spec.js was Chromium only while Edge and Firefox had three
+ * shards (booked at the default, it put the Edge lane at 35.2 of its 35
+ * minutes). With four shards it runs in every lane.
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
@@ -318,14 +326,12 @@ export const PROJECT_IGNORES = Object.freeze({
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
-    'real-start.spec.js',
   ],
   firefox: [
     'wasm-smoke.spec.js',
     'drawing-editor.spec.js',
     'trace-start-cancel.spec.js',
     'potrace-engine.spec.js',
-    'real-start.spec.js',
   ],
 });
 

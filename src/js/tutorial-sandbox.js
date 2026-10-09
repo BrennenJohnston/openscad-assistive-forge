@@ -4740,11 +4740,11 @@ function attachCompletionListener({ selector, event, predicate }) {
   const nextBtn = tutorialOverlay?.querySelector('#tutorialNextBtn');
   if (!requirementEl || !nextBtn) return;
 
-  // Support selector lists like "#a, #b" and tolerate missing nodes.
-  // For detailsOpen we may want to watch either the actual <details> node
-  // or a wrapper; find the first matching element.
-  const target = document.querySelector(selector);
-  if (!target) {
+  // Support selector lists like "#a, #b" and tolerate missing nodes. Every
+  // element the list names is watched: a hint can offer more than one way
+  // (drag the slider or type in the number box) and any of them completes it.
+  const targets = Array.from(document.querySelectorAll(selector));
+  if (targets.length === 0) {
     // Wait for element to appear
     const observer = new MutationObserver(() => {
       const el = document.querySelector(selector);
@@ -4758,8 +4758,11 @@ function attachCompletionListener({ selector, event, predicate }) {
     return;
   }
 
-  const handler = () => {
-    if (predicate && !predicate(target)) return;
+  let done = false;
+  const handler = (e) => {
+    if (done) return;
+    if (predicate && !predicate(e.currentTarget)) return;
+    done = true;
 
     stepCompleted = true;
     nextBtn.disabled = false;
@@ -4770,14 +4773,18 @@ function attachCompletionListener({ selector, event, predicate }) {
     // If we auto-minimized to let the user interact, bring the panel back.
     setTimeout(() => restoreIfAutoMinimized(), 250);
 
-    target.removeEventListener(event, handler, true);
+    for (const target of targets) {
+      target.removeEventListener(event, handler, true);
+    }
     completionListeners = completionListeners.filter(
       (l) => l.handler !== handler
     );
   };
 
-  target.addEventListener(event, handler, true);
-  completionListeners.push({ element: target, event, handler });
+  for (const target of targets) {
+    target.addEventListener(event, handler, true);
+    completionListeners.push({ element: target, event, handler });
+  }
 }
 
 /**

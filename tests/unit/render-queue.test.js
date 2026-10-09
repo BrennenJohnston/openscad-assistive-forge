@@ -469,4 +469,63 @@ describe('RenderQueue', () => {
       expect(queue.jobs.size).toBe(2)
     })
   })
+
+  // On a first visit the engine is built after the welcome, so the queue
+  // exists before any controller does.
+  describe('A controller that arrives after the queue', () => {
+    it('renders with the controller there is when the job runs', async () => {
+      let current = null
+      const q = new RenderQueue(() => current)
+      q.setProject('cube(1);')
+      const id = q.addJob('Job 1', { width: 1 }, 'stl')
+      current = renderController
+
+      await q.renderJob(id)
+
+      expect(q.jobs.get(id).state).toBe('complete')
+      expect(renderController.render).toHaveBeenCalledTimes(1)
+    })
+
+    it('says the engine is not ready in a sentence, never the code error', async () => {
+      const q = new RenderQueue(() => null)
+      q.setProject('cube(1);')
+      const id = q.addJob('Job 1', { width: 1 }, 'stl')
+
+      await expect(q.renderJob(id)).rejects.toThrow()
+
+      const job = q.jobs.get(id)
+      expect(job.state).toBe('error')
+      expect(job.error).toBe(
+        'Job 1 could not render: The OpenSCAD engine has not initialized yet. Please wait or refresh the page.'
+      )
+    })
+
+    it('puts an engine failure in the same plain sentence', async () => {
+      renderController.render.mockRejectedValueOnce(
+        Object.assign(new Error('Render timed out after 60000ms'), {
+          code: 'TIMEOUT',
+        })
+      )
+      const id = queue.addJob('Job 1', { width: 1 }, 'stl')
+
+      await expect(queue.renderJob(id)).rejects.toThrow()
+
+      expect(queue.jobs.get(id).error).toBe(
+        'Job 1 could not render: The model is taking too long to generate.'
+      )
+    })
+
+    it('stops the controller there is now', () => {
+      const cancel = vi.fn()
+      let current = null
+      const q = new RenderQueue(() => current)
+      q.isProcessing = true
+      q.currentJobId = q.addJob('Job 1', { width: 1 }, 'stl')
+      current = { cancel }
+
+      q.stopProcessing()
+
+      expect(cancel).toHaveBeenCalledTimes(1)
+    })
+  })
 })

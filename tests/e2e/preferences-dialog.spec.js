@@ -593,6 +593,17 @@ test('the input-device tabs describe the gamepad support that exists', async ({
   // reason that is false is worse than no reason: it tells a user to stop
   // looking for a feature they already have.
   test.setTimeout(240_000);
+  // The no-controller sentence is true only where no controller is attached,
+  // and a test machine can have one. Hide any real pad from the page, keeping
+  // the Gamepad API itself, so the case means the same on every machine.
+  await page.addInitScript(() => {
+    navigator.getGamepads = () => [];
+    window.addEventListener(
+      'gamepadconnected',
+      (event) => event.stopImmediatePropagation(),
+      true
+    );
+  });
   await openPreferences(page);
 
   await page.locator('#prefs-tab-3dview').click();
@@ -602,8 +613,8 @@ test('the input-device tabs describe the gamepad support that exists', async ({
   await expect(axes).not.toContainText(/no input-device engine/i);
   await expect(axes).toContainText(/stick/i);
 
-  // The read-only status line says what the engine actually sees.
-  // Headless Chromium has the Gamepad API with no devices, so the honest
+  // The read-only status line says what the engine actually sees. With the
+  // Gamepad API present and no device in sight (made so above), the honest
   // report is the no-controller invitation — never a fabricated pad, and
   // never the unsupported-browser claim.
   const status = page.locator('#prefsGamepadStatus');

@@ -25,7 +25,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import { stateManager } from '../../src/js/state.js';
-import { initCompanionFilesController } from '../../src/js/companion-files-controller.js';
+import {
+  detectRequiredCompanionFiles,
+  initCompanionFilesController,
+} from '../../src/js/companion-files-controller.js';
 
 /** Mirror of the companion panel in index.html, ids kept verbatim. */
 const PANEL_HTML = `
@@ -162,5 +165,56 @@ describe('#projectFilesList is a valid list', () => {
       ...document.querySelectorAll('#projectFilesList button[data-action="edit"]'),
     ].find((b) => b.dataset.path === 'utils/helpers.scad');
     expect(edit).toBeTruthy();
+  });
+});
+
+// A library a model uses comes from the Libraries panel, not from the
+// project, so it is never a missing companion. A file of the project's own
+// still is. And the badge counts companions, which the main file is not.
+describe('what the Companion Files panel reports', () => {
+  const warningShown = () =>
+    !document.getElementById('projectFilesWarning').classList.contains('hidden');
+  const warningText = () =>
+    document.getElementById('projectFilesWarningText').textContent;
+
+  function render(scad, projectFiles) {
+    stateManager.setState({
+      uploadedFile: { name: 'main.scad', content: scad },
+      projectFiles,
+      mainFilePath: 'main.scad',
+    });
+    controller.renderProjectFilesList(
+      projectFiles,
+      'main.scad',
+      detectRequiredCompanionFiles(scad)
+    );
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = PANEL_HTML;
+    controller = makeController();
+  });
+
+  it('does not call a library include missing when there are no companions', () => {
+    render('use <MCAD/boxes.scad>\ncube(10);', null);
+    expect(warningShown()).toBe(false);
+  });
+
+  it('does not call a library include missing beside a companion', () => {
+    const scad = 'use <MCAD/boxes.scad>\ncube(10);';
+    render(scad, new Map([['main.scad', scad], ['notes.txt', 'x']]));
+    expect(warningShown()).toBe(false);
+  });
+
+  it('still names a missing file of the project', () => {
+    render('include <parts/lid.scad>\ncube(10);', null);
+    expect(warningShown()).toBe(true);
+    expect(warningText()).toContain('parts/lid.scad');
+  });
+
+  it('counts the companions, not the main file', () => {
+    const scad = 'cube(10);';
+    render(scad, new Map([['main.scad', scad], ['notes.txt', 'x']]));
+    expect(document.getElementById('projectFilesBadge').textContent).toBe('1');
   });
 });

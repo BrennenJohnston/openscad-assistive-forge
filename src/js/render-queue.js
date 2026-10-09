@@ -3,6 +3,11 @@
  * @license GPL-3.0-or-later
  */
 
+import { translateError } from './error-translator.js';
+
+const ENGINE_NOT_READY =
+  'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.';
+
 /**
  * Job structure:
  * {
@@ -19,8 +24,17 @@
  */
 
 export class RenderQueue {
-  constructor(renderController, options = {}) {
-    this.renderController = renderController;
+  /**
+   * @param {object|Function} getRenderController - The render controller, or
+   *   a function returning the current one. A first visit builds the engine
+   *   after the welcome, so the queue can exist before any controller does.
+   * @param {object} options - Configuration options
+   */
+  constructor(getRenderController, options = {}) {
+    this._getRenderController =
+      typeof getRenderController === 'function'
+        ? getRenderController
+        : () => getRenderController;
     this.maxQueueSize = options.maxQueueSize || 20;
     this.jobs = new Map(); // id -> job
     this.nextId = 1;
@@ -31,6 +45,11 @@ export class RenderQueue {
     this.libraries = [];
     this.isProcessing = false;
     this.currentJobId = null;
+  }
+
+  /** The render controller there is now, or null before the engine. */
+  get renderController() {
+    return this._getRenderController();
   }
 
   /**
@@ -181,6 +200,11 @@ export class RenderQueue {
     this.updateJob(id, { state: 'rendering', error: null, renderTime: null });
 
     try {
+      if (!this.renderController) {
+        const notReady = new Error(ENGINE_NOT_READY);
+        notReady.code = 'ENGINE_NOT_READY';
+        throw notReady;
+      }
       const result = await this.renderController.render(
         this.scadContent,
         job.parameters,
@@ -213,7 +237,7 @@ export class RenderQueue {
     } catch (error) {
       this.updateJob(id, {
         state: 'error',
-        error: error.message || 'Render failed',
+        error: `${job.name} could not render: ${describeFailure(error)}`,
         renderTime: null,
       });
       this.currentJobId = null;
@@ -277,7 +301,7 @@ export class RenderQueue {
 
     // Cancel render controller if a job is currently rendering
     if (this.currentJobId) {
-      this.renderController.cancel();
+      this.renderController?.cancel();
       this.updateJob(this.currentJobId, {
         state: 'cancelled',
         error: 'Processing stopped by user',
@@ -453,4 +477,13 @@ export class RenderQueue {
       })(),
     };
   }
+}
+
+/** The reason half of a failed job's sentence, in plain words. */
+function describeFailure(error) {
+  if (error?.code === 'ENGINE_NOT_READY') return ENGINE_NOT_READY;
+  return translateError(error?.message, {
+    code: error?.code,
+    details: error?.details,
+  }).explanation;
 }

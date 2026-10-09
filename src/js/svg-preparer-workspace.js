@@ -1067,6 +1067,45 @@ export function editedSvgFileName(sourceName) {
   return `${base || 'drawing'}-edited.svg`;
 }
 
+/**
+ * The edited drawing as a file to keep. Other programs read a drawing's size
+ * from its width and height, and take bare numbers there as pixels. A drawing
+ * that names a real unit keeps it; one in bare numbers is sized in millimeters
+ * at the width the design prints at, its proportion kept. The viewBox is not
+ * touched, and neither is what Apply hands the model.
+ * @param {string} svgString
+ * @param {number} widthMm
+ * @returns {string}
+ */
+export function svgSizedInMm(svgString, widthMm) {
+  if (!(widthMm > 0)) return svgString;
+  const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (!root || root.nodeName.toLowerCase() !== 'svg') return svgString;
+  const bare = (value) => value === null || /^\s*[\d.]+\s*$/.test(value);
+  const w = root.getAttribute('width');
+  const h = root.getAttribute('height');
+  if (!bare(w) || !bare(h)) return svgString;
+
+  const box = (root.getAttribute('viewBox') || '')
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  let ratio = null;
+  if (box.length === 4 && box[2] > 0 && box[3] > 0) {
+    ratio = box[3] / box[2];
+  } else if (parseFloat(w) > 0 && parseFloat(h) > 0) {
+    ratio = parseFloat(h) / parseFloat(w);
+    root.setAttribute('viewBox', `0 0 ${parseFloat(w)} ${parseFloat(h)}`);
+  }
+  if (!ratio) return svgString;
+
+  const mm = (n) => `${+n.toFixed(3)}mm`;
+  root.setAttribute('width', mm(widthMm));
+  root.setAttribute('height', mm(widthMm * ratio));
+  return new XMLSerializer().serializeToString(doc);
+}
+
 function downloadSvgString(svgString, fileName) {
   const blob = new Blob([svgString], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
@@ -3557,7 +3596,10 @@ export function createSvgPrepWorkspace(containerEl) {
     } else if (btn.dataset.action === 'save') {
       if (!currentResult) return;
       const fileName = editedSvgFileName(currentSourceName);
-      downloadSvgString(currentResult, fileName);
+      downloadSvgString(
+        svgSizedInMm(currentResult, currentDesignWidthMm()),
+        fileName
+      );
       liveRegion.textContent = `Saved ${fileName}`;
       announce(`Saved ${fileName}`);
       if (currentCallbacks.onSave) currentCallbacks.onSave(fileName);

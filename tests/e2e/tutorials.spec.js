@@ -619,3 +619,69 @@ test.describe('The box tour ends by naming the way back', () => {
     )
   })
 })
+
+// The walk above stops at the first step that waits for an action, so it
+// cannot tell a step that never completes from one it did not try. This one
+// performs each action the step's hint names and requires Next to unlock.
+test.describe('Getting Started, action by action', () => {
+  test.use({ viewport: { width: 1280, height: 720 } })
+
+  const ACTIONS = {
+    'Expand a parameter group': (page) =>
+      page.locator('details.param-group > summary').filter({ hasText: 'Dimensions' }).first().click(),
+    'Adjust a parameter': async (page) => {
+      const box = page.locator('#param-width-spinbox')
+      await box.fill('60')
+      await box.press('Tab')
+    },
+    'Save a design (preset)': (page) => page.locator('#presetControls details > summary').first().click(),
+    'Generate and download your file': (page) => page.locator('#primaryActionBtn').click(),
+    'Help & Examples': (page) => page.locator('#featuresGuideBtn').click(),
+    'Features Guide': (page) => page.keyboard.press('Escape'),
+  }
+
+  test('every step that waits for an action is completed by that action', async ({ page }) => {
+    test.setTimeout(240_000)
+    await setBaseline(page)
+    await page.goto('/')
+    // The way a person starts it: the simple box's card on the Main Page
+    // opens the box and starts the tour on it.
+    await page.locator('[data-example="simple-box"]').click()
+    await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 60_000 })
+    await waitForTutorialOverlay(page)
+
+    const title = page.locator('#tutorial-step-title')
+    const next = page.locator('#tutorialNextBtn')
+    const stepName = async () =>
+      (await title.count()) ? (await title.textContent()).trim() : null
+    const ready = async () => (await next.isEnabled()) && (await next.isVisible())
+    const completed = []
+    const visited = []
+
+    for (let i = 0; i < 30 && (await next.count()) > 0; i += 1) {
+      const name = await stepName()
+      visited.push(name)
+      if (!(await next.isEnabled())) {
+        expect(ACTIONS[name], `no action known for the step "${name}"`).toBeTruthy()
+        await ACTIONS[name](page)
+        // The action unlocks Next, or (opening the guide) moves the tour on.
+        await expect
+          .poll(async () => (await stepName()) !== name || (await ready()), {
+            message: `"${name}" stays locked after its action`,
+            timeout: 30_000,
+          })
+          .toBe(true)
+        completed.push(name)
+        if ((await stepName()) !== name) continue
+      }
+      await next.click()
+      await expect.poll(stepName).not.toBe(name)
+    }
+
+    // Typing is the one the hint offers that used to do nothing. The presets
+    // step waits only when its section starts closed.
+    expect(completed).toContain('Adjust a parameter')
+    // Reached the steps after the last action, so no action ended the tour.
+    expect(visited).toContain('Simplified or Standard')
+  })
+})

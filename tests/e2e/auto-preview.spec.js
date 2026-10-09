@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import {
+  announcementMark,
+  announcementsSince,
+  recordAnnouncements,
+} from './helpers/invariants.js';
 
 /**
  * Auto-preview, proved observably.
@@ -158,4 +163,83 @@ test('auto-preview off stops a parameter change from rendering; on starts one', 
       timeout: 60_000,
     })
     .toBeGreaterThan(0);
+});
+
+/** A Design menu item, by its visible label. */
+async function designMenu(page, label) {
+  await page.locator('#designMenuBtn').click();
+  const item = page
+    .locator('#designMenuItems button')
+    .filter({ has: page.getByText(label, { exact: true }) })
+    .first();
+  await expect(item).toBeVisible();
+  await item.click();
+}
+
+async function turnAutoPreviewOff(page) {
+  await designMenu(page, 'Automatic Reload and Preview');
+  await expect(page.locator('#autoPreviewToggle')).not.toBeChecked();
+}
+
+async function expectOutdated(page) {
+  await expect(page.locator('.preview-state-indicator')).toHaveClass(
+    /state-stale/
+  );
+}
+
+test.describe('Preview with Automatic preview off', () => {
+  test('Design > Preview and F5 bring an outdated preview up to date', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    await loadRealFixture(page);
+    await waitForPreviewReady(page);
+    await turnAutoPreviewOff(page);
+
+    await changeAParameter(page);
+    await expectOutdated(page);
+    await designMenu(page, 'Preview');
+    await waitForPreviewReady(page);
+
+    await changeAParameter(page);
+    await expectOutdated(page);
+    await page.keyboard.press('F5');
+    await waitForPreviewReady(page);
+  });
+
+  test('turning Automatic preview back on renders the change made while it was off', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    await loadRealFixture(page);
+    await waitForPreviewReady(page);
+    await turnAutoPreviewOff(page);
+
+    await changeAParameter(page);
+    await expectOutdated(page);
+    await designMenu(page, 'Automatic Reload and Preview');
+    await expect(page.locator('#autoPreviewToggle')).toBeChecked();
+    await waitForPreviewReady(page);
+  });
+
+  test('a Preview with nothing changed says so, once', async ({ page }) => {
+    test.setTimeout(420_000);
+    await recordAnnouncements(page);
+    await loadRealFixture(page);
+    await waitForPreviewReady(page);
+
+    const mark = await announcementMark(page);
+    await designMenu(page, 'Preview');
+    await expect(page.locator('#previewStatusText')).toHaveText(
+      'Preview is current'
+    );
+    await page.waitForTimeout(1_500);
+    // Counted on the announcer, the voice meant to speak status. The status
+    // bars are live regions as well and repeat every status message today,
+    // a separate problem with its own fix.
+    const said = (await announcementsSince(page, mark)).filter(
+      (a) => a.region === '#srAnnouncer' && a.text === 'Preview is current'
+    );
+    expect(said, JSON.stringify(said)).toHaveLength(1);
+  });
 });

@@ -127,12 +127,17 @@ const HARRY = '\u2813\u281C\u2817\u283D\u2808\u2801\u2810';
 
 const params = () => stateManager.getState().parameters || {};
 
+// The panel lays out 400 ms after the last input. A loaded machine can hold
+// a test worker for seconds, so every wait here allows 8 s (a test in this
+// file times out at 10 s) and still returns the moment the layout lands.
+const SETTLE = { timeout: 8000, interval: 25 };
+
 /** Type into the panel's text input and wait for the layout to settle. */
 async function typeText(text, expectSettled) {
   const input = document.getElementById('brailleTextInput');
   input.value = text;
   input.dispatchEvent(new Event('input'));
-  await vi.waitFor(expectSettled, { timeout: 3000, interval: 25 });
+  await vi.waitFor(expectSettled, SETTLE);
 }
 
 /** Type into the braille editor and wait for the layout to settle. */
@@ -140,7 +145,7 @@ async function typeBraille(text, expectSettled) {
   const field = document.getElementById('brailleFieldInput');
   field.value = text;
   field.dispatchEvent(new Event('input'));
-  await vi.waitFor(expectSettled, { timeout: 3000, interval: 25 });
+  await vi.waitFor(expectSettled, SETTLE);
 }
 
 function mountCardPanel(extra = {}) {
@@ -252,7 +257,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     renderAll.dispatchEvent(new Event('change'));
     await vi.waitFor(() => {
       expect(params().card_layout).toBe('All cards');
-    });
+    }, SETTLE);
     expect(params().Line_9).toBe('\u2813\u2811');
     expect(params().Line_10).toBe('\u2813\u2811');
   });
@@ -267,7 +272,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
       expect(document.getElementById('brailleFieldInput').value).toBe(
         word('hi')
       );
-    });
+    }, SETTLE);
     expect(
       document.getElementById('brailleFieldStatus').textContent
     ).toContain('Filled from your text');
@@ -282,7 +287,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
       expect(document.getElementById('brailleFieldInput').value).toBe(
         word('hi')
       );
-    });
+    }, SETTLE);
 
     // Editing the text clears the pristine editor (nothing typed is lost)
     await typeText('bye', () => {
@@ -317,7 +322,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
       expect(document.getElementById('brailleTextInput').value).toBe(
         'hello back\nhello back'
       );
-    });
+    }, SETTLE);
     // The braille stays authoritative (editor untouched)
     expect(document.getElementById('brailleFieldInput').value).toBe(
       '\u2813\u2811\n\u2801'
@@ -338,7 +343,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     document.getElementById('brailleFieldFromAscii').click();
     await vi.waitFor(() => {
       expect(params().Line_1).toBe(HARRY);
-    });
+    }, SETTLE);
     expect(document.getElementById('brailleFieldInput').value).toBe(HARRY);
     expect(document.getElementById('brailleFieldStatus').textContent).toBe(
       'Converted 1 line of braille ASCII to braille cells.'
@@ -353,7 +358,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     document.getElementById('brailleFieldFromAscii').click();
     await vi.waitFor(() => {
       expect(params().Line_1).toBe(HARRY);
-    });
+    }, SETTLE);
     expect(params().Line_2).not.toBe('');
     expect(document.getElementById('brailleFieldStatus').textContent).toBe(
       'Converted 2 lines of braille ASCII to braille cells.'
@@ -374,7 +379,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
       expect(document.getElementById('brailleErrors').textContent).toContain(
         'Line 1 contains "{", which is not a braille ASCII character.'
       );
-    });
+    }, SETTLE);
     expect(document.getElementById('brailleFieldInput').value).toBe('ab{');
     expect(params().Line_1).toBe('');
   });
@@ -473,7 +478,7 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     expect(announce).not.toHaveBeenCalledWith('dots 1 2 5');
     await vi.waitFor(() => {
       expect(params().Line_1).toBe('\u2801\u2813\u2803');
-    });
+    }, SETTLE);
   });
 
   it('with six-key entry on, leaves Tab and a key with Ctrl to the browser', () => {
@@ -532,11 +537,11 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
 
     await vi.waitFor(() => {
       expect(document.getElementById('brailleMaxRows').value).toBe('4');
-    });
+    }, SETTLE);
     // The next layout writes the (unclamped) requested value back
     await vi.waitFor(() => {
       expect(params().grid_rows).toBe('4');
-    });
+    }, SETTLE);
   });
 
   it('announces and warns when the card height clamps the requested rows', async () => {
@@ -551,7 +556,7 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
 
     await vi.waitFor(() => {
       expect(params().grid_rows).toBe('3');
-    });
+    }, SETTLE);
 
     // Warning tier (role=status), not a silent reset
     const warnings = document.getElementById('brailleWarnings');
@@ -577,14 +582,14 @@ describe('braille panel card mode — grid_rows sync and clamp', () => {
     });
     await vi.waitFor(() => {
       expect(params().grid_rows).toBe('3');
-    });
+    }, SETTLE);
 
     stateManager.setState({
       parameters: { ...params(), card_face_height_mm: '100' },
     });
     await vi.waitFor(() => {
       expect(params().grid_rows).toBe('8');
-    });
+    }, SETTLE);
     expect(document.getElementById('brailleMaxRows').value).toBe('8');
   });
 });
@@ -630,7 +635,7 @@ describe('braille panel card mode — friendly download names', () => {
     renderAll.dispatchEvent(new Event('change'));
     await vi.waitFor(() => {
       expect(params().card_layout).toBe('All cards');
-    });
+    }, SETTLE);
     expect(getBrailleDownloadName()).toBe('Braille Cards hello');
   });
 
@@ -646,7 +651,7 @@ describe('braille panel card mode — friendly download names', () => {
     // (mocked to 'hello back'; the name takes the first word).
     await vi.waitFor(() => {
       expect(getBrailleDownloadName()).toBe('Braille Card hello');
-    });
+    }, SETTLE);
   });
 
   it('returns null when there is nothing to name', async () => {
@@ -790,7 +795,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
     document.getElementById('brailleFieldToText').click();
     await vi.waitFor(() => {
       expect(params().sign_text_1).toBe('go');
-    });
+    }, SETTLE);
     // The plate keeps the editor's braille
     expect(params().Line_1).toBe('\u281B');
   });
@@ -834,7 +839,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
           word('hello')
         );
       },
-      { timeout: 3000, interval: 25 }
+      SETTLE
     );
 
     // Editing one cell must reach the model untouched by translation.
@@ -849,7 +854,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
       () => {
         expect(document.getElementById('brailleFieldInput').value).not.toBe('');
       },
-      { timeout: 3000, interval: 25 }
+      SETTLE
     );
 
     await typeText('exit', () => {
@@ -860,7 +865,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
       () => {
         expect(params().Line_1).toBe(word('exit'));
       },
-      { timeout: 3000, interval: 25 }
+      SETTLE
     );
   });
 
@@ -874,7 +879,7 @@ describe('braille panel sign mode — braille editor (Unicode)', () => {
     document.getElementById('brailleFieldFromAscii').click();
     await vi.waitFor(() => {
       expect(params().Line_1).toBe(HARRY);
-    });
+    }, SETTLE);
     expect(params().sign_text_1).toBe('Exit');
     expect(document.getElementById('brailleFieldHelp').textContent).toBe(
       'One line per braille row on the sign. Press "Translate to braille" ' +
@@ -1080,7 +1085,7 @@ describe('braille panel card mode — contracted braille by default', () => {
       'hello\nworld'
     );
     const select = document.getElementById('brailleTableSelect');
-    await vi.waitFor(() => expect(select.value).toBe('en-ueb-g2.ctb'));
+    await vi.waitFor(() => expect(select.value).toBe('en-ueb-g2.ctb'), SETTLE);
     expect(document.getElementById('brailleTableHelp').textContent).toBe(
       'Contracted (Grade 2) fits more on a card; the Braille Authority of ' +
         'North America uses it in its business card examples. Uncontracted ' +
@@ -1107,7 +1112,7 @@ describe('braille panel — the table list without its catalog', () => {
       getTables.mockRejectedValueOnce(new Error('Failed to fetch'));
       mountCardPanel({ defaultTable: file });
       const select = document.getElementById('brailleTableSelect');
-      await vi.waitFor(() => expect(select.value).toBe(file));
+      await vi.waitFor(() => expect(select.value).toBe(file), SETTLE);
       expect(select.options).toHaveLength(1);
       expect(select.options[0].textContent).toBe(label);
     });

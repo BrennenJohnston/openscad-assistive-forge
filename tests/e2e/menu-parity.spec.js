@@ -7,6 +7,13 @@
  */
 import { test, expect } from '@playwright/test'
 import path from 'path'
+import {
+  attachInvariants,
+  expectFocusInside,
+  expectFocusNotOnBody,
+  expectNoPageErrors,
+  expectPageFitsViewport,
+} from './helpers/invariants.js'
 
 const RECENT_KEY = 'openscad-forge-recent-files'
 const RECENT_UNAVAILABLE_REASON =
@@ -1453,5 +1460,163 @@ test.describe('Forge direction: File menu', () => {
     await expect(
       page.getByRole('menuitemradio', { name: 'High (smooth)' })
     ).toHaveAttribute('aria-checked', 'true')
+  })
+})
+
+test.describe('Menus driven by keyboard and pointer', () => {
+  // A menu is rebuilt every time it opens. These cases open it several times
+  // first, the way a person does, before counting what one key does.
+  test('one key moves one item and one Enter runs once after many openings', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.__opened = []
+      window.open = (url) => {
+        window.__opened.push(String(url))
+        return null
+      }
+    })
+    await loadFixture(page)
+    const help = page.locator('#helpMenuModal')
+    for (let i = 0; i < 3; i += 1) {
+      await page.locator('#helpMenuBtn').click()
+      await expect(help).not.toHaveClass(/hidden/)
+      await page.keyboard.press('Escape')
+      await expect(help).toHaveClass(/hidden/)
+    }
+    await page.locator('#helpMenuBtn').click()
+    const focused = () =>
+      page.evaluate(
+        () => document.activeElement?.querySelector('.menu-item-label')?.textContent
+      )
+    await expect.poll(focused).toBe('About')
+    await page.keyboard.press('ArrowDown')
+    expect(await focused()).toBe('OpenSCAD Homepage')
+    await page.keyboard.press('ArrowDown')
+    expect(await focused()).toBe('Documentation')
+    await page.keyboard.press('Enter')
+    await expect(help).toHaveClass(/hidden/)
+    expect(await page.evaluate(() => window.__opened)).toEqual([
+      'https://openscad.org/documentation.html',
+    ])
+  })
+
+  test('a click on a disabled item keeps focus in the menu, and Escape still closes it', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    const bar = await page.locator('#designMenuBtn').boundingBox()
+    await page.mouse.click(bar.x + bar.width / 2, bar.y + bar.height / 2)
+    const menu = page.locator('#designMenuModal')
+    await expect(menu).not.toHaveClass(/hidden/)
+    // 3D Print is disabled in every state, so the case never depends on
+    // whether a render happens to be running.
+    const disabled = menuItem(page, 'design', '3D Print')
+    await expect(disabled).toHaveAttribute('aria-disabled', 'true')
+    // A real pointer at the item's centre, not a locator click, which would
+    // pick its own target.
+    const box = await disabled.boundingBox()
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await expectFocusNotOnBody(page)
+    await expectFocusInside(page, menu)
+    await expect(menu).not.toHaveClass(/hidden/)
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveClass(/hidden/)
+    await expect(page.locator('#designMenuBtn')).toBeFocused()
+  })
+})
+
+test.describe('Design menu results', () => {
+  test('F10 shows the parameter schema in a dialog, and closing it leaves the page as it was', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await page.keyboard.press('F10')
+    const dialog = page.getByRole('dialog', { name: 'Parameter Schema' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toBeInViewport()
+    // Focus moves in on the next frame.
+    await expect(
+      dialog.getByRole('button', { name: 'Close', exact: true })
+    ).toBeFocused()
+    await expectFocusInside(page, dialog)
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expectPageFitsViewport(page)
+  })
+
+  test('Check Validity shows its result, counting vertices as the engine does', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await loadFixture(page)
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: 180_000 }
+    )
+    await clickMenuItem(page, 'design', 'Check Validity')
+    const dialog = page.getByRole('dialog', { name: 'Check Validity' })
+    await expect(dialog).toBeVisible()
+    await expect(
+      dialog.getByRole('button', { name: 'Close', exact: true })
+    ).toBeFocused()
+    await expectFocusInside(page, dialog)
+    const result = await dialog.locator('.modal-body').textContent()
+    const counted = /Valid mesh: ([\d,]+) triangles, ([\d,]+) unique vertices/.exec(
+      result
+    )
+    expect(counted, result).not.toBeNull()
+    const engine = await page.evaluate(() =>
+      [
+        ...(document.getElementById('console-output')?.textContent || '').matchAll(
+          /Vertices:\s+(\d+)/g
+        ),
+      ].map((m) => m[1])
+    )
+    expect(engine.at(-1)).toBe(counted[2].replace(/,/g, ''))
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+  })
+})
+
+test.describe('New File and Flush Caches', () => {
+  // New File starts a project from the starter template, as the Main Page's
+  // Start New Project does, and asks first when a project is open.
+  test('File > New File asks, then opens the starter project', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    attachInvariants(page)
+    await loadFixture(page)
+
+    await clickMenuItem(page, 'file', 'New File')
+    const ask = page.getByRole('alertdialog', { name: 'New File' })
+    await expect(ask).toContainText('This will replace the current file.')
+    await ask.getByRole('button', { name: 'Confirm' }).click()
+
+    await expect(page.locator('#fileInfoSummary')).toHaveText(
+      'new_project.scad',
+      { timeout: 30_000 }
+    )
+    expectNoPageErrors(page)
+  })
+
+  // Flushing the caches keeps the document, as on the desktop, and the
+  // preview comes back from scratch.
+  test('Design > Flush Caches keeps the project and previews it again', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    attachInvariants(page)
+    await loadFixture(page)
+    const indicator = page.locator('.preview-state-indicator')
+    await expect(indicator).toHaveClass(/state-current/, { timeout: 180_000 })
+
+    await clickMenuItem(page, 'design', 'Flush Caches')
+
+    await expect(page.locator('#fileInfoSummary')).toHaveText('sample.scad')
+    await expect(page.locator('.param-control').first()).toBeAttached()
+    await expect(indicator).toHaveClass(/state-current/, { timeout: 180_000 })
+    expectNoPageErrors(page)
   })
 })
