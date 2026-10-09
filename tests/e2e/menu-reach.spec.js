@@ -18,6 +18,8 @@ const SIZES = [
   { width: 1366, height: 768 },
   { width: 1280, height: 720 },
   { width: 1920, height: 1080 },
+  // Short enough that Export starts below the menu's visible edge.
+  { width: 1280, height: 600 },
 ]
 
 test.beforeEach(async ({ page }) => {
@@ -55,12 +57,42 @@ async function clickCentre(page, locator) {
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
 
+/** Is the item itself what a click at its centre would hit? */
+function underPointer(item) {
+  return item.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const hit = document.elementFromPoint(
+      r.left + r.width / 2,
+      r.top + r.height / 2
+    )
+    return !!hit && (hit === el || el.contains(hit))
+  })
+}
+
+/**
+ * Turn the wheel over the menu body, as a person would, until the item is
+ * under the pointer. Taller fonts (Firefox on Linux) put Export below the
+ * body's visible edge at 1280 x 720.
+ */
+async function wheelToReach(page, item) {
+  const body = page.locator('#fileMenuModal .toolbar-menu-body')
+  for (let turn = 0; turn < 20 && !(await underPointer(item)); turn++) {
+    const box = await body.boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.wheel(0, 100)
+  }
+  expect(await underPointer(item), 'the wheel never reached the item').toBe(
+    true
+  )
+}
+
 async function openExport(page) {
   await clickCentre(page, page.locator('#fileMenuBtn'))
   await expect(page.locator('#fileMenuModal')).not.toHaveClass(/hidden/)
   const trigger = page
     .locator('#fileMenuItems .menu-submenu-trigger')
     .filter({ has: page.getByText('Export', { exact: true }) })
+  await wheelToReach(page, trigger)
   await clickCentre(page, trigger)
   await expect(trigger).toHaveAttribute('aria-expanded', 'true')
   return page.locator(`#${await trigger.getAttribute('aria-controls')}`)

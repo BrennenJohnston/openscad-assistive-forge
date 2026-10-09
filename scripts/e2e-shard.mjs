@@ -283,7 +283,8 @@ export const MEASURED_SECONDS = {
   // classic-mode (403.9), classic-panels (392.4) and preferences-dialog
   // (88.9) measured within their bookings and are left alone.
   'comparison.spec.js': 16.2,
-  'menu-reach.spec.js': 30.0,
+  // Measured at five cases (30.0); a sixth, at 1280 x 600, scales it to 36.
+  'menu-reach.spec.js': 36.0,
   'project-switch.spec.js': 52.2,
   'render-queue.spec.js': 10.6,
 };
