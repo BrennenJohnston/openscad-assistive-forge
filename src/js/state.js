@@ -111,6 +111,9 @@ export class StateManager {
     this._announceClearTimeout = null;
     this._createdAt = Date.now();
     this._urlRestoreConsumed = false;
+    // A link's values are read by the first project load in a page and by
+    // no other: the next project starts from its own defaults.
+    this._urlParamsRead = false;
   }
 
   subscribe(callback) {
@@ -228,6 +231,8 @@ export class StateManager {
   }
 
   async loadFromURL() {
+    if (this._urlParamsRead) return null;
+    this._urlParamsRead = true;
     const params = await deserializeURLParams();
     // The payload has now been read, however it turned out; the writer is free.
     this._urlRestoreConsumed = true;

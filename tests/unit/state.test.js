@@ -656,6 +656,18 @@ describe('State Management', () => {
       expect(loaded).not.toBeNull()
       expect(loaded.sizes).toEqual(sizes)
     })
+
+    // A link's values are for the design it opens with; the next project
+    // loaded in the same page starts from its own defaults.
+    it('applies a link once per page load', async () => {
+      window.location.hash = `#v=1&params=${encodeURIComponent(JSON.stringify({ width: 61 }))}`
+
+      const first = await state.loadFromURL()
+      const second = await state.loadFromURL()
+
+      expect(first).toEqual({ width: 61 })
+      expect(second).toBeNull()
+    })
   })
 
   describe('performURLSync', () => {

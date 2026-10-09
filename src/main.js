@@ -7357,7 +7357,7 @@ async function initApp() {
           // Update dimensions display
           updateDimensionsDisplay();
           // Console fidelity: preview runs surface their echo()/WARNING
-          // output too, not just full renders (cache hits carry none)
+          // output too, not just full renders (a cache hit brings its own)
           if (
             consoleOutput &&
             typeof window.updateConsoleOutput === 'function'
@@ -8138,6 +8138,11 @@ async function initApp() {
   // button's listener so File > Close Project can ask its own dirty-aware
   // question and still reach this one path without a second dialog.
   async function closeProjectToWelcome() {
+    resetProjectUiState();
+    // The name of a closed project is not the page's any more.
+    const fileInfoSummary = document.getElementById('fileInfoSummary');
+    if (fileInfoSummary) fileInfoSummary.textContent = '';
+
     // Reset file input
     fileInput.value = '';
 
@@ -13298,9 +13303,10 @@ if (rounded) {
   });
 
   /**
-   * What belonged to the project being replaced, cleared as another loads:
-   * its comparison variants, which would otherwise render as the new
-   * project under their old names.
+   * What belonged to the project being replaced, cleared as another loads or
+   * the project closes: its comparison variants (which would render as the
+   * new project under their old names), its generated file and the link to
+   * download it, and the notices about its values.
    */
   function resetProjectUiState() {
     if (comparisonController) {
@@ -13308,6 +13314,14 @@ if (rounded) {
         exitComparisonMode({ quiet: true });
       }
       comparisonController.clearAll();
+    }
+    lastGeneratedParamsHash = null;
+    stateManager.setState({ stl: null, stlStats: null, generatedOutput: null });
+    document.getElementById('downloadFallbackLink')?.classList.add('hidden');
+    const notices = document.getElementById('parameterNotices');
+    if (notices) {
+      notices.replaceChildren();
+      notices.hidden = true;
     }
   }
 

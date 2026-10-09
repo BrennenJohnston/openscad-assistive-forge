@@ -646,7 +646,8 @@ export class AutoPreviewController {
         cached.stats,
         true,
         cached.durationMs,
-        timing
+        timing,
+        cached.consoleOutput || ''
       );
     } catch (error) {
       console.error('Failed to load cached preview:', error);
@@ -1297,6 +1298,9 @@ export class AutoPreviewController {
       stats: result.stats,
       durationMs,
       timing: result.timing || {},
+      // The messages belong with the preview: showing it again from the
+      // cache shows its messages, not whatever the last render said.
+      consoleOutput: result.consoleOutput || '',
       timestamp: Date.now(),
     });
   }

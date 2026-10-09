@@ -373,8 +373,28 @@ describe('AutoPreviewController', () => {
           parseMs: 0,
           renderMs: 0,
           wasmInitMs: 0,
-        })
+        }),
+        ''
       )
+    })
+
+    // A preview shown again from the cache brings the messages its render
+    // printed, so a stale error from other values does not stay on screen.
+    it("hands back the cached render's console output", async () => {
+      const params = { width: 10 }
+      const hash = controller.hashParams(params)
+      const cacheKey = `${hash}|model`
+      controller.addToCache(cacheKey, {
+        stl: new ArrayBuffer(4),
+        stats: { triangles: 5 },
+        consoleOutput: 'ECHO: "ten wide"',
+      })
+      const previewReady = vi.fn()
+      controller.onPreviewReady = previewReady
+
+      await controller.loadCachedPreview(hash, cacheKey, 'model')
+
+      expect(previewReady.mock.calls[0][5]).toBe('ECHO: "ten wide"')
     })
 
     it('adds results to cache and evicts old entries', () => {
