@@ -14398,8 +14398,12 @@ if (rounded) {
       } else if (action === 'delete') {
         const presetToDelete = presetManager.loadPreset(modelName, presetId);
         const presetLabel = presetToDelete?.name || 'this preset';
+        // Plain words: the dialog shows its message as text, so markup here
+        // was read out as tags.
         const confirmed = await showConfirmDialog(
-          `Are you sure you want to delete "<strong>${presetLabel}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+          presetToDelete?.name
+            ? `Delete the preset "${presetLabel}"? This cannot be undone.`
+            : 'Delete this preset? This cannot be undone.',
           'Delete Preset',
           'Delete',
           'Cancel',
@@ -14796,7 +14800,7 @@ if (rounded) {
 
     // Show warning modal — deletion is irreversible
     const confirmed = await showConfirmDialog(
-      `Are you sure you want to delete the preset "<strong>${preset.name}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+      `Delete the preset "${preset.name}"? This cannot be undone.`,
       'Delete Preset',
       'Delete',
       'Cancel',

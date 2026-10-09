@@ -9,6 +9,7 @@ import {
   getSelectedPresetLabel,
   getPresetOptions,
 } from './helpers/preset-helpers.js'
+import { expectNoRawTags } from './helpers/invariants.js'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -340,6 +341,11 @@ test.describe('Preset Workflow', () => {
     await deleteButton.click()
     const confirmModal = page.locator('.confirm-modal')
     await expect(confirmModal).toBeVisible({ timeout: 5000 })
+    // The question is plain words, read as written: no markup as text.
+    await expect(confirmModal.locator('#confirmDialogMessage')).toHaveText(
+      'Delete the preset "Delete Test"? This cannot be undone.'
+    )
+    await expectNoRawTags(confirmModal)
     await confirmModal.locator('button[data-action="confirm"]').click()
     await confirmModal.waitFor({ state: 'detached', timeout: 5000 })
 
