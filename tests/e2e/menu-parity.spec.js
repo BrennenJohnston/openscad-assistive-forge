@@ -8,8 +8,10 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 import {
+  attachInvariants,
   expectFocusInside,
   expectFocusNotOnBody,
+  expectNoPageErrors,
   expectPageFitsViewport,
 } from './helpers/invariants.js'
 
@@ -1574,5 +1576,47 @@ test.describe('Design menu results', () => {
     expect(engine.at(-1)).toBe(counted[2].replace(/,/g, ''))
     await page.keyboard.press('Escape')
     await expect(dialog).toHaveCount(0)
+  })
+})
+
+test.describe('New File and Flush Caches', () => {
+  // New File starts a project from the starter template, as the Main Page's
+  // Start New Project does, and asks first when a project is open.
+  test('File > New File asks, then opens the starter project', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    attachInvariants(page)
+    await loadFixture(page)
+
+    await clickMenuItem(page, 'file', 'New File')
+    const ask = page.getByRole('alertdialog', { name: 'New File' })
+    await expect(ask).toContainText('This will replace the current file.')
+    await ask.getByRole('button', { name: 'Confirm' }).click()
+
+    await expect(page.locator('#fileInfoSummary')).toHaveText(
+      'new_project.scad',
+      { timeout: 30_000 }
+    )
+    expectNoPageErrors(page)
+  })
+
+  // Flushing the caches keeps the document, as on the desktop, and the
+  // preview comes back from scratch.
+  test('Design > Flush Caches keeps the project and previews it again', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    attachInvariants(page)
+    await loadFixture(page)
+    const indicator = page.locator('.preview-state-indicator')
+    await expect(indicator).toHaveClass(/state-current/, { timeout: 180_000 })
+
+    await clickMenuItem(page, 'design', 'Flush Caches')
+
+    await expect(page.locator('#fileInfoSummary')).toHaveText('sample.scad')
+    await expect(page.locator('.param-control').first()).toBeAttached()
+    await expect(indicator).toHaveClass(/state-current/, { timeout: 180_000 })
+    expectNoPageErrors(page)
   })
 })

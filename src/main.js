@@ -3591,12 +3591,7 @@ async function initApp() {
 
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
-    onNew: () => {
-      stateManager.resetState();
-      const container = document.getElementById('parametersContainer');
-      if (container) container.textContent = '';
-      if (previewManager) previewManager.clearScene();
-    },
+    onNew: () => void startNewProject(),
     onReload: () => {
       const state = stateManager.getState();
       if (state.uploadedFile) {
@@ -4421,10 +4416,16 @@ async function initApp() {
     getWorker: () => renderController?.worker || null,
     getScadContent: () => stateManager.getState()?.uploadedFile?.content || '',
     extractParameters,
+    // The caches are flushed, not the project, as on the desktop: the same
+    // project is previewed again from scratch.
     onFlushComplete: () => {
-      stateManager.resetState();
-      const container = document.getElementById('parametersContainer');
-      if (container) container.textContent = '';
+      const state = stateManager.getState();
+      if (!autoPreviewController || !state.uploadedFile) return;
+      autoPreviewController.clearPreviewCache();
+      autoPreviewController.forcePreview(state.parameters).catch((error) => {
+        console.error('[Flush] Preview after flushing failed:', error);
+        showErrorToast({ title: 'Preview Failed', message: error.message });
+      });
     },
   });
   designPanelController.init();
@@ -8335,11 +8336,22 @@ async function initApp() {
 
   // ========== Start new project ==========
   // A way to start a new project from scratch.
-  const startNewProjectBtn = document.getElementById('startNewProjectBtn');
-  if (startNewProjectBtn) {
-    startNewProjectBtn.addEventListener('click', async () => {
-      // Create a starter template
-      const starterTemplate = `// New OpenSCAD Project
+  /**
+   * A new project from the starter template: the Main Page's Start New
+   * Project and File > New File. From the menu a project can be open, so
+   * that asks first, as loading an example does.
+   */
+  async function startNewProject() {
+    if (stateManager.getState().uploadedFile) {
+      const confirmed = await showConfirmDialog(
+        'This will replace the current file. Continue?',
+        'New File'
+      );
+      if (!confirmed) return;
+    }
+
+    // Create a starter template
+    const starterTemplate = `// New OpenSCAD Project
 // Created with OpenSCAD Assistive Forge
 // https://github.com/BrennenJohnston/openscad-assistive-forge
 
@@ -8371,32 +8383,34 @@ if (rounded) {
 }
 `;
 
-      try {
-        const fileName = 'new_project.scad';
-        // Process it like a regular file upload, but pass content directly.
-        // `handleFile()` uses FileReader for `File`/Blob inputs; passing a plain object
-        // without content will throw. This path intentionally avoids FileReader.
-        await fileHandler.handleFile(
-          { name: fileName },
-          starterTemplate,
-          null,
-          null,
-          'user',
-          fileName
-        );
+    try {
+      const fileName = 'new_project.scad';
+      // Process it like a regular file upload, but pass content directly.
+      // `handleFile()` uses FileReader for `File`/Blob inputs; passing a plain object
+      // without content will throw. This path intentionally avoids FileReader.
+      await fileHandler.handleFile(
+        { name: fileName },
+        starterTemplate,
+        null,
+        null,
+        'user',
+        fileName
+      );
 
-        // Announce to screen readers
-        announceImmediate(
-          'New project created. You can customize the parameters or edit the code.'
-        );
+      // Announce to screen readers
+      announceImmediate(
+        'New project created. You can customize the parameters or edit the code.'
+      );
 
-        console.log('[App] New project created from template');
-      } catch (error) {
-        console.error('[App] Failed to create new project:', error);
-        updateStatus('Failed to create new project', 'error');
-      }
-    });
+      console.log('[App] New project created from template');
+    } catch (error) {
+      console.error('[App] Failed to create new project:', error);
+      updateStatus('Failed to create new project', 'error');
+    }
   }
+
+  const startNewProjectBtn = document.getElementById('startNewProjectBtn');
+  startNewProjectBtn?.addEventListener('click', () => void startNewProject());
 
   // Load examples - unified handler
   // IMPORTANT: Keep this as the single click handler for all example buttons.
