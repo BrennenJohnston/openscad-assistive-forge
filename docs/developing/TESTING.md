@@ -19,11 +19,24 @@ npm run test:ui
 npm run test:e2e:ui
 ```
 
+`npm run test:e2e` runs the browser suite the way CI does: retries on, the
+cases CI skips skipped, and a fresh dev server. On Windows Playwright runs one
+worker, by design. For a full local run against a dev server I already have
+open, I use:
+
+```bash
+PW_BASE_URL=http://localhost:5173 npx playwright test --project=chromium
+```
+
+The ASCII City Walk suites build a 3D city in every case and take most of a
+local run. When a run is about something else, `--grep-invert ascii-city-walk`
+leaves them out.
+
 ## Where the tests live
 
 | Path | What it is | How to run it |
 |---|---|---|
-| `tests/unit/*.test.js` | Vitest. 108 files, 3,957 tests as of 2026-08-16 | `npm run test:run` |
+| `tests/unit/*.test.js` | Vitest | `npm run test:run` |
 | `tests/e2e/*.spec.js` | Playwright against the dev server | `npm run test:e2e` |
 | `tests/e2e-prod/*.spec.js` | Playwright against the **built** app under the deployed Content Security Policy | `npm run test:e2e:prod` |
 | `tests/visual/*.visual.spec.js` | Screenshot comparison, baselines per platform | `npm run test:visual` |
@@ -36,6 +49,38 @@ Security Policy should run `npm run test:e2e:prod` as well.
 
 Harness files that live under `build/` must be named `*.pwalk.js`, not
 `*.spec.js` -- Vitest picks up `build/*.spec.js` and tries to run it.
+
+## Shared checks for browser tests
+
+`tests/e2e/helpers/invariants.js` holds checks any spec can run after a step.
+They catch what a person meets and a narrow assertion misses.
+
+| Check | What it fails on |
+|---|---|
+| `attachInvariants(page)`, later `expectNoPageErrors(page)` | an uncaught page error, or a console error that names broken code (`is not a function`, `before initialization` and the like), at any point in the test. Call `attachInvariants` before the first navigation |
+| `expectFocusNotOnBody(page)` | focus dropped to the page body, where a keyboard user is lost |
+| `expectFocusInside(page, container)` | focus outside the dialog or panel that should hold it |
+| `expectNoRawTags(locator)` | markup shown as text, such as `<strong>` in a message |
+| `expectPageFitsViewport(page)` | a page taller than its window, or one that has slid up inside it |
+
+`recordAnnouncements(page)` fails on nothing by itself. Called before the first
+navigation, it records every text written to a live region, including regions
+added later; `announcementMark(page)` and `announcementsSince(page, mark)` give a
+test what one action said, so it can count it.
+
+## Suites with a particular job
+
+- `real-start.spec.js` starts the app the way a person does, with nothing
+  written to storage first. Every other suite marks the welcome dialog as
+  seen, so the first visit and the return visit, with and without "Remember
+  my choice", only run here.
+- `project-switch.spec.js` loads one project after another and checks that
+  nothing of the first (comparison variants, a link's values, the last
+  generated file, old messages) is left on the second, and that Close Project
+  leaves no file named on the Main Page.
+- `menu-reach.spec.js` opens File > Export with a real pointer at common
+  window sizes and checks that a click at the center of each item reaches the
+  item. In a short window it turns the wheel first, as a person would.
 
 ## Troubleshooting
 
@@ -111,11 +156,24 @@ This replicates the end-to-end workflow for a multi-file SCAD project with prese
     - `"design default values": {}` is the first key in `parameterSets`.
     - Modified preset values match what you saved.
 
+### Walking a release candidate
+
+Before a release I walk the release candidate's preview deployment by hand,
+with NVDA running: a written list of steps, each with what should happen,
+covering what the release changed and the flows that broke before. The
+automated suites can pass while a person still cannot finish a task, and a
+walk finds that. I write down what each step did, in my own words, and
+anything wrong is fixed before the release.
+
+NVDA's log keeps everything it says, and `npm run nvda-tail` turns it into a
+record step by step. How to set that up, and what to listen for, is in the
+[NVDA listening pack](../notes/NVDA_LISTENING_PACK.md).
+
 ### Regression checklist
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (108 files, 3,957 tests).
+- [ ] `npm run test:run` -- all unit tests pass (232 files, 7,739 tests and 2 skipped, as of 2026-10-09).
 - [ ] `npm run test:e2e` -- E2E tests pass on Chromium.
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.
@@ -123,10 +181,10 @@ After any changes, verify:
 - [ ] `npx playwright test tests/e2e/accessibility.spec.js` -- axe-core passes.
 - [ ] `npm run build && npm run check-bundle` -- budgets met.
 
-Measured 2026-08-16: core app **475 KB** gzipped against a 500 KB budget, main
-CSS 58 KB against 150 KB, all assets 844 KB against 1 MB. The core app is at
-95% of its budget, so a new dependency is a real decision rather than a
-formality.
+Measured 2026-10-09: core app **460 KB** gzipped against a 586 KB budget, main
+CSS 65 KB against 150 KB, all assets **1.14 MB** against 1.19 MB. All assets
+are at 95% of their budget, so a new dependency is a real decision rather than
+a formality.
 
 ---
 

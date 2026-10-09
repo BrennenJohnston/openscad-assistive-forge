@@ -7,10 +7,11 @@ has been *heard* correct until this run happens. Chrome, NVDA running,
 the app at `npm run dev`, a fresh profile or cleared site data so the
 first-visit dialog appears.
 
-Budget about an hour now, and it splits cleanly: sections 1 to 6 are the
-app as it stood, about half an hour, and sections 7 to 11 are the
-picture-to-charm work added in this round, about another half hour. Doing
-only one half is a result too, as long as you say which.
+Budget about an hour and a half, and it splits cleanly: sections 1 to 6 are
+the core app, about half an hour; sections 7 to 11 are the picture-to-charm
+path, about another half hour; sections 12 to 15 are the flows a release walk
+repeats, about twenty minutes. Doing only part is a result too, as long as you
+say which.
 
 Two traps to carry in, learned on a sibling project's runs:
 
@@ -22,6 +23,28 @@ Two traps to carry in, learned on a sibling project's runs:
 
 Record what actually happened in the third column, including the boring
 parts — a run that finds nothing is a result.
+
+## Keeping a record
+
+NVDA can write everything it says to its log: in NVDA's settings, General >
+Logging level, choose "Input/output". The log is `%TEMP%\nvda.log`, started
+fresh each time NVDA starts. From the repository:
+
+```bash
+npm run nvda-tail -- --mark
+npm run nvda-tail -- "3. Changing a parameter"
+```
+
+The first line sets the starting point. Each later call appends what NVDA
+said, and the keys it heard, since the last call to `build/nvda-speech.md`
+under the step's label, with the time of each line, and prints it (`--out`
+picks another file, `--quiet` skips the printing). A sentence spoken twice for
+one action shows as two lines a few milliseconds apart.
+
+**Privacy warning:** at this level the log holds every key you press and
+everything NVDA reads, including passwords and messages in other windows.
+Set the level back to "Info" after the run, and keep the record file out of
+anything you share.
 
 ## 1. Arrival and the first-visit choice
 
@@ -220,6 +243,53 @@ list still say everything the picture now shows?
 | Save crop: the editor comes back on the result and says "Cropped. N shapes." once; Cancel or Escape says "Crop canceled. Your drawing is unchanged." and puts focus back on Crop | ☐ | |
 | After a crop, "Undo crop" is in the toolbar; pressing it says "Crop undone. N shapes." once, and the button goes away | ☐ | |
 | The charm view's "Render preview" says "Rendering the charm with the drawing as it is now." once, and the note under the charm says which drawing it shows | ☐ | |
+
+## 12. The two tours
+
+Start the Main Page Tour from the Main Page, then Getting Started from the
+simple box's Start Tutorial.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| The tour opens with focus on Next or on the step's text, not on "Minimize tutorial" | ☐ | |
+| Each step's title and its explanation are read when the step appears, once each, and the step number once | ☐ | |
+| After Next, focus is in the tour panel, not on the page body | ☐ | |
+| The Exit button's name and its description are not the same words twice | ☐ | |
+| Getting Started, "Adjust a parameter": typing a value in Width and pressing Tab makes Next available | ☐ | |
+| On the last step the button's spoken name says Finish, as its text does | ☐ | |
+| Finishing says one sentence, and focus goes back to the button that started the tour | ☐ | |
+
+## 13. Dialogs from the Help menu
+
+Open About, the Features Guide, Keyboard Shortcuts and Library info, each from
+the Help menu.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| Opening reads the dialog's name once, then what has focus inside it | ☐ | |
+| The Features Guide's tab strip reads as tabs with names and positions ("Libraries, tab, selected, 1 of 6") | ☐ | |
+| Escape, or the dialog's own close button, closes it and puts focus back on the Help menu button | ☐ | |
+
+## 14. Deleting a preset
+
+Save a preset, then delete it from the Presets panel. Save another and delete
+it from Import / Export.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| The question reads its title, "Delete Preset", then `Delete the preset "<name>"? This cannot be undone.`, with no markup words in it | ☐ | |
+| Cancel leaves the preset where it was and puts focus back on the control that asked | ☐ | |
+| After Delete, focus is on the preset list, not the page body; from Import / Export, focus stays in that dialog | ☐ | |
+
+## 15. The braille preview
+
+The Braille Sign, the Braille Card and the Braille Charm: type a short text
+and let it translate.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| Each line of the braille preview reads its number and its braille, with no language name ("und") before the cells | ☐ | |
+| "Translate to braille" reports its result once, and the whole Customizer panel is not read out again | ☐ | |
 
 ## What to send back
 

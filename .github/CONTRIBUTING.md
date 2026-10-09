@@ -56,7 +56,9 @@ If a user would notice the change, add one line under "Unreleased" in
 - Format: `npm run format`
 - Lint: `npm run lint`
 - Unit tests: `npm run test:run`
-- Browser tests: `npm run test:e2e`
+- Browser tests: `npm run test:e2e`. A new spec can use the shared checks in
+  `tests/e2e/helpers/invariants.js` (page errors, focus lost to the page body,
+  markup shown as text); `docs/developing/TESTING.md` lists them.
 - Example models: `npm run validate:example public/examples/<your-folder>`
 
 On Windows, see `docs/developing/TROUBLESHOOTING.md#playwright-terminal-hangs-windows` if Playwright gets stuck.

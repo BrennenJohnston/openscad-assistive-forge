@@ -23,6 +23,9 @@ pull request and nothing to merge back.
    also starts the Release Checks workflow (Edge, Firefox, Safari, the
    visual comparison and the Lighthouse audit), which takes about 40
    minutes; `main` requires its Edge and Lighthouse checks as well.
+4. Walk the release candidate's preview by hand, with NVDA running ("Walking
+   a release candidate" in `docs/developing/TESTING.md`). Anything wrong is
+   fixed before the release.
 
 ### Braille tools
 
