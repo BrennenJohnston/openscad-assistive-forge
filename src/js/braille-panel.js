@@ -259,6 +259,9 @@ class BraillePanel {
     this.generateAll = true;
     this.isApplying = false;
     this.firstLayout = true;
+    // Set by destroy(): a panel that has been replaced never lays out or
+    // writes again, even when a table list it was waiting for arrives late.
+    this.destroyed = false;
     this.unsubscribe = null;
     this.lastWatchedValues = null;
     this.lastGridRowsParam = null;
@@ -1394,6 +1397,7 @@ class BraillePanel {
   // ------------------------------------------------------------------
 
   scheduleLayout(delay = DEBOUNCE_MS) {
+    if (this.destroyed) return;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.runLayout().catch((error) => {
@@ -2347,6 +2351,7 @@ class BraillePanel {
    * @returns {boolean} Whether anything was written
    */
   writeParams(updates, { skipIfFirstLayout = false } = {}) {
+    if (this.destroyed) return false;
     const currentParams = stateManager.getState().parameters || {};
     const changed = Object.entries(updates).filter(
       ([name, value]) => String(currentParams[name] ?? '') !== String(value)
@@ -2606,6 +2611,7 @@ class BraillePanel {
   }
 
   destroy() {
+    this.destroyed = true;
     clearTimeout(this.debounceTimer);
     this.layoutSeq++;
     if (this.unsubscribe) {
