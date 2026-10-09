@@ -18,9 +18,11 @@ const SIZES = [
   { width: 1366, height: 768 },
   { width: 1280, height: 720 },
   { width: 1920, height: 1080 },
-  // Short enough that Export starts below the menu's visible edge.
-  { width: 1280, height: 600 },
 ]
+
+// Short enough that Export starts below the menu's visible edge and its list
+// does not fit: a person reaches each item with the wheel.
+const SHORT = { width: 1280, height: 560 }
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -72,14 +74,31 @@ function underPointer(item) {
 /**
  * Turn the wheel over the menu body, as a person would, until the item is
  * under the pointer. Taller fonts (Firefox on Linux) put Export below the
- * body's visible edge at 1280 x 720.
+ * body's visible edge at 1280 x 720. Firefox scrolls smoothly, so each turn
+ * waits for the body to stop moving before anything is measured.
  */
 async function wheelToReach(page, item) {
   const body = page.locator('#fileMenuModal .toolbar-menu-body')
   for (let turn = 0; turn < 20 && !(await underPointer(item)); turn++) {
     const box = await body.boundingBox()
+    const target = await item.boundingBox()
+    const below = target.y + target.height / 2 > box.y + box.height / 2
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await page.mouse.wheel(0, 100)
+    await page.mouse.wheel(0, below ? 100 : -100)
+    await body.evaluate(
+      (el) =>
+        new Promise((resolve) => {
+          let last = el.scrollTop
+          let still = 0
+          const frame = () => {
+            still = el.scrollTop === last ? still + 1 : 0
+            last = el.scrollTop
+            if (still >= 3) resolve()
+            else requestAnimationFrame(frame)
+          }
+          requestAnimationFrame(frame)
+        })
+    )
   }
   expect(await underPointer(item), 'the wheel never reached the item').toBe(
     true
@@ -130,6 +149,19 @@ test.describe('File > Export by pointer', () => {
       expectNoPageErrors(page)
     })
   }
+
+  test(`every Export item can be wheeled under the pointer at ${SHORT.width} x ${SHORT.height}`, async ({
+    page,
+  }) => {
+    attachInvariants(page)
+    await page.setViewportSize(SHORT)
+    await loadFixture(page)
+    const list = await openExport(page)
+    const items = list.locator('[role^="menuitem"]')
+    expect(await items.count()).toBeGreaterThan(10)
+    for (const item of await items.all()) await wheelToReach(page, item)
+    expectNoPageErrors(page)
+  })
 
   test('a pointer click on Export as DXF reaches the export', async ({
     page,
