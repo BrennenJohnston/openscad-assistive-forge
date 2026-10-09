@@ -1721,7 +1721,8 @@ describe('UI Generator', () => {
 
     async function uploadSvg(
       fileInput,
-      svgContent = '<svg><path/><circle/></svg>'
+      svgContent = '<svg><path/><circle/></svg>',
+      { until = 'card' } = {}
     ) {
       const file = new File([svgContent], 'test.svg', {
         type: 'image/svg+xml',
@@ -1730,8 +1731,29 @@ describe('UI Generator', () => {
         value: [file],
         configurable: true,
       });
+      // The drawing tools load with the first picture, which on a busy
+      // machine outlasts any fixed pause; wait for the upload's own result,
+      // a filled status card or, with until: 'editor', the editor opening.
+      const factory = vi.mocked(createSvgPrepWorkspace);
+      const opens = () =>
+        factory.mock.results.reduce(
+          (n, r) => n + (r.value?.open?.mock.calls.length ?? 0),
+          0
+        );
+      const opensBefore = opens();
       fileInput.dispatchEvent(new Event('change'));
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await vi.waitFor(
+        () => {
+          const done =
+            until === 'editor'
+              ? opens() > opensBefore
+              : container.querySelector(
+                  '.svg-prep-status-badge, .svg-prep-edit-btn'
+                );
+          if (!done) throw new Error('the upload has not finished');
+        },
+        { timeout: 8000, interval: 20 }
+      );
     }
 
     it('shows Edit button for needs_review status', async () => {
@@ -1892,7 +1914,7 @@ describe('UI Generator', () => {
         const onChange = vi.fn();
         renderParameterUI(svgFileSchema, container, onChange, {});
         const fileInput = container.querySelector('input[type="file"]');
-        await uploadSvg(fileInput);
+        await uploadSvg(fileInput, undefined, { until: 'editor' });
 
         const factory = vi.mocked(createSvgPrepWorkspace);
         const stub = factory.mock.results[factory.mock.results.length - 1].value;
@@ -1926,7 +1948,7 @@ describe('UI Generator', () => {
       const onChange = vi.fn();
       renderParameterUI(svgFileSchema, container, onChange, {});
       const fileInput = container.querySelector('input[type="file"]');
-      await uploadSvg(fileInput);
+      await uploadSvg(fileInput, undefined, { until: 'editor' });
       const factory = vi.mocked(createSvgPrepWorkspace);
       const stub = factory.mock.results[factory.mock.results.length - 1].value;
       const options = stub.open.mock.calls[0][2];
@@ -1957,7 +1979,8 @@ describe('UI Generator', () => {
         // width is the box's width.
         await uploadSvg(
           fileInput,
-          '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="448" viewBox="0 0 600 448"><path d="M0,0h600v448h-600z"/></svg>'
+          '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="448" viewBox="0 0 600 448"><path d="M0,0h600v448h-600z"/></svg>',
+          { until: 'editor' }
         );
         const factory = vi.mocked(createSvgPrepWorkspace);
         const stub = factory.mock.results[factory.mock.results.length - 1].value;
@@ -1999,7 +2022,8 @@ describe('UI Generator', () => {
       const fileInput = container.querySelector('input[type="file"]');
       await uploadSvg(
         fileInput,
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 224"><rect x="0" y="0" width="300" height="224"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 224"><rect x="0" y="0" width="300" height="224"/></svg>',
+        { until: 'editor' }
       );
       const factory = vi.mocked(createSvgPrepWorkspace);
       const stub = factory.mock.results[factory.mock.results.length - 1].value;
@@ -2048,7 +2072,7 @@ describe('UI Generator', () => {
       });
       renderParameterUI(svgFileSchema, container, vi.fn(), {});
       const fileInput = container.querySelector('input[type="file"]');
-      await uploadSvg(fileInput);
+      await uploadSvg(fileInput, undefined, { until: 'editor' });
       const factory = vi.mocked(createSvgPrepWorkspace);
       const stub = factory.mock.results[factory.mock.results.length - 1].value;
       const options = stub.open.mock.calls[0][2];
