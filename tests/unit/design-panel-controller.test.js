@@ -58,12 +58,15 @@ beforeEach(() => {
   vi.mocked(getConsolePanel().addSystemLine).mockClear();
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const dialog of dialogs()) {
     dialog.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
     );
   }
+  // A closed dialog tries focus again 50 ms later (modal-manager.js). Let that
+  // retry run here, so it never fires after the file ends and its page is gone.
+  await new Promise((resolve) => setTimeout(resolve, 100));
 });
 
 function schemaController(parameters) {
