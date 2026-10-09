@@ -963,10 +963,19 @@ function createHelpTooltip(param) {
     button.setAttribute('aria-expanded', 'false');
   };
 
+  // A pointer press focuses the button before its click: if the focus opened
+  // the tip, the click would close it again at once. So during a press the
+  // click alone decides; focus from the keyboard still opens it.
+  let pointerPress = false;
+  button.addEventListener('pointerdown', () => {
+    pointerPress = true;
+  });
+
   // Toggle tooltip on click
   button.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    pointerPress = false;
 
     const isVisible = tooltip.style.display === 'block';
     if (isVisible) {
@@ -978,11 +987,12 @@ function createHelpTooltip(param) {
 
   // Show tooltip on focus (WCAG: keyboard accessible)
   button.addEventListener('focus', () => {
-    showTooltip();
+    if (!pointerPress) showTooltip();
   });
 
   // Hide tooltip on blur
   button.addEventListener('blur', () => {
+    pointerPress = false;
     // Small delay to allow click on tooltip if needed
     setTimeout(() => {
       if (!wrapper.contains(document.activeElement)) {

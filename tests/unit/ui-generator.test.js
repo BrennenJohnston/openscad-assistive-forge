@@ -2722,3 +2722,61 @@ describe('the hole warning follows the shape the model cuts', () => {
     expect(warning().hidden).toBe(true);
   });
 });
+
+// A pointer press focuses the button before its click. The focus used to
+// open the tip and the click then closed it, so the mouse never saw it.
+describe('the "?" help button', () => {
+  let el;
+  let button;
+  const expanded = () => button.getAttribute('aria-expanded');
+  const press = () => {
+    button.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    button.focus();
+    button.click();
+  };
+
+  beforeEach(() => {
+    el = document.createElement('div');
+    document.body.appendChild(el);
+    renderParameterUI(
+      buildParams({
+        params: [
+          {
+            name: 'width',
+            type: 'number',
+            default: 50,
+            minimum: 0,
+            maximum: 100,
+            uiType: 'slider',
+            description: 'The width of the object',
+          },
+        ],
+      }),
+      el,
+      vi.fn(),
+      {}
+    );
+    button = el.querySelector('.param-help-button');
+  });
+  afterEach(() => el.remove());
+
+  it('opens with a pointer press', () => {
+    press();
+    expect(expanded()).toBe('true');
+  });
+
+  it('closes with a second pointer press', () => {
+    press();
+    press();
+    expect(expanded()).toBe('false');
+  });
+
+  it('opens when the keyboard reaches it, and Escape closes it', () => {
+    button.focus();
+    expect(expanded()).toBe('true');
+    button.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(expanded()).toBe('false');
+  });
+});
