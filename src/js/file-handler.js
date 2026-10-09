@@ -561,7 +561,7 @@ export function initFileHandler({
     mainFilePathArg = null,
     source = 'user',
     originalFileNameArg = null,
-    { deferInitialPreview = false } = {}
+    { deferInitialPreview = false, startingValues = null } = {}
   ) {
     if (!file && !content) return;
 
@@ -1289,13 +1289,23 @@ export function initFileHandler({
       }
 
       const urlParams = await stateManager.loadFromURL();
-      if (urlParams && Object.keys(urlParams).length > 0) {
-        console.log('Loaded parameters from URL:', urlParams);
+      const fromLink = urlParams ? Object.keys(urlParams) : [];
+      const fromDraft = startingValues ? Object.keys(startingValues) : [];
+      if (fromLink.length > 0 || fromDraft.length > 0) {
+        if (fromLink.length > 0) {
+          console.log('Loaded parameters from URL:', urlParams);
+        }
 
-        const { sanitized, adjustments } = sanitizeUrlParams(
-          extracted,
-          urlParams
-        );
+        // A link's values win over a restored draft's: the address is the
+        // more explicit choice. Only a link's values are reported as changed
+        // to fit; a draft's were saved from this same file.
+        const { sanitized, adjustments } = sanitizeUrlParams(extracted, {
+          ...startingValues,
+          ...urlParams,
+        });
+        for (const key of Object.keys(adjustments)) {
+          if (!fromLink.includes(key)) delete adjustments[key];
+        }
 
         const updatedValues = renderParameterUI(
           extracted,
@@ -1319,7 +1329,9 @@ export function initFileHandler({
         }
 
         updateStatus(
-          `Ready - ${paramCount} parameters loaded (${Object.keys(urlParams).length} from URL)`
+          fromLink.length > 0
+            ? `Ready - ${paramCount} parameters loaded (${fromLink.length} from URL)`
+            : `Ready - ${paramCount} parameters loaded`
         );
 
         // A notice, not a status: a status line stands for about 660 ms

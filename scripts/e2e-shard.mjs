@@ -274,8 +274,9 @@ export const MEASURED_SECONDS = {
   // and no engine. Nine cases in 3.8 s locally; booked at 10, the rounding
   // potrace-engine carries.
   'invariants-selftest.spec.js': 10.0,
-  // Four cases, each a first visit that downloads the engine.
-  'real-start.spec.js': 39.1,
+  // Five cases, each a first visit that downloads the engine: 39.1 measured
+  // at four, scaled to five.
+  'real-start.spec.js': 48.9,
   // Summed from the Chromium shards of one pull-request run (2026-10-09), the
   // method above; real-start.spec.js just before is from the same run. The
   // grown files above it in this table (menu-parity, tutorials, auto-preview,

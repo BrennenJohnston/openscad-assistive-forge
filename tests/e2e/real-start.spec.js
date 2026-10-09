@@ -168,4 +168,34 @@ test.describe('A real start-up', () => {
     await expect(params).toBeAttached()
     expectNoPageErrors(page)
   })
+
+  // The page keeps a changed value in its own address too, so a plain reload
+  // would bring it back through the link. A return visit comes in through the
+  // plain address, where only the draft holds the value.
+  test('a restored draft keeps the values that were changed', async ({ page }) => {
+    attachInvariants(page)
+    page.on('dialog', (dialog) => dialog.accept())
+    await page.goto('/')
+    await acceptWelcome(page, { remember: true })
+    await declineTourOffer(page)
+    await waitForEngine(page)
+    await openSimpleBox(page)
+    await page.locator('details.param-group > summary').filter({ hasText: 'Dimensions' }).first().click()
+    const width = page.locator('#param-width-spinbox')
+    await width.fill('57')
+    await width.press('Tab')
+    await page.waitForFunction(
+      () => /"width":"?57"?[,}]/.test(localStorage.getItem('openscad-forge-editor-draft') || ''),
+      null,
+      { timeout: 10_000 }
+    )
+
+    await page.evaluate(() => history.replaceState(null, '', '/'))
+    await page.reload()
+    await waitForEngine(page)
+    const { params, failed } = await restoredOrFailed(page)
+    await expect(failed).toHaveCount(0)
+    await expect(params).toHaveValue('57')
+    expectNoPageErrors(page)
+  })
 })
