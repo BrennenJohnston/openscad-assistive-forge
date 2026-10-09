@@ -118,7 +118,10 @@ function main(argv) {
     return i >= 0 ? argv[i + 1] : undefined;
   };
   const valueOf = new Set(
-    ['--out', '--log'].map((name) => argv.indexOf(name) + 1)
+    ['--out', '--log']
+      .map((name) => argv.indexOf(name))
+      .filter((i) => i >= 0)
+      .map((i) => i + 1)
   );
   const label =
     argv.find((arg, i) => !arg.startsWith('--') && !valueOf.has(i)) ?? 'step';
@@ -133,7 +136,12 @@ function main(argv) {
     );
     process.exit(1);
   }
-  const result = tailNvdaLog({ log, out, label, mark: argv.includes('--mark') });
+  const result = tailNvdaLog({
+    log,
+    out,
+    label,
+    mark: argv.includes('--mark'),
+  });
   if (result.marked) {
     console.log('Marked: the next call starts here.');
   } else if (!argv.includes('--quiet')) {
@@ -142,6 +150,9 @@ function main(argv) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   main(process.argv.slice(2));
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, readFileSync, writeFileSync, appendFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { execFileSync } from 'child_process';
 import { parseNvdaLog, tailNvdaLog } from '../../scripts/nvda-tail.mjs';
 
 // The shape NVDA writes at log level "input/output": a head line per entry
@@ -71,5 +72,28 @@ describe('tailNvdaLog', () => {
 
     tailNvdaLog({ log, out, label: 'Step 4: nothing' });
     expect(readFileSync(out, 'utf8')).toContain('(nothing spoken)');
+  });
+});
+
+describe('the nvda-tail command', () => {
+  it('keeps the step label when the log is found by default', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nvda-tail-'));
+    const out = join(dir, 'speech.md');
+    writeFileSync(join(dir, 'nvda.log'), LOG);
+    const run = (args) =>
+      execFileSync(process.execPath, ['scripts/nvda-tail.mjs', ...args], {
+        env: { ...process.env, TEMP: dir },
+        encoding: 'utf8',
+      });
+
+    run(['--mark', '--out', out]);
+    appendFileSync(
+      join(dir, 'nvda.log'),
+      'IO - speech.speech.speak (07:50:02.000) - MainThread (1100):\n' +
+        "Speaking ['Preview ready']\n"
+    );
+    run(['3. Changing a parameter', '--out', out, '--quiet']);
+
+    expect(readFileSync(out, 'utf8')).toContain('### 3. Changing a parameter');
   });
 });
