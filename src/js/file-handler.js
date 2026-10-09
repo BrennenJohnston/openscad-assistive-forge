@@ -298,6 +298,8 @@ export function showProcessingOverlay(message, opts = {}) {
  * @param {Function} deps.setCanonicalProjectFiles - Update canonical project files snapshot
  * @param {Function} deps.renderLibraryUI - Render library controls UI
  * @param {Function} deps.getEnabledLibrariesForRender - Returns enabled library mount paths
+ * @param {Function} [deps.resetProjectUiState] - Clears what belonged to the
+ *   project being replaced; called once a new project is about to take over
  * @returns {Object} Controller API: { handleFile, handleFolderImport, loadExampleByKey }
  */
 export function initFileHandler({
@@ -335,6 +337,7 @@ export function initFileHandler({
   setCanonicalProjectFiles,
   renderLibraryUI,
   getEnabledLibrariesForRender,
+  resetProjectUiState,
 }) {
   // ------------------------------------------------------------------
   // Folder import helpers
@@ -854,6 +857,7 @@ export function initFileHandler({
         paramTypes[pName] = pDef.type || 'string';
       }
 
+      resetProjectUiState?.();
       stateManager.setState({
         uploadedFile: { name: originalFileName, content: fileContent },
         projectFiles: projectFiles || null,

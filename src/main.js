@@ -7582,6 +7582,7 @@ async function initApp() {
     setCanonicalProjectFiles,
     renderLibraryUI,
     getEnabledLibrariesForRender,
+    resetProjectUiState,
   });
 
   // Check for saved draft - but only if first-visit modal is not blocking
@@ -9373,6 +9374,29 @@ if (rounded) {
   }
 
   /**
+   * Draw the Customizer for the open project, wired the way every redraw is:
+   * each change is recorded for Undo, clears the preset selection and asks
+   * for a preview.
+   * @param {Object|null} [values] - The values to show; null shows the state's
+   */
+  function renderCustomizer(values = null) {
+    renderParameterUI(
+      stateManager.getState().schema,
+      document.getElementById('parametersContainer'),
+      (changed) => {
+        stateManager.recordParameterState();
+        stateManager.setState({ parameters: changed });
+        clearPresetSelection(changed);
+        if (autoPreviewController && stateManager.getState().uploadedFile) {
+          autoPreviewController.onParameterChange(changed);
+        }
+        updatePrimaryActionButton();
+      },
+      values
+    );
+  }
+
+  /**
    * Perform undo: restores previous parameter state, re-renders UI, and
    * triggers auto-preview.  Called by Edit toolbar menu, Undo button,
    * and keyboard shortcut.
@@ -9381,24 +9405,7 @@ if (rounded) {
     const previousParams = stateManager.undo();
     if (previousParams) {
       const state = stateManager.getState();
-
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(
-        state.schema,
-        parametersContainer,
-        (values) => {
-          stateManager.recordParameterState();
-          stateManager.setState({ parameters: values });
-          clearPresetSelection(values);
-          if (autoPreviewController && state.uploadedFile) {
-            autoPreviewController.onParameterChange(values);
-          }
-          updatePrimaryActionButton();
-        },
-        previousParams
-      );
+      renderCustomizer(previousParams);
 
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(previousParams);
@@ -9417,24 +9424,7 @@ if (rounded) {
     const nextParams = stateManager.redo();
     if (nextParams) {
       const state = stateManager.getState();
-
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(
-        state.schema,
-        parametersContainer,
-        (values) => {
-          stateManager.recordParameterState();
-          stateManager.setState({ parameters: values });
-          clearPresetSelection(values);
-          if (autoPreviewController && state.uploadedFile) {
-            autoPreviewController.onParameterChange(values);
-          }
-          updatePrimaryActionButton();
-        },
-        nextParams
-      );
+      renderCustomizer(nextParams);
 
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(nextParams);
@@ -9475,20 +9465,7 @@ if (rounded) {
       clearPresetSelection(state.defaults);
 
       // Re-render UI with defaults
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(state.schema, parametersContainer, (values) => {
-        stateManager.recordParameterState();
-        stateManager.setState({ parameters: values });
-        // Clear preset selection when parameters are manually changed
-        clearPresetSelection(values);
-        // Trigger auto-preview on parameter change
-        if (autoPreviewController && state.uploadedFile) {
-          autoPreviewController.onParameterChange(values);
-        }
-        updatePrimaryActionButton();
-      });
+      renderCustomizer();
 
       // Trigger auto-preview with reset params
       if (autoPreviewController && state.uploadedFile) {
@@ -13303,18 +13280,36 @@ if (rounded) {
 
     if (variant) {
       // Exit comparison mode and load variant parameters
-      exitComparisonMode();
+      exitComparisonMode({ quiet: true });
+      stateManager.recordParameterState();
       stateManager.setState({ parameters: { ...variant.parameters } });
 
       // Re-render parameter UI
-      const state = stateManager.getState();
-      if (state.schema) {
-        renderParameterUI(state.schema, state.parameters);
+      if (stateManager.getState().schema) {
+        renderCustomizer(variant.parameters);
       }
+      if (autoPreviewController) {
+        autoPreviewController.onParameterChange(variant.parameters);
+      }
+      updatePrimaryActionButton();
 
       updateStatus(`Editing ${variant.name}`);
     }
   });
+
+  /**
+   * What belonged to the project being replaced, cleared as another loads:
+   * its comparison variants, which would otherwise render as the new
+   * project under their old names.
+   */
+  function resetProjectUiState() {
+    if (comparisonController) {
+      if (stateManager.getState().comparisonMode) {
+        exitComparisonMode({ quiet: true });
+      }
+      comparisonController.clearAll();
+    }
+  }
 
   function enterComparisonMode() {
     const state = stateManager.getState();
@@ -13339,7 +13334,11 @@ if (rounded) {
     console.log('[Comparison] Entered comparison mode');
   }
 
-  function exitComparisonMode() {
+  /**
+   * @param {{quiet?: boolean}} [options] - quiet when the caller says what
+   *   happened itself (Edit, a project load), so one action is one message
+   */
+  function exitComparisonMode({ quiet = false } = {}) {
     const state = stateManager.getState();
     stateManager.setState({ comparisonMode: false });
 
@@ -13362,7 +13361,7 @@ if (rounded) {
     // Variants are kept: leaving comparison mode does not clear them.
 
     console.log('[Comparison] Exited comparison mode');
-    updateStatus('Exited comparison mode');
+    if (!quiet) updateStatus('Exited comparison mode');
   }
 
   // Handle browser back/forward button while in comparison mode
