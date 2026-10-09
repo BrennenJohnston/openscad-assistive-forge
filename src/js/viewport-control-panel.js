@@ -14,6 +14,9 @@
  *                    the live pixel size instead of setting it.
  *   Lock             Disabled. It locks upstream's aspect ratio while you type
  *                    a size; with no settable size there is nothing to lock.
+ *   Rotation Y       Read-only, always 0. The rotation is OpenSCAD's $vpr,
+ *                    [tilt, roll, turn], and this camera's up is locked to +Z,
+ *                    so it never rolls.
  *
  * ## Why the update path looks the way it does
  *
@@ -41,6 +44,49 @@ export const UPDATE_THROTTLE_MS = 100;
 
 /** Degrees per radian, kept once so the two conversions cannot disagree. */
 const RAD_TO_DEG = 180 / Math.PI;
+
+/**
+ * Looking straight along Z leaves the camera no frame to aim by (its up and
+ * its view line coincide), so a tilt of 0 or 180 is held this far off the
+ * pole, as the Top and Bottom views are. Degrees.
+ */
+const POLE_DEG = 0.001;
+
+/**
+ * OpenSCAD's $vpr for a camera at this offset from its target: the tilt away
+ * from looking straight down, no roll, and the turn about the vertical axis
+ * from the front (-Y) toward +X. The numbers the desktop shows and a model
+ * pastes.
+ * @param {{x: number, y: number, z: number}} offset - camera minus target
+ * @returns {{x: number, y: number, z: number}} degrees
+ */
+export function vprFromOffset({ x, y, z }) {
+  const distance = Math.hypot(x, y, z);
+  if (distance < 1e-9) return { x: 0, y: 0, z: 0 };
+  return {
+    x: Math.acos(Math.max(-1, Math.min(1, z / distance))) * RAD_TO_DEG,
+    y: 0,
+    z: Math.atan2(x, -y) * RAD_TO_DEG,
+  };
+}
+
+/**
+ * Where a camera sits, relative to its target, for a $vpr tilt and turn.
+ * @param {number} tiltDeg
+ * @param {number} turnDeg
+ * @param {number} distance
+ * @returns {{x: number, y: number, z: number}}
+ */
+export function offsetFromVpr(tiltDeg, turnDeg, distance) {
+  const tilt =
+    Math.min(180 - POLE_DEG, Math.max(POLE_DEG, tiltDeg)) / RAD_TO_DEG;
+  const turn = turnDeg / RAD_TO_DEG;
+  return {
+    x: distance * Math.sin(tilt) * Math.sin(turn),
+    y: -distance * Math.sin(tilt) * Math.cos(turn),
+    z: distance * Math.cos(tilt),
+  };
+}
 
 /**
  * The numeric fields, in upstream's grid order. `read` pulls a value out of
@@ -108,6 +154,7 @@ export class ViewportControlPanel {
     }
     this.width = $('vpWidth');
     this.height = $('vpHeight');
+    if (this.fields.vpRy) this.fields.vpRy.readOnly = true;
 
     // Switching to orthographic does not have to move the camera, so it emits
     // no OrbitControls 'change' — without this the FOV field would stay
@@ -193,18 +240,17 @@ export class ViewportControlPanel {
     const camera = pm?.getActiveCamera?.();
     if (!controls || !camera) return null;
 
-    const euler = camera.rotation;
     return {
       translation: {
         x: controls.target.x,
         y: controls.target.y,
         z: controls.target.z,
       },
-      rotation: {
-        x: euler.x * RAD_TO_DEG,
-        y: euler.y * RAD_TO_DEG,
-        z: euler.z * RAD_TO_DEG,
-      },
+      rotation: vprFromOffset({
+        x: camera.position.x - controls.target.x,
+        y: camera.position.y - controls.target.y,
+        z: camera.position.z - controls.target.z,
+      }),
       distance: camera.position.distanceTo(controls.target),
       fov: typeof camera.fov === 'number' ? camera.fov : null,
       orthographic: pm.getProjectionMode?.() === 'orthographic',
@@ -319,27 +365,18 @@ export class ViewportControlPanel {
 
       // Rotation and distance are applied together: both describe where the
       // camera sits relative to the same target, so writing one at a time
-      // would move the camera twice for one edit.
-      const rx = num('vpRx', pose.rotation.x) / RAD_TO_DEG;
-      const ry = num('vpRy', pose.rotation.y) / RAD_TO_DEG;
-      const rz = num('vpRz', pose.rotation.z) / RAD_TO_DEG;
+      // would move the camera twice for one edit. The controls' update below
+      // aims it back at the target with +Z up.
       const distance = Math.max(0.001, num('vpDistance', pose.distance));
-
-      camera.rotation.set(rx, ry, rz);
-      camera.updateMatrixWorld();
-      // Local -Z is the direction a three.js camera looks along, so backing up
-      // that far from the target places it at the requested distance.
-      const dir = { x: 0, y: 0, z: 1 };
-      const m = camera.matrixWorld.elements;
-      const forward = {
-        x: m[8] * dir.z,
-        y: m[9] * dir.z,
-        z: m[10] * dir.z,
-      };
+      const seat = offsetFromVpr(
+        num('vpRx', pose.rotation.x),
+        num('vpRz', pose.rotation.z),
+        distance
+      );
       camera.position.set(
-        target.x + forward.x * distance,
-        target.y + forward.y * distance,
-        target.z + forward.z * distance
+        target.x + seat.x,
+        target.y + seat.y,
+        target.z + seat.z
       );
 
       if (!pose.orthographic && typeof camera.fov === 'number') {

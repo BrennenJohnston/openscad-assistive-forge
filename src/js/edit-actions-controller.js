@@ -14,6 +14,7 @@ import {
   safeSetItem,
 } from './storage-keys.js';
 import { EDITOR_PREF_SPEC } from './editor-prefs.js';
+import { vprFromOffset } from './viewport-control-panel.js';
 import { announceImmediate } from './announcer.js';
 
 // Shared with Preferences ▸ Editor, which offers the same setting. Two
@@ -140,9 +141,9 @@ export class EditActionsController {
       return;
     }
 
-    const elevation = Math.asin(dz / dist) * (180 / Math.PI);
-    const azimuth = Math.atan2(dx, -dy) * (180 / Math.PI);
-    const text = `[${azimuth.toFixed(2)}, 0, ${elevation.toFixed(2)}]`;
+    // The $vpr a model pastes: the same reading Viewport-Control shows.
+    const rotation = vprFromOffset({ x: dx, y: dy, z: dz });
+    const text = `[${rotation.x.toFixed(2)}, 0, ${rotation.z.toFixed(2)}]`;
     await this._copyText(text, 'Rotation copied');
   }
 

@@ -20,8 +20,9 @@ import path from 'path';
 //    'change' path, not by calling the builder.
 //
 // The camera pose is a desktop close-up reference (translate [3.83 18.81
-// -4.09], rotate [71.80 0 14.50], distance 140, fov 22.5), converted to the
-// panel's euler: vpRx/Ry/Rz = 71.2425/13.7599/0.
+// -4.09], rotate [71.80 0 14.50], distance 140, fov 22.5). The panel reads and
+// writes the desktop's own rotation, so the numbers go in as they are; its
+// Rotation Y is a read-only 0 (the camera never rolls).
 
 const UNIVERSAL_CUFF = path.join(
   process.cwd(),
@@ -37,9 +38,8 @@ const REFERENCE_POSE = {
   tx: 3.83,
   ty: 18.81,
   tz: -4.09,
-  rx: 71.2425,
-  ry: 13.7599,
-  rz: 0,
+  rx: 71.8,
+  rz: 14.5,
   distance: 140,
   fov: 22.5,
 };
@@ -139,7 +139,6 @@ async function setPose(page, pose) {
     ['vpTy', pose.ty],
     ['vpTz', pose.tz],
     ['vpRx', pose.rx],
-    ['vpRy', pose.ry],
     ['vpRz', pose.rz],
     ['vpDistance', pose.distance],
     ['vpFov', pose.fov],
