@@ -2886,7 +2886,40 @@ async function initApp() {
   let hasUserAcceptedDownload = !isFirstVisit();
   let pendingWasmInit = false;
   let pendingDraft = null;
+  // The end of initApp: until then parts of the page that loading a project
+  // reaches (the preview drawer's state among them) do not exist yet.
+  let startupDone = false;
   const firstVisitReadyResolvers = [];
+
+  /**
+   * Ask about a saved draft and open it if wanted. One path for both roads in,
+   * straight after start-up or after the welcome dialog, and never before
+   * start-up has finished: a restore run mid-way reached a variable declared
+   * further down and lost the project.
+   */
+  function restorePendingDraft() {
+    if (!pendingDraft || !startupDone) return;
+    const draftToRestore = pendingDraft;
+    pendingDraft = null;
+
+    const shouldRestore = confirm(
+      `Found a saved draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
+    );
+
+    if (shouldRestore) {
+      console.log('Restoring draft...');
+      fileHandler.handleFile(
+        { name: draftToRestore.fileName },
+        draftToRestore.fileContent,
+        null,
+        null,
+        'saved'
+      );
+      updateStatus('Draft restored');
+    } else {
+      stateManager.clearLocalStorage();
+    }
+  }
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
@@ -3160,28 +3193,7 @@ async function initApp() {
     }
 
     // Restore pending draft if one was deferred
-    if (pendingDraft) {
-      const draftToRestore = pendingDraft;
-      pendingDraft = null;
-
-      const shouldRestore = confirm(
-        `Found a saved draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
-      );
-
-      if (shouldRestore) {
-        console.log('Restoring deferred draft...');
-        fileHandler.handleFile(
-          { name: draftToRestore.fileName },
-          draftToRestore.fileContent,
-          null,
-          null,
-          'saved'
-        );
-        updateStatus('Draft restored');
-      } else {
-        stateManager.clearLocalStorage();
-      }
-    }
+    restorePendingDraft();
   };
 
   if (firstVisitContinue && firstVisitModal) {
@@ -7645,32 +7657,9 @@ async function initApp() {
       : null;
 
   if (draft) {
-    // If first-visit modal is blocking, defer draft restoration
-    if (firstVisitBlocking) {
-      console.log(
-        'Draft found, but deferring until first-visit modal is dismissed'
-      );
-      pendingDraft = draft; // Will be restored in handleFirstVisitClose
-    } else {
-      const shouldRestore = confirm(
-        `Found a saved draft of "${draft.fileName}" from ${new Date(draft.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
-      );
-
-      if (shouldRestore) {
-        console.log('Restoring draft...');
-        // Treat draft as uploaded file
-        fileHandler.handleFile(
-          { name: draft.fileName },
-          draft.fileContent,
-          null,
-          null,
-          'saved'
-        );
-        updateStatus('Draft restored');
-      } else {
-        stateManager.clearLocalStorage();
-      }
-    }
+    // Restored by restorePendingDraft(): at the end of start-up, or, while
+    // the first-visit modal blocks, once it is dismissed.
+    pendingDraft = draft;
   }
 
   /**
@@ -16673,6 +16662,9 @@ if (rounded) {
   }
 
   updateStatus('Ready - Upload a file to begin');
+
+  startupDone = true;
+  if (!firstVisitBlocking) restorePendingDraft();
 }
 
 // Library UI Rendering

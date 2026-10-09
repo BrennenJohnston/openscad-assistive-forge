@@ -145,12 +145,7 @@ test.describe('A real start-up', () => {
     expectNoPageErrors(page)
   })
 
-  // A remembered return that accepts the draft question loses the project
-  // today: the restore runs before the preview drawer's state exists. This
-  // case asserts the right outcome and is marked as failing until that is
-  // fixed; the day it passes, Playwright reports it, and the mark comes off.
   test('a return visit with "Remember my choice" restores the draft', async ({ page }) => {
-    test.fail(true, 'a remembered return loses the restored draft')
     attachInvariants(page)
     const questions = []
     page.on('dialog', async (dialog) => {
