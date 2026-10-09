@@ -346,6 +346,13 @@ export class ClassicLayoutController {
      */
     this._moved = [];
 
+    // A docked <details> is its pane's whole body, with its summary hidden:
+    // closed, it would leave the dock an empty frame with nothing in it to
+    // open it again. Whatever closes one while docked, it opens again.
+    this._keepDockedOpen = (event) => {
+      if (!event.target.open) event.target.open = true;
+    };
+
     /**
      * Which Forge console tab was selected when Classic took over, so exit()
      * can hand the panel back as found.
@@ -488,6 +495,7 @@ export class ClassicLayoutController {
       slot.appendChild(panel);
       if (panel.tagName === 'DETAILS') {
         panel.open = true;
+        panel.addEventListener('toggle', this._keepDockedOpen);
       }
     }
 
@@ -578,6 +586,7 @@ export class ClassicLayoutController {
 
     for (const record of [...this._moved].reverse()) {
       const { el, parent, nextSibling, wasOpen } = record;
+      el.removeEventListener('toggle', this._keepDockedOpen);
       if (parent && parent.isConnected) {
         // Reverse order means a recorded sibling is normally back in place by
         // now, and the markup's indentation whitespace makes most anchors

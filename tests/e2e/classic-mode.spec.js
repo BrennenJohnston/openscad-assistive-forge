@@ -2788,17 +2788,20 @@ test.describe('View menu per-toolbar hide toggles', () => {
       });
     });
 
+    // Libraries: a toggle that opens and closes a panel and says so. (The
+    // Console no longer closes in Classic; its item moves focus into the
+    // dock, as the Error-Log's does.)
     await page.locator('#windowMenuBtn').click();
     await page
       .locator('#windowMenuItems button')
-      .filter({ has: page.getByText('Console', { exact: true }) })
+      .filter({ has: page.getByText('Libraries', { exact: true }) })
       .first()
       .click();
     await page.waitForTimeout(800);
 
     const said = await page.evaluate(() => window.__said);
-    const aboutConsole = said.filter((line) => /console/i.test(line));
-    expect(aboutConsole).toHaveLength(1);
+    const aboutLibraries = said.filter((line) => /libraries/i.test(line));
+    expect(aboutLibraries).toHaveLength(1);
   });
 
   test('classic-hide-toolbars-persist: the choice survives a reload', async ({ page }) => {
@@ -2991,5 +2994,72 @@ test.describe('Return to Main Page control', () => {
 
     // You are already on the main page: the control stands down.
     await expect(btn).toBeHidden();
+  });
+});
+
+// In Classic the Console is a dock pane: its <details> is the whole body, so
+// a closed one leaves the dock as an empty frame with nothing in it to open
+// it again.
+test.describe('The Classic Console dock is never an empty frame', () => {
+  async function enterClassic(page) {
+    await loadSampleProject(page);
+    // Standard first: Classic keeps the density it is entered with, and the
+    // Simplified one drops the menu bar and the bottom strip.
+    await switchToStandardMode(page);
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
+  }
+
+  test('loading another project keeps the Console open', async ({ page }) => {
+    test.setTimeout(240_000);
+    await enterClassic(page);
+
+    await page
+      .locator('#fileInput')
+      .setInputFiles(
+        path.join(process.cwd(), 'tests', 'fixtures', 'sample-advanced.scad')
+      );
+    const notNow = page.locator('#saveProjectNotNow');
+    if (await notNow.isVisible().catch(() => false)) await notNow.click();
+    await expect(page.locator('#fileInfoSummary')).toHaveText(
+      'sample-advanced.scad'
+    );
+
+    await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
+  });
+
+  test('Window > Console takes focus into the Console and the key brings it back, leaving it open', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassic(page);
+    const slot = page.locator('#classicConsoleSlot');
+
+    await page.locator('#windowMenuBtn').click();
+    await page
+      .locator('#windowMenuItems button')
+      .filter({ has: page.getByText('Console', { exact: true }) })
+      .first()
+      .click();
+
+    await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
+    await expect
+      .poll(() =>
+        slot.evaluate((el) => el.contains(document.activeElement))
+      )
+      .toBe(true);
+
+    await page.keyboard.press('Control+Alt+1');
+
+    await expect
+      .poll(() =>
+        slot.evaluate((el) => el.contains(document.activeElement))
+      )
+      .toBe(false);
+    await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
   });
 });

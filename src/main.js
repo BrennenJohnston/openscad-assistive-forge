@@ -648,6 +648,46 @@ function toggleErrorLog() {
   }
 }
 
+/** Where focus was before Window > Console sent it into the Classic dock. */
+let consoleReturnFocus = null;
+
+/** Classic: is the Console dock on screen right now? */
+function isConsoleShowingClassic() {
+  if (getUIModeController().getClassicDensity() === 'simplified') return false;
+  if (getClassicLayoutController()?.isConsoleCollapsed()) return false;
+  return !document.getElementById('classicConsoleSlot')?.hidden;
+}
+
+/**
+ * Ctrl+Alt+1 / Window > Console. Forge opens and closes the console. In
+ * Classic the Console is a dock pane that stays open (a closed one is an
+ * empty frame), so, like the Error-Log beside it, the toggle sends focus into
+ * the pane and back out again. Classic's Simplified view drops the strip;
+ * there the Forge behavior stands.
+ */
+function toggleConsole() {
+  const layout = getClassicLayoutController();
+  const docked =
+    document.body.dataset.uiMode === 'classic' &&
+    Boolean(layout) &&
+    getUIModeController().getClassicDensity() !== 'simplified';
+  if (!docked) {
+    getUIModeController().togglePanelVisibility('consoleOutput');
+    return;
+  }
+
+  const slot = document.getElementById('classicConsoleSlot');
+  const active = document.activeElement;
+  if (slot?.contains(active) || active?.id === tabIdFor('console')) {
+    const prior = consoleReturnFocus;
+    consoleReturnFocus = null;
+    if (prior?.isConnected && typeof prior.focus === 'function') prior.focus();
+    return;
+  }
+  if (layout.isConsoleCollapsed()) layout.setConsoleCollapsed(false);
+  if (focusDockPanel('console')) consoleReturnFocus = active;
+}
+
 /**
  * The toolbars Classic can hide, each with the body attribute `classic.css`
  * keys off and the preference key it persists under.
@@ -4944,7 +4984,15 @@ async function initApp() {
             : CODE_EDITOR_UNAVAILABLE_REASON,
         handler: () => toggleEditorPanel(),
       },
-      panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      {
+        type: 'toggle',
+        label: 'Console',
+        shortcutAction: 'toggleConsole',
+        checked: inClassic
+          ? isConsoleShowingClassic()
+          : uiCtrl.isPanelShowing('consoleOutput'),
+        handler: () => toggleConsole(),
+      },
       {
         type: 'toggle',
         label: 'Customizer',
@@ -16531,9 +16579,7 @@ if (rounded) {
   keyboardConfig.on('toggleCrosshairs', () =>
     displayOptionsController.toggle('crosshairs')
   );
-  keyboardConfig.on('toggleConsole', () =>
-    getUIModeController().togglePanelVisibility('consoleOutput')
-  );
+  keyboardConfig.on('toggleConsole', () => toggleConsole());
   // 'errorLog' is not in PANEL_REGISTRY, so togglePanelVisibility would
   // return early and Ctrl+Alt+2 would do nothing. The Error-Log is a console
   // tab in Forge and a strip pane in Classic; registry semantics fit
