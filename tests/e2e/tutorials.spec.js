@@ -34,7 +34,7 @@ async function setBaseline(page) {
 /** Open a tutorial by programmatically calling startTutorial() in the page */
 async function startTutorial(page, tutorialId) {
   // Wait for the app to expose window.startTutorial (set during app init)
-  await page.waitForFunction(() => typeof window.startTutorial === 'function', {
+  await page.waitForFunction(() => typeof window.startTutorial === 'function', null, {
     timeout: 10000,
   })
   // Invoke and wait for the async startTutorial to complete
@@ -62,7 +62,7 @@ async function waitForSpotlightSettled(page, timeoutMs = SPOTLIGHT_TIMEOUT_MS) {
   const appeared = await page
     .waitForFunction(
       () => !!document.querySelector('.tutorial-spotlight, [class*="spotlight-cutout"]'),
-      { timeout: timeoutMs }
+      null, { timeout: timeoutMs }
     )
     .then(() => true)
     .catch(() => false)

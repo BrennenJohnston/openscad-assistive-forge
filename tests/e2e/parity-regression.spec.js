@@ -24,6 +24,7 @@ import {
   expandPresetControls,
   getSelectedPresetLabel,
 } from './helpers/preset-helpers.js';
+import { recordConsole } from './helpers/invariants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +44,7 @@ const HEIGHTMAP_FIXTURE = path.resolve(
 test.describe.configure({ timeout: 180_000 });
 
 test.beforeEach(async ({ page }) => {
+  await recordConsole(page);
   await page.addInitScript(() => {
     // Only clear on the first navigation of this page context (not on reload).
     // sessionStorage persists across reloads but resets per new browser context,
@@ -121,7 +123,7 @@ async function waitForPreviewIdle(page, { timeout = 60_000 } = {}) {
       const cls = indicator.className;
       return cls.includes('state-current') || cls.includes('state-error');
     },
-    { timeout },
+    null, { timeout },
   );
 }
 
@@ -205,7 +207,7 @@ test.describe('Parity — Color Passthrough (S-001–004, S-006)', () => {
         const entries = window.__consoleCapture || [];
         return entries.some(e => e.includes('[Preview Performance]'));
       },
-      { timeout: 60_000 },
+      null, { timeout: 60_000 },
     ).catch(() => { /* fallback: fixed wait */ });
     await page.waitForTimeout(5_000);
 
@@ -607,7 +609,7 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     // Wait for localStorage to be written (previewManager.saveGridOpacityPreference)
     await page.waitForFunction(
       () => Object.keys(localStorage).some(k => k.includes('grid-opacity')),
-      { timeout: 5_000 }
+      null, { timeout: 5_000 }
     );
 
     // Wait for WASM init to complete before reloading.
@@ -616,7 +618,7 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     // and clears localStorage before the test can read it back.
     await page.waitForFunction(
       () => localStorage.getItem('openscad-forge-wasm-init-completed') === 'true',
-      { timeout: 60_000 }
+      null, { timeout: 60_000 }
     );
 
     await page.reload();

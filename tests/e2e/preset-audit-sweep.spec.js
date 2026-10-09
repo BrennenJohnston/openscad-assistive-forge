@@ -203,7 +203,7 @@ test.describe('Preset Audit Sweep — Browser Side', () => {
       // Wait for parameters to update after selection
       await page.waitForFunction(() => {
         return !document.querySelector('.preset-loading, .param-updating')
-      }, { timeout: 5000 }).catch(() => {})
+      }, null, { timeout: 5000 }).catch(() => {})
 
       // Accept any preset-compatibility warning
       const applyBtn = page.locator('.preset-modal [data-action="apply"]')

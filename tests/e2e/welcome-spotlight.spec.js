@@ -209,7 +209,7 @@ test.describe('Welcome spotlight', () => {
     // promise inside evaluate deadlocks if a dialog opens.
     await page.waitForFunction(
       () => typeof window.startTutorial === 'function',
-      { timeout: 10_000 }
+      null, { timeout: 10_000 }
     );
     await page.evaluate(() => {
       void window.startTutorial('voice-input');

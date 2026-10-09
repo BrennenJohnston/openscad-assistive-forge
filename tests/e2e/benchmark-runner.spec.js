@@ -99,7 +99,7 @@ async function waitForPreviewIdle(page, { timeout = 240_000 } = {}) {
         text.includes('Customizer')
       );
     },
-    { timeout }
+    null, { timeout }
   );
 }
 

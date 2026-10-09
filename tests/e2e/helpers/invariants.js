@@ -85,6 +85,26 @@ export async function expectPageFitsViewport(page) {
 }
 
 /**
+ * Keep the page's own console lines in `window.__consoleCapture`, from before
+ * the app's first script runs, so a page-side wait can watch for one. Call
+ * before the first navigation.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+export async function recordConsole(page) {
+  await page.addInitScript(() => {
+    window.__consoleCapture = []
+    for (const level of ['log', 'info', 'warn', 'error']) {
+      const original = console[level]
+      console[level] = (...args) => {
+        window.__consoleCapture.push(args.map(String).join(' '))
+        return original.apply(console, args)
+      }
+    }
+  })
+}
+
+/**
  * Record every text written to any live region, from before the app's first
  * script runs, including regions added later. Call before the first navigation.
  *
