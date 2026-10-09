@@ -17048,14 +17048,21 @@ if (typeof window !== 'undefined') {
      * parity test can prove that Center, View All and Reset View each moved
      * the view differently rather than merely that the item was clickable.
      * `target` is null when the browser has no WebGL, so there are no controls.
-     * @returns {{position: number[], target: number[]|null}|null}
+     * `right` and `up` are the camera's own world axes, which show a roll;
+     * the rotation the viewport panel publishes is OpenSCAD's $vpr and
+     * cannot.
+     * @returns {{position: number[], target: number[]|null, right: number[], up: number[]}|null}
      */
     cameraPose() {
       const camera = previewManager?.getActiveCamera?.();
       if (!camera) return null;
+      camera.updateMatrixWorld();
+      const m = camera.matrixWorld.elements;
       return {
         position: camera.position.toArray(),
         target: previewManager.controls?.target?.toArray() ?? null,
+        right: [m[0], m[1], m[2]],
+        up: [m[4], m[5], m[6]],
       };
     },
 
