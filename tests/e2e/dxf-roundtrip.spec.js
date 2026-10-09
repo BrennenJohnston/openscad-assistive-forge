@@ -196,6 +196,18 @@ test.describe('DXF in, DXF out', () => {
       page.locator('button[data-action="save"]').click(),
     ])
     expect(download.suggestedFilename()).toBe('known-extents-edited.svg')
+
+    // A drawing that came with a real size keeps it: this one is 42 by 27 mm
+    // (its outline plus the flatten's margin), not the editor's design width.
+    const target = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'forge-svg-')),
+      'edited.svg'
+    )
+    await download.saveAs(target)
+    const saved = fs.readFileSync(target, 'utf8')
+    const rootTag = saved.slice(0, saved.indexOf('>') + 1)
+    expect(rootTag).toContain('width="42mm"')
+    expect(rootTag).toContain('height="27mm"')
   })
 
   test('a DXF with nothing importable in it is refused in plain words', async ({

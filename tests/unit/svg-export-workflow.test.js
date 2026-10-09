@@ -31,6 +31,7 @@ const resolve2DExportIntent = (parameters, schema, format) =>
   ).resolvedParameters;
 
 import { OUTPUT_FORMATS } from '../../src/js/download.js';
+import { svgSizedInMm } from '../../src/js/svg-preparer-workspace.js';
 
 // ── FileActionsController: onExport2D callback ──────────────────────────────
 
@@ -258,5 +259,47 @@ describe('Export menu items — structure validation', () => {
 
     ctrl.onExport2D('dxf');
     expect(handler).toHaveBeenCalledWith('dxf');
+  });
+});
+
+// A saved drawing is opened by other programs, which read its size from the
+// root's width and height. Without a unit they guess (usually pixels).
+describe("the drawing editor's saved SVG", () => {
+  const root = (svg) =>
+    new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+
+  it('is sized in millimeters at the width the design prints at', () => {
+    const saved = svgSizedInMm(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50"><path d="M0 0 H100 V50 Z"/></svg>',
+      14
+    );
+    const svg = root(saved);
+    expect(svg.getAttribute('width')).toBe('14mm');
+    expect(svg.getAttribute('height')).toBe('7mm');
+    expect(svg.getAttribute('viewBox')).toBe('0 0 100 50');
+    expect(svg.querySelector('path').getAttribute('d')).toBe('M0 0 H100 V50 Z');
+  });
+
+  it('keeps a size that already names a real unit', () => {
+    const svg = root(
+      svgSizedInMm(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -26 42 27" width="42mm" height="27mm"></svg>',
+        14
+      )
+    );
+    expect(svg.getAttribute('width')).toBe('42mm');
+    expect(svg.getAttribute('height')).toBe('27mm');
+  });
+
+  it('takes the proportion from the size when there is no viewBox', () => {
+    const svg = root(
+      svgSizedInMm(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"></svg>',
+        40
+      )
+    );
+    expect(svg.getAttribute('width')).toBe('40mm');
+    expect(svg.getAttribute('height')).toBe('20mm');
+    expect(svg.getAttribute('viewBox')).toBe('0 0 200 100');
   });
 });
