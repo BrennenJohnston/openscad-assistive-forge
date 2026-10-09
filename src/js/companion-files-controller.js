@@ -139,6 +139,43 @@ function getFileIcon(ext) {
 }
 
 /**
+ * The required files a project does not have. A path under a known library's
+ * folder (MCAD/boxes.scad) comes from the Libraries panel, never from the
+ * project, so it is not missing; a project file counts as present by its path
+ * or, wherever it sits in the project, by its file name.
+ * @param {Object|null} requiredFiles - From detectRequiredCompanionFiles
+ * @param {Map<string, string>|null} projectFiles
+ * @returns {Array<Object>} The missing entries of requiredFiles.files
+ */
+export function missingCompanionFiles(requiredFiles, projectFiles) {
+  if (!requiredFiles?.files) return [];
+  const knownLibraryIdSet = new Set(
+    Object.keys(LIBRARY_DEFINITIONS).map((id) => id.toLowerCase())
+  );
+  const projectBasenames = projectFiles
+    ? new Set(
+        Array.from(projectFiles.keys()).map((p) =>
+          p.split('/').pop().toLowerCase()
+        )
+      )
+    : new Set();
+  return requiredFiles.files.filter((f) => {
+    if (!f.required) return false;
+    if (typeof f.path !== 'string' || f.path.trim() === '') return false;
+    const normalizedPath = f.path.trim().replace(/^\/+/, '');
+    const pathParts = normalizedPath.split('/');
+    const firstSegment = pathParts[0].toLowerCase();
+    const isLibraryReference =
+      pathParts.length > 1 && knownLibraryIdSet.has(firstSegment);
+    if (isLibraryReference) return false;
+    if (!projectFiles) return true;
+    if (projectFiles.has(f.path)) return false;
+    const baseName = pathParts[pathParts.length - 1].toLowerCase();
+    return !projectBasenames.has(baseName);
+  });
+}
+
+/**
  * Initialize the companion files controller.
  * @param {Object} deps
  * @param {Function} deps.getPreviewManager - Returns current PreviewManager instance (may be null)
@@ -295,17 +332,10 @@ export function initCompanionFilesController({
       container.innerHTML = '';
       if (breadcrumbHost) breadcrumbHost.innerHTML = '';
       if (warning && warningText) {
-        const missingFiles = [];
-        if (requiredFiles && requiredFiles.files) {
-          for (const reqFile of requiredFiles.files) {
-            if (
-              reqFile.required &&
-              (!projectFiles || !projectFiles.has(reqFile.path))
-            ) {
-              missingFiles.push(reqFile.path);
-            }
-          }
-        }
+        const missingFiles = missingCompanionFiles(
+          requiredFiles,
+          projectFiles
+        ).map((f) => f.path);
         if (missingFiles.length > 0) {
           warning.classList.remove('hidden');
           warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
@@ -319,17 +349,12 @@ export function initCompanionFilesController({
     controls.classList.remove('hidden');
 
     if (badge) {
-      badge.textContent = projectFiles.size;
+      badge.textContent = companionCount;
     }
 
-    const missingFiles = [];
-    if (requiredFiles && requiredFiles.files) {
-      for (const reqFile of requiredFiles.files) {
-        if (reqFile.required && !projectFiles.has(reqFile.path)) {
-          missingFiles.push(reqFile.path);
-        }
-      }
-    }
+    const missingFiles = missingCompanionFiles(requiredFiles, projectFiles).map(
+      (f) => f.path
+    );
 
     if (warning && warningText) {
       if (missingFiles.length > 0) {
@@ -907,30 +932,7 @@ export function initCompanionFilesController({
       requiredFiles?.files &&
       typeof window.updateConsoleOutput === 'function'
     ) {
-      const knownLibraryIdSet = new Set(
-        Object.keys(LIBRARY_DEFINITIONS).map((id) => id.toLowerCase())
-      );
-      const projectBasenames = projectFiles
-        ? new Set(
-            Array.from(projectFiles.keys()).map((p) =>
-              p.split('/').pop().toLowerCase()
-            )
-          )
-        : new Set();
-      const missing = requiredFiles.files.filter((f) => {
-        if (!f.required) return false;
-        if (typeof f.path !== 'string' || f.path.trim() === '') return false;
-        const normalizedPath = f.path.trim().replace(/^\/+/, '');
-        const pathParts = normalizedPath.split('/');
-        const firstSegment = pathParts[0].toLowerCase();
-        const isLibraryReference =
-          pathParts.length > 1 && knownLibraryIdSet.has(firstSegment);
-        if (isLibraryReference) return false;
-        if (!projectFiles) return true;
-        if (projectFiles.has(f.path)) return false;
-        const baseName = pathParts[pathParts.length - 1].toLowerCase();
-        return !projectBasenames.has(baseName);
-      });
+      const missing = missingCompanionFiles(requiredFiles, projectFiles);
       if (missing.length > 0) {
         const warnings = missing
           .map((f) => `WARNING: Can't open include file '${f.path}'.`)
