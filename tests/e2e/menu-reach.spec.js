@@ -74,7 +74,8 @@ function underPointer(item) {
 /**
  * Turn the wheel over the menu body, as a person would, until the item is
  * under the pointer. Taller fonts (Firefox on Linux) put Export below the
- * body's visible edge at 1280 x 720.
+ * body's visible edge at 1280 x 720. Firefox scrolls smoothly, so each turn
+ * waits for the body to stop moving before anything is measured.
  */
 async function wheelToReach(page, item) {
   const body = page.locator('#fileMenuModal .toolbar-menu-body')
@@ -84,6 +85,20 @@ async function wheelToReach(page, item) {
     const below = target.y + target.height / 2 > box.y + box.height / 2
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await page.mouse.wheel(0, below ? 100 : -100)
+    await body.evaluate(
+      (el) =>
+        new Promise((resolve) => {
+          let last = el.scrollTop
+          let still = 0
+          const frame = () => {
+            still = el.scrollTop === last ? still + 1 : 0
+            last = el.scrollTop
+            if (still >= 3) resolve()
+            else requestAnimationFrame(frame)
+          }
+          requestAnimationFrame(frame)
+        })
+    )
   }
   expect(await underPointer(item), 'the wheel never reached the item').toBe(
     true
