@@ -12906,26 +12906,75 @@ if (rounded) {
     const formatName =
       OUTPUT_FORMATS[job.outputFormat]?.name || job.outputFormat.toUpperCase();
 
-    div.innerHTML = `
-      <div class="queue-item-header">
-        <span class="queue-item-icon">${stateIcon}</span>
-        <span class="queue-item-name" contenteditable="${job.state === 'queued' ? 'true' : 'false'}" data-job-id="${job.id}">${job.name}</span>
-        <span class="queue-item-format">${formatName}</span>
-        <span class="queue-item-state">${job.state}</span>
-      </div>
-      <div class="queue-item-body">
-        ${job.error ? `<div class="queue-item-error">${job.error}</div>` : ''}
-        ${job.renderTime ? `<div class="queue-item-time">Render time: ${(job.renderTime / 1000).toFixed(1)}s</div>` : ''}
-        ${job.result?.stats?.triangles ? `<div class="queue-item-stats">${job.result.stats.triangles.toLocaleString()} triangles</div>` : ''}
-      </div>
-      <div class="queue-item-actions">
-        ${job.state === 'complete' ? `<button class="btn btn-sm btn-primary" data-action="download" data-job-id="${job.id}" aria-label="Download ${job.name}">📥 Download</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="edit" data-job-id="${job.id}" aria-label="Edit ${job.name} parameters">✏️ Edit</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="cancel" data-job-id="${job.id}" aria-label="Cancel ${job.name}">⏹️ Cancel</button>` : ''}
-        ${job.state !== 'rendering' ? `<button class="btn btn-sm btn-outline" data-action="remove" data-job-id="${job.id}" aria-label="Remove ${job.name}">🗑️ Remove</button>` : ''}
-      </div>
-    `;
+    // Built as text: a job's name can come from an imported queue file.
+    const part = (tag, className, text = '') => {
+      const el = document.createElement(tag);
+      el.className = className;
+      el.textContent = text;
+      return el;
+    };
 
+    const name = part('span', 'queue-item-name', job.name);
+    name.setAttribute(
+      'contenteditable',
+      job.state === 'queued' ? 'true' : 'false'
+    );
+    name.dataset.jobId = job.id;
+    const header = part('div', 'queue-item-header');
+    header.append(
+      part('span', 'queue-item-icon', stateIcon),
+      name,
+      part('span', 'queue-item-format', formatName),
+      part('span', 'queue-item-state', job.state)
+    );
+
+    const body = part('div', 'queue-item-body');
+    if (job.error) body.append(part('div', 'queue-item-error', job.error));
+    if (job.renderTime) {
+      body.append(
+        part(
+          'div',
+          'queue-item-time',
+          `Render time: ${(job.renderTime / 1000).toFixed(1)}s`
+        )
+      );
+    }
+    if (job.result?.stats?.triangles) {
+      body.append(
+        part(
+          'div',
+          'queue-item-stats',
+          `${job.result.stats.triangles.toLocaleString()} triangles`
+        )
+      );
+    }
+
+    const action = (kind, style, label, text) => {
+      const button = part('button', `btn btn-sm ${style}`, text);
+      button.dataset.action = kind;
+      button.dataset.jobId = job.id;
+      button.setAttribute('aria-label', label);
+      return button;
+    };
+    const actions = part('div', 'queue-item-actions');
+    if (job.state === 'complete') {
+      actions.append(
+        action('download', 'btn-primary', `Download ${job.name}`, '📥 Download')
+      );
+    }
+    if (job.state === 'queued') {
+      actions.append(
+        action('edit', 'btn-outline', `Edit ${job.name} parameters`, '✏️ Edit'),
+        action('cancel', 'btn-outline', `Cancel ${job.name}`, '⏹️ Cancel')
+      );
+    }
+    if (job.state !== 'rendering') {
+      actions.append(
+        action('remove', 'btn-outline', `Remove ${job.name}`, '🗑️ Remove')
+      );
+    }
+
+    div.append(header, body, actions);
     return div;
   }
 
