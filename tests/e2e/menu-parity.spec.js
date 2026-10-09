@@ -7,7 +7,11 @@
  */
 import { test, expect } from '@playwright/test'
 import path from 'path'
-import { expectFocusInside, expectFocusNotOnBody } from './helpers/invariants.js'
+import {
+  expectFocusInside,
+  expectFocusNotOnBody,
+  expectPageFitsViewport,
+} from './helpers/invariants.js'
 
 const RECENT_KEY = 'openscad-forge-recent-files'
 const RECENT_UNAVAILABLE_REASON =
@@ -1517,5 +1521,58 @@ test.describe('Menus driven by keyboard and pointer', () => {
     await page.keyboard.press('Escape')
     await expect(menu).toHaveClass(/hidden/)
     await expect(page.locator('#designMenuBtn')).toBeFocused()
+  })
+})
+
+test.describe('Design menu results', () => {
+  test('F10 shows the parameter schema in a dialog, and closing it leaves the page as it was', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await page.keyboard.press('F10')
+    const dialog = page.getByRole('dialog', { name: 'Parameter Schema' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toBeInViewport()
+    // Focus moves in on the next frame.
+    await expect(
+      dialog.getByRole('button', { name: 'Close', exact: true })
+    ).toBeFocused()
+    await expectFocusInside(page, dialog)
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expectPageFitsViewport(page)
+  })
+
+  test('Check Validity shows its result, counting vertices as the engine does', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await loadFixture(page)
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: 180_000 }
+    )
+    await clickMenuItem(page, 'design', 'Check Validity')
+    const dialog = page.getByRole('dialog', { name: 'Check Validity' })
+    await expect(dialog).toBeVisible()
+    await expect(
+      dialog.getByRole('button', { name: 'Close', exact: true })
+    ).toBeFocused()
+    await expectFocusInside(page, dialog)
+    const result = await dialog.locator('.modal-body').textContent()
+    const counted = /Valid mesh: ([\d,]+) triangles, ([\d,]+) unique vertices/.exec(
+      result
+    )
+    expect(counted, result).not.toBeNull()
+    const engine = await page.evaluate(() =>
+      [
+        ...(document.getElementById('console-output')?.textContent || '').matchAll(
+          /Vertices:\s+(\d+)/g
+        ),
+      ].map((m) => m[1])
+    )
+    expect(engine.at(-1)).toBe(counted[2].replace(/,/g, ''))
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
   })
 })

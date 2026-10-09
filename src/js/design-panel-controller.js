@@ -10,7 +10,8 @@
  */
 
 import { announceImmediate } from './announcer.js';
-import { createModal, closeModal } from './modal-manager.js';
+import { getConsolePanel } from './console-panel.js';
+import { createModal } from './modal-manager.js';
 
 /**
  * DesignPanelController manages design-tool UI actions.
@@ -31,6 +32,8 @@ export class DesignPanelController {
     this.getScadContent = options.getScadContent || (() => '');
     this.extractParameters = options.extractParameters || (() => []);
     this.onFlushComplete = options.onFlushComplete || (() => {});
+    // The dialog each action has open, so asking again does not stack copies.
+    this._open = new Map();
   }
 
   init() {
@@ -75,36 +78,14 @@ export class DesignPanelController {
       return;
     }
 
-    const text = JSON.stringify(params, null, 2);
-    const { modal } = createModal({
-      ariaLabel: 'Parameter schema',
-      className: 'design-ast-modal',
-      closeOnOverlay: true,
-      closeOnEscape: true,
-    });
-
-    const heading = document.createElement('h2');
-    heading.className = 'design-ast-heading';
-    heading.textContent = 'Parameter Schema';
-
+    const count = Object.keys(params?.parameters || {}).length;
     const pre = document.createElement('pre');
     pre.className = 'design-ast-content';
-    pre.textContent = text;
-
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'btn btn-primary design-ast-close';
-    closeBtn.textContent = 'Close';
-    closeBtn.setAttribute('aria-label', 'Close parameter schema view');
-    closeBtn.addEventListener('click', () => closeModal(modal));
-
-    const body = modal.querySelector('.modal-body') || modal;
-    body.appendChild(heading);
-    body.appendChild(pre);
-    body.appendChild(closeBtn);
+    pre.textContent = JSON.stringify(params, null, 2);
+    this._showDialog('ast', 'Parameter Schema', pre);
 
     announceImmediate(
-      `Parameter schema displayed with ${params.length} parameters`
+      `Parameter schema shown: ${count} ${count === 1 ? 'parameter' : 'parameters'}`
     );
   }
 
@@ -129,27 +110,35 @@ export class DesignPanelController {
     const vertexCount = positionAttr.count;
     const indexCount = geo.index ? geo.index.count : vertexCount;
     const triangleCount = Math.floor(indexCount / 3);
+    // The mesh repeats a corner for every triangle that meets there; the
+    // engine's console counts each corner once, and so does this.
+    const corners = new Set();
+    const xyz = positionAttr.array;
+    const stride = positionAttr.itemSize || 3;
+    for (let i = 0; i < vertexCount; i += 1) {
+      const at = i * stride;
+      corners.add(`${xyz[at]},${xyz[at + 1]},${xyz[at + 2]}`);
+    }
 
     const issues = [];
     if (vertexCount === 0) issues.push('mesh has no vertices');
     if (triangleCount === 0) issues.push('mesh has no faces');
 
     const statusEl = document.getElementById('design-validity-status');
-    if (issues.length === 0) {
-      const msg = `Valid: ${triangleCount.toLocaleString()} triangles, ${vertexCount.toLocaleString()} vertices`;
-      if (statusEl) {
-        statusEl.textContent = msg;
-        statusEl.dataset.state = 'valid';
-      }
-      announceImmediate(msg);
-    } else {
-      const msg = `Issues found: ${issues.join('; ')}`;
-      if (statusEl) {
-        statusEl.textContent = msg;
-        statusEl.dataset.state = 'invalid';
-      }
-      announceImmediate(msg);
+    const valid = issues.length === 0;
+    const msg = valid
+      ? `Valid mesh: ${triangleCount.toLocaleString()} triangles, ${corners.size.toLocaleString()} unique vertices`
+      : `Issues found: ${issues.join('; ')}`;
+    if (statusEl) {
+      statusEl.textContent = msg;
+      statusEl.dataset.state = valid ? 'valid' : 'invalid';
     }
+    const result = document.createElement('p');
+    result.className = 'design-validity-result';
+    result.textContent = msg;
+    this._showDialog('validity', 'Check Validity', result);
+    getConsolePanel().addSystemLine(msg);
+    announceImmediate(msg);
   }
 
   // ---------------------------------------------------------------------------
@@ -201,6 +190,30 @@ export class DesignPanelController {
   // ---------------------------------------------------------------------------
   // Private
   // ---------------------------------------------------------------------------
+
+  /**
+   * Open a dialog for one action, replacing that action's dialog if it is
+   * already open.
+   * @param {string} key - The action
+   * @param {string} title - Visible title, also the dialog's name
+   * @param {HTMLElement} body - What the dialog shows
+   */
+  _showDialog(key, title, body) {
+    this._open.get(key)?.cleanup(null);
+    const { modal, promise, cleanup } = createModal({
+      className: `preset-modal design-${key}-modal`,
+      titleId: `design-${key}-title`,
+      title,
+      buttons: [
+        { label: 'Close', className: 'btn btn-primary', action: 'close' },
+      ],
+    });
+    modal.querySelector('.modal-body').appendChild(body);
+    this._open.set(key, { cleanup });
+    promise.then(() => {
+      if (this._open.get(key)?.cleanup === cleanup) this._open.delete(key);
+    });
+  }
 
   _wireButtons() {
     const bindings = {

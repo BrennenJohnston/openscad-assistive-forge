@@ -244,6 +244,8 @@ export function getActiveModal() {
  * @param {boolean} [options.closeOnBackdrop=true] - Whether clicking backdrop closes modal
  * @param {boolean} [options.closeOnEscape=true] - Whether Escape key closes modal
  * @returns {{modal: HTMLElement, promise: Promise<string|null>, cleanup: Function}}
+ *   The modal is open, with focus on its first footer button (or its close
+ *   button) and focus going back where it was when it closes.
  */
 export function createModal(options) {
   const {
@@ -251,7 +253,7 @@ export function createModal(options) {
     ariaLabel,
     titleId,
     title,
-    content,
+    content = '',
     buttons = [],
     showCloseButton = true,
     closeOnBackdrop = true,
@@ -302,9 +304,12 @@ export function createModal(options) {
     resolvePromise = resolve;
   });
 
+  let closed = false;
   const cleanup = (result = null) => {
+    if (closed) return;
+    closed = true;
     closeModal(modal);
-    document.body.removeChild(modal);
+    modal.remove();
     resolvePromise(result);
   };
 
@@ -343,6 +348,12 @@ export function createModal(options) {
       }
     });
   }
+
+  openModal(modal, {
+    focusTarget:
+      modal.querySelector('.preset-modal-footer button:not([disabled])') ||
+      modal.querySelector('.preset-modal-close'),
+  });
 
   return { modal, promise, cleanup };
 }
