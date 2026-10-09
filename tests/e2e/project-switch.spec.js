@@ -20,8 +20,10 @@ test.beforeEach(async ({ page }) => {
 async function loadFixture(page, name) {
   await page.locator('#fileInput').setInputFiles(path.join(process.cwd(), 'tests', 'fixtures', name))
   await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 30_000 })
-  const notNow = page.locator('#saveProjectNotNow')
-  if (await notNow.isVisible().catch(() => false)) await notNow.click()
+  // Every upload is offered a place in Saved Projects, and the offer can open
+  // a moment after the project shows; wait for it rather than glance once.
+  await page.locator('#saveProjectNotNow').click()
+  await expect(page.locator('.save-project-modal')).toHaveCount(0)
   await expect(page.locator('.preview-state-indicator')).toHaveClass(/state-current/, {
     timeout: RENDER_TIMEOUT,
   })
