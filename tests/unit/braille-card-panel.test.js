@@ -207,6 +207,30 @@ describe('braille panel card mode — braille editor (Unicode)', () => {
     expect(document.getElementById('brailleFieldEditor').open).toBe(true);
   });
 
+  it('a panel taken down before its tables load writes nothing afterwards', async () => {
+    let finishLoading;
+    getTables.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishLoading = () =>
+            resolve({
+              tables: [{ file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' }],
+              defaultTable: 'en-ueb-g1.ctb',
+            });
+        })
+    );
+    mountCardPanel(); // its table list is still loading
+    mountCardPanel(); // the next one replaces it
+
+    await typeBraille('⠿⠿⠿', () => {
+      expect(params().Line_1).toBe('⠿⠿⠿');
+    });
+    finishLoading();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    expect(params().Line_1).toBe('⠿⠿⠿');
+  });
+
   it('maps ASCII spaces to blank cells and trims trailing blanks', async () => {
     await typeBraille('\u2813 \u2811  ', () => {
       expect(params().Line_1).toBe('\u2813\u2800\u2811');
