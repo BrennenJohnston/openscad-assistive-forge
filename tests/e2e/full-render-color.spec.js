@@ -14,6 +14,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { recordConsole } from './helpers/invariants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,7 +53,7 @@ async function uploadColorFixture(page) {
       const entries = window.__consoleCapture || [];
       return entries.some(e => e.includes('[Preview Performance]'));
     },
-    { timeout: 60_000 },
+    null, { timeout: 60_000 },
   ).catch(() => { /* fallback: fixed wait */ });
 
   await page.waitForTimeout(5_000);
@@ -112,7 +113,7 @@ async function waitForPreviewIdle(page, { timeout = 120_000 } = {}) {
       const cls = indicator.className;
       return cls.includes('state-current') || cls.includes('state-error');
     },
-    { timeout },
+    null, { timeout },
   );
 }
 
@@ -122,6 +123,7 @@ test.describe('Full Render Color Passthrough', () => {
   test.describe.configure({ timeout: 180_000 });
 
   test.beforeEach(async ({ page }) => {
+    await recordConsole(page);
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
@@ -173,7 +175,7 @@ test.describe('Full Render Color Passthrough', () => {
         );
         return fullRenderLogs.length > 0;
       },
-      { timeout: 120_000 },
+      null, { timeout: 120_000 },
     ).catch(() => { /* fallback: fixed wait */ });
 
     await page.waitForTimeout(8_000);
@@ -243,7 +245,7 @@ test.describe('Full Render Color Passthrough', () => {
         const btn = document.getElementById('primaryActionBtn');
         return btn?.dataset?.action === 'download';
       },
-      { timeout: 120_000 },
+      null, { timeout: 120_000 },
     );
     console.log('[Phase2] Button transitioned to download state');
 

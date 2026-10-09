@@ -180,7 +180,7 @@ test.describe('WASM smoke (never skipped)', () => {
         const indicator = document.querySelector('.preview-state-indicator')
         return sawRerender && /state-current/.test(indicator?.className || '')
       },
-      { timeout: PREVIEW_TIMEOUT }
+      null, { timeout: PREVIEW_TIMEOUT }
     )
 
     await waitForPreviewReady(page)

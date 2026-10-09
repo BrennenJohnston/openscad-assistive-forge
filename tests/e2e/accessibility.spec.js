@@ -848,7 +848,7 @@ test.describe('Screen Reader Support', () => {
       // Wait for the blocking class to be removed (confirms full cleanup)
       await page.waitForFunction(
         () => !document.body.classList.contains('first-visit-blocking'),
-        { timeout: 5000 }
+        null, { timeout: 5000 }
       ).catch(() => {})
       // Brief settle for any close animations
       await page.waitForTimeout(300)
@@ -2917,7 +2917,7 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     await waitForWasmReady(page)
     await page.waitForFunction(
       () => document.querySelectorAll('#projectFilesList *').length > 0,
-      { timeout: 30_000 }
+      null, { timeout: 30_000 }
     )
 
     // The panel ships with its disclosure closed; opening it directly is
@@ -2968,7 +2968,7 @@ test.describe('Axe-Core Scans for Missing Views', () => {
         const hasConsoleContent = consoleOutput && consoleOutput.textContent.trim().length > 0
         return hasStatusContent || hasConsoleContent
       },
-      { timeout: 30_000 }
+      null, { timeout: 30_000 }
     )
 
     await page.waitForTimeout(2000)

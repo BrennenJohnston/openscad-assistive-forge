@@ -15,6 +15,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { recordConsole } from './helpers/invariants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,7 +48,7 @@ async function uploadColorFixture(page) {
       const entries = window.__consoleCapture || [];
       return entries.some(e => e.includes('[Preview Performance]'));
     },
-    { timeout: 60_000 },
+    null, { timeout: 60_000 },
   ).catch(() => { /* fallback: fixed wait */ });
 
   await page.waitForTimeout(5_000);
@@ -106,6 +107,7 @@ test.describe('COFF Color Probe', () => {
 
   test.beforeEach(async ({ page, browserName }) => {
     test.skip(browserName === 'webkit', 'WebKit WASM does not emit COFF color metadata');
+    await recordConsole(page);
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');

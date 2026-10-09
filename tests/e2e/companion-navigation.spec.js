@@ -61,7 +61,7 @@ const openCompanionTree = async (
   });
   await page.waitForFunction(
     () => document.querySelectorAll('#projectFilesList *').length > 0,
-    { timeout: 30_000 }
+    null, { timeout: 30_000 }
   );
 
   // A narrow viewport parks the whole parameter column in the mobile drawer,
@@ -100,7 +100,7 @@ const openEditor = async (page) => {
   await expect(page.locator('#textFileEditorModal')).not.toHaveClass(/hidden/);
   await page.waitForFunction(
     () => document.activeElement?.id === 'textFileEditorContent',
-    { timeout: 5000 }
+    null, { timeout: 5000 }
   );
 };
 

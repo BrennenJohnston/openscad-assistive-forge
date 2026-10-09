@@ -80,7 +80,7 @@ async function waitForPreviewIdle(page, { timeout = 120_000 } = {}) {
       const cls = indicator.className;
       return cls.includes('state-current') || cls.includes('state-error');
     },
-    { timeout },
+    null, { timeout },
   );
 }
 
@@ -192,7 +192,7 @@ async function triggerFullRender(page) {
       const cls = indicator.className;
       return cls.includes('state-current') || cls.includes('state-error');
     },
-    { timeout: 180_000 },
+    null, { timeout: 180_000 },
   );
 
   return captureGeometryStats(page);
@@ -275,7 +275,7 @@ test.describe('LWFL Parity Reproduction', () => {
 
       await page.waitForFunction(() => {
         return !document.querySelector('.preset-loading, .param-updating');
-      }, { timeout: 5000 }).catch(() => {});
+      }, null, { timeout: 5000 }).catch(() => {});
 
       const applyBtn = page.locator('.preset-modal [data-action="apply"]');
       if (await applyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -322,7 +322,7 @@ test.describe('LWFL Parity Reproduction', () => {
       await selectPreset(page, presetName);
       await page.waitForFunction(() => {
         return !document.querySelector('.preset-loading, .param-updating');
-      }, { timeout: 5000 }).catch(() => {});
+      }, null, { timeout: 5000 }).catch(() => {});
 
       if (await applyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
         await applyBtn.click();
@@ -435,7 +435,7 @@ test.describe('LWFL Parity Reproduction', () => {
       await selectPreset(page, targetPreset);
       await page.waitForFunction(() => {
         return !document.querySelector('.preset-loading, .param-updating');
-      }, { timeout: 5000 }).catch(() => {});
+      }, null, { timeout: 5000 }).catch(() => {});
 
       const applyBtn = page.locator('.preset-modal [data-action="apply"]');
       if (await applyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -480,7 +480,7 @@ test.describe('LWFL Parity Reproduction', () => {
       await selectPreset(page, targetPreset);
       await page.waitForFunction(() => {
         return !document.querySelector('.preset-loading, .param-updating');
-      }, { timeout: 5000 }).catch(() => {});
+      }, null, { timeout: 5000 }).catch(() => {});
 
       if (await applyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
         await applyBtn.click();

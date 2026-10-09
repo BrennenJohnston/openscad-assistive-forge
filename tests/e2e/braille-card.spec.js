@@ -677,7 +677,7 @@ test.describe('Braille translation workflow (card)', () => {
           indicator.className.includes('state-error')
         )
       },
-      { timeout: 150_000 }
+      null, { timeout: 150_000 }
     )
     const indicatorClass = await page
       .locator('.preview-state-indicator')

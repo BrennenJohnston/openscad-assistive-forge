@@ -191,7 +191,7 @@ test.describe('Keyguard WASM Compilation Smoke Tests', () => {
         const status = document.querySelector('#renderStatus, .render-status')
         if (status && status.textContent.toLowerCase().includes('complete')) return true
         return false
-      }, { timeout: 90000 })
+      }, null, { timeout: 90000 })
     } catch {
       console.log('[Compilation Smoke] Render did not complete within timeout (expected for large file)')
     }
