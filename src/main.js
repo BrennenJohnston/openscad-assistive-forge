@@ -2897,7 +2897,7 @@ async function initApp() {
    * start-up has finished: a restore run mid-way reached a variable declared
    * further down and lost the project.
    */
-  function restorePendingDraft() {
+  async function restorePendingDraft() {
     if (!pendingDraft || !startupDone) return;
     const draftToRestore = pendingDraft;
     pendingDraft = null;
@@ -2908,12 +2908,14 @@ async function initApp() {
 
     if (shouldRestore) {
       console.log('Restoring draft...');
-      fileHandler.handleFile(
+      await fileHandler.handleFile(
         { name: draftToRestore.fileName },
         draftToRestore.fileContent,
         null,
         null,
-        'saved'
+        'saved',
+        null,
+        { startingValues: draftToRestore.parameters }
       );
       updateStatus('Draft restored');
     } else {
