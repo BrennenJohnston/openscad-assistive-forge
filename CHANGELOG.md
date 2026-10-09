@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.1] - 2026-10-09
+
+Fixes for things that did not work as they should: the menus, the render
+queue, preview with automatic preview off, comparison, the Design menu's
+results, New File and Flush Caches, and a return visit that lost its
+project.
+
+### Fixed
+
+- Menus act once per key press, give focus back to their button when they
+  close, and stay open when a grayed-out item is clicked.
+- Every File > Export item can be reached with a mouse: opening Export
+  scrolls the whole list into view.
+- The render queue renders on a first visit, shows job names as text and a
+  failed job's reason in plain words, and its counts return to 0 when the
+  last job is removed.
+- Design > Preview and F5 render with automatic preview off, turning it
+  back on catches up, and Preview with nothing changed says the preview is
+  current.
+- Comparison's Edit opens the variant's values, and a new project starts
+  with no variants, link values, last file or messages left from the one
+  before.
+- Design > Display Parameters and Check Validity show their result in a
+  dialog; Check Validity counts unique vertices.
+- File > New File asks before replacing a project and opens a starter file;
+  Design > Flush Caches keeps the project and previews it again.
+- A return visit with "Remember my choice" restores its draft instead of
+  failing, and the restored draft keeps the values you changed.
+- Switching quickly between braille tools no longer carries the earlier
+  text's braille into the new design.
+- The Getting Started tour's Width step unlocks Next when a value is typed.
+- The Charm Designer no longer says the hole is outside the shape when a
+  design comes from its library.
+- Classic: the Console dock stays open and keeps its log; Window > Console
+  moves focus to it; Viewport-Control and Copy viewport rotation use
+  OpenSCAD's rotation numbers ([55, 0, 25] for the default view).
+- Library includes are no longer reported as missing files, and the
+  Companion Files count leaves out the main file.
+- A parameter's "?" help opens and closes with one click.
+- Deleting a preset asks plainly, with no markup in the question.
+- Save SVG in the drawing editor writes the design's size in millimeters.
+- A shared project's name and author show as plain text.
+- The Features Guide no longer pulls focus back to its first tab.
+- No text the app shows or says uses an em dash.
+- The model color picker's default and Reset match the preview's color.
+- The 3D preview does not draw while the drawing editor or a 2D preview
+  hides it, and the drawing tools load with the first picture, not with the
+  app; if they cannot load, the app says so in plain words.
+
 ## [5.2.0] - 2026-10-05
 
 The braille tools now translate the way liblouis does, on a current
