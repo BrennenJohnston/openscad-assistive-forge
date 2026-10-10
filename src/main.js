@@ -7469,8 +7469,14 @@ async function initApp() {
             const friendly = translateError(error?.message || String(error), {
               code: error?.code,
             });
-            updateStatus(`Preview failed: ${friendly.title}`, 'error');
-            _announceError(`Preview failed: ${friendly.title}`);
+            // A title alone cannot tell the person that the next change
+            // starts the engine again.
+            const sentence =
+              error?.code === 'ENGINE_RESTART_FAILED'
+                ? `Preview failed: ${friendly.title}. ${friendly.suggestion}`
+                : `Preview failed: ${friendly.title}`;
+            updateStatus(sentence, 'error');
+            _announceError(sentence);
           }
         },
       }

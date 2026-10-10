@@ -1202,3 +1202,42 @@ describe('Binary STL Detection', () => {
     expect(asciiSize / triangleCount).toBeGreaterThan(100)
   })
 })
+
+describe('a restart that fails does not stop later renders', () => {
+  it('starts the engine again on the next render after both restart attempts failed', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+    controller._moduleUsed = true
+
+    // The engine cannot start again (a phone short of memory, say): both
+    // attempts fail and the worker is gone.
+    controller.restart = vi.fn().mockImplementation(async () => {
+      controller.worker = null
+      controller.ready = false
+      throw new Error('the engine could not start')
+    })
+    await expect(controller.render('cube(1);', {})).rejects.toMatchObject({
+      code: 'ENGINE_RESTART_FAILED',
+    })
+    expect(controller.restart).toHaveBeenCalledTimes(2)
+
+    // Now it can: the next render starts it and runs.
+    controller.restart = vi.fn().mockImplementation(async () => {
+      controller.worker = { postMessage: vi.fn() }
+      controller.ready = true
+    })
+    const next = controller.render('cube(1);', {})
+    await vi.waitFor(() => expect(controller.currentRequest).toBeTruthy())
+    expect(controller.restart).toHaveBeenCalledTimes(1)
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: {
+        requestId: controller.currentRequest.id,
+        data: new ArrayBuffer(1),
+        stats: { triangles: 1 },
+      },
+    })
+    await expect(next).resolves.toBeTruthy()
+  })
+})

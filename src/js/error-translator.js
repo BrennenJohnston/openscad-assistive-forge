@@ -470,6 +470,12 @@ export const TRANSLATIONS_BY_CODE = {
       'Simplify the model or remove projection()/roof() functions. ' +
       'Desktop OpenSCAD may handle this model better.',
   },
+  ENGINE_RESTART_FAILED: {
+    title: 'Engine Stopped',
+    explanation: 'The OpenSCAD engine stopped and could not start again.',
+    suggestion:
+      'Change a value or press Preview to try again. If it still fails, reload the page.',
+  },
   WASM_OOB: {
     title: 'Memory Access Error',
     explanation:
