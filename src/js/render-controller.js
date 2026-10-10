@@ -1063,6 +1063,9 @@ export class RenderController {
             // File > Export > STL (ascii) is the only caller that asks for
             // anything but binary; everything else keeps the fast default.
             ...(options.stlBinary === false ? { stlBinary: false } : {}),
+            // A preview that will draw the model's `%` shapes asks for the
+            // CSG tree they are cut from.
+            ...(options.backgroundTree ? { backgroundTree: true } : {}),
           };
 
           // Clear any stale cancel watchdog before posting the new render.

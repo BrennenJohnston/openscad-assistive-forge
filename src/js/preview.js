@@ -39,7 +39,12 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { classifyInnerFaces, offFaceCount, parseOFF } from './mesh-extras.js';
+import {
+  classifyInnerFaces,
+  offFaceCount,
+  parseOFF,
+  parseOFFWithAlpha,
+} from './mesh-extras.js';
 import { buildAxisTriadOverlay } from './axis-triad-overlay.js';
 import { normalizeHexColor } from './color-utils.js';
 import { get2DStylePalette } from './state-colors.js';
@@ -412,7 +417,7 @@ export const PREVIEW_COLORS = {
 };
 
 /**
- * The desktop's 3D View colour-scheme list, in its own order (the JSON
+ * The desktop's 3D View color-scheme list, in its own order (the JSON
  * `index` field, the order the desktop's Preferences list shows).
  *
  * `colors` names the PREVIEW_COLORS entry each one paints with. Cornfield
@@ -1575,6 +1580,7 @@ export class PreviewManager {
    */
   loadSTL(stlData, options = {}) {
     this.hide2DPreview();
+    this.clearBackgroundShapes();
     const { preserveCamera = false } = options;
     return new Promise((resolve, reject) => {
       try {
@@ -1729,6 +1735,7 @@ export class PreviewManager {
    */
   async loadOFF(offData, options = {}) {
     this.hide2DPreview();
+    this.clearBackgroundShapes();
     const { preserveCamera = false, debugHighlight = null } = options;
     const parseStartTime = performance.now();
     try {
@@ -1790,6 +1797,7 @@ export class PreviewManager {
       if (hasColors && colors && colors.length === positions.length) {
         geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
       }
+      let placement = parsed.offset || [0, 0, 0];
       if (parsed.normals) {
         // The worker centered the soup, computed the flat normals three.js
         // would have, and classified and edged it; the token it answered
@@ -1818,7 +1826,10 @@ export class PreviewManager {
         }
       } else {
         geometry.computeVertexNormals();
+        geometry.computeBoundingBox();
+        const center = geometry.boundingBox.getCenter(new Vector3());
         geometry.center();
+        placement = [-center.x, -center.y, -center.z];
       }
 
       // The bed before the extras are scheduled, so a copy the worker
@@ -1827,6 +1838,12 @@ export class PreviewManager {
       if (this.autoBedEnabled) {
         this.applyAutoBed(geometry);
       }
+      // Where the model's own coordinates went, so its `%` shapes can follow.
+      this.modelPlacement = [
+        placement[0],
+        placement[1],
+        placement[2] + (this.autoBedEnabled ? this.autoBedOffset || 0 : 0),
+      ];
 
       if (!parsed.normals) {
         // Inline for a small mesh, in a worker for a big one; a mesh with its
@@ -1949,6 +1966,53 @@ export class PreviewManager {
       console.error('[Preview] Failed to load OFF:', error);
       throw error;
     }
+  }
+
+  /**
+   * Draw the model's `%` shapes see-through, as desktop OpenSCAD's preview
+   * does: each face in its own color and alpha, gray where it has none,
+   * moved as the model was. Call after loadOFF for the same model.
+   * @param {ArrayBuffer|string} offData - The OFF of the `%` shapes alone
+   * @returns {{triangles: number}}
+   */
+  loadBackgroundShapesOFF(offData) {
+    this.clearBackgroundShapes();
+    const text =
+      typeof offData === 'string' ? offData : new TextDecoder().decode(offData);
+    const { positions, colors } = parseOFFWithAlpha(text);
+    if (positions.length === 0) return { triangles: 0 };
+    const [dx, dy, dz] = this.modelPlacement || [0, 0, 0];
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i] += dx;
+      positions[i + 1] += dy;
+      positions[i + 2] += dz;
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new Float32BufferAttribute(colors, 4));
+    geometry.computeVertexNormals();
+    const material = new MeshPhongMaterial({
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      side: DoubleSide,
+      specular: 0x000000,
+      shininess: DESKTOP_SHININESS,
+    });
+    this.backgroundShapes = new Mesh(geometry, material);
+    this.backgroundShapes.userData.isBackgroundShapes = true;
+    this.backgroundShapes.renderOrder = 2;
+    this.scene.add(this.backgroundShapes);
+    return { triangles: positions.length / 9 };
+  }
+
+  /** Remove the `%` shapes drawn for the previous model, if any. */
+  clearBackgroundShapes() {
+    if (!this.backgroundShapes) return;
+    this.scene.remove(this.backgroundShapes);
+    this.backgroundShapes.geometry.dispose();
+    this.backgroundShapes.material.dispose();
+    this.backgroundShapes = null;
   }
 
   /**
@@ -4766,6 +4830,7 @@ export class PreviewManager {
   clear() {
     this.hide2DPreview();
     this.hideMeasurements();
+    this.clearBackgroundShapes();
     this.dimensions = null;
 
     // Reset rotation centering state

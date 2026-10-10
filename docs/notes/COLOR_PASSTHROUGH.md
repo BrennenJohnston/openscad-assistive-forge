@@ -114,6 +114,14 @@ verified compatible with multi-color meshes:
 
 ---
 
+## The `%` Background Modifier
+
+**Desktop behavior:** A `%` shape is left out of every render and drawn see-through in the preview: in its own color and alpha when it has a `color()`, otherwise in a half see-through gray.
+
+**Current behavior:** A preview of a model whose source may use `%` also asks the engine for its CSG tree (a second `-o` in the same run). `src/js/background-tree.js` cuts that tree down to the `%` branches, keeping the transforms and colors above them and turning any boolean above them into a plain group, and wraps an uncolored branch in the gray. A second engine run renders that alone to OFF, and the preview draws it see-through (`loadBackgroundShapesOFF`), moved as the model was. Generate is unchanged: its STL has no `%` shapes, as on desktop. The cost is one extra engine run per preview of such a model.
+
+---
+
 ## Color Parameter Legend (Supplementary)
 
 In addition to COFF per-face colors, the app provides a **color parameter legend**:
@@ -193,7 +201,7 @@ color_passthrough: { ..., killSwitch: true }
 - **Performance:** OFF is a text format; for very large models, parsing may be slower than binary STL.
 - **Memory:** Vertex colors increase per-vertex data size.
 - **Detection heuristic:** `scadUsesColor()` regex scan is approximate; may miss edge cases where `color` appears in variable names.
-- **Alpha omission:** Per-face alpha values from COFF (`parts[n+4]`) are intentionally not read — only RGB is extracted. Three.js material transparency is handled separately via `debugHighlight` overlay.
+- **Alpha omission:** The model's own mesh reads RGB only (`parseOFF`); transparency there is the `debugHighlight` overlay's. The `%` shapes are read with their alpha (`parseOFFWithAlpha`).
 - **Mixed colored/uncolored faces:** If some faces have inline color and others do not, `colors.length < positions.length`, and the color attribute is silently dropped. The entire mesh falls back to solid theme color. This does not occur in practice (OpenSCAD wraps all geometry in `color()` calls), but is a latent fragility.
 - **First-face-black edge case:** If the first face has RGB (0,0,0), `Math.max(0,0,0) = 0 ≤ 1` selects float scale, causing subsequent integer values (e.g., 255) to be used unscaled. Three.js clamps to 1.0, rendering all non-black colors as white. Not triggered by any current keyguard scenario.
 - **Full render dual-render cost:** When color passthrough is active, `renderFull()` performs two WASM renders — first OFF for the preview, then STL for download. This doubles the render time for the Generate button. A future optimization could derive STL client-side from the parsed OFF geometry.
@@ -210,7 +218,7 @@ color_passthrough: { ..., killSwitch: true }
 6. ~~**Multi-color COFF verification**~~ — Done (2026-03-14). Multi-color passthrough verified end-to-end. 2069 tests pass, 0 failures.
 7. ~~**Full render color passthrough**~~ — Done (2026-03-15). `renderFull()` now routes through OFF when color passthrough is active. Dual-render: OFF for preview, STL for download. 2075 unit tests pass, E2E verified.
 8. Color legend showing actual per-face COFF colors instead of SCAD parameter-derived colors.
-9. Alpha channel passthrough (COFF alpha is currently ignored).
+9. Alpha channel passthrough for the model's own mesh (the `%` shapes already use it).
 10. First-face-black edge case fix in color scale detection (use global max instead of first-face max).
 11. Material-per-face-group architecture (if vertex colors prove insufficient for complex multi-color meshes).
 12. Dual-format caching: cache both OFF and STL from a single WASM render to avoid the second STL render in the full render path.
