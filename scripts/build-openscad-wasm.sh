@@ -89,6 +89,23 @@ if [ "$VARIANT" = "round-to-nearest" ]; then
   fi
 fi
 
+# A measurement build may use WebAssembly's own exceptions instead of
+# Emscripten's JavaScript ones, which put a JavaScript frame on the browser's
+# stack for every call that may throw.
+WASM_EXCEPTIONS="${WASM_EXCEPTIONS:-}"
+if [ -n "$WASM_EXCEPTIONS" ]; then
+  for pattern in '^  target_compile_options(OpenSCADLibInternal PUBLIC -fexceptions)$' \
+                 '^    -fexceptions$' '^    -sDISABLE_EXCEPTION_CATCHING=0$'; do
+    if [ "$(grep -c -- "$pattern" "$SRC/CMakeLists.txt")" != "1" ]; then
+      echo "The exceptions line '$pattern' is not in CMakeLists.txt exactly once; upstream changed." >&2
+      exit 1
+    fi
+  done
+  sed -i -e 's/^  target_compile_options(OpenSCADLibInternal PUBLIC -fexceptions)$/  target_compile_options(OpenSCADLibInternal PUBLIC -fwasm-exceptions)/' \
+         -e 's/^    -fexceptions$/    -fwasm-exceptions/' \
+         -e '/^    -sDISABLE_EXCEPTION_CATCHING=0$/d' "$SRC/CMakeLists.txt"
+fi
+
 # OpenSCAD's CI gives CMake the abbreviated hash git prints for the commit,
 # 8 characters here: the official engine reports "2026.04.03 (git 98d89134)".
 # The full hash would be a different string in the binary.
@@ -126,6 +143,7 @@ fi
   echo "CGAL:             $(docker run --rm "$IMAGE" awk '/#define CGAL_VERSION /{print $3}' /emsdk/upstream/emscripten/cache/sysroot/include/CGAL/version.h)"
   echo "CMake settings:   -DCMAKE_BUILD_TYPE=Release -DSNAPSHOT=ON -DEXPERIMENTAL=ON"
   echo "Stack size:       ${STACK_SIZE:-Emscripten default}"
+  echo "C++ exceptions:   $([ -n "$WASM_EXCEPTIONS" ] && echo 'WebAssembly (-fwasm-exceptions)' || echo 'JavaScript (-fexceptions)')"
   echo "Build paths:      /root/project (source), /root/build (output)"
   echo "Commit in engine: ${OPENSCAD_COMMIT:0:8}"
   echo
