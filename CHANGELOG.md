@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.2] - 2026-10-09
+
+The OpenSCAD engine starts again in browsers that opened the app before
+5.2.0, and previews recover after the engine stops.
+
+### Fixed
+
+- The engine starts in a browser that kept an older copy of it. Since
+  5.2.0, such a browser said "Engine Initialization Failed" until its
+  cached files were deleted; a copy that fails its check is now fetched
+  again past every cache.
+- When the engine still cannot start, the dialog says what most likely
+  happened and how to delete the browser's cached files, which the app's
+  Clear Cache button cannot reach.
+- After the engine stops and cannot start again, the next change starts
+  it again, and until then the status line says what to do, instead of
+  every later preview failing with "Something Went Wrong".
+
 ## [5.2.1] - 2026-10-09
 
 Fixes for things that did not work as they should: the menus, the render
