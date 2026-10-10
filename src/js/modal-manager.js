@@ -119,17 +119,24 @@ export function closeModal(modal, options = {}) {
   modal.setAttribute('aria-hidden', 'true');
 
   // WebKit may lose focus during the hide/reflow cycle. Retry across
-  // both a microtask (setTimeout 0) and a frame boundary (rAF).
+  // both a microtask (setTimeout 0) and a frame boundary (rAF), but only
+  // while focus is lost: a caller that moves focus itself after closing (to
+  // a list drawn again under the dialog, or into the next dialog) keeps it.
   if (target) {
+    const focusLost = () => {
+      const active = document.activeElement;
+      return (
+        !active ||
+        active === document.body ||
+        !active.isConnected ||
+        modal.contains(active)
+      );
+    };
     setTimeout(() => {
-      if (document.activeElement !== target) {
-        target.focus();
-      }
+      if (focusLost()) target.focus();
     }, 50);
     requestAnimationFrame(() => {
-      if (document.activeElement !== target) {
-        target.focus();
-      }
+      if (focusLost()) target.focus();
     });
   }
 

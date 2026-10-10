@@ -122,18 +122,20 @@ export function createFocusTrap(container, options = {}) {
       isActive = true;
       container.addEventListener('keydown', handleKeydown);
 
-      // Set initial focus
-      if (activateOptions.initialFocus) {
+      // Set initial focus at once, not only in the next frame: a busy page,
+      // or a tab in the background, can hold that frame back, and a key
+      // pressed meanwhile went to whatever was behind the dialog (Escape to
+      // the menu that opened it, leaving the dialog open). The frame stays as
+      // a retry for a container that only becomes focusable once laid out.
+      const target =
+        activateOptions.initialFocus || getFocusableElements(container)[0];
+      if (target) {
+        target.focus();
         requestAnimationFrame(() => {
-          activateOptions.initialFocus.focus();
+          if (isActive && !container.contains(document.activeElement)) {
+            target.focus();
+          }
         });
-      } else {
-        const focusable = getFocusableElements(container);
-        if (focusable.length > 0) {
-          requestAnimationFrame(() => {
-            focusable[0].focus();
-          });
-        }
       }
     },
 
@@ -318,7 +320,17 @@ export function createDocumentFocusTrap(container, options = {}) {
       if (delay > 0) {
         setTimeout(setFocus, delay);
       } else {
-        requestAnimationFrame(setFocus);
+        // At once, not only in the next frame: a busy page, or a tab in the
+        // background, can hold that frame back, and a key pressed meanwhile
+        // went to whatever was behind the dialog (Escape to an open menu,
+        // leaving the dialog open). The frame stays as a retry for a
+        // container that only becomes focusable once it is laid out.
+        setFocus();
+        requestAnimationFrame(() => {
+          if (isActive && !container.contains(document.activeElement)) {
+            setFocus();
+          }
+        });
       }
     },
 

@@ -656,13 +656,13 @@ export class ToolbarMenuController {
     const all = listEl.querySelectorAll(
       '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
     );
-    return Array.from(all).filter((el) => {
-      // Exclude items inside nested submenus
-      const closestMenu = el.closest('[role="menu"]');
-      if (closestMenu !== listEl) return false;
-      // Exclude disabled items
-      return el.getAttribute('aria-disabled') !== 'true';
-    });
+    // Items inside nested submenus are left out. A grayed-out item is kept,
+    // as the menu pattern asks: the arrow keys reach it, so a keyboard or
+    // screen reader user learns it exists and why it is off; Enter on it
+    // does nothing, since it has no click handler.
+    return Array.from(all).filter(
+      (el) => el.closest('[role="menu"]') === listEl
+    );
   }
 
   /**
@@ -1164,12 +1164,10 @@ export class ToolbarMenuController {
     const all = submenuUl.querySelectorAll(
       '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
     );
-    return Array.from(all).filter((el) => {
-      const closestMenu = el.closest('[role="menu"]');
-      return (
-        closestMenu === submenuUl && el.getAttribute('aria-disabled') !== 'true'
-      );
-    });
+    // Grayed-out items stay reachable here too (see _getNavigableItems).
+    return Array.from(all).filter(
+      (el) => el.closest('[role="menu"]') === submenuUl
+    );
   }
 
   /**
