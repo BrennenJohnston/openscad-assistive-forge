@@ -111,11 +111,14 @@ fi
 # The full hash would be a different string in the binary.
 docker run --rm -v "$SRC:/root/project" -v "$BUILD:/root/build" -w /root/project \
   -e WASM_TYPE="$WASM_TYPE" -e OPENSCAD_COMMIT="${OPENSCAD_COMMIT:0:8}" \
-  -e OPENSCAD_VERSION="$OPENSCAD_VERSION" -e STACK_SIZE="$STACK_SIZE" "$IMAGE" bash -c '
+  -e OPENSCAD_VERSION="$OPENSCAD_VERSION" -e STACK_SIZE="$STACK_SIZE" \
+  -e WASM_EXCEPTIONS="$WASM_EXCEPTIONS" "$IMAGE" bash -c '
     set -euo pipefail
     find /root/build -mindepth 1 -delete
     extra=()
     if [ -n "$STACK_SIZE" ]; then extra+=("-DCMAKE_EXE_LINKER_FLAGS=-sSTACK_SIZE=$STACK_SIZE"); fi
+    # Every C++ target (svg and the submodules too), not only the main library.
+    if [ -n "$WASM_EXCEPTIONS" ]; then extra+=("-DCMAKE_CXX_FLAGS=-fwasm-exceptions"); fi
     emcmake cmake -G Ninja -B ../build . \
       -DCMAKE_BUILD_TYPE=Release \
       -DWASM_BUILD_TYPE="$WASM_TYPE" \
