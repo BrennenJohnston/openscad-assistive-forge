@@ -237,36 +237,4 @@ test.describe('The editor decides the model', () => {
       .toContain('EDITOR_RENDER_MARKER');
   });
 
-  /** The actions drawer holds Compare; open it if collapsed. */
-  async function openActionsDrawer(page) {
-    const btn = page.locator('#addToComparisonBtn');
-    if (!(await btn.isVisible())) {
-      await page.locator('#actionsDrawerToggle').click();
-    }
-    await expect(btn).toBeVisible({ timeout: 10_000 });
-  }
-
-  test('Add to Comparison captures an edit typed a moment earlier', async ({
-    page,
-  }) => {
-    test.setTimeout(300_000);
-    await loadFixture(page);
-    await waitForFirstPreview(page);
-    const editor = await openForgeEditor(page);
-
-    await editor.click();
-    await page.keyboard.press('Control+End');
-    await page.keyboard.press('Enter');
-    await page.keyboard.insertText('cube(3);');
-    await openActionsDrawer(page);
-    await page.locator('#addToComparisonBtn').click();
-
-    // The variant auto-renders on add; the compiler's own triangle count is
-    // the witness the snapshot carried the edit (fixture 24, cube adds 12).
-    await expect
-      .poll(() => page.locator('.status-stats').first().textContent(), {
-        timeout: RENDER_TIMEOUT,
-      })
-      .toContain('36 triangles');
-  });
 });

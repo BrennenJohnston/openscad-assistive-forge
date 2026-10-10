@@ -853,12 +853,6 @@
   border-radius: 0;
 }
 
-/* Comparison view */
-:root[data-ui-variant='mono'] .comparison-container {
-  background: var(--color-bg-primary);
-  border-color: var(--color-border);
-}
-
 /* Preview container background */
 :root[data-ui-variant='mono'] .preview-container {
   background: var(--color-bg-primary);

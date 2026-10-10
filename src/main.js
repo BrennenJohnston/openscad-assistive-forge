@@ -102,8 +102,6 @@ import {
   dismissMigrationOffer,
   coercePresetValues,
 } from './js/preset-manager.js';
-import { ComparisonController } from './js/comparison-controller.js';
-import { ComparisonView } from './js/comparison-view.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './js/library-manager.js';
 import {
   openModal,
@@ -440,8 +438,6 @@ function showUnsupportedBrowser(missing) {
 let renderController = null;
 let previewManager = null;
 let autoPreviewController = null;
-let comparisonController = null;
-let comparisonView = null;
 
 /**
  * Export quality mode. Module-scope like previewManager so the __forgeDebug
@@ -1642,11 +1638,7 @@ async function initApp() {
 
   // The Back button gets an answer instead of the door. Installed
   // before any surface can flip, so the very first project opened is guarded.
-  // The comparison view keeps its own popstate consumer, and this hands that
-  // press to it rather than asking on top of it.
-  installBackGuard({
-    isComparisonMode: () => !!stateManager.getState().comparisonMode,
-  });
+  installBackGuard();
 
   // Initialize theme (before any UI rendering)
   themeManager.init();
@@ -11726,12 +11718,6 @@ if (rounded) {
 
     // Toggle focus mode
     toggleFocusMode = function () {
-      // Don't allow focus mode when comparison view is active
-      const comparisonViewEl = document.getElementById('comparisonView');
-      if (comparisonViewEl && !comparisonViewEl.classList.contains('hidden')) {
-        return;
-      }
-
       isFocusMode = !isFocusMode;
 
       if (isFocusMode) {
@@ -11810,24 +11796,6 @@ if (rounded) {
         }
       }
     });
-
-    // Auto-exit focus mode when comparison view is shown
-    const comparisonViewEl = document.getElementById('comparisonView');
-    if (comparisonViewEl) {
-      // Watch for comparison view becoming visible
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === 'class') {
-            if (!comparisonViewEl.classList.contains('hidden') && isFocusMode) {
-              // Exit focus mode when comparison view opens
-              toggleFocusMode();
-            }
-          }
-        });
-      });
-
-      observer.observe(comparisonViewEl, { attributes: true });
-    }
   }
 
   // Primary Action Button (transforms between Generate and Download)
@@ -12328,42 +12296,6 @@ if (rounded) {
     updateStatus(`Downloaded (previous STL): ${filename}`);
   });
 
-  // Export Parameters button
-  const exportParamsBtn = document.getElementById('exportParamsBtn');
-  if (exportParamsBtn) {
-    exportParamsBtn.addEventListener('click', () => {
-      const state = stateManager.getState();
-
-      if (!state.uploadedFile) {
-        showErrorToast({
-          title: 'No File Loaded',
-          message: 'Upload a .scad or .zip file first.',
-        });
-        return;
-      }
-
-      // Create JSON snapshot
-      const snapshot = {
-        version: '1.0.0',
-        model: state.uploadedFile.name,
-        timestamp: new Date().toISOString(),
-        parameters: state.parameters,
-      };
-
-      const json = JSON.stringify(snapshot, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${state.uploadedFile.name.replace('.scad', '')}-params.json`;
-      a.click();
-
-      URL.revokeObjectURL(url);
-      updateStatus(`Customizer settings exported to JSON`);
-    });
-  }
-
   // ========== Publish project ==========
 
   const publishProjectBtn = document.getElementById('publishProjectBtn');
@@ -12814,167 +12746,12 @@ if (rounded) {
     }
   }
 
-  // ========== Comparison mode ==========
-
-  // Initialize comparison controller
-  // Pass getter function to handle lazy renderController initialization
-  comparisonController = new ComparisonController(
-    stateManager,
-    () => renderController,
-    {
-      maxVariants: 10,
-    }
-  );
-
-  const comparisonViewContainer = document.getElementById('comparisonView');
-  comparisonView = new ComparisonView(
-    comparisonViewContainer,
-    comparisonController,
-    {
-      theme: themeManager.getActiveTheme(),
-      highContrast: themeManager.highContrast,
-    }
-  );
-
-  // Listen to theme changes and update comparison view
-  themeManager.addListener((_themePref, activeTheme, highContrast) => {
-    if (comparisonView) {
-      comparisonView.updateTheme(activeTheme, highContrast);
-    }
-  });
-
-  // Add to Comparison button
-  const addToComparisonBtn = document.getElementById('addToComparisonBtn');
-  addToComparisonBtn?.addEventListener('click', () => {
-    // Publish first: comparison variants render from the content captured
-    // here, the same exposure as the queue.
-    publishEditorEdits();
-    const state = stateManager.getState();
-
-    if (!state.uploadedFile) {
-      showErrorToast({
-        title: 'No File Loaded',
-        message: 'Upload a .scad or .zip file first.',
-      });
-      return;
-    }
-
-    // Check if at max capacity - if so, just enter comparison mode without adding
-    if (comparisonController.isAtMaxCapacity()) {
-      enterComparisonMode();
-      updateStatus('Entered comparison mode (at max variants)');
-      return;
-    }
-
-    // Set the project content before adding the variant: the ComparisonView
-    // subscription auto-renders as soon as a variant is added.
-    const libsForRender = getEnabledLibrariesForRender();
-    comparisonController.setProject(
-      state.uploadedFile.content,
-      state.projectFiles,
-      state.mainFilePath,
-      libsForRender
-    );
-
-    // Generate variant name
-    const count = comparisonController.getVariantCount() + 1;
-    const variantName = `Variant ${count}`;
-
-    // Add variant (now safe because project is already set)
-    const variantId = comparisonController.addVariant(
-      variantName,
-      state.parameters
-    );
-    console.log(`Added variant ${variantId}:`, variantName);
-
-    // Switch to comparison mode (setProject will be called again but that's fine)
-    enterComparisonMode();
-
-    updateStatus(`Added "${variantName}" to comparison`);
-  });
-
-  // Comparison mode event listeners
-  window.addEventListener('comparison:add-variant', (e) => {
-    const state = stateManager.getState();
-    if (!state.uploadedFile) return;
-
-    // Ensure project is set before adding variant (in case called from comparison view)
-    const libsForRender = getEnabledLibrariesForRender();
-    comparisonController.setProject(
-      state.uploadedFile.content,
-      state.projectFiles,
-      state.mainFilePath,
-      libsForRender
-    );
-
-    const count = comparisonController.getVariantCount() + 1;
-    const providedName = e?.detail?.variantName;
-    const variantName =
-      typeof providedName === 'string' && providedName.trim()
-        ? providedName.trim()
-        : `Variant ${count}`;
-
-    comparisonController.addVariant(variantName, state.parameters);
-
-    updateStatus(`Added "${variantName}" to comparison`);
-  });
-
-  window.addEventListener('comparison:exit', () => {
-    exitComparisonMode();
-  });
-
-  window.addEventListener('comparison:download-variant', (e) => {
-    const { variant } = e.detail;
-    if (variant && variant.stl) {
-      const state = stateManager.getState();
-      const filename = generateFilename(
-        `${state.uploadedFile.name.replace('.scad', '')}-${variant.name}`,
-        variant.parameters
-      );
-
-      // Get selected output format
-      const format = outputFormatSelect ? outputFormatSelect.value : 'stl';
-      downloadFile(variant.stl, filename, format);
-      updateStatus(`Downloaded: ${filename}`);
-    }
-  });
-
-  window.addEventListener('comparison:edit-variant', (e) => {
-    const { variantId } = e.detail;
-    const variant = comparisonController.getVariant(variantId);
-
-    if (variant) {
-      // Exit comparison mode and load variant parameters
-      exitComparisonMode({ quiet: true });
-      stateManager.recordParameterState();
-      stateManager.setState({ parameters: { ...variant.parameters } });
-
-      // Re-render parameter UI
-      if (stateManager.getState().schema) {
-        renderCustomizer(variant.parameters);
-      }
-      if (autoPreviewController) {
-        autoPreviewController.onParameterChange(variant.parameters);
-      }
-      updatePrimaryActionButton();
-
-      updateStatus(`Editing ${variant.name}`);
-    }
-  });
-
   /**
    * What belonged to the project being replaced, cleared as another loads or
-   * the project closes: its comparison variants (which would render as the
-   * new project under their old names), its generated file and the link to
-   * download it, and the notices about its values.
+   * the project closes: its generated file and the link to download it, and
+   * the notices about its values.
    */
   function resetProjectUiState() {
-    if (comparisonController) {
-      if (stateManager.getState().comparisonMode) {
-        exitComparisonMode({ quiet: true });
-      }
-      comparisonController.clearAll();
-    }
     lastGeneratedParamsHash = null;
     stateManager.setState({ stl: null, stlStats: null, generatedOutput: null });
     document.getElementById('downloadFallbackLink')?.classList.add('hidden');
@@ -12984,68 +12761,6 @@ if (rounded) {
       notices.hidden = true;
     }
   }
-
-  function enterComparisonMode() {
-    const state = stateManager.getState();
-    stateManager.setState({ comparisonMode: true });
-
-    // Set project content for comparison controller
-    const libsForRender = getEnabledLibrariesForRender();
-    comparisonController.setProject(
-      state.uploadedFile.content,
-      state.projectFiles,
-      state.mainFilePath,
-      libsForRender
-    );
-
-    // Hide main interface, show comparison view
-    mainInterface.classList.add('hidden');
-    comparisonViewContainer.classList.remove('hidden');
-
-    // Initialize comparison view
-    comparisonView.init();
-
-    console.log('[Comparison] Entered comparison mode');
-  }
-
-  /**
-   * @param {{quiet?: boolean}} [options] - quiet when the caller says what
-   *   happened itself (Edit, a project load), so one action is one message
-   */
-  function exitComparisonMode({ quiet = false } = {}) {
-    const state = stateManager.getState();
-    stateManager.setState({ comparisonMode: false });
-
-    // Always hide comparison view
-    comparisonViewContainer.classList.add('hidden');
-
-    // Show appropriate screen based on whether a file is loaded
-    if (state.uploadedFile) {
-      // File is loaded - show main interface, hide welcome screen
-      mainInterface.classList.remove('hidden');
-      welcomeScreen.classList.add('hidden');
-      setAppSurface('project');
-    } else {
-      // No file loaded - show welcome screen, hide main interface
-      mainInterface.classList.add('hidden');
-      welcomeScreen.classList.remove('hidden');
-      setAppSurface('welcome');
-    }
-
-    // Variants are kept: leaving comparison mode does not clear them.
-
-    console.log('[Comparison] Exited comparison mode');
-    if (!quiet) updateStatus('Exited comparison mode');
-  }
-
-  // Handle browser back/forward button while in comparison mode
-  window.addEventListener('popstate', () => {
-    const state = stateManager.getState();
-    if (state.comparisonMode) {
-      // Exit comparison mode when user navigates back
-      exitComparisonMode();
-    }
-  });
 
   // ========== Preset system ==========
   // OpenSCAD Customizer-compatible preset management

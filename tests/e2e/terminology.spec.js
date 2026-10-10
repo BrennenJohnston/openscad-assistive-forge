@@ -303,9 +303,6 @@ test.describe('Customizer terminology', () => {
   test('five controls speak Customizer, not Params', async ({ page }) => {
     await page.goto('/')
 
-    await expect(page.locator('#exportParamsBtn .btn-text')).toHaveText(
-      'Export Customizer Settings'
-    )
     await expect(page.locator('#viewParamsJsonBtn')).toContainText(
       'View Customizer JSON'
     )

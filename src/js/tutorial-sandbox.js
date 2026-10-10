@@ -1139,9 +1139,9 @@ const TUTORIALS = {
         content: `
           <p>Open the <strong>Actions</strong> drawer for extra tools:</p>
           <ul>
-            <li><strong>Export Customizer Settings</strong> - download your settings as JSON</li>
-            <li><strong>Compare</strong> - track changes</li>
-            <li><strong>Queue</strong> - batch multiple renders</li>
+            <li><strong>Copy Link</strong>: a link that opens this design with your settings</li>
+            <li><strong>Edit Drawing</strong>: open an SVG or a photo in the drawing editor</li>
+            <li><strong>Publish</strong> (Standard view): a manifest to share this project from your own hosting</li>
           </ul>
           <p class="tutorial-hint">On mobile it expands upward from the bottom bar. On desktop it opens from the Actions section next to the main button.</p>
         `,

@@ -817,13 +817,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
   max-width: 100%;
 }
 
-/* Comparison View - takes full height when visible */
-.comparison-view {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
 /* Welcome Screen */
 .welcome-screen {
   flex: 1;
@@ -2525,7 +2518,6 @@ details summary:focus,
 .param-control,
 .preset-item,
 .library-item,
-.variant-card,
 .feature-card,
 .hint-item {
   scroll-margin-top: calc(
@@ -2540,8 +2532,7 @@ details summary:focus,
 .param-panel,
 .preview-content,
 .preview-info-section,
-.preset-modal-content,
-.comparison-grid {
+.preset-modal-content {
   scroll-padding-top: calc(var(--space-md) + var(--space-xs));
   scroll-padding-bottom: calc(var(--space-md) + var(--space-xs));
 }
@@ -2971,11 +2962,6 @@ details summary:focus,
 /* Focus mode button state */
 #focusModeBtn[aria-pressed='true'] svg {
   transform: rotate(90deg);
-}
-
-/* Hide focus mode button when comparison view is active */
-.comparison-view:not(.hidden) ~ .main-interface #focusModeBtn {
-  display: none !important;
 }
 
 /* ============================================================================
@@ -3458,13 +3444,6 @@ details summary:focus,
   #primaryActionBtn {
     min-width: auto;
   }
-
-  /* Hide less-used actions on very small screens */
-  @media (max-width: 360px) {
-    #addToComparisonBtn {
-      display: none;
-    }
-  }
 }
 
 @media (min-width: 1024px) {
@@ -3683,11 +3662,6 @@ details summary:focus,
     background: Canvas;
     color: CanvasText;
     border: 3px solid CanvasText !important;
-  }
-
-  /* Comparison view */
-  .comparison-container {
-    background: Canvas;
   }
 
   /* File info */
