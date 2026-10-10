@@ -118,6 +118,7 @@ import {
   showErrorModal,
   showErrorToast,
 } from './js/error-translator.js';
+import { reserveSpaceForActionsBar } from './js/actions-bar-reserve.js';
 import { engineStartFailureNotice } from './js/engine-start-notice.js';
 import {
   getStorageEstimate,
@@ -11450,6 +11451,9 @@ if (rounded) {
 
     // Expose startTutorial globally for E2E test automation
     window.startTutorial = (tutorialId) => startTutorial(tutorialId);
+
+    // On a phone the bar is fixed over the page; leave it its real height.
+    reserveSpaceForActionsBar(document.getElementById('actionsBar'));
 
     // Initialize actions drawer toggle
     const initActionsDrawer = () => {

@@ -301,6 +301,8 @@ export const MEASURED_SECONDS = {
   'typed-preset.spec.js': 15.0,
   // One case, about 4 s locally with a warm engine; booked at 15.
   'background-shapes.spec.js': 15.0,
+  // Two cases, about 7 s locally with a warm engine; booked at 20.
+  'echo-drawer-phone.spec.js': 20.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

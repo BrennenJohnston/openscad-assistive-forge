@@ -1104,12 +1104,17 @@ body[data-app-surface='welcome'] #uiModeToggle {
     }
   }
 
-  /* Preview panel takes full width */
+  /* Preview panel takes full width. The fixed Actions bar is two rows here,
+     taller with larger text: actions-bar-reserve.js keeps its real height in
+     --actions-bar-reserved, so nothing in the preview sits underneath it. */
   .preview-panel {
     width: 100%;
     flex: 1;
     min-height: 0;
-    padding-bottom: var(--actions-bar-collapsed-offset);
+    padding-bottom: var(
+      --actions-bar-reserved,
+      var(--actions-bar-collapsed-offset)
+    );
     transition: padding-bottom var(--motion-base) ease;
   }
 
