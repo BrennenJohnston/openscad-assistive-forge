@@ -29,16 +29,6 @@ async function loadFixture(page, name) {
   })
 }
 
-/** The actions drawer holds Compare and Queue; open it if collapsed. */
-async function addToComparison(page) {
-  const btn = page.locator('#addToComparisonBtn')
-  if (!(await btn.isVisible())) await page.locator('#actionsDrawerToggle').click()
-  await btn.click()
-  await expect(page.locator('#comparisonView')).toBeVisible()
-}
-
-const cards = (page) => page.locator('#comparisonView [id^="variant-card-"]')
-
 async function waitForEngine(page) {
   await page.waitForSelector('body[data-wasm-ready="true"]', { state: 'attached', timeout: 120_000 })
 }
@@ -54,24 +44,6 @@ async function setNumber(page, name, value) {
 
 test.describe('Loading another project', () => {
   test.setTimeout(300_000)
-
-  // A variant renders the project the comparison holds, so one left over
-  // from the last project would render as the new one under its old name.
-  test("the comparison holds only the new project's variants", async ({ page }) => {
-    attachInvariants(page)
-    await page.goto('/')
-    await page.waitForSelector('body[data-wasm-ready="true"]', { state: 'attached', timeout: 120_000 })
-    await loadFixture(page, 'sample.scad')
-    await addToComparison(page)
-    await expect(cards(page)).toHaveCount(1)
-    await page.getByRole('button', { name: 'Return to customizer' }).click()
-
-    await loadFixture(page, 'sample-advanced.scad')
-    await addToComparison(page)
-
-    await expect(cards(page)).toHaveCount(1)
-    expectNoPageErrors(page)
-  })
 
   // A link's values are for the design it opens with. The first design here
   // has no width, so the link's width is reported and ignored; the next

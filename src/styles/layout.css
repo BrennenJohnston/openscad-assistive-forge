@@ -817,13 +817,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
   max-width: 100%;
 }
 
-/* Comparison View - takes full height when visible */
-.comparison-view {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
 /* Welcome Screen */
 .welcome-screen {
   flex: 1;
@@ -1736,6 +1729,16 @@ body[data-app-surface='welcome'] #uiModeToggle {
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* The open Actions drawer rises out of this bar over the preview. Lift the
+   bar above the open Preview Settings panel so, where the two overlap, the
+   drawer the person just opened is the one a press reaches. Phone widths fix
+   the bar higher still (below). */
+@media (min-width: 768px) {
+  .preview-panel .actions-bar:has(.actions-drawer:not(.collapsed)) {
+    z-index: calc(var(--z-index-sticky) + 15);
+  }
+}
+
 /* Tablet and up: side-by-side layout */
 @media (min-width: 768px) {
   .header-content {
@@ -2525,8 +2528,6 @@ details summary:focus,
 .param-control,
 .preset-item,
 .library-item,
-.queue-item,
-.variant-card,
 .feature-card,
 .hint-item {
   scroll-margin-top: calc(
@@ -2541,8 +2542,7 @@ details summary:focus,
 .param-panel,
 .preview-content,
 .preview-info-section,
-.preset-modal-content,
-.comparison-grid {
+.preset-modal-content {
   scroll-padding-top: calc(var(--space-md) + var(--space-xs));
   scroll-padding-bottom: calc(var(--space-md) + var(--space-xs));
 }
@@ -2804,24 +2804,6 @@ details summary:focus,
   margin: 0 var(--space-xs);
 }
 
-/* Queue badge styling */
-.queue-badge {
-  background-color: var(--color-accent);
-  color: var(--color-on-accent);
-  font-size: var(--font-size-2xs);
-  font-weight: 600;
-  padding: var(--space-2xs) var(--space-xs);
-  border-radius: var(--border-radius-sm);
-  min-width: 16px;
-  text-align: center;
-  margin-left: var(--space-2xs);
-}
-
-.queue-badge:empty,
-.queue-badge[data-count='0'] {
-  display: none;
-}
-
 /* Primary actions (right side, always visible) */
 .actions-primary {
   display: flex;
@@ -2990,11 +2972,6 @@ details summary:focus,
 /* Focus mode button state */
 #focusModeBtn[aria-pressed='true'] svg {
   transform: rotate(90deg);
-}
-
-/* Hide focus mode button when comparison view is active */
-.comparison-view:not(.hidden) ~ .main-interface #focusModeBtn {
-  display: none !important;
 }
 
 /* ============================================================================
@@ -3477,13 +3454,6 @@ details summary:focus,
   #primaryActionBtn {
     min-width: auto;
   }
-
-  /* Hide less-used actions on very small screens */
-  @media (max-width: 360px) {
-    #addToComparisonBtn {
-      display: none;
-    }
-  }
 }
 
 @media (min-width: 1024px) {
@@ -3702,11 +3672,6 @@ details summary:focus,
     background: Canvas;
     color: CanvasText;
     border: 3px solid CanvasText !important;
-  }
-
-  /* Comparison view */
-  .comparison-container {
-    background: Canvas;
   }
 
   /* File info */

@@ -102,10 +102,7 @@ import {
   dismissMigrationOffer,
   coercePresetValues,
 } from './js/preset-manager.js';
-import { ComparisonController } from './js/comparison-controller.js';
-import { ComparisonView } from './js/comparison-view.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './js/library-manager.js';
-import { RenderQueue } from './js/render-queue.js';
 import {
   openModal,
   closeModal,
@@ -441,9 +438,6 @@ function showUnsupportedBrowser(missing) {
 let renderController = null;
 let previewManager = null;
 let autoPreviewController = null;
-let comparisonController = null;
-let comparisonView = null;
-let renderQueue = null;
 
 /**
  * Export quality mode. Module-scope like previewManager so the __forgeDebug
@@ -1644,11 +1638,7 @@ async function initApp() {
 
   // The Back button gets an answer instead of the door. Installed
   // before any surface can flip, so the very first project opened is guarded.
-  // The comparison view keeps its own popstate consumer, and this hands that
-  // press to it rather than asking on top of it.
-  installBackGuard({
-    isComparisonMode: () => !!stateManager.getState().comparisonMode,
-  });
+  installBackGuard();
 
   // Initialize theme (before any UI rendering)
   themeManager.init();
@@ -11728,12 +11718,6 @@ if (rounded) {
 
     // Toggle focus mode
     toggleFocusMode = function () {
-      // Don't allow focus mode when comparison view is active
-      const comparisonViewEl = document.getElementById('comparisonView');
-      if (comparisonViewEl && !comparisonViewEl.classList.contains('hidden')) {
-        return;
-      }
-
       isFocusMode = !isFocusMode;
 
       if (isFocusMode) {
@@ -11812,24 +11796,6 @@ if (rounded) {
         }
       }
     });
-
-    // Auto-exit focus mode when comparison view is shown
-    const comparisonViewEl = document.getElementById('comparisonView');
-    if (comparisonViewEl) {
-      // Watch for comparison view becoming visible
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === 'class') {
-            if (!comparisonViewEl.classList.contains('hidden') && isFocusMode) {
-              // Exit focus mode when comparison view opens
-              toggleFocusMode();
-            }
-          }
-        });
-      });
-
-      observer.observe(comparisonViewEl, { attributes: true });
-    }
   }
 
   // Primary Action Button (transforms between Generate and Download)
@@ -12330,42 +12296,6 @@ if (rounded) {
     updateStatus(`Downloaded (previous STL): ${filename}`);
   });
 
-  // Export Parameters button
-  const exportParamsBtn = document.getElementById('exportParamsBtn');
-  if (exportParamsBtn) {
-    exportParamsBtn.addEventListener('click', () => {
-      const state = stateManager.getState();
-
-      if (!state.uploadedFile) {
-        showErrorToast({
-          title: 'No File Loaded',
-          message: 'Upload a .scad or .zip file first.',
-        });
-        return;
-      }
-
-      // Create JSON snapshot
-      const snapshot = {
-        version: '1.0.0',
-        model: state.uploadedFile.name,
-        timestamp: new Date().toISOString(),
-        parameters: state.parameters,
-      };
-
-      const json = JSON.stringify(snapshot, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${state.uploadedFile.name.replace('.scad', '')}-params.json`;
-      a.click();
-
-      URL.revokeObjectURL(url);
-      updateStatus(`Customizer settings exported to JSON`);
-    });
-  }
-
   // ========== Publish project ==========
 
   const publishProjectBtn = document.getElementById('publishProjectBtn');
@@ -12816,611 +12746,12 @@ if (rounded) {
     }
   }
 
-  // ========== Render queue ==========
-
-  // Initialize render queue. A getter, as for the comparison below: on a
-  // first visit the engine is built after the welcome, later than this line.
-  renderQueue = new RenderQueue(() => renderController, {
-    maxQueueSize: 20,
-  });
-
-  // Render Queue UI elements
-  const queueBadge = document.getElementById('queueBadge');
-  const addToQueueBtn = document.getElementById('addToQueueBtn');
-  const viewQueueBtn = document.getElementById('viewQueueBtn');
-  const queueModal = document.getElementById('renderQueueModal');
-  const queueModalClose = document.getElementById('queueModalClose');
-  const queueModalOverlay = document.getElementById('queueModalOverlay');
-  const queueList = document.getElementById('queueList');
-  const queueEmpty = document.getElementById('queueEmpty');
-  const processQueueBtn = document.getElementById('processQueueBtn');
-  const stopQueueBtn = document.getElementById('stopQueueBtn');
-  const clearCompletedBtn = document.getElementById('clearCompletedBtn');
-  const clearQueueBtn = document.getElementById('clearQueueBtn');
-  const exportQueueBtn = document.getElementById('exportQueueBtn');
-  const importQueueBtn = document.getElementById('importQueueBtn');
-  const queueImportInput = document.getElementById('queueImportInput');
-  const queueStatsTotal = document.getElementById('queueStatsTotal');
-  const queueStatsQueued = document.getElementById('queueStatsQueued');
-  const queueStatsRendering = document.getElementById('queueStatsRendering');
-  const queueStatsComplete = document.getElementById('queueStatsComplete');
-  const queueStatsError = document.getElementById('queueStatsError');
-
-  // Update queue badge
-  function updateQueueBadge() {
-    const count = renderQueue.getJobCount();
-    if (queueBadge) {
-      queueBadge.textContent = count;
-    }
-  }
-
-  // Update queue statistics
-  function updateQueueStats() {
-    const stats = renderQueue.getStatistics();
-    if (queueStatsTotal) queueStatsTotal.textContent = stats.total;
-    if (queueStatsQueued) queueStatsQueued.textContent = stats.queued;
-    if (queueStatsRendering) queueStatsRendering.textContent = stats.rendering;
-    if (queueStatsComplete) queueStatsComplete.textContent = stats.complete;
-    if (queueStatsError) queueStatsError.textContent = stats.error;
-  }
-
-  // Render queue list UI
-  function renderQueueList() {
-    if (!queueList) return;
-
-    const jobs = renderQueue.getAllJobs();
-
-    // Clear existing items, and recount, before the empty case too: removing
-    // the last job used to leave its row and its counts on screen.
-    Array.from(queueList.children).forEach((child) => {
-      if (!child.classList.contains('queue-empty')) {
-        child.remove();
-      }
-    });
-    updateQueueStats();
-
-    if (jobs.length === 0) {
-      queueEmpty.classList.remove('hidden');
-      return;
-    }
-
-    queueEmpty.classList.add('hidden');
-
-    // Render each job
-    jobs.forEach((job) => {
-      const jobElement = createQueueJobElement(job);
-      queueList.appendChild(jobElement);
-    });
-  }
-
-  // Create a queue job element
-  function createQueueJobElement(job) {
-    const div = document.createElement('div');
-    div.className = `queue-item queue-item-${job.state}`;
-    div.setAttribute('role', 'listitem');
-    div.dataset.jobId = job.id;
-
-    const stateIcon =
-      {
-        queued: '⏳',
-        rendering: '⚙️',
-        complete: '✅',
-        error: '❌',
-        cancelled: '⏹️',
-      }[job.state] || '❓';
-
-    const formatName =
-      OUTPUT_FORMATS[job.outputFormat]?.name || job.outputFormat.toUpperCase();
-
-    // Built as text: a job's name can come from an imported queue file.
-    const part = (tag, className, text = '') => {
-      const el = document.createElement(tag);
-      el.className = className;
-      el.textContent = text;
-      return el;
-    };
-
-    const name = part('span', 'queue-item-name', job.name);
-    name.setAttribute(
-      'contenteditable',
-      job.state === 'queued' ? 'true' : 'false'
-    );
-    name.dataset.jobId = job.id;
-    const header = part('div', 'queue-item-header');
-    header.append(
-      part('span', 'queue-item-icon', stateIcon),
-      name,
-      part('span', 'queue-item-format', formatName),
-      part('span', 'queue-item-state', job.state)
-    );
-
-    const body = part('div', 'queue-item-body');
-    if (job.error) body.append(part('div', 'queue-item-error', job.error));
-    if (job.renderTime) {
-      body.append(
-        part(
-          'div',
-          'queue-item-time',
-          `Render time: ${(job.renderTime / 1000).toFixed(1)}s`
-        )
-      );
-    }
-    if (job.result?.stats?.triangles) {
-      body.append(
-        part(
-          'div',
-          'queue-item-stats',
-          `${job.result.stats.triangles.toLocaleString()} triangles`
-        )
-      );
-    }
-
-    const action = (kind, style, label, text) => {
-      const button = part('button', `btn btn-sm ${style}`, text);
-      button.dataset.action = kind;
-      button.dataset.jobId = job.id;
-      button.setAttribute('aria-label', label);
-      return button;
-    };
-    const actions = part('div', 'queue-item-actions');
-    if (job.state === 'complete') {
-      actions.append(
-        action('download', 'btn-primary', `Download ${job.name}`, '📥 Download')
-      );
-    }
-    if (job.state === 'queued') {
-      actions.append(
-        action('edit', 'btn-outline', `Edit ${job.name} parameters`, '✏️ Edit'),
-        action('cancel', 'btn-outline', `Cancel ${job.name}`, '⏹️ Cancel')
-      );
-    }
-    if (job.state !== 'rendering') {
-      actions.append(
-        action('remove', 'btn-outline', `Remove ${job.name}`, '🗑️ Remove')
-      );
-    }
-
-    div.append(header, body, actions);
-    return div;
-  }
-
-  // Subscribe to queue changes
-  renderQueue.subscribe((event, data) => {
-    updateQueueBadge();
-
-    if (queueModal && !queueModal.classList.contains('hidden')) {
-      renderQueueList();
-    }
-
-    // Handle processing events
-    if (event === 'processing-start') {
-      if (processQueueBtn) {
-        processQueueBtn.classList.add('hidden');
-      }
-      if (stopQueueBtn) {
-        stopQueueBtn.classList.remove('hidden');
-      }
-    } else if (
-      event === 'processing-complete' ||
-      event === 'processing-stopped'
-    ) {
-      if (processQueueBtn) {
-        processQueueBtn.classList.remove('hidden');
-      }
-      if (stopQueueBtn) {
-        stopQueueBtn.classList.add('hidden');
-      }
-
-      if (event === 'processing-complete') {
-        updateStatus(
-          `Queue processing complete: ${data.completed} succeeded, ${data.failed} failed`
-        );
-      }
-    }
-  });
-
-  // Add to Queue button
-  addToQueueBtn?.addEventListener('click', () => {
-    // Publish first: a queued job snapshots the project's content at this
-    // moment, so an edit still inside the write-back window would be left
-    // behind for every render the job ever does.
-    publishEditorEdits();
-    const state = stateManager.getState();
-
-    if (!state.uploadedFile) {
-      showErrorToast({
-        title: 'No File Loaded',
-        message: 'Upload a .scad or .zip file first.',
-      });
-      return;
-    }
-
-    if (renderQueue.isAtMaxCapacity()) {
-      showErrorToast({
-        title: 'Queue Full',
-        message: 'The render queue is full (maximum 20 jobs).',
-      });
-      return;
-    }
-
-    // Get current output format
-    const outputFormat = outputFormatSelect?.value || 'stl';
-    const count = renderQueue.getJobCount() + 1;
-    const jobName = `Job ${count}`;
-
-    // Set project for queue
-    const libsForRender = getEnabledLibrariesForRender();
-    renderQueue.setProject(
-      state.uploadedFile.content,
-      state.projectFiles,
-      state.mainFilePath,
-      libsForRender
-    );
-
-    // Add job
-    const jobId = renderQueue.addJob(jobName, state.parameters, outputFormat);
-    console.log(`Added job ${jobId} to queue`);
-
-    updateStatus(`Added "${jobName}" to render queue`);
-  });
-
-  // View Queue button
-  viewQueueBtn?.addEventListener('click', () => {
-    if (queueModal) {
-      queueModal.classList.remove('hidden');
-      renderQueueList();
-    }
-  });
-
-  // Close modal handlers
-  queueModalClose?.addEventListener('click', () => {
-    if (queueModal) {
-      queueModal.classList.add('hidden');
-    }
-  });
-
-  queueModalOverlay?.addEventListener('click', () => {
-    if (queueModal) {
-      queueModal.classList.add('hidden');
-    }
-  });
-
-  // Process Queue button
-  processQueueBtn?.addEventListener('click', async () => {
-    try {
-      // Start the engine if it has not started; a job that still finds none
-      // fails with a sentence saying so.
-      await ensureWasmInitialized();
-      await renderQueue.processQueue();
-    } catch (error) {
-      console.error('Queue processing error:', error);
-      updateStatus(`Queue processing error: ${error.message}`);
-    }
-  });
-
-  // Stop Queue button
-  stopQueueBtn?.addEventListener('click', () => {
-    renderQueue.stopProcessing();
-    updateStatus('Queue processing stopped');
-  });
-
-  // Clear Completed button
-  clearCompletedBtn?.addEventListener('click', () => {
-    renderQueue.clearCompleted();
-    renderQueueList();
-    updateStatus('Cleared completed jobs');
-  });
-
-  // Clear All button
-  clearQueueBtn?.addEventListener('click', () => {
-    if (renderQueue.isQueueProcessing()) {
-      showErrorToast({
-        title: 'Queue Busy',
-        message: 'Cannot clear the queue while processing is in progress.',
-      });
-      return;
-    }
-
-    if (renderQueue.getJobCount() === 0) {
-      return;
-    }
-
-    if (confirm('Are you sure you want to clear all jobs from the queue?')) {
-      renderQueue.clearAll();
-      renderQueueList();
-      updateStatus('Cleared all jobs');
-    }
-  });
-
-  // Export Queue button
-  exportQueueBtn?.addEventListener('click', () => {
-    const data = renderQueue.exportQueue();
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `render-queue-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    updateStatus('Exported queue to JSON');
-  });
-
-  // Import Queue button
-  importQueueBtn?.addEventListener('click', () => {
-    queueImportInput?.click();
-  });
-
-  // Queue import handler
-  queueImportInput?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-
-      renderQueue.importQueue(data);
-      renderQueueList();
-      updateStatus('Imported queue from JSON');
-    } catch (error) {
-      console.error('Queue import error:', error);
-      showErrorToast({ title: 'Queue Import Failed', message: error.message });
-    }
-
-    // Clear file input
-    queueImportInput.value = '';
-  });
-
-  // Queue item action handlers (event delegation)
-  queueList?.addEventListener('click', async (e) => {
-    const button = e.target.closest('button[data-action]');
-    if (!button) return;
-
-    const action = button.dataset.action;
-    const jobId = button.dataset.jobId;
-    const job = renderQueue.getJob(jobId);
-
-    if (!job) return;
-
-    switch (action) {
-      case 'download':
-        if (job.result?.data) {
-          const state = stateManager.getState();
-          const filename = generateFilename(
-            `${state.uploadedFile.name.replace('.scad', '')}-${job.name}`,
-            job.parameters,
-            job.outputFormat
-          );
-          downloadFile(job.result.data, filename, job.outputFormat);
-          updateStatus(`Downloaded: ${filename}`);
-        }
-        break;
-
-      case 'edit': {
-        // Close modal and load job parameters
-        queueModal.classList.add('hidden');
-        stateManager.setState({ parameters: { ...job.parameters } });
-
-        // Re-render parameter UI
-        const editState = stateManager.getState();
-        if (editState.schema) {
-          const parametersContainer = document.getElementById(
-            'parametersContainer'
-          );
-          renderParameterUI(editState.schema, parametersContainer, (values) => {
-            stateManager.setState({ parameters: values });
-            if (autoPreviewController && editState.uploadedFile) {
-              autoPreviewController.onParameterChange(values);
-            }
-            updatePrimaryActionButton();
-          });
-        }
-
-        updateStatus(`Editing ${job.name} parameters`);
-        break;
-      }
-
-      case 'cancel':
-        renderQueue.cancelJob(jobId);
-        renderQueueList();
-        break;
-
-      case 'remove':
-        try {
-          renderQueue.removeJob(jobId);
-          renderQueueList();
-        } catch (error) {
-          showErrorToast({ title: 'Remove Failed', message: error.message });
-        }
-        break;
-    }
-  });
-
-  // Job name editing (contenteditable)
-  queueList?.addEventListener(
-    'blur',
-    (e) => {
-      if (
-        e.target.classList.contains('queue-item-name') &&
-        e.target.hasAttribute('contenteditable')
-      ) {
-        const jobId = e.target.dataset.jobId;
-        const newName = e.target.textContent.trim();
-
-        if (newName) {
-          renderQueue.renameJob(jobId, newName);
-        } else {
-          // Restore original name if empty
-          const job = renderQueue.getJob(jobId);
-          e.target.textContent = job.name;
-        }
-      }
-    },
-    true
-  );
-
-  // ========== Comparison mode ==========
-
-  // Initialize comparison controller
-  // Pass getter function to handle lazy renderController initialization
-  comparisonController = new ComparisonController(
-    stateManager,
-    () => renderController,
-    {
-      maxVariants: 10,
-    }
-  );
-
-  const comparisonViewContainer = document.getElementById('comparisonView');
-  comparisonView = new ComparisonView(
-    comparisonViewContainer,
-    comparisonController,
-    {
-      theme: themeManager.getActiveTheme(),
-      highContrast: themeManager.highContrast,
-    }
-  );
-
-  // Listen to theme changes and update comparison view
-  themeManager.addListener((_themePref, activeTheme, highContrast) => {
-    if (comparisonView) {
-      comparisonView.updateTheme(activeTheme, highContrast);
-    }
-  });
-
-  // Add to Comparison button
-  const addToComparisonBtn = document.getElementById('addToComparisonBtn');
-  addToComparisonBtn?.addEventListener('click', () => {
-    // Publish first: comparison variants render from the content captured
-    // here, the same exposure as the queue.
-    publishEditorEdits();
-    const state = stateManager.getState();
-
-    if (!state.uploadedFile) {
-      showErrorToast({
-        title: 'No File Loaded',
-        message: 'Upload a .scad or .zip file first.',
-      });
-      return;
-    }
-
-    // Check if at max capacity - if so, just enter comparison mode without adding
-    if (comparisonController.isAtMaxCapacity()) {
-      enterComparisonMode();
-      updateStatus('Entered comparison mode (at max variants)');
-      return;
-    }
-
-    // Set the project content before adding the variant: the ComparisonView
-    // subscription auto-renders as soon as a variant is added.
-    const libsForRender = getEnabledLibrariesForRender();
-    comparisonController.setProject(
-      state.uploadedFile.content,
-      state.projectFiles,
-      state.mainFilePath,
-      libsForRender
-    );
-
-    // Generate variant name
-    const count = comparisonController.getVariantCount() + 1;
-    const variantName = `Variant ${count}`;
-
-    // Add variant (now safe because project is already set)
-    const variantId = comparisonController.addVariant(
-      variantName,
-      state.parameters
-    );
-    console.log(`Added variant ${variantId}:`, variantName);
-
-    // Switch to comparison mode (setProject will be called again but that's fine)
-    enterComparisonMode();
-
-    updateStatus(`Added "${variantName}" to comparison`);
-  });
-
-  // Comparison mode event listeners
-  window.addEventListener('comparison:add-variant', (e) => {
-    const state = stateManager.getState();
-    if (!state.uploadedFile) return;
-
-    // Ensure project is set before adding variant (in case called from comparison view)
-    const libsForRender = getEnabledLibrariesForRender();
-    comparisonController.setProject(
-      state.uploadedFile.content,
-      state.projectFiles,
-      state.mainFilePath,
-      libsForRender
-    );
-
-    const count = comparisonController.getVariantCount() + 1;
-    const providedName = e?.detail?.variantName;
-    const variantName =
-      typeof providedName === 'string' && providedName.trim()
-        ? providedName.trim()
-        : `Variant ${count}`;
-
-    comparisonController.addVariant(variantName, state.parameters);
-
-    updateStatus(`Added "${variantName}" to comparison`);
-  });
-
-  window.addEventListener('comparison:exit', () => {
-    exitComparisonMode();
-  });
-
-  window.addEventListener('comparison:download-variant', (e) => {
-    const { variant } = e.detail;
-    if (variant && variant.stl) {
-      const state = stateManager.getState();
-      const filename = generateFilename(
-        `${state.uploadedFile.name.replace('.scad', '')}-${variant.name}`,
-        variant.parameters
-      );
-
-      // Get selected output format
-      const format = outputFormatSelect ? outputFormatSelect.value : 'stl';
-      downloadFile(variant.stl, filename, format);
-      updateStatus(`Downloaded: ${filename}`);
-    }
-  });
-
-  window.addEventListener('comparison:edit-variant', (e) => {
-    const { variantId } = e.detail;
-    const variant = comparisonController.getVariant(variantId);
-
-    if (variant) {
-      // Exit comparison mode and load variant parameters
-      exitComparisonMode({ quiet: true });
-      stateManager.recordParameterState();
-      stateManager.setState({ parameters: { ...variant.parameters } });
-
-      // Re-render parameter UI
-      if (stateManager.getState().schema) {
-        renderCustomizer(variant.parameters);
-      }
-      if (autoPreviewController) {
-        autoPreviewController.onParameterChange(variant.parameters);
-      }
-      updatePrimaryActionButton();
-
-      updateStatus(`Editing ${variant.name}`);
-    }
-  });
-
   /**
    * What belonged to the project being replaced, cleared as another loads or
-   * the project closes: its comparison variants (which would render as the
-   * new project under their old names), its generated file and the link to
-   * download it, and the notices about its values.
+   * the project closes: its generated file and the link to download it, and
+   * the notices about its values.
    */
   function resetProjectUiState() {
-    if (comparisonController) {
-      if (stateManager.getState().comparisonMode) {
-        exitComparisonMode({ quiet: true });
-      }
-      comparisonController.clearAll();
-    }
     lastGeneratedParamsHash = null;
     stateManager.setState({ stl: null, stlStats: null, generatedOutput: null });
     document.getElementById('downloadFallbackLink')?.classList.add('hidden');
@@ -13430,68 +12761,6 @@ if (rounded) {
       notices.hidden = true;
     }
   }
-
-  function enterComparisonMode() {
-    const state = stateManager.getState();
-    stateManager.setState({ comparisonMode: true });
-
-    // Set project content for comparison controller
-    const libsForRender = getEnabledLibrariesForRender();
-    comparisonController.setProject(
-      state.uploadedFile.content,
-      state.projectFiles,
-      state.mainFilePath,
-      libsForRender
-    );
-
-    // Hide main interface, show comparison view
-    mainInterface.classList.add('hidden');
-    comparisonViewContainer.classList.remove('hidden');
-
-    // Initialize comparison view
-    comparisonView.init();
-
-    console.log('[Comparison] Entered comparison mode');
-  }
-
-  /**
-   * @param {{quiet?: boolean}} [options] - quiet when the caller says what
-   *   happened itself (Edit, a project load), so one action is one message
-   */
-  function exitComparisonMode({ quiet = false } = {}) {
-    const state = stateManager.getState();
-    stateManager.setState({ comparisonMode: false });
-
-    // Always hide comparison view
-    comparisonViewContainer.classList.add('hidden');
-
-    // Show appropriate screen based on whether a file is loaded
-    if (state.uploadedFile) {
-      // File is loaded - show main interface, hide welcome screen
-      mainInterface.classList.remove('hidden');
-      welcomeScreen.classList.add('hidden');
-      setAppSurface('project');
-    } else {
-      // No file loaded - show welcome screen, hide main interface
-      mainInterface.classList.add('hidden');
-      welcomeScreen.classList.remove('hidden');
-      setAppSurface('welcome');
-    }
-
-    // Variants are kept: leaving comparison mode does not clear them.
-
-    console.log('[Comparison] Exited comparison mode');
-    if (!quiet) updateStatus('Exited comparison mode');
-  }
-
-  // Handle browser back/forward button while in comparison mode
-  window.addEventListener('popstate', () => {
-    const state = stateManager.getState();
-    if (state.comparisonMode) {
-      // Exit comparison mode when user navigates back
-      exitComparisonMode();
-    }
-  });
 
   // ========== Preset system ==========
   // OpenSCAD Customizer-compatible preset management
@@ -15454,7 +14723,6 @@ if (rounded) {
   // =========================================
   // Console output display for ECHO/WARNING/ERROR messages
   // =========================================
-  const viewConsoleBtn = document.getElementById('viewConsoleBtn');
   const consoleOutputModal = document.getElementById('consoleOutputModal');
   const consoleOutputClose = document.getElementById('consoleOutputClose');
   const consoleOutputOverlay = document.getElementById('consoleOutputOverlay');
@@ -15462,7 +14730,6 @@ if (rounded) {
   const consoleCopyBtn = document.getElementById('consoleCopyBtn');
   const consoleClearBtn = document.getElementById('consoleClearBtn');
   const consoleCloseBtn = document.getElementById('consoleCloseBtn');
-  const consoleBadge = document.getElementById('consoleBadge');
 
   // State for console output
   let lastConsoleOutput = '';
@@ -15524,18 +14791,10 @@ if (rounded) {
       if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
         renderConsoleOutput('');
       }
-      if (consoleBadge) {
-        consoleBadge.classList.add('hidden');
-      }
       return;
     }
 
     lastConsoleOutput = normalizedOutput;
-
-    // Show badge to indicate new output
-    if (consoleBadge) {
-      consoleBadge.classList.remove('hidden');
-    }
 
     // If modal is open, update it
     if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
@@ -15753,11 +15012,6 @@ if (rounded) {
   const openConsoleModal = () => {
     if (!consoleOutputModal) return;
 
-    // Clear the "new output" badge
-    if (consoleBadge) {
-      consoleBadge.classList.add('hidden');
-    }
-
     // Render current console output
     renderConsoleOutput(lastConsoleOutput);
 
@@ -15774,8 +15028,6 @@ if (rounded) {
     // Announce to screen readers
     announceImmediate('Console output panel opened');
   };
-
-  viewConsoleBtn?.addEventListener('click', openConsoleModal);
 
   // Echo drawer toggle
   const echoDrawerToggleBtn = document.getElementById('echoDrawerToggle');
@@ -15899,9 +15151,6 @@ if (rounded) {
    */
   function clearConsoleState() {
     lastConsoleOutput = '';
-    if (consoleBadge) {
-      consoleBadge.classList.add('hidden');
-    }
     renderConsoleOutput('');
     consolePanel.clear();
     const consolePanelDetails = document.getElementById('consolePanel');

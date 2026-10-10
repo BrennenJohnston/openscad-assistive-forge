@@ -1204,6 +1204,19 @@ describe('Binary STL Detection', () => {
 })
 
 describe('a restart that fails does not stop later renders', () => {
+  // The file's last case, and it logs each failed attempt and the finished
+  // render. Held here, so no console write is still in flight when the file
+  // ends and Vitest closes its channel to the worker.
+  let errorSpy
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('starts the engine again on the next render after both restart attempts failed', async () => {
     const controller = new RenderController()
     controller.worker = { postMessage: vi.fn() }
@@ -1221,6 +1234,10 @@ describe('a restart that fails does not stop later renders', () => {
       code: 'ENGINE_RESTART_FAILED',
     })
     expect(controller.restart).toHaveBeenCalledTimes(2)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('restart failed after retry'),
+      expect.any(Error)
+    )
 
     // Now it can: the next render starts it and runs.
     controller.restart = vi.fn().mockImplementation(async () => {

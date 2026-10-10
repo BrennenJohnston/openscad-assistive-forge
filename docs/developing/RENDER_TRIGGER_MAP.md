@@ -66,10 +66,6 @@ Two rules that are easy to break:
 - **Engine variables (`$`-prefixed) are never withheld**, and the withhold filter runs **after** `applyQualitySettings`. The quality preset caps `$fn` before a preview; dropping it would hand the preview the model's full-resolution value.
 - **The modified-ness primitive is `parameters` vs `defaults`.** Any path that writes `parameters` must **not** also write `defaults`, or the user's value silently stops counting as theirs and a later code edit will overwrite it. Preset application and URL parameters already get this right.
 
-### Known gaps
-
-The render queue (`renderQueue.setProject`) and comparison mode (`comparisonController.setProject`) read `uploadedFile.content` without publishing first, the same class of defect the contract above closes for Render and Export.
-
 ---
 
 ## All Render Call Sites in `src/main.js`

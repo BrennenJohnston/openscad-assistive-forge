@@ -143,15 +143,6 @@ export function setupModalCloseHandlers(modal, selectors = {}) {
  * Call this after DOM is ready for modals that exist in HTML
  */
 export function initStaticModals() {
-  // Render Queue Modal
-  const queueModal = document.getElementById('renderQueueModal');
-  if (queueModal) {
-    setupModalCloseHandlers(queueModal, {
-      closeButton: '#queueModalClose',
-      overlay: '#queueModalOverlay',
-    });
-  }
-
   // Source Viewer Modal
   const sourceModal = document.getElementById('sourceViewerModal');
   if (sourceModal) {
