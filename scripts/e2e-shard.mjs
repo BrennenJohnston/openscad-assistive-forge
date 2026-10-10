@@ -279,6 +279,9 @@ export const MEASURED_SECONDS = {
   // Five cases, each a first visit that downloads the engine: 39.1 measured
   // at four, scaled to five.
   'real-start.spec.js': 48.9,
+  // Skipped in Chromium (its own script stack is the limit there); in the
+  // Firefox lane one case of about 9 s.
+  'engine-depth.spec.js': 5.0,
   // Summed from the Chromium shards of one pull-request run (2026-10-09), the
   // method above; real-start.spec.js just before is from the same run. The
   // grown files above it in this table (menu-parity, tutorials, auto-preview,

@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "generated": "2026-10-01T00:00:00Z",
-  "build": "OpenSCAD-2026.04.03+forge.1 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST)",
-  "source": "scripts/build-openscad-wasm.sh, round-to-nearest variant, from https://github.com/openscad/openscad at commit 98d891340e6007524e69f399162016f9b22584ff (GitHub Actions run 36799890264)",
+  "generated": "2026-10-10T00:00:00Z",
+  "build": "OpenSCAD-2026.04.03+forge.2 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST, 8 MiB stack)",
+  "source": "scripts/build-openscad-wasm.sh, round-to-nearest variant (8 MiB stack), from https://github.com/openscad/openscad at commit 98d891340e6007524e69f399162016f9b22584ff (GitHub Actions run 38078524115)",
   "archive": "openscad-official.zip",
   "files": {
     "openscad.js": {
@@ -10,8 +10,8 @@
       "size": 100183
     },
     "openscad.wasm": {
-      "sha256": "f71f40d457a9cb9710aa76a053881663ec267291381f5709f4809f98c3c6eff5",
-      "size": 10715350
+      "sha256": "291ca5910c5d8c86dae52b2a675c1ba7ac87516445d3ef0b3b0f8d1d047facb5",
+      "size": 10715351
     }
   },
   "engines": {
@@ -20,8 +20,8 @@
     "fastCsg": true
   },
   "previousBuild": {
-    "build": "OpenSCAD-2026.04.03",
-    "reason": "WebAssembly can only round to nearest, and the official build lets CGAL assume it can switch rounding modes. minkowski() hulls failed a CGAL assertion and fell back to a method that took about a minute on some models, and minkowski() meshes differed slightly from desktop OpenSCAD's. This build adds CGAL_ALWAYS_ROUND_TO_NEAREST and changes nothing else."
+    "build": "OpenSCAD-2026.04.03+forge.1 (98d891340e, CGAL_ALWAYS_ROUND_TO_NEAREST)",
+    "reason": "Emscripten's default 64 KiB stack: a model that repeats a module a few dozen to a few hundred levels deep ran past it and damaged memory instead of stopping, and OpenSCAD's own recursion guard, which assumes 8 MiB on Emscripten, never fired. This build links the engine with an 8 MiB stack and changes nothing else."
   },
   "knownIssues": [
     "projection() triggers CGAL assertion failure (openscad-wasm#6, CGAL#7560)",
