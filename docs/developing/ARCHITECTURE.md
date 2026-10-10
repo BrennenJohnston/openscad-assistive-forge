@@ -38,7 +38,6 @@ mindmap
           parser.js
           state.js
           render-controller.js
-          render-queue.js
         UI Layer
           ui-generator.js
           preview.js
@@ -409,7 +408,6 @@ flowchart LR
 - `src/js/parser.js` - extracts Customizer annotations from SCAD
 - `src/js/state.js` - holds current parameter values
 - `src/js/render-controller.js` - queues and dispatches renders
-- `src/js/render-queue.js` - manages render queue and caching
 - `src/js/auto-preview-controller.js` - debounces parameter changes
 
 **UI layer:**

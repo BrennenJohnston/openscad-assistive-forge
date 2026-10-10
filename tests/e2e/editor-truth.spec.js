@@ -237,47 +237,14 @@ test.describe('The editor decides the model', () => {
       .toContain('EDITOR_RENDER_MARKER');
   });
 
-  /** The actions drawer holds Compare and Queue; open it if collapsed. */
+  /** The actions drawer holds Compare; open it if collapsed. */
   async function openActionsDrawer(page) {
-    const btn = page.locator('#addToQueueBtn');
+    const btn = page.locator('#addToComparisonBtn');
     if (!(await btn.isVisible())) {
       await page.locator('#actionsDrawerToggle').click();
     }
     await expect(btn).toBeVisible({ timeout: 10_000 });
   }
-
-  test('Add to Queue captures an edit typed a moment earlier', async ({
-    page,
-  }) => {
-    test.setTimeout(300_000);
-    await loadFixture(page);
-    await waitForFirstPreview(page);
-    const editor = await openForgeEditor(page);
-
-    // Same race shape as Render's: the queue snapshots content at the
-    // click, so an unpublished edit would be missing from every render the
-    // job ever does - the snapshot never heals when the debounce fires.
-    await editor.click();
-    await page.keyboard.press('Control+End');
-    // Queue and comparison renders do not sink echo into the console panel,
-    // so the compiler's own TRIANGLE COUNT is the witness instead: the
-    // fixture is 24 triangles, and this unpublished edit adds a cube (+12).
-    await page.keyboard.press('Enter');
-    await page.keyboard.insertText('cube(3);');
-    await openActionsDrawer(page);
-    await page.locator('#addToQueueBtn').click();
-
-    await page.locator('#viewQueueBtn').click();
-    await expect(page.locator('#renderQueueModal')).toBeVisible();
-    await page.locator('#processQueueBtn').click();
-
-    await expect
-      .poll(
-        () => page.locator('.queue-item-stats').first().textContent(),
-        { timeout: RENDER_TIMEOUT }
-      )
-      .toContain('36');
-  });
 
   test('Add to Comparison captures an edit typed a moment earlier', async ({
     page,

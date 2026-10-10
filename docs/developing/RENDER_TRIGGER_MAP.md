@@ -68,7 +68,7 @@ Two rules that are easy to break:
 
 ### Known gaps
 
-The render queue (`renderQueue.setProject`) and comparison mode (`comparisonController.setProject`) read `uploadedFile.content` without publishing first, the same class of defect the contract above closes for Render and Export.
+Comparison mode (`comparisonController.setProject`) reads `uploadedFile.content` without publishing first, the same class of defect the contract above closes for Render and Export.
 
 ---
 

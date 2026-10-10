@@ -287,7 +287,6 @@ export const MEASURED_SECONDS = {
   // Measured at five cases (30.0); a sixth, at 1280 x 600, scales it to 36.
   'menu-reach.spec.js': 36.0,
   'project-switch.spec.js': 52.2,
-  'render-queue.spec.js': 10.6,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

@@ -984,55 +984,6 @@
   font-size: var(--font-size-sm, 0.875rem);
 }
 
-/* Queue modal buttons */
-:root[data-ui-variant='mono'] #processQueueBtn {
-  font-size: 0;
-}
-:root[data-ui-variant='mono'] #processQueueBtn::before {
-  content: '[>] Process Queue';
-  font-size: var(--font-size-sm, 0.875rem);
-}
-
-:root[data-ui-variant='mono'] #stopQueueBtn {
-  font-size: 0;
-}
-:root[data-ui-variant='mono'] #stopQueueBtn::before {
-  content: '[||] Stop';
-  font-size: var(--font-size-sm, 0.875rem);
-}
-
-:root[data-ui-variant='mono'] #clearCompletedBtn {
-  font-size: 0;
-}
-:root[data-ui-variant='mono'] #clearCompletedBtn::before {
-  content: '[DEL] Clear Completed';
-  font-size: var(--font-size-sm, 0.875rem);
-}
-
-:root[data-ui-variant='mono'] #clearQueueBtn {
-  font-size: 0;
-}
-:root[data-ui-variant='mono'] #clearQueueBtn::before {
-  content: '[DEL] Clear All';
-  font-size: var(--font-size-sm, 0.875rem);
-}
-
-:root[data-ui-variant='mono'] #exportQueueBtn {
-  font-size: 0;
-}
-:root[data-ui-variant='mono'] #exportQueueBtn::before {
-  content: '[SAVE] Export Queue';
-  font-size: var(--font-size-sm, 0.875rem);
-}
-
-:root[data-ui-variant='mono'] #importQueueBtn {
-  font-size: 0;
-}
-:root[data-ui-variant='mono'] #importQueueBtn::before {
-  content: '[LOAD] Import Queue';
-  font-size: var(--font-size-sm, 0.875rem);
-}
-
 /* Source/Params viewer copy buttons */
 :root[data-ui-variant='mono'] #sourceViewerCopy {
   font-size: 0;
@@ -1259,7 +1210,6 @@
 /* --- Library / companion / queue badges → mono --- */
 :root[data-ui-variant='mono'] .library-badge,
 :root[data-ui-variant='mono'] .project-files-badge,
-:root[data-ui-variant='mono'] .queue-badge,
 :root[data-ui-variant='mono'] .console-badge {
   background: var(--color-accent);
   color: var(--color-accent-text);

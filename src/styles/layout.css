@@ -2525,7 +2525,6 @@ details summary:focus,
 .param-control,
 .preset-item,
 .library-item,
-.queue-item,
 .variant-card,
 .feature-card,
 .hint-item {
@@ -2802,24 +2801,6 @@ details summary:focus,
   background-color: var(--color-border);
   flex-shrink: 0;
   margin: 0 var(--space-xs);
-}
-
-/* Queue badge styling */
-.queue-badge {
-  background-color: var(--color-accent);
-  color: var(--color-on-accent);
-  font-size: var(--font-size-2xs);
-  font-weight: 600;
-  padding: var(--space-2xs) var(--space-xs);
-  border-radius: var(--border-radius-sm);
-  min-width: 16px;
-  text-align: center;
-  margin-left: var(--space-2xs);
-}
-
-.queue-badge:empty,
-.queue-badge[data-count='0'] {
-  display: none;
 }
 
 /* Primary actions (right side, always visible) */
