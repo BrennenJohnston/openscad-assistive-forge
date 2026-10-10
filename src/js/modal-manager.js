@@ -123,7 +123,8 @@ export function closeModal(modal, options = {}) {
   // WebKit may lose focus during the hide/reflow cycle. Retry across
   // both a microtask (setTimeout 0) and a frame boundary (rAF), but only
   // while focus is lost: a caller that moves focus itself after closing (to
-  // a list drawn again under the dialog, or into the next dialog) keeps it.
+  // a list drawn again under the dialog, or into the next dialog) keeps it,
+  // and so does this dialog when it is opened again before the retries run.
   if (target) {
     const focusLost = () => {
       const active = document.activeElement;
@@ -131,7 +132,7 @@ export function closeModal(modal, options = {}) {
         !active ||
         active === document.body ||
         !active.isConnected ||
-        modal.contains(active)
+        (modal.contains(active) && !modalStates.has(modal))
       );
     };
     setTimeout(() => {

@@ -110,6 +110,7 @@ import {
   initStaticModals,
   isAnyModalOpen,
 } from './js/modal-manager.js';
+import { disableKeepingFocus } from './js/focus-trap.js';
 import {
   translateError,
   previewFailureSentence,
@@ -1895,6 +1896,7 @@ async function initApp() {
       modal.className = 'preset-modal cache-clear-dialog';
       modal.setAttribute('role', 'dialog');
       modal.setAttribute('aria-labelledby', 'cacheClearTitle');
+      modal.setAttribute('aria-describedby', 'cacheClearWarningText');
       modal.setAttribute('aria-modal', 'true');
 
       const hasProjects = storageInfo.savedDesignsCount > 0;
@@ -1908,7 +1910,7 @@ async function initApp() {
           <div class="preset-modal-body">
             <div class="cache-clear-warning">
               <span class="cache-clear-warning-icon" aria-hidden="true">⚠️</span>
-              <div class="cache-clear-warning-text">
+              <div class="cache-clear-warning-text" id="cacheClearWarningText">
                 <strong>Warning:</strong> This will delete all saved projects and cached app data by default.
                 Check the box below if you want to keep your saved projects.
               </div>
@@ -2015,10 +2017,13 @@ async function initApp() {
         const cancelBtn = modal.querySelector('#cacheClearCancelBtn');
         const confirmBtn = modal.querySelector('#cacheClearConfirmBtn');
 
-        cancelBtn.addEventListener('click', () => {
+        const cancel = () => {
+          closeModal(modal);
           document.body.removeChild(modal);
           resolve(false);
-        });
+        };
+
+        cancelBtn.addEventListener('click', cancel);
 
         confirmBtn.addEventListener('click', async () => {
           const clearAppCaches = modal.querySelector('#clearAppCaches').checked;
@@ -2048,6 +2053,7 @@ async function initApp() {
               ),
             ]);
 
+            closeModal(modal);
             document.body.removeChild(modal);
 
             if (result.appCachesCleared || result.userDataCleared) {
@@ -2071,6 +2077,7 @@ async function initApp() {
 
             // Force reload anyway - the cache clear may have partially succeeded
             // and reloading is the safest recovery action
+            closeModal(modal);
             document.body.removeChild(modal);
             updateStatus(
               'Cache clear taking too long, forcing reload...',
@@ -2086,13 +2093,14 @@ async function initApp() {
         // Close on escape
         modal.addEventListener('keydown', (e) => {
           if (e.key === 'Escape') {
-            document.body.removeChild(modal);
-            resolve(false);
+            e.preventDefault();
+            cancel();
           }
         });
 
-        // Focus first interactive element
-        setTimeout(() => cancelBtn.focus(), 100);
+        // Through the modal manager: Tab stays inside, and Cancel or Escape
+        // gives focus back to the button that opened it.
+        openModal(modal, { focusTarget: cancelBtn });
       });
     } catch (error) {
       console.error('[Storage] Smart cache clear error:', error);
@@ -8277,6 +8285,11 @@ async function initApp() {
       appHeader.classList.remove('compact');
     }
 
+    // The button that brought the person here is hidden with the project, so
+    // focus would fall to the page body (or a control of the closed view):
+    // the Main Page's heading says where they are.
+    document.getElementById('features-heading')?.focus();
+
     console.log('[App] File cleared, returned to welcome screen');
   }
 
@@ -12599,6 +12612,12 @@ if (rounded) {
         closeModal(publishProjectModal)
       );
     }
+    // Escape closes from anywhere inside, its address field included.
+    publishProjectModal?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      closeModal(publishProjectModal);
+    });
 
     // Copy manifest button
     if (copyManifestBtn && publishManifestOutput) {
@@ -12894,10 +12913,25 @@ if (rounded) {
       addPresetBtn.disabled = !hasModel;
     }
 
-    // Delete button: enabled when a user preset is selected (not design defaults)
+    // Delete button: enabled when a user preset is selected (not design
+    // defaults). It disables itself after a delete, with focus on it, so
+    // focus moves to the preset chooser first rather than to the page body.
     if (deletePresetBtn) {
-      deletePresetBtn.disabled =
-        !hasPresetSelected || !hasModel || isDesignDefaults;
+      if (!hasPresetSelected || !hasModel || isDesignDefaults) {
+        const chooser = [
+          document.querySelector(
+            '#presetComboboxContainer .preset-combobox-input'
+          ),
+          presetSelect,
+        ].find(
+          (el) =>
+            el &&
+            (typeof el.checkVisibility !== 'function' || el.checkVisibility())
+        );
+        disableKeepingFocus(deletePresetBtn, chooser);
+      } else {
+        deletePresetBtn.disabled = false;
+      }
       deletePresetBtn.title = isDesignDefaults
         ? 'Design default values cannot be deleted'
         : hasPresetSelected
@@ -13558,8 +13592,14 @@ if (rounded) {
     }
   }
 
-  // Show manage presets modal
-  function showManagePresetsModal() {
+  /**
+   * Show the Import / Export designs dialog.
+   * @param {Object} [options]
+   * @param {number} [options.afterDeleteIndex] - Where a preset was just
+   *   deleted from the list: the list opens unfolded, focus on the row now in
+   *   its place, so someone clearing out presets keeps their place.
+   */
+  function showManagePresetsModal(options = {}) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
@@ -13706,6 +13746,11 @@ if (rounded) {
       closeModal(modal);
       document.body.removeChild(modal);
     };
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      closeManagePresetsModalHandler();
+    });
 
     // Handle actions
     modal.addEventListener('click', async (e) => {
@@ -13738,10 +13783,13 @@ if (rounded) {
           { destructive: true }
         );
         if (confirmed) {
+          const index = [
+            ...modal.querySelectorAll('button[data-action="delete"]'),
+          ].indexOf(btn);
           presetManager.deletePreset(modelName, presetId);
           updatePresetDropdown();
           closeManagePresetsModalHandler();
-          showManagePresetsModal();
+          showManagePresetsModal({ afterDeleteIndex: index });
         }
       } else if (action === 'export') {
         const json = presetManager.exportPreset(modelName, presetId);
@@ -13940,10 +13988,21 @@ if (rounded) {
       }
     });
 
+    let focusTarget = modal.querySelector('.preset-modal-close');
+    const afterDelete = options?.afterDeleteIndex;
+    if (Number.isInteger(afterDelete) && afterDelete >= 0) {
+      const list = modal.querySelector('.preset-list-details');
+      if (list) list.open = true;
+      const deletes = modal.querySelectorAll('button[data-action="delete"]');
+      focusTarget =
+        deletes[afterDelete] ||
+        deletes[afterDelete - 1] ||
+        list?.querySelector('summary') ||
+        focusTarget;
+    }
+
     // Open modal with focus management (WCAG 2.2 focus trapping)
-    openModal(modal, {
-      focusTarget: modal.querySelector('.preset-modal-close'),
-    });
+    openModal(modal, { focusTarget });
   }
 
   // Preset button handlers - OpenSCAD Customizer semantics
@@ -14658,7 +14717,6 @@ if (rounded) {
       return;
     }
 
-    sourceViewerModal.classList.remove('hidden');
     sourceViewerContent.value = state.uploadedFile.content;
 
     const lineCount = state.uploadedFile.content.split('\n').length;
@@ -14669,7 +14727,11 @@ if (rounded) {
       <span>📊 ${charCount.toLocaleString()} characters</span>
     `;
 
-    setTimeout(() => sourceViewerContent.focus(), 100);
+    // On the heading, not the code: focus in the text put a screen reader at
+    // its end ("blank"), past everything it was opened to read.
+    openModal(sourceViewerModal, {
+      focusTarget: document.getElementById('sourceViewerTitle'),
+    });
   });
 
   copySourceBtn?.addEventListener('click', async () => {
@@ -14702,11 +14764,11 @@ if (rounded) {
   });
 
   sourceViewerClose?.addEventListener('click', () => {
-    sourceViewerModal.classList.add('hidden');
+    closeModal(sourceViewerModal);
   });
 
   sourceViewerOverlay?.addEventListener('click', () => {
-    sourceViewerModal.classList.add('hidden');
+    closeModal(sourceViewerModal);
   });
 
   sourceViewerCopy?.addEventListener('click', async () => {
@@ -15016,8 +15078,11 @@ if (rounded) {
     // Render current console output
     renderConsoleOutput(lastConsoleOutput);
 
-    // Show modal
-    consoleOutputModal.classList.remove('hidden');
+    // Show it with focus inside, on its heading: left on the button behind
+    // it, Escape had nothing to close.
+    openModal(consoleOutputModal, {
+      focusTarget: document.getElementById('consoleOutputTitle'),
+    });
 
     // renderConsoleOutput's scroll-to-newest ran against a hidden modal, where
     // scrollHeight is 0, so it did nothing. Now that the modal has layout, put
@@ -15056,7 +15121,7 @@ if (rounded) {
   // Close handlers
   const closeConsoleModal = () => {
     if (consoleOutputModal) {
-      consoleOutputModal.classList.add('hidden');
+      closeModal(consoleOutputModal);
     }
   };
 
@@ -15325,17 +15390,18 @@ if (rounded) {
 
     const json = JSON.stringify(state.parameters, null, 2);
     paramsJsonContent.value = json;
-    paramsJsonModal.classList.remove('hidden');
-
-    setTimeout(() => paramsJsonContent.focus(), 100);
+    // On the heading, as View Source: focus in the text started at its end.
+    openModal(paramsJsonModal, {
+      focusTarget: document.getElementById('paramsJsonTitle'),
+    });
   });
 
   paramsJsonClose?.addEventListener('click', () => {
-    paramsJsonModal.classList.add('hidden');
+    closeModal(paramsJsonModal);
   });
 
   paramsJsonOverlay?.addEventListener('click', () => {
-    paramsJsonModal.classList.add('hidden');
+    closeModal(paramsJsonModal);
   });
 
   paramsJsonCopy?.addEventListener('click', async () => {
@@ -15410,10 +15476,10 @@ if (rounded) {
     if (e.key === 'Escape') {
       const featuresGuideModal = document.getElementById('featuresGuideModal');
       if (!sourceViewerModal.classList.contains('hidden')) {
-        sourceViewerModal.classList.add('hidden');
+        closeModal(sourceViewerModal);
       }
       if (!paramsJsonModal.classList.contains('hidden')) {
-        paramsJsonModal.classList.add('hidden');
+        closeModal(paramsJsonModal);
       }
       if (
         featuresGuideModal &&

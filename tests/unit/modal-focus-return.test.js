@@ -125,6 +125,25 @@ describe('a dialog closing', () => {
     vi.advanceTimersByTime(60)
     expect(document.activeElement).toBe(row)
   })
+
+  it('leaves focus in the same dialog when it opens again at once', () => {
+    // Escape, then Enter on the opener straight away: the first close's
+    // retries must not pull focus out of the dialog open again.
+    const frames = []
+    globalThis.requestAnimationFrame = (cb) => frames.push(cb)
+    const opener = button('View Full Console')
+    opener.focus()
+    const modal = dialogWithButton()
+    openModal(modal)
+    closeModal(modal)
+    expect(document.activeElement).toBe(opener)
+    openModal(modal)
+    const inside = modal.querySelector('button')
+    expect(document.activeElement).toBe(inside)
+    frames.splice(0).forEach((cb) => cb())
+    vi.advanceTimersByTime(60)
+    expect(document.activeElement).toBe(inside)
+  })
 })
 
 describe('a focused button being disabled', () => {
