@@ -11,6 +11,7 @@ import {
 } from './js/parameter-reconciler.js';
 import {
   renderParameterUI,
+  commitPendingParameterEdit,
   setLimitsUnlocked,
   getAllDefaults,
   focusParameter,
@@ -12951,6 +12952,9 @@ if (rounded) {
    * @param {Object} preset - Loaded preset with .parameters, .name, .id
    */
   function applyPresetParametersAndCompanions(preset) {
+    // A value typed but not yet applied joins the current values first, so
+    // the preset lands on top of it rather than on the values before it.
+    commitPendingParameterEdit(document.getElementById('parametersContainer'));
     isLoadingPreset = true;
 
     const state = stateManager.getState();
