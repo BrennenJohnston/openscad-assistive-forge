@@ -290,6 +290,9 @@ export const MEASURED_SECONDS = {
   'project-switch.spec.js': 52.2,
   // Four cases, 21.1 s locally; booked at 25 until a CI run measures it.
   'actions-drawer.spec.js': 25.0,
+  // Two cases, 5.8 s locally with a warm engine; booked at 20 for the cold
+  // engine load each CI case pays.
+  'engine-recovery.spec.js': 20.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

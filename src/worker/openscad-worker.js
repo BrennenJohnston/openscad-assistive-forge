@@ -45,6 +45,7 @@ import { engineFileUrl } from './engine-url.js';
 import { fetchAndCheckEngineFile } from './engine-integrity.js';
 import {
   translateWorkerError,
+  workerErrorNeedsRestart,
   MODEL_NOT_2D_SUGGESTION,
   MODEL_NOT_2D_EXPLANATION,
 } from './error-translations.js';
@@ -2102,15 +2103,9 @@ async function render(payload) {
     // MODEL_NOT_2D is included: callMain ran (setting _callMainInvoked=true) even
     // though OpenSCAD exited with code 1. Without a restart the next render hits
     // WASM_DOUBLE_INVOKE because the worker-side guard sees _callMainInvoked=true.
-    const needsRestart =
-      error?.needsRestart === true ||
-      typeof error === 'number' ||
-      /^\d+$/.test(String(error)) ||
-      code === 'INTERNAL_ERROR' ||
-      code === 'MODEL_NOT_2D' ||
-      code === 'WASM_ABORT' ||
-      code === 'WASM_UNREACHABLE' ||
-      code === 'WASM_OOB';
+    const needsRestart = workerErrorNeedsRestart(error, code, {
+      callMainInvoked: _callMainInvoked,
+    });
 
     self.postMessage({
       type: 'ERROR',

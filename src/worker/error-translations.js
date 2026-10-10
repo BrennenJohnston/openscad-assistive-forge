@@ -189,6 +189,16 @@ export function translateWorkerError(rawError) {
     }
   }
 
+  // The render controller restarts the engine and tries again when it sees
+  // this code, so the code has to reach it.
+  if (rawError?.code === 'WASM_DOUBLE_INVOKE') {
+    return {
+      message: `Rendering error: ${errorStr}`,
+      code: 'WASM_DOUBLE_INVOKE',
+      raw: errorStr,
+    };
+  }
+
   // Fallback: return a cleaned up version of the error
   // Remove internal paths and technical details that aren't helpful
   const cleaned = errorStr
@@ -211,4 +221,32 @@ export function translateWorkerError(rawError) {
     code: 'RENDER_FAILED',
     raw: errorStr,
   };
+}
+
+/**
+ * Whether the engine must be started again before the next render. Once
+ * callMain has run, the engine's state is spent whatever went wrong: a
+ * browser that runs out of stack throws a RangeError or a RuntimeError that
+ * no code below names, and without a restart the next render is refused.
+ * @param {*} error - What the render threw
+ * @param {string} code - The code translateWorkerError gave it
+ * @param {{callMainInvoked?: boolean}} [state] - Whether callMain ran
+ * @returns {boolean}
+ */
+export function workerErrorNeedsRestart(
+  error,
+  code,
+  { callMainInvoked = false } = {}
+) {
+  return (
+    callMainInvoked ||
+    error?.needsRestart === true ||
+    typeof error === 'number' ||
+    /^\d+$/.test(String(error)) ||
+    code === 'INTERNAL_ERROR' ||
+    code === 'MODEL_NOT_2D' ||
+    code === 'WASM_ABORT' ||
+    code === 'WASM_UNREACHABLE' ||
+    code === 'WASM_OOB'
+  );
 }

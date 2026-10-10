@@ -190,6 +190,18 @@ export function estimateRenderTime(scadContent, parameters = {}) {
  */
 const MEMORY_WARNING_THRESHOLD_MB = 819;
 
+/**
+ * A stop the person asked for, or that a newer render made. Callers test the
+ * code, never the words: other failures say "canceled" too.
+ * @param {string} message
+ * @returns {Error}
+ */
+function cancelledError(message) {
+  const error = new Error(message);
+  error.code = 'RENDER_CANCELLED';
+  return error;
+}
+
 export class RenderController {
   /**
    * Create a new RenderController
@@ -1088,7 +1100,13 @@ export class RenderController {
                 `[RenderController] Render watchdog fired after ${watchdogMs}ms — ` +
                   `worker is hung. Hard canceling.`
               );
-              this.cancel({ hard: true });
+              const seconds = Math.round(watchdogMs / 1000);
+              const timeoutError = new Error(
+                `Stopped after ${seconds} seconds: the render took longer than its time limit.`
+              );
+              timeoutError.code = 'RENDER_TIMEOUT';
+              timeoutError.timeoutSeconds = seconds;
+              this.cancel({ hard: true, error: timeoutError });
             }
           }, watchdogMs);
 
@@ -1278,9 +1296,11 @@ export class RenderController {
    *   Kept short because callMain() blocks the worker event loop — the CANCEL message
    *   cannot be processed during an active blocking render.
    * @param {boolean} [options.hard=false] - Force immediate hard cancel (skip soft attempt)
+   * @param {Error} [options.error] - What the render is rejected with; by
+   *   default a RENDER_CANCELLED error, the code callers test for a cancel
    */
   cancel(options = {}) {
-    const { gracePeriodMs = 200, hard = false } = options;
+    const { gracePeriodMs = 200, hard = false, error = null } = options;
 
     if (!this.currentRequest) return;
 
@@ -1289,7 +1309,7 @@ export class RenderController {
     if (hard) {
       // Immediate hard cancel — terminate and reinit
       console.warn('[RenderController] Hard cancel: terminating worker');
-      reject(new Error('Render canceled (hard cancel)'));
+      reject(error || cancelledError('Render canceled (hard cancel)'));
       this.currentRequest = null;
       this._hardCancelAndReinit();
       return;
@@ -1302,7 +1322,7 @@ export class RenderController {
         payload: { requestId: id },
       });
     }
-    reject(new Error('Render canceled'));
+    reject(error || cancelledError('Render canceled'));
     this.currentRequest = null;
 
     // Watchdog: if the worker is still blocking after the grace period,

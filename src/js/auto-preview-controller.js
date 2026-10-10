@@ -1211,9 +1211,10 @@ export class AutoPreviewController {
       // If the file changed mid-render, ignore this error.
       if (localScadVersion !== this.scadVersion) return;
 
-      // Treat cancellations as non-errors (common during rapid changes / file switching).
-      const msg = (error?.message || String(error)).toLowerCase();
-      if (msg.includes('cancel')) {
+      // A cancel is not an error (common during rapid changes and file
+      // switches). Read the code: the engine's refusal to run twice also says
+      // "canceled", and a stop at the time limit must reach the person.
+      if (error?.code === 'RENDER_CANCELLED' || error?.code === 'CANCELLED') {
         return;
       }
 
