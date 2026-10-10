@@ -105,7 +105,15 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) {
     return;
   }
-  
+
+  // A request made with cache: 'reload' asks for the server's copy (the
+  // engine worker does this when a cached engine fails its integrity check):
+  // answer it from the network, and keep that answer in place of the cached one.
+  if (request.cache === 'reload') {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
   // Determine caching strategy
   const strategy = getCacheStrategy(url.pathname);
   
