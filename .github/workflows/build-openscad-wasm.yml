@@ -24,6 +24,11 @@ on:
         default: round-to-nearest
         type: choice
         options: [round-to-nearest, baseline]
+      stack_size:
+        description: engine stack in bytes for a measurement build (empty keeps Emscripten's default)
+        required: false
+        default: ''
+        type: string
   pull_request:
     paths:
       - 'scripts/build-openscad-wasm.sh'
@@ -45,6 +50,7 @@ jobs:
     env:
       VARIANT: ${{ inputs.variant || 'round-to-nearest' }}
       WASM_TYPE: ${{ matrix.wasm_type }}
+      STACK_SIZE: ${{ inputs.stack_size || '' }}
       # The example-manifest commit that holds the Plug Puller 0.13.0 with
       # its minkowski() edges. Later copies round their edges another way
       # and would pass on any engine.
@@ -125,7 +131,9 @@ jobs:
             if [ "$want" != "$got" ]; then same=no; fi
           done
           echo "Same bytes as public/wasm/openscad-official (a $shipped build): $same" | tee "$out/shipped.txt"
-          if [ "$VARIANT" = "$shipped" ] && [ "$same" != "yes" ]; then
+          if [ -n "$STACK_SIZE" ]; then
+            echo "A measurement build with stack $STACK_SIZE is expected to differ." | tee -a "$out/shipped.txt"
+          elif [ "$VARIANT" = "$shipped" ] && [ "$same" != "yes" ]; then
             echo "::error::The $VARIANT build is not the engine Forge ships. The recipe and public/wasm/openscad-official/ have to change together."
             exit 1
           fi
@@ -154,7 +162,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: openscad-wasm-${{ env.VARIANT }}-${{ matrix.wasm_type }}
+          name: openscad-wasm-${{ env.VARIANT }}-${{ matrix.wasm_type }}${{ env.STACK_SIZE && format('-stack{0}', env.STACK_SIZE) || '' }}
           path: |
             build/openscad-wasm/${{ env.VARIANT }}-${{ matrix.wasm_type }}/
           retention-days: 30

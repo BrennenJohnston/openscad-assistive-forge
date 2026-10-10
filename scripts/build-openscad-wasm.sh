@@ -43,6 +43,13 @@ OPENSCAD_VERSION="${OPENSCAD_VERSION:-2026.04.03}"
 IMAGE="${IMAGE:-openscad/wasm-base-release@sha256:f73d33d5f2fd4c7ae4d3aaacb1e2e2deb193b878b38bb80c8235c933ac340c66}"
 VARIANT="${VARIANT:-round-to-nearest}"
 WASM_TYPE="${WASM_TYPE:-web}"
+# A measurement build may set the engine's stack in bytes. Emscripten's
+# default is 64 KiB; OpenSCAD's recursion guard assumes 8 MiB on Emscripten.
+STACK_SIZE="${STACK_SIZE:-}"
+if [ -n "$STACK_SIZE" ] && ! [[ "$STACK_SIZE" =~ ^[0-9]+$ ]]; then
+  echo "STACK_SIZE must be a number of bytes, not '$STACK_SIZE'" >&2
+  exit 1
+fi
 
 case "$VARIANT" in round-to-nearest|baseline) ;; *)
   echo "VARIANT must be round-to-nearest or baseline, not '$VARIANT'" >&2; exit 1 ;;
@@ -87,15 +94,17 @@ fi
 # The full hash would be a different string in the binary.
 docker run --rm -v "$SRC:/root/project" -v "$BUILD:/root/build" -w /root/project \
   -e WASM_TYPE="$WASM_TYPE" -e OPENSCAD_COMMIT="${OPENSCAD_COMMIT:0:8}" \
-  -e OPENSCAD_VERSION="$OPENSCAD_VERSION" "$IMAGE" bash -c '
+  -e OPENSCAD_VERSION="$OPENSCAD_VERSION" -e STACK_SIZE="$STACK_SIZE" "$IMAGE" bash -c '
     set -euo pipefail
     find /root/build -mindepth 1 -delete
+    extra=()
+    if [ -n "$STACK_SIZE" ]; then extra+=("-DCMAKE_EXE_LINKER_FLAGS=-sSTACK_SIZE=$STACK_SIZE"); fi
     emcmake cmake -G Ninja -B ../build . \
       -DCMAKE_BUILD_TYPE=Release \
       -DWASM_BUILD_TYPE="$WASM_TYPE" \
       -DOPENSCAD_COMMIT="$OPENSCAD_COMMIT" \
       -DOPENSCAD_VERSION="$OPENSCAD_VERSION" \
-      -DSNAPSHOT=ON -DEXPERIMENTAL=ON
+      -DSNAPSHOT=ON -DEXPERIMENTAL=ON ${extra[@]+"${extra[@]}"}
     cmake --build ../build'
 
 rm -rf "$OUT"
@@ -116,6 +125,7 @@ fi
   echo "Emscripten:       $(docker run --rm "$IMAGE" emcc --version | head -1)"
   echo "CGAL:             $(docker run --rm "$IMAGE" awk '/#define CGAL_VERSION /{print $3}' /emsdk/upstream/emscripten/cache/sysroot/include/CGAL/version.h)"
   echo "CMake settings:   -DCMAKE_BUILD_TYPE=Release -DSNAPSHOT=ON -DEXPERIMENTAL=ON"
+  echo "Stack size:       ${STACK_SIZE:-Emscripten default}"
   echo "Build paths:      /root/project (source), /root/build (output)"
   echo "Commit in engine: ${OPENSCAD_COMMIT:0:8}"
   echo
