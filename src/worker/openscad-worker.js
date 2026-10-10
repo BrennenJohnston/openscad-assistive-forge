@@ -41,6 +41,8 @@ import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
 import { ensureLibraryDir, writeLibraryFile } from './library-fs.js';
 import { unpackLibraryArchive } from './lib-archive.js';
+import { engineFileUrl } from './engine-url.js';
+import { fetchAndCheckEngineFile } from './engine-integrity.js';
 import {
   translateWorkerError,
   MODEL_NOT_2D_SUGGESTION,
@@ -130,6 +132,10 @@ async function ensureOpenSCADModule() {
  * @param {string} baseUrl - Base URL for fetching assets (optional, defaults to current origin)
  */
 async function initWASM(baseUrl = '', cachedCapabilities = null) {
+  // The engine bytes fetched again past every cache, when the first copy
+  // failed the integrity check and the fresh one passed.
+  let verifiedEngineBinary = null;
+  let engineCopyMismatched = false;
   try {
     // Start timing WASM initialization
     wasmInitStartTime = performance.now();
@@ -179,9 +185,13 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         }
 
         // Verify size and SHA-256 of both the JS loader and the WASM binary
+        // the engine will actually load.
         const filesToCheck = [
           { name: 'openscad.js', url: wasmJsUrl },
-          { name: 'openscad.wasm', url: `${wasmBasePath}/openscad.wasm` },
+          {
+            name: 'openscad.wasm',
+            url: engineFileUrl(wasmBasePath, integrityData),
+          },
         ];
         const mismatches = [];
 
@@ -190,33 +200,27 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
           if (!expected?.size && !expected?.sha256) continue;
 
           try {
-            const resp = await fetch(url);
-            if (!resp.ok) continue;
-            const buffer = await resp.arrayBuffer();
-
-            if (expected.size && buffer.byteLength !== expected.size) {
-              mismatches.push(
-                `${name}: expected ${expected.size} bytes, got ${buffer.byteLength}`
+            // A cache, the browser's or the service worker's, can hand back
+            // a different engine. The binary is then fetched again past every
+            // cache, and the engine starts from that copy once it checks out.
+            const { mismatch, verified, replaced } =
+              await fetchAndCheckEngineFile(name, url, expected, {
+                refetch: name === 'openscad.wasm',
+              });
+            if (verified) {
+              console.warn(
+                `[Worker] ${replaced}; fetched the engine again past the caches`
               );
-              continue;
+              verifiedEngineBinary = verified;
             }
-            if (expected.sha256 && crypto?.subtle) {
-              const digest = await crypto.subtle.digest('SHA-256', buffer);
-              const hex = Array.from(new Uint8Array(digest))
-                .map((b) => b.toString(16).padStart(2, '0'))
-                .join('');
-              if (hex !== expected.sha256) {
-                mismatches.push(
-                  `${name}: SHA-256 mismatch (expected ${expected.sha256.slice(0, 16)}…, got ${hex.slice(0, 16)}…)`
-                );
-              }
-            }
+            if (mismatch) mismatches.push(mismatch);
           } catch (_fetchErr) {
             // Fetch may fail on some CDN configs; skip this file's check
           }
         }
 
         if (mismatches.length > 0) {
+          engineCopyMismatched = true;
           const msg = `[Worker] WASM integrity check FAILED: ${mismatches.join('; ')}. Files may be corrupted or tampered with; re-run npm run setup-wasm.`;
           console.warn(msg);
           self.postMessage({
@@ -238,6 +242,10 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         console.log('[Worker] Integrity check skipped:', integrityErr.message);
     }
 
+    // The binary's address names its build (see engine-url.js), so a copy
+    // kept from an earlier engine is never paired with this loader.
+    const wasmBinaryUrl = engineFileUrl(wasmBasePath, integrityData);
+
     // Dynamic import of official WASM module
     const OpenSCADModule = await import(/* @vite-ignore */ wasmJsUrl);
     const OpenSCAD = OpenSCADModule.default;
@@ -253,6 +261,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
 
     // Initialize OpenSCAD with configuration
     const module = await OpenSCAD({
+      ...(verifiedEngineBinary ? { wasmBinary: verifiedEngineBinary } : {}),
       // Prevent auto-running main (GUI) on init; we call callMain manually.
       noInitialRun: true,
       // Keep runtime alive after callMain (e.g., --help during capability checks).
@@ -260,7 +269,10 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       locateFile: (path) => {
         // All WASM assets are in the same directory
         if (path.endsWith('.wasm') || path.endsWith('.data')) {
-          const resolved = `${wasmBasePath}/${path}`;
+          const resolved =
+            path === 'openscad.wasm'
+              ? wasmBinaryUrl
+              : `${wasmBasePath}/${path}`;
           if (!wasmAssetLogShown) {
             if (import.meta.env.DEV)
               console.log('[Worker] Resolved WASM asset:', resolved);
@@ -366,7 +378,9 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'ERROR',
       payload: {
         requestId: 'init',
-        code: 'INIT_FAILED',
+        // A copy that failed the integrity check is the likely cause, and the
+        // page tells the person how to remove it.
+        code: engineCopyMismatched ? 'ENGINE_COPY_MISMATCH' : 'INIT_FAILED',
         message: 'Failed to initialize OpenSCAD engine',
         details: error.message,
       },

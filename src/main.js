@@ -119,6 +119,7 @@ import {
   showErrorModal,
   showErrorToast,
 } from './js/error-translator.js';
+import { engineStartFailureNotice } from './js/engine-start-notice.js';
 import {
   getStorageEstimate,
   clearCachedData as _clearCachedData,
@@ -5829,10 +5830,7 @@ async function initApp() {
         const details = error?.details ? ` Details: ${error.details}` : '';
         showErrorModal({
           title: 'Engine Initialization Failed',
-          message:
-            'Failed to initialize the OpenSCAD engine. Some features may not work.',
-          suggestion:
-            'Try refreshing the page. If the problem persists, try a different browser.',
+          ...engineStartFailureNotice(error?.code),
           technical: error.message + details,
         });
         return false;
