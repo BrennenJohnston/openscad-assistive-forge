@@ -937,7 +937,9 @@ export class RenderController {
       };
 
       const renderOnce = async () => {
-        if (this._moduleUsed) {
+        // A worker that is gone, after a restart that failed, is started
+        // again here, so one failure never stops every later render.
+        if (this._moduleUsed || !this.worker) {
           console.log(
             '[RenderController] Proactive restart: WASM module was used by previous render'
           );
@@ -960,11 +962,15 @@ export class RenderController {
               );
             }
           }
-          this._moduleUsed = false;
+          if (this.ready) this._moduleUsed = false;
         }
 
         if (!this.ready) {
-          throw new Error('Worker not ready. Call init() first.');
+          const error = new Error(
+            'The OpenSCAD engine could not start again. Worker not ready.'
+          );
+          error.code = 'ENGINE_RESTART_FAILED';
+          throw error;
         }
 
         const requestId = `render-${++this.requestId}`;

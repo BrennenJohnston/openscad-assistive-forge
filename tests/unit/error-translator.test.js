@@ -517,3 +517,14 @@ describe('Error Translator', () => {
     });
   });
 });
+
+describe('an engine that could not start again', () => {
+  test('is told in plain words, with what to do', () => {
+    const friendly = translateError('The OpenSCAD engine could not start again.', {
+      code: 'ENGINE_RESTART_FAILED',
+    });
+    expect(friendly.title).toBe('Engine Stopped');
+    expect(friendly.suggestion).toMatch(/try again/i);
+    expect(friendly.suggestion).toMatch(/reload the page/i);
+  });
+});
