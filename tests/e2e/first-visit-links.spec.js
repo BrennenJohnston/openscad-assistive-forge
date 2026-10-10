@@ -115,7 +115,9 @@ test.describe('A shared link on a first visit', () => {
     )
 
     // The render worker fetches the engine; only a context route holds it.
-    await page.context().route('**/openscad.wasm', async (route) => {
+    // The address carries the build (openscad.wasm?v=...), so match the path.
+    const engine = (url) => url.pathname.endsWith('/openscad.wasm')
+    await page.context().route(engine, async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 6000))
       await route.continue()
     })
