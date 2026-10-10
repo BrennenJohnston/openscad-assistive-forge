@@ -111,7 +111,9 @@ export const MEASURED_SECONDS = {
   'classic-mode.spec.js': 400.8,
   'menu-parity.spec.js': 253.9,
   'accessibility.spec.js': 195.8,
-  'camera-face-view-orbit.spec.js': 165.5,
+  // Every pose is now read once the camera holds still: one local pass went
+  // from 90 s to 114 s, so 165.5 is scaled by the same ratio.
+  'camera-face-view-orbit.spec.js': 210.0,
   'tutorials.spec.js': 142.1,
   'tour-interaction.spec.js': 269.2,
   'preferences-dialog.spec.js': 90.6,
@@ -283,11 +285,11 @@ export const MEASURED_SECONDS = {
   // dxf-roundtrip, svg-edit-door) carry numbers from the same run.
   // classic-mode (403.9), classic-panels (392.4) and preferences-dialog
   // (88.9) measured within their bookings and are left alone.
-  'comparison.spec.js': 16.2,
   // Measured at five cases (30.0); a sixth, at 1280 x 600, scales it to 36.
   'menu-reach.spec.js': 36.0,
   'project-switch.spec.js': 52.2,
-  'render-queue.spec.js': 10.6,
+  // Four cases, 21.1 s locally; booked at 25 until a CI run measures it.
+  'actions-drawer.spec.js': 25.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

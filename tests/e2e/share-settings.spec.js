@@ -71,6 +71,15 @@ async function openActionsDrawer(page) {
   await page.locator('#actionsDrawerToggle').click()
 }
 
+// Publish is offered in Standard view only.
+async function useStandardView(page) {
+  const toggle = page.locator('#uiModeToggle')
+  if ((await toggle.getAttribute('aria-checked')) !== 'true') {
+    await toggle.click()
+  }
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+}
+
 const lastCopied = (page) => page.evaluate(() => window.__copied.at(-1) ?? null)
 
 test.describe('Sharing the values on screen', () => {
@@ -128,6 +137,7 @@ test.describe('Sharing the values on screen', () => {
     await openExample(page, 'simple-box')
     await setParameter(page, 'param-width', 72)
 
+    await useStandardView(page)
     await openActionsDrawer(page)
     await page.locator('#publishProjectBtn').click()
     await expect(page.locator('#publishManifestOutput')).toBeVisible({
@@ -158,6 +168,7 @@ test.describe('Sharing the values on screen', () => {
     page,
   }) => {
     await openExample(page, 'simple-box')
+    await useStandardView(page)
     await openActionsDrawer(page)
     await page.locator('#publishProjectBtn').click()
     await page.locator('#publishIncludeSettings').check()
@@ -173,6 +184,7 @@ test.describe('Sharing the values on screen', () => {
     await openExample(page, 'multi-file-box')
     await setParameter(page, 'param-width', 66)
 
+    await useStandardView(page)
     await openActionsDrawer(page)
     await page.locator('#publishProjectBtn').click()
     await expect(page.locator('#downloadProjectZipBtn')).toBeVisible({

@@ -69,8 +69,6 @@ let walking = false;
 /** Enough to clear the entries a few reload cycles can leave behind. */
 const MAX_WALK_STEPS = 5;
 
-let isComparisonMode = () => false;
-
 /**
  * Did the app itself answer the Back press currently being dispatched?
  *
@@ -236,29 +234,14 @@ function handlePopState() {
   armed = false;
   markAnswered();
 
-  // Comparison mode has its own popstate consumer, which exits the comparison
-  // view. That is a real step back inside the app, so this press is spent:
-  // re-arm and ask nothing. Two dialogs for one press would be the bug.
-  if (isComparisonMode()) {
-    rearm();
-    return;
-  }
-
   if (asking) return;
   void ask();
 }
 
-/**
- * @param {Object} [options]
- * @param {() => boolean} [options.isComparisonMode] Is the comparison view up?
- */
-export function installBackGuard(options = {}) {
+/** Guard the browser's Back button while a project is open. */
+export function installBackGuard() {
   if (installed) return;
   installed = true;
-
-  if (typeof options.isComparisonMode === 'function') {
-    isComparisonMode = options.isComparisonMode;
-  }
 
   onAppSurfaceChange((surface) => {
     if (surface === 'project') arm();

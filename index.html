@@ -5343,100 +5343,6 @@
                 <div class="actions-drawer-body" id="actionsDrawerBody">
                   <button
                     type="button"
-                    id="addToComparisonBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Add current configuration to comparison"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <rect x="3" y="3" width="7" height="18" rx="1"></rect>
-                      <rect x="14" y="3" width="7" height="18" rx="1"></rect>
-                    </svg>
-                    <span class="btn-text">Compare</span>
-                  </button>
-                  <span
-                    class="actions-drawer-divider"
-                    aria-hidden="true"
-                  ></span>
-                  <button
-                    type="button"
-                    id="addToQueueBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Add current configuration to render queue"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                      <path d="M12 8v8"></path>
-                      <path d="M8 12h8"></path>
-                    </svg>
-                    <span class="btn-text">Add to Queue</span>
-                  </button>
-                  <button
-                    type="button"
-                    id="viewQueueBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="View and manage render queue"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path d="M4 6h16"></path>
-                      <path d="M4 12h16"></path>
-                      <path d="M4 18h16"></path>
-                    </svg>
-                    <span class="btn-text">Queue</span>
-                    <span class="queue-badge" id="queueBadge">0</span>
-                  </button>
-                  <button
-                    type="button"
-                    id="exportParamsBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Export Customizer Settings as a JSON file"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                      ></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <span class="btn-text">Export Customizer Settings</span>
-                  </button>
-                  <button
-                    type="button"
                     id="publishProjectBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Generate a shareable manifest for hosting this project externally"
@@ -5506,43 +5412,6 @@
                       ></path>
                     </svg>
                     <span class="btn-text">Edit Drawing</span>
-                  </button>
-                  <span
-                    class="actions-drawer-divider"
-                    aria-hidden="true"
-                  ></span>
-                  <button
-                    type="button"
-                    id="viewConsoleBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="View OpenSCAD console output including echo statements"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <rect x="2" y="3" width="20" height="18" rx="2"></rect>
-                      <line x1="6" y1="8" x2="6" y2="8"></line>
-                      <line x1="10" y1="8" x2="18" y2="8"></line>
-                      <line x1="6" y1="12" x2="6" y2="12"></line>
-                      <line x1="10" y1="12" x2="18" y2="12"></line>
-                      <line x1="6" y1="16" x2="6" y2="16"></line>
-                      <line x1="10" y1="16" x2="14" y2="16"></line>
-                    </svg>
-                    <span class="btn-text">Console</span>
-                    <span
-                      class="console-badge hidden"
-                      id="consoleBadge"
-                      role="img"
-                      aria-label="New console output available"
-                      >!</span
-                    >
                   </button>
                 </div>
               </div>
@@ -6556,15 +6425,6 @@
             </div>
           </div>
         </div>
-        <!-- Comparison View (hidden by default) -->
-        <div
-          class="comparison-view hidden"
-          id="comparisonView"
-          role="region"
-          aria-label="Comparison view"
-        >
-          <!-- Comparison UI will be dynamically generated here -->
-        </div>
       </main>
       <div
         class="error-message hidden"
@@ -6728,127 +6588,6 @@
       </div>
     </div>
 
-    <!-- Render Queue Modal -->
-    <div
-      class="modal hidden"
-      id="renderQueueModal"
-      role="dialog"
-      aria-labelledby="queueModalTitle"
-      aria-modal="true"
-      aria-hidden="true"
-    >
-      <div class="modal-overlay" id="queueModalOverlay"></div>
-      <div class="modal-content modal-large">
-        <div class="modal-header">
-          <h2 id="queueModalTitle">Render Queue</h2>
-          <button
-            type="button"
-            class="modal-close"
-            id="queueModalClose"
-            aria-label="Close render queue"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body" id="queueModalBody">
-          <!-- Queue controls -->
-          <div class="queue-controls">
-            <button
-              type="button"
-              id="processQueueBtn"
-              class="btn btn-primary"
-              aria-label="Process all queued jobs"
-            >
-              ▶️ Process Queue
-            </button>
-            <button
-              type="button"
-              id="stopQueueBtn"
-              class="btn btn-outline hidden"
-              aria-label="Stop processing queue"
-            >
-              ⏸️ Stop
-            </button>
-            <button
-              type="button"
-              id="clearCompletedBtn"
-              class="btn btn-outline"
-              aria-label="Clear completed jobs"
-            >
-              🗑️ Clear Completed
-            </button>
-            <button
-              type="button"
-              id="clearQueueBtn"
-              class="btn btn-outline"
-              aria-label="Clear all jobs"
-            >
-              🗑️ Clear All
-            </button>
-            <button
-              type="button"
-              id="exportQueueBtn"
-              class="btn btn-outline"
-              aria-label="Export queue as JSON"
-            >
-              💾 Export Queue
-            </button>
-            <button
-              type="button"
-              id="importQueueBtn"
-              class="btn btn-outline"
-              aria-label="Import queue from JSON"
-            >
-              📂 Import Queue
-            </button>
-          </div>
-          <!-- Queue statistics -->
-          <div class="queue-stats" id="queueStats" aria-live="polite">
-            <span class="queue-stat"
-              >Total: <strong id="queueStatsTotal">0</strong></span
-            >
-            <span class="queue-stat"
-              >Queued: <strong id="queueStatsQueued">0</strong></span
-            >
-            <span class="queue-stat"
-              >Rendering: <strong id="queueStatsRendering">0</strong></span
-            >
-            <span class="queue-stat"
-              >Complete: <strong id="queueStatsComplete">0</strong></span
-            >
-            <span class="queue-stat"
-              >Error: <strong id="queueStatsError">0</strong></span
-            >
-          </div>
-          <!-- Queue list -->
-          <div class="queue-list" id="queueList" role="list">
-            <!-- Queue items will be dynamically generated here -->
-            <div class="queue-empty" id="queueEmpty" role="listitem">
-              <p>No jobs in queue</p>
-              <p class="queue-empty-hint">Click "Add to Queue" to add jobs</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!-- Hidden file input for queue import -->
-    <input
-      type="file"
-      id="queueImportInput"
-      accept=".json"
-      class="hidden"
-      aria-hidden="true"
-    />
     <!-- Source Code Viewer Modal -->
     <div
       class="modal hidden"
@@ -7264,8 +7003,12 @@
             <h4>Sharing Your Configuration</h4>
             <ul class="features-list">
               <li>
-                <strong>Export Customizer Settings</strong> (Actions menu) –
-                Download your current settings as a JSON file
+                <strong>Copy Link</strong> (Actions menu): a link that opens
+                this design with your settings
+              </li>
+              <li>
+                <strong>Import / Export</strong> (Presets): save your presets to
+                a JSON file and load them again
               </li>
             </ul>
             <h4>Sort Designs</h4>
@@ -7501,15 +7244,16 @@
             </p>
             <ul class="features-list">
               <li>
-                <strong>Export Customizer Settings</strong>: Download your
-                configuration as JSON
+                <strong>Copy Link</strong>: copy a link that opens this design
+                with your settings
               </li>
               <li>
-                <strong>Compare</strong>: Track and compare parameter changes
+                <strong>Edit Drawing</strong>: open an SVG or a photo in the
+                drawing editor
               </li>
               <li>
-                <strong>Queue</strong>: Batch multiple renders and process them
-                later
+                <strong>Publish</strong> (Standard view): make a manifest to
+                share this project from your own hosting
               </li>
             </ul>
             <h4>Focus Mode</h4>

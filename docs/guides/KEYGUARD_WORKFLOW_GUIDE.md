@@ -151,7 +151,7 @@ Use the **Snap Views** buttons (Top, Front, Side) for quick inspection angles.
 
 **Preset**: Click "Save Preset" in the Parameters panel. Use a descriptive name (e.g., "iPad10-TouchChat-8x6-ClientName").
 
-**JSON export**: Use the Actions drawer to export parameters as a shareable JSON file.
+**Share**: Copy Link in the Actions drawer gives a link that opens these settings; Import / Export in Presets saves your presets to a JSON file.
 
 ### 9. Print
 

@@ -227,7 +227,7 @@ Best practices for managing multiple client configurations:
 
 - Use clear preset names with client initials and device info
 - Document parameter values in client records
-- Keep a backup JSON export in each client's file
+- Keep each client's presets backed up in their file (Presets > Import / Export)
 - Review and update presets after each assessment
 
 ---

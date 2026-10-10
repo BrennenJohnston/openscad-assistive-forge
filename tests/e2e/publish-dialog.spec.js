@@ -31,6 +31,12 @@ async function openPublishDialog(page, exampleKey) {
   } catch {
     // Not every example raises the save prompt
   }
+  // Publish is offered in Standard view only.
+  const viewToggle = page.locator('#uiModeToggle')
+  if ((await viewToggle.getAttribute('aria-checked')) !== 'true') {
+    await viewToggle.click()
+  }
+  await expect(viewToggle).toHaveAttribute('aria-checked', 'true')
   const drawerToggle = page.locator('#actionsDrawerToggle')
   await drawerToggle.click()
   const publish = page.locator('#publishProjectBtn')

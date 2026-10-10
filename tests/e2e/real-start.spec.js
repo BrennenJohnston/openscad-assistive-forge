@@ -51,15 +51,6 @@ async function openSimpleBox(page) {
   await expect(closeTour).toBeHidden()
 }
 
-/** The actions drawer holds Compare and Queue; open it if collapsed. */
-async function openActionsDrawer(page) {
-  const btn = page.locator('#addToQueueBtn')
-  if (!(await btn.isVisible())) {
-    await page.locator('#actionsDrawerToggle').click()
-  }
-  await expect(btn).toBeVisible({ timeout: 10_000 })
-}
-
 /** The draft is written two seconds after the last change. */
 async function waitForDraft(page) {
   await page.waitForFunction(() => localStorage.getItem('openscad-forge-editor-draft') !== null, null, {
@@ -86,38 +77,6 @@ test.describe('A real start-up', () => {
     await waitForEngine(page)
     await expect(page.locator('#welcomeScreen')).toBeVisible()
     await openSimpleBox(page)
-    expectNoPageErrors(page)
-  })
-
-  // The queue is built at start-up, and on a first visit the engine is
-  // built later, after the welcome: the queue has to find it when it runs.
-  test('a first visit: the render queue renders, and an emptied queue is empty', async ({ page }) => {
-    attachInvariants(page)
-    await page.goto('/')
-    await acceptWelcome(page, { remember: false })
-    await declineTourOffer(page)
-    await waitForEngine(page)
-    await openSimpleBox(page)
-
-    await openActionsDrawer(page)
-    await page.locator('#addToQueueBtn').click()
-    await page.locator('#viewQueueBtn').click()
-    const queue = page.locator('#renderQueueModal')
-    await expect(queue).toBeVisible()
-    await page.locator('#processQueueBtn').click()
-    const job = queue.locator('.queue-item')
-    await expect(job.locator('.queue-item-stats')).toHaveText(/^[\d,]+ triangles$/, {
-      timeout: PREVIEW_TIMEOUT,
-    })
-    await expect(job.locator('.queue-item-error')).toHaveCount(0)
-
-    // Found by its action: the open dialog is still aria-hidden, so it
-    // offers no roles to find the button by.
-    await job.locator('button[data-action="remove"]').click()
-    await expect(job).toHaveCount(0)
-    await expect(page.locator('#queueEmpty')).toBeVisible()
-    await expect(page.locator('#queueStatsTotal')).toHaveText('0')
-    await expect(page.locator('#queueStatsComplete')).toHaveText('0')
     expectNoPageErrors(page)
   })
 

@@ -65,7 +65,6 @@ npm run test:e2e    # validates full workflows
 Related test files:
 - `tests/unit/zip-handler.test.js`
 - `tests/unit/validation-schemas.test.js`
-- `tests/unit/comparison-view.test.js` (HTML escaping)
 
 ## Dependency auditing
 

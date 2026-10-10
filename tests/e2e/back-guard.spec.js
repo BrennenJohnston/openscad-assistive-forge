@@ -209,33 +209,6 @@ test.describe('The guard belongs to the project surface', () => {
 test.describe('One Back press, one answer', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test('the comparison view answers the press itself, and no dialog stacks on top', async ({
-    page,
-  }) => {
-    test.setTimeout(240_000);
-    await openProject(page);
-
-    await page.locator('#actionsDrawerToggle').click();
-    await page.locator('#addToComparisonBtn').click();
-    await expect(page.locator('#comparisonView')).toBeVisible({
-      timeout: 30_000,
-    });
-
-    // The comparison listener predates the guard and could never fire before
-    // it: nothing in the app pushed history. Now that something does, this
-    // press belongs to the view that is open, not to the app's front door.
-    await page.goBack();
-    await expect(page.locator('#comparisonView')).toBeHidden({
-      timeout: 15_000,
-    });
-    await expect(leaveDialog(page)).toHaveCount(0);
-    expect((await appState(page)).surface).toBe('project');
-
-    // and the press was spent, not the guard: the next one asks.
-    await page.goBack();
-    await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
-  });
-
   test('A tour is still on its step after Stay', async ({ page }) => {
     test.setTimeout(240_000);
     await seed(page);

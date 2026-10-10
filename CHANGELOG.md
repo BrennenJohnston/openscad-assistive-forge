@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Actions drawer is shorter: the render queue, Compare, Export
+  Customizer Settings and its Console button are gone, and Publish is in
+  Standard view.
+
+### Fixed
+
+- The open Actions drawer stays on top of Preview Settings & Info in a
+  short window, so every button it shows can be pressed.
+
 ## [5.2.2] - 2026-10-09
 
 The OpenSCAD engine starts again in browsers that opened the app before

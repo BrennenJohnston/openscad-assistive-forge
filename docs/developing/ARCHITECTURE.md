@@ -38,7 +38,6 @@ mindmap
           parser.js
           state.js
           render-controller.js
-          render-queue.js
         UI Layer
           ui-generator.js
           preview.js
@@ -46,7 +45,6 @@ mindmap
           drawer-controller.js
         Features
           preset-manager.js
-          comparison-controller.js
           saved-projects-manager.js
           zip-handler.js
           library-manager.js
@@ -384,22 +382,6 @@ sequenceDiagram
     State->>Render: Request render (repeat)
 ```
 
-## Comparison mode
-
-Side-by-side rendering with shared controls:
-
-```mermaid
-flowchart LR
-    UI[comparison-view.js / comparison-controller.js] --> State[state.js]
-    State --> RenderA["render-controller (A)"]
-    State --> RenderB["render-controller (B)"]
-    RenderA --> Worker[openscad-worker.js]
-    RenderB --> Worker
-    RenderA --> PreviewA["preview.js (left)"]
-    RenderB --> PreviewB["preview.js (right)"]
-    UI -->|toggle / swap / sync| State
-```
-
 ## Key modules
 
 **Entry point:**
@@ -409,7 +391,6 @@ flowchart LR
 - `src/js/parser.js` - extracts Customizer annotations from SCAD
 - `src/js/state.js` - holds current parameter values
 - `src/js/render-controller.js` - queues and dispatches renders
-- `src/js/render-queue.js` - manages render queue and caching
 - `src/js/auto-preview-controller.js` - debounces parameter changes
 
 **UI layer:**
@@ -421,7 +402,6 @@ flowchart LR
 **Features:**
 - `src/js/preset-manager.js` - save/load parameter presets
 - `src/js/saved-projects-manager.js` - save/load full projects
-- `src/js/comparison-controller.js` - side-by-side mode
 - `src/js/zip-handler.js` - ZIP extraction and creation
 - `src/js/library-manager.js` - OpenSCAD library bundles
 - `src/js/tutorial-sandbox.js` - guided tutorials

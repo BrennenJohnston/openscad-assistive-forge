@@ -37,9 +37,13 @@ const STL_FIXTURE = path.join(
 const WASM_READY_TIMEOUT = 180_000;
 const D2R = Math.PI / 180;
 
-// Damping is on (dampingFactor 0.05), so the camera keeps easing after mouseup.
-// A second is ~3 time constants; the residue is under a tenth of a degree.
+// Damping is on (dampingFactor 0.05), so the camera keeps easing after mouseup,
+// a fixed share per frame. Measured after a 40 px pull: still 0.4 degrees from
+// rest at 1.2 s at 60 frames a second, and 1.9 degrees at 34. A slow runner is
+// further off still, so readCamera() waits for the pose to hold still.
 const SETTLE_MS = 1200;
+const STILL_DEG = 0.02;
+const STILL_TIMEOUT_MS = 15_000;
 
 // A stale up rolls the frame by 0.16 rad and more. Anything above five
 // thousandths here is a real frame tilt, not float noise.
@@ -94,7 +98,7 @@ async function enterClassic(page) {
  * The live camera as this spec judges it: how rolled the frame is, and where
  * the camera sits on its turntable.
  */
-async function readCamera(page) {
+async function readPose(page) {
   const cam = await page.evaluate(
     () => window.__forgeDebug?.cameraPose?.() ?? null
   );
@@ -109,6 +113,34 @@ async function readCamera(page) {
     elevationDeg: Math.asin(off[2] / len) / D2R,
     azimuthDeg: Math.atan2(off[0], -off[1]) / D2R,
   };
+}
+
+/**
+ * The pose once the camera has stopped easing: two reads 100 ms apart that
+ * agree. Every check then compares resting poses, however slow the machine.
+ */
+async function readCamera(page) {
+  let last = await readPose(page);
+  if (!last) return null;
+  const deadline = Date.now() + STILL_TIMEOUT_MS;
+  for (;;) {
+    await page.waitForTimeout(100);
+    const now = await readPose(page);
+    if (!now) return null;
+    if (
+      Math.abs(now.elevationDeg - last.elevationDeg) < STILL_DEG &&
+      Math.abs(now.azimuthDeg - last.azimuthDeg) < STILL_DEG
+    ) {
+      return now;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `the camera was still moving after ${STILL_TIMEOUT_MS} ms ` +
+          `(elevation ${now.elevationDeg}, azimuth ${now.azimuthDeg})`
+      );
+    }
+    last = now;
+  }
 }
 
 /**
