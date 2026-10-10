@@ -13,13 +13,17 @@
 # into the engine's assertion messages, so any other path gives different
 # bytes for the same code.
 #
-# The "round-to-nearest" variant makes one change to upstream: it adds
+# The "round-to-nearest" variant makes two changes to upstream. It adds
 # CGAL_ALWAYS_ROUND_TO_NEAREST beside the CGAL_DISABLE_ROUNDING_MATH_CHECK
 # that OpenSCAD's CMakeLists.txt already sets for Emscripten. WebAssembly can
 # only round to nearest, so without it CGAL's interval arithmetic, which
 # expects to set upward rounding, is unsound in the browser: minkowski() hulls
-# fail CGAL assertions and fall back to a far slower method. "baseline" builds
-# upstream unchanged, for comparison.
+# fail CGAL assertions and fall back to a far slower method. And it links the
+# engine with an 8 MiB stack. Emscripten's default is 64 KiB, which a model
+# that repeats a module a few hundred levels deep runs past, damaging memory
+# instead of stopping; OpenSCAD's own recursion guard assumes 8 MiB on
+# Emscripten, so with the default it never fires. "baseline" builds upstream
+# unchanged, for comparison.
 #
 # It needs git and Docker. The repeatable way to run it is the "Build OpenSCAD
 # wasm" workflow in .github/workflows, which uploads the output as an
@@ -43,6 +47,9 @@ OPENSCAD_VERSION="${OPENSCAD_VERSION:-2026.04.03}"
 IMAGE="${IMAGE:-openscad/wasm-base-release@sha256:f73d33d5f2fd4c7ae4d3aaacb1e2e2deb193b878b38bb80c8235c933ac340c66}"
 VARIANT="${VARIANT:-round-to-nearest}"
 WASM_TYPE="${WASM_TYPE:-web}"
+# The round-to-nearest engine's stack in bytes: what OpenSCAD's recursion guard
+# assumes on Emscripten.
+STACK_SIZE=8388608
 
 case "$VARIANT" in round-to-nearest|baseline) ;; *)
   echo "VARIANT must be round-to-nearest or baseline, not '$VARIANT'" >&2; exit 1 ;;
@@ -80,6 +87,9 @@ if [ "$VARIANT" = "round-to-nearest" ]; then
     echo "The build image's CGAL does not know CGAL_ALWAYS_ROUND_TO_NEAREST." >&2
     exit 1
   fi
+  LINKER_FLAGS="-sSTACK_SIZE=$STACK_SIZE"
+else
+  LINKER_FLAGS=""
 fi
 
 # OpenSCAD's CI gives CMake the abbreviated hash git prints for the commit,
@@ -87,15 +97,18 @@ fi
 # The full hash would be a different string in the binary.
 docker run --rm -v "$SRC:/root/project" -v "$BUILD:/root/build" -w /root/project \
   -e WASM_TYPE="$WASM_TYPE" -e OPENSCAD_COMMIT="${OPENSCAD_COMMIT:0:8}" \
-  -e OPENSCAD_VERSION="$OPENSCAD_VERSION" "$IMAGE" bash -c '
+  -e OPENSCAD_VERSION="$OPENSCAD_VERSION" -e LINKER_FLAGS="$LINKER_FLAGS" \
+  "$IMAGE" bash -c '
     set -euo pipefail
     find /root/build -mindepth 1 -delete
+    extra=()
+    if [ -n "$LINKER_FLAGS" ]; then extra+=("-DCMAKE_EXE_LINKER_FLAGS=$LINKER_FLAGS"); fi
     emcmake cmake -G Ninja -B ../build . \
       -DCMAKE_BUILD_TYPE=Release \
       -DWASM_BUILD_TYPE="$WASM_TYPE" \
       -DOPENSCAD_COMMIT="$OPENSCAD_COMMIT" \
       -DOPENSCAD_VERSION="$OPENSCAD_VERSION" \
-      -DSNAPSHOT=ON -DEXPERIMENTAL=ON
+      -DSNAPSHOT=ON -DEXPERIMENTAL=ON ${extra[@]+"${extra[@]}"}
     cmake --build ../build'
 
 rm -rf "$OUT"
@@ -116,12 +129,14 @@ fi
   echo "Emscripten:       $(docker run --rm "$IMAGE" emcc --version | head -1)"
   echo "CGAL:             $(docker run --rm "$IMAGE" awk '/#define CGAL_VERSION /{print $3}' /emsdk/upstream/emscripten/cache/sysroot/include/CGAL/version.h)"
   echo "CMake settings:   -DCMAKE_BUILD_TYPE=Release -DSNAPSHOT=ON -DEXPERIMENTAL=ON"
+  echo "Linker settings:  ${LINKER_FLAGS:-none}"
   echo "Build paths:      /root/project (source), /root/build (output)"
   echo "Commit in engine: ${OPENSCAD_COMMIT:0:8}"
   echo
   if [ "$VARIANT" = "round-to-nearest" ]; then
-    echo "Change to upstream (CMakeLists.txt):"
+    echo "Changes to upstream (CMakeLists.txt, then linking):"
     git -C "$SRC" diff --unified=0 -- CMakeLists.txt | grep '^[-+][^-+]'
+    echo "+ $LINKER_FLAGS"
   else
     echo "Change to upstream: none"
   fi
