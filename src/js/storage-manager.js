@@ -625,8 +625,8 @@ export async function getDetailedStorageInfo() {
 // ============================================================================
 
 // Companion handling mirrors zip-handler.js so every import path stores
-// one shape: text formats as strings, images as base64 data URLs, and
-// binary formats the renderer cannot use (e.g. .stl) skipped with a log.
+// one shape: text formats as strings, images and the meshes import() reads
+// as base64 data URLs, and binary formats nothing reads skipped with a log.
 // File.text() never throws on binary input (it lossily decodes as UTF-8),
 // so reading every companion as text would silently corrupt every
 // imported .png and .stl.
@@ -640,7 +640,11 @@ const FOLDER_IMPORT_TEXT_EXTS = new Set([
   '.csv',
   '.json',
   '.txt',
+  '.off',
 ]);
+
+/** Binary meshes import() reads, stored as data URLs (matches zip-handler MESH_EXTS) */
+const FOLDER_IMPORT_MESH_EXTS = new Set(['.stl', '.3mf', '.obj', '.amf']);
 
 /** Image extensions stored as data URLs (matches zip-handler IMAGE_EXTS) */
 const FOLDER_IMPORT_IMAGE_EXTS = new Set([
@@ -702,6 +706,9 @@ export async function readProjectFilesFromList(fileList, mainFilePath) {
       const mime = ext === '.jpg' ? 'jpeg' : ext.slice(1);
       projectFiles[relPath] =
         `data:image/${mime};base64,${bufferToBase64(await f.arrayBuffer())}`;
+    } else if (FOLDER_IMPORT_MESH_EXTS.has(ext)) {
+      projectFiles[relPath] =
+        `data:application/octet-stream;base64,${bufferToBase64(await f.arrayBuffer())}`;
     } else {
       console.log(
         `[FolderImport] Skipping companion (not usable by the renderer): ${rel}`

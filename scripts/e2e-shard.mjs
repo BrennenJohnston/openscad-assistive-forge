@@ -293,6 +293,8 @@ export const MEASURED_SECONDS = {
   // Two cases, 5.8 s locally with a warm engine; booked at 20 for the cold
   // engine load each CI case pays.
   'engine-recovery.spec.js': 20.0,
+  // Two cases, about 10 s locally with a warm engine; booked at 20 likewise.
+  'mesh-companion.spec.js': 20.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

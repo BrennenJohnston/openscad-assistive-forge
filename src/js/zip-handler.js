@@ -22,18 +22,17 @@ export async function extractZipFiles(zipFile) {
     // and THREE.js overlay renderer can consume them directly.
     const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
 
-    // Non-image binary types that cannot be stored as text strings and are
-    // not used by the OpenSCAD WASM renderer. Extracting these as UTF-8 text
-    // would corrupt their content and waste significant memory.
+    // Binary meshes import() reads: kept byte for byte as data URLs, which
+    // the worker decodes when it mounts them.
+    const MESH_EXTS = new Set(['stl', '3mf', 'obj', 'amf']);
+
+    // Binary types nothing reads. Extracting these as UTF-8 text would
+    // corrupt their content and waste significant memory.
     const BINARY_ONLY_EXTS = new Set([
       'bmp',
       'tiff',
       'tif',
       'ico',
-      'stl',
-      'obj',
-      'amf',
-      '3mf',
       'wrl',
       'zip',
       'gz',
@@ -86,7 +85,16 @@ export async function extractZipFiles(zipFile) {
         continue;
       }
 
-      // Skip non-image binary files
+      if (MESH_EXTS.has(ext)) {
+        const base64Data = await zipEntry.async('base64');
+        files.set(
+          normalizedPath,
+          `data:application/octet-stream;base64,${base64Data}`
+        );
+        continue;
+      }
+
+      // Skip binary files nothing reads
       if (BINARY_ONLY_EXTS.has(ext)) {
         console.log(
           `[ZIP] Skipping binary file (not usable as text): ${relativePath}`

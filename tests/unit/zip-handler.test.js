@@ -454,15 +454,36 @@ describe('ZIP Handler', () => {
       expect(value).toMatch(/^data:image\/jpeg;base64,/)
     })
 
-    it('should still skip non-image binary files', async () => {
+    // import() reads these, so they are kept, byte for byte.
+    it.each(['stl', '3mf', 'obj', 'amf'])(
+      'keeps a .%s mesh as a byte-identical data URL',
+      async (ext) => {
+        const bytes = new Uint8Array([0x73, 0x74, 0x6c, 0x00, 0xff, 0x80, 0x0d, 0x0a])
+        const zip = new JSZip()
+        zip.file('main.scad', `import("parts/model.${ext}");`)
+        zip.file(`parts/model.${ext}`, bytes)
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        const result = await extractZipFiles(zipBlob)
+
+        const value = result.files.get(`parts/model.${ext}`)
+        expect(value).toMatch(/^data:application\/octet-stream;base64,/)
+        const decoded = Uint8Array.from(atob(value.split(',')[1]), (c) =>
+          c.charCodeAt(0)
+        )
+        expect(Array.from(decoded)).toEqual(Array.from(bytes))
+      }
+    )
+
+    it('should still skip binary files nothing reads', async () => {
       const zip = new JSZip()
       zip.file('main.scad', 'cube([10, 10, 10]);')
-      zip.file('model.stl', new Uint8Array([0x73, 0x74, 0x6c])) // fake STL
+      zip.file('manual.pdf', new Uint8Array([0x25, 0x50, 0x44, 0x46]))
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const result = await extractZipFiles(zipBlob)
 
-      expect(result.files.has('model.stl')).toBe(false)
+      expect(result.files.has('manual.pdf')).toBe(false)
     })
 
     it('should extract nested PNG files preserving path', async () => {
