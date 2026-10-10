@@ -437,11 +437,18 @@ export const TRANSLATIONS_BY_CODE = {
       'Check include/use paths and file names. If using a ZIP project, ensure all referenced files are included.',
   },
   RECURSION: {
-    title: 'Infinite Recursion',
+    title: 'Model Too Deep',
     explanation:
-      'The model has a module or function that calls itself forever.',
+      'The model repeats a module or function inside itself more times than this browser can follow.',
     suggestion:
-      'Check recursive module or function calls for a missing termination condition.',
+      'Try a smaller value for the setting that sets how many times it repeats. Desktop OpenSCAD can go deeper.',
+  },
+  ENGINE_OUT_OF_ROOM: {
+    title: 'Engine Ran Out of Room',
+    explanation:
+      'The browser engine ran out of room while building the model. The most common cause is a module or function that repeats inside itself many times.',
+    suggestion:
+      'Try a smaller value for the setting that sets how many times it repeats. Desktop OpenSCAD can go deeper.',
   },
   CGAL_ASSERTION: {
     title: 'Known Browser Engine Limitation',
@@ -486,6 +493,32 @@ export const TRANSLATIONS_BY_CODE = {
       'or simplify boolean operations.',
   },
 };
+
+// The render controller's own stop at the time limit means what the worker's
+// TIMEOUT means, and is told the same way.
+TRANSLATIONS_BY_CODE.RENDER_TIMEOUT = TRANSLATIONS_BY_CODE.TIMEOUT;
+
+/**
+ * The status line, and the announcement, for a preview that failed.
+ * @param {Error} error - The failure, with the code the pipeline gave it
+ * @returns {string}
+ */
+export function previewFailureSentence(error) {
+  if (error?.code === 'RENDER_TIMEOUT' && error.timeoutSeconds) {
+    return (
+      `Preview stopped: it took longer than ${error.timeoutSeconds} seconds. ` +
+      'Try a simpler setting, then change a value to preview again.'
+    );
+  }
+  const friendly = translateError(error?.message || String(error), {
+    code: error?.code,
+  });
+  // A title alone cannot tell the person that the next change starts the
+  // engine again.
+  return error?.code === 'ENGINE_RESTART_FAILED'
+    ? `Preview failed: ${friendly.title}. ${friendly.suggestion}`
+    : `Preview failed: ${friendly.title}`;
+}
 
 /**
  * Default fallback for unknown errors

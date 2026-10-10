@@ -61,6 +61,11 @@ test.describe('After the engine runs out of stack', () => {
 
     const indicator = page.locator('.preview-state-indicator')
     await expect(indicator).toHaveClass(/state-error/, { timeout: 120_000 })
+    // Chromium says plainly it ran out of stack; Firefox reports whatever the
+    // overrun damaged, so its words name the likely cause.
+    await expect(page.locator('#statusArea')).toHaveText(
+      /^Preview failed: (Model Too Deep|Engine Ran Out of Room)$/
+    )
 
     await setSteps(page, 5)
     await expect(indicator).toHaveClass(/state-current/, { timeout: 90_000 })
@@ -97,5 +102,8 @@ test.describe('A preview stopped at the time limit', () => {
     // the stop. Jump past both while the engine is still busy.
     await page.clock.fastForward(120_000)
     await expect(indicator).toHaveClass(/state-error/, { timeout: 30_000 })
+    await expect(page.locator('#statusArea')).toHaveText(
+      'Preview stopped: it took longer than 90 seconds. Try a simpler setting, then change a value to preview again.'
+    )
   })
 })

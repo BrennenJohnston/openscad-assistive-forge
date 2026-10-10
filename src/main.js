@@ -111,6 +111,7 @@ import {
 } from './js/modal-manager.js';
 import {
   translateError,
+  previewFailureSentence,
   findFailedCheck,
   findMissingLibrary,
   showErrorModal,
@@ -7454,15 +7455,7 @@ async function initApp() {
               return;
             }
 
-            const friendly = translateError(error?.message || String(error), {
-              code: error?.code,
-            });
-            // A title alone cannot tell the person that the next change
-            // starts the engine again.
-            const sentence =
-              error?.code === 'ENGINE_RESTART_FAILED'
-                ? `Preview failed: ${friendly.title}. ${friendly.suggestion}`
-                : `Preview failed: ${friendly.title}`;
+            const sentence = previewFailureSentence(error);
             updateStatus(sentence, 'error');
             _announceError(sentence);
           }
