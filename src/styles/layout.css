@@ -1729,6 +1729,16 @@ body[data-app-surface='welcome'] #uiModeToggle {
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* The open Actions drawer rises out of this bar over the preview. Lift the
+   bar above the open Preview Settings panel so, where the two overlap, the
+   drawer the person just opened is the one a press reaches. Phone widths fix
+   the bar higher still (below). */
+@media (min-width: 768px) {
+  .preview-panel .actions-bar:has(.actions-drawer:not(.collapsed)) {
+    z-index: calc(var(--z-index-sticky) + 15);
+  }
+}
+
 /* Tablet and up: side-by-side layout */
 @media (min-width: 768px) {
   .header-content {

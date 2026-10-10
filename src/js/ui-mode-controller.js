@@ -121,6 +121,14 @@ const PANEL_REGISTRY = [
     selector: '#projectFilesControls',
     defaultHiddenInBasic: true,
   },
+  // Publish serves people who host a project, not the people a Simplified
+  // view is set up for.
+  {
+    id: 'publish',
+    label: 'Publish',
+    selector: '#publishProjectBtn',
+    defaultHiddenInBasic: true,
+  },
   {
     id: 'toolbarMenuFile',
     label: 'Toolbar: File',

@@ -14723,7 +14723,6 @@ if (rounded) {
   // =========================================
   // Console output display for ECHO/WARNING/ERROR messages
   // =========================================
-  const viewConsoleBtn = document.getElementById('viewConsoleBtn');
   const consoleOutputModal = document.getElementById('consoleOutputModal');
   const consoleOutputClose = document.getElementById('consoleOutputClose');
   const consoleOutputOverlay = document.getElementById('consoleOutputOverlay');
@@ -14731,7 +14730,6 @@ if (rounded) {
   const consoleCopyBtn = document.getElementById('consoleCopyBtn');
   const consoleClearBtn = document.getElementById('consoleClearBtn');
   const consoleCloseBtn = document.getElementById('consoleCloseBtn');
-  const consoleBadge = document.getElementById('consoleBadge');
 
   // State for console output
   let lastConsoleOutput = '';
@@ -14793,18 +14791,10 @@ if (rounded) {
       if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
         renderConsoleOutput('');
       }
-      if (consoleBadge) {
-        consoleBadge.classList.add('hidden');
-      }
       return;
     }
 
     lastConsoleOutput = normalizedOutput;
-
-    // Show badge to indicate new output
-    if (consoleBadge) {
-      consoleBadge.classList.remove('hidden');
-    }
 
     // If modal is open, update it
     if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
@@ -15022,11 +15012,6 @@ if (rounded) {
   const openConsoleModal = () => {
     if (!consoleOutputModal) return;
 
-    // Clear the "new output" badge
-    if (consoleBadge) {
-      consoleBadge.classList.add('hidden');
-    }
-
     // Render current console output
     renderConsoleOutput(lastConsoleOutput);
 
@@ -15043,8 +15028,6 @@ if (rounded) {
     // Announce to screen readers
     announceImmediate('Console output panel opened');
   };
-
-  viewConsoleBtn?.addEventListener('click', openConsoleModal);
 
   // Echo drawer toggle
   const echoDrawerToggleBtn = document.getElementById('echoDrawerToggle');
@@ -15168,9 +15151,6 @@ if (rounded) {
    */
   function clearConsoleState() {
     lastConsoleOutput = '';
-    if (consoleBadge) {
-      consoleBadge.classList.add('hidden');
-    }
     renderConsoleOutput('');
     consolePanel.clear();
     const consolePanelDetails = document.getElementById('consolePanel');
