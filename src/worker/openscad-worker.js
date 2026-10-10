@@ -41,6 +41,7 @@ import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
 import { ensureLibraryDir, writeLibraryFile } from './library-fs.js';
 import { unpackLibraryArchive } from './lib-archive.js';
+import { engineFileUrl } from './engine-url.js';
 import {
   translateWorkerError,
   MODEL_NOT_2D_SUGGESTION,
@@ -179,9 +180,13 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         }
 
         // Verify size and SHA-256 of both the JS loader and the WASM binary
+        // the engine will actually load.
         const filesToCheck = [
           { name: 'openscad.js', url: wasmJsUrl },
-          { name: 'openscad.wasm', url: `${wasmBasePath}/openscad.wasm` },
+          {
+            name: 'openscad.wasm',
+            url: engineFileUrl(wasmBasePath, integrityData),
+          },
         ];
         const mismatches = [];
 
@@ -238,6 +243,10 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         console.log('[Worker] Integrity check skipped:', integrityErr.message);
     }
 
+    // The binary's address names its build (see engine-url.js), so a copy
+    // kept from an earlier engine is never paired with this loader.
+    const wasmBinaryUrl = engineFileUrl(wasmBasePath, integrityData);
+
     // Dynamic import of official WASM module
     const OpenSCADModule = await import(/* @vite-ignore */ wasmJsUrl);
     const OpenSCAD = OpenSCADModule.default;
@@ -260,7 +269,10 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       locateFile: (path) => {
         // All WASM assets are in the same directory
         if (path.endsWith('.wasm') || path.endsWith('.data')) {
-          const resolved = `${wasmBasePath}/${path}`;
+          const resolved =
+            path === 'openscad.wasm'
+              ? wasmBinaryUrl
+              : `${wasmBasePath}/${path}`;
           if (!wasmAssetLogShown) {
             if (import.meta.env.DEV)
               console.log('[Worker] Resolved WASM asset:', resolved);
