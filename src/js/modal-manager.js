@@ -14,10 +14,48 @@ const modalStates = new Map();
 let bodyOverflowBefore = null;
 
 /**
+ * Whether focus can usefully go back to an element: still in the page, able
+ * to take focus, and not inside anything hidden.
+ * @param {Element|null} el
+ * @returns {boolean}
+ */
+function canTakeFocusBack(el) {
+  return Boolean(
+    el &&
+    el !== document.body &&
+    el.isConnected &&
+    typeof el.focus === 'function' &&
+    !el.disabled &&
+    !el.closest('[hidden], .hidden, [aria-hidden="true"]')
+  );
+}
+
+/**
+ * Where focus goes when a dialog closes: the control that opened it, else
+ * the fallback named on closing or opening, else the main region. Never the
+ * page body, where a keyboard or screen reader user loses their place.
+ */
+function focusAfterClose(state, fallbackFocus) {
+  return (
+    [
+      state?.trigger,
+      fallbackFocus,
+      state?.fallbackFocus,
+      document.getElementById('main-content'),
+    ].find(canTakeFocusBack) || null
+  );
+}
+
+/**
  * Open a modal with proper focus management
  * @param {HTMLElement} modal - Modal element to open
  * @param {Object} [options] - Options
  * @param {HTMLElement} [options.focusTarget] - Element to focus on open (defaults to first focusable)
+ * @param {HTMLElement} [options.returnFocus] - Where focus returns on close
+ *   (defaults to what had focus): a menu's button, when a menu item that
+ *   closes with the menu opened the dialog
+ * @param {HTMLElement} [options.fallbackFocus] - Where focus goes if that is
+ *   gone or hidden by the time the dialog closes
  * @param {Function} [options.onClose] - Callback when modal is closed
  * @returns {void}
  */
@@ -25,7 +63,7 @@ export function openModal(modal, options = {}) {
   if (!modal) return;
 
   // Store trigger for focus restoration
-  const trigger = document.activeElement;
+  const trigger = options.returnFocus || document.activeElement;
 
   // Create focus trap using shared utility
   const focusTrap = createFocusTrap(modal);
@@ -33,6 +71,7 @@ export function openModal(modal, options = {}) {
   // Store state
   modalStates.set(modal, {
     trigger,
+    fallbackFocus: options.fallbackFocus || null,
     focusTrap,
     onClose: options.onClose || null,
   });
@@ -56,22 +95,24 @@ export function openModal(modal, options = {}) {
 /**
  * Close a modal with proper focus restoration
  * @param {HTMLElement} modal - Modal element to close
+ * @param {Object} [options] - Options
+ * @param {HTMLElement} [options.fallbackFocus] - Where focus goes if the
+ *   control that opened the dialog is gone or hidden (a deleted card's
+ *   button, say)
  * @returns {void}
  */
-export function closeModal(modal) {
+export function closeModal(modal, options = {}) {
   if (!modal) return;
 
   const state = modalStates.get(modal);
+  const target = state ? focusAfterClose(state, options.fallbackFocus) : null;
 
   if (state) {
     // Release focus trap and restore focus before setting aria-hidden.
     // Keeping a focused element inside an aria-hidden container violates
     // WCAG 4.1.2 and the APG modal dialog pattern.
     state.focusTrap.deactivate();
-
-    if (state.trigger && typeof state.trigger.focus === 'function') {
-      state.trigger.focus();
-    }
+    target?.focus();
   }
 
   modal.classList.add('hidden');
@@ -79,16 +120,15 @@ export function closeModal(modal) {
 
   // WebKit may lose focus during the hide/reflow cycle. Retry across
   // both a microtask (setTimeout 0) and a frame boundary (rAF).
-  if (state?.trigger && typeof state.trigger.focus === 'function') {
-    const trigger = state.trigger;
+  if (target) {
     setTimeout(() => {
-      if (document.activeElement !== trigger) {
-        trigger.focus();
+      if (document.activeElement !== target) {
+        target.focus();
       }
     }, 50);
     requestAnimationFrame(() => {
-      if (document.activeElement !== trigger) {
-        trigger.focus();
+      if (document.activeElement !== target) {
+        target.focus();
       }
     });
   }

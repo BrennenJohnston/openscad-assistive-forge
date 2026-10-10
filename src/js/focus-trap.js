@@ -351,3 +351,22 @@ export function createDocumentFocusTrap(container, options = {}) {
 export function trapFocusHandler(container) {
   return createFocusTrap(container).getHandler();
 }
+
+/**
+ * Disable a button without dropping focus on the page body. A focused button
+ * that becomes disabled loses focus, and a keyboard or screen reader user
+ * loses their place, so focus moves to the fallback first.
+ *
+ * @param {HTMLButtonElement|null} button - The button to disable
+ * @param {HTMLElement|null} fallback - Where focus goes if the button had it
+ */
+export function disableKeepingFocus(button, fallback) {
+  if (!button) return;
+  if (
+    document.activeElement === button &&
+    typeof fallback?.focus === 'function'
+  ) {
+    fallback.focus();
+  }
+  button.disabled = true;
+}
