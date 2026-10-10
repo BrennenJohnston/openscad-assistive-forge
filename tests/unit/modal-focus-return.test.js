@@ -91,6 +91,29 @@ describe('a dialog closing', () => {
     closeModal(modal)
     expect(document.activeElement).toBe(fallback)
   })
+
+  it('keeps the focus a caller moves after closing', () => {
+    // A list drawn again under the dialog loses its opener, and the caller
+    // finds the new row itself. The retries are for focus lost in the hide,
+    // not for taking it back from there.
+    const frames = []
+    globalThis.requestAnimationFrame = (cb) => frames.push(cb)
+    const main = document.createElement('main')
+    main.id = 'main-content'
+    main.tabIndex = -1
+    document.body.appendChild(main)
+    const opener = button('Edit', main)
+    opener.focus()
+    const modal = dialogWithButton()
+    openModal(modal)
+    opener.remove()
+    closeModal(modal)
+    const row = button('helpers.scad', main)
+    row.focus()
+    frames.splice(0).forEach((cb) => cb())
+    vi.advanceTimersByTime(60)
+    expect(document.activeElement).toBe(row)
+  })
 })
 
 describe('a focused button being disabled', () => {
@@ -111,5 +134,18 @@ describe('a focused button being disabled', () => {
     disableKeepingFocus(undo, button('Redo'))
     expect(undo.disabled).toBe(true)
     expect(document.activeElement).toBe(field)
+  })
+})
+
+describe('a dialog opening', () => {
+  it('takes focus at once, before the next frame', () => {
+    // A busy page, or a tab in the background, can hold the next frame back;
+    // a key pressed meanwhile must reach the dialog, not what is behind it.
+    globalThis.requestAnimationFrame = () => 0
+    const opener = button('Help')
+    opener.focus()
+    const modal = dialogWithButton()
+    openModal(modal)
+    expect(modal.contains(document.activeElement)).toBe(true)
   })
 })
