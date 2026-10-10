@@ -150,6 +150,19 @@ export function decodeDataUrl(dataUrl) {
 }
 
 /**
+ * Whether a project path climbs out of its folder: a ".." segment, after
+ * either kind of slash. Two dots inside a name ("puzzle_V2..scad") are only
+ * part of the name.
+ * @param {string} path
+ * @returns {boolean}
+ */
+export function hasParentSegment(path) {
+  return String(path)
+    .split(/[\\/]/)
+    .some((segment) => segment === '..');
+}
+
+/**
  * Sanitize a filename for safe use in the virtual filesystem.
  * Rejects path traversal and strips directory prefixes.
  *

@@ -262,6 +262,34 @@ export function showProcessingOverlay(message, opts = {}) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The main-file choices for a folder: every .scad, the folder's own files
+ * first, then each subfolder's in name order. A folder of many projects then
+ * offers all of them, and two files with one name are told apart by their
+ * folder.
+ * @param {string[]} paths - webkitRelativePath values under rootDir
+ * @param {string} rootDir - The chosen folder's name
+ * @returns {{folder: string, paths: string[]}[]} folder is '' for the
+ *   chosen folder itself, else the subfolder's path inside it
+ */
+export function groupScadChoices(paths, rootDir) {
+  const prefix = rootDir ? `${rootDir}/` : '';
+  const groups = new Map();
+  for (const path of paths) {
+    const inner = path.startsWith(prefix) ? path.slice(prefix.length) : path;
+    const slash = inner.lastIndexOf('/');
+    const folder = slash === -1 ? '' : inner.slice(0, slash);
+    if (!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder).push(path);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
+    .map(([folder, list]) => ({
+      folder,
+      paths: [...list].sort((a, b) => a.localeCompare(b)),
+    }));
+}
+
+/**
  * Initialize the file handler controller.
  * @param {Object} deps
  * @param {Function} deps.getPreviewManager - Returns current PreviewManager (may be null)
@@ -363,23 +391,36 @@ export function initFileHandler({
    * Show a modal prompting the user to select one .scad file from a list.
    * @param {string[]} paths - webkitRelativePath values to choose from
    * @param {string} prompt - Heading text
+   * @param {string} rootDir - The chosen folder's name, which heads its own files
    * @returns {Promise<string|null>} Selected path, or null if canceled
    */
-  async function _promptScadSelection(paths, prompt) {
+  async function _promptScadSelection(paths, prompt, rootDir) {
     return new Promise((resolve) => {
       const dialog = document.createElement('dialog');
       dialog.className = 'folder-scad-select-dialog';
       dialog.setAttribute('aria-labelledby', 'scadSelectTitle');
 
-      const optionsHtml = paths
-        .map(
-          (p, i) =>
-            `<label class="import-mode-option">
-              <input type="radio" name="scadFile" value="${escapeHtml(p)}"${i === 0 ? ' checked' : ''} />
+      const groups = groupScadChoices(paths, rootDir);
+      const firstPath = groups[0]?.paths[0];
+      const optionHtml = (p) =>
+        `<label class="import-mode-option">
+              <input type="radio" name="scadFile" value="${escapeHtml(p)}"${p === firstPath ? ' checked' : ''} />
               <span>${escapeHtml(p.split('/').pop())}</span>
-            </label>`
-        )
-        .join('');
+            </label>`;
+      // One folder needs no headings; several get one group each, named by
+      // the folder, so a screen reader hears where each file lives.
+      const optionsHtml =
+        groups.length === 1
+          ? groups[0].paths.map(optionHtml).join('')
+          : groups
+              .map(
+                ({ folder, paths: inFolder }) =>
+                  `<fieldset class="import-mode-fieldset">
+              <legend class="import-mode-legend">${escapeHtml(folder || rootDir)}</legend>
+              ${inFolder.map(optionHtml).join('')}
+            </fieldset>`
+              )
+              .join('');
 
       dialog.innerHTML = `
         <form method="dialog" class="import-mode-form">
@@ -485,16 +526,20 @@ export function initFileHandler({
     if (scadInRoot.length === 1) {
       mainFilePath = scadInRoot[0].webkitRelativePath;
     } else if (scadInRoot.length > 1) {
+      // Every .scad, not only the root's: a folder of projects keeps the
+      // others in subfolders.
       dismissOverlay();
       mainFilePath = await _promptScadSelection(
-        scadInRoot.map((f) => f.webkitRelativePath),
-        'Multiple .scad files found in the folder root. Select the main file:'
+        scadAnywhere.map((f) => f.webkitRelativePath),
+        'Multiple .scad files found in the folder root. Select the main file:',
+        rootDir
       );
     } else if (scadAnywhere.length > 0) {
       dismissOverlay();
       mainFilePath = await _promptScadSelection(
         scadAnywhere.map((f) => f.webkitRelativePath),
-        'No .scad files found in the folder root. Select the main file:'
+        'No .scad files found in the folder root. Select the main file:',
+        rootDir
       );
     } else {
       dismissOverlay();

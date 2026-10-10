@@ -23,7 +23,10 @@
  * - Threaded WASM for multi-core parallelism (requires SharedArrayBuffer)
  */
 
-import { resolveFileParams } from '../js/file-param-resolver.js';
+import {
+  resolveFileParams,
+  hasParentSegment,
+} from '../js/file-param-resolver.js';
 import {
   FONT_ASSET_DIR,
   FONT_FILES,
@@ -649,7 +652,7 @@ async function mountFiles(files, options = {}) {
 
   for (const filePath of files.keys()) {
     // Security: Reject path traversal attempts
-    if (filePath.includes('..') || filePath.startsWith('/')) {
+    if (hasParentSegment(filePath) || filePath.startsWith('/')) {
       console.warn(`[Worker FS] Skipping invalid path: ${filePath}`);
       continue;
     }
@@ -688,7 +691,7 @@ async function mountFiles(files, options = {}) {
 
   for (const [filePath, content] of files.entries()) {
     // Security: Skip path traversal attempts
-    if (filePath.includes('..') || filePath.startsWith('/')) {
+    if (hasParentSegment(filePath) || filePath.startsWith('/')) {
       continue;
     }
 

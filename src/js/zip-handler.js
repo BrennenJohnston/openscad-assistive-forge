@@ -3,6 +3,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { hasParentSegment } from './file-param-resolver.js';
+
 /**
  * Extract files from a ZIP archive
  * @param {File|Blob} zipFile - ZIP file to extract
@@ -61,7 +63,7 @@ export async function extractZipFiles(zipFile) {
 
       // Security: Reject paths with directory traversal attempts
       if (
-        normalizedPath.includes('..') ||
+        hasParentSegment(normalizedPath) ||
         normalizedPath.startsWith('/') ||
         normalizedPath.includes('\\')
       ) {
