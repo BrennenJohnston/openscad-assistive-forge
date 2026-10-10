@@ -1204,14 +1204,16 @@ describe('Binary STL Detection', () => {
 })
 
 describe('a restart that fails does not stop later renders', () => {
-  // The file's last case, and it logs each failed attempt and the finished
-  // render. Held here, so no console write is still in flight when the file
-  // ends and Vitest closes its channel to the worker.
+  // The file's last case, and it logs each failed attempt and, last of all,
+  // the finished render (console.debug). Every console method is held here,
+  // so no write is still in flight when the file ends and Vitest closes its
+  // channel to the worker.
   let errorSpy
   beforeEach(() => {
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    for (const method of ['warn', 'log', 'info', 'debug']) {
+      vi.spyOn(console, method).mockImplementation(() => {})
+    }
   })
   afterEach(() => {
     vi.restoreAllMocks()
