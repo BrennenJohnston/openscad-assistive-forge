@@ -880,6 +880,12 @@ export class KeyboardConfig {
     if (!this.enabled) return;
 
     const target = event.target;
+
+    // Escape inside an open <dialog> belongs to the dialog: the browser
+    // closes one on Escape unless the key's default is prevented, which
+    // Cancel render did even with nothing rendering.
+    if (event.key === 'Escape' && target.closest?.('dialog[open]')) return;
+
     const isInputField =
       target.tagName === 'INPUT' ||
       target.tagName === 'TEXTAREA' ||

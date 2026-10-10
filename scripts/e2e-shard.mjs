@@ -298,8 +298,8 @@ export const MEASURED_SECONDS = {
   'engine-recovery.spec.js': 20.0,
   // Two cases, about 10 s locally with a warm engine; booked at 20 likewise.
   'mesh-companion.spec.js': 20.0,
-  // One case, about 8 s locally with a warm engine; booked at 15.
-  'folder-projects.spec.js': 15.0,
+  // Two cases, about 8 s and 2 s locally with a warm engine; booked at 20.
+  'folder-projects.spec.js': 20.0,
   // One case, about 9 s locally with a warm engine; booked at 15.
   'typed-preset.spec.js': 15.0,
   // One case, about 4 s locally with a warm engine; booked at 15.
