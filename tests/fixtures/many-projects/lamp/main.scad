@@ -6,4 +6,5 @@ include <shade..scad>
 height = 20; // [10:1:40]
 
 cylinder(r = 2, h = height, $fn = 16);
-translate([0, 0, height]) shade();
+// Overlap the stem by 0.01 mm so the two solids share no face.
+translate([0, 0, height - 0.01]) shade();
