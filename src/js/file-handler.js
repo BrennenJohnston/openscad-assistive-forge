@@ -290,6 +290,28 @@ export function groupScadChoices(paths, rootDir) {
 }
 
 /**
+ * The first parameter control a person can reach: the first input on show,
+ * else the first group's heading when every group is folded (an input in a
+ * folded group is in the page, but focus() on it does nothing).
+ * @param {HTMLElement|null} container - The parameters container
+ * @returns {HTMLElement|null}
+ */
+export function firstParameterControl(container) {
+  if (!container) return null;
+  const drawn = (el) =>
+    typeof el.checkVisibility !== 'function' || el.checkVisibility();
+  return (
+    [
+      ...container.querySelectorAll(
+        'input:not([type="hidden"]), select, textarea'
+      ),
+    ].find(drawn) ||
+    [...container.querySelectorAll('summary')].find(drawn) ||
+    null
+  );
+}
+
+/**
  * Initialize the file handler controller.
  * @param {Object} deps
  * @param {Function} deps.getPreviewManager - Returns current PreviewManager (may be null)
@@ -1494,8 +1516,12 @@ export function initFileHandler({
           const promptState = currentExampleKey
             ? { ...state, sourceExampleKey: currentExampleKey }
             : state;
-          const promptResult =
-            await getSavedProjectsUI().showSaveProjectPrompt(promptState);
+          // After Save or Not now, back to the model just loaded: its first
+          // parameter, looked up again on closing in case it was redrawn.
+          const promptResult = await getSavedProjectsUI().showSaveProjectPrompt(
+            promptState,
+            { focusAfter: () => firstParameterControl(parametersContainer) }
+          );
 
           if (promptResult?.saved && promptResult.projectId) {
             await loadUserSvgsIntoGallery(promptResult.projectId);

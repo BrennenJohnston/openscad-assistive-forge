@@ -15,7 +15,8 @@ let bodyOverflowBefore = null;
 
 /**
  * Whether focus can usefully go back to an element: still in the page, able
- * to take focus, and not inside anything hidden.
+ * to take focus, not inside anything hidden, and drawn (an input in a folded
+ * group is none of the hidden kinds, yet focus() on it does nothing).
  * @param {Element|null} el
  * @returns {boolean}
  */
@@ -26,7 +27,8 @@ function canTakeFocusBack(el) {
     el.isConnected &&
     typeof el.focus === 'function' &&
     !el.disabled &&
-    !el.closest('[hidden], .hidden, [aria-hidden="true"]')
+    !el.closest('[hidden], .hidden, [aria-hidden="true"]') &&
+    (typeof el.checkVisibility !== 'function' || el.checkVisibility())
   );
 }
 

@@ -92,6 +92,17 @@ describe('a dialog closing', () => {
     expect(document.activeElement).toBe(fallback)
   })
 
+  it('does not return to a control that is not drawn', () => {
+    // An input in a folded group is in the page but cannot take focus.
+    const folded = button('Width')
+    folded.checkVisibility = () => false
+    const fallback = button('Dimensions')
+    const modal = dialogWithButton()
+    openModal(modal, { returnFocus: folded, fallbackFocus: fallback })
+    closeModal(modal)
+    expect(document.activeElement).toBe(fallback)
+  })
+
   it('keeps the focus a caller moves after closing', () => {
     // A list drawn again under the dialog loses its opener, and the caller
     // finds the new row itself. The retries are for focus lost in the hide,
