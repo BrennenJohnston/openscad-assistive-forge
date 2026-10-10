@@ -308,6 +308,8 @@ export const MEASURED_SECONDS = {
   // Five cases, about 2 s each locally with a warm engine; booked at 30 for
   // the cold engine load two of them wait for on CI.
   'saved-projects-focus.spec.js': 30.0,
+  // Eight cases, 44.6 s locally (each one loads the app); booked at 55.
+  'dialog-focus-return.spec.js': 55.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
