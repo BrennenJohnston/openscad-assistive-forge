@@ -92,6 +92,22 @@ describe('a dialog closing', () => {
     expect(document.activeElement).toBe(fallback)
   })
 
+  it('returns to a drawn control whose container carries a hidden class', () => {
+    // The Help button sits in the workflow bar, which is classed "hidden" on
+    // the Main Page while the button itself stays on screen; focus went to
+    // the main region instead of back to Help.
+    const bar = document.createElement('nav')
+    bar.classList.add('hidden')
+    document.body.appendChild(bar)
+    const help = button('Help', bar)
+    help.checkVisibility = () => true
+    help.focus()
+    const modal = dialogWithButton()
+    openModal(modal)
+    closeModal(modal)
+    expect(document.activeElement).toBe(help)
+  })
+
   it('does not return to a control that is not drawn', () => {
     // An input in a folded group is in the page but cannot take focus.
     const folded = button('Width')

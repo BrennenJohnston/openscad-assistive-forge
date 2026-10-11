@@ -1636,13 +1636,22 @@ export function initFileHandler({
         prog.examples.includes(exampleKey)
       );
 
-      handleFile(
+      const loading = handleFile(
         { name: example.name },
         exampleContent,
         exProjectFiles,
         exMainFilePath,
         isProgramExample ? 'program-example' : 'example'
       );
+      if (closeFeaturesGuideModal) {
+        // The guide that asked for this model has closed under it. Focus
+        // goes to the model's first parameter, not back to the guide's
+        // button or the main region, which a screen reader read whole.
+        await loading;
+        firstParameterControl(
+          document.getElementById('parametersContainer')
+        )?.focus();
+      }
     } catch (error) {
       console.error('Failed to load example:', error);
       updateStatus('Error loading example');

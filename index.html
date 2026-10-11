@@ -4450,13 +4450,14 @@
                 </div>
               </div>
             </div>
-            <!-- Expert Mode Panel: the code editor interface -->
+            <!-- Expert Mode Panel: the code editor interface. Not live: every
+                 keystroke changes its text, and a live region would read the
+                 code back. -->
             <div
               class="expert-mode-panel"
               id="expertModePanel"
               role="region"
               aria-label="OpenSCAD code editor"
-              aria-live="polite"
             >
               <!-- Mobile touch-drag resize handle -->
               <div class="expert-mode-drag-handle" aria-hidden="true">
@@ -5127,11 +5128,13 @@
                       </section>
                     </div>
                   </div>
+                  <!-- Not live: the size and triangle count are there to be
+                       read; the announcer says the result itself. -->
                   <div
                     class="stats"
                     id="stats"
                     role="status"
-                    aria-live="polite"
+                    aria-live="off"
                   ></div>
                   <div
                     class="dimensions-display hidden"
@@ -5205,12 +5208,14 @@
                     to see a preview.
                   </div>
                 </div>
-                <!-- Status bar overlay at bottom of preview -->
+                <!-- Status bar overlay at bottom of preview. Not live: the
+                     announcer (#srAnnouncer) says each status once, and this
+                     bar keeps the same words for the eye and for navigation. -->
                 <div
                   class="preview-status-bar idle no-stats"
                   id="previewStatusBar"
                   role="status"
-                  aria-live="polite"
+                  aria-live="off"
                 >
                   <span class="preview-status-text" id="previewStatusText"
                     >Ready</span
@@ -6446,8 +6451,9 @@
         <span id="classicStatusViewport" class="classic-status-viewport"></span>
         <span class="classic-status-spacer" aria-hidden="true"></span>
         <!-- role="status" is on this one span, not on the bar: the render
-             state is the only thing here that should announce itself. -->
-        <span id="classicStatusText" role="status" aria-live="polite"></span>
+             state is the one thing here to find as a status. It does not
+             speak; the announcer (#srAnnouncer) says each status once. -->
+        <span id="classicStatusText" role="status" aria-live="off"></span>
         <span class="classic-status-divider" aria-hidden="true">|</span>
         <span id="classicStatusStats"></span>
         <span class="classic-status-divider" aria-hidden="true">|</span>
@@ -6458,12 +6464,13 @@
          sit in the Preview Settings drawer, whose content is display:none
          while collapsed (the default) and in Classic entirely, and #app
          itself goes inert while the first-visit gate blocks, so real screen
-         readers would never hear them in those states. -->
+         readers would never hear them in those states. The status area is
+         not live: the announcer below says each status once. -->
     <div
       class="status-area"
       id="statusArea"
       role="status"
-      aria-live="polite"
+      aria-live="off"
       aria-label="Application status"
     >
       Ready
@@ -8621,7 +8628,7 @@ No console output yet. Generate a model to see output.</pre
       id="first-visit-modal"
       role="dialog"
       aria-labelledby="first-visit-title"
-      aria-describedby="first-visit-intro"
+      aria-describedby="firstVisitDescription"
       aria-modal="true"
       aria-hidden="true"
     >
@@ -8643,14 +8650,19 @@ No console output yet. Generate a model to see output.</pre
           <!-- Heading + four short bullets, two columns of two on
                desktop (grid column flow keeps DOM order 1-4 for the
                virtual cursor), stacked at the modal's narrow breakpoint.
-               The id stays: the dialog's aria-describedby points here. -->
+               The dialog's description is the first sentence alone: NVDA
+               reads it each time it reports the dialog, and the whole note
+               (both copies of it) ran to about 160 words. The rest is read
+               by moving through the dialog. -->
           <div id="first-visit-intro" class="first-visit-note">
             <h3 class="first-visit-note-title">Note for first time users:</h3>
             <ul class="first-visit-note-list">
               <li>
-                This app runs entirely in your browser. All of your work stays
-                on your device. No information is sent to or collected by anyone
-                else.
+                <span id="firstVisitDescription"
+                  >This app runs entirely in your browser.</span
+                >
+                All of your work stays on your device. No information is sent to
+                or collected by anyone else.
               </li>
               <li>
                 Your first render downloads the OpenSCAD engine, about 15 to 30

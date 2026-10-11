@@ -2204,9 +2204,10 @@ class BraillePanel {
       const cells = countCells(braille);
       const overflow = cells > this.cellsPerLine;
 
+      // No lang: lang="und" made NVDA say "und (not supported)" before
+      // every line of cells.
       const brailleSpan = document.createElement('span');
       brailleSpan.className = 'braille-preview-braille';
-      brailleSpan.lang = 'und';
       brailleSpan.textContent = braille || '(blank line)';
       item.appendChild(brailleSpan);
 

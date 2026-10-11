@@ -4613,15 +4613,22 @@ select:focus-visible {
   border-radius: var(--border-radius-pill, 999px);
   z-index: 20;
   opacity: 0;
+  /* Hidden, not only clear: at opacity 0 a screen reader still found
+     "Generating preview…" with nothing generating. Visibility waits for the
+     fade to end. */
+  visibility: hidden;
   pointer-events: none;
   transition:
     opacity var(--motion-slow) ease,
-    transform var(--motion-slow) ease;
+    transform var(--motion-slow) ease,
+    visibility 0s linear var(--motion-slow);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .preview-rendering-overlay.visible {
   opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
   transform: translateX(-50%) translateY(0);
 }
 
@@ -4725,7 +4732,9 @@ select:focus-visible {
   }
 
   .preview-rendering-overlay {
-    transition: opacity var(--motion-slow) ease;
+    transition:
+      opacity var(--motion-slow) ease,
+      visibility 0s linear var(--motion-slow);
     transform: translateX(-50%);
   }
 
@@ -17936,8 +17945,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 /* While the editor owns the area, the preview's floating pills fade: they
    are about the model behind the editor, and at 412 px wide one of them sat
-   on the editor's title. Opacity, not display, so their live regions still
-   speak. Reverse: delete this block. */
+   on the editor's title. Opacity, not display, so the status bar's words
+   stay in reach of a screen reader. Reverse: delete this block. */
 .preview-canvas-section.has-drawing-editor .preview-state-indicator,
 .preview-canvas-section.has-drawing-editor .preview-rendering-overlay,
 .preview-canvas-section.has-drawing-editor .preview-status-bar {

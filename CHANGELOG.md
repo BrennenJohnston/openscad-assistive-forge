@@ -51,6 +51,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pane close buttons) keep focus nearby.
 - Greyed-out menu items are reached by the arrow keys and say why they
   are off.
+- A screen reader hears each status once: "Preview ready", "Generating"
+  and a Generate's result were said up to four times. With Automatic
+  preview off, the status bars say "Preview outdated" after a change.
+- The code editor no longer reads its own changes aloud, and a screen
+  reader no longer finds "Generating preview" when nothing is generating.
+- The console reads each new line once: warnings are no longer alerts,
+  the log is not read again from the top after each run, a line no
+  longer says its level twice ("Warning: WARNING:"), and the full console
+  no longer announces that it opened.
+- Braille preview lines are read without "und (not supported)" in front
+  of every line.
+- An example opened from the Features Guide leaves focus on its first
+  setting, and closing the guide from the Main Page goes back to Help.
+- Tours open on Next, and each step's heading takes focus so its text is
+  read; the step number is said once, the last button is named Finish,
+  and finishing a tour says so once.
+- A failed preview or Generate says so once, with OpenSCAD's own error,
+  and messages name your files instead of the engine's (`/tmp/input.scad`).
 
 ## [5.2.2] - 2026-10-09
 

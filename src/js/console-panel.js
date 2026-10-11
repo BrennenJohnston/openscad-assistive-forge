@@ -14,6 +14,12 @@ import { showErrorToast } from './error-translator.js';
 import { escapeHtml } from './html-utils.js';
 
 /**
+ * How long the log stays quiet after it is rebuilt: long enough for a screen
+ * reader to take the rebuilt rows as the page, not as new messages.
+ */
+export const LIVE_RESTORE_MS = 200;
+
+/**
  * Console entry types
  */
 export const CONSOLE_ENTRY_TYPE = {
@@ -84,6 +90,15 @@ export class ConsolePanel {
     // output, so silent renders do not fill the log with bare separators.
     this.renderSection = 1;
     this._pendingSeparator = false;
+
+    // The log is a live region, so it only ever grows by the rows that are
+    // new: rebuilding it made a screen reader read every message again as
+    // one utterance. The entries shown as rows, in order; the last entry
+    // render() has looked at; entries trimmed off the front since.
+    this._rowEntries = [];
+    this._lastConsidered = null;
+    this._dropped = [];
+    this._quietTimer = null;
 
     // Auto-expand etiquette: a panel the user closed stays closed for
     // WARNINGs; only ERRORs force it back open. _programmaticOpen keeps our
@@ -208,7 +223,7 @@ export class ConsolePanel {
         checkbox.checked = this.filters[type];
         checkbox.addEventListener('change', (e) => {
           this.filters[type] = e.target.checked;
-          this.render();
+          this._rebuild();
           this._syncStructuredFilters(type, e.target.checked);
         });
       }
@@ -461,6 +476,7 @@ export class ConsolePanel {
 
     if (this.entries.length > this.maxEntries) {
       const removed = this.entries.shift();
+      this._dropped.push(removed);
       if (this.counts[removed.type] !== undefined) {
         this.counts[removed.type]--;
       }
@@ -505,13 +521,20 @@ export class ConsolePanel {
    * @param {Object} entry - Console entry
    */
   announceIfImportant(entry) {
+    // An error line ends the run, and the run's failure is announced with
+    // that line (previewFailureSentence, the Generate error); said here too,
+    // a failure was heard up to four times.
     if (
       entry.type !== CONSOLE_ENTRY_TYPE.ECHO &&
-      entry.type !== CONSOLE_ENTRY_TYPE.WARNING &&
-      entry.type !== CONSOLE_ENTRY_TYPE.ERROR
+      entry.type !== CONSOLE_ENTRY_TYPE.WARNING
     ) {
       return;
     }
+
+    // On screen, the log is a live region and says the line itself; a second
+    // voice would say it twice. Decided as the line arrives: by the time a
+    // deferred announcement runs, the panel may have opened for it.
+    if (this._logOnScreen()) return;
 
     const now = Date.now();
     if (now - this.lastAnnouncement < this.announcementDebounce) {
@@ -543,7 +566,11 @@ export class ConsolePanel {
     } else {
       typeLabel = 'Message';
     }
-    const message = `${typeLabel}: ${entry.message}`;
+    // OpenSCAD's own lines name their level ("WARNING: ..."); a label in
+    // front of that said it twice.
+    const message = entry.message.startsWith(`${entry.type.toUpperCase()}:`)
+      ? entry.message
+      : `${typeLabel}: ${entry.message}`;
 
     if (entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
       announceError(message);
@@ -553,36 +580,75 @@ export class ConsolePanel {
   }
 
   /**
-   * Render all entries to the container (Log view)
+   * Is the log where a screen reader would hear it: the Log view, drawn?
+   * @returns {boolean}
+   * @private
+   */
+  _logOnScreen() {
+    return (
+      this.activeView === 'log' &&
+      Boolean(this.container?.isConnected) &&
+      this.container.checkVisibility?.() === true
+    );
+  }
+
+  /**
+   * Show the entries that arrived since the last call (Log view). Rows
+   * already shown stay as they are.
    */
   render() {
     if (!this.container) return;
 
-    const visibleEntries = this.entries.filter(
-      (e) => e.type === CONSOLE_ENTRY_TYPE.SEPARATOR || this.filters[e.type]
-    );
+    // Rows for entries trimmed off the front of the log go with them.
+    if (this._dropped.length > 0) {
+      const dropped = new Set(this._dropped);
+      this._dropped = [];
+      while (this._rowEntries.length > 0 && dropped.has(this._rowEntries[0])) {
+        this._rowEntries.shift();
+        this.container.querySelector('.console-entry')?.remove();
+      }
+    }
 
-    if (visibleEntries.length === 0) {
-      this.container.innerHTML = `
+    const from = this._lastConsidered
+      ? this.entries.indexOf(this._lastConsidered) + 1
+      : 0;
+    if (this._lastConsidered && from === 0) {
+      // More arrived at once than the log keeps: nothing left to append to.
+      this._rebuild();
+      return;
+    }
+    const fresh = this.entries
+      .slice(from)
+      .filter(
+        (e) => e.type === CONSOLE_ENTRY_TYPE.SEPARATOR || this.filters[e.type]
+      );
+    this._lastConsidered = this.entries[this.entries.length - 1] || null;
+
+    if (fresh.length === 0) {
+      if (
+        this._rowEntries.length === 0 &&
+        !this.container.querySelector('.console-empty')
+      ) {
+        this.container.innerHTML = `
         <div class="console-empty">
           No console output yet. ECHO, WARNING, and ERROR messages will appear here.
         </div>
       `;
-      this._noteGeometry();
+        this._noteGeometry();
+      }
       return;
     }
 
-    const entriesHtml = visibleEntries
-      .map((entry) => this.renderEntry(entry))
-      .join('');
-
-    // Replacing the markup resets scrollTop to 0, so a reader who has scrolled
-    // up would lose their place on every arriving message. Entries only ever
-    // append, so the offset they were reading at is still the right one.
+    // A reader who has scrolled up keeps their place; rows only append.
     const previousScrollTop = this.container.scrollTop;
     const wasFollowing = this._followTail;
 
-    this.container.innerHTML = entriesHtml;
+    if (this._rowEntries.length === 0) this.container.replaceChildren();
+    this.container.insertAdjacentHTML(
+      'beforeend',
+      fresh.map((entry) => this.renderEntry(entry)).join('')
+    );
+    this._rowEntries.push(...fresh);
 
     if (wasFollowing) {
       this.scrollToTail();
@@ -590,6 +656,45 @@ export class ConsolePanel {
       this.container.scrollTop = previousScrollTop;
       this._noteGeometry();
     }
+  }
+
+  /**
+   * Rebuild the whole log (a filter changed, or the log was cleared). The
+   * region is quiet while it is rebuilt: the rows are not new messages.
+   * @private
+   */
+  _rebuild() {
+    if (!this.container) return;
+    this._quietFor(LIVE_RESTORE_MS);
+    const previousScrollTop = this.container.scrollTop;
+    this._rowEntries = [];
+    this._lastConsidered = null;
+    this._dropped = [];
+    this.container.replaceChildren();
+    this.render();
+    if (!this._followTail) {
+      this.container.scrollTop = previousScrollTop;
+      this._noteGeometry();
+    }
+  }
+
+  /**
+   * Turn the log's live region off for a while, then back to what it was.
+   * @param {number} ms
+   * @private
+   */
+  _quietFor(ms) {
+    if (this._quietTimer) {
+      clearTimeout(this._quietTimer);
+    } else {
+      this._liveValue = this.container.getAttribute('aria-live');
+    }
+    if (this._liveValue === null) return;
+    this.container.setAttribute('aria-live', 'off');
+    this._quietTimer = setTimeout(() => {
+      this._quietTimer = null;
+      this.container.setAttribute('aria-live', this._liveValue);
+    }, ms);
   }
 
   /**
@@ -619,11 +724,10 @@ export class ConsolePanel {
 
     const safeMessage = escapeHtml(entry.message);
 
-    // No role at all for ordinary lines: role="listitem" would need a list
-    // parent, and #console-output is role="log". role="log" already says
-    // "messages, newest last", so the entries need nothing of their own.
-    const entryRole =
-      entry.type === 'warning' || entry.type === 'error' ? 'alert' : null;
+    // No role for any line: role="listitem" would need a list parent, and
+    // #console-output is role="log", which already says "messages, newest
+    // last". A warning or error row once carried role="alert", and each was
+    // spoken as an alert on top of the log's own reading.
 
     const hasLocation = entry.line !== null && this.onNavigate;
     const lineLink = hasLocation
@@ -641,7 +745,7 @@ export class ConsolePanel {
       : safeMessage;
 
     return `
-      <div class="console-entry ${typeClass}"${entryRole ? ` role="${entryRole}"` : ''}>
+      <div class="console-entry ${typeClass}">
         <time class="console-timestamp" datetime="${time.toISOString()}">${timeStr}</time>
         <span class="console-type" aria-hidden="true">${typeLabel}</span>
         <span class="console-message">${messageHtml}${lineLink}</span>
@@ -666,7 +770,7 @@ export class ConsolePanel {
     this._pendingSeparator = false;
     this._followTail = true;
     this.updateBadge();
-    this.render();
+    this._rebuild();
     if (this.structuredPanel) {
       this.structuredPanel.clear();
     }

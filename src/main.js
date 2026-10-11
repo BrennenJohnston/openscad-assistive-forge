@@ -114,6 +114,7 @@ import { disableKeepingFocus, setBusy, isBusy } from './js/focus-trap.js';
 import {
   translateError,
   previewFailureSentence,
+  engineErrorLine,
   findFailedCheck,
   findMissingLibrary,
   showErrorModal,
@@ -1622,10 +1623,13 @@ async function initApp() {
   window.addEventListener('appinstalled', () => {
     console.log('[PWA] App installed successfully via browser');
 
+    const installed = '✅ App installed! You can now use it offline.';
+    // The status area is not live; the announcer speaks.
+    announceImmediate(installed);
     const statusArea = document.getElementById('statusArea');
     if (statusArea) {
       const originalText = statusArea.textContent;
-      statusArea.textContent = '✅ App installed! You can now use it offline.';
+      statusArea.textContent = installed;
       setTimeout(() => {
         statusArea.textContent = originalText;
       }, 5000);
@@ -3406,7 +3410,11 @@ async function initApp() {
         files: state.projectFiles,
         mainFile: state.mainFilePath,
         libraries: libsForRender,
-        onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+        // Said once, above; progress only keeps the words on screen.
+        onProgress: () =>
+          updateStatus(`Generating ${formatName}\u2026`, 'default', {
+            announce: false,
+          }),
       };
       let result;
       try {
@@ -3544,7 +3552,9 @@ async function initApp() {
 
     const formatName = OUTPUT_FORMATS[format]?.name || format.toUpperCase();
     getToolbarMenuController().closeAll();
-    updateStatus(`Generating ${formatName}\u2026`);
+    updateStatus(`Generating ${formatName}\u2026`, 'default', {
+      announce: false,
+    });
     announceImmediate(`Generating ${formatName}. This may take a moment.`);
     autoPreviewController?.cancelPending();
 
@@ -3560,7 +3570,10 @@ async function initApp() {
           files: state.projectFiles,
           mainFile: state.mainFilePath,
           libraries: getEnabledLibrariesForRender(),
-          onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+          onProgress: () =>
+            updateStatus(`Generating ${formatName}\u2026`, 'default', {
+              announce: false,
+            }),
         }
       );
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -5729,6 +5742,9 @@ async function initApp() {
           schemaNames: Object.keys(defineState.schema?.parameters || {}),
         });
       });
+      renderController.setProjectFileNameResolver(
+        () => stateManager.getState().uploadedFile?.name || null
+      );
 
       // Set up memory warning callback
       renderController.setMemoryWarningCallback((memoryInfo) => {
@@ -6462,10 +6478,12 @@ async function initApp() {
   const overlayToggle = document.getElementById('overlayToggle');
 
   // Create preview state indicator element
+  // Not live: the badge's states pass by on every change ("Changes
+  // pending", "Generating...", "Preview ready"), and the announcer already
+  // says the one that is news.
   const previewStateIndicator = document.createElement('div');
   previewStateIndicator.className = 'preview-state-indicator state-idle';
   previewStateIndicator.textContent = 'No preview';
-  previewStateIndicator.setAttribute('aria-live', 'polite');
 
   // Create rendering overlay
   const renderingOverlay = document.createElement('div');
@@ -7398,6 +7416,27 @@ async function initApp() {
           if (newState === PREVIEW_STATE.RENDERING) {
             getAnimatePanel()?.pauseForExternalRender();
           }
+          // The status bars said "Preview ready" under a badge saying the
+          // preview is outdated. With Automatic preview on, the state passes
+          // through STALE to PENDING in the same task; only a preview that
+          // stays outdated says so, and only over a line that still calls a
+          // result ready (another message written with the change, "Quality
+          // reduced" say, stands). Not announced: the change was the
+          // person's own.
+          if (newState === PREVIEW_STATE.STALE) {
+            queueMicrotask(() => {
+              const line =
+                document.getElementById('statusArea')?.textContent.trim() || '';
+              if (
+                autoPreviewController?.state === PREVIEW_STATE.STALE &&
+                /^(Preview|[A-Z0-9]+) ready$/.test(line)
+              ) {
+                updateStatus('Preview outdated', 'default', {
+                  announce: false,
+                });
+              }
+            });
+          }
           if (newState === PREVIEW_STATE.CURRENT) {
             if (typeof extra?.renderDurationMs === 'number') {
               autoPreviewHints.lastPreviewDurationMs = extra.renderDurationMs;
@@ -7474,7 +7513,9 @@ async function initApp() {
             }
 
             const sentence = previewFailureSentence(error);
-            updateStatus(sentence, 'error');
+            // Said once, assertively; through updateStatus as well it was
+            // said twice.
+            updateStatus(sentence, 'error', { announce: false });
             _announceError(sentence);
           }
         },
@@ -11937,6 +11978,9 @@ if (rounded) {
         state.uploadedFile.content,
         state.parameters
       );
+      // "Generating" is said once a Generate: by the estimate when there is
+      // one, else by the first progress report.
+      let generatingSaid = false;
       if (estimate.seconds >= 5 || estimate.warning) {
         const estimateMsg =
           estimate.confidence === 'low'
@@ -11946,6 +11990,7 @@ if (rounded) {
           console.warn('[Render] Complexity warning:', estimate.warning);
         }
         updateStatus(estimateMsg);
+        generatingSaid = true;
       }
 
       const startTime = Date.now();
@@ -12007,7 +12052,10 @@ if (rounded) {
           onProgress: (_percent, _message) => {
             const fn =
               OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
-            updateStatus(`Generating ${fn}...`);
+            updateStatus(`Generating ${fn}...`, 'default', {
+              announce: !generatingSaid,
+            });
+            generatingSaid = true;
           },
         };
         try {
@@ -12274,9 +12322,15 @@ if (rounded) {
         code: error.code,
         details: error.details,
       });
-      updateStatus(`Error: ${friendlyError.title}`);
+      // Said once, assertively, with the engine's own line where it gave
+      // one: the message panels leave error lines to this.
+      updateStatus(`Error: ${friendlyError.title}`, 'error', {
+        announce: false,
+      });
+      const engineLine = engineErrorLine(error.details);
       _announceError(
-        `Error: ${friendlyError.title}. ${friendlyError.explanation}`
+        `Error: ${friendlyError.title}. ${friendlyError.explanation}` +
+          (engineLine ? ` ${engineLine}` : '')
       );
 
       showErrorModal({
@@ -15066,10 +15120,14 @@ if (rounded) {
         String(!echoDrawer.classList.contains('collapsed'))
       );
 
+    // A run with an error has failed, and its failure is announced with the
+    // error; the count would be a second voice for the same news. A single
+    // message is said by its own line in the console; the count is for when
+    // several arrive at once.
+    if (errorCount > 0 || warnCount + echoCount < 2) return;
+
     // Build accessible announcement
     const summary = [];
-    if (errorCount > 0)
-      summary.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
     if (warnCount > 0)
       summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
     if (echoCount > 0)
@@ -15127,9 +15185,8 @@ if (rounded) {
     if (consoleOutput) {
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
-
-    // Announce to screen readers
-    announceImmediate('Console output panel opened');
+    // No announcement: focus on the heading already says which panel this
+    // is, and "Console output panel opened" said it a second time.
   };
 
   // Echo drawer toggle

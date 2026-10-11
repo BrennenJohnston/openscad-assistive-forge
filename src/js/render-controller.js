@@ -202,6 +202,22 @@ function cancelledError(message) {
   return error;
 }
 
+/**
+ * The engine's paths, in the names people know: a single file runs as
+ * /tmp/input.scad and a project under /work/, and both showed up in messages
+ * and errors as if they were the person's own files.
+ * @param {*} text - Engine output; anything not text is returned as it came
+ * @param {string|null} mainFileName - The name the model was opened with
+ * @returns {*}
+ */
+export function withProjectPaths(text, mainFileName) {
+  if (typeof text !== 'string' || !text) return text;
+  const named = mainFileName
+    ? text.split('/tmp/input.scad').join(mainFileName)
+    : text;
+  return named.split('/work/').join('');
+}
+
 export class RenderController {
   /**
    * Create a new RenderController
@@ -469,7 +485,18 @@ export class RenderController {
    * @param {Function} onInitProgress - Optional init progress callback
    */
   handleMessage(message, onInitProgress) {
-    const { type, payload } = message;
+    const { type } = message;
+    let { payload } = message;
+
+    if ((type === 'COMPLETE' || type === 'ERROR') && payload) {
+      const name = this._getProjectFileName?.() || null;
+      payload = {
+        ...payload,
+        consoleOutput: withProjectPaths(payload.consoleOutput, name),
+        message: withProjectPaths(payload.message, name),
+        details: withProjectPaths(payload.details, name),
+      };
+    }
 
     switch (type) {
       case 'READY':
@@ -721,6 +748,14 @@ export class RenderController {
    */
   setWithheldDefineKeyResolver(resolver) {
     this._getWithheldDefineKeys = resolver;
+  }
+
+  /**
+   * Supply the name the open model goes by, for the engine's messages.
+   * @param {(() => string|null)|null} resolver
+   */
+  setProjectFileNameResolver(resolver) {
+    this._getProjectFileName = resolver;
   }
 
   /**

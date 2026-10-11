@@ -69,3 +69,40 @@ test('a guide example asks with focus on Cancel, and Cancel goes back to the ope
   await expect(confirm).toHaveCount(0)
   await expect(opener).toBeFocused()
 })
+
+test('a guide example, once loaded, leaves focus on its first parameter', async ({
+  page,
+}) => {
+  // Not on the button that opened the guide, nor on the main region, which a
+  // screen reader read as one long utterance.
+  await page.locator('#featuresGuideBtn').focus()
+  await page.keyboard.press('Enter')
+  const guide = page.locator('#featuresGuideModal')
+  await expect(guide).toBeVisible()
+  const example = guide.locator(
+    '[data-feature-example][data-example="library-test"]'
+  )
+  await example.focus()
+  await page.keyboard.press('Enter')
+
+  // The question opens on Cancel; the person moves to Load.
+  const load = page.locator('.confirm-modal button[data-action="confirm"]')
+  await expect(load).toBeVisible()
+  await load.focus()
+  await expect(load).toBeFocused()
+  await page.keyboard.press('Enter')
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() =>
+          Boolean(
+            document
+              .getElementById('parametersContainer')
+              ?.contains(document.activeElement)
+          )
+        ),
+      { timeout: 30_000 }
+    )
+    .toBe(true)
+})

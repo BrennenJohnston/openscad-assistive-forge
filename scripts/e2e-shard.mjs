@@ -114,7 +114,8 @@ export const MEASURED_SECONDS = {
   // Every pose is now read once the camera holds still: one local pass went
   // from 90 s to 114 s, so 165.5 is scaled by the same ratio.
   'camera-face-view-orbit.spec.js': 210.0,
-  'tutorials.spec.js': 142.1,
+  // Measured 142.1; four cases on what a tour says (about 9 s locally) add 15.
+  'tutorials.spec.js': 157.1,
   'tour-interaction.spec.js': 269.2,
   'preferences-dialog.spec.js': 90.6,
   'responsive-audit.spec.js': 91.9,
@@ -139,7 +140,8 @@ export const MEASURED_SECONDS = {
   'stakeholder-acceptance.spec.js': 38.4,
   'manifest-loading.spec.js': 71.2,
   'drawer-reduction.spec.js': 15.8,
-  'console-tail.spec.js': 34.2,
+  // Measured 34.2; a fifth case (a second run, about 15 s locally) adds 15.
+  'console-tail.spec.js': 49.2,
   'axis-depth-truth.spec.js': 29.2,
   'welcome-spotlight.spec.js': 30.2,
   'editor-fold-markers.spec.js': 28.0,
@@ -313,10 +315,10 @@ export const MEASURED_SECONDS = {
   // Five cases, about 2 s each locally with a warm engine; booked at 30 for
   // the cold engine load two of them wait for on CI.
   'saved-projects-focus.spec.js': 30.0,
-  // Eight cases, 44.6 s locally (each one loads the app); booked at 55.
-  'dialog-focus-return.spec.js': 55.0,
-  // One case, about 6 s locally; booked at 15.
-  'guide-example-focus.spec.js': 15.0,
+  // Nine cases, about 47 s locally (each one loads the app); booked at 60.
+  'dialog-focus-return.spec.js': 60.0,
+  // Two cases, about 6 s each locally; booked at 25.
+  'guide-example-focus.spec.js': 25.0,
   // Eight cases, 48.8 s locally (each one loads the app; one generates); 60.
   'self-disabling-controls-focus.spec.js': 60.0,
   // Three cases, about 3 s each locally with a warm engine; booked at 20.
@@ -325,6 +327,8 @@ export const MEASURED_SECONDS = {
   'drawing-editor-close-focus.spec.js': 20.0,
   // Four cases, about 7 s each locally (a first visit; three load the app).
   'dialog-focus-sweep.spec.js': 40.0,
+  // Six cases, about 5 s each locally with a warm engine; booked at 50.
+  'status-announcements.spec.js': 50.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

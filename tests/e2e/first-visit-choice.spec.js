@@ -196,6 +196,26 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).toHaveClass(/first-visit-blocking/);
   });
 
+  test('the modal is described by the first sentence of its note, not the whole note', async ({
+    page,
+  }) => {
+    // NVDA reads a dialog's description each time it reports the dialog,
+    // twice on opening; the whole note was about 80 words.
+    await page.goto('/');
+    await waitForModal(page);
+    const description = await page.evaluate(() => {
+      const modal = document.getElementById('first-visit-modal');
+      return (modal.getAttribute('aria-describedby') || '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((id) => document.getElementById(id)?.textContent || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    });
+    expect(description).toBe('This app runs entirely in your browser.');
+  });
+
   test('the modal speaks its own copy and has no remember-hint', async ({
     page,
   }) => {

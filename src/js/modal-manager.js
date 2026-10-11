@@ -15,8 +15,11 @@ let bodyOverflowBefore = null;
 
 /**
  * Whether focus can usefully go back to an element: still in the page, able
- * to take focus, not inside anything hidden, and drawn (an input in a folded
- * group is none of the hidden kinds, yet focus() on it does nothing).
+ * to take focus, not hidden from assistive tech, and drawn (an input in a
+ * folded group is none of the hidden kinds, yet focus() on it does nothing).
+ * Drawn is the browser's answer where it can give one: a "hidden" class on a
+ * container does not always hide (the Help button stays on screen in the
+ * workflow bar classed "hidden" on the Main Page).
  * @param {Element|null} el
  * @returns {boolean}
  */
@@ -27,8 +30,10 @@ function canTakeFocusBack(el) {
     el.isConnected &&
     typeof el.focus === 'function' &&
     !el.disabled &&
-    !el.closest('[hidden], .hidden, [aria-hidden="true"]') &&
-    (typeof el.checkVisibility !== 'function' || el.checkVisibility())
+    !el.closest('[hidden], [aria-hidden="true"]') &&
+    (typeof el.checkVisibility === 'function'
+      ? el.checkVisibility()
+      : !el.closest('.hidden'))
   );
 }
 

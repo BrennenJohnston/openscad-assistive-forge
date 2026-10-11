@@ -317,4 +317,46 @@ test.describe('Console shows its newest output', () => {
       })
       .toBeLessThanOrEqual(TAIL_SLACK);
   });
+
+  test('a new run adds its lines and leaves the lines already shown in place', async ({
+    page,
+  }) => {
+    // The log is a live region: rebuilt on every run, a screen reader read
+    // the whole of it again as one utterance.
+    test.setTimeout(WASM_READY_TIMEOUT + 2 * PREVIEW_TIMEOUT);
+    await loadProject(page);
+    await openConsolePanel(page);
+    await waitForNewestLine(page);
+
+    const log = page.locator('#console-output');
+    await log
+      .locator('.console-entry')
+      .first()
+      .evaluate((row) => {
+        row.dataset.seenBefore = 'yes';
+      });
+
+    const size = page.locator('#param-size-spinbox');
+    if (!(await size.isVisible())) {
+      await page.evaluate(() => {
+        const group = document.querySelector(
+          '.param-group[data-group-id="Dimensions"]'
+        );
+        if (group) group.open = true;
+      });
+    }
+    await size.fill('12');
+    await size.press('Enter');
+
+    await expect(log.locator('.console-entry--separator').last()).toContainText(
+      'Render 2',
+      { timeout: PREVIEW_TIMEOUT }
+    );
+    await expect(log.locator('.console-entry').first()).toHaveAttribute(
+      'data-seen-before',
+      'yes'
+    );
+    await expect(log.locator('[role="alert"]')).toHaveCount(0);
+    await expect(log).toHaveAttribute('aria-live', 'polite');
+  });
 });
