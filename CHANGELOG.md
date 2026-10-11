@@ -24,14 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previews again, and the message says what happened: a model too deep
   for the browser, or how long it waited.
 - Folder and ZIP projects keep their STL, 3MF, OBJ and AMF files, so a
-  model that imports one previews whole.
+  model that imports one previews whole, even one that builds the file's
+  name as it runs.
 - A folder of several projects offers every model, grouped by folder, and
   a file with two dots in its name is no longer left out.
 - Text settings apply from a phone's keyboard, and a preset chosen while a
   text setting is being edited lands whole.
 - On a phone, the preview's messages stay above the Actions and Camera
-  buttons; the bar is named by its words, each line shows its level once,
-  and a color name no longer reads as a missing include file.
+  buttons; the bar is named by its words, and each line shows its level
+  once.
+- A color name such as "Chartreuse" no longer reads as a missing include
+  file, in the preview's messages or when a ZIP opens.
+- Escape stops a Generate, as the Cancel button does, and a Generate
+  stopped either way is no longer reported as an error.
 - The open Actions drawer stays on top of Preview Settings & Info in a
   short window, so every button it shows can be pressed.
 - Models that repeat a module many levels deep preview in Firefox and

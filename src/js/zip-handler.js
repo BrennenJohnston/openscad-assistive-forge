@@ -4,6 +4,8 @@
  */
 
 import { hasParentSegment } from './file-param-resolver.js';
+import { withoutComments } from './scad-comments.js';
+import { includeStatements } from './scad-directives.js';
 
 /**
  * Extract files from a ZIP archive
@@ -372,9 +374,9 @@ function normalizePath(path) {
  * @returns {string[]} - Array of include/use statements
  */
 export function scanIncludes(content) {
-  const includePattern = /(?:include|use)\s*[<"][^>"]+[>"]/g;
-  const matches = content.match(includePattern) || [];
-  return matches;
+  return includeStatements(withoutComments(content)).map(
+    ({ kind, path }) => `${kind} <${path}>`
+  );
 }
 
 /**

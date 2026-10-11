@@ -83,6 +83,9 @@ export function filterFilesForMount(files, mainFile) {
   const referencedBasenames = new Set(
     [...referenced].map((p) => basenameLower(p))
   );
+  // A name built at run time (import(str("frog_", n, ".stl"))) names no file
+  // itself: the files its literal pieces can reach are referenced too.
+  const reachable = (deps.importPatterns || []).map((p) => new RegExp(p, 'i'));
 
   const filtered = new Map();
   const dropped = [];
@@ -96,7 +99,9 @@ export function filterFilesForMount(files, mainFile) {
     }
     const lower = String(path).toLowerCase();
     const isReferenced =
-      referenced.has(lower) || referencedBasenames.has(basenameLower(lower));
+      referenced.has(lower) ||
+      referencedBasenames.has(basenameLower(lower)) ||
+      reachable.some((pattern) => pattern.test(lower));
     if (isReferenced) {
       filtered.set(path, content);
       mountBytes += contentSize(content);

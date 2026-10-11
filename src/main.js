@@ -11818,6 +11818,10 @@ if (rounded) {
     });
   }
 
+  // Set by the Cancel button: the next canceled Generate was asked to stop,
+  // and is not an error.
+  let generateCanceled = false;
+
   // Primary Action Button (transforms between Generate and Download)
   primaryActionBtn.addEventListener('click', async () => {
     const action = primaryActionBtn.dataset.action;
@@ -11912,6 +11916,7 @@ if (rounded) {
 
       // Show cancel button, and move focus there before this button
       // disables itself: the render can be stopped from where focus is.
+      generateCanceled = false;
       cancelRenderBtn.classList.remove('hidden');
       disableKeepingFocus(primaryActionBtn, cancelRenderBtn);
       primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
@@ -12138,6 +12143,14 @@ if (rounded) {
         fullQuality: true,
       });
     } catch (error) {
+      if (generateCanceled && error?.code === 'RENDER_CANCELLED') {
+        // Stopped on purpose: the status says so, and the preview on screen
+        // is still the one from before.
+        updatePreviewStateUI(
+          autoPreviewController?.state ?? PREVIEW_STATE.STALE
+        );
+        return;
+      }
       console.error('Generation failed:', error);
       updatePreviewStateUI(PREVIEW_STATE.ERROR, {
         error: error.message,
@@ -12294,6 +12307,7 @@ if (rounded) {
   // Cancel render button
   cancelRenderBtn.addEventListener('click', () => {
     if (renderController) {
+      generateCanceled = true;
       renderController.cancel();
       updateStatus('Generation canceled by user');
       primaryActionBtn.disabled = false;
@@ -15752,11 +15766,13 @@ if (rounded) {
     }
   });
 
-  keyboardConfig.on('cancelRender', () => {
-    if (renderController && renderController.isRendering()) {
-      renderController.cancel();
-    }
-  });
+  // The same stop as the Cancel button, which only a Generate shows. A
+  // preview has no Cancel and nothing to fall back to: stopped, it would say
+  // "Generating..." for good.
+  const cancelGenerate = () => {
+    if (!cancelRenderBtn.classList.contains('hidden')) cancelRenderBtn.click();
+  };
+  keyboardConfig.on('cancelRender', cancelGenerate);
 
   keyboardConfig.on('download', () => {
     const state = stateManager.getState();
@@ -16060,11 +16076,7 @@ if (rounded) {
       }
     });
 
-    gamepadController.on('action:cancel', () => {
-      if (renderController && renderController.isRendering()) {
-        renderController.cancel();
-      }
-    });
+    gamepadController.on('action:cancel', cancelGenerate);
 
     // Gamepad connection feedback
     gamepadController.on('connected', (info) => {

@@ -53,6 +53,27 @@ describe('filterFilesForMount', () => {
     expect(files.size).toBe(4)
   })
 
+  it('keeps the binaries a computed import name can reach', () => {
+    // TurtleSCAD's frog choir: import(str("frog_", n, ".stl")) names no file
+    // literally, and every frog was dropped.
+    const files = new Map([
+      [
+        'src/frog_choir.scad',
+        'for (n = [1:2]) translate([n * 10, 0]) import(str("frog_", n, ".stl"));',
+      ],
+      ['src/frog_1.stl', new Uint8Array(BIG)],
+      ['src/frog_2.stl', new Uint8Array(BIG)],
+      ['src/teapot.stl', new Uint8Array(BIG)],
+    ])
+    const result = filterFilesForMount(files, 'src/frog_choir.scad')
+    expect([...result.files.keys()].sort()).toEqual([
+      'src/frog_1.stl',
+      'src/frog_2.stl',
+      'src/frog_choir.scad',
+    ])
+    expect(result.dropped).toEqual(['src/teapot.stl'])
+  })
+
   it('always keeps every text file regardless of size decisions', () => {
     const files = new Map([
       ['main.scad', 'cube(1);'],

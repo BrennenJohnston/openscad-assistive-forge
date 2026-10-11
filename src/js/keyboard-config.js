@@ -879,6 +879,11 @@ export class KeyboardConfig {
   _handleKeydown(event) {
     if (!this.enabled) return;
 
+    // An Escape that has closed something (a drawer, a menu, a tooltip) is
+    // not also Cancel render: closing the Customizer drawer while a preview
+    // runs leaves the preview running.
+    if (event.key === 'Escape' && event.defaultPrevented) return;
+
     const target = event.target;
 
     // Escape inside an open <dialog> belongs to the dialog: the browser

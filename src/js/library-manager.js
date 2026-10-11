@@ -6,6 +6,8 @@
  */
 
 import { getAppPrefKey } from './storage-keys.js';
+import { withoutComments } from './scad-comments.js';
+import { includeStatements } from './scad-directives.js';
 
 // Storage key using standardized naming convention
 const STORAGE_KEY_LIBRARIES = getAppPrefKey('libraries');
@@ -76,13 +78,9 @@ export const LIBRARY_DEFINITIONS = {
 export function detectLibraries(scadContent) {
   const detected = new Set();
 
-  // Match include/use statements
-  const includePattern = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
-  let match;
-
-  while ((match = includePattern.exec(scadContent)) !== null) {
-    const includePath = match[1] || match[2];
-
+  for (const { path: includePath } of includeStatements(
+    withoutComments(scadContent || '')
+  )) {
     // Check which library it belongs to
     for (const libId of Object.keys(LIBRARY_DEFINITIONS)) {
       if (includePath.startsWith(libId + '/')) {
