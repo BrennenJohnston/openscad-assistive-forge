@@ -5,6 +5,10 @@
  */
 
 import { withoutComments } from './scad-comments.js';
+import {
+  includeStatements,
+  computedImportPatterns,
+} from './scad-directives.js';
 
 /**
  * Parse SCAD file for dependencies (best-effort regex, not full parser)
@@ -16,31 +20,20 @@ export function extractDependencies(scadContent) {
     includes: [], // include <file.txt>
     uses: [], // use <file.scad>
     imports: [], // import("file.svg")
+    importPatterns: [], // import(str("frog_", n, ".stl")): RegExp sources
   };
 
   if (!scadContent) return dependencies;
 
   const source = withoutComments(scadContent);
 
-  // Match include <filename> or include "filename"
-  // Handles various extensions: .txt, .scad, .json, etc.
-  const includeRegex = /include\s*[<"]([^>"]+)[>"]/g;
-  let match;
-  while ((match = includeRegex.exec(source)) !== null) {
-    const filename = match[1].trim();
-    if (filename && !dependencies.includes.includes(filename)) {
-      dependencies.includes.push(filename);
-    }
+  for (const { kind, path } of includeStatements(source)) {
+    const list = kind === 'include' ? dependencies.includes : dependencies.uses;
+    if (!list.includes(path)) list.push(path);
   }
+  dependencies.importPatterns = computedImportPatterns(source);
 
-  // Match use <filename> or use "filename"
-  const useRegex = /use\s*[<"]([^>"]+)[>"]/g;
-  while ((match = useRegex.exec(source)) !== null) {
-    const filename = match[1].trim();
-    if (filename && !dependencies.uses.includes(filename)) {
-      dependencies.uses.push(filename);
-    }
-  }
+  let match;
 
   // Match import("filename") - for SVG, STL, etc.
   const importRegex = /import\s*\(\s*["']([^"']+)["']\s*(?:,\s*[^)]+)?\)/g;
@@ -164,6 +157,7 @@ export function scanAllDependencies(files, mainFile) {
     includes: new Set(),
     uses: new Set(),
     imports: new Set(),
+    importPatterns: new Set(),
   };
 
   const scanned = new Set();
@@ -181,6 +175,7 @@ export function scanAllDependencies(files, mainFile) {
     deps.includes.forEach((f) => allDependencies.includes.add(f));
     deps.uses.forEach((f) => allDependencies.uses.add(f));
     deps.imports.forEach((f) => allDependencies.imports.add(f));
+    deps.importPatterns.forEach((p) => allDependencies.importPatterns.add(p));
 
     // Recursively scan included/used files that exist
     [...deps.includes, ...deps.uses].forEach((depFile) => {
@@ -200,6 +195,7 @@ export function scanAllDependencies(files, mainFile) {
     includes: Array.from(allDependencies.includes),
     uses: Array.from(allDependencies.uses),
     imports: Array.from(allDependencies.imports),
+    importPatterns: Array.from(allDependencies.importPatterns),
   };
 }
 

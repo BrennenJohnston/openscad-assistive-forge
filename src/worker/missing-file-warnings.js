@@ -9,6 +9,7 @@
  */
 
 import { withoutComments } from '../js/scad-comments.js';
+import { includeStatements } from '../js/scad-directives.js';
 
 /**
  * Scan SCAD source for include/use directives and return desktop-format
@@ -27,17 +28,11 @@ import { withoutComments } from '../js/scad-comments.js';
 export function generateMissingFileWarnings(scadContent, fileExistsFn) {
   const warnings = [];
   const seen = new Set();
-  // A statement of its own: at a line's start or after `;`, `{` or `}`, the
-  // whole word. Without that, `color("Chartreuse")` read as `use "..."` up
-  // to the next quote, and warned about a file full of code.
-  const directiveRegex =
-    /(?:^|[;{}])[ \t]*(?:include|use)\b[ \t]*(?:<([^>\n]+)>|"([^"\n]+)")/gm;
-  const source = withoutComments(scadContent);
-  let match;
 
-  while ((match = directiveRegex.exec(source)) !== null) {
-    const refFile = (match[1] || match[2]).trim();
-    if (!refFile || seen.has(refFile)) continue;
+  for (const { path: refFile } of includeStatements(
+    withoutComments(scadContent)
+  )) {
+    if (seen.has(refFile)) continue;
     seen.add(refFile);
 
     if (!fileExistsFn(refFile)) {
