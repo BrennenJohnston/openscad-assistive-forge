@@ -171,3 +171,40 @@ test('a failed preview says its error once, naming the file as it was opened', a
   expect(failed[0].text).toContain('broken.scad');
   expect(failed[0].text).not.toContain('/tmp/');
 });
+
+test('Unlock Parameter Limits says its new state once, each way', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openBox(page);
+  // Advanced settings are in Standard.
+  const mode = page.locator('#uiModeToggle');
+  if ((await mode.getAttribute('aria-checked')) !== 'true') await mode.click();
+  await expect(mode).toHaveAttribute('aria-checked', 'true');
+  const box = page.locator('#unlockLimitsToggle');
+  await page.evaluate(() => {
+    const el = document.getElementById('unlockLimitsToggle');
+    for (let p = el; p; p = p.parentElement) {
+      if (p.tagName === 'DETAILS') p.open = true;
+    }
+  });
+
+  let mark = await announcementMark(page);
+  await box.check();
+  await page.waitForTimeout(500);
+  let said = await announcementsSince(page, mark);
+  expect(
+    said.filter((a) => /limits unlocked/.test(a.text)),
+    JSON.stringify(said)
+  ).toHaveLength(1);
+  expect(said.filter((a) => /restored/.test(a.text))).toHaveLength(0);
+
+  mark = await announcementMark(page);
+  await box.uncheck();
+  await page.waitForTimeout(500);
+  said = await announcementsSince(page, mark);
+  expect(
+    said.filter((a) => /limits restored/.test(a.text)),
+    JSON.stringify(said)
+  ).toHaveLength(1);
+});
