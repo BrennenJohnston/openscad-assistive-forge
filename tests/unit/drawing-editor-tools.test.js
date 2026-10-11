@@ -15,7 +15,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-vi.mock('../../src/js/focus-trap.js', () => ({
+vi.mock('../../src/js/focus-trap.js', async (importOriginal) => ({
+  // The real helpers (disableKeepingFocus and the like); only the trap is
+  // stubbed.
+  ...(await importOriginal()),
   createDocumentFocusTrap: vi.fn(() => ({
     activate: vi.fn(),
     deactivate: vi.fn(),
@@ -520,6 +523,46 @@ describe('the stencil purpose with tools', () => {
     editor.undo()
     expect(editor.getPlan().rule).toBe('stacked')
     expect(rule.checked).toBe(true)
+  })
+
+  it('Undo and Redo hand focus to each other at the ends of the history', async () => {
+    await openCat()
+    addColour('Brown', '#997048')
+    addColour('White', '#fafbf8')
+    const undo = surface.querySelector('[data-action="undo"]:not(.drawing-editor-table-undo)')
+    const redo = surface.querySelector('[data-action="redo"]')
+    undo.focus()
+    while (!undo.disabled) undo.click()
+    expect(document.activeElement).toBe(redo)
+    while (!redo.disabled) redo.click()
+    expect(document.activeElement).toBe(undo)
+  })
+
+  it('the plate stepper hands focus to its other button at the last plate', async () => {
+    await openCat()
+    addColour('Brown', '#997048')
+    addColour('White', '#fafbf8')
+    const prev = surface.querySelector('[data-action="prev-plate"]')
+    const next = surface.querySelector('[data-action="next-plate"]')
+    next.focus()
+    for (let i = 0; i < 10 && !next.disabled; i++) next.click()
+    expect(next.disabled).toBe(true)
+    expect(document.activeElement).toBe(prev)
+  })
+
+  it('a plate moved to the end of its range keeps focus on its other order button', async () => {
+    await openCat()
+    addColour('Brown', '#997048')
+    addColour('White', '#fafbf8')
+    const items = () => [...surface.querySelectorAll('.drawing-editor-plates li')]
+    const white = items()[2]
+    const colour = white.dataset.colour
+    white.querySelector('[data-action="paint-earlier"]').focus()
+    white.querySelector('[data-action="paint-earlier"]').click()
+    const moved = items().find((li) => li.dataset.colour === colour)
+    // The ground plate stays first, so second place is as early as it goes.
+    expect(moved.querySelector('[data-action="paint-earlier"]').disabled).toBe(true)
+    expect(document.activeElement).toBe(moved.querySelector('[data-action="paint-later"]'))
   })
 
   it('Apply hands the host the drawing as it is, with the plan readable inside the callback', async () => {

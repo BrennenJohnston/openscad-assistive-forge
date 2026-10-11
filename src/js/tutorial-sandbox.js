@@ -12,7 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { createFocusTrap } from './focus-trap.js';
+import { createFocusTrap, disableKeepingFocus, setBusy } from './focus-trap.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate, announceError } from './announcer.js';
 import { backGuardAnsweredPop } from './back-guard.js';
@@ -2540,11 +2540,14 @@ async function navigateToStep(newIndex) {
 
   isNavigating = true;
   // Prevent "double taps" from being ignored silently on mobile.
-  // While we are navigating, disable nav buttons so the UI reflects the busy state.
+  // While we are navigating, mark the nav buttons busy so the UI reflects
+  // it; busy, not disabled, so the button pressed keeps focus (a disabled
+  // one dropped it to the page body on every step). isNavigating ignores a
+  // second press.
   const backBtn = tutorialOverlay?.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay?.querySelector('#tutorialNextBtn');
-  backBtn?.setAttribute('disabled', 'true');
-  nextBtn?.setAttribute('disabled', 'true');
+  setBusy(backBtn, true);
+  setBusy(nextBtn, true);
   try {
     await showStep(newIndex);
     consecutiveFailures = 0;
@@ -2555,8 +2558,17 @@ async function navigateToStep(newIndex) {
       const currentStep = activeTutorial?.steps?.[currentStepIndex];
       const back = tutorialOverlay.querySelector('#tutorialBackBtn');
       const next = tutorialOverlay.querySelector('#tutorialNextBtn');
-      if (back) back.disabled = currentStepIndex === 0;
-      if (next) next.disabled = !!currentStep?.completion && !stepCompleted;
+      setBusy(back, false);
+      setBusy(next, false);
+      const backOff = currentStepIndex === 0;
+      const nextOff = !!currentStep?.completion && !stepCompleted;
+      next?.setAttribute('aria-disabled', String(nextOff));
+      // Back on the first step and Next on a step still waiting turn off:
+      // focus goes to the other one, not to the page body.
+      if (back && !backOff) back.disabled = false;
+      if (next && !nextOff) next.disabled = false;
+      if (back && backOff) disableKeepingFocus(back, nextOff ? null : next);
+      if (next && nextOff) disableKeepingFocus(next, backOff ? null : back);
     }
   }
 }
@@ -3911,7 +3923,8 @@ async function showStep(stepIndex) {
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay.querySelector('#tutorialNextBtn');
 
-  if (backBtn) backBtn.disabled = stepIndex === 0;
+  if (backBtn && stepIndex === 0) disableKeepingFocus(backBtn, nextBtn);
+  else if (backBtn) backBtn.disabled = false;
   if (nextBtn)
     nextBtn.textContent =
       stepIndex === activeTutorial.steps.length - 1 ? 'Finish ✓' : 'Next →';
@@ -4712,7 +4725,11 @@ function setupCompletion(step) {
     requirementEl.textContent = '';
   }
 
-  nextBtn.disabled = !stepCompleted;
+  if (stepCompleted) nextBtn.disabled = false;
+  else {
+    const backBtn = tutorialOverlay?.querySelector('#tutorialBackBtn');
+    disableKeepingFocus(nextBtn, backBtn?.disabled ? null : backBtn);
+  }
   nextBtn.setAttribute('aria-disabled', String(!stepCompleted));
 
   if (!step.completion) return;

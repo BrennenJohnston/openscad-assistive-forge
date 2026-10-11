@@ -173,3 +173,81 @@ test('a grid preset saved or deleted leaves focus on the grid chooser', async ({
   await expect(page.locator('#gridPresetDeleteRow')).toBeHidden()
   await expect(chooser).toBeFocused()
 })
+
+test('the tutorial keeps focus on Back and Next as steps change and at the ends', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.__toBody = 0
+    document.addEventListener(
+      'focusout',
+      (e) => {
+        if (!e.relatedTarget) window.__toBody += 1
+      },
+      true
+    )
+  })
+  await page.waitForFunction(() => typeof window.startTutorial === 'function')
+  await page.evaluate(async () => {
+    await window.startTutorial('intro')
+  })
+  const back = page.locator('#tutorialBackBtn')
+  const next = page.locator('#tutorialNextBtn')
+  await expect(next).toBeVisible()
+  await expect(back).toBeDisabled()
+
+  // Step 2, then Back to the first step: Back turns off, Next takes focus.
+  await next.focus()
+  await page.keyboard.press('Enter')
+  await expect(back).toBeEnabled()
+  await back.focus()
+  await page.keyboard.press('Enter')
+  await expect(back).toBeDisabled()
+  await expect(next).toBeFocused()
+
+  // Forward to the first step that waits for an action: Next turns off,
+  // Back takes focus.
+  for (let i = 0; i < 6 && !(await next.isDisabled()); i += 1) {
+    await next.focus()
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(400)
+  }
+  await expect(next).toBeDisabled()
+  await expect(back).toBeFocused()
+  expect(await page.evaluate(() => window.__toBody)).toBe(0)
+})
+
+test('Export Backup keeps focus while it works', async ({ page }) => {
+  // It is offered only when there are saved projects to back up.
+  await page.evaluate(async () => {
+    const mod = await import('/src/js/saved-projects-manager.js')
+    const result = await mod.saveProject({
+      name: 'Backup me',
+      originalName: 'backup.scad',
+      kind: 'scad',
+      mainFilePath: 'backup.scad',
+      content: 'cube(10);',
+    })
+    if (!result.success) throw new Error(result.error)
+  })
+  await page.goto('/')
+  await page.waitForSelector('#welcomeScreen', { state: 'visible' })
+  await press(page, '#clearStorageBtn')
+  const exportBtn = page.locator('#exportBeforeClearBtn')
+  await expect(exportBtn).toBeVisible()
+  await page.evaluate(() => {
+    window.__toBody = 0
+    document.addEventListener(
+      'focusout',
+      (e) => {
+        if (!e.relatedTarget) window.__toBody += 1
+      },
+      true
+    )
+  })
+  await exportBtn.focus()
+  await page.keyboard.press('Enter')
+  await expect(exportBtn).toHaveText('Export Backup', { timeout: 30_000 })
+  await expect(exportBtn).toBeFocused()
+  expect(await page.evaluate(() => window.__toBody)).toBe(0)
+})

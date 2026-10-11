@@ -404,3 +404,33 @@ export function firstParameterControl(container) {
     null
   );
 }
+
+/**
+ * Mark a button busy with its own action, or no longer. Not `disabled`: a
+ * disabled button loses focus to the page body, and the person who pressed
+ * it loses their place. `aria-disabled` keeps it focusable and says it is
+ * unavailable (`data-busy` gives it the disabled look); its click handler
+ * checks isBusy() and ignores a second press.
+ *
+ * @param {HTMLButtonElement|null} button
+ * @param {boolean} busy
+ */
+export function setBusy(button, busy) {
+  if (!button) return;
+  if (busy) {
+    button.setAttribute('aria-disabled', 'true');
+    button.dataset.busy = 'true';
+  } else {
+    button.removeAttribute('aria-disabled');
+    delete button.dataset.busy;
+  }
+}
+
+/**
+ * Whether a button is busy with its own action (see setBusy).
+ * @param {Element|null} button
+ * @returns {boolean}
+ */
+export function isBusy(button) {
+  return button?.dataset?.busy === 'true';
+}

@@ -44,7 +44,7 @@
  */
 
 import { createSvgPrepWorkspace } from '../svg-preparer-workspace.js';
-import { createDocumentFocusTrap } from '../focus-trap.js';
+import { createDocumentFocusTrap, disableKeepingFocus } from '../focus-trap.js';
 import { parseSvgElements, classifyElements } from '../svg-preparer.js';
 import { boundsOf } from '../svg-nesting.js';
 import { EDITOR_STRINGS as S } from './strings.js';
@@ -1381,8 +1381,15 @@ export function createDrawingEditor({
   function renderStepper(cuts) {
     if (plateIndex >= cuts.length) plateIndex = -1;
     const n = cuts.length;
-    prevPlateBtn.disabled = n === 0 || plateIndex < 0;
-    nextPlateBtn.disabled = n === 0 || plateIndex >= n - 1;
+    const prevOff = n === 0 || plateIndex < 0;
+    const nextOff = n === 0 || plateIndex >= n - 1;
+    // At either end the button pressed turns off: focus goes to the other.
+    if (!prevOff) prevPlateBtn.disabled = false;
+    if (!nextOff) nextPlateBtn.disabled = false;
+    if (prevOff)
+      disableKeepingFocus(prevPlateBtn, nextOff ? null : nextPlateBtn);
+    if (nextOff)
+      disableKeepingFocus(nextPlateBtn, prevOff ? null : prevPlateBtn);
     if (plateIndex < 0) {
       stepperText.textContent = S.allPlates;
       canvas.showPlate(null);
@@ -1734,9 +1741,19 @@ export function createDrawingEditor({
   }
 
   function updateHistoryButtons() {
-    undoBtn.disabled = !stack.canUndo();
-    redoBtn.disabled = !stack.canRedo();
-    tableUndoBtn.disabled = !stack.canUndo();
+    const canUndo = stack.canUndo();
+    const canRedo = stack.canRedo();
+    // Enable before disabling: the step that turns one off turns its partner
+    // on, and a focused button that disables itself hands focus to it, not to
+    // the page body. The table's Undo has no Redo beside it: the toolbar's.
+    if (canUndo) undoBtn.disabled = false;
+    if (canUndo) tableUndoBtn.disabled = false;
+    if (canRedo) redoBtn.disabled = false;
+    if (!canUndo) {
+      disableKeepingFocus(undoBtn, canRedo ? redoBtn : null);
+      disableKeepingFocus(tableUndoBtn, canRedo ? redoBtn : null);
+    }
+    if (!canRedo) disableKeepingFocus(redoBtn, canUndo ? undoBtn : null);
   }
 
   function setTool(id) {
@@ -2033,10 +2050,17 @@ export function createDrawingEditor({
       platesList.appendChild(li);
     });
     if (remember) {
-      const again = platesList.querySelector(
-        `[data-colour="${escapeAttr(remember.colour || '')}"] [data-action="${remember.action}"]`
+      const row = platesList.querySelector(
+        `[data-colour="${escapeAttr(remember.colour || '')}"]`
       );
-      if (again) again.focus();
+      const again = row?.querySelector(`[data-action="${remember.action}"]`);
+      // At the end of the order the same button is off now (focus() on it
+      // does nothing): its partner moves the plate back.
+      const target =
+        again && !again.disabled
+          ? again
+          : row?.querySelector('[data-action^="paint-"]:not(:disabled)');
+      target?.focus();
     }
   }
 

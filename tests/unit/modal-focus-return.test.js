@@ -179,3 +179,18 @@ describe('a dialog opening', () => {
     expect(modal.contains(document.activeElement)).toBe(true)
   })
 })
+
+describe('a button busy with its own action', () => {
+  it('keeps focus, says it is unavailable, and comes back as it was', async () => {
+    const { setBusy, isBusy } = await import('../../src/js/focus-trap.js')
+    const save = button('Save to Folder')
+    save.focus()
+    setBusy(save, true)
+    expect(document.activeElement).toBe(save)
+    expect(save.getAttribute('aria-disabled')).toBe('true')
+    expect(isBusy(save)).toBe(true)
+    setBusy(save, false)
+    expect(save.hasAttribute('aria-disabled')).toBe(false)
+    expect(isBusy(save)).toBe(false)
+  })
+})
