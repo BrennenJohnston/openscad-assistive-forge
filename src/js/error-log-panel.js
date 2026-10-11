@@ -453,11 +453,9 @@ export class ErrorLogPanel {
 
   /** @param {ErrorLogEntry} entry */
   _announceIfImportant(entry) {
-    if (
-      entry.type !== ERROR_LOG_TYPE.ERROR &&
-      entry.type !== ERROR_LOG_TYPE.WARNING
-    )
-      return;
+    // Errors are left to the failed run's own announcement, which carries
+    // the engine's line.
+    if (entry.type !== ERROR_LOG_TYPE.WARNING) return;
     const now = Date.now();
     if (now - this.lastAnnouncement < this.announcementDebounce) {
       clearTimeout(this.pendingAnnouncement);

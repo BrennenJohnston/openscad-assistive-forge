@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tours open on Next, and each step's heading takes focus so its text is
   read; the step number is said once, the last button is named Finish,
   and finishing a tour says so once.
+- A failed preview or Generate says so once, with OpenSCAD's own error,
+  and messages name your files instead of the engine's (`/tmp/input.scad`).
 
 ## [5.2.2] - 2026-10-09
 

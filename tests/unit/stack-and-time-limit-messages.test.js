@@ -113,6 +113,22 @@ describe('other preview failures keep their sentence', () => {
     )
   })
 
+  it("says the engine's own error after the title, once", () => {
+    // A screen reader heard only "Preview failed: Code Problem Found"; the
+    // error itself was on screen and nowhere else.
+    const error = new Error('Syntax error in your OpenSCAD file.')
+    error.code = 'SYNTAX_ERROR'
+    error.details = [
+      'Error: OpenSCAD compilation failed with exit code 1. Output: [ERR] Could not initialize localization',
+      '[ERR] ERROR: Parser error: syntax error in file simple_box.scad, line 4',
+      "[ERR] Can't parse file 'simple_box.scad'!",
+    ].join('\n')
+    expect(previewFailureSentence(error)).toBe(
+      `Preview failed: ${TRANSLATIONS_BY_CODE.SYNTAX_ERROR.title}. ` +
+        'Parser error: syntax error in file simple_box.scad, line 4'
+    )
+  })
+
   it('an engine that could not start again says what to do', () => {
     const error = new Error('The OpenSCAD engine could not start again.')
     error.code = 'ENGINE_RESTART_FAILED'

@@ -1,8 +1,9 @@
 /**
  * Unit tests for what the Error Log says aloud.
  *
- * A warning goes to the polite announcer with the label "Warning:". Only an
- * error interrupts, with "Error:".
+ * A warning goes to the polite announcer with the label "Warning:". An error
+ * says nothing here: it ends the run, and the run's failure is announced once
+ * with the engine's line.
  *
  * @license GPL-3.0-or-later
  */
@@ -46,9 +47,9 @@ describe('ErrorLogPanel: what a recovered engine warning says', () => {
     );
   });
 
-  it('still interrupts for an error', () => {
+  it('leaves an error to the failed run, which says it once', () => {
     panel.addOutput('ERROR: Assertion failed in file model.scad, line 12');
-    expect(announceError).toHaveBeenCalledTimes(1);
-    expect(announceError.mock.calls[0][0]).toMatch(/^Error at line 12: ERROR:/);
+    expect(announceError).not.toHaveBeenCalled();
+    expect(announceImmediate).not.toHaveBeenCalled();
   });
 });

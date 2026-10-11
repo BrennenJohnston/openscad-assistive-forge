@@ -499,6 +499,17 @@ export const TRANSLATIONS_BY_CODE = {
 TRANSLATIONS_BY_CODE.RENDER_TIMEOUT = TRANSLATIONS_BY_CODE.TIMEOUT;
 
 /**
+ * The first "ERROR:" line the engine wrote, without its level word. A run
+ * that fails says it with its own announcement, so the message panels leave
+ * error lines unsaid.
+ * @param {*} details - The failure's engine output
+ * @returns {string|null}
+ */
+export function engineErrorLine(details) {
+  return /\bERROR:\s*([^\n]+)/.exec(String(details || ''))?.[1]?.trim() || null;
+}
+
+/**
  * The status line, and the announcement, for a preview that failed.
  * @param {Error} error - The failure, with the code the pipeline gave it
  * @returns {string}
@@ -515,8 +526,14 @@ export function previewFailureSentence(error) {
   });
   // A title alone cannot tell the person that the next change starts the
   // engine again.
-  return error?.code === 'ENGINE_RESTART_FAILED'
-    ? `Preview failed: ${friendly.title}. ${friendly.suggestion}`
+  if (error?.code === 'ENGINE_RESTART_FAILED') {
+    return `Preview failed: ${friendly.title}. ${friendly.suggestion}`;
+  }
+  // The engine's own first error line, where it gave one: the title alone
+  // left the error itself to be found on screen.
+  const engineLine = engineErrorLine(error?.details);
+  return engineLine
+    ? `Preview failed: ${friendly.title}. ${engineLine}`
     : `Preview failed: ${friendly.title}`;
 }
 

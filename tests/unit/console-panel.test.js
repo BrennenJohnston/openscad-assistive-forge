@@ -123,4 +123,12 @@ describe('the console log, as a screen reader meets it', () => {
     p.addOutput('WARNING: out of sight')
     expect(announceImmediate).toHaveBeenCalledWith('WARNING: out of sight')
   })
+
+  it('leaves an error line to the failed run, which says it once', () => {
+    const p = new ConsolePanel({ container, badge: document.createElement('span') })
+    container.checkVisibility = () => false
+    p.addOutput('ERROR: Parser error: syntax error in file a.scad, line 4')
+    expect(announceError).not.toHaveBeenCalled()
+    expect(announceImmediate).not.toHaveBeenCalled()
+  })
 })

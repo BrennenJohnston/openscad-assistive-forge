@@ -114,6 +114,7 @@ import { disableKeepingFocus, setBusy, isBusy } from './js/focus-trap.js';
 import {
   translateError,
   previewFailureSentence,
+  engineErrorLine,
   findFailedCheck,
   findMissingLibrary,
   showErrorModal,
@@ -5741,6 +5742,9 @@ async function initApp() {
           schemaNames: Object.keys(defineState.schema?.parameters || {}),
         });
       });
+      renderController.setProjectFileNameResolver(
+        () => stateManager.getState().uploadedFile?.name || null
+      );
 
       // Set up memory warning callback
       renderController.setMemoryWarningCallback((memoryInfo) => {
@@ -7415,11 +7419,18 @@ async function initApp() {
           // The status bars said "Preview ready" under a badge saying the
           // preview is outdated. With Automatic preview on, the state passes
           // through STALE to PENDING in the same task; only a preview that
-          // stays outdated says so. Not announced: the change was the
+          // stays outdated says so, and only over a line that still calls a
+          // result ready (another message written with the change, "Quality
+          // reduced" say, stands). Not announced: the change was the
           // person's own.
           if (newState === PREVIEW_STATE.STALE) {
             queueMicrotask(() => {
-              if (autoPreviewController?.state === PREVIEW_STATE.STALE) {
+              const line =
+                document.getElementById('statusArea')?.textContent.trim() || '';
+              if (
+                autoPreviewController?.state === PREVIEW_STATE.STALE &&
+                /^(Preview|[A-Z0-9]+) ready$/.test(line)
+              ) {
                 updateStatus('Preview outdated', 'default', {
                   announce: false,
                 });
@@ -7502,7 +7513,9 @@ async function initApp() {
             }
 
             const sentence = previewFailureSentence(error);
-            updateStatus(sentence, 'error');
+            // Said once, assertively; through updateStatus as well it was
+            // said twice.
+            updateStatus(sentence, 'error', { announce: false });
             _announceError(sentence);
           }
         },
@@ -12296,9 +12309,15 @@ if (rounded) {
         code: error.code,
         details: error.details,
       });
-      updateStatus(`Error: ${friendlyError.title}`);
+      // Said once, assertively, with the engine's own line where it gave
+      // one: the message panels leave error lines to this.
+      updateStatus(`Error: ${friendlyError.title}`, 'error', {
+        announce: false,
+      });
+      const engineLine = engineErrorLine(error.details);
       _announceError(
-        `Error: ${friendlyError.title}. ${friendlyError.explanation}`
+        `Error: ${friendlyError.title}. ${friendlyError.explanation}` +
+          (engineLine ? ` ${engineLine}` : '')
       );
 
       showErrorModal({
@@ -15087,10 +15106,12 @@ if (rounded) {
         String(!echoDrawer.classList.contains('collapsed'))
       );
 
+    // A run with an error has failed, and its failure is announced with the
+    // error; the count would be a second voice for the same news.
+    if (errorCount > 0) return;
+
     // Build accessible announcement
     const summary = [];
-    if (errorCount > 0)
-      summary.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
     if (warnCount > 0)
       summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
     if (echoCount > 0)

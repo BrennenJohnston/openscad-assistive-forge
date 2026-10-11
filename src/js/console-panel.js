@@ -521,10 +521,12 @@ export class ConsolePanel {
    * @param {Object} entry - Console entry
    */
   announceIfImportant(entry) {
+    // An error line ends the run, and the run's failure is announced with
+    // that line (previewFailureSentence, the Generate error); said here too,
+    // a failure was heard up to four times.
     if (
       entry.type !== CONSOLE_ENTRY_TYPE.ECHO &&
-      entry.type !== CONSOLE_ENTRY_TYPE.WARNING &&
-      entry.type !== CONSOLE_ENTRY_TYPE.ERROR
+      entry.type !== CONSOLE_ENTRY_TYPE.WARNING
     ) {
       return;
     }

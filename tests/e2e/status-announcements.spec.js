@@ -138,3 +138,36 @@ test('nothing reads "Generating" while nothing is generating', async ({
     /.*/
   );
 });
+
+test('a failed preview says its error once, naming the file as it was opened', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  await recordAnnouncements(page);
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 180_000,
+  });
+  const mark = await announcementMark(page);
+  await page.locator('#fileInput').setInputFiles({
+    name: 'broken.scad',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(['size = 10;', 'cube(size', ''].join('\n')),
+  });
+  await expect(page.locator('.preview-state-indicator')).toHaveClass(
+    /state-error/,
+    { timeout: 120_000 }
+  );
+  await page.waitForTimeout(SETTLE_MS);
+
+  const said = await announcementsSince(page, mark);
+  const failed = said.filter((a) => /Preview failed/.test(a.text));
+  expect(failed, JSON.stringify(said)).toHaveLength(1);
+  expect(failed[0].text).toContain('broken.scad');
+  expect(failed[0].text).not.toContain('/tmp/');
+});
