@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { attachInvariants, expectNoNativeDialog } from './helpers/invariants.js'
 
 // The two questions the app can ask while it starts: presets left by an
 // older version, and the engine download on a slow or metered connection.
@@ -6,16 +7,6 @@ import { test, expect } from '@playwright/test'
 
 const LEGACY_PRESETS_KEY = 'openscad-customizer-presets'
 const STORAGE_PREFS_KEY = 'openscad-forge-storage-prefs'
-
-/** Every browser dialog that opens, dismissed and kept for the assertion. */
-function recordNativeDialogs(page) {
-  const opened = []
-  page.on('dialog', async (dialog) => {
-    opened.push(`${dialog.type()}: ${dialog.message()}`)
-    await dialog.dismiss()
-  })
-  return opened
-}
 
 function question(page, title) {
   return page
@@ -37,7 +28,7 @@ test('presets from an earlier version are offered in the app’s own dialog', as
       sessionStorage.setItem('legacy-seeded', '1')
     }
   }, LEGACY_PRESETS_KEY)
-  const natives = recordNativeDialogs(page)
+  attachInvariants(page)
   await page.goto('/')
 
   const offer = question(page, 'Presets From an Earlier Version')
@@ -48,7 +39,7 @@ test('presets from an earlier version are offered in the app’s own dialog', as
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem('openscad-forge-presets-v2') || ''))
     .toContain('Old Preset')
-  expect(natives).toEqual([])
+  expectNoNativeDialog(page)
 })
 
 test('a metered connection is asked before the engine downloads, in the app’s own dialog', async ({ page }) => {
@@ -57,7 +48,7 @@ test('a metered connection is asked before the engine downloads, in the app’s 
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     localStorage.setItem(key, JSON.stringify({ allowLargeDownloads: false }))
   }, STORAGE_PREFS_KEY)
-  const natives = recordNativeDialogs(page)
+  attachInvariants(page)
   const engineRequests = []
   page.on('request', (request) => {
     if (/openscad\.wasm(\?|$)/.test(request.url())) engineRequests.push(request.url())
@@ -73,5 +64,5 @@ test('a metered connection is asked before the engine downloads, in the app’s 
   await page.waitForTimeout(3_000)
   expect(engineRequests, 'Not now must not start the engine download').toEqual([])
   await expect(page.locator('body')).not.toHaveAttribute('data-wasm-ready', 'true')
-  expect(natives).toEqual([])
+  expectNoNativeDialog(page)
 })

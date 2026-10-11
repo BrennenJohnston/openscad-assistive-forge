@@ -48,14 +48,14 @@ export default [
     files: ['src/**/*.js'],
     rules: {
       'no-restricted-globals': [
-        'warn',
+        'error',
         ...['confirm', 'prompt', 'alert'].map((name) => ({
           name,
           message: `Use the app's own dialog from src/js/dialogs.js instead of ${name}().`,
         })),
       ],
       'no-restricted-properties': [
-        'warn',
+        'error',
         ...['confirm', 'prompt', 'alert'].map((property) => ({
           object: 'window',
           property,

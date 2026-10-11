@@ -9,7 +9,11 @@ import {
   getSelectedPresetLabel,
   getPresetOptions,
 } from './helpers/preset-helpers.js'
-import { expectNoRawTags } from './helpers/invariants.js'
+import {
+  attachInvariants,
+  expectNoNativeDialog,
+  expectNoRawTags,
+} from './helpers/invariants.js'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -272,11 +276,7 @@ test.describe('Preset Workflow', () => {
 
     const pageErrors = []
     page.on('pageerror', (err) => pageErrors.push(err.message))
-    const natives = []
-    page.on('dialog', async (dialog) => {
-      natives.push(`${dialog.type()}: ${dialog.message()}`)
-      await dialog.dismiss()
-    })
+    attachInvariants(page)
 
     const manageBtn = page.locator('#managePresetsBtn')
     await expect(manageBtn).toBeVisible({ timeout: 3000 })
@@ -331,7 +331,7 @@ test.describe('Preset Workflow', () => {
       .evaluate((el) => Array.from(el.options).map((o) => o.textContent.trim()))
     expect(optionLabels.join('\n')).toContain('Imported Preset')
     expect(optionLabels.join('\n')).not.toContain('Kept Preset')
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
   })
 
   test('should delete a preset', async ({ page }) => {

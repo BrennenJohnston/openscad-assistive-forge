@@ -58,6 +58,7 @@ They catch what a person meets and a narrow assertion misses.
 | Check | What it fails on |
 |---|---|
 | `attachInvariants(page)`, later `expectNoPageErrors(page)` | an uncaught page error, or a console error that names broken code (`is not a function`, `before initialization` and the like), at any point in the test. Call `attachInvariants` before the first navigation |
+| `attachInvariants(page)`, later `expectNoNativeDialog(page)` | a browser `confirm`, `prompt` or `alert` at any point in the test; each one is dismissed so the page goes on. The app asks through its own dialogs in `src/js/dialogs.js`, and lint refuses the browser's three in `src/` |
 | `expectFocusNotOnBody(page)` | focus dropped to the page body, where a keyboard user is lost |
 | `expectFocusInside(page, container)` | focus outside the dialog or panel that should hold it |
 | `expectNoRawTags(locator)` | markup shown as text, such as `<strong>` in a message |

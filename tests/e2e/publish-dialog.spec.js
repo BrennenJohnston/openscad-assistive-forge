@@ -9,6 +9,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { attachInvariants, expectNoNativeDialog } from './helpers/invariants.js'
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -114,16 +115,6 @@ test.describe('Copying when the browser refuses the clipboard', () => {
     })
   })
 
-  /** Every browser dialog that opens, dismissed and kept for the assertion. */
-  function recordNativeDialogs(page) {
-    const opened = []
-    page.on('dialog', async (dialog) => {
-      opened.push(`${dialog.type()}: ${dialog.message()}`)
-      await dialog.dismiss()
-    })
-    return opened
-  }
-
   async function expectCopyByHand(page, text, opener) {
     const dialog = page
       .locator('[role="dialog"]')
@@ -138,18 +129,18 @@ test.describe('Copying when the browser refuses the clipboard', () => {
   }
 
   test('the manifest', async ({ page }) => {
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
     await openPublishDialog(page, 'simple-box')
     const { text } = await readEmittedManifest(page)
     const copy = page.locator('#copyManifestBtn')
     await copy.click()
     await expectCopyByHand(page, text, copy)
     await expect(copy).not.toContainText('Copied')
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
   })
 
   test('the share link', async ({ page }) => {
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
     await openPublishDialog(page, 'simple-box')
     await page.locator('#publishRepoUrl').fill('https://example.org/my-design')
     const link = page.locator('#publishShareLink')
@@ -158,11 +149,11 @@ test.describe('Copying when the browser refuses the clipboard', () => {
     await copy.click()
     await expectCopyByHand(page, await link.inputValue(), copy)
     await expect(copy).not.toContainText('Copied')
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
   })
 
   test('Copy Link in the Actions drawer', async ({ page }) => {
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
     await page.goto('/?example=simple-box')
     await page.locator('.param-control').first().waitFor({ state: 'attached', timeout: 60000 })
     await page.locator('#actionsDrawerToggle').click()
@@ -177,6 +168,6 @@ test.describe('Copying when the browser refuses the clipboard', () => {
     await dialog.getByRole('button', { name: 'Close', exact: true }).click()
     await expect(dialog).toHaveCount(0)
     await expect(page.locator('#statusArea')).not.toContainText('Link copied')
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
   })
 })

@@ -7,6 +7,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { attachInvariants, expectNoNativeDialog } from './helpers/invariants.js'
 
 test.describe.configure({ timeout: 120_000 })
 
@@ -157,11 +158,7 @@ test('Generate keeps focus while it runs, and ends on the main button', async ({
 test('a grid preset saved or deleted leaves focus on the grid chooser', async ({
   page,
 }) => {
-  const natives = []
-  page.on('dialog', async (dialog) => {
-    natives.push(`${dialog.type()}: ${dialog.message()}`)
-    await dialog.dismiss()
-  })
+  attachInvariants(page)
   const drawer = page.locator('#previewDrawerToggle')
   if ((await drawer.getAttribute('aria-expanded')) !== 'true') {
     await drawer.click()
@@ -186,7 +183,7 @@ test('a grid preset saved or deleted leaves focus on the grid chooser', async ({
   await expect(question).toHaveCount(0)
   await expect(page.locator('#gridPresetDeleteRow')).toBeHidden()
   await expect(chooser).toBeFocused()
-  expect(natives).toEqual([])
+  expectNoNativeDialog(page)
 })
 
 test('the tutorial moves focus to each step heading, never the body, at the ends too', async ({

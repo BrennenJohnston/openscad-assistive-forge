@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { attachInvariants, expectNoPageErrors } from './helpers/invariants.js'
+import { attachInvariants, expectNoNativeDialog, expectNoPageErrors } from './helpers/invariants.js'
 
 const ENGINE_TIMEOUT = 240_000
 const PREVIEW_TIMEOUT = 180_000
@@ -75,16 +75,6 @@ async function restoreDraft(page) {
   await expect(question).toHaveCount(0)
 }
 
-/** Every browser dialog that opens, dismissed and kept for the assertion. */
-function recordNativeDialogs(page) {
-  const opened = []
-  page.on('dialog', async (dialog) => {
-    opened.push(`${dialog.type()}: ${dialog.message()}`)
-    await dialog.dismiss()
-  })
-  return opened
-}
-
 /** The restored project, or the dialog that says it could not be read. */
 async function restoredOrFailed(page) {
   const params = page.locator('#param-width-spinbox')
@@ -109,7 +99,7 @@ test.describe('A real start-up', () => {
 
   test('a return visit without "Remember my choice" asks again and restores the draft', async ({ page }) => {
     attachInvariants(page)
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
     await page.goto('/')
     await acceptWelcome(page, { remember: false })
     await declineTourOffer(page)
@@ -124,13 +114,13 @@ test.describe('A real start-up', () => {
     await expect(failed).toHaveCount(0)
     await expect(params).toBeAttached()
     await waitForPreview(page)
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
     expectNoPageErrors(page)
   })
 
   test('a return visit with "Remember my choice" restores the draft', async ({ page }) => {
     attachInvariants(page)
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
     await page.goto('/')
     await acceptWelcome(page, { remember: true })
     await declineTourOffer(page)
@@ -145,7 +135,7 @@ test.describe('A real start-up', () => {
     const { params, failed } = await restoredOrFailed(page)
     await expect(failed).toHaveCount(0)
     await expect(params).toBeAttached()
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
     expectNoPageErrors(page)
   })
 
@@ -154,7 +144,7 @@ test.describe('A real start-up', () => {
   // plain address, where only the draft holds the value.
   test('a restored draft keeps the values that were changed', async ({ page }) => {
     attachInvariants(page)
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
     await page.goto('/')
     await acceptWelcome(page, { remember: true })
     await declineTourOffer(page)
@@ -177,7 +167,7 @@ test.describe('A real start-up', () => {
     const { params, failed } = await restoredOrFailed(page)
     await expect(failed).toHaveCount(0)
     await expect(params).toHaveValue('57')
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
     expectNoPageErrors(page)
   })
 })

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { attachInvariants, expectNoNativeDialog } from './helpers/invariants.js'
 
 // The questions the saved projects ask (a folder's new name, a project
 // file's new name, a new folder, and each delete) are the app's own dialogs:
@@ -13,16 +14,6 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
-
-/** Every browser dialog that opens, dismissed and kept for the assertion. */
-function recordNativeDialogs(page) {
-  const opened = []
-  page.on('dialog', async (dialog) => {
-    opened.push(`${dialog.type()}: ${dialog.message()}`)
-    await dialog.dismiss()
-  })
-  return opened
-}
 
 async function seed(page, { folders = [], project = null } = {}) {
   await page.goto('/')
@@ -72,7 +63,7 @@ function folderRow(page, name) {
 }
 
 test('a saved folder is renamed and deleted through the app’s own dialogs', async ({ page }) => {
-  const natives = recordNativeDialogs(page)
+  attachInvariants(page)
   await seed(page, { folders: ['Gears', 'Hinges'] })
   await expect(folderRow(page, 'Gears')).toBeVisible({ timeout: 30_000 })
 
@@ -99,11 +90,11 @@ test('a saved folder is renamed and deleted through the app’s own dialogs', as
   await expect(folderRow(page, 'Gear trains')).toHaveCount(0)
   await expect.poll(() => focusedElement(page)).toMatchObject({ inList: true })
 
-  expect(natives).toEqual([])
+  expectNoNativeDialog(page)
 })
 
 test('a project’s files are renamed, added and deleted through the app’s own dialogs', async ({ page }) => {
-  const natives = recordNativeDialogs(page)
+  attachInvariants(page)
   await seed(page, {
     project: {
       name: 'Box kit',
@@ -174,5 +165,5 @@ test('a project’s files are renamed, added and deleted through the app’s own
   await expect(tree.locator('.btn-delete-project-folder[data-folder="pieces"]')).toHaveCount(0)
   await expect.poll(() => focusedElement(page)).toMatchObject({ inTree: true })
 
-  expect(natives).toEqual([])
+  expectNoNativeDialog(page)
 })

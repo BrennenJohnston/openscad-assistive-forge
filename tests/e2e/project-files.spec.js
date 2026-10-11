@@ -9,6 +9,7 @@ import path from 'path'
 import fs from 'fs'
 import { Buffer } from 'node:buffer'
 import JSZip from 'jszip'
+import { attachInvariants, expectNoNativeDialog } from './helpers/invariants.js'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -173,16 +174,6 @@ const openProjectFilesDisclosure = async (page) => {
     await details.locator('summary').click()
   }
   await expect(details).toHaveJSProperty('open', true)
-}
-
-/** Every browser dialog that opens, dismissed and kept for the assertion. */
-const recordNativeDialogs = (page) => {
-  const opened = []
-  page.on('dialog', async (dialog) => {
-    opened.push(`${dialog.type()}: ${dialog.message()}`)
-    await dialog.dismiss()
-  })
-  return opened
 }
 
 /** One of the app's own questions, found by its title. */
@@ -445,7 +436,7 @@ cube(10);
     const removeBtn = nonMainItem.locator('button[data-action="remove"]')
     await expect(removeBtn).toBeVisible()
     const path = await removeBtn.getAttribute('data-path')
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
 
     await removeBtn.click()
 
@@ -461,7 +452,7 @@ cube(10);
     await expect
       .poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('#projectFilesList'))))
       .toBe(true)
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
   })
 
   test('removal can be cancelled', async ({ page }) => {
@@ -480,7 +471,7 @@ cube(10);
     const nonMainItem = page.locator('.project-file-item:not(.main-file)').first()
     const removeBtn = nonMainItem.locator('button[data-action="remove"]')
     await expect(removeBtn).toBeVisible()
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
 
     await removeBtn.click()
     const question = appQuestion(page, 'Remove File')
@@ -491,7 +482,7 @@ cube(10);
     // Nothing removed, and focus back on the button that asked.
     await expect(fileItems).toHaveCount(initialCount)
     await expect(removeBtn).toBeFocused()
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
   })
 
   test('adding a file whose name is taken asks before replacing it', async ({ page }) => {
@@ -501,7 +492,7 @@ cube(10);
     await openProjectFilesDisclosure(page)
     const fileItems = page.locator('.project-file-item')
     const initialCount = await fileItems.count()
-    const natives = recordNativeDialogs(page)
+    attachInvariants(page)
 
     await page.locator('#addCompanionFileInput').setInputFiles({
       name: 'settings.txt',
@@ -516,7 +507,7 @@ cube(10);
     await question.getByRole('button', { name: 'Replace', exact: true }).click()
     await expect(question).toHaveCount(0)
     await expect(fileItems).toHaveCount(initialCount)
-    expect(natives).toEqual([])
+    expectNoNativeDialog(page)
   })
 
   test('companion save button is visible for loaded projects', async ({ page }) => {

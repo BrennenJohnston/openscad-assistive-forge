@@ -13,6 +13,7 @@ import {
   attachInvariants,
   expectFocusInside,
   expectFocusNotOnBody,
+  expectNoNativeDialog,
   expectNoPageErrors,
   expectNoRawTags,
   expectPageFitsViewport,
@@ -48,6 +49,16 @@ test.describe('Invariants can fail', () => {
     await page.evaluate(() => console.error("TypeError: Cannot read properties of null (reading 'render')"))
     await page.waitForTimeout(100)
     expect(() => expectNoPageErrors(page)).toThrow(/Cannot read properties/)
+  })
+
+  test('a browser confirm fails the no-native-dialog check, and does not block the page', async ({
+    page,
+  }) => {
+    attachInvariants(page)
+    await openPage(page, '<button id="b">Go</button>')
+    const answer = await page.evaluate(() => window.confirm('Delete it?'))
+    expect(answer).toBe(false)
+    expect(() => expectNoNativeDialog(page)).toThrow(/confirm: Delete it\?/)
   })
 
   test('focus on the body fails the focus check', async ({ page }) => {
@@ -135,6 +146,7 @@ test.describe('Invariants pass a page that keeps them', () => {
     await openPage(page, '<div role="dialog" id="d"><p id="m">Delete "Walk test"? This cannot be undone.</p><button id="ok">OK</button></div>')
     await page.locator('#ok').focus()
     expectNoPageErrors(page)
+    expectNoNativeDialog(page)
     await expectFocusNotOnBody(page)
     await expectFocusInside(page, page.locator('#d'))
     await expectNoRawTags(page.locator('#m'))
