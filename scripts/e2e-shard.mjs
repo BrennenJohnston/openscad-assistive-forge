@@ -312,6 +312,8 @@ export const MEASURED_SECONDS = {
   'dialog-focus-return.spec.js': 55.0,
   // One case, about 6 s locally; booked at 15.
   'guide-example-focus.spec.js': 15.0,
+  // Six cases, 35.6 s locally (each one loads the app; one generates); 45.
+  'self-disabling-controls-focus.spec.js': 45.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

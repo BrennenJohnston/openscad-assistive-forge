@@ -11901,11 +11901,11 @@ if (rounded) {
       let formatName =
         OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
 
-      primaryActionBtn.disabled = true;
-      primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
-
-      // Show cancel button
+      // Show cancel button, and move focus there before this button
+      // disables itself: the render can be stopped from where focus is.
       cancelRenderBtn.classList.remove('hidden');
+      disableKeepingFocus(primaryActionBtn, cancelRenderBtn);
+      primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
 
       // Disable undo/redo during rendering to prevent state mismatches
       stateManager.setHistoryEnabled(false);
@@ -12265,8 +12265,7 @@ if (rounded) {
       });
     } finally {
       primaryActionBtn.disabled = false;
-      // Hide cancel button
-      cancelRenderBtn.classList.add('hidden');
+      hideCancelRender();
       // Re-enable undo/redo after rendering
       stateManager.setHistoryEnabled(true);
       // Always restore button to correct state based on current conditions
@@ -12274,13 +12273,22 @@ if (rounded) {
     }
   }
 
+  /**
+   * Hide Cancel when a render ends. Focus on it goes back to the main
+   * button first (enabled again by then), not to the page body.
+   */
+  function hideCancelRender() {
+    if (document.activeElement === cancelRenderBtn) primaryActionBtn.focus();
+    cancelRenderBtn.classList.add('hidden');
+  }
+
   // Cancel render button
   cancelRenderBtn.addEventListener('click', () => {
     if (renderController) {
       renderController.cancel();
       updateStatus('Generation canceled by user');
-      cancelRenderBtn.classList.add('hidden');
       primaryActionBtn.disabled = false;
+      hideCancelRender();
       // Re-enable undo/redo after cancellation
       stateManager.setHistoryEnabled(true);
       updatePrimaryActionButton();
@@ -15318,6 +15326,9 @@ if (rounded) {
     });
 
     resetGroupSelector.classList.remove('hidden');
+    // To the picker it just revealed, which names itself: otherwise the
+    // press sounded as if nothing had happened.
+    resetGroupSelect.focus();
   });
 
   confirmResetGroupBtn?.addEventListener('click', () => {
@@ -15361,6 +15372,10 @@ if (rounded) {
       autoPreviewController.onParameterChange(newParams);
     }
 
+    // Back to Reset Group: the picker and its button are hidden now.
+    if (resetGroupSelector.contains(document.activeElement)) {
+      resetGroupBtn?.focus();
+    }
     resetGroupSelector.classList.add('hidden');
     const groupLabel =
       state.schema.groups.find((g) => g.id === groupId)?.label || groupId;
