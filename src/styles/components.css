@@ -403,6 +403,13 @@ details.param-group.forge-disclosure[open] > summary::before {
   cursor: not-allowed;
 }
 
+/* Busy with its own action: aria-disabled, not disabled, so it keeps focus
+   (setBusy in focus-trap.js); it looks like a disabled button. */
+.btn[data-busy='true'] {
+  opacity: 0.5;
+  cursor: progress;
+}
+
 .btn-primary {
   background-color: var(--color-accent);
   color: var(--color-on-accent);
@@ -12755,6 +12762,7 @@ body.tutorial-body-locked {
   }
 
   .btn:disabled,
+  .btn[data-busy='true'],
   button:disabled {
     opacity: 1; /* Don't use opacity in forced-colors */
     color: GrayText;

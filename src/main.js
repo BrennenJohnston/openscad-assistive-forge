@@ -110,6 +110,7 @@ import {
   initStaticModals,
   isAnyModalOpen,
 } from './js/modal-manager.js';
+import { disableKeepingFocus, setBusy, isBusy } from './js/focus-trap.js';
 import {
   translateError,
   previewFailureSentence,
@@ -1397,7 +1398,7 @@ async function initApp() {
         const clearCacheBtn = document.getElementById('clearCacheBtn');
         const originalBtnText = clearCacheBtn?.textContent;
         if (clearCacheBtn) {
-          clearCacheBtn.disabled = true;
+          setBusy(clearCacheBtn, true);
           clearCacheBtn.textContent = 'Clearing...';
           clearCacheBtn.setAttribute('aria-busy', 'true');
         }
@@ -1451,7 +1452,7 @@ async function initApp() {
         navigator.serviceWorker.removeEventListener('message', onCacheCleared);
 
         if (clearCacheBtn) {
-          clearCacheBtn.disabled = false;
+          setBusy(clearCacheBtn, false);
           clearCacheBtn.textContent = originalBtnText || 'Clear Cache';
           clearCacheBtn.removeAttribute('aria-busy');
         }
@@ -1895,6 +1896,7 @@ async function initApp() {
       modal.className = 'preset-modal cache-clear-dialog';
       modal.setAttribute('role', 'dialog');
       modal.setAttribute('aria-labelledby', 'cacheClearTitle');
+      modal.setAttribute('aria-describedby', 'cacheClearWarningText');
       modal.setAttribute('aria-modal', 'true');
 
       const hasProjects = storageInfo.savedDesignsCount > 0;
@@ -1908,7 +1910,7 @@ async function initApp() {
           <div class="preset-modal-body">
             <div class="cache-clear-warning">
               <span class="cache-clear-warning-icon" aria-hidden="true">⚠️</span>
-              <div class="cache-clear-warning-text">
+              <div class="cache-clear-warning-text" id="cacheClearWarningText">
                 <strong>Warning:</strong> This will delete all saved projects and cached app data by default.
                 Check the box below if you want to keep your saved projects.
               </div>
@@ -1999,12 +2001,13 @@ async function initApp() {
       const exportBtn = modal.querySelector('#exportBeforeClearBtn');
       if (exportBtn) {
         exportBtn.addEventListener('click', async () => {
-          exportBtn.disabled = true;
+          if (isBusy(exportBtn)) return;
+          setBusy(exportBtn, true);
           exportBtn.textContent = 'Exporting...';
           try {
             await handleExportBackup();
           } finally {
-            exportBtn.disabled = false;
+            setBusy(exportBtn, false);
             exportBtn.textContent = 'Export Backup';
           }
         });
@@ -2015,10 +2018,13 @@ async function initApp() {
         const cancelBtn = modal.querySelector('#cacheClearCancelBtn');
         const confirmBtn = modal.querySelector('#cacheClearConfirmBtn');
 
-        cancelBtn.addEventListener('click', () => {
+        const cancel = () => {
+          closeModal(modal);
           document.body.removeChild(modal);
           resolve(false);
-        });
+        };
+
+        cancelBtn.addEventListener('click', cancel);
 
         confirmBtn.addEventListener('click', async () => {
           const clearAppCaches = modal.querySelector('#clearAppCaches').checked;
@@ -2048,6 +2054,7 @@ async function initApp() {
               ),
             ]);
 
+            closeModal(modal);
             document.body.removeChild(modal);
 
             if (result.appCachesCleared || result.userDataCleared) {
@@ -2071,6 +2078,7 @@ async function initApp() {
 
             // Force reload anyway - the cache clear may have partially succeeded
             // and reloading is the safest recovery action
+            closeModal(modal);
             document.body.removeChild(modal);
             updateStatus(
               'Cache clear taking too long, forcing reload...',
@@ -2086,13 +2094,14 @@ async function initApp() {
         // Close on escape
         modal.addEventListener('keydown', (e) => {
           if (e.key === 'Escape') {
-            document.body.removeChild(modal);
-            resolve(false);
+            e.preventDefault();
+            cancel();
           }
         });
 
-        // Focus first interactive element
-        setTimeout(() => cancelBtn.focus(), 100);
+        // Through the modal manager: Tab stays inside, and Cancel or Escape
+        // gives focus back to the button that opened it.
+        openModal(modal, { focusTarget: cancelBtn });
       });
     } catch (error) {
       console.error('[Storage] Smart cache clear error:', error);
@@ -3124,8 +3133,14 @@ async function initApp() {
     if (document.getElementById('firstVisitRemember')?.checked === true) {
       markFirstVisitComplete();
     }
-    closeModal(firstVisitModal);
+    // Unblock first: while the app is inert and aria-hidden, closeModal finds
+    // nothing it may give focus to (the page opened with nothing focused, and
+    // everything else is inside the app), and focus fell to the page body.
+    // It lands on the Main Page's heading, as a return to the Main Page does.
     setFirstVisitBlocking(false);
+    closeModal(firstVisitModal, {
+      fallbackFocus: document.getElementById('features-heading'),
+    });
     // After the unblock, so the mode switch's announcement is not silenced
     // by the aria-hidden #app subtree. The controller persists the choice
     // through its own preference storage.
@@ -5483,6 +5498,7 @@ async function initApp() {
   updateStencilSetExport();
 
   exportStencilSetBtn?.addEventListener('click', async () => {
+    if (isBusy(exportStencilSetBtn)) return;
     const state = stateManager.getState();
     const params = state.parameters || {};
     const count = stencilPlateCount(params);
@@ -5506,7 +5522,7 @@ async function initApp() {
       format,
     });
 
-    exportStencilSetBtn.disabled = true;
+    setBusy(exportStencilSetBtn, true);
     const restore = exportStencilSetBtn.textContent;
     exportStencilSetBtn.textContent = EXPORT_STRINGS.busy;
     announceImmediate(EXPORT_STRINGS.start(jobs.length + 1));
@@ -5549,7 +5565,7 @@ async function initApp() {
       announceImmediate(said);
       showErrorToast({ title: 'Export stopped', message: error.message });
     } finally {
-      exportStencilSetBtn.disabled = false;
+      setBusy(exportStencilSetBtn, false);
       exportStencilSetBtn.textContent = restore;
     }
   });
@@ -8091,15 +8107,16 @@ async function initApp() {
   );
   if (companionSaveToFolderBtn) {
     companionSaveToFolderBtn.addEventListener('click', async () => {
+      if (isBusy(companionSaveToFolderBtn)) return;
       const state = stateManager.getState();
-      companionSaveToFolderBtn.disabled = true;
+      setBusy(companionSaveToFolderBtn, true);
       try {
         await folderSaveActions.saveCompanions({
           projectFiles: state.projectFiles,
           mainFilePath: state.mainFilePath,
         });
       } finally {
-        companionSaveToFolderBtn.disabled = false;
+        setBusy(companionSaveToFolderBtn, false);
       }
     });
   }
@@ -8276,6 +8293,11 @@ async function initApp() {
     if (appHeader) {
       appHeader.classList.remove('compact');
     }
+
+    // The button that brought the person here is hidden with the project, so
+    // focus would fall to the page body (or a control of the closed view):
+    // the Main Page's heading says where they are.
+    document.getElementById('features-heading')?.focus();
 
     console.log('[App] File cleared, returned to welcome screen');
   }
@@ -8775,8 +8797,8 @@ if (rounded) {
       const state = stateManager.getState();
       if (!state.uploadedFile) return;
 
-      if (manifestSaveCopyBtn.disabled) return;
-      manifestSaveCopyBtn.disabled = true;
+      if (isBusy(manifestSaveCopyBtn)) return;
+      setBusy(manifestSaveCopyBtn, true);
 
       const origin = state.manifestOrigin;
       const projectName = state.uploadedFile.name.replace('.scad', '');
@@ -8802,7 +8824,7 @@ if (rounded) {
         if (duplicate) {
           const overwrite = await showManifestOverwriteConfirm(projectName);
           if (overwrite === 'cancel') {
-            manifestSaveCopyBtn.disabled = false;
+            setBusy(manifestSaveCopyBtn, false);
             return;
           }
           if (overwrite === 'overwrite') {
@@ -8818,7 +8840,7 @@ if (rounded) {
               currentSavedProjectId = duplicate.id;
             } else {
               updateStatus(`Save failed: ${result.error}`, 'error');
-              manifestSaveCopyBtn.disabled = false;
+              setBusy(manifestSaveCopyBtn, false);
               return;
             }
           } else {
@@ -8835,7 +8857,7 @@ if (rounded) {
               currentSavedProjectId = result.id;
             } else {
               updateStatus(`Save failed: ${result.error}`, 'error');
-              manifestSaveCopyBtn.disabled = false;
+              setBusy(manifestSaveCopyBtn, false);
               return;
             }
           }
@@ -8853,7 +8875,7 @@ if (rounded) {
             currentSavedProjectId = result.id;
           } else {
             updateStatus(`Save failed: ${result.error}`, 'error');
-            manifestSaveCopyBtn.disabled = false;
+            setBusy(manifestSaveCopyBtn, false);
             return;
           }
         }
@@ -8867,7 +8889,7 @@ if (rounded) {
       } catch (err) {
         console.error('[Manifest] Save copy failed:', err);
         updateStatus('Failed to save local copy', 'error');
-        manifestSaveCopyBtn.disabled = false;
+        setBusy(manifestSaveCopyBtn, false);
       }
     });
   }
@@ -11892,12 +11914,12 @@ if (rounded) {
       let formatName =
         OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
 
-      primaryActionBtn.disabled = true;
-      primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
-
-      // Show cancel button
+      // Show cancel button, and move focus there before this button
+      // disables itself: the render can be stopped from where focus is.
       generateCanceled = false;
       cancelRenderBtn.classList.remove('hidden');
+      disableKeepingFocus(primaryActionBtn, cancelRenderBtn);
+      primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
 
       // Disable undo/redo during rendering to prevent state mismatches
       stateManager.setHistoryEnabled(false);
@@ -12265,13 +12287,21 @@ if (rounded) {
       });
     } finally {
       primaryActionBtn.disabled = false;
-      // Hide cancel button
-      cancelRenderBtn.classList.add('hidden');
+      hideCancelRender();
       // Re-enable undo/redo after rendering
       stateManager.setHistoryEnabled(true);
       // Always restore button to correct state based on current conditions
       updatePrimaryActionButton();
     }
+  }
+
+  /**
+   * Hide Cancel when a render ends. Focus on it goes back to the main
+   * button first (enabled again by then), not to the page body.
+   */
+  function hideCancelRender() {
+    if (document.activeElement === cancelRenderBtn) primaryActionBtn.focus();
+    cancelRenderBtn.classList.add('hidden');
   }
 
   // Cancel render button
@@ -12280,8 +12310,8 @@ if (rounded) {
       generateCanceled = true;
       renderController.cancel();
       updateStatus('Generation canceled by user');
-      cancelRenderBtn.classList.add('hidden');
       primaryActionBtn.disabled = false;
+      hideCancelRender();
       // Re-enable undo/redo after cancellation
       stateManager.setHistoryEnabled(true);
       updatePrimaryActionButton();
@@ -12490,6 +12520,7 @@ if (rounded) {
   const saveToFolderBtn = document.getElementById('saveToFolderBtn');
   if (saveToFolderBtn) {
     saveToFolderBtn.addEventListener('click', async () => {
+      if (isBusy(saveToFolderBtn)) return;
       const state = stateManager.getState();
       if (!state.stl || !state.uploadedFile) {
         showErrorToast({
@@ -12510,7 +12541,7 @@ if (rounded) {
         outputFormat,
         getBrailleDownloadName()
       );
-      saveToFolderBtn.disabled = true;
+      setBusy(saveToFolderBtn, true);
       try {
         await folderSaveActions.saveExport({
           fileName,
@@ -12518,7 +12549,7 @@ if (rounded) {
           mainFilePath: state.mainFilePath,
         });
       } finally {
-        saveToFolderBtn.disabled = false;
+        setBusy(saveToFolderBtn, false);
       }
     });
   }
@@ -12613,6 +12644,12 @@ if (rounded) {
         closeModal(publishProjectModal)
       );
     }
+    // Escape closes from anywhere inside, its address field included.
+    publishProjectModal?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      closeModal(publishProjectModal);
+    });
 
     // Copy manifest button
     if (copyManifestBtn && publishManifestOutput) {
@@ -12908,10 +12945,25 @@ if (rounded) {
       addPresetBtn.disabled = !hasModel;
     }
 
-    // Delete button: enabled when a user preset is selected (not design defaults)
+    // Delete button: enabled when a user preset is selected (not design
+    // defaults). It disables itself after a delete, with focus on it, so
+    // focus moves to the preset chooser first rather than to the page body.
     if (deletePresetBtn) {
-      deletePresetBtn.disabled =
-        !hasPresetSelected || !hasModel || isDesignDefaults;
+      if (!hasPresetSelected || !hasModel || isDesignDefaults) {
+        const chooser = [
+          document.querySelector(
+            '#presetComboboxContainer .preset-combobox-input'
+          ),
+          presetSelect,
+        ].find(
+          (el) =>
+            el &&
+            (typeof el.checkVisibility !== 'function' || el.checkVisibility())
+        );
+        disableKeepingFocus(deletePresetBtn, chooser);
+      } else {
+        deletePresetBtn.disabled = false;
+      }
       deletePresetBtn.title = isDesignDefaults
         ? 'Design default values cannot be deleted'
         : hasPresetSelected
@@ -13420,6 +13472,11 @@ if (rounded) {
       closeModal(modal);
       document.body.removeChild(modal);
     };
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      closeSavePresetModal();
+    });
 
     // Handle form submission
     const form = modal.querySelector('#savePresetForm');
@@ -13572,8 +13629,14 @@ if (rounded) {
     }
   }
 
-  // Show manage presets modal
-  function showManagePresetsModal() {
+  /**
+   * Show the Import / Export designs dialog.
+   * @param {Object} [options]
+   * @param {number} [options.afterDeleteIndex] - Where a preset was just
+   *   deleted from the list: the list opens unfolded, focus on the row now in
+   *   its place, so someone clearing out presets keeps their place.
+   */
+  function showManagePresetsModal(options = {}) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
@@ -13720,6 +13783,11 @@ if (rounded) {
       closeModal(modal);
       document.body.removeChild(modal);
     };
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      closeManagePresetsModalHandler();
+    });
 
     // Handle actions
     modal.addEventListener('click', async (e) => {
@@ -13752,10 +13820,13 @@ if (rounded) {
           { destructive: true }
         );
         if (confirmed) {
+          const index = [
+            ...modal.querySelectorAll('button[data-action="delete"]'),
+          ].indexOf(btn);
           presetManager.deletePreset(modelName, presetId);
           updatePresetDropdown();
           closeManagePresetsModalHandler();
-          showManagePresetsModal();
+          showManagePresetsModal({ afterDeleteIndex: index });
         }
       } else if (action === 'export') {
         const json = presetManager.exportPreset(modelName, presetId);
@@ -13954,10 +14025,21 @@ if (rounded) {
       }
     });
 
+    let focusTarget = modal.querySelector('.preset-modal-close');
+    const afterDelete = options?.afterDeleteIndex;
+    if (Number.isInteger(afterDelete) && afterDelete >= 0) {
+      const list = modal.querySelector('.preset-list-details');
+      if (list) list.open = true;
+      const deletes = modal.querySelectorAll('button[data-action="delete"]');
+      focusTarget =
+        deletes[afterDelete] ||
+        deletes[afterDelete - 1] ||
+        list?.querySelector('summary') ||
+        focusTarget;
+    }
+
     // Open modal with focus management (WCAG 2.2 focus trapping)
-    openModal(modal, {
-      focusTarget: modal.querySelector('.preset-modal-close'),
-    });
+    openModal(modal, { focusTarget });
   }
 
   // Preset button handlers - OpenSCAD Customizer semantics
@@ -14672,7 +14754,6 @@ if (rounded) {
       return;
     }
 
-    sourceViewerModal.classList.remove('hidden');
     sourceViewerContent.value = state.uploadedFile.content;
 
     const lineCount = state.uploadedFile.content.split('\n').length;
@@ -14683,7 +14764,11 @@ if (rounded) {
       <span>📊 ${charCount.toLocaleString()} characters</span>
     `;
 
-    setTimeout(() => sourceViewerContent.focus(), 100);
+    // On the heading, not the code: focus in the text put a screen reader at
+    // its end ("blank"), past everything it was opened to read.
+    openModal(sourceViewerModal, {
+      focusTarget: document.getElementById('sourceViewerTitle'),
+    });
   });
 
   copySourceBtn?.addEventListener('click', async () => {
@@ -14716,11 +14801,11 @@ if (rounded) {
   });
 
   sourceViewerClose?.addEventListener('click', () => {
-    sourceViewerModal.classList.add('hidden');
+    closeModal(sourceViewerModal);
   });
 
   sourceViewerOverlay?.addEventListener('click', () => {
-    sourceViewerModal.classList.add('hidden');
+    closeModal(sourceViewerModal);
   });
 
   sourceViewerCopy?.addEventListener('click', async () => {
@@ -15030,8 +15115,11 @@ if (rounded) {
     // Render current console output
     renderConsoleOutput(lastConsoleOutput);
 
-    // Show modal
-    consoleOutputModal.classList.remove('hidden');
+    // Show it with focus inside, on its heading: left on the button behind
+    // it, Escape had nothing to close.
+    openModal(consoleOutputModal, {
+      focusTarget: document.getElementById('consoleOutputTitle'),
+    });
 
     // renderConsoleOutput's scroll-to-newest ran against a hidden modal, where
     // scrollHeight is 0, so it did nothing. Now that the modal has layout, put
@@ -15070,7 +15158,7 @@ if (rounded) {
   // Close handlers
   const closeConsoleModal = () => {
     if (consoleOutputModal) {
-      consoleOutputModal.classList.add('hidden');
+      closeModal(consoleOutputModal);
     }
   };
 
@@ -15267,6 +15355,9 @@ if (rounded) {
     });
 
     resetGroupSelector.classList.remove('hidden');
+    // To the picker it just revealed, which names itself: otherwise the
+    // press sounded as if nothing had happened.
+    resetGroupSelect.focus();
   });
 
   confirmResetGroupBtn?.addEventListener('click', () => {
@@ -15310,6 +15401,10 @@ if (rounded) {
       autoPreviewController.onParameterChange(newParams);
     }
 
+    // Back to Reset Group: the picker and its button are hidden now.
+    if (resetGroupSelector.contains(document.activeElement)) {
+      resetGroupBtn?.focus();
+    }
     resetGroupSelector.classList.add('hidden');
     const groupLabel =
       state.schema.groups.find((g) => g.id === groupId)?.label || groupId;
@@ -15339,17 +15434,18 @@ if (rounded) {
 
     const json = JSON.stringify(state.parameters, null, 2);
     paramsJsonContent.value = json;
-    paramsJsonModal.classList.remove('hidden');
-
-    setTimeout(() => paramsJsonContent.focus(), 100);
+    // On the heading, as View Source: focus in the text started at its end.
+    openModal(paramsJsonModal, {
+      focusTarget: document.getElementById('paramsJsonTitle'),
+    });
   });
 
   paramsJsonClose?.addEventListener('click', () => {
-    paramsJsonModal.classList.add('hidden');
+    closeModal(paramsJsonModal);
   });
 
   paramsJsonOverlay?.addEventListener('click', () => {
-    paramsJsonModal.classList.add('hidden');
+    closeModal(paramsJsonModal);
   });
 
   paramsJsonCopy?.addEventListener('click', async () => {
@@ -15424,10 +15520,10 @@ if (rounded) {
     if (e.key === 'Escape') {
       const featuresGuideModal = document.getElementById('featuresGuideModal');
       if (!sourceViewerModal.classList.contains('hidden')) {
-        sourceViewerModal.classList.add('hidden');
+        closeModal(sourceViewerModal);
       }
       if (!paramsJsonModal.classList.contains('hidden')) {
-        paramsJsonModal.classList.add('hidden');
+        closeModal(paramsJsonModal);
       }
       if (
         featuresGuideModal &&

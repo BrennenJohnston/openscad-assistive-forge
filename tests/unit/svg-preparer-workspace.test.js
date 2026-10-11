@@ -28,7 +28,10 @@ const mockTrapActivate = vi.fn();
 const mockTrapDeactivate = vi.fn();
 const mockTrapIsActive = vi.fn(() => false);
 
-vi.mock('../../src/js/focus-trap.js', () => ({
+vi.mock('../../src/js/focus-trap.js', async (importOriginal) => ({
+  // The real helpers (disableKeepingFocus and the like); only the trap is
+  // stubbed.
+  ...(await importOriginal()),
   createDocumentFocusTrap: vi.fn(() => ({
     activate: mockTrapActivate,
     deactivate: mockTrapDeactivate,
@@ -2986,6 +2989,22 @@ describe('deleting shapes from the list', () => {
     ws.destroy();
   });
 
+  it('Undo delete, pressed, hands focus to Delete those rather than the page', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+    deleteRow(ws, 1);
+    const undoBtn = ws._root.querySelector('[data-action="undo-delete"]');
+    undoBtn.focus();
+    undoBtn.click();
+    expect(undoBtn.disabled).toBe(true);
+    expect(document.activeElement).toBe(
+      ws._root.querySelector('[data-action="delete-small"]')
+    );
+    ws.destroy();
+  });
+
   it('undo is one level and puts the shape back where it was', () => {
     const ws = createSvgPrepWorkspace(container);
     openWith(ws, 4, {
@@ -4156,6 +4175,21 @@ describe('the too-thin shapes, and one press to leave them out', () => {
     await ws.whenReady();
     expect(markOf(ws, 0)).toBe('too thin to print, too small to trace clearly');
     expect(markOf(ws, 1)).toBeNull();
+    ws.destroy();
+  });
+
+  it('Turn those back on, pressed, hands focus to Turn those off rather than the page', async () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SVG, analysisOf([BAR, BAR2, SQUARE]));
+    await ws.whenReady();
+    await ws.whenCombined();
+    const btn = ws._root.querySelector('[data-action="ignore-thin"]');
+    const undo = ws._root.querySelector('[data-action="undo-ignore"]');
+    btn.click();
+    undo.focus();
+    undo.click();
+    expect(undo.disabled).toBe(true);
+    expect(document.activeElement).toBe(btn);
     ws.destroy();
   });
 

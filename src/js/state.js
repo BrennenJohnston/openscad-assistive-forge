@@ -5,6 +5,7 @@
 
 import { announce, announceImmediate } from './announcer.js';
 import { getAppPrefKey } from './storage-keys.js';
+import { disableKeepingFocus } from './focus-trap.js';
 
 /**
  * Parameter History Manager for Undo/Redo functionality
@@ -486,21 +487,21 @@ export class StateManager {
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
 
-    if (undoBtn) {
-      undoBtn.disabled = !this.canUndo() || !this.historyEnabled;
-      undoBtn.setAttribute(
-        'aria-disabled',
-        String(!this.canUndo() || !this.historyEnabled)
-      );
-    }
+    const canUndo = this.canUndo() && this.historyEnabled;
+    const canRedo = this.canRedo() && this.historyEnabled;
 
-    if (redoBtn) {
-      redoBtn.disabled = !this.canRedo() || !this.historyEnabled;
-      redoBtn.setAttribute(
-        'aria-disabled',
-        String(!this.canRedo() || !this.historyEnabled)
-      );
-    }
+    // Enable before disabling: the step that turns one button off (the last
+    // change undone, say) turns its partner on, and a focused button that
+    // disables itself hands focus to that partner rather than the page body.
+    if (undoBtn && canUndo) undoBtn.disabled = false;
+    if (redoBtn && canRedo) redoBtn.disabled = false;
+    if (undoBtn && !canUndo)
+      disableKeepingFocus(undoBtn, canRedo ? redoBtn : null);
+    if (redoBtn && !canRedo)
+      disableKeepingFocus(redoBtn, canUndo ? undoBtn : null);
+
+    undoBtn?.setAttribute('aria-disabled', String(!canUndo));
+    redoBtn?.setAttribute('aria-disabled', String(!canRedo));
   }
 
   /**
