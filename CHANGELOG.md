@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A screen reader hears each status once: "Preview ready", "Generating"
   and a Generate's result were said up to four times. With Automatic
   preview off, the status bars say "Preview outdated" after a change.
+- The code editor no longer reads its own changes aloud, and a screen
+  reader no longer finds "Generating preview" when nothing is generating.
 
 ## [5.2.2] - 2026-10-09
 

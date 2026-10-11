@@ -125,3 +125,16 @@ test('a Generate says its result once', async ({ page }) => {
     JSON.stringify(said)
   ).toHaveLength(0);
 });
+
+test('nothing reads "Generating" while nothing is generating', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openBox(page);
+  await expect(page.locator('.preview-rendering-overlay')).toBeHidden();
+  // The code editor is a region to work in, not a voice.
+  await expect(page.locator('#expertModePanel')).not.toHaveAttribute(
+    'aria-live',
+    /.*/
+  );
+});
