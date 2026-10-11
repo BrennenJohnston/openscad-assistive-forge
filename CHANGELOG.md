@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Actions drawer is shorter: the render queue, Compare, Export
   Customizer Settings and its Console button are gone, and Publish is in
   Standard view.
+- The header's controls are named by the words on them, first: "Keys",
+  "HC", "Full Screen", "Help", "Main Page", "Publish", "Copy Link", "Edit
+  Drawing" (the longer words are their descriptions). The theme button says
+  "Theme: Auto", "Theme: Light" or "Theme: Dark"; the interface switch is
+  "Interface mode" with its two options; "Main Page" mentions unsaved
+  changes only when there are some.
 
 ### Fixed
 

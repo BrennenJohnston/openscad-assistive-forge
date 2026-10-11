@@ -2845,6 +2845,31 @@ async function initApp() {
     }
   });
 
+  // The Main Page button mentions unsaved changes only when there are some:
+  // its name warned on every read, before a single value had changed.
+  const mainPageBtn = document.getElementById('clearFileBtn');
+  const syncMainPageName = () => {
+    if (!mainPageBtn) return;
+    const changes = Boolean(
+      stateManager.getState().uploadedFile && stateManager.canUndo()
+    );
+    mainPageBtn.setAttribute(
+      'aria-label',
+      changes ? 'Main Page. Unsaved changes will be lost.' : 'Main Page'
+    );
+    mainPageBtn.title = changes
+      ? 'Back to the Main Page (unsaved changes will be lost)'
+      : 'Back to the Main Page';
+  };
+  stateManager.subscribe((state, prevState) => {
+    if (
+      state.uploadedFile !== prevState.uploadedFile ||
+      state.parameters !== prevState.parameters
+    ) {
+      syncMainPageName();
+    }
+  });
+
   // ═══════════════════════════════════════════════════════════════════════
   // First-visit gate: the critical initialization barrier
   //
@@ -5376,10 +5401,10 @@ async function initApp() {
     // who cannot see the button change.
     const syncContrastLabel = () => {
       const on = themeManager.highContrast;
-      contrastBtn.setAttribute(
-        'aria-label',
-        `High contrast mode: ${on ? 'ON' : 'OFF'}. Click to ${on ? 'disable' : 'enable'}.`
-      );
+      // The name keeps its visible word; on or off is the pressed state.
+      contrastBtn.setAttribute('aria-label', 'HC: high contrast');
+      contrastBtn.setAttribute('aria-pressed', String(on));
+      contrastBtn.title = on ? 'High contrast is on' : 'High contrast';
     };
 
     contrastBtn.addEventListener('click', () => {
@@ -11795,9 +11820,9 @@ if (rounded) {
       if (isFocusMode) {
         // Enter focus mode
         mainInterface.classList.add('focus-mode');
+        // The name keeps its visible word; the pressed state says on or off.
         focusModeBtn.setAttribute('aria-pressed', 'true');
-        focusModeBtn.setAttribute('aria-label', 'Exit focus mode');
-        focusModeBtn.title = 'Exit focus mode (Esc)';
+        focusModeBtn.title = 'Full Screen is on (Esc leaves it)';
 
         // Check for camera focus mode (mobile portrait + camera drawer open)
         updateCameraFocusMode();
@@ -11806,8 +11831,7 @@ if (rounded) {
         mainInterface.classList.remove('focus-mode');
         exitCameraFocusMode();
         focusModeBtn.setAttribute('aria-pressed', 'false');
-        focusModeBtn.setAttribute('aria-label', 'Enter focus mode');
-        focusModeBtn.title = 'Focus mode (maximize preview)';
+        focusModeBtn.title = 'Full Screen (the preview alone)';
       }
 
       // Trigger preview resize after mode change

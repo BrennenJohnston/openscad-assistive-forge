@@ -941,20 +941,11 @@ export class UIModeController {
     const isSimplified = this.currentMode === 'simplified';
     btn.setAttribute('aria-checked', String(!isSimplified));
 
-    if (isSimplified) {
-      btn.setAttribute(
-        'aria-label',
-        'Interface mode: Simplified. Click to switch to Standard mode'
-      );
-      btn.classList.add('ui-mode-toggle--basic');
-    } else {
-      const modeName = this.currentMode === 'classic' ? 'Classic' : 'Standard';
-      btn.setAttribute(
-        'aria-label',
-        `Interface mode: ${modeName}. Click to switch to Simplified mode`
-      );
-      btn.classList.remove('ui-mode-toggle--basic');
-    }
+    // A two-option choice named "Interface mode": the switch's state and
+    // its two visible words say the rest. The old name put the whole
+    // sentence in front, and read its old state before it changed.
+    btn.setAttribute('aria-label', 'Interface mode');
+    btn.classList.toggle('ui-mode-toggle--basic', isSimplified);
   }
 
   /**

@@ -331,6 +331,8 @@ export const MEASURED_SECONDS = {
   'status-announcements.spec.js': 50.0,
   // Three cases, about 8 s each locally (each loads the app); booked at 30.
   'export-messages.spec.js': 30.0,
+  // Five cases, about 3 s each locally with a warm engine; booked at 25.
+  'header-names.spec.js': 25.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

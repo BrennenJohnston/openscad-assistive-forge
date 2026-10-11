@@ -97,8 +97,16 @@ body {
 }
 
 @media (max-width: 480px) and (orientation: portrait) {
+  /* The full name stays in the heading for assistive tech (clipped, not
+     removed): with it removed and the short form aria-hidden, the page's
+     h1 was empty on a phone. */
   .title-full {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
   .title-short {
     display: inline;
