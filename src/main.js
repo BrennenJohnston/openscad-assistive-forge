@@ -3132,8 +3132,14 @@ async function initApp() {
     if (document.getElementById('firstVisitRemember')?.checked === true) {
       markFirstVisitComplete();
     }
-    closeModal(firstVisitModal);
+    // Unblock first: while the app is inert and aria-hidden, closeModal finds
+    // nothing it may give focus to (the page opened with nothing focused, and
+    // everything else is inside the app), and focus fell to the page body.
+    // It lands on the Main Page's heading, as a return to the Main Page does.
     setFirstVisitBlocking(false);
+    closeModal(firstVisitModal, {
+      fallbackFocus: document.getElementById('features-heading'),
+    });
     // After the unblock, so the mode switch's announcement is not silenced
     // by the aria-hidden #app subtree. The controller persists the choice
     // through its own preference storage.
@@ -13448,6 +13454,11 @@ if (rounded) {
       closeModal(modal);
       document.body.removeChild(modal);
     };
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      closeSavePresetModal();
+    });
 
     // Handle form submission
     const form = modal.querySelector('#savePresetForm');
