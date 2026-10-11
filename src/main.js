@@ -289,7 +289,7 @@ import { getDisplayOptionsController } from './js/display-options-controller.js'
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
-import { showConfirmDialog } from './js/dialogs.js';
+import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
 import { initHfmController } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
@@ -12631,13 +12631,18 @@ if (rounded) {
     return null;
   }
 
-  async function copyTextWithFallback(text, promptLabel) {
+  /**
+   * Copy text, or hand it over to copy by hand when the browser refuses.
+   * @param {string} text
+   * @returns {Promise<boolean>} True only when the text reached the
+   *   clipboard, so a caller says "copied" only then
+   */
+  async function copyTextWithFallback(text) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
     } catch (_err) {
-      prompt(promptLabel, text);
-      return false;
+      return showTextToCopyDialog(text);
     }
   }
 
@@ -12692,7 +12697,7 @@ if (rounded) {
       const fragment = stateManager.getShareFragment();
       const base = projectReopenUrl();
       const link = `${base || window.location.origin + window.location.pathname}${fragment}`;
-      await copyTextWithFallback(link, 'Copy this link:');
+      if (!(await copyTextWithFallback(link))) return;
 
       if (!base) {
         updateStatus(
@@ -12778,21 +12783,17 @@ if (rounded) {
     // Copy manifest button
     if (copyManifestBtn && publishManifestOutput) {
       copyManifestBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(
-            publishManifestOutput.textContent
-          );
-          const textSpan =
-            copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
-          const original = textSpan.textContent;
-          textSpan.textContent = 'Copied!';
-          setTimeout(() => {
-            textSpan.textContent = original;
-          }, 2000);
-          updateStatus('Manifest copied to clipboard');
-        } catch (_err) {
-          prompt('Copy this manifest JSON:', publishManifestOutput.textContent);
+        if (!(await copyTextWithFallback(publishManifestOutput.textContent))) {
+          return;
         }
+        const textSpan =
+          copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
+        const original = textSpan.textContent;
+        textSpan.textContent = 'Copied!';
+        setTimeout(() => {
+          textSpan.textContent = original;
+        }, 2000);
+        updateStatus('Manifest copied to clipboard');
       });
     }
 
@@ -12905,16 +12906,12 @@ if (rounded) {
     // Copy shareable link button
     if (copyShareLinkBtn && publishShareLink) {
       copyShareLinkBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(publishShareLink.value);
-          copyShareLinkBtn.textContent = 'Copied!';
-          setTimeout(() => {
-            copyShareLinkBtn.textContent = 'Copy';
-          }, 2000);
-          updateStatus('Shareable link copied to clipboard');
-        } catch (_err) {
-          prompt('Copy this link:', publishShareLink.value);
-        }
+        if (!(await copyTextWithFallback(publishShareLink.value))) return;
+        copyShareLinkBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyShareLinkBtn.textContent = 'Copy';
+        }, 2000);
+        updateStatus('Shareable link copied to clipboard');
       });
     }
   }

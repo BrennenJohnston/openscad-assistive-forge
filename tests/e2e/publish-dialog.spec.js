@@ -103,3 +103,80 @@ test.describe('Publish dialog', () => {
     expect(text.trim().startsWith('{')).toBe(true)
   })
 })
+
+// When the browser refuses the clipboard, the text is handed over in the
+// app's own "Copy by hand" dialog, and nothing claims a copy happened.
+test.describe('Copying when the browser refuses the clipboard', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      navigator.clipboard.writeText = () =>
+        Promise.reject(new DOMException('Write permission denied.', 'NotAllowedError'))
+    })
+  })
+
+  /** Every browser dialog that opens, dismissed and kept for the assertion. */
+  function recordNativeDialogs(page) {
+    const opened = []
+    page.on('dialog', async (dialog) => {
+      opened.push(`${dialog.type()}: ${dialog.message()}`)
+      await dialog.dismiss()
+    })
+    return opened
+  }
+
+  async function expectCopyByHand(page, text, opener) {
+    const dialog = page
+      .locator('[role="dialog"]')
+      .filter({ has: page.getByRole('heading', { name: 'Copy by hand', exact: true }) })
+    await expect(dialog).toBeVisible()
+    const field = dialog.getByLabel('Text to copy', { exact: true })
+    await expect(field).toHaveValue(text)
+    await expect(field).toBeFocused()
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(opener).toBeFocused()
+  }
+
+  test('the manifest', async ({ page }) => {
+    const natives = recordNativeDialogs(page)
+    await openPublishDialog(page, 'simple-box')
+    const { text } = await readEmittedManifest(page)
+    const copy = page.locator('#copyManifestBtn')
+    await copy.click()
+    await expectCopyByHand(page, text, copy)
+    await expect(copy).not.toContainText('Copied')
+    expect(natives).toEqual([])
+  })
+
+  test('the share link', async ({ page }) => {
+    const natives = recordNativeDialogs(page)
+    await openPublishDialog(page, 'simple-box')
+    await page.locator('#publishRepoUrl').fill('https://example.org/my-design')
+    const link = page.locator('#publishShareLink')
+    await expect(link).toBeVisible()
+    const copy = page.locator('#copyShareLinkBtn')
+    await copy.click()
+    await expectCopyByHand(page, await link.inputValue(), copy)
+    await expect(copy).not.toContainText('Copied')
+    expect(natives).toEqual([])
+  })
+
+  test('Copy Link in the Actions drawer', async ({ page }) => {
+    const natives = recordNativeDialogs(page)
+    await page.goto('/?example=simple-box')
+    await page.locator('.param-control').first().waitFor({ state: 'attached', timeout: 60000 })
+    await page.locator('#actionsDrawerToggle').click()
+    const copy = page.locator('#copySettingsLinkBtn')
+    await expect(copy).toBeVisible({ timeout: 10000 })
+    await copy.click()
+    const dialog = page
+      .locator('[role="dialog"]')
+      .filter({ has: page.getByRole('heading', { name: 'Copy by hand', exact: true }) })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel('Text to copy', { exact: true })).toHaveValue(/\?example=simple-box/)
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.locator('#statusArea')).not.toContainText('Link copied')
+    expect(natives).toEqual([])
+  })
+})
