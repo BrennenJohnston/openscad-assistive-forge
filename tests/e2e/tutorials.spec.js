@@ -8,6 +8,11 @@
  * Scope: 6 tutorials × 2 viewports = 12 full runs.
  */
 import { test, expect } from '@playwright/test'
+import {
+  announcementMark,
+  announcementsSince,
+  recordAnnouncements,
+} from './helpers/invariants.js'
 
 // ── Viewports ────────────────────────────────────────────────────────────────
 
@@ -683,5 +688,69 @@ test.describe('Getting Started, action by action', () => {
     expect(completed).toContain('Adjust a parameter')
     // Reached the steps after the last action, so no action ended the tour.
     expect(visited).toContain('Simplified or Standard')
+  })
+})
+
+test.describe('A tour, as a screen reader meets it', () => {
+  async function openTourByKeyboard(page) {
+    await setBaseline(page)
+    await recordAnnouncements(page)
+    await page.goto('/')
+    const start = page.locator('#startWelcomeTourBtn')
+    await expect(start).toBeVisible({ timeout: 30_000 })
+    await page.waitForFunction(() => typeof window.startTutorial === 'function')
+    await start.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+  }
+
+  test('opens on Next, not on Minimize', async ({ page }) => {
+    await openTourByKeyboard(page)
+    await expect(page.locator('#tutorialNextBtn')).toBeFocused()
+  })
+
+  test('each Next brings focus to the step heading, which says its place once', async ({
+    page,
+  }) => {
+    await openTourByKeyboard(page)
+    const mark = await announcementMark(page)
+    await page.keyboard.press('Enter')
+
+    const heading = page.locator('#tutorial-step-title')
+    await expect(heading).toBeFocused()
+    await expect(heading).toHaveAttribute('aria-describedby', 'tutorialProgress')
+    await expect(page.locator('#tutorialProgress')).toHaveText(/Step 2 of \d+/)
+    await expect(page.locator('#tutorialProgress')).not.toHaveAttribute('aria-live', /.*/)
+
+    await page.waitForTimeout(500)
+    const said = await announcementsSince(page, mark)
+    expect(said.filter((a) => /Step 2/.test(a.text)), JSON.stringify(said)).toHaveLength(0)
+  })
+
+  test('the last step is named Finish, and finishing says so once', async ({ page }) => {
+    await openTourByKeyboard(page)
+    const next = page.locator('#tutorialNextBtn')
+    for (let i = 0; i < 30; i++) {
+      if ((await next.textContent()).includes('Finish')) break
+      await next.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.locator('#tutorial-step-title')).toBeFocused()
+    }
+    await expect(page.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+
+    const mark = await announcementMark(page)
+    await next.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    await page.waitForTimeout(500)
+    const said = await announcementsSince(page, mark)
+    expect(said.filter((a) => /Tutorial completed/.test(a.text)), JSON.stringify(said)).toHaveLength(1)
+    expect(said.filter((a) => /Tutorial closed/.test(a.text)), JSON.stringify(said)).toHaveLength(0)
+  })
+
+  test('Exit says one thing', async ({ page }) => {
+    await openTourByKeyboard(page)
+    const exit = page.locator('.tutorial-close')
+    await expect(exit).toHaveAttribute('title', (await exit.getAttribute('aria-label')) ?? '')
   })
 })

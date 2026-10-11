@@ -114,7 +114,8 @@ export const MEASURED_SECONDS = {
   // Every pose is now read once the camera holds still: one local pass went
   // from 90 s to 114 s, so 165.5 is scaled by the same ratio.
   'camera-face-view-orbit.spec.js': 210.0,
-  'tutorials.spec.js': 142.1,
+  // Measured 142.1; four cases on what a tour says (about 9 s locally) add 15.
+  'tutorials.spec.js': 157.1,
   'tour-interaction.spec.js': 269.2,
   'preferences-dialog.spec.js': 90.6,
   'responsive-audit.spec.js': 91.9,

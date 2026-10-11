@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of every line.
 - An example opened from the Features Guide leaves focus on its first
   setting, and closing the guide from the Main Page goes back to Help.
+- Tours open on Next, and each step's heading takes focus so its text is
+  read; the step number is said once, the last button is named Finish,
+  and finishing a tour says so once.
 
 ## [5.2.2] - 2026-10-09
 

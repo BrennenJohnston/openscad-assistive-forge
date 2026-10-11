@@ -2551,6 +2551,11 @@ async function navigateToStep(newIndex) {
   try {
     await showStep(newIndex);
     consecutiveFailures = 0;
+    // The new step's heading takes focus, so its title, its place in the
+    // tour and then its text are read in order. Left on Next, a screen
+    // reader heard only a title, never the step's text.
+    const heading = tutorialOverlay?.querySelector('#tutorial-step-title');
+    if (heading && (heading.checkVisibility?.() ?? true)) heading.focus();
   } finally {
     isNavigating = false;
     // Re-enable buttons based on the current step state
@@ -3127,7 +3132,7 @@ function createTutorialOverlay() {
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
-          <button class="tutorial-close" aria-label="Exit tutorial (Escape)" title="Close (Esc)" type="button">
+          <button class="tutorial-close" aria-label="Exit tutorial (Escape)" title="Exit tutorial (Escape)" type="button">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -3148,7 +3153,7 @@ function createTutorialOverlay() {
       </div>
 
       <div class="tutorial-footer">
-        <div class="tutorial-progress" aria-live="polite">
+        <div class="tutorial-progress" id="tutorialProgress">
           Step <span id="tutorial-step-current">1</span> of <span id="tutorial-step-total">${activeTutorial.steps.length}</span>
         </div>
         <div class="tutorial-nav">
@@ -3195,11 +3200,17 @@ function createTutorialOverlay() {
     focusTrapCleanup = setupFocusTrap(panel);
     setupTouchHandlers(panel);
 
-    // Move focus to the panel (or first focusable element)
+    // Focus starts on Next: the first button was Minimize, and Enter there
+    // put the tour away. At once, so focus does not sit on the page body
+    // while the button that started the tour goes; again on the next frame
+    // if the panel was not ready to take it.
     const firstFocusable =
-      panel.querySelector('button:not(:disabled)') || panel;
+      panel.querySelector('#tutorialNextBtn:not(:disabled)') ||
+      panel.querySelector('button:not(:disabled)') ||
+      panel;
+    firstFocusable.focus();
     requestAnimationFrame(() => {
-      firstFocusable.focus();
+      if (!panel.contains(document.activeElement)) firstFocusable.focus();
     });
   }
 
@@ -3890,8 +3901,11 @@ async function showStep(stepIndex) {
   // Update content (use compact content if viewport is small/zoomed)
   const contentEl = tutorialOverlay.querySelector('#tutorial-panel-content');
   if (contentEl) {
+    // The step's place in the tour is said with its title, from the counter
+    // on screen; it was a live counter and an announcement of its own, said
+    // twice per step.
     contentEl.innerHTML = `
-      <h3 class="tutorial-step-title" id="tutorial-step-title">${step.title}</h3>
+      <h3 class="tutorial-step-title" id="tutorial-step-title" tabindex="-1" aria-describedby="tutorialProgress">${step.title}</h3>
       <div class="tutorial-step-content">${getStepContent(step)}</div>
     `;
   }
@@ -3925,9 +3939,12 @@ async function showStep(stepIndex) {
 
   if (backBtn && stepIndex === 0) disableKeepingFocus(backBtn, nextBtn);
   else if (backBtn) backBtn.disabled = false;
-  if (nextBtn)
-    nextBtn.textContent =
-      stepIndex === activeTutorial.steps.length - 1 ? 'Finish ✓' : 'Next →';
+  if (nextBtn) {
+    const last = stepIndex === activeTutorial.steps.length - 1;
+    nextBtn.textContent = last ? 'Finish ✓' : 'Next →';
+    // The name follows the words on the button.
+    nextBtn.setAttribute('aria-label', last ? 'Finish' : 'Next step');
+  }
 
   // Setup completion gate
   setupCompletion(step);
@@ -3951,11 +3968,6 @@ async function showStep(stepIndex) {
 
   // Clear the guard flag - step setup is complete, drawer observer can now work
   isSettingUpStep = false;
-
-  // Announce to screen readers
-  announceToScreenReader(
-    `Step ${stepIndex + 1} of ${activeTutorial.steps.length}: ${step.title}`
-  );
 }
 
 /**
@@ -5300,7 +5312,9 @@ export function closeTutorial(completed = false, options = {}) {
   currentTarget = null;
   consecutiveFailures = 0;
 
-  if (!options.skipAnnouncement) {
+  // A finished tour has already said so; "closed at step 13 of 13" after it
+  // sounded like the tour had been given up.
+  if (!options.skipAnnouncement && !completed) {
     announceToScreenReader(
       `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
     );
