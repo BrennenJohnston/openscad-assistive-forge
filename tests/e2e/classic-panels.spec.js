@@ -239,7 +239,9 @@ test.describe('Title-bar control order', () => {
       }
       if (close) {
         barsWithClose += 1;
-        const rightAnchor = trailingStow ? trailingStow.box.left : bar.bar.right;
+        const rightAnchor = trailingStow
+          ? trailingStow.box.left
+          : bar.bar.right;
         const inset = rightAnchor - close.box.right;
         expect(
           inset,
@@ -994,10 +996,7 @@ test.describe('Error Log reach (F1)', () => {
         ].filter((el) => el.offsetParent !== null || el.getClientRects().length)
           .length
     );
-    expect(
-      reachable,
-      'a stowed strip still offers focusable controls'
-    ).toBe(0);
+    expect(reachable, 'a stowed strip still offers focusable controls').toBe(0);
 
     // Tab from the un-stow tab and confirm focus never lands inside.
     await page
@@ -1565,8 +1564,9 @@ test.describe('Animate panel (F5)', () => {
     await expect(playBtn).toHaveAttribute('aria-label', 'Play animation');
 
     await playBtn.click();
-    await expect(playBtn).toHaveAttribute('aria-pressed', 'true');
-    // The name says what pressing it will DO, not what state it is in.
+    // The name says what pressing it will DO; a pressed state on top of it
+    // was a second signal for the same thing.
+    await expect(playBtn).not.toHaveAttribute('aria-pressed', /.*/);
     await expect(playBtn).toHaveAttribute('aria-label', 'Pause animation');
 
     await expect
@@ -1574,7 +1574,7 @@ test.describe('Animate panel (F5)', () => {
       .toBeGreaterThanOrEqual(2);
 
     await playBtn.click();
-    await expect(playBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(playBtn).toHaveAttribute('aria-label', 'Play animation');
 
     // The frame already inside the worker still completes — a blocking WASM
     // render cannot be cancelled mid-flight — but nothing follows it.
@@ -1626,18 +1626,18 @@ test.describe('Animate panel (F5)', () => {
 
     const playBtn = page.locator('#animatePlayBtn');
     await playBtn.click();
-    await expect(playBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(playBtn).toHaveAttribute('aria-label', 'Pause animation');
 
     // Render goes through renderFull(), which sets no preview state — the
     // panel hears onFullRenderStart instead.
     await page.locator('#classicRenderBtn').click();
-    await expect(playBtn).toHaveAttribute('aria-pressed', 'false', {
+    await expect(playBtn).toHaveAttribute('aria-label', 'Play animation', {
       timeout: PREVIEW_TIMEOUT,
     });
 
     // And it stays stopped rather than quietly picking back up.
     await page.waitForTimeout(3000);
-    await expect(playBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(playBtn).toHaveAttribute('aria-label', 'Play animation');
   });
 
   test('classic-animate-dump-disabled: Dump Pictures says why it cannot work', async ({
@@ -2220,9 +2220,10 @@ test.describe('Classic 3D-view defaults', () => {
     // "Per-interface" has to mean this — nothing Classic-flavored may have
     // touched the Forge namespace.
     const prefs = await readViewPrefs(page);
-    expect(prefs.axesForge, 'Forge must not have had axes switched on').not.toBe(
-      'true'
-    );
+    expect(
+      prefs.axesForge,
+      'Forge must not have had axes switched on'
+    ).not.toBe('true');
     expect(
       prefs.gridForge,
       'Forge must not have had its grid switched off'
@@ -2428,7 +2429,9 @@ test.describe('Small-defect sweep', () => {
       }
       await page.waitForTimeout(300);
       const m = await readPair(selector);
-      console.log(`[d55] ${label}: ${m.color} on ${m.background} = ${m.ratio}:1`);
+      console.log(
+        `[d55] ${label}: ${m.color} on ${m.background} = ${m.ratio}:1`
+      );
       expect(
         m.ratio,
         `${label} is ${m.color} on ${m.background} = ${m.ratio}:1`

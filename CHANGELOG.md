@@ -85,6 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In Keyboard Shortcuts, each key button is named by its key, so a screen
   reader can learn the shortcut; a saved project card's buttons name the
   project ("Load Simple box", "Delete Simple box").
+- In Classic, the pane separators say their real share from the start
+  ("Editor: 26%", not "0%"); the "A. Forge" and "Classic" button is named by
+  its words; Play has one state signal; a font radio says its style
+  ("Liberation Sans Bold"); the opacity, brightness and contrast sliders say
+  their value with its unit.
 
 ## [5.2.2] - 2026-10-09
 

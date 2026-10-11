@@ -7032,14 +7032,17 @@ async function initApp() {
   if (savedOpacity && modelOpacityInput) {
     modelOpacityInput.value = savedOpacity;
     if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
+    modelOpacityInput.setAttribute('aria-valuetext', `${savedOpacity}%`);
   }
   if (savedBrightness && brightnessInput) {
     brightnessInput.value = savedBrightness;
     if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`;
+    brightnessInput.setAttribute('aria-valuetext', `${savedBrightness}%`);
   }
   if (savedContrast && contrastInput) {
     contrastInput.value = savedContrast;
     if (contrastValue) contrastValue.textContent = `${savedContrast}%`;
+    contrastInput.setAttribute('aria-valuetext', `${savedContrast}%`);
   }
 
   const updateAppearanceSlidersDisabledState = (enabled) => {
@@ -7086,6 +7089,7 @@ async function initApp() {
     modelOpacityInput.addEventListener('input', () => {
       const v = modelOpacityInput.value;
       if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
+      modelOpacityInput.setAttribute('aria-valuetext', `${v}%`);
       writeScopedPref(STORAGE_KEY_MODEL_OPACITY, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setModelOpacity(parseInt(v, 10));
@@ -7096,6 +7100,7 @@ async function initApp() {
     brightnessInput.addEventListener('input', () => {
       const v = brightnessInput.value;
       if (brightnessValue) brightnessValue.textContent = `${v}%`;
+      brightnessInput.setAttribute('aria-valuetext', `${v}%`);
       writeScopedPref(STORAGE_KEY_BRIGHTNESS, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setBrightness(parseInt(v, 10));
@@ -7106,6 +7111,7 @@ async function initApp() {
     contrastInput.addEventListener('input', () => {
       const v = contrastInput.value;
       if (contrastValue) contrastValue.textContent = `${v}%`;
+      contrastInput.setAttribute('aria-valuetext', `${v}%`);
       writeScopedPref(STORAGE_KEY_CONTRAST, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setContrast(parseInt(v, 10));

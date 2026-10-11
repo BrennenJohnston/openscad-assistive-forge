@@ -65,7 +65,7 @@ test.describe('Classic header toggle', () => {
 
     const classicToggle = page.locator('#classicModeToggle');
     await expect(classicToggle).toBeVisible();
-    await expect(classicToggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(classicToggle).toHaveAttribute('aria-label', 'Classic');
 
     // Enter classic straight from the default Simplified mode
     await classicToggle.click();
@@ -73,7 +73,7 @@ test.describe('Classic header toggle', () => {
       'data-ui-mode',
       'classic'
     );
-    await expect(classicToggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(classicToggle).toHaveAttribute('aria-label', 'A. Forge');
 
     // The View menu radio agrees with the header toggle
     await page.locator('#viewMenuBtn').click();
@@ -88,7 +88,7 @@ test.describe('Classic header toggle', () => {
       'data-ui-mode',
       'simplified'
     );
-    await expect(classicToggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(classicToggle).toHaveAttribute('aria-label', 'Classic');
 
     // From Standard, the round-trip remembers standard
     await switchToStandardMode(page);
@@ -104,7 +104,9 @@ test.describe('Classic header toggle', () => {
     );
   });
 
-  test('classic mode persists across reload and exit still returns to the remembered mode', async ({ page }) => {
+  test('classic mode persists across reload and exit still returns to the remembered mode', async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
 
     await loadSampleProject(page);
@@ -126,7 +128,7 @@ test.describe('Classic header toggle', () => {
       'data-ui-mode',
       'classic'
     );
-    await expect(classicToggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(classicToggle).toHaveAttribute('aria-label', 'A. Forge');
 
     await classicToggle.click();
     await expect(page.locator('body')).toHaveAttribute(
@@ -359,7 +361,9 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     );
   });
 
-  test('classic-density-shared: the choice carries out of Classic and survives reload', async ({ page }) => {
+  test('classic-density-shared: the choice carries out of Classic and survives reload', async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
 
     await loadSampleProject(page);
@@ -1465,7 +1469,9 @@ test.describe('Classic dock resizers', () => {
     ).toBeGreaterThanOrEqual(230);
   });
 
-  test('classic-resizer-persist: a resized column survives a reload', async ({ page }) => {
+  test('classic-resizer-persist: a resized column survives a reload', async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
 
     await page.setViewportSize({ width: 1400, height: 900 });
@@ -2305,9 +2311,12 @@ test.describe('Classic dock relocation', () => {
 
     // ...and it was announced
     await expect
-      .poll(async () => page.evaluate(() => (window.__said || []).join(' | ')), {
-        timeout: 15000,
-      })
+      .poll(
+        async () => page.evaluate(() => (window.__said || []).join(' | ')),
+        {
+          timeout: 15000,
+        }
+      )
       .toContain('Error-Log moved to the upper right');
   });
 
@@ -2379,9 +2388,12 @@ test.describe('Classic dock relocation', () => {
     await expect(errorTab).toBeFocused();
     await expect(errorTab).toHaveAttribute('aria-selected', 'true');
     await expect
-      .poll(async () => page.evaluate(() => (window.__said || []).join(' | ')), {
-        timeout: 15000,
-      })
+      .poll(
+        async () => page.evaluate(() => (window.__said || []).join(' | ')),
+        {
+          timeout: 15000,
+        }
+      )
       .toContain('Error-Log merged with Console, tab 2 of 2');
 
     // Arrows select, and the group is a single tab stop
@@ -2443,7 +2455,9 @@ test.describe('Classic dock relocation', () => {
     await expect(page.locator('#paramPanel')).toBeVisible();
   });
 
-  test('classic-dock-persist: a relocated panel is still there after a reload', async ({ page }) => {
+  test('classic-dock-persist: a relocated panel is still there after a reload', async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     await enterClassicDesktop(page);
 
@@ -2804,7 +2818,9 @@ test.describe('View menu per-toolbar hide toggles', () => {
     expect(aboutLibraries).toHaveLength(1);
   });
 
-  test('classic-hide-toolbars-persist: the choice survives a reload', async ({ page }) => {
+  test('classic-hide-toolbars-persist: the choice survives a reload', async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     await enterClassicDesktop(page);
 
@@ -2849,8 +2865,8 @@ test.describe('Classic toggle placement and honest active label', () => {
       const follows = (a, b) =>
         Boolean(
           a &&
-            b &&
-            a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+          b &&
+          a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
         );
       const uiMode = document.getElementById('uiModeToggle');
       const density = document.getElementById('classicDensityToggle');
@@ -2920,16 +2936,17 @@ test.describe('Classic toggle placement and honest active label', () => {
       Math.abs(boxAfter.y - boxBefore.y),
       'vertical position stays in the banner across the switch'
     ).toBeLessThan(40);
-    await expect(classicToggle).toHaveAttribute(
-      'aria-label',
-      'Switch back to the Assistive Forge interface'
+    await expect(classicToggle).toHaveAttribute('aria-label', 'A. Forge');
+    await expect(classicToggle).not.toHaveAttribute('aria-pressed', /.*/);
+    await expect(page.locator('#classicModeToggleDescription')).toHaveText(
+      'Switch to the Assistive Forge interface'
     );
 
     await classicToggle.click();
     await expect(label).toHaveText('Classic');
-    await expect(classicToggle).toHaveAttribute(
-      'aria-label',
-      'Switch to Classic desktop layout'
+    await expect(classicToggle).toHaveAttribute('aria-label', 'Classic');
+    await expect(page.locator('#classicModeToggleDescription')).toHaveText(
+      'Switch to the Classic desktop layout'
     );
   });
 });
@@ -2952,10 +2969,9 @@ test.describe('Return to Main Page control', () => {
       const branding = document.querySelector('.header-branding');
       return Boolean(
         b &&
-          branding &&
-          b.closest('.header-content') &&
-          b.compareDocumentPosition(branding) &
-            Node.DOCUMENT_POSITION_FOLLOWING
+        branding &&
+        b.closest('.header-content') &&
+        b.compareDocumentPosition(branding) & Node.DOCUMENT_POSITION_FOLLOWING
       );
     });
     expect(leadsHeader, 'the control precedes the branding').toBe(true);
@@ -2964,9 +2980,7 @@ test.describe('Return to Main Page control', () => {
     // the same token every other new control asserts against.
     const target = await page.evaluate(() =>
       parseInt(
-        getComputedStyle(document.body).getPropertyValue(
-          '--size-touch-target'
-        ),
+        getComputedStyle(document.body).getPropertyValue('--size-touch-target'),
         10
       )
     );
@@ -3048,17 +3062,13 @@ test.describe('The Classic Console dock is never an empty frame', () => {
 
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
     await expect
-      .poll(() =>
-        slot.evaluate((el) => el.contains(document.activeElement))
-      )
+      .poll(() => slot.evaluate((el) => el.contains(document.activeElement)))
       .toBe(true);
 
     await page.keyboard.press('Control+Alt+1');
 
     await expect
-      .poll(() =>
-        slot.evaluate((el) => el.contains(document.activeElement))
-      )
+      .poll(() => slot.evaluate((el) => el.contains(document.activeElement)))
       .toBe(false);
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
   });

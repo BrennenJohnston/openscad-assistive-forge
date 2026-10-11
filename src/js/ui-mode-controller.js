@@ -957,17 +957,26 @@ export class UIModeController {
     if (!btn) return;
 
     const isClassic = this.currentMode === 'classic';
-    btn.setAttribute('aria-pressed', String(isClassic));
-    // The button names what pressing it does, like the theme toggles:
-    // inside Classic it is the way back to the Assistive Forge interface,
-    // and the visible label says so rather than only changing color.
-    const label = isClassic
-      ? 'Switch back to the Assistive Forge interface'
-      : 'Switch to Classic desktop layout';
-    btn.setAttribute('aria-label', label);
+    // Named by its visible words, with what pressing it does as its
+    // description. A "pressed" state on a button whose name said "switch
+    // back" left unclear which interface was on.
+    const words = isClassic ? 'A. Forge' : 'Classic';
+    const does = isClassic
+      ? 'Switch to the Assistive Forge interface'
+      : 'Switch to the Classic desktop layout';
+    btn.setAttribute('aria-label', words);
+    btn.removeAttribute('aria-pressed');
+    let description = document.getElementById('classicModeToggleDescription');
+    if (!description) {
+      description = document.createElement('span');
+      description.id = 'classicModeToggleDescription';
+      description.className = 'sr-only';
+      btn.insertAdjacentElement('beforebegin', description);
+    }
+    description.textContent = does;
     const visibleLabel = btn.querySelector('.classic-label');
     if (visibleLabel) {
-      visibleLabel.textContent = isClassic ? 'A. Forge' : 'Classic';
+      visibleLabel.textContent = words;
     }
 
     // The button is gated only while it points into Classic on a
@@ -983,8 +992,8 @@ export class UIModeController {
     // at #classicModeToggleReason and no describedby can dangle at a
     // control the user cannot see.
     btn.removeAttribute('aria-disabled');
-    btn.removeAttribute('aria-describedby');
-    btn.setAttribute('title', label);
+    btn.setAttribute('aria-describedby', 'classicModeToggleDescription');
+    btn.setAttribute('title', does);
   }
 
   /**
