@@ -139,7 +139,8 @@ export const MEASURED_SECONDS = {
   'stakeholder-acceptance.spec.js': 38.4,
   'manifest-loading.spec.js': 71.2,
   'drawer-reduction.spec.js': 15.8,
-  'console-tail.spec.js': 34.2,
+  // Measured 34.2; a fifth case (a second run, about 15 s locally) adds 15.
+  'console-tail.spec.js': 49.2,
   'axis-depth-truth.spec.js': 29.2,
   'welcome-spotlight.spec.js': 30.2,
   'editor-fold-markers.spec.js': 28.0,

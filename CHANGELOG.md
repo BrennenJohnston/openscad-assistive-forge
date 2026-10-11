@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preview off, the status bars say "Preview outdated" after a change.
 - The code editor no longer reads its own changes aloud, and a screen
   reader no longer finds "Generating preview" when nothing is generating.
+- The console reads each new line once: warnings are no longer alerts,
+  the log is not read again from the top after each run, and a line no
+  longer says its level twice ("Warning: WARNING:").
 
 ## [5.2.2] - 2026-10-09
 
