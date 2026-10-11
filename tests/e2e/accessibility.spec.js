@@ -997,11 +997,15 @@ test.describe('Screen Reader Support', () => {
     test('should have proper focus indicators on role cards', async ({ page }) => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
-      
-      // Tab to first Try button
-      await page.keyboard.press('Tab') // Skip link
-      await page.keyboard.press('Tab') // Header controls or first card button
-      
+
+      // Tab onto the first card's button from the control before it. Counting
+      // Tabs from the top assumed focus started on the page body; the first
+      // visit now closes onto the Main Page heading.
+      const firstCard = page.locator('.role-path-card').first()
+      await firstCard.locator('.role-path-details > summary').focus()
+      await page.keyboard.press('Tab')
+      await expect(firstCard.locator('.role-path-actions button').first()).toBeFocused()
+
       // Get focused element
       const focusedElement = page.locator(':focus')
       await expect(focusedElement).toBeVisible()
