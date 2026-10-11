@@ -153,7 +153,11 @@ for (const vp of VIEWPORTS) {
         await expect(page.locator('.title-full')).not.toBeVisible()
       } else if (isNarrowPortrait) {
         await expect(page.locator('.title-short')).toBeVisible()
-        await expect(page.locator('.title-full')).not.toBeVisible()
+        // The full name stays in the heading for assistive tech, clipped to
+        // a point rather than removed, so it is not drawn but not display:none.
+        const fullBox = await page.locator('.title-full').boundingBox()
+        expect(fullBox.width).toBeLessThanOrEqual(1)
+        expect(fullBox.height).toBeLessThanOrEqual(1)
       } else {
         await expect(page.locator('.title-full')).toBeVisible()
       }

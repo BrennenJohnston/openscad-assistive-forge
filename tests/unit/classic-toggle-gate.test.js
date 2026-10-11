@@ -58,9 +58,8 @@ function buildToggleDom() {
 
 async function freshController() {
   vi.resetModules();
-  const { UIModeController } = await import(
-    '../../src/js/ui-mode-controller.js'
-  );
+  const { UIModeController } =
+    await import('../../src/js/ui-mode-controller.js');
   const { announceImmediate } = await import('../../src/js/announcer.js');
   return { UIModeController, announceImmediate };
 }
@@ -89,7 +88,10 @@ describe('Classic toggle viewport gate', () => {
     // aria-describedby left on a removed control is an orphan pointing at
     // text nothing can reach.
     expect(btn.hasAttribute('aria-disabled')).toBe(false);
-    expect(btn.hasAttribute('aria-describedby')).toBe(false);
+    // Described by what pressing it does, never by the gate's reason.
+    expect(btn.getAttribute('aria-describedby')).toBe(
+      'classicModeToggleDescription'
+    );
   });
 
   it('shows the toggle, undecorated, on a desktop-shaped viewport', async () => {
@@ -102,8 +104,13 @@ describe('Classic toggle viewport gate', () => {
 
     expect(btn.classList.contains('hidden')).toBe(false);
     expect(btn.hasAttribute('aria-disabled')).toBe(false);
-    expect(btn.hasAttribute('aria-describedby')).toBe(false);
-    expect(btn.getAttribute('title')).toBe('Switch to Classic desktop layout');
+    // Described by what pressing it does, never by the gate's reason.
+    expect(btn.getAttribute('aria-describedby')).toBe(
+      'classicModeToggleDescription'
+    );
+    expect(btn.getAttribute('title')).toBe(
+      'Switch to the Classic desktop layout'
+    );
   });
 
   it('never gates the way out: inside Classic the toggle stays on screen at phone shapes', async () => {
@@ -118,8 +125,9 @@ describe('Classic toggle viewport gate', () => {
     setViewport(375, 812);
     controller._updateClassicToggleButton();
     expect(btn.classList.contains('hidden')).toBe(false);
-    expect(btn.getAttribute('aria-label')).toBe(
-      'Switch back to the Assistive Forge interface'
+    expect(btn.getAttribute('aria-label')).toBe('A. Forge');
+    expect(btn.getAttribute('title')).toBe(
+      'Switch to the Assistive Forge interface'
     );
 
     // Leaving works, and the button goes away once it points back in.
@@ -190,8 +198,8 @@ describe('Classic toggle viewport gate', () => {
     expect(controller.isClassicDeferredByViewport()).toBe(true);
 
     controller.setClassicDensity('simplified');
-    expect(JSON.parse(localStorage.getItem('openscad-forge-ui-mode')).mode).toBe(
-      'classic'
-    );
+    expect(
+      JSON.parse(localStorage.getItem('openscad-forge-ui-mode')).mode
+    ).toBe('classic');
   });
 });

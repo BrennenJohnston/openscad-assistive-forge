@@ -246,13 +246,13 @@ export function initCompanionFilesController({
       saveBtn.textContent = 'Update Saved Project';
       saveBtn.setAttribute(
         'aria-label',
-        'Update companion files in the saved project'
+        'Update Saved Project: the companion files in it'
       );
     } else {
       saveBtn.textContent = 'Save as Project';
       saveBtn.setAttribute(
         'aria-label',
-        'Save this file and companion files as a project'
+        'Save as Project: the companion files with this project'
       );
     }
   }

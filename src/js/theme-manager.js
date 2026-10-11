@@ -365,11 +365,17 @@ export function initThemeToggle(buttonId, onToggle = null) {
   // click handler: Ctrl+T, a City Walk in-game toggle and, under 'auto',
   // the system changing scheme all change the theme too, and the button
   // has to describe the state it is actually in, whoever changed it.
+  // The name says the theme chosen, not the one the system resolved it to:
+  // "Auto" was read as "dark" at night, the same as Dark.
+  const names = {
+    [THEMES.AUTO]: 'Theme: Auto',
+    [THEMES.LIGHT]: 'Theme: Light',
+    [THEMES.DARK]: 'Theme: Dark',
+  };
   const syncLabel = () => {
-    button.setAttribute(
-      'aria-label',
-      `Current theme: ${themeManager.getActiveTheme()}. Click to cycle themes.`
-    );
+    const name = names[themeManager.currentTheme] || 'Theme';
+    button.setAttribute('aria-label', name);
+    button.title = `${name}. Press for the next: Auto, Light, Dark.`;
   };
 
   // Handle click

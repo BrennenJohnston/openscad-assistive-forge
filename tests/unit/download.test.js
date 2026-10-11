@@ -96,64 +96,44 @@ describe('Download Manager', () => {
       vi.useRealTimers();
     });
 
-    it('should generate filename with model name, hash, and date', () => {
+    it('names the file for the project and the day', () => {
       const filename = generateFilename('test_model', { width: 50 }, 'stl');
-      expect(filename).toMatch(/^test_model-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('test_model-2026-01-15.stl');
     });
 
     it('should sanitize model name', () => {
       const filename = generateFilename('My Model!.scad', {}, 'stl');
-      expect(filename).toMatch(/^my_model_-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('my_model_-2026-01-15.stl');
     });
 
     it('should remove .scad extension from model name', () => {
       const filename = generateFilename('model.scad', {}, 'stl');
       expect(filename).not.toContain('.scad');
-      expect(filename).toMatch(/^model-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('model-2026-01-15.stl');
     });
 
     it('should remove .zip extension from model name', () => {
       const filename = generateFilename('project.zip', {}, 'stl');
       expect(filename).not.toContain('.zip');
-      expect(filename).toMatch(/^project-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('project-2026-01-15.stl');
     });
 
     it('should replace invalid characters with underscores', () => {
       const filename = generateFilename('test@#$%model', {}, 'stl');
-      expect(filename).toMatch(/^test____model-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('test____model-2026-01-15.stl');
     });
 
     it('should convert to lowercase', () => {
       const filename = generateFilename('TestModel', {}, 'stl');
-      expect(filename).toMatch(/^testmodel-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('testmodel-2026-01-15.stl');
     });
 
-    it('should generate different hashes for different parameters', () => {
+    it('gives the same name whatever the parameters', () => {
+      // The name once carried a code made from the parameters, which nobody
+      // could read; the day is enough to tell two exports apart.
       const filename1 = generateFilename('model', { width: 50 }, 'stl');
       const filename2 = generateFilename('model', { width: 100 }, 'stl');
-
-      const hash1 = filename1.split('-')[1];
-      const hash2 = filename2.split('-')[1];
-
-      expect(hash1).not.toBe(hash2);
-    });
-
-    it('should generate same hash for same parameters', () => {
-      const filename1 = generateFilename(
-        'model',
-        { width: 50, height: 100 },
-        'stl'
-      );
-      const filename2 = generateFilename(
-        'model',
-        { width: 50, height: 100 },
-        'stl'
-      );
-
-      const hash1 = filename1.split('-')[1];
-      const hash2 = filename2.split('-')[1];
-
-      expect(hash1).toBe(hash2);
+      expect(filename1).toBe(filename2);
     });
 
     it('should support different output formats', () => {
@@ -182,7 +162,7 @@ describe('Download Manager', () => {
 
     it('should handle empty parameters', () => {
       const filename = generateFilename('model', {}, 'stl');
-      expect(filename).toMatch(/^model-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('model-2026-01-15.stl');
     });
 
     it('should handle complex parameter objects', () => {
@@ -193,7 +173,7 @@ describe('Download Manager', () => {
         options: { smooth: true, finish: 'matte' },
       };
       const filename = generateFilename('model', params, 'stl');
-      expect(filename).toMatch(/^model-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('model-2026-01-15.stl');
     });
   });
 
@@ -437,7 +417,7 @@ describe('Download Manager', () => {
       const filename = generateFilename(modelName, parameters, 'stl');
       downloadFile(data, filename, 'stl');
 
-      expect(filename).toMatch(/^my_model-[a-z0-9]+-20260115\.stl$/);
+      expect(filename).toBe('my_model-2026-01-15.stl');
       expect(mockAnchor.download).toBe(filename);
       expect(mockAnchor.click).toHaveBeenCalled();
       expect(revokeObjectURLSpy).toHaveBeenCalled();

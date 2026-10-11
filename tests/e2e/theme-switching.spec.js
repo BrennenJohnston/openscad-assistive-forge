@@ -3,7 +3,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from '@playwright/test';
 
 // Dismiss first-visit modal and seed an explicit theme preference on first
 // load so the theme cycle (auto→light→dark→auto) always produces a visible
@@ -13,200 +13,218 @@ import { test, expect } from '@playwright/test'
 // a reload.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     if (!localStorage.getItem('openscad-forge-theme')) {
-      localStorage.setItem('openscad-forge-theme', 'light')
+      localStorage.setItem('openscad-forge-theme', 'light');
     }
-  })
-})
+  });
+});
 
 test.describe('Theme Switching', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/');
     // Wait for page to fully load
-    await expect(page.locator('h1')).toBeVisible()
-  })
+    await expect(page.locator('h1')).toBeVisible();
+  });
 
   test('should have theme toggle button visible', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
-    await expect(themeButton).toBeVisible()
-  })
+    const themeButton = page.locator('#themeToggle');
+    await expect(themeButton).toBeVisible();
+  });
 
   test('should toggle between light and dark themes', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+    const themeButton = page.locator('#themeToggle');
 
     // Get initial theme
-    const initialTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-    
+    const initialTheme = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme')
+    );
+
     // Click theme toggle
-    await themeButton.click()
-    await page.waitForTimeout(500)
+    await themeButton.click();
+    await page.waitForTimeout(500);
 
     // Verify theme changed
-    const newTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-    expect(newTheme).not.toBe(initialTheme)
+    const newTheme = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme')
+    );
+    expect(newTheme).not.toBe(initialTheme);
 
     // Theme may cycle through multiple themes (light -> dark -> high-contrast)
     // Click until we get back to initial theme (max 5 clicks)
-    let currentTheme = newTheme
-    let attempts = 0
+    let currentTheme = newTheme;
+    let attempts = 0;
     while (currentTheme !== initialTheme && attempts < 5) {
-      await themeButton.click()
-      await page.waitForTimeout(500)
-      currentTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-      attempts++
+      await themeButton.click();
+      await page.waitForTimeout(500);
+      currentTheme = await page.evaluate(() =>
+        document.documentElement.getAttribute('data-theme')
+      );
+      attempts++;
     }
 
     // Verify we cycled back to initial theme (or at least theme changes work)
-    expect(attempts).toBeGreaterThan(0)
-    expect(attempts).toBeLessThan(5)
-  })
+    expect(attempts).toBeGreaterThan(0);
+    expect(attempts).toBeLessThan(5);
+  });
 
   test('should apply theme-specific colors', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+    const themeButton = page.locator('#themeToggle');
 
     // Switch to dark theme
-    const currentTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-    
+    const currentTheme = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme')
+    );
+
     if (currentTheme !== 'dark') {
-      await themeButton.click()
-      await page.waitForTimeout(300)
+      await themeButton.click();
+      await page.waitForTimeout(300);
     }
 
     // Check that background is dark
     const bodyBg = await page.evaluate(() => {
-      return window.getComputedStyle(document.body).backgroundColor
-    })
+      return window.getComputedStyle(document.body).backgroundColor;
+    });
 
     // Dark theme should have dark background (RGB values < 100)
-    const darkTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+    const darkTheme = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme')
+    );
     if (darkTheme === 'dark') {
-      expect(bodyBg).not.toBe('rgb(255, 255, 255)')
+      expect(bodyBg).not.toBe('rgb(255, 255, 255)');
     }
 
     // Switch to light theme
-    await themeButton.click()
-    await page.waitForTimeout(300)
+    await themeButton.click();
+    await page.waitForTimeout(300);
 
     const lightBg = await page.evaluate(() => {
-      return window.getComputedStyle(document.body).backgroundColor
-    })
+      return window.getComputedStyle(document.body).backgroundColor;
+    });
 
     // Backgrounds should be different
-    expect(lightBg).not.toBe(bodyBg)
-  })
+    expect(lightBg).not.toBe(bodyBg);
+  });
 
   test('should have high contrast mode option', async ({ page }) => {
-    const highContrastToggle = page.locator('input[type="checkbox"][aria-label*="contrast"], button[aria-label*="High Contrast"], label:has-text("High Contrast")')
+    const highContrastToggle = page.locator(
+      'input[type="checkbox"][aria-label*="contrast"], button[aria-label*="High Contrast"], label:has-text("High Contrast")'
+    );
 
     // High contrast may be exposed through the theme cycle instead of a
     // discrete control — skip honestly rather than fake-passing.
     test.skip(
       !(await highContrastToggle.isVisible()),
       'No discrete high-contrast control in this UI (theme cycle covers HC)'
-    )
+    );
 
-    const isCheckbox = await highContrastToggle.evaluate(el => el.type === 'checkbox')
+    const isCheckbox = await highContrastToggle.evaluate(
+      (el) => el.type === 'checkbox'
+    );
 
     if (isCheckbox) {
-      const initialState = await highContrastToggle.isChecked()
+      const initialState = await highContrastToggle.isChecked();
 
-      await highContrastToggle.click()
-      await page.waitForTimeout(300)
+      await highContrastToggle.click();
+      await page.waitForTimeout(300);
 
-      const newState = await highContrastToggle.isChecked()
-      expect(newState).not.toBe(initialState)
+      const newState = await highContrastToggle.isChecked();
+      expect(newState).not.toBe(initialState);
 
       // Verify high-contrast attribute applied
       const hasHighContrast = await page.evaluate(() =>
         document.documentElement.hasAttribute('data-high-contrast')
-      )
+      );
 
       if (newState) {
-        expect(hasHighContrast).toBe(true)
+        expect(hasHighContrast).toBe(true);
       }
     }
-  })
+  });
 
   test('should persist theme choice across page reloads', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+    const themeButton = page.locator('#themeToggle');
 
     // Set to a specific theme
-    await themeButton.click()
-    await page.waitForTimeout(300)
+    await themeButton.click();
+    await page.waitForTimeout(300);
 
-    const themeBeforeReload = await page.evaluate(() => 
+    const themeBeforeReload = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
-    )
+    );
 
     // Reload page
-    await page.reload()
-    await expect(page.locator('h1')).toBeVisible()
-    await page.waitForTimeout(500)
+    await page.reload();
+    await expect(page.locator('h1')).toBeVisible();
+    await page.waitForTimeout(500);
 
     // Verify theme persisted
-    const themeAfterReload = await page.evaluate(() => 
+    const themeAfterReload = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
-    )
+    );
 
-    expect(themeAfterReload).toBe(themeBeforeReload)
-  })
+    expect(themeAfterReload).toBe(themeBeforeReload);
+  });
 
   test('should update all UI elements when theme changes', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+    const themeButton = page.locator('#themeToggle');
 
     // Get theme attribute (more reliable than computed colors)
-    const themeBefore = await page.evaluate(() => 
+    const themeBefore = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
-    )
+    );
 
     // Switch theme
-    await themeButton.click()
-    await page.waitForTimeout(500)
+    await themeButton.click();
+    await page.waitForTimeout(500);
 
-    const themeAfter = await page.evaluate(() => 
+    const themeAfter = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
-    )
+    );
 
     // Theme should have changed
-    expect(themeAfter).not.toBe(themeBefore)
+    expect(themeAfter).not.toBe(themeBefore);
 
     // Verify theme attribute is applied (which drives CSS)
-    expect(themeAfter).toBeTruthy()
-  })
+    expect(themeAfter).toBeTruthy();
+  });
 
-  test('should have accessible focus indicators in all themes', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+  test('should have accessible focus indicators in all themes', async ({
+    page,
+  }) => {
+    const themeButton = page.locator('#themeToggle');
 
     const checkFocusIndicator = async () => {
-      const firstButton = page.locator('button').first()
-      await firstButton.focus()
-      
-      const outline = await firstButton.evaluate(el => {
-        const styles = window.getComputedStyle(el)
-        return styles.outline + styles.boxShadow
-      })
-      
-      return outline !== 'none' && outline !== ''
-    }
+      const firstButton = page.locator('button').first();
+      await firstButton.focus();
+
+      const outline = await firstButton.evaluate((el) => {
+        const styles = window.getComputedStyle(el);
+        return styles.outline + styles.boxShadow;
+      });
+
+      return outline !== 'none' && outline !== '';
+    };
 
     // Check in current theme
-    const hasFocusIndicator1 = await checkFocusIndicator()
-    expect(hasFocusIndicator1).toBe(true)
+    const hasFocusIndicator1 = await checkFocusIndicator();
+    expect(hasFocusIndicator1).toBe(true);
 
     // Switch theme
-    await themeButton.click()
-    await page.waitForTimeout(300)
+    await themeButton.click();
+    await page.waitForTimeout(300);
 
     // Check in new theme
-    const hasFocusIndicator2 = await checkFocusIndicator()
-    expect(hasFocusIndicator2).toBe(true)
-  })
+    const hasFocusIndicator2 = await checkFocusIndicator();
+    expect(hasFocusIndicator2).toBe(true);
+  });
 
-  test('should support keyboard navigation for theme toggle', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
-    await expect(themeButton).toBeVisible()
+  test('should support keyboard navigation for theme toggle', async ({
+    page,
+  }) => {
+    const themeButton = page.locator('#themeToggle');
+    await expect(themeButton).toBeVisible();
 
     // 1) Verify the button is reachable via Tab.
     // macOS WebKit/Safari does not tab to buttons by default (platform
@@ -214,154 +232,170 @@ test.describe('Theme Switching', () => {
     // Tab traversal doesn't reach the button within a reasonable number
     // of presses. The Enter-activation test below still validates that
     // the button responds to keyboard input.
-    await page.keyboard.press('Tab')
-    let found = false
+    await page.keyboard.press('Tab');
+    let found = false;
     for (let i = 0; i < 50; i++) {
-      const id = await page.evaluate(() => document.activeElement?.id)
-      if (id === 'themeToggle') { found = true; break }
-      await page.keyboard.press('Tab')
+      const id = await page.evaluate(() => document.activeElement?.id);
+      if (id === 'themeToggle') {
+        found = true;
+        break;
+      }
+      await page.keyboard.press('Tab');
     }
     if (!found) {
-      await themeButton.focus()
-      await expect(themeButton).toBeFocused()
+      await themeButton.focus();
+      await expect(themeButton).toBeFocused();
     }
 
     // 2) Verify Enter activates the toggle while focused
     // Use getAttribute OR 'auto' to normalise the null-when-auto case
-    const themeBefore = await page.evaluate(() =>
-      document.documentElement.getAttribute('data-theme') || 'auto'
-    )
+    const themeBefore = await page.evaluate(
+      () => document.documentElement.getAttribute('data-theme') || 'auto'
+    );
 
-    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter');
 
     // Wait for the DOM attribute to actually change (avoids timing flakes)
     // Edge on CI can be slow to propagate attribute changes after keyboard events
     await page.waitForFunction(
       (prev) => {
-        const cur = document.documentElement.getAttribute('data-theme') || 'auto'
-        return cur !== prev
+        const cur =
+          document.documentElement.getAttribute('data-theme') || 'auto';
+        return cur !== prev;
       },
       themeBefore,
-      { timeout: 10000 },
-    )
+      { timeout: 10000 }
+    );
 
-    const themeAfter = await page.evaluate(() =>
-      document.documentElement.getAttribute('data-theme') || 'auto'
-    )
-    expect(themeAfter).not.toBe(themeBefore)
-  })
+    const themeAfter = await page.evaluate(
+      () => document.documentElement.getAttribute('data-theme') || 'auto'
+    );
+    expect(themeAfter).not.toBe(themeBefore);
+  });
 
   test('should announce theme changes to screen readers', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+    const themeButton = page.locator('#themeToggle');
 
     // Check for live region or status element
-    const liveRegions = await page.locator('[role="status"], [aria-live]').count()
-    expect(liveRegions).toBeGreaterThan(0)
+    const liveRegions = await page
+      .locator('[role="status"], [aria-live]')
+      .count();
+    expect(liveRegions).toBeGreaterThan(0);
 
     // Theme changes should be announced (implementation-specific)
     // This test verifies infrastructure exists
-  })
+  });
 
-  test('should maintain theme when loading different examples', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+  test('should maintain theme when loading different examples', async ({
+    page,
+  }) => {
+    const themeButton = page.locator('#themeToggle');
 
     // Set theme
-    await themeButton.click()
-    await page.waitForTimeout(300)
+    await themeButton.click();
+    await page.waitForTimeout(300);
 
-    const themeBefore = await page.evaluate(() => 
+    const themeBefore = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
-    )
+    );
 
     // Load an example
-    const exampleButton = page.locator('button:has-text("Simple Box")').first()
+    const exampleButton = page.locator('button:has-text("Simple Box")').first();
     if (await exampleButton.isVisible()) {
-      await exampleButton.click()
-      await page.waitForTimeout(2000)
+      await exampleButton.click();
+      await page.waitForTimeout(2000);
 
       // Verify theme persisted
-      const themeAfter = await page.evaluate(() => 
+      const themeAfter = await page.evaluate(() =>
         document.documentElement.getAttribute('data-theme')
-      )
+      );
 
-      expect(themeAfter).toBe(themeBefore)
+      expect(themeAfter).toBe(themeBefore);
     }
-  })
+  });
 
   test('should cycle through all available themes', async ({ page }) => {
-    const themeButton = page.locator('#themeToggle')
+    const themeButton = page.locator('#themeToggle');
 
-    const themes = new Set()
-    const maxClicks = 5
+    const themes = new Set();
+    const maxClicks = 5;
 
     for (let i = 0; i < maxClicks; i++) {
-      const currentTheme = await page.evaluate(() => 
+      const currentTheme = await page.evaluate(() =>
         document.documentElement.getAttribute('data-theme')
-      )
-      themes.add(currentTheme)
-      
-      await themeButton.click()
-      await page.waitForTimeout(300)
+      );
+      themes.add(currentTheme);
+
+      await themeButton.click();
+      await page.waitForTimeout(300);
     }
 
     // Should have at least 2 themes (light and dark)
-    expect(themes.size).toBeGreaterThanOrEqual(2)
-  })
-})
+    expect(themes.size).toBeGreaterThanOrEqual(2);
+  });
+});
 
 test.describe('Mono / Alt View Theme Switching', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await expect(page.locator('h1')).toBeVisible()
-  })
+    await page.goto('/');
+    await expect(page.locator('h1')).toBeVisible();
+  });
 
-  test('should apply mono variant attribute and preserve theme', async ({ page }) => {
+  test('should apply mono variant attribute and preserve theme', async ({
+    page,
+  }) => {
     await page.evaluate(() => {
-      document.documentElement.setAttribute('data-theme', 'light')
-    })
+      document.documentElement.setAttribute('data-theme', 'light');
+    });
 
     await page.evaluate(() => {
-      document.documentElement.setAttribute('data-ui-variant', 'mono')
-    })
-    await page.waitForTimeout(100)
+      document.documentElement.setAttribute('data-ui-variant', 'mono');
+    });
+    await page.waitForTimeout(100);
 
     const attrs = await page.evaluate(() => ({
       theme: document.documentElement.getAttribute('data-theme'),
       variant: document.documentElement.getAttribute('data-ui-variant'),
-    }))
+    }));
 
-    expect(attrs.theme).toBe('light')
-    expect(attrs.variant).toBe('mono')
-  })
+    expect(attrs.theme).toBe('light');
+    expect(attrs.variant).toBe('mono');
+  });
 
-  test('should switch themes correctly while mono variant is active', async ({ page }) => {
+  test('should switch themes correctly while mono variant is active', async ({
+    page,
+  }) => {
     await page.evaluate(() => {
-      document.documentElement.setAttribute('data-theme', 'light')
-      document.documentElement.setAttribute('data-ui-variant', 'mono')
-    })
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.setAttribute('data-ui-variant', 'mono');
+    });
 
-    const themeButton = page.locator('#themeToggle')
+    const themeButton = page.locator('#themeToggle');
 
     const themeBefore = await page.evaluate(() =>
-      document.documentElement.getAttribute('data-theme'),
-    )
+      document.documentElement.getAttribute('data-theme')
+    );
 
-    await themeButton.click()
-    await page.waitForTimeout(500)
+    await themeButton.click();
+    await page.waitForTimeout(500);
 
     const themeAfter = await page.evaluate(() =>
-      document.documentElement.getAttribute('data-theme'),
-    )
+      document.documentElement.getAttribute('data-theme')
+    );
     const variantAfter = await page.evaluate(() =>
-      document.documentElement.getAttribute('data-ui-variant'),
-    )
+      document.documentElement.getAttribute('data-ui-variant')
+    );
 
-    expect(themeAfter).not.toBe(themeBefore)
-    expect(variantAfter).toBe('mono')
-    console.log(`Mono variant preserved during theme switch: ${themeBefore} -> ${themeAfter}`)
-  })
+    expect(themeAfter).not.toBe(themeBefore);
+    expect(variantAfter).toBe('mono');
+    console.log(
+      `Mono variant preserved during theme switch: ${themeBefore} -> ${themeAfter}`
+    );
+  });
 
-  test('should apply correct background colors in all 7 theme states', async ({ page }) => {
+  test('should apply correct background colors in all 7 theme states', async ({
+    page,
+  }) => {
     const themeStates = [
       { name: 'Light', theme: 'light', hc: false, mono: false },
       { name: 'Dark', theme: 'dark', hc: false, mono: false },
@@ -370,49 +404,51 @@ test.describe('Mono / Alt View Theme Switching', () => {
       { name: 'Mono Light', theme: 'light', hc: false, mono: true },
       { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
       { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
-    ]
+    ];
 
     for (const state of themeStates) {
       await page.evaluate((cfg) => {
-        const root = document.documentElement
-        root.setAttribute('data-theme', cfg.theme)
+        const root = document.documentElement;
+        root.setAttribute('data-theme', cfg.theme);
         if (cfg.hc) {
-          root.setAttribute('data-high-contrast', 'true')
+          root.setAttribute('data-high-contrast', 'true');
         } else {
-          root.removeAttribute('data-high-contrast')
+          root.removeAttribute('data-high-contrast');
         }
         if (cfg.mono) {
-          root.setAttribute('data-ui-variant', 'mono')
+          root.setAttribute('data-ui-variant', 'mono');
         } else {
-          root.removeAttribute('data-ui-variant')
+          root.removeAttribute('data-ui-variant');
         }
-      }, state)
+      }, state);
 
-      await page.waitForTimeout(50)
+      await page.waitForTimeout(50);
 
-      const bg = await page.evaluate(() =>
-        window.getComputedStyle(document.body).backgroundColor,
-      )
+      const bg = await page.evaluate(
+        () => window.getComputedStyle(document.body).backgroundColor
+      );
 
-      expect(bg).toBeTruthy()
+      expect(bg).toBeTruthy();
 
-      const bgValues = bg.match(/\d+/g)
+      const bgValues = bg.match(/\d+/g);
       if (bgValues) {
-        const [r, g, b] = bgValues.map(Number)
+        const [r, g, b] = bgValues.map(Number);
         if (state.theme === 'dark' || state.mono) {
           // Mono variant uses --color-bg-primary: #000000 (retro terminal)
           // regardless of light/dark setting; only accent colors change.
-          expect(r + g + b).toBeLessThan(200)
+          expect(r + g + b).toBeLessThan(200);
         } else {
-          expect(r + g + b).toBeGreaterThan(400)
+          expect(r + g + b).toBeGreaterThan(400);
         }
       }
 
-      console.log(`${state.name}: bg=${bg}`)
+      console.log(`${state.name}: bg=${bg}`);
     }
-  })
+  });
 
-  test('should have data-theme attribute set in all 7 theme states', async ({ page }) => {
+  test('should have data-theme attribute set in all 7 theme states', async ({
+    page,
+  }) => {
     const themeStates = [
       { name: 'Light', theme: 'light', hc: false, mono: false },
       { name: 'Dark', theme: 'dark', hc: false, mono: false },
@@ -421,199 +457,202 @@ test.describe('Mono / Alt View Theme Switching', () => {
       { name: 'Mono Light', theme: 'light', hc: false, mono: true },
       { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
       { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
-    ]
+    ];
 
     for (const state of themeStates) {
       await page.evaluate((cfg) => {
-        const root = document.documentElement
-        root.setAttribute('data-theme', cfg.theme)
+        const root = document.documentElement;
+        root.setAttribute('data-theme', cfg.theme);
         if (cfg.hc) {
-          root.setAttribute('data-high-contrast', 'true')
+          root.setAttribute('data-high-contrast', 'true');
         } else {
-          root.removeAttribute('data-high-contrast')
+          root.removeAttribute('data-high-contrast');
         }
         if (cfg.mono) {
-          root.setAttribute('data-ui-variant', 'mono')
+          root.setAttribute('data-ui-variant', 'mono');
         } else {
-          root.removeAttribute('data-ui-variant')
+          root.removeAttribute('data-ui-variant');
         }
-      }, state)
+      }, state);
 
       const dataTheme = await page.evaluate(() =>
-        document.documentElement.getAttribute('data-theme'),
-      )
+        document.documentElement.getAttribute('data-theme')
+      );
 
-      expect(dataTheme).toBe(state.theme)
-      console.log(`${state.name}: data-theme=${dataTheme}`)
+      expect(dataTheme).toBe(state.theme);
+      console.log(`${state.name}: data-theme=${dataTheme}`);
     }
-  })
+  });
 
-  test('should persist theme when mono variant is toggled off', async ({ page }) => {
+  test('should persist theme when mono variant is toggled off', async ({
+    page,
+  }) => {
     await page.evaluate(() => {
-      document.documentElement.setAttribute('data-theme', 'dark')
-      document.documentElement.setAttribute('data-ui-variant', 'mono')
-    })
-    await page.waitForTimeout(100)
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.setAttribute('data-ui-variant', 'mono');
+    });
+    await page.waitForTimeout(100);
 
     await page.evaluate(() => {
-      document.documentElement.removeAttribute('data-ui-variant')
-    })
-    await page.waitForTimeout(100)
+      document.documentElement.removeAttribute('data-ui-variant');
+    });
+    await page.waitForTimeout(100);
 
     const attrs = await page.evaluate(() => ({
       theme: document.documentElement.getAttribute('data-theme'),
       variant: document.documentElement.getAttribute('data-ui-variant'),
-    }))
+    }));
 
-    expect(attrs.theme).toBe('dark')
-    expect(attrs.variant).toBeNull()
-  })
-})
+    expect(attrs.theme).toBe('dark');
+    expect(attrs.variant).toBeNull();
+  });
+});
 
 test.describe('Alt View unlock flow (?hfm=unlock)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/?hfm=unlock')
-    await expect(page.locator('h1')).toBeVisible()
-  })
+    await page.goto('/?hfm=unlock');
+    await expect(page.locator('h1')).toBeVisible();
+  });
 
-  test('injects the Alt View toggle and toggles the mono variant', async ({ page }) => {
-    const toggle = page.locator('#_hfmToggle')
-    await expect(toggle).toBeVisible()
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  test('injects the Alt View toggle and toggles the mono variant', async ({
+    page,
+  }) => {
+    const toggle = page.locator('#_hfmToggle');
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
     // Enable Alt View
-    await toggle.click()
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect
       .poll(() =>
         page.evaluate(() =>
           document.documentElement.getAttribute('data-ui-variant')
         )
       )
-      .toBe('mono')
+      .toBe('mono');
 
     // Disable Alt View
-    await toggle.click()
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await expect
       .poll(() =>
         page.evaluate(() =>
           document.documentElement.getAttribute('data-ui-variant')
         )
       )
-      .toBe(null)
-  })
+      .toBe(null);
+  });
 
-  test('theme toggle while mono keeps the variant and a black preview scene', async ({ page }) => {
-    const toggle = page.locator('#_hfmToggle')
-    await expect(toggle).toBeVisible()
-    await toggle.click()
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  test('theme toggle while mono keeps the variant and a black preview scene', async ({
+    page,
+  }) => {
+    const toggle = page.locator('#_hfmToggle');
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
     // Switch theme while Alt View is enabled
-    await page.locator('#themeToggle').click()
-    await page.waitForTimeout(500)
+    await page.locator('#themeToggle').click();
+    await page.waitForTimeout(500);
 
     const state = await page.evaluate(() => {
-      const root = document.documentElement
+      const root = document.documentElement;
       return {
         variant: root.getAttribute('data-ui-variant'),
         bodyBg: window.getComputedStyle(document.body).backgroundColor,
-      }
-    })
+      };
+    });
 
     // Regression for the theme-switch-while-mono bug: variant must survive
     // and the mono palette (black background) must stay in effect.
-    expect(state.variant).toBe('mono')
-    const rgb = state.bodyBg.match(/\d+/g)?.map(Number) ?? []
-    expect(rgb[0] + rgb[1] + rgb[2]).toBeLessThan(200)
-  })
-})
+    expect(state.variant).toBe('mono');
+    const rgb = state.bodyBg.match(/\d+/g)?.map(Number) ?? [];
+    expect(rgb[0] + rgb[1] + rgb[2]).toBeLessThan(200);
+  });
+});
 
 // The editor must follow the resolved app theme, not the OS media query: a
 // dark-mode browser must not paint a dark editor island inside a light
 // app. Classic is always light (desktop parity).
 test.describe('Editor follows the app theme, not the OS', () => {
-  test.use({ colorScheme: 'dark' })
+  test.use({ colorScheme: 'dark' });
 
-  const isCI = !!process.env.CI
-  const WASM_READY_TIMEOUT = 180_000
+  const isCI = !!process.env.CI;
+  const WASM_READY_TIMEOUT = 180_000;
 
   async function editorBrightness(page) {
     const bg = await page
       .locator('.cm-editor')
       .first()
-      .evaluate((el) => getComputedStyle(el).backgroundColor)
-    const rgb = bg.match(/\d+/g)?.map(Number) ?? []
-    return (rgb[0] + rgb[1] + rgb[2]) / 3
+      .evaluate((el) => getComputedStyle(el).backgroundColor);
+    const rgb = bg.match(/\d+/g)?.map(Number) ?? [];
+    return (rgb[0] + rgb[1] + rgb[2]) / 3;
   }
 
   async function loadSample(page) {
-    await page.goto('/')
+    await page.goto('/');
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       state: 'attached',
       timeout: WASM_READY_TIMEOUT,
-    })
-    await page.setInputFiles(
-      '#fileInput',
-      'tests/fixtures/sample.scad'
-    )
+    });
+    await page.setInputFiles('#fileInput', 'tests/fixtures/sample.scad');
     await expect(page.locator('#mainInterface')).toBeVisible({
       timeout: 30_000,
-    })
-    const notNow = page.locator('#saveProjectNotNow')
+    });
+    const notNow = page.locator('#saveProjectNotNow');
     try {
-      await notNow.waitFor({ state: 'visible', timeout: 3_000 })
-      await notNow.click()
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
     } catch {
       // No save-project modal to dismiss.
     }
-    const uiToggle = page.locator('#uiModeToggle')
+    const uiToggle = page.locator('#uiModeToggle');
     if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
-      await uiToggle.click()
+      await uiToggle.click();
     }
   }
 
   test('Classic stays light under a dark OS preference', async ({ page }) => {
-    test.setTimeout(240_000)
-    await loadSample(page)
+    test.setTimeout(240_000);
+    await loadSample(page);
 
-    await page.locator('#classicModeToggle').click()
+    await page.locator('#classicModeToggle').click();
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',
       'classic'
-    )
+    );
     await expect(page.locator('.cm-editor').first()).toBeVisible({
       timeout: 20_000,
-    })
+    });
 
     // Dark OS, light app, Classic: the editor must be light (a dark editor
     // here paints rgb(30,30,30)).
-    expect(await editorBrightness(page)).toBeGreaterThan(200)
-  })
+    expect(await editorBrightness(page)).toBeGreaterThan(200);
+  });
 
   test('the Forge editor follows the app theme in both directions', async ({
     page,
   }) => {
-    test.skip(isCI, 'WASM-heavy; the Classic case above is the CI regression')
-    test.setTimeout(240_000)
-    await loadSample(page)
+    test.skip(isCI, 'WASM-heavy; the Classic case above is the CI regression');
+    test.setTimeout(240_000);
+    await loadSample(page);
 
     // Expert Mode hosts the code editor outside Classic.
-    await page.keyboard.press('Control+e')
+    await page.keyboard.press('Control+e');
     await expect(page.locator('#expertModePanel .cm-editor')).toBeVisible({
       timeout: 20_000,
-    })
+    });
 
     // App light + OS dark: light editor.
-    expect(await editorBrightness(page)).toBeGreaterThan(200)
+    expect(await editorBrightness(page)).toBeGreaterThan(200);
 
     // App dark: dark editor — the fix must not pin the editor light.
-    await page.locator('#themeToggle').click()
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-    expect(await editorBrightness(page)).toBeLessThan(80)
-  })
-})
+    await page.locator('#themeToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    expect(await editorBrightness(page)).toBeLessThan(80);
+  });
+});
 
 test.describe('The header toggles describe the state they are in', () => {
   // Both labels must follow every route that changes the state, not only
@@ -623,15 +662,15 @@ test.describe('The header toggles describe the state they are in', () => {
   // DEFAULT_SHORTCUTS shifts them "to avoid OpenSCAD conflicts", and the
   // unshifted pair belongs to the opt-in LEGACY_FORGE_SHORTCUTS preset.
   const themeLabel = (page) =>
-    page.locator('#themeToggle').getAttribute('aria-label')
+    page.locator('#themeToggle').getAttribute('aria-label');
   const contrastLabel = (page) =>
-    page.locator('#contrastToggle').getAttribute('aria-label')
+    page.locator('#contrastToggle').getAttribute('aria-label');
 
   test('the keyboard shortcut flips high contrast and the label follows', async ({
     page,
   }) => {
-    await page.goto('/')
-    await page.locator('#contrastToggle').waitFor()
+    await page.goto('/');
+    await page.locator('#contrastToggle').waitFor();
     // The chord is only live once the app has finished booting: the shortcut
     // table is registered early, but the handlers that act on it are
     // attached late, so an earlier press matches, calls preventDefault, and
@@ -639,40 +678,46 @@ test.describe('The header toggles describe the state they are in', () => {
     // which point this marker is set - the same gate this suite already uses.
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 60000,
-    })
+    });
 
     await expect(page.locator('html')).not.toHaveAttribute(
       'data-high-contrast',
       'true'
-    )
-    expect(await contrastLabel(page)).toBe(
-      'High contrast mode: OFF. Click to enable.'
-    )
+    );
+    expect(await contrastLabel(page)).toBe('HC: high contrast');
+    await expect(page.locator('#contrastToggle')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
 
-    await page.keyboard.press('Control+Shift+h')
+    await page.keyboard.press('Control+Shift+h');
     await expect(page.locator('html')).toHaveAttribute(
       'data-high-contrast',
       'true'
-    )
-    expect(await contrastLabel(page)).toBe(
-      'High contrast mode: ON. Click to disable.'
-    )
+    );
+    expect(await contrastLabel(page)).toBe('HC: high contrast');
+    await expect(page.locator('#contrastToggle')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
 
-    await page.keyboard.press('Control+Shift+h')
+    await page.keyboard.press('Control+Shift+h');
     await expect(page.locator('html')).not.toHaveAttribute(
       'data-high-contrast',
       'true'
-    )
-    expect(await contrastLabel(page)).toBe(
-      'High contrast mode: OFF. Click to enable.'
-    )
-  })
+    );
+    expect(await contrastLabel(page)).toBe('HC: high contrast');
+    await expect(page.locator('#contrastToggle')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+  });
 
   test('the keyboard shortcut cycles the theme and the label follows', async ({
     page,
   }) => {
-    await page.goto('/')
-    await page.locator('#themeToggle').waitFor()
+    await page.goto('/');
+    await page.locator('#themeToggle').waitFor();
     // The chord is only live once the app has finished booting: the shortcut
     // table is registered early, but the handlers that act on it are
     // attached late, so an earlier press matches, calls preventDefault, and
@@ -680,49 +725,41 @@ test.describe('The header toggles describe the state they are in', () => {
     // which point this marker is set - the same gate this suite already uses.
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       timeout: 60000,
-    })
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
-    expect(await themeLabel(page)).toBe(
-      'Current theme: light. Click to cycle themes.'
-    )
+    });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    expect(await themeLabel(page)).toBe('Theme: Light');
 
     // The label names the resolved theme, so cycle until the resolved value
     // actually moves rather than assuming one press is enough.
-    await page.keyboard.press('Control+Shift+t')
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-    expect(await themeLabel(page)).toBe(
-      'Current theme: dark. Click to cycle themes.'
-    )
-  })
+    await page.keyboard.press('Control+Shift+t');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    expect(await themeLabel(page)).toBe('Theme: Dark');
+  });
 
-  test('the system changing scheme under Auto relabels the button by itself', async ({
+  test('the system changing scheme under Auto keeps the button at Auto', async ({
     page,
   }) => {
     // The purest form of the defect: nobody touches anything at all, and the
     // button still has to stop lying.
     await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-theme', 'auto')
-    })
-    await page.emulateMedia({ colorScheme: 'light' })
-    await page.goto('/')
-    await page.locator('#themeToggle').waitFor()
+      localStorage.setItem('openscad-forge-theme', 'auto');
+    });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/');
+    await page.locator('#themeToggle').waitFor();
 
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     // Polled, not one-shot: the button exists with its static "Toggle
     // theme" label before init wires the descriptive one, and a loaded
     // shard can read that gap (measured on CI; the sibling case above is
     // gated behind data-wasm-ready and never saw it).
-    await expect
-      .poll(() => themeLabel(page))
-      .toBe('Current theme: light. Click to cycle themes.')
+    await expect.poll(() => themeLabel(page)).toBe('Theme: Auto');
 
-    await page.emulateMedia({ colorScheme: 'dark' })
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-    await expect
-      .poll(() => themeLabel(page))
-      .toBe('Current theme: dark. Click to cycle themes.')
-  })
-})
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => themeLabel(page)).toBe('Theme: Auto');
+  });
+});
 
 /**
  * The unlock door keeps the fragment.
@@ -750,19 +787,19 @@ test.describe('the unlock door keeps the fragment', () => {
   test('keeps the URL fragment while still stripping the unlock', async ({
     page,
   }) => {
-    await page.goto('/?hfm=unlock#keep=me')
-    await expect(page.locator('h1')).toBeVisible()
+    await page.goto('/?hfm=unlock#keep=me');
+    await expect(page.locator('h1')).toBeVisible();
     // Polled, not read once: the door runs after the first paint, so an
     // immediate read races it and would pass before the cleanup happened.
     await expect
       .poll(() => page.evaluate(() => window.location.search))
-      .toBe('')
+      .toBe('');
     // The `hfm` half matters too: a "fix" that kept the fragment by leaving
     // the whole URL alone would pass a fragment-only check while quietly
     // re-sharing the unlock. The assertion above is `toBe('')`, not merely
     // "does not contain hfm", for that reason.
-    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me')
-  })
+    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me');
+  });
 
   test('keeps the fragment when other query parameters survive too', async ({
     page,
@@ -770,11 +807,11 @@ test.describe('the unlock door keeps the fragment', () => {
     // The composition has two branches - one for a query with something left
     // in it and one for a query left empty - and a fix applied to only one of
     // them would pass the case above and still break real links.
-    await page.goto('/?hfm=unlock&keepme=1#keep=me')
-    await expect(page.locator('h1')).toBeVisible()
+    await page.goto('/?hfm=unlock&keepme=1#keep=me');
+    await expect(page.locator('h1')).toBeVisible();
     await expect
       .poll(() => page.evaluate(() => window.location.search))
-      .toBe('?keepme=1')
-    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me')
-  })
-})
+      .toBe('?keepme=1');
+    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me');
+  });
+});

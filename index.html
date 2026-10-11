@@ -66,19 +66,14 @@
             type="button"
             id="clearFileBtn"
             class="btn btn-sm btn-outline"
-            aria-label="Main Page. Warning: unsaved changes will be lost"
-            title="Main Page (unsaved changes will be lost)"
+            aria-label="Main Page"
+            title="Back to the Main Page"
             data-tutorial-target="clear-file"
           >
             ← Main Page
           </button>
           <div class="header-branding">
-            <img
-              class="header-logo"
-              src="/icons/logo.png"
-              alt="OpenSCAD Assistive Web Forge logo"
-              width="44"
-            />
+            <img class="header-logo" src="/icons/logo.png" alt="" width="44" />
             <div class="header-branding-text">
               <h1>
                 <!-- Classic renders a desktop window caption
@@ -150,7 +145,7 @@
               type="button"
               id="shortcutsToggle"
               class="btn btn-sm btn-secondary shortcuts-toggle"
-              aria-label="Keyboard shortcuts"
+              aria-label="Keys: keyboard shortcuts"
               title="Keyboard shortcuts"
             >
               <svg
@@ -189,17 +184,15 @@
               class="ui-mode-toggle hidden"
               role="switch"
               aria-checked="false"
-              aria-label="Interface mode: Simplified. Click to switch to Standard mode"
+              aria-label="Interface mode: Simplified, Standard"
               title="Switch between Simplified and Standard interface modes"
             >
-              <span
-                class="ui-mode-option ui-mode-option--basic"
-                aria-hidden="true"
+              <!-- The two words are the switch's options, read with its
+                   name and state; hidden, the name had to carry them. -->
+              <span class="ui-mode-option ui-mode-option--basic"
                 >Simplified</span
               >
-              <span
-                class="ui-mode-option ui-mode-option--advanced"
-                aria-hidden="true"
+              <span class="ui-mode-option ui-mode-option--advanced"
                 >Standard</span
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
@@ -213,7 +206,7 @@
               class="ui-mode-toggle classic-density-toggle ui-mode-toggle--basic"
               role="switch"
               aria-checked="false"
-              aria-label="Classic view: Simplified. Click to switch to Standard"
+              aria-label="Classic view: Simplified, Standard"
               title="Switch between the Simplified and Standard Classic views"
             >
               <span
@@ -402,17 +395,14 @@
         </div>
       </div>
       <div id="toolbarSlot">
-        <!-- Workflow Progress Indicator (COGA breadcrumbs), outside the
-             header so it cannot overlap it -->
-        <!-- #toolbarMenuBar is a flex sibling of .workflow-steps inside this container so that
-             in Advanced mode the toolbar buttons share the same row as the action buttons,
-             exactly replacing the breadcrumb steps. -->
-        <div
-          class="workflow-progress hidden"
-          id="workflowProgress"
-          role="navigation"
-          aria-label="Workflow progress"
-        >
+        <!-- The toolbar row, outside the header so it cannot overlap it:
+             the application menubar on the left (its own landmark, named
+             below), and the view controls (HC, theme, Full Screen, Help)
+             pinned to the right. Not a landmark of its own: it was once a
+             "Workflow progress" navigation, and that name outlived the
+             breadcrumbs, so a screen reader found Help inside a landmark
+             about progress. -->
+        <div class="workflow-progress hidden" id="workflowProgress">
           <div
             id="toolbarMenuBar"
             class="toolbar-menu-bar hidden"
@@ -491,8 +481,8 @@
               type="button"
               id="contrastToggle"
               class="btn btn-sm btn-secondary contrast-toggle"
-              aria-label="Toggle high contrast"
-              title="Toggle high contrast mode"
+              aria-label="HC: high contrast"
+              title="High contrast"
               data-tutorial-target="contrast-toggle"
             >
               <svg
@@ -563,8 +553,8 @@
               id="focusModeBtn"
               class="btn btn-sm btn-outline"
               aria-pressed="false"
-              aria-label="Enter focus mode"
-              title="Focus mode (maximize preview)"
+              aria-label="Full Screen: the preview alone"
+              title="Full Screen (the preview alone)"
             >
               <svg
                 width="16"
@@ -585,8 +575,8 @@
               type="button"
               id="featuresGuideBtn"
               class="btn btn-sm btn-outline btn-with-icon"
-              aria-label="Open features guide and examples"
-              title="Help & Examples"
+              aria-label="Help: features guide and examples"
+              title="Help: features guide and examples"
               data-tutorial-target="features-guide"
             >
               <svg
@@ -1176,7 +1166,7 @@
                       type="button"
                       class="btn btn-large btn-outline"
                       id="uploadZoneFolderBtn"
-                      aria-label="Open a project folder from your computer"
+                      title="Open a project folder from your computer"
                     >
                       Open Project Folder…
                     </button>
@@ -1271,8 +1261,8 @@
                         type="button"
                         class="btn btn-sm btn-outline"
                         id="importFolderBtn"
-                        aria-label="Import project folder"
-                        title="Import Folder"
+                        aria-label="Import Folder: a project folder from your computer"
+                        title="Import a project folder"
                         hidden
                       >
                         <svg
@@ -1297,8 +1287,8 @@
                         type="button"
                         class="btn btn-sm btn-outline"
                         id="connectFolderBtn"
-                        aria-label="Connect to a folder on disk for persistent two-way access"
-                        title="Connect to a folder (Chromium only)"
+                        aria-label="Connect Folder: a folder on disk, kept in step both ways"
+                        title="Connect a folder on disk (Chromium only)"
                         hidden
                       >
                         <svg
@@ -2673,34 +2663,34 @@
                   <legend>Details</legend>
                   <div class="classic-vp-field">
                     <label for="vpTx">Translation X</label>
-                    <input type="number" id="vpTx" step="1" />
+                    <input type="number" id="vpTx" step="any" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpTy">Translation Y</label>
-                    <input type="number" id="vpTy" step="1" />
+                    <input type="number" id="vpTy" step="any" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpTz">Translation Z</label>
-                    <input type="number" id="vpTz" step="1" />
+                    <input type="number" id="vpTz" step="any" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpRx">Rotation X</label>
-                    <input type="number" id="vpRx" step="1" />
+                    <input type="number" id="vpRx" step="any" />
                     <span class="classic-vp-unit">&deg;</span>
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpRy">Rotation Y</label>
-                    <input type="number" id="vpRy" step="1" />
+                    <input type="number" id="vpRy" step="any" />
                     <span class="classic-vp-unit">&deg;</span>
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpRz">Rotation Z</label>
-                    <input type="number" id="vpRz" step="1" />
+                    <input type="number" id="vpRz" step="any" />
                     <span class="classic-vp-unit">&deg;</span>
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpDistance">Distance</label>
-                    <input type="number" id="vpDistance" step="1" min="0" />
+                    <input type="number" id="vpDistance" step="any" min="0" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpFov">FOV</label>
@@ -2822,7 +2812,6 @@
                       type="button"
                       class="btn classic-tb-btn"
                       id="animatePlayBtn"
-                      aria-pressed="false"
                       title="Play animation"
                     >
                       <span
@@ -3853,7 +3842,8 @@
                           type="button"
                           class="btn btn-sm btn-outline companion-save-btn hidden"
                           id="companionSaveBtn"
-                          aria-label="Save companion files to this project"
+                          aria-label="Save as Project: the companion files with this project"
+                          title="Save the companion files with this project"
                         >
                           Save as Project
                         </button>
@@ -4180,7 +4170,7 @@
                         type="button"
                         id="managePresetsBtn"
                         class="btn btn-sm btn-outline"
-                        aria-label="Import and export presets"
+                        aria-label="Import / Export presets"
                         title="Import and export presets"
                       >
                         📋 Import / Export
@@ -4995,6 +4985,7 @@
                               <input
                                 type="range"
                                 id="modelOpacityInput"
+                                aria-valuetext="100%"
                                 min="10"
                                 max="100"
                                 step="5"
@@ -5021,6 +5012,7 @@
                               <input
                                 type="range"
                                 id="brightnessInput"
+                                aria-valuetext="100%"
                                 min="20"
                                 max="200"
                                 step="5"
@@ -5046,6 +5038,7 @@
                               <input
                                 type="range"
                                 id="contrastInput"
+                                aria-valuetext="100%"
                                 min="20"
                                 max="200"
                                 step="5"
@@ -5349,7 +5342,7 @@
                     type="button"
                     id="publishProjectBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Generate a shareable manifest for hosting this project externally"
+                    aria-label="Publish: a manifest to share this project from your own hosting"
                   >
                     <svg
                       class="btn-icon-svg"
@@ -5373,7 +5366,7 @@
                     type="button"
                     id="copySettingsLinkBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Copy a link to this design with my current settings"
+                    aria-label="Copy Link: a link that opens this design with your settings"
                   >
                     <svg
                       class="btn-icon-svg"
@@ -5398,7 +5391,7 @@
                     type="button"
                     id="editDrawingActionBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Open an SVG or photo in the drawing editor"
+                    aria-label="Edit Drawing: open an SVG or a photo in the drawing editor"
                   >
                     <svg
                       class="btn-icon-svg"

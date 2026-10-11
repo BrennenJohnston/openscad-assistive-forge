@@ -126,6 +126,21 @@ export class ClassicResizerController {
       this._elements.set(def.key, el);
     }
     this._applyAll();
+    // The panes have no measured size until Classic has laid out, and the
+    // layout changes again when the density switches, so the values read
+    // here were 0% until the first move. Read them again whenever a measured
+    // pane changes shape (the host keeps its own size through all of it).
+    if (typeof ResizeObserver === 'function') {
+      this._paneObserver = new ResizeObserver(() => this._refreshAria());
+      for (const id of [
+        'classicEditorSlot',
+        'paramPanel',
+        'classicBottomStrip',
+      ]) {
+        const pane = document.getElementById(id);
+        if (pane) this._paneObserver.observe(pane);
+      }
+    }
   }
 
   /**
@@ -137,6 +152,8 @@ export class ClassicResizerController {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
+    this._paneObserver?.disconnect();
+    this._paneObserver = null;
     for (const { target, type, handler } of this._listeners) {
       target.removeEventListener(type, handler);
     }

@@ -83,36 +83,50 @@ export const OUTPUT_FORMATS = {
 };
 
 /**
- * Generate a short hash from a string
- * @param {string} str - String to hash
- * @returns {string} Short hash (6 chars)
+ * The project's name as a file name stem: no extension, nothing a file
+ * system refuses.
+ * @param {string} modelName - Name of the model
+ * @returns {string}
  */
-function shortHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString(36).substring(0, 6);
+export function projectStem(modelName) {
+  return (modelName || 'model')
+    .replace(/\.(scad|zip)$/i, '')
+    .replace(/[^a-z0-9_-]/gi, '_')
+    .toLowerCase();
+}
+
+/** Today, as the date in a file name. */
+export function todayStamp() {
+  return new Date().toISOString().split('T')[0];
 }
 
 /**
- * Generate filename for download
+ * The name a download gets: the project and the day, and for an STL which
+ * of the two kinds it is, so a person finding the file later knows what it
+ * is. The old name carried an unexplained code made from the parameters,
+ * and both STL kinds got the same name.
  * @param {string} modelName - Name of the model
- * @param {Object} parameters - Parameter values
+ * @param {Object} _parameters - Parameter values (no longer part of the name)
  * @param {string} format - Output format (stl, obj, off, amf, 3mf)
+ * @param {Object} [options]
+ * @param {boolean} [options.stlBinary] - For an STL, which kind; left out,
+ *   the name says no kind
  * @returns {string} Filename
  */
-export function generateFilename(modelName, parameters, format = 'stl') {
-  const sanitized = modelName
-    .replace(/\.(scad|zip)$/, '')
-    .replace(/[^a-z0-9_-]/gi, '_')
-    .toLowerCase();
-  const hash = shortHash(JSON.stringify(parameters));
-  const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+export function generateFilename(
+  modelName,
+  _parameters,
+  format = 'stl',
+  { stlBinary } = {}
+) {
+  const kind =
+    format === 'stl' && typeof stlBinary === 'boolean'
+      ? stlBinary
+        ? '-binary'
+        : '-ascii'
+      : '';
   const extension = OUTPUT_FORMATS[format]?.extension || `.${format}`;
-  return `${sanitized}-${hash}-${date}${extension}`;
+  return `${projectStem(modelName)}-${todayStamp()}${kind}${extension}`;
 }
 
 /**
@@ -130,13 +144,14 @@ export function resolveDownloadFilename(
   modelName,
   parameters,
   format = 'stl',
-  overrideName = null
+  overrideName = null,
+  options = {}
 ) {
   if (overrideName) {
     const extension = OUTPUT_FORMATS[format]?.extension || `.${format}`;
     return sanitizeFilename(overrideName) + extension;
   }
-  return generateFilename(modelName, parameters, format);
+  return generateFilename(modelName, parameters, format, options);
 }
 
 /**

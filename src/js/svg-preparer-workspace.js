@@ -2062,7 +2062,7 @@ export function createSvgPrepWorkspace(containerEl) {
       ).length;
       const ignoredCount = elements.filter((el) => el.role === 'ignore').length;
       liveRegion.textContent = isCompound
-        ? `Preview updated: ${fgCount} shapes on, ${ignoredCount} off.`
+        ? `Preview updated: ${fgCount} ${fgCount === 1 ? 'shape' : 'shapes'} on, ${ignoredCount} off.`
         : `Preview updated: ${fgCount} on, ${elements.filter((el) => el.role === 'hole' && el.pathData).length} cut out.`;
     }
     return true;
@@ -3302,7 +3302,7 @@ export function createSvgPrepWorkspace(containerEl) {
     updateDeleteUi();
     const message =
       positions.length === 1
-        ? `Deleted ${what}. ${liveElements.length} shapes left. Undo available.`
+        ? `Deleted ${what}. ${liveElements.length} ${liveElements.length === 1 ? 'shape' : 'shapes'} left. Undo available.`
         : `Deleted ${positions.length} shapes. ${liveElements.length} left. Undo available.`;
     liveRegion.textContent = message;
     announce(message);
@@ -3318,7 +3318,7 @@ export function createSvgPrepWorkspace(containerEl) {
     lastDeletion = null;
     rebuildRows();
     updateDeleteUi();
-    const message = `Undone. ${liveElements.length} shapes.`;
+    const message = `Undone. ${liveElements.length} ${liveElements.length === 1 ? 'shape' : 'shapes'}.`;
     liveRegion.textContent = message;
     announce(message);
   }

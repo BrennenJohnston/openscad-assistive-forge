@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Actions drawer is shorter: the render queue, Compare, Export
   Customizer Settings and its Console button are gone, and Publish is in
   Standard view.
+- The header's controls are named by the words on them, first: "Keys",
+  "HC", "Full Screen", "Help", "Main Page", "Publish", "Copy Link", "Edit
+  Drawing" (the longer words are their descriptions). The theme button says
+  "Theme: Auto", "Theme: Light" or "Theme: Dark"; the interface switch is
+  "Interface mode" with its two options; "Main Page" mentions unsaved
+  changes only when there are some.
 
 ### Fixed
 
@@ -69,6 +75,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and finishing a tour says so once.
 - A failed preview or Generate says so once, with OpenSCAD's own error,
   and messages name your files instead of the engine's (`/tmp/input.scad`).
+- Downloads are named for the project and the day (`simple_box-2026-10-11.obj`),
+  the two STL kinds apart (`-ascii.stl`, `-binary.stl`), the viewport image
+  `simple_box-preview.png`, and Export Changed Settings names your project
+  instead of "Unknown Model".
+- A PDF export of a 3D model says what works instead: SVG or DXF, which
+  offer an approximate outline.
+- The drawing editor says "1 shape", not "1 shapes".
+- In Keyboard Shortcuts, each key button is named by its key, so a screen
+  reader can learn the shortcut; a saved project card's buttons name the
+  project ("Load Simple box", "Delete Simple box").
+- In Classic, the pane separators say their real share from the start
+  ("Editor: 26%", not "0%"); the "A. Forge" and "Classic" button is named by
+  its words; Play has one state signal; a font radio says its style
+  ("Liberation Sans Bold"); the opacity, brightness and contrast sliders say
+  their value with its unit.
+- Touch targets of at least 44 px: the Customizer's "?" and reset buttons,
+  the camera view buttons, a dialog's close, the Clear Cache dialog's Keep
+  checkbox, and the code editor's search panel. A parameter's help tip opens
+  inside the panel instead of being cut off at its edge. The Main Page's
+  folder buttons are named by their visible words.
+- Automatic preview, switched off, stays off on the next visit (recovery mode
+  switched it off and the app forgot); Viewport Control's fields accept the
+  fractions the app writes into them.
 
 ## [5.2.2] - 2026-10-09
 

@@ -941,20 +941,13 @@ export class UIModeController {
     const isSimplified = this.currentMode === 'simplified';
     btn.setAttribute('aria-checked', String(!isSimplified));
 
-    if (isSimplified) {
-      btn.setAttribute(
-        'aria-label',
-        'Interface mode: Simplified. Click to switch to Standard mode'
-      );
-      btn.classList.add('ui-mode-toggle--basic');
-    } else {
-      const modeName = this.currentMode === 'classic' ? 'Classic' : 'Standard';
-      btn.setAttribute(
-        'aria-label',
-        `Interface mode: ${modeName}. Click to switch to Simplified mode`
-      );
-      btn.classList.remove('ui-mode-toggle--basic');
-    }
+    // A two-option choice named "Interface mode": the switch's state and
+    // its two visible words say the rest. The old name put the whole
+    // sentence in front, and read its old state before it changed.
+    // The two words on the switch are in its name too: a control whose
+    // visible words are not in its name cannot be worked by saying them.
+    btn.setAttribute('aria-label', 'Interface mode: Simplified, Standard');
+    btn.classList.toggle('ui-mode-toggle--basic', isSimplified);
   }
 
   /**
@@ -966,17 +959,26 @@ export class UIModeController {
     if (!btn) return;
 
     const isClassic = this.currentMode === 'classic';
-    btn.setAttribute('aria-pressed', String(isClassic));
-    // The button names what pressing it does, like the theme toggles:
-    // inside Classic it is the way back to the Assistive Forge interface,
-    // and the visible label says so rather than only changing color.
-    const label = isClassic
-      ? 'Switch back to the Assistive Forge interface'
-      : 'Switch to Classic desktop layout';
-    btn.setAttribute('aria-label', label);
+    // Named by its visible words, with what pressing it does as its
+    // description. A "pressed" state on a button whose name said "switch
+    // back" left unclear which interface was on.
+    const words = isClassic ? 'A. Forge' : 'Classic';
+    const does = isClassic
+      ? 'Switch to the Assistive Forge interface'
+      : 'Switch to the Classic desktop layout';
+    btn.setAttribute('aria-label', words);
+    btn.removeAttribute('aria-pressed');
+    let description = document.getElementById('classicModeToggleDescription');
+    if (!description) {
+      description = document.createElement('span');
+      description.id = 'classicModeToggleDescription';
+      description.className = 'sr-only';
+      btn.insertAdjacentElement('beforebegin', description);
+    }
+    description.textContent = does;
     const visibleLabel = btn.querySelector('.classic-label');
     if (visibleLabel) {
-      visibleLabel.textContent = isClassic ? 'A. Forge' : 'Classic';
+      visibleLabel.textContent = words;
     }
 
     // The button is gated only while it points into Classic on a
@@ -992,8 +994,8 @@ export class UIModeController {
     // at #classicModeToggleReason and no describedby can dangle at a
     // control the user cannot see.
     btn.removeAttribute('aria-disabled');
-    btn.removeAttribute('aria-describedby');
-    btn.setAttribute('title', label);
+    btn.setAttribute('aria-describedby', 'classicModeToggleDescription');
+    btn.setAttribute('title', does);
   }
 
   /**
@@ -1023,12 +1025,9 @@ export class UIModeController {
     const isSimplified = this.getClassicDensity() === 'simplified';
     btn.setAttribute('aria-checked', String(!isSimplified));
     btn.classList.toggle('ui-mode-toggle--basic', isSimplified);
-    btn.setAttribute(
-      'aria-label',
-      isSimplified
-        ? 'Classic view: Simplified. Click to switch to Standard'
-        : 'Classic view: Standard. Click to switch to Simplified'
-    );
+    // The name carries the two words on the switch; aria-checked carries
+    // which one is on, so the name itself never changes.
+    btn.setAttribute('aria-label', 'Classic view: Simplified, Standard');
   }
 
   /**

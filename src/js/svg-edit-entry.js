@@ -778,11 +778,11 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       announceOpen:
         announceOpen ||
         ((shapes) =>
-          prepared.traced
-            ? `${fileName} traced into ${shapes} shapes. Editor opened.`
-            : prepared.converted
-              ? `${fileName} converted in ${(prepared.ms / 1000).toFixed(1)} seconds, ${shapes} shapes. Editor opened.`
-              : `${fileName} opened for editing, ${shapes} shapes.`),
+          EDITOR_S.openedForEditing(fileName, shapes, {
+            traced: prepared.traced,
+            converted: prepared.converted,
+            seconds: (prepared.ms || 0) / 1000,
+          })),
     });
   }
 

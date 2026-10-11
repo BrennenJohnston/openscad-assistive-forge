@@ -34,6 +34,8 @@ import {
   downloadFile,
   generateFilename,
   resolveDownloadFilename,
+  projectStem,
+  todayStamp,
   formatFileSize,
   sanitizeFilename,
   OUTPUT_FORMATS,
@@ -111,6 +113,10 @@ import {
   isAnyModalOpen,
 } from './js/modal-manager.js';
 import { disableKeepingFocus, setBusy, isBusy } from './js/focus-trap.js';
+import {
+  readAutoPreviewChoice,
+  writeAutoPreviewChoice,
+} from './js/auto-preview-choice.js';
 import {
   translateError,
   previewFailureSentence,
@@ -1229,7 +1235,8 @@ async function initApp() {
 
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
-  let autoPreviewEnabled = true;
+  // The person's choice, read back at every start (recovery mode writes it off).
+  let autoPreviewEnabled = readAutoPreviewChoice();
   // Runtime mapping from preset name to companion file paths (built on ZIP load).
   // Stores path references only — content is resolved lazily on preset activation.
   let presetCompanionMap = null;
@@ -1241,7 +1248,7 @@ async function initApp() {
   let isLoadingPreset = false;
   let currentPresetSignature = null;
   let isPresetDirty = false;
-  let autoPreviewUserEnabled = true;
+  let autoPreviewUserEnabled = autoPreviewEnabled;
   let previewQuality = RENDER_QUALITY.DESKTOP_DEFAULT;
 
   // CRITICAL: Declare DOM element variables early to avoid Temporal Dead Zone errors
@@ -2843,6 +2850,31 @@ async function initApp() {
     }
   });
 
+  // The Main Page button mentions unsaved changes only when there are some:
+  // its name warned on every read, before a single value had changed.
+  const mainPageBtn = document.getElementById('clearFileBtn');
+  const syncMainPageName = () => {
+    if (!mainPageBtn) return;
+    const changes = Boolean(
+      stateManager.getState().uploadedFile && stateManager.canUndo()
+    );
+    mainPageBtn.setAttribute(
+      'aria-label',
+      changes ? 'Main Page. Unsaved changes will be lost.' : 'Main Page'
+    );
+    mainPageBtn.title = changes
+      ? 'Back to the Main Page (unsaved changes will be lost)'
+      : 'Back to the Main Page';
+  };
+  stateManager.subscribe((state, prevState) => {
+    if (
+      state.uploadedFile !== prevState.uploadedFile ||
+      state.parameters !== prevState.parameters
+    ) {
+      syncMainPageName();
+    }
+  });
+
   // ═══════════════════════════════════════════════════════════════════════
   // First-visit gate: the critical initialization barrier
   //
@@ -3597,12 +3629,20 @@ async function initApp() {
       return 'ready';
     } catch (error) {
       console.error(`[Export] ${formatName} render failed:`, error);
-      updateStatus(`${formatName} export failed: ${error.message || error}`);
+      // A PDF has no approximate outline to offer, unlike SVG and DXF, and
+      // the engine's refusal named a setting this model may not have.
+      const message =
+        format === 'pdf' && error?.code === 'MODEL_NOT_2D'
+          ? 'PDF export needs a 2D model. For this 3D model, export SVG or DXF, which offer an approximate outline.'
+          : error.message || String(error);
+      updateStatus(`${formatName} export failed: ${message}`, 'error', {
+        announce: false,
+      });
+      // The toast is an alert and says it; a second voice said it twice.
       showErrorToast({
         title: `${formatName} Export Failed`,
-        message: error.message || String(error),
+        message,
       });
-      announceImmediate(`${formatName} export failed.`);
       return false;
     }
   }
@@ -3646,7 +3686,8 @@ async function initApp() {
       const dataUrl = canvas.toDataURL('image/png');
       if (!dataUrl || dataUrl.length < 100) return;
       const link = document.createElement('a');
-      link.download = 'openscad-preview.png';
+      // Named for the project, so a picture found later says which one.
+      link.download = `${projectStem(stateManager.getState().uploadedFile?.name)}-preview.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
@@ -5365,10 +5406,10 @@ async function initApp() {
     // who cannot see the button change.
     const syncContrastLabel = () => {
       const on = themeManager.highContrast;
-      contrastBtn.setAttribute(
-        'aria-label',
-        `High contrast mode: ${on ? 'ON' : 'OFF'}. Click to ${on ? 'disable' : 'enable'}.`
-      );
+      // The name keeps its visible word; on or off is the pressed state.
+      contrastBtn.setAttribute('aria-label', 'HC: high contrast');
+      contrastBtn.setAttribute('aria-pressed', String(on));
+      contrastBtn.title = on ? 'High contrast is on' : 'High contrast';
     };
 
     contrastBtn.addEventListener('click', () => {
@@ -6683,6 +6724,7 @@ async function initApp() {
     autoPreviewToggle.addEventListener('change', () => {
       autoPreviewUserEnabled = autoPreviewToggle.checked;
       autoPreviewEnabled = autoPreviewUserEnabled;
+      writeAutoPreviewChoice(autoPreviewEnabled);
       if (autoPreviewController) {
         autoPreviewController.setEnabled(
           autoPreviewEnabled,
@@ -6996,14 +7038,17 @@ async function initApp() {
   if (savedOpacity && modelOpacityInput) {
     modelOpacityInput.value = savedOpacity;
     if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
+    modelOpacityInput.setAttribute('aria-valuetext', `${savedOpacity}%`);
   }
   if (savedBrightness && brightnessInput) {
     brightnessInput.value = savedBrightness;
     if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`;
+    brightnessInput.setAttribute('aria-valuetext', `${savedBrightness}%`);
   }
   if (savedContrast && contrastInput) {
     contrastInput.value = savedContrast;
     if (contrastValue) contrastValue.textContent = `${savedContrast}%`;
+    contrastInput.setAttribute('aria-valuetext', `${savedContrast}%`);
   }
 
   const updateAppearanceSlidersDisabledState = (enabled) => {
@@ -7050,6 +7095,7 @@ async function initApp() {
     modelOpacityInput.addEventListener('input', () => {
       const v = modelOpacityInput.value;
       if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
+      modelOpacityInput.setAttribute('aria-valuetext', `${v}%`);
       writeScopedPref(STORAGE_KEY_MODEL_OPACITY, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setModelOpacity(parseInt(v, 10));
@@ -7060,6 +7106,7 @@ async function initApp() {
     brightnessInput.addEventListener('input', () => {
       const v = brightnessInput.value;
       if (brightnessValue) brightnessValue.textContent = `${v}%`;
+      brightnessInput.setAttribute('aria-valuetext', `${v}%`);
       writeScopedPref(STORAGE_KEY_BRIGHTNESS, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setBrightness(parseInt(v, 10));
@@ -7070,6 +7117,7 @@ async function initApp() {
     contrastInput.addEventListener('input', () => {
       const v = contrastInput.value;
       if (contrastValue) contrastValue.textContent = `${v}%`;
+      contrastInput.setAttribute('aria-valuetext', `${v}%`);
       writeScopedPref(STORAGE_KEY_CONTRAST, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setContrast(parseInt(v, 10));
@@ -11784,9 +11832,9 @@ if (rounded) {
       if (isFocusMode) {
         // Enter focus mode
         mainInterface.classList.add('focus-mode');
+        // The name keeps its visible word; the pressed state says on or off.
         focusModeBtn.setAttribute('aria-pressed', 'true');
-        focusModeBtn.setAttribute('aria-label', 'Exit focus mode');
-        focusModeBtn.title = 'Exit focus mode (Esc)';
+        focusModeBtn.title = 'Full Screen is on (Esc leaves it)';
 
         // Check for camera focus mode (mobile portrait + camera drawer open)
         updateCameraFocusMode();
@@ -11795,8 +11843,7 @@ if (rounded) {
         mainInterface.classList.remove('focus-mode');
         exitCameraFocusMode();
         focusModeBtn.setAttribute('aria-pressed', 'false');
-        focusModeBtn.setAttribute('aria-label', 'Enter focus mode');
-        focusModeBtn.title = 'Focus mode (maximize preview)';
+        focusModeBtn.title = 'Full Screen (the preview alone)';
       }
 
       // Trigger preview resize after mode change
@@ -15535,10 +15582,14 @@ if (rounded) {
 
     const defaultParams = state.schema.parameters || {};
 
+    // The file names the project it belongs to; currentModelName is not
+    // always set, and the file then said "Unknown Model".
+    const modelName =
+      state.uploadedFile?.name || state.currentModelName || 'model';
     const changedJson = presetManager.exportChangedParametersJSON(
       state.parameters,
       defaultParams,
-      state.currentModelName || 'Unknown Model'
+      modelName
     );
 
     const parsed = JSON.parse(changedJson);
@@ -15555,13 +15606,8 @@ if (rounded) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
 
-    const baseName = (state.currentModelName || 'model').replace(
-      /\.(scad|zip)$/i,
-      ''
-    );
-    const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
     a.href = url;
-    a.download = `${baseName}-changed-params-${date}.json`;
+    a.download = `${projectStem(modelName)}-${todayStamp()}-changed-settings.json`;
     a.click();
     URL.revokeObjectURL(url);
 

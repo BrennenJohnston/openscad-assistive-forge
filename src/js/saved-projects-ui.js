@@ -52,6 +52,44 @@ import { showErrorModal, showErrorToast } from './error-translator.js';
  *   fileName, finishConnect} or {ok:false, reason, message}
  * @returns {Object} Controller API
  */
+/**
+ * A saved project card's buttons. Each name carries the project: a screen
+ * reader moving by buttons once heard "Load, Edit, Delete" card after card
+ * with no way to tell whose.
+ * @param {{id: string, name: string}} project
+ * @param {{isZip: boolean, isFolderLink: boolean}} kind
+ * @returns {string} HTML
+ */
+export function projectCardActionsHTML(project, { isZip, isFolderLink }) {
+  const name = escapeHtml(project.name);
+  return `
+        <div class="saved-project-actions">
+            <button class="btn btn-primary btn-load-project" data-project-id="${project.id}" aria-label="Load ${name}">
+              Load
+            </button>
+            ${
+              isZip
+                ? `<button class="btn btn-secondary btn-manage-files" data-project-id="${project.id}" aria-label="Files for ${name}" title="View and manage the project's files">
+              Files
+            </button>`
+                : ''
+            }
+            <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}" aria-label="Edit ${name}">
+              Edit
+            </button>
+            ${
+              isFolderLink
+                ? ''
+                : `<button class="btn btn-secondary btn-download-project" data-project-id="${project.id}" aria-label="Export ${name}" title="Download the project as a ZIP">
+              Export
+            </button>`
+            }
+            <button class="btn btn-danger btn-delete-project" data-project-id="${project.id}" aria-label="Delete ${name}">
+              Delete
+            </button>
+          </div>`;
+}
+
 export function initSavedProjectsUI({
   showConfirmDialog,
   showProcessingOverlay,
@@ -386,31 +424,7 @@ export function initSavedProjectsUI({
           </div>
         </div>
         ${notesPreview}
-        <div class="saved-project-actions">
-            <button class="btn btn-primary btn-load-project" data-project-id="${project.id}">
-              Load
-            </button>
-            ${
-              isZip
-                ? `<button class="btn btn-secondary btn-manage-files" data-project-id="${project.id}" title="View and manage project files">
-              Files
-            </button>`
-                : ''
-            }
-            <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}">
-              Edit
-            </button>
-            ${
-              isFolderLink
-                ? ''
-                : `<button class="btn btn-secondary btn-download-project" data-project-id="${project.id}" title="Download this project as a ZIP">
-              Export
-            </button>`
-            }
-            <button class="btn btn-danger btn-delete-project" data-project-id="${project.id}">
-              Delete
-            </button>
-          </div>
+        ${projectCardActionsHTML(project, { isZip, isFolderLink })}
         </div>
     `;
   }

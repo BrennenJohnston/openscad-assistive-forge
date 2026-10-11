@@ -266,7 +266,9 @@ export class AnimatePanel {
     const label = this.playing ? 'Pause animation' : 'Play animation';
     this.playBtn.setAttribute('aria-label', label);
     this.playBtn.setAttribute('title', label);
-    this.playBtn.setAttribute('aria-pressed', String(this.playing));
+    // No pressed state: the name already says which of the two it is, and a
+    // "pressed" on top read as a second signal for the same thing.
+    this.playBtn.removeAttribute('aria-pressed');
     const icon = this.playBtn.querySelector('.classic-icon');
     if (icon) {
       icon.dataset.icon = this.playing

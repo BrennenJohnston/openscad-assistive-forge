@@ -234,6 +234,12 @@ export class FontListPanel {
     const label = document.createElement('label');
     label.setAttribute('for', radio.id);
     label.textContent = entry.family;
+    // The style is in the next column for the eye; the radio's name carries
+    // it too, or the three Liberation Sans radios were all "Liberation Sans".
+    const styleForName = document.createElement('span');
+    styleForName.className = 'sr-only';
+    styleForName.textContent = ` ${entry.style}`;
+    label.appendChild(styleForName);
     name.appendChild(label);
 
     const style = document.createElement('td');
