@@ -106,6 +106,26 @@ test.describe('Invariants can fail', () => {
     expect(rows.filter((r) => r.region === '#s' && r.text === 'Preview ready')).toHaveLength(2)
     expect(rows.filter((r) => r.region === '#late' && r.text === 'STL ready')).toHaveLength(1)
   })
+
+  test('the recorder leaves out a region that cannot speak', async ({ page }) => {
+    await recordAnnouncements(page)
+    await openPage(
+      page,
+      '<div role="status" aria-live="off" id="quiet"></div>' +
+        '<div aria-live="polite" id="gone" style="display:none"></div>' +
+        '<div role="status" aria-busy="true" id="busy"></div>' +
+        '<div aria-live="polite" id="heard"></div>'
+    )
+    const mark = await announcementMark(page)
+    await page.evaluate(() => {
+      for (const id of ['quiet', 'gone', 'busy', 'heard']) {
+        document.getElementById(id).textContent = 'Preview ready'
+      }
+    })
+    await page.waitForTimeout(100)
+    const rows = await announcementsSince(page, mark)
+    expect(rows.map((r) => r.region)).toEqual(['#heard'])
+  })
 })
 
 test.describe('Invariants pass a page that keeps them', () => {

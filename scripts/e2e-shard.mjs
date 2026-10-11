@@ -323,6 +323,8 @@ export const MEASURED_SECONDS = {
   'drawing-editor-close-focus.spec.js': 20.0,
   // Four cases, about 7 s each locally (a first visit; three load the app).
   'dialog-focus-sweep.spec.js': 40.0,
+  // Three cases, about 6 s each locally with a warm engine; booked at 30.
+  'status-announcements.spec.js': 30.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

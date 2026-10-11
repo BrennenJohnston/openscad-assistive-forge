@@ -5205,12 +5205,14 @@
                     to see a preview.
                   </div>
                 </div>
-                <!-- Status bar overlay at bottom of preview -->
+                <!-- Status bar overlay at bottom of preview. Not live: the
+                     announcer (#srAnnouncer) says each status once, and this
+                     bar keeps the same words for the eye and for navigation. -->
                 <div
                   class="preview-status-bar idle no-stats"
                   id="previewStatusBar"
                   role="status"
-                  aria-live="polite"
+                  aria-live="off"
                 >
                   <span class="preview-status-text" id="previewStatusText"
                     >Ready</span
@@ -6446,8 +6448,9 @@
         <span id="classicStatusViewport" class="classic-status-viewport"></span>
         <span class="classic-status-spacer" aria-hidden="true"></span>
         <!-- role="status" is on this one span, not on the bar: the render
-             state is the only thing here that should announce itself. -->
-        <span id="classicStatusText" role="status" aria-live="polite"></span>
+             state is the one thing here to find as a status. It does not
+             speak; the announcer (#srAnnouncer) says each status once. -->
+        <span id="classicStatusText" role="status" aria-live="off"></span>
         <span class="classic-status-divider" aria-hidden="true">|</span>
         <span id="classicStatusStats"></span>
         <span class="classic-status-divider" aria-hidden="true">|</span>
@@ -6458,12 +6461,13 @@
          sit in the Preview Settings drawer, whose content is display:none
          while collapsed (the default) and in Classic entirely, and #app
          itself goes inert while the first-visit gate blocks, so real screen
-         readers would never hear them in those states. -->
+         readers would never hear them in those states. The status area is
+         not live: the announcer below says each status once. -->
     <div
       class="status-area"
       id="statusArea"
       role="status"
-      aria-live="polite"
+      aria-live="off"
       aria-label="Application status"
     >
       Ready

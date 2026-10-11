@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pane close buttons) keep focus nearby.
 - Greyed-out menu items are reached by the arrow keys and say why they
   are off.
+- A screen reader hears each status once: "Preview ready", "Generating"
+  and a Generate's result were said up to four times. With Automatic
+  preview off, the status bars say "Preview outdated" after a change.
 
 ## [5.2.2] - 2026-10-09
 

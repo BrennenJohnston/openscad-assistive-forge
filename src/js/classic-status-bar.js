@@ -8,7 +8,8 @@
  * while Classic mode is active. Read-only MutationObservers copy
  * textContent — the mirrors never write back to their sources, so there is
  * no loop risk. Classic hides the overlay (display:none removes it from the
- * accessibility tree), leaving the bar as the single live status region.
+ * accessibility tree), leaving the bar as the one status to find there. It
+ * does not speak: the announcer (#srAnnouncer) says each status once.
  *
  * @license GPL-3.0-or-later
  */

@@ -107,6 +107,10 @@ export async function recordConsole(page) {
 /**
  * Record every text written to any live region, from before the app's first
  * script runs, including regions added later. Call before the first navigation.
+ * A region that cannot speak at the moment of the write is left out: one set
+ * to aria-live="off" (its text is still there to be read by navigation), one
+ * marked aria-busy (screen readers hold its changes, and the walk's NVDA runs
+ * never heard the engine's busy loading overlay) and one not drawn at all.
  *
  * @param {import('@playwright/test').Page} page
  */
@@ -116,10 +120,15 @@ export async function recordAnnouncements(page) {
     const selector = '[aria-live], [role="status"], [role="log"], [role="alert"]'
     const watched = new WeakSet()
     const label = (el) => (el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${el.classList[0] || ''}`)
+    const speaks = (el) =>
+      el.getAttribute('aria-live') !== 'off' &&
+      !el.closest('[aria-busy="true"]') &&
+      (el.checkVisibility?.() ?? true)
     const watch = (el) => {
       if (watched.has(el)) return
       watched.add(el)
       new MutationObserver(() => {
+        if (!speaks(el)) return
         const text = (el.textContent || '').replace(/\s+/g, ' ').trim()
         if (text) window.__announcements.push({ t: Math.round(performance.now()), region: label(el), text })
       }).observe(el, { childList: true, subtree: true, characterData: true })

@@ -1622,10 +1622,13 @@ async function initApp() {
   window.addEventListener('appinstalled', () => {
     console.log('[PWA] App installed successfully via browser');
 
+    const installed = '✅ App installed! You can now use it offline.';
+    // The status area is not live; the announcer speaks.
+    announceImmediate(installed);
     const statusArea = document.getElementById('statusArea');
     if (statusArea) {
       const originalText = statusArea.textContent;
-      statusArea.textContent = '✅ App installed! You can now use it offline.';
+      statusArea.textContent = installed;
       setTimeout(() => {
         statusArea.textContent = originalText;
       }, 5000);
@@ -3406,7 +3409,11 @@ async function initApp() {
         files: state.projectFiles,
         mainFile: state.mainFilePath,
         libraries: libsForRender,
-        onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+        // Said once, above; progress only keeps the words on screen.
+        onProgress: () =>
+          updateStatus(`Generating ${formatName}\u2026`, 'default', {
+            announce: false,
+          }),
       };
       let result;
       try {
@@ -3544,7 +3551,9 @@ async function initApp() {
 
     const formatName = OUTPUT_FORMATS[format]?.name || format.toUpperCase();
     getToolbarMenuController().closeAll();
-    updateStatus(`Generating ${formatName}\u2026`);
+    updateStatus(`Generating ${formatName}\u2026`, 'default', {
+      announce: false,
+    });
     announceImmediate(`Generating ${formatName}. This may take a moment.`);
     autoPreviewController?.cancelPending();
 
@@ -3560,7 +3569,10 @@ async function initApp() {
           files: state.projectFiles,
           mainFile: state.mainFilePath,
           libraries: getEnabledLibrariesForRender(),
-          onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+          onProgress: () =>
+            updateStatus(`Generating ${formatName}\u2026`, 'default', {
+              announce: false,
+            }),
         }
       );
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -6462,10 +6474,12 @@ async function initApp() {
   const overlayToggle = document.getElementById('overlayToggle');
 
   // Create preview state indicator element
+  // Not live: the badge's states pass by on every change ("Changes
+  // pending", "Generating...", "Preview ready"), and the announcer already
+  // says the one that is news.
   const previewStateIndicator = document.createElement('div');
   previewStateIndicator.className = 'preview-state-indicator state-idle';
   previewStateIndicator.textContent = 'No preview';
-  previewStateIndicator.setAttribute('aria-live', 'polite');
 
   // Create rendering overlay
   const renderingOverlay = document.createElement('div');
@@ -7397,6 +7411,20 @@ async function initApp() {
           // here — renderAnimationFrame sets no preview state.
           if (newState === PREVIEW_STATE.RENDERING) {
             getAnimatePanel()?.pauseForExternalRender();
+          }
+          // The status bars said "Preview ready" under a badge saying the
+          // preview is outdated. With Automatic preview on, the state passes
+          // through STALE to PENDING in the same task; only a preview that
+          // stays outdated says so. Not announced: the change was the
+          // person's own.
+          if (newState === PREVIEW_STATE.STALE) {
+            queueMicrotask(() => {
+              if (autoPreviewController?.state === PREVIEW_STATE.STALE) {
+                updateStatus('Preview outdated', 'default', {
+                  announce: false,
+                });
+              }
+            });
           }
           if (newState === PREVIEW_STATE.CURRENT) {
             if (typeof extra?.renderDurationMs === 'number') {
@@ -11932,6 +11960,9 @@ if (rounded) {
         state.uploadedFile.content,
         state.parameters
       );
+      // "Generating" is said once a Generate: by the estimate when there is
+      // one, else by the first progress report.
+      let generatingSaid = false;
       if (estimate.seconds >= 5 || estimate.warning) {
         const estimateMsg =
           estimate.confidence === 'low'
@@ -11941,6 +11972,7 @@ if (rounded) {
           console.warn('[Render] Complexity warning:', estimate.warning);
         }
         updateStatus(estimateMsg);
+        generatingSaid = true;
       }
 
       const startTime = Date.now();
@@ -12002,7 +12034,10 @@ if (rounded) {
           onProgress: (_percent, _message) => {
             const fn =
               OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
-            updateStatus(`Generating ${fn}...`);
+            updateStatus(`Generating ${fn}...`, 'default', {
+              announce: !generatingSaid,
+            });
+            generatingSaid = true;
           },
         };
         try {
