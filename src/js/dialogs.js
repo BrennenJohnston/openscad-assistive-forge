@@ -16,6 +16,12 @@ import { escapeHtml } from './html-utils.js';
  * @param {string} [title='Confirm Action'] - Dialog title
  * @param {string} [confirmLabel='Confirm'] - Label for confirm button
  * @param {string} [cancelLabel='Cancel'] - Label for cancel button
+ * @param {Object} [options]
+ * @param {boolean} [options.destructive=false] - Show the confirm button as a
+ *   danger action
+ * @param {boolean} [options.focusConfirm=false] - Open on the confirm button
+ *   instead of Cancel, for a question whose cancel is the answer that throws
+ *   work away
  * @returns {Promise<boolean>} True if confirmed, false if canceled
  */
 export function showConfirmDialog(
@@ -23,7 +29,7 @@ export function showConfirmDialog(
   title = 'Confirm Action',
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
-  { destructive = false } = {}
+  { destructive = false, focusConfirm = false } = {}
 ) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
@@ -83,7 +89,9 @@ export function showConfirmDialog(
     });
 
     openModal(modal, {
-      focusTarget: modal.querySelector('[data-action="cancel"]'),
+      focusTarget: modal.querySelector(
+        focusConfirm ? '[data-action="confirm"]' : '[data-action="cancel"]'
+      ),
     });
   });
 }

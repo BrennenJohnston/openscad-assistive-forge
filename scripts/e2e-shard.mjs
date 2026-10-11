@@ -339,6 +339,8 @@ export const MEASURED_SECONDS = {
   'classic-names.spec.js': 25.0,
   // Two cases, 7.1 s together locally (no engine wait); booked at 20.
   'saved-projects-dialogs.spec.js': 20.0,
+  // Two cases, a few seconds each locally (neither waits for the engine); 20.
+  'startup-questions.spec.js': 20.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

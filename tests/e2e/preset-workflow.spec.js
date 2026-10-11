@@ -267,11 +267,16 @@ test.describe('Preset Workflow', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await loadSimpleBoxExample(page)
+    // Replace mode asks before deleting presets only when there are some.
+    await createPreset(page, 'Kept Preset')
 
     const pageErrors = []
     page.on('pageerror', (err) => pageErrors.push(err.message))
-    // Replace mode uses a native confirm() when user presets exist.
-    page.on('dialog', (dialog) => dialog.accept())
+    const natives = []
+    page.on('dialog', async (dialog) => {
+      natives.push(`${dialog.type()}: ${dialog.message()}`)
+      await dialog.dismiss()
+    })
 
     const manageBtn = page.locator('#managePresetsBtn')
     await expect(manageBtn).toBeVisible({ timeout: 3000 })
@@ -302,6 +307,16 @@ test.describe('Preset Workflow', () => {
       ),
     })
 
+    // The question is the app's own, and it opens on Cancel: its other
+    // answer deletes presets.
+    const question = page
+      .locator('[role="alertdialog"]')
+      .filter({ has: page.getByRole('heading', { name: 'Replace All Designs', exact: true }) })
+    await expect(question).toBeVisible({ timeout: 10000 })
+    await expect(question).toContainText('permanently delete 1 existing design for "simple_box.scad"')
+    await expect(question.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
+    await question.getByRole('button', { name: 'Replace all', exact: true }).click()
+
     // Give the import handler time to parse and apply
     await page.waitForTimeout(1500)
 
@@ -315,6 +330,8 @@ test.describe('Preset Workflow', () => {
       .locator('#presetSelect')
       .evaluate((el) => Array.from(el.options).map((o) => o.textContent.trim()))
     expect(optionLabels.join('\n')).toContain('Imported Preset')
+    expect(optionLabels.join('\n')).not.toContain('Kept Preset')
+    expect(natives).toEqual([])
   })
 
   test('should delete a preset', async ({ page }) => {

@@ -8,7 +8,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { showPromptDialog, showTextToCopyDialog } from '../../src/js/dialogs.js'
+import {
+  showConfirmDialog,
+  showPromptDialog,
+  showTextToCopyDialog,
+} from '../../src/js/dialogs.js'
 
 let originalRaf
 let originalClipboard
@@ -50,6 +54,24 @@ afterEach(() => {
   } else {
     delete navigator.clipboard
   }
+})
+
+describe('showConfirmDialog', () => {
+  it('opens on Cancel, the safe answer when confirming loses work', () => {
+    opener('Delete')
+    showConfirmDialog('Delete it?', 'Delete', 'Delete', 'Cancel', { destructive: true })
+    expect(document.activeElement.textContent.trim()).toBe('Cancel')
+  })
+
+  it('opens on the confirm button when cancelling is what loses work', async () => {
+    opener('Start')
+    const answer = showConfirmDialog('Restore it?', 'Restore', 'Restore draft', 'Discard draft', {
+      focusConfirm: true,
+    })
+    expect(document.activeElement.textContent.trim()).toBe('Restore draft')
+    document.activeElement.click()
+    await expect(answer).resolves.toBe(true)
+  })
 })
 
 describe('showPromptDialog', () => {

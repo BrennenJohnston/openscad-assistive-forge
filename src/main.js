@@ -2941,8 +2941,14 @@ async function initApp() {
     const draftToRestore = pendingDraft;
     pendingDraft = null;
 
-    const shouldRestore = confirm(
-      `Found a saved draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
+    // Opens on Restore: the other answer deletes the draft, and Enter on the
+    // browser's own question used to restore.
+    const shouldRestore = await showConfirmDialog(
+      `A draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()} is kept in this browser. Restore it, or discard it?`,
+      'Restore a saved draft?',
+      'Restore draft',
+      'Discard draft',
+      { focusConfirm: true }
     );
 
     if (shouldRestore) {
@@ -5350,7 +5356,7 @@ async function initApp() {
   // Preset migration check: detect legacy presets for versioned format migration
   // Check for legacy presets that can be migrated to the new versioned format
   // ============================================================================
-  const checkPresetMigration = () => {
+  const checkPresetMigration = async () => {
     try {
       const migrationInfo = checkMigrationAvailable();
 
@@ -5365,7 +5371,12 @@ async function initApp() {
           `Found ${migrationInfo.legacyPresetCount} preset(s) from a previous version. ` +
           `Would you like to migrate them to preserve your work?`;
 
-        const shouldMigrate = confirm(message);
+        const shouldMigrate = await showConfirmDialog(
+          message,
+          'Presets From an Earlier Version',
+          'Migrate',
+          'Skip'
+        );
 
         if (shouldMigrate) {
           const result = migrateFromLegacyStorage({ createBackup: true });
@@ -5735,6 +5746,10 @@ async function initApp() {
 
   // Track WASM initialization state
   let wasmInitialized = false;
+  // The download question while it is open, shared with any caller that
+  // arrives meanwhile: the browser's own question held them back, the app's
+  // does not.
+  let downloadQuestion = null;
 
   /**
    * Ensure WASM is initialized before operations that need it
@@ -5757,11 +5772,15 @@ async function initApp() {
 
     // Check if we should defer large downloads on metered connections
     if (deferDownloads) {
-      const proceed = confirm(
-        'This app requires downloading ~15MB of WebAssembly files.\n\n' +
-          'You appear to be on a metered or slow connection.\n\n' +
-          'Do you want to proceed with the download?'
-      );
+      downloadQuestion ??= showConfirmDialog(
+        'This app needs about 15 MB of files, once. You seem to be on a slow or metered connection. Download them now?',
+        'Download the engine?',
+        'Download',
+        'Not now'
+      ).finally(() => {
+        downloadQuestion = null;
+      });
+      const proceed = await downloadQuestion;
       if (!proceed) {
         updateStatus('WASM download deferred', 'info');
         return false;
@@ -8987,8 +9006,12 @@ if (rounded) {
     manifestResetBtn.addEventListener('click', async () => {
       const origin = stateManager.getState().manifestOrigin;
       if (!origin?.url) return;
-      const confirmed = confirm(
-        'Reset to the original shared project? Your unsaved changes will be lost.'
+      const confirmed = await showConfirmDialog(
+        'Reset to the original shared project? Your unsaved changes will be lost.',
+        'Reset Project',
+        'Reset',
+        'Cancel',
+        { destructive: true }
       );
       if (!confirmed) return;
       try {
@@ -14040,8 +14063,11 @@ if (rounded) {
             const paramSchema = currentState.schema?.parameters || {};
 
             if (!currentModelName) {
-              const proceed = confirm(
-                'No model is currently loaded. Presets will be saved as "Unknown Model" and may not appear in the dropdown until you load a matching model.\n\nContinue with import?'
+              const proceed = await showConfirmDialog(
+                'No model is currently loaded. Presets will be saved as "Unknown Model" and may not appear in the dropdown until you load a matching model.\n\nContinue with import?',
+                'Import Presets',
+                'Import',
+                'Cancel'
               );
               if (!proceed) return;
             }
@@ -14075,8 +14101,12 @@ if (rounded) {
               }
 
               if (realCount > 0) {
-                const confirmed = confirm(
-                  `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`
+                const confirmed = await showConfirmDialog(
+                  `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`,
+                  'Replace All Designs',
+                  'Replace all',
+                  'Cancel',
+                  { destructive: true }
                 );
                 if (!confirmed) return;
                 presetManager.clearPresetsForModel(currentModelName, {

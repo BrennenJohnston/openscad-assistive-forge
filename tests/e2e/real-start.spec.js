@@ -58,6 +58,33 @@ async function waitForDraft(page) {
   })
 }
 
+/**
+ * The draft question, in the app's own dialog. It opens on "Restore draft":
+ * its other answer throws the draft away, so Enter must not be the one that
+ * loses work.
+ */
+async function restoreDraft(page) {
+  const question = page
+    .locator('[role="alertdialog"]')
+    .filter({ has: page.getByRole('heading', { name: 'Restore a saved draft?', exact: true }) })
+  await expect(question).toBeVisible({ timeout: 60_000 })
+  await expect(question).toContainText('A draft of "simple_box.scad" from')
+  const restore = question.getByRole('button', { name: 'Restore draft', exact: true })
+  await expect(restore).toBeFocused()
+  await restore.click()
+  await expect(question).toHaveCount(0)
+}
+
+/** Every browser dialog that opens, dismissed and kept for the assertion. */
+function recordNativeDialogs(page) {
+  const opened = []
+  page.on('dialog', async (dialog) => {
+    opened.push(`${dialog.type()}: ${dialog.message()}`)
+    await dialog.dismiss()
+  })
+  return opened
+}
+
 /** The restored project, or the dialog that says it could not be read. */
 async function restoredOrFailed(page) {
   const params = page.locator('#param-width-spinbox')
@@ -82,11 +109,7 @@ test.describe('A real start-up', () => {
 
   test('a return visit without "Remember my choice" asks again and restores the draft', async ({ page }) => {
     attachInvariants(page)
-    const questions = []
-    page.on('dialog', async (dialog) => {
-      questions.push(dialog.message())
-      await dialog.accept()
-    })
+    const natives = recordNativeDialogs(page)
     await page.goto('/')
     await acceptWelcome(page, { remember: false })
     await declineTourOffer(page)
@@ -96,21 +119,18 @@ test.describe('A real start-up', () => {
 
     await page.reload()
     await acceptWelcome(page, { remember: false })
+    await restoreDraft(page)
     const { params, failed } = await restoredOrFailed(page)
     await expect(failed).toHaveCount(0)
     await expect(params).toBeAttached()
     await waitForPreview(page)
-    expect(questions.some((q) => /saved draft of "simple_box\.scad"/.test(q))).toBe(true)
+    expect(natives).toEqual([])
     expectNoPageErrors(page)
   })
 
   test('a return visit with "Remember my choice" restores the draft', async ({ page }) => {
     attachInvariants(page)
-    const questions = []
-    page.on('dialog', async (dialog) => {
-      questions.push(dialog.message())
-      await dialog.accept()
-    })
+    const natives = recordNativeDialogs(page)
     await page.goto('/')
     await acceptWelcome(page, { remember: true })
     await declineTourOffer(page)
@@ -121,10 +141,11 @@ test.describe('A real start-up', () => {
     await page.reload()
     await waitForEngine(page)
     await expect(page.locator('#first-visit-modal')).toBeHidden()
+    await restoreDraft(page)
     const { params, failed } = await restoredOrFailed(page)
-    expect(questions.some((q) => /saved draft of "simple_box\.scad"/.test(q))).toBe(true)
     await expect(failed).toHaveCount(0)
     await expect(params).toBeAttached()
+    expect(natives).toEqual([])
     expectNoPageErrors(page)
   })
 
@@ -133,7 +154,7 @@ test.describe('A real start-up', () => {
   // plain address, where only the draft holds the value.
   test('a restored draft keeps the values that were changed', async ({ page }) => {
     attachInvariants(page)
-    page.on('dialog', (dialog) => dialog.accept())
+    const natives = recordNativeDialogs(page)
     await page.goto('/')
     await acceptWelcome(page, { remember: true })
     await declineTourOffer(page)
@@ -152,9 +173,11 @@ test.describe('A real start-up', () => {
     await page.evaluate(() => history.replaceState(null, '', '/'))
     await page.reload()
     await waitForEngine(page)
+    await restoreDraft(page)
     const { params, failed } = await restoredOrFailed(page)
     await expect(failed).toHaveCount(0)
     await expect(params).toHaveValue('57')
+    expect(natives).toEqual([])
     expectNoPageErrors(page)
   })
 })
