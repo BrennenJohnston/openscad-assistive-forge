@@ -10,6 +10,7 @@ import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import { formatFileSize } from './download.js';
 import { openModal, closeModal } from './modal-manager.js';
+import { showConfirmDialog } from './dialogs.js';
 import {
   buildNestedTree,
   getNodeAtPath,
@@ -706,8 +707,12 @@ export function initCompanionFilesController({
       }
 
       if (projectFiles.has(fileName)) {
-        const overwrite = confirm(
-          `File "${fileName}" already exists. Overwrite?`
+        const overwrite = await showConfirmDialog(
+          `A file named "${fileName}" is already in the project. Replace it?`,
+          'Replace File',
+          'Replace',
+          'Cancel',
+          { destructive: true }
         );
         if (!overwrite) return;
       }
@@ -775,7 +780,21 @@ export function initCompanionFilesController({
       return;
     }
 
-    const confirmed = confirm(`Remove "${path}" from the project?`);
+    const rowsBefore = [
+      ...document.querySelectorAll('#projectFilesList .project-file-item'),
+    ];
+    const index = rowsBefore.findIndex(
+      (row) =>
+        row.querySelector('button[data-action="remove"]')?.dataset.path === path
+    );
+
+    const confirmed = await showConfirmDialog(
+      `Remove "${path}" from the project?`,
+      'Remove File',
+      'Remove',
+      'Cancel',
+      { destructive: true }
+    );
     if (!confirmed) return;
 
     projectFiles.delete(path);
@@ -787,6 +806,16 @@ export function initCompanionFilesController({
       ? detectRequiredCompanionFiles(uploadedFile.content)
       : null;
     renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+    // The list is drawn again without the row: focus the row now in its
+    // place, else the one before, else the panel's own heading.
+    const rows = document.querySelectorAll(
+      '#projectFilesList .project-file-item'
+    );
+    const row = index >= 0 ? rows[index] || rows[index - 1] : null;
+    (
+      row ||
+      document.querySelector('#projectFilesControls .project-files-summary')
+    )?.focus();
 
     const autoPreviewController = getAutoPreviewController();
     if (autoPreviewController) {

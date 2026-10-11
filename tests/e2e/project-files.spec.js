@@ -7,6 +7,7 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
+import { Buffer } from 'node:buffer'
 import JSZip from 'jszip'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
@@ -173,6 +174,22 @@ const openProjectFilesDisclosure = async (page) => {
   }
   await expect(details).toHaveJSProperty('open', true)
 }
+
+/** Every browser dialog that opens, dismissed and kept for the assertion. */
+const recordNativeDialogs = (page) => {
+  const opened = []
+  page.on('dialog', async (dialog) => {
+    opened.push(`${dialog.type()}: ${dialog.message()}`)
+    await dialog.dismiss()
+  })
+  return opened
+}
+
+/** One of the app's own questions, found by its title. */
+const appQuestion = (page, title) =>
+  page
+    .locator('[role="alertdialog"]')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
 
 test.describe('Project Files Manager', () => {
   test.describe.configure({ timeout: 150_000 }) // WASM init may need ~120s
@@ -427,20 +444,24 @@ cube(10);
     const nonMainItem = page.locator('.project-file-item:not(.main-file)').first()
     const removeBtn = nonMainItem.locator('button[data-action="remove"]')
     await expect(removeBtn).toBeVisible()
-    
-    // Set up dialog handler before clicking
-    page.on('dialog', async dialog => {
-      await dialog.accept()
-    })
-    
+    const path = await removeBtn.getAttribute('data-path')
+    const natives = recordNativeDialogs(page)
+
     await removeBtn.click()
-    
-    // Wait for UI to update
-    await page.waitForTimeout(1000)
-    
-    // Verify file count decreased
-    const newCount = await fileItems.count()
-    expect(newCount).toBeLessThan(initialCount)
+
+    // The app's own question, opening on Cancel: its other answer removes.
+    const question = appQuestion(page, 'Remove File')
+    await expect(question).toContainText(`Remove "${path}" from the project?`)
+    await expect(question.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
+    await question.getByRole('button', { name: 'Remove', exact: true }).click()
+    await expect(question).toHaveCount(0)
+
+    await expect(fileItems).toHaveCount(initialCount - 1)
+    // The list is drawn again; focus lands on the row now in that place.
+    await expect
+      .poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('#projectFilesList'))))
+      .toBe(true)
+    expect(natives).toEqual([])
   })
 
   test('removal can be cancelled', async ({ page }) => {
@@ -459,21 +480,43 @@ cube(10);
     const nonMainItem = page.locator('.project-file-item:not(.main-file)').first()
     const removeBtn = nonMainItem.locator('button[data-action="remove"]')
     await expect(removeBtn).toBeVisible()
+    const natives = recordNativeDialogs(page)
 
-    
-    // Set up dialog handler to dismiss
-    page.on('dialog', async dialog => {
-      await dialog.dismiss()
-    })
-    
     await removeBtn.click()
-    
-    // Wait for UI to process
-    await page.waitForTimeout(500)
-    
-    // Verify file count unchanged
-    const newCount = await fileItems.count()
-    expect(newCount).toBe(initialCount)
+    const question = appQuestion(page, 'Remove File')
+    await expect(question).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(question).toHaveCount(0)
+
+    // Nothing removed, and focus back on the button that asked.
+    await expect(fileItems).toHaveCount(initialCount)
+    await expect(removeBtn).toBeFocused()
+    expect(natives).toEqual([])
+  })
+
+  test('adding a file whose name is taken asks before replacing it', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
+    const fileItems = page.locator('.project-file-item')
+    const initialCount = await fileItems.count()
+    const natives = recordNativeDialogs(page)
+
+    await page.locator('#addCompanionFileInput').setInputFiles({
+      name: 'settings.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('replaced settings'),
+    })
+
+    const question = appQuestion(page, 'Replace File')
+    await expect(question).toContainText(
+      'A file named "settings.txt" is already in the project. Replace it?'
+    )
+    await question.getByRole('button', { name: 'Replace', exact: true }).click()
+    await expect(question).toHaveCount(0)
+    await expect(fileItems).toHaveCount(initialCount)
+    expect(natives).toEqual([])
   })
 
   test('companion save button is visible for loaded projects', async ({ page }) => {
