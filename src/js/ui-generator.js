@@ -1004,6 +1004,7 @@ function createHelpTooltip(param) {
   // Keyboard support: Escape to close
   button.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && tooltip.style.display === 'block') {
+      e.preventDefault();
       hideTooltip();
       button.focus();
     }
@@ -1034,6 +1035,7 @@ document.addEventListener('keydown', (e) => {
       '.param-tooltip[style*="display: block"]'
     );
     if (visibleTooltips.length > 0) {
+      e.preventDefault();
       document.querySelectorAll('.param-tooltip').forEach((t) => {
         t.style.display = 'none';
       });
