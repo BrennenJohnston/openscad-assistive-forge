@@ -174,7 +174,7 @@ test('a grid preset saved or deleted leaves focus on the grid chooser', async ({
   await expect(chooser).toBeFocused()
 })
 
-test('the tutorial keeps focus on Back and Next as steps change and at the ends', async ({
+test('the tutorial moves focus to each step heading, never the body, at the ends too', async ({
   page,
 }) => {
   await page.evaluate(() => {
@@ -196,24 +196,28 @@ test('the tutorial keeps focus on Back and Next as steps change and at the ends'
   await expect(next).toBeVisible()
   await expect(back).toBeDisabled()
 
-  // Step 2, then Back to the first step: Back turns off, Next takes focus.
+  // Each step's heading takes focus, so its text is read; the buttons
+  // turning off at the ends do not take it anywhere else.
+  const heading = page.locator('#tutorial-step-title')
+
+  // Step 2, then Back to the first step: Back turns off.
   await next.focus()
   await page.keyboard.press('Enter')
   await expect(back).toBeEnabled()
+  await expect(heading).toBeFocused()
   await back.focus()
   await page.keyboard.press('Enter')
   await expect(back).toBeDisabled()
-  await expect(next).toBeFocused()
+  await expect(heading).toBeFocused()
 
-  // Forward to the first step that waits for an action: Next turns off,
-  // Back takes focus.
+  // Forward to the first step that waits for an action: Next turns off.
   for (let i = 0; i < 6 && !(await next.isDisabled()); i += 1) {
     await next.focus()
     await page.keyboard.press('Enter')
     await page.waitForTimeout(400)
   }
   await expect(next).toBeDisabled()
-  await expect(back).toBeFocused()
+  await expect(heading).toBeFocused()
   expect(await page.evaluate(() => window.__toBody)).toBe(0)
 })
 
