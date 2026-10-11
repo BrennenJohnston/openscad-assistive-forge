@@ -474,7 +474,13 @@ export class ErrorLogPanel {
     this.pendingAnnouncement = null;
     const label = TYPE_LABELS[entry.type] || 'Issue';
     const loc = entry.line !== null ? ` at line ${entry.line}` : '';
-    const msg = `${label}${loc}: ${entry.message}`;
+    // OpenSCAD's own lines start with their level ("WARNING: ..."); after
+    // the label it was said twice.
+    const text = entry.message.replace(
+      new RegExp(`^${label.toUpperCase()}:\\s*`),
+      ''
+    );
+    const msg = `${label}${loc}: ${text}`;
     if (entry.type === ERROR_LOG_TYPE.ERROR) {
       announceError(msg);
     } else {

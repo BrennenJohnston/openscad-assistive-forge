@@ -33,10 +33,12 @@ describe('ErrorLogPanel: what a recovered engine warning says', () => {
     panel = new ErrorLogPanel({ container: null, badge: null });
   });
 
-  it('says the minkowski fallback politely, as a warning', () => {
+  it('says the minkowski fallback politely, as a warning, its level once', () => {
     panel.addOutput(FALLBACK);
     expect(announceError).not.toHaveBeenCalled();
-    expect(announceImmediate).toHaveBeenCalledWith(`Warning: ${FALLBACK}`);
+    expect(announceImmediate).toHaveBeenCalledWith(
+      `Warning: ${FALLBACK.replace(/^WARNING:\s*/, '')}`
+    );
   });
 
   it("says CGAL's violation printout politely, as a warning", () => {
