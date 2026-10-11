@@ -312,10 +312,10 @@ export const MEASURED_SECONDS = {
   // Five cases, about 2 s each locally with a warm engine; booked at 30 for
   // the cold engine load two of them wait for on CI.
   'saved-projects-focus.spec.js': 30.0,
-  // Eight cases, 44.6 s locally (each one loads the app); booked at 55.
-  'dialog-focus-return.spec.js': 55.0,
-  // One case, about 6 s locally; booked at 15.
-  'guide-example-focus.spec.js': 15.0,
+  // Nine cases, about 47 s locally (each one loads the app); booked at 60.
+  'dialog-focus-return.spec.js': 60.0,
+  // Two cases, about 6 s each locally; booked at 25.
+  'guide-example-focus.spec.js': 25.0,
   // Eight cases, 48.8 s locally (each one loads the app; one generates); 60.
   'self-disabling-controls-focus.spec.js': 60.0,
   // Three cases, about 3 s each locally with a warm engine; booked at 20.

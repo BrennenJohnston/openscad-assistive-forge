@@ -121,6 +121,23 @@ test('going back to the Main Page lands on its heading', async ({ page }) => {
   await expect(page.locator('#features-heading')).toBeFocused()
 })
 
+test('the Features Guide from Help on the Main Page goes back to Help', async ({
+  page,
+}) => {
+  // Help sits in a bar classed "hidden" on the Main Page while it stays on
+  // screen; Escape once sent focus to the main region instead.
+  await page.goto('/')
+  // The button is drawn before the app wires it up.
+  await page.waitForFunction(() => typeof window.openFeaturesGuide === 'function', null, {
+    timeout: 60_000,
+  })
+  await press(page, '#featuresGuideBtn')
+  await expect(page.locator('#tab-libraries')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#featuresGuideModal')).toBeHidden()
+  await expect(page.locator('#featuresGuideBtn')).toBeFocused()
+})
+
 test('Clear Cache reads its warning, holds Tab, and Escape and Cancel go back', async ({
   page,
 }) => {

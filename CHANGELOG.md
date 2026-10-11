@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The console reads each new line once: warnings are no longer alerts,
   the log is not read again from the top after each run, and a line no
   longer says its level twice ("Warning: WARNING:").
+- Braille preview lines are read without "und (not supported)" in front
+  of every line.
+- An example opened from the Features Guide leaves focus on its first
+  setting, and closing the guide from the Main Page goes back to Help.
 
 ## [5.2.2] - 2026-10-09
 

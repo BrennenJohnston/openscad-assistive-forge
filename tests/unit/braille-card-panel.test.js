@@ -939,6 +939,19 @@ describe('braille panel — when the engine fails', () => {
   });
 });
 
+describe('braille panel — the preview as a screen reader reads it', () => {
+  beforeEach(() => mountCardPanel());
+  afterEach(() => destroyBraillePanel());
+
+  it('marks no line with a language for the screen reader to name', async () => {
+    // lang="und" was read as "und (not supported)" before every line.
+    const rows = () =>
+      document.querySelectorAll('#braillePreview .braille-preview-braille');
+    await typeText('hello', () => expect(rows()[0]?.textContent).toBe(word('hello')));
+    expect(rows()[0].hasAttribute('lang')).toBe(false);
+  });
+});
+
 describe('braille panel — characters with no braille', () => {
   beforeEach(() => mountCardPanel());
   afterEach(() => destroyBraillePanel());
