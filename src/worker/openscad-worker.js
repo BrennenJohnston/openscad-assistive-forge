@@ -23,7 +23,10 @@
  * - Threaded WASM for multi-core parallelism (requires SharedArrayBuffer)
  */
 
-import { resolveFileParams } from '../js/file-param-resolver.js';
+import {
+  resolveFileParams,
+  hasParentSegment,
+} from '../js/file-param-resolver.js';
 import {
   FONT_ASSET_DIR,
   FONT_FILES,
@@ -43,8 +46,10 @@ import { ensureLibraryDir, writeLibraryFile } from './library-fs.js';
 import { unpackLibraryArchive } from './lib-archive.js';
 import { engineFileUrl } from './engine-url.js';
 import { fetchAndCheckEngineFile } from './engine-integrity.js';
+import { backgroundTreeFromCsg } from '../js/background-tree.js';
 import {
   translateWorkerError,
+  workerErrorNeedsRestart,
   MODEL_NOT_2D_SUGGESTION,
   MODEL_NOT_2D_EXPLANATION,
 } from './error-translations.js';
@@ -648,7 +653,7 @@ async function mountFiles(files, options = {}) {
 
   for (const filePath of files.keys()) {
     // Security: Reject path traversal attempts
-    if (filePath.includes('..') || filePath.startsWith('/')) {
+    if (hasParentSegment(filePath) || filePath.startsWith('/')) {
       console.warn(`[Worker FS] Skipping invalid path: ${filePath}`);
       continue;
     }
@@ -687,7 +692,7 @@ async function mountFiles(files, options = {}) {
 
   for (const [filePath, content] of files.entries()) {
     // Security: Skip path traversal attempts
-    if (filePath.includes('..') || filePath.startsWith('/')) {
+    if (hasParentSegment(filePath) || filePath.startsWith('/')) {
       continue;
     }
 
@@ -1268,12 +1273,17 @@ async function renderWithCallMain(
     }
 
     // Build command: [performance flags, -D key=value, ...] -o outputFile inputFile
+    // A preview of a model with `%` shapes also writes the CSG tree, from
+    // which those shapes are drawn by a second render.
+    const treeFile = '/tmp/output-tree.csg';
+    const wantTree = Boolean(renderOptions?.backgroundTree) && format === 'off';
     const args = [
       ...performanceFlags,
       ...exportFlags,
       ...defineArgs,
       '-o',
       outputFile,
+      ...(wantTree ? ['-o', treeFile] : []),
       inputFile,
     ];
 
@@ -1427,6 +1437,25 @@ async function renderWithCallMain(
     // Read output file
     const outputData = module.FS.readFile(outputFile);
 
+    let backgroundScad = null;
+    if (wantTree) {
+      if (module.FS.analyzePath(treeFile).exists) {
+        backgroundScad = backgroundTreeFromCsg(
+          module.FS.readFile(treeFile, { encoding: 'utf8' })
+        );
+        module.FS.unlink(treeFile);
+      } else {
+        self.postMessage({
+          type: 'CONSOLE',
+          payload: {
+            level: 'warn',
+            message:
+              'The engine wrote no CSG tree, so % shapes are not drawn in this preview.',
+          },
+        });
+      }
+    }
+
     // Clean up temporary files
     try {
       if (wroteTempInput) {
@@ -1442,6 +1471,7 @@ async function renderWithCallMain(
     }
     return {
       data: outputData,
+      backgroundScad,
       diagnostics: {
         defineArgs,
         performanceFlags,
@@ -1858,6 +1888,7 @@ async function render(payload) {
       );
       const outputData = callMainResult.data;
       const renderDiagnostics = callMainResult.diagnostics;
+      const backgroundScad = callMainResult.backgroundScad;
 
       // Capture render duration
       renderDurationMs = Math.round(performance.now() - renderStartTime);
@@ -1871,7 +1902,13 @@ async function render(payload) {
         },
       });
 
-      return { data: outputData, format, renderDurationMs, renderDiagnostics };
+      return {
+        data: outputData,
+        format,
+        renderDurationMs,
+        renderDiagnostics,
+        backgroundScad,
+      };
     })();
 
     // Race between render and timeout
@@ -1881,6 +1918,7 @@ async function render(payload) {
       format: resultFormat,
       renderDurationMs: workerRenderMs,
       renderDiagnostics: workerDiagnostics,
+      backgroundScad,
     } = result;
 
     // Clear timeout
@@ -2011,6 +2049,7 @@ async function render(payload) {
             wasmInitMs: wasmInitDurationMs,
           },
           consoleOutput: openscadConsoleOutput || '',
+          backgroundScad: backgroundScad || undefined,
           diagnostics: workerDiagnostics || undefined,
           postProcessing:
             resultFormat === 'dxf'
@@ -2102,15 +2141,9 @@ async function render(payload) {
     // MODEL_NOT_2D is included: callMain ran (setting _callMainInvoked=true) even
     // though OpenSCAD exited with code 1. Without a restart the next render hits
     // WASM_DOUBLE_INVOKE because the worker-side guard sees _callMainInvoked=true.
-    const needsRestart =
-      error?.needsRestart === true ||
-      typeof error === 'number' ||
-      /^\d+$/.test(String(error)) ||
-      code === 'INTERNAL_ERROR' ||
-      code === 'MODEL_NOT_2D' ||
-      code === 'WASM_ABORT' ||
-      code === 'WASM_UNREACHABLE' ||
-      code === 'WASM_OOB';
+    const needsRestart = workerErrorNeedsRestart(error, code, {
+      callMainInvoked: _callMainInvoked,
+    });
 
     self.postMessage({
       type: 'ERROR',

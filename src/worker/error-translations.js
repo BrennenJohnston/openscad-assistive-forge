@@ -111,10 +111,28 @@ export const ERROR_TRANSLATIONS = [
     code: 'FILE_NOT_FOUND',
   },
   {
-    pattern: /Recursion detected|Stack overflow/i,
+    // OpenSCAD's own limit, then the two browsers that say plainly they ran
+    // out of stack: Chromium, and Firefox's JavaScript. A deep model can be
+    // finite, so none of this says "infinite".
+    pattern:
+      /Recursion detected|Stack overflow|Maximum call stack size exceeded|too much recursion/i,
     message:
-      'Your model has infinite recursion. Check recursive module or function calls.',
+      'Your model repeats a module or function inside itself more times than this browser can follow. ' +
+      'Try a smaller value for the setting that sets how many times it repeats.',
     code: 'RECURSION',
+  },
+  {
+    // When the engine's own small stack overruns, Firefox and WebKit report
+    // whatever the damaged memory hits next. A deep model is the usual cause
+    // of these words, but not the only one, so they are told as likely.
+    // Chromium's "memory access out of bounds" stays WASM_OOB: its own stack
+    // limit stops a deep model before the engine's stack can overrun.
+    pattern:
+      /indirect call to null|call_indirect to a signature that does not match|index out of bounds|Out of bounds memory access/i,
+    message:
+      'The browser engine ran out of room while building your model, ' +
+      'most often because a module or function repeats inside itself many times.',
+    code: 'ENGINE_OUT_OF_ROOM',
   },
   // CGAL assertion failures — root cause of projection()/roof() crashes in WASM
   // See: openscad-wasm#6, openscad#6582, CGAL#7560
@@ -189,6 +207,16 @@ export function translateWorkerError(rawError) {
     }
   }
 
+  // The render controller restarts the engine and tries again when it sees
+  // this code, so the code has to reach it.
+  if (rawError?.code === 'WASM_DOUBLE_INVOKE') {
+    return {
+      message: `Rendering error: ${errorStr}`,
+      code: 'WASM_DOUBLE_INVOKE',
+      raw: errorStr,
+    };
+  }
+
   // Fallback: return a cleaned up version of the error
   // Remove internal paths and technical details that aren't helpful
   const cleaned = errorStr
@@ -211,4 +239,32 @@ export function translateWorkerError(rawError) {
     code: 'RENDER_FAILED',
     raw: errorStr,
   };
+}
+
+/**
+ * Whether the engine must be started again before the next render. Once
+ * callMain has run, the engine's state is spent whatever went wrong: a
+ * browser that runs out of stack throws a RangeError or a RuntimeError that
+ * no code below names, and without a restart the next render is refused.
+ * @param {*} error - What the render threw
+ * @param {string} code - The code translateWorkerError gave it
+ * @param {{callMainInvoked?: boolean}} [state] - Whether callMain ran
+ * @returns {boolean}
+ */
+export function workerErrorNeedsRestart(
+  error,
+  code,
+  { callMainInvoked = false } = {}
+) {
+  return (
+    callMainInvoked ||
+    error?.needsRestart === true ||
+    typeof error === 'number' ||
+    /^\d+$/.test(String(error)) ||
+    code === 'INTERNAL_ERROR' ||
+    code === 'MODEL_NOT_2D' ||
+    code === 'WASM_ABORT' ||
+    code === 'WASM_UNREACHABLE' ||
+    code === 'WASM_OOB'
+  );
 }

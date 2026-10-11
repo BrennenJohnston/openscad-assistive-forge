@@ -201,5 +201,6 @@ These are known differences between Forge's WASM-based rendering and the desktop
 | **File access** | Full filesystem | Upload/URL only | No direct filesystem access; all files must be uploaded or fetched via URL |
 | **Customizer GUI** | Native Qt widgets | HTML form controls | Behavior should match, but rendering differs |
 | **Library support** | Full MCAD/BOSL2 | Bundled subset | Libraries must be included in the WASM filesystem |
+| **`%` shapes** | Drawn see-through in the preview | Drawn see-through in the preview by a second engine run | One extra run per preview of a model that uses `%`; see `docs/notes/COLOR_PASSTHROUGH.md` |
 
 These gaps are documented to set expectations. They do not represent bugs unless desktop parity is explicitly planned.

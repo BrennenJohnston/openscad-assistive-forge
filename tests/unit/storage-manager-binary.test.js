@@ -69,17 +69,36 @@ describe('readProjectFilesFromList — binary safety', () => {
     expect(result.projectFiles['photo.jpg']).toMatch(/^data:image\/jpeg;base64,/)
   })
 
-  it('skips .stl companions instead of storing corrupted text', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  // import() reads these, so they are kept, byte for byte, as the ZIP
+  // import keeps them.
+  it.each(['stl', '3mf', 'obj', 'amf'])(
+    'stores a .%s mesh as a byte-identical data URL',
+    async (ext) => {
+      const files = [
+        makeFile('main.scad', 'proj/main.scad', scad),
+        makeFile(`mesh.${ext}`, `proj/parts/mesh.${ext}`, BINARY_BYTES),
+      ]
+      const result = await readProjectFilesFromList(files, 'proj/main.scad')
+      const stored = result.projectFiles[`parts/mesh.${ext}`]
+
+      expect(stored).toMatch(/^data:application\/octet-stream;base64,/)
+      const decoded = Uint8Array.from(atob(stored.split(',')[1]), (c) =>
+        c.charCodeAt(0)
+      )
+      expect(Array.from(decoded)).toEqual(Array.from(BINARY_BYTES))
+    }
+  )
+
+  it('stores an .off mesh as text, as the ZIP import does', async () => {
+    const off = ['OFF', '3 1 0', '0 0 0', '1 0 0', '0 1 0', '3 0 1 2', ''].join(
+      '\n'
+    )
     const files = [
       makeFile('main.scad', 'proj/main.scad', scad),
-      makeFile('mesh.stl', 'proj/mesh.stl', BINARY_BYTES),
+      makeFile('mesh.off', 'proj/mesh.off', off),
     ]
     const result = await readProjectFilesFromList(files, 'proj/main.scad')
-    expect(result.projectFiles['mesh.stl']).toBeUndefined()
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining('mesh.stl')
-    )
+    expect(result.projectFiles['mesh.off']).toBe(off)
   })
 
   it('skips hidden files and unknown extensions', async () => {

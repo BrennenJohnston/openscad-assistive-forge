@@ -27,7 +27,11 @@ import { withoutComments } from '../js/scad-comments.js';
 export function generateMissingFileWarnings(scadContent, fileExistsFn) {
   const warnings = [];
   const seen = new Set();
-  const directiveRegex = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
+  // A statement of its own: at a line's start or after `;`, `{` or `}`, the
+  // whole word. Without that, `color("Chartreuse")` read as `use "..."` up
+  // to the next quote, and warned about a file full of code.
+  const directiveRegex =
+    /(?:^|[;{}])[ \t]*(?:include|use)\b[ \t]*(?:<([^>\n]+)>|"([^"\n]+)")/gm;
   const source = withoutComments(scadContent);
   let match;
 

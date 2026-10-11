@@ -18,6 +18,7 @@ import {
 } from './render-intent.js';
 import { build2DPreviewStyleTag } from './state-colors.js';
 import { RENDER_QUALITY } from './render-controller.js';
+import { mayUseBackgroundModifier } from './background-tree.js';
 
 /**
  * Preview state constants
@@ -1071,6 +1072,9 @@ export class AutoPreviewController {
         onProgress: (percent, message) => {
           this.onProgress(percent, message, 'preview');
         },
+        ...(previewOutputFormat === 'off' && this._mayUseBackgroundShapes()
+          ? { backgroundTree: true }
+          : {}),
       };
 
       if (sourceOverridesActive) {
@@ -1204,6 +1208,24 @@ export class AutoPreviewController {
         timing,
         activeResult.consoleOutput || ''
       );
+      if (activeResult.backgroundScad) {
+        // The model's preview is already ready; a failure here leaves only
+        // its `%` shapes undrawn. The engine's own messages from it reach
+        // the Console panel through the render controller.
+        try {
+          await this._drawBackgroundShapes(
+            activeResult.backgroundScad,
+            previewRenderOpts,
+            localScadVersion,
+            paramHash
+          );
+        } catch (backgroundError) {
+          console.warn(
+            '[AutoPreview] The % shapes could not be drawn:',
+            backgroundError
+          );
+        }
+      }
     } catch (error) {
       renderFailed = true;
       console.error('[AutoPreview] Preview render failed:', error);
@@ -1211,9 +1233,10 @@ export class AutoPreviewController {
       // If the file changed mid-render, ignore this error.
       if (localScadVersion !== this.scadVersion) return;
 
-      // Treat cancellations as non-errors (common during rapid changes / file switching).
-      const msg = (error?.message || String(error)).toLowerCase();
-      if (msg.includes('cancel')) {
+      // A cancel is not an error (common during rapid changes and file
+      // switches). Read the code: the engine's refusal to run twice also says
+      // "canceled", and a stop at the time limit must reach the person.
+      if (error?.code === 'RENDER_CANCELLED' || error?.code === 'CANCELLED') {
         return;
       }
 
@@ -1698,6 +1721,71 @@ export class AutoPreviewController {
       };
     }
     return null;
+  }
+
+  /**
+   * Whether the model's source may use the `%` modifier, in its main file or
+   * any .scad file of the project.
+   * @returns {boolean}
+   */
+  _mayUseBackgroundShapes() {
+    if (mayUseBackgroundModifier(this.currentScadContent)) return true;
+    if (!(this.projectFiles instanceof Map)) return false;
+    for (const [path, content] of this.projectFiles) {
+      if (path.endsWith('.scad') && mayUseBackgroundModifier(content)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Draw the model's `%` shapes, which no render includes: a second render
+   * of them alone, shown see-through over the model just previewed.
+   * @param {string} backgroundScad - The `%` shapes alone, from the engine's CSG tree
+   * @param {Object} previewRenderOpts - The options the model's preview used
+   * @param {number} scadVersion - The model's version when it was previewed
+   * @param {string} paramHash - Its values' hash when it was previewed
+   */
+  async _drawBackgroundShapes(
+    backgroundScad,
+    previewRenderOpts,
+    scadVersion,
+    paramHash
+  ) {
+    if (!this.previewManager?.loadBackgroundShapesOFF) return;
+    // In a project the engine renders the mounted main file, so the `%`
+    // shapes take its place for this render.
+    const { files, mainFile } = previewRenderOpts;
+    let renderFiles = files;
+    if (mainFile && files instanceof Map) {
+      renderFiles = new Map(files);
+      renderFiles.set(mainFile, backgroundScad);
+    }
+    const result = await this.renderController.renderPreview(
+      backgroundScad,
+      {},
+      {
+        ...previewRenderOpts,
+        files: renderFiles,
+        outputFormat: 'off',
+        backgroundTree: false,
+        // The model's preview is ready and says so; this render must not
+        // put "Rendering preview..." back on the status line.
+        onProgress: undefined,
+      }
+    );
+    // A newer model or newer values took over while this rendered.
+    if (
+      scadVersion !== this.scadVersion ||
+      paramHash !== this.currentParamHash
+    ) {
+      return;
+    }
+    const { triangles } = this.previewManager.loadBackgroundShapesOFF(
+      result.stl
+    );
+    console.log(`[AutoPreview] % shapes drawn: ${triangles} triangles`);
   }
 
   /**

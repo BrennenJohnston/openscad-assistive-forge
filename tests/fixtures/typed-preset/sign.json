@@ -1,0 +1,10 @@
+{
+  "parameterSets": {
+    "Big": {
+      "width": "100",
+      "height": "50",
+      "depth": "8"
+    }
+  },
+  "fileFormatVersion": "1"
+}

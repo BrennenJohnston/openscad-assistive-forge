@@ -11,6 +11,7 @@ import {
 } from './js/parameter-reconciler.js';
 import {
   renderParameterUI,
+  commitPendingParameterEdit,
   setLimitsUnlocked,
   getAllDefaults,
   focusParameter,
@@ -111,11 +112,13 @@ import {
 } from './js/modal-manager.js';
 import {
   translateError,
+  previewFailureSentence,
   findFailedCheck,
   findMissingLibrary,
   showErrorModal,
   showErrorToast,
 } from './js/error-translator.js';
+import { reserveSpaceForActionsBar } from './js/actions-bar-reserve.js';
 import { engineStartFailureNotice } from './js/engine-start-notice.js';
 import {
   getStorageEstimate,
@@ -7454,15 +7457,7 @@ async function initApp() {
               return;
             }
 
-            const friendly = translateError(error?.message || String(error), {
-              code: error?.code,
-            });
-            // A title alone cannot tell the person that the next change
-            // starts the engine again.
-            const sentence =
-              error?.code === 'ENGINE_RESTART_FAILED'
-                ? `Preview failed: ${friendly.title}. ${friendly.suggestion}`
-                : `Preview failed: ${friendly.title}`;
+            const sentence = previewFailureSentence(error);
             updateStatus(sentence, 'error');
             _announceError(sentence);
           }
@@ -11457,6 +11452,9 @@ if (rounded) {
     // Expose startTutorial globally for E2E test automation
     window.startTutorial = (tutorialId) => startTutorial(tutorialId);
 
+    // On a phone the bar is fixed over the page; leave it its real height.
+    reserveSpaceForActionsBar(document.getElementById('actionsBar'));
+
     // Initialize actions drawer toggle
     const initActionsDrawer = () => {
       const toggleBtn = document.getElementById('actionsDrawerToggle');
@@ -12958,6 +12956,9 @@ if (rounded) {
    * @param {Object} preset - Loaded preset with .parameters, .name, .id
    */
   function applyPresetParametersAndCompanions(preset) {
+    // A value typed but not yet applied joins the current values first, so
+    // the preset lands on top of it rather than on the values before it.
+    commitPendingParameterEdit(document.getElementById('parametersContainer'));
     isLoadingPreset = true;
 
     const state = stateManager.getState();

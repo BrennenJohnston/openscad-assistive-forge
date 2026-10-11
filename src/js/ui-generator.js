@@ -1791,15 +1791,27 @@ function createTextInput(param, onChange) {
     labelContainer.appendChild(hint);
   }
 
-  input.addEventListener('change', (e) => {
-    onChange(param.name, e.target.value);
+  // A phone's keyboard may send no change event, so the value also applies
+  // on Enter as a key press and on leaving the field: once per new value.
+  // Enter during an input method's composition only confirms the characters.
+  input.setAttribute('enterkeyhint', 'done');
+  let applied = input.value;
+  const apply = () => {
+    if (input.value === applied) return;
+    applied = input.value;
+    onChange(param.name, input.value);
+  };
+  input.addEventListener('change', apply);
+  input.addEventListener('blur', apply);
+  input.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.keyCode === 13) && !e.isComposing) apply();
   });
   container.appendChild(input);
 
   const applyHint = document.createElement('span');
   applyHint.id = `${input.id}-apply-hint`;
   applyHint.className = 'param-hint';
-  applyHint.textContent = 'Press Enter to apply';
+  applyHint.textContent = 'Applies when you press Enter or leave the field';
   container.appendChild(applyHint);
 
   const describedBy = [input.getAttribute('aria-describedby'), applyHint.id]
@@ -5008,6 +5020,26 @@ function createRawControl(param, onChange) {
  * @param {(groupId: string, isOpen: boolean) => void} [options.onGroupToggle]
  * @returns {Object} Current parameter values
  */
+/** Counts parameter-UI renders, so a replaced control can tell it is stale. */
+let parameterUiGeneration = 0;
+
+/**
+ * Apply an edit the person has typed but not yet applied (a field in the
+ * controls that still has focus) before something replaces the controls.
+ * Leaving the field applies it, as it would by hand.
+ * @param {HTMLElement} container - The parameter controls' container
+ */
+export function commitPendingParameterEdit(container) {
+  const active = document.activeElement;
+  if (
+    active &&
+    container?.contains(active) &&
+    active.matches('input, textarea')
+  ) {
+    active.blur();
+  }
+}
+
 export function renderParameterUI(
   extractedParams,
   container,
@@ -5034,6 +5066,10 @@ export function renderParameterUI(
     // automatic re-render (theme change, preset apply, etc.).
     resolvedOpenIds = getOpenGroupIdsFromDOM(container);
   }
+  // Controls replaced below can still fire (a focused field commits as it is
+  // removed); their callbacks hold the old values, so only this render's
+  // controls may apply.
+  const generation = ++parameterUiGeneration;
   container.innerHTML = '';
 
   const { groups, parameters } = extractedParams;
@@ -5204,6 +5240,7 @@ export function renderParameterUI(
       // extraValues lets a control commit companion values (e.g. a design's
       // measured aspect) in the SAME state snapshot as its own change.
       const handleChange = (name, value, extraValues) => {
+        if (generation !== parameterUiGeneration) return;
         currentValues[name] = value;
         currentParameterValues[name] = value;
         if (extraValues) {

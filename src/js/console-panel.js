@@ -630,11 +630,21 @@ export class ConsolePanel {
       ? ` <button type="button" class="console-line-link" data-file="${escapeHtml(entry.file || '')}" data-line="${entry.line}" aria-label="Go to line ${entry.line}">:${entry.line}</button>`
       : '';
 
+    // OpenSCAD's own lines start with their level ("WARNING: ..."), which the
+    // label beside them already shows. The words stay for a screen reader,
+    // which does not hear the label; on screen the level shows once.
+    const prefix = `${typeLabel}:`;
+    const messageHtml = entry.message.startsWith(prefix)
+      ? `<span class="sr-only">${prefix} </span>${escapeHtml(
+          entry.message.slice(prefix.length).trimStart()
+        )}`
+      : safeMessage;
+
     return `
       <div class="console-entry ${typeClass}"${entryRole ? ` role="${entryRole}"` : ''}>
         <time class="console-timestamp" datetime="${time.toISOString()}">${timeStr}</time>
         <span class="console-type" aria-hidden="true">${typeLabel}</span>
-        <span class="console-message">${safeMessage}${lineLink}</span>
+        <span class="console-message">${messageHtml}${lineLink}</span>
       </div>
     `;
   }

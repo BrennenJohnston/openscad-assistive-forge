@@ -393,6 +393,122 @@ export function offFaceCount(text) {
  * @returns {{positions: Float32Array, colors: Float32Array|null, hasColors: boolean, numVerts: number, numFaces: number, isCOFF: boolean}}
  */
 export function parseOFF(text) {
+  const { lines, vertices, numVerts, numFaces, faceStart, isCOFF } =
+    readOFF(text);
+
+  const positions = [];
+  const rawColors = [];
+  let hasColors = false;
+  let rawColorMax = 0;
+
+  for (let i = 0; i < numFaces; i++) {
+    const parts = lines[faceStart + i].split(/\s+/).map(Number);
+    const n = parts[0];
+    if (n < 3) continue;
+    // RGB only: per-face alpha (parts[n+4]) is not read here; the `%`
+    // shapes, which need it, are read by parseOFFWithAlpha.
+    const hasInlineColor = parts.length >= n + 4;
+    const v0 = parts[1];
+    for (let t = 1; t < n - 1; t++) {
+      const va = parts[1 + t];
+      const vb = parts[1 + t + 1];
+      positions.push(
+        vertices[v0 * 3],
+        vertices[v0 * 3 + 1],
+        vertices[v0 * 3 + 2],
+        vertices[va * 3],
+        vertices[va * 3 + 1],
+        vertices[va * 3 + 2],
+        vertices[vb * 3],
+        vertices[vb * 3 + 1],
+        vertices[vb * 3 + 2]
+      );
+      if (hasInlineColor) {
+        const rawR = parts[n + 1];
+        const rawG = parts[n + 2];
+        const rawB = parts[n + 3];
+        rawColorMax = Math.max(rawColorMax, rawR, rawG, rawB);
+        rawColors.push(rawR, rawG, rawB, rawR, rawG, rawB, rawR, rawG, rawB);
+        hasColors = true;
+      }
+    }
+  }
+  return finishParseOFF(
+    positions,
+    rawColors,
+    hasColors,
+    rawColorMax,
+    numVerts,
+    numFaces,
+    isCOFF
+  );
+}
+
+/**
+ * Read an OFF of a model's `%` shapes, which the preview draws see-through:
+ * each face keeps its own color and its alpha, and a face with no color
+ * gets desktop OpenSCAD's half see-through gray. Unlike parseOFF, a single
+ * color is kept: it is the color the person chose.
+ *
+ * @param {string} text
+ * @returns {{positions: Float32Array, colors: Float32Array}} colors are RGBA, one per vertex
+ */
+export function parseOFFWithAlpha(text) {
+  const { lines, vertices, numFaces, faceStart } = readOFF(text);
+  const faces = [];
+  let rawColorMax = 0;
+  for (let i = 0; i < numFaces; i++) {
+    const parts = lines[faceStart + i].split(/\s+/).map(Number);
+    const n = parts[0];
+    if (n < 3) continue;
+    const rgba =
+      parts.length >= n + 4
+        ? [
+            parts[n + 1],
+            parts[n + 2],
+            parts[n + 3],
+            parts.length >= n + 5 ? parts[n + 4] : null,
+          ]
+        : null;
+    if (rgba) rawColorMax = Math.max(rawColorMax, rgba[0], rgba[1], rgba[2]);
+    faces.push({ parts, n, rgba });
+  }
+  const scale = rawColorMax > 1 ? 1 / 255 : 1;
+  const positions = [];
+  const colors = [];
+  for (const { parts, n, rgba } of faces) {
+    const color = rgba
+      ? [
+          rgba[0] * scale,
+          rgba[1] * scale,
+          rgba[2] * scale,
+          rgba[3] === null ? 1 : rgba[3] * scale,
+        ]
+      : [180 / 255, 180 / 255, 180 / 255, 0.5];
+    const v0 = parts[1];
+    for (let t = 1; t < n - 1; t++) {
+      for (const v of [v0, parts[1 + t], parts[2 + t]]) {
+        positions.push(
+          vertices[v * 3],
+          vertices[v * 3 + 1],
+          vertices[v * 3 + 2]
+        );
+        colors.push(...color);
+      }
+    }
+  }
+  return {
+    positions: Float32Array.from(positions),
+    colors: Float32Array.from(colors),
+  };
+}
+
+/**
+ * The header and vertices of an OFF or COFF file, shared by both readers.
+ * @param {string} text
+ * @returns {{lines: string[], vertices: number[], numVerts: number, numFaces: number, faceStart: number, isCOFF: boolean}}
+ */
+function readOFF(text) {
   const lines = text
     .split('\n')
     .map((l) => l.trim())
@@ -432,47 +548,28 @@ export function parseOFF(text) {
     vertices.push(x, y, z);
   }
 
-  const positions = [];
-  const rawColors = [];
-  let hasColors = false;
-  let rawColorMax = 0;
+  return {
+    lines,
+    vertices,
+    numVerts,
+    numFaces,
+    faceStart: dataStartLine + numVerts,
+    isCOFF,
+  };
+}
 
-  const faceStart = dataStartLine + numVerts;
-  for (let i = 0; i < numFaces; i++) {
-    const parts = lines[faceStart + i].split(/\s+/).map(Number);
-    const n = parts[0];
-    if (n < 3) continue;
-
-    // RGB only: per-face alpha (parts[n+4]) is not read; transparency is
-    // the debug highlight overlay's business.
-    const hasInlineColor = parts.length >= n + 4;
-
-    const v0 = parts[1];
-    for (let t = 1; t < n - 1; t++) {
-      const va = parts[1 + t];
-      const vb = parts[1 + t + 1];
-      positions.push(
-        vertices[v0 * 3],
-        vertices[v0 * 3 + 1],
-        vertices[v0 * 3 + 2],
-        vertices[va * 3],
-        vertices[va * 3 + 1],
-        vertices[va * 3 + 2],
-        vertices[vb * 3],
-        vertices[vb * 3 + 1],
-        vertices[vb * 3 + 2]
-      );
-      if (hasInlineColor) {
-        const rawR = parts[n + 1];
-        const rawG = parts[n + 2];
-        const rawB = parts[n + 3];
-        rawColorMax = Math.max(rawColorMax, rawR, rawG, rawB);
-        rawColors.push(rawR, rawG, rawB, rawR, rawG, rawB, rawR, rawG, rawB);
-        hasColors = true;
-      }
-    }
-  }
-
+/**
+ * parseOFF's last step: drop a single uniform color and scale the rest.
+ */
+function finishParseOFF(
+  positions,
+  rawColors,
+  hasColors,
+  rawColorMax,
+  numVerts,
+  numFaces,
+  isCOFF
+) {
   if (hasColors && rawColors.length > 0) {
     const uniqueFaceColors = new Set();
     for (let i = 0; i < rawColors.length; i += 9) {
@@ -629,6 +726,9 @@ export function prepareOFF(text, options = {}) {
     colors,
     hasColors,
     bounds: { min: bounds.min, max: bounds.max },
+    // How far the soup was moved, so another mesh (the `%` shapes) can be
+    // moved with it.
+    offset: [bounds.x, bounds.y, bounds.z],
     isInner: extras.isInner,
     edges: extras.edges,
     edgeTotal: extras.edgeTotal,

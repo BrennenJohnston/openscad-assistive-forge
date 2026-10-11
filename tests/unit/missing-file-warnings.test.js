@@ -274,3 +274,36 @@ describe('ConsolePanel + ErrorLogPanel compatibility', () => {
     expect(/\bWARNING:/i.test(warningLine)).toBe(true);
   });
 });
+
+describe('generateMissingFileWarnings — only real include and use statements', () => {
+  const noFilesExist = () => false;
+
+  it('does not read a word ending in "use" as a use statement', () => {
+    const scad = 'color("Chartreuse") cube(1);\ncolor("Gold") sphere(1);';
+    expect(generateMissingFileWarnings(scad, noFilesExist)).toEqual([]);
+  });
+
+  it('does not read a string ending in "use" before another string', () => {
+    const scad = 'pet = "Mouse";\nlabel = "Cheese";\ncube(1);';
+    expect(generateMissingFileWarnings(scad, noFilesExist)).toEqual([]);
+  });
+
+  it('does not read an include inside a string', () => {
+    const scad = 'echo("include <a.txt>");\ncube(1);';
+    expect(generateMissingFileWarnings(scad, noFilesExist)).toEqual([]);
+  });
+
+  it('still finds one after a statement on the same line', () => {
+    const scad = 'cube(1); include <after.txt>';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'after.txt'");
+  });
+
+  it('still finds an indented one', () => {
+    const scad = '  use <lib/indented.scad>\ncube(1);';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'lib/indented.scad'");
+  });
+});

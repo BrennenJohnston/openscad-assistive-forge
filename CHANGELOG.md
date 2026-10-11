@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The preview draws a model's `%` shapes see-through, in their own color,
+  as desktop OpenSCAD does: the Plug Puller's plug shows.
+
 ### Changed
 
 - The Actions drawer is shorter: the render queue, Compare, Export
@@ -15,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- After a preview fails or runs past its time limit, the next change
+  previews again, and the message says what happened: a model too deep
+  for the browser, or how long it waited.
+- Folder and ZIP projects keep their STL, 3MF, OBJ and AMF files, so a
+  model that imports one previews whole.
+- A folder of several projects offers every model, grouped by folder, and
+  a file with two dots in its name is no longer left out.
+- Text settings apply from a phone's keyboard, and a preset chosen while a
+  text setting is being edited lands whole.
+- On a phone, the preview's messages stay above the Actions and Camera
+  buttons; the bar is named by its words, each line shows its level once,
+  and a color name no longer reads as a missing include file.
 - The open Actions drawer stays on top of Preview Settings & Info in a
   short window, so every button it shows can be pressed.
 
