@@ -17,7 +17,10 @@ import { join } from 'node:path'
 const mockTrapActivate = vi.fn()
 const mockTrapDeactivate = vi.fn()
 
-vi.mock('../../src/js/focus-trap.js', () => ({
+vi.mock('../../src/js/focus-trap.js', async (importOriginal) => ({
+  // The real helpers (disableKeepingFocus and the like); only the trap is
+  // stubbed.
+  ...(await importOriginal()),
   createDocumentFocusTrap: vi.fn(() => ({
     activate: mockTrapActivate,
     deactivate: mockTrapDeactivate,

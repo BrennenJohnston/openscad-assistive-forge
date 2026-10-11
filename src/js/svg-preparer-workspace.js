@@ -11,7 +11,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { createDocumentFocusTrap } from './focus-trap.js';
+import { createDocumentFocusTrap, disableKeepingFocus } from './focus-trap.js';
 import { announce } from './announcer.js';
 import {
   measureAllThickness,
@@ -3456,7 +3456,8 @@ export function createSvgPrepWorkspace(containerEl) {
     for (const [role, rows] of groups) applyRole(rows, role);
     const n = lastIgnore.rows.length;
     lastIgnore = null;
-    refs.undoIgnoreBtn.disabled = true;
+    // Pressed, it turns itself off: focus to the button that does the reverse.
+    disableKeepingFocus(refs.undoIgnoreBtn, refs.ignoreThinBtn);
     const sentence =
       n === 1
         ? 'Undone. 1 shape is back to how it was.'
@@ -3498,9 +3499,25 @@ export function createSvgPrepWorkspace(containerEl) {
   /** Keep the delete controls telling the truth about what they can do. */
   function updateDeleteUi() {
     const count = liveElements.length;
-    refs.undoDeleteBtn.disabled = !lastDeletion;
-    refs.deleteSmallBtn.disabled = count === 0;
-    refs.keepLargestBtn.disabled = count === 0;
+    // Enable before disabling, and a focused button that turns itself off
+    // hands focus to one that can still act: Undo delete to Delete those,
+    // the delete buttons (nothing left) to Undo delete.
+    if (lastDeletion) refs.undoDeleteBtn.disabled = false;
+    if (count > 0) {
+      refs.deleteSmallBtn.disabled = false;
+      refs.keepLargestBtn.disabled = false;
+    }
+    if (!lastDeletion) {
+      disableKeepingFocus(
+        refs.undoDeleteBtn,
+        count > 0 ? refs.deleteSmallBtn : null
+      );
+    }
+    if (count === 0) {
+      const back = lastDeletion ? refs.undoDeleteBtn : null;
+      disableKeepingFocus(refs.deleteSmallBtn, back);
+      disableKeepingFocus(refs.keepLargestBtn, back);
+    }
     refs.bulkCount.textContent = `${count} ${count === 1 ? 'shape' : 'shapes'}`;
   }
 

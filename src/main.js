@@ -110,7 +110,7 @@ import {
   initStaticModals,
   isAnyModalOpen,
 } from './js/modal-manager.js';
-import { disableKeepingFocus } from './js/focus-trap.js';
+import { disableKeepingFocus, setBusy, isBusy } from './js/focus-trap.js';
 import {
   translateError,
   previewFailureSentence,
@@ -1398,7 +1398,7 @@ async function initApp() {
         const clearCacheBtn = document.getElementById('clearCacheBtn');
         const originalBtnText = clearCacheBtn?.textContent;
         if (clearCacheBtn) {
-          clearCacheBtn.disabled = true;
+          setBusy(clearCacheBtn, true);
           clearCacheBtn.textContent = 'Clearing...';
           clearCacheBtn.setAttribute('aria-busy', 'true');
         }
@@ -1452,7 +1452,7 @@ async function initApp() {
         navigator.serviceWorker.removeEventListener('message', onCacheCleared);
 
         if (clearCacheBtn) {
-          clearCacheBtn.disabled = false;
+          setBusy(clearCacheBtn, false);
           clearCacheBtn.textContent = originalBtnText || 'Clear Cache';
           clearCacheBtn.removeAttribute('aria-busy');
         }
@@ -2001,12 +2001,13 @@ async function initApp() {
       const exportBtn = modal.querySelector('#exportBeforeClearBtn');
       if (exportBtn) {
         exportBtn.addEventListener('click', async () => {
-          exportBtn.disabled = true;
+          if (isBusy(exportBtn)) return;
+          setBusy(exportBtn, true);
           exportBtn.textContent = 'Exporting...';
           try {
             await handleExportBackup();
           } finally {
-            exportBtn.disabled = false;
+            setBusy(exportBtn, false);
             exportBtn.textContent = 'Export Backup';
           }
         });
@@ -5497,6 +5498,7 @@ async function initApp() {
   updateStencilSetExport();
 
   exportStencilSetBtn?.addEventListener('click', async () => {
+    if (isBusy(exportStencilSetBtn)) return;
     const state = stateManager.getState();
     const params = state.parameters || {};
     const count = stencilPlateCount(params);
@@ -5520,7 +5522,7 @@ async function initApp() {
       format,
     });
 
-    exportStencilSetBtn.disabled = true;
+    setBusy(exportStencilSetBtn, true);
     const restore = exportStencilSetBtn.textContent;
     exportStencilSetBtn.textContent = EXPORT_STRINGS.busy;
     announceImmediate(EXPORT_STRINGS.start(jobs.length + 1));
@@ -5563,7 +5565,7 @@ async function initApp() {
       announceImmediate(said);
       showErrorToast({ title: 'Export stopped', message: error.message });
     } finally {
-      exportStencilSetBtn.disabled = false;
+      setBusy(exportStencilSetBtn, false);
       exportStencilSetBtn.textContent = restore;
     }
   });
@@ -8105,15 +8107,16 @@ async function initApp() {
   );
   if (companionSaveToFolderBtn) {
     companionSaveToFolderBtn.addEventListener('click', async () => {
+      if (isBusy(companionSaveToFolderBtn)) return;
       const state = stateManager.getState();
-      companionSaveToFolderBtn.disabled = true;
+      setBusy(companionSaveToFolderBtn, true);
       try {
         await folderSaveActions.saveCompanions({
           projectFiles: state.projectFiles,
           mainFilePath: state.mainFilePath,
         });
       } finally {
-        companionSaveToFolderBtn.disabled = false;
+        setBusy(companionSaveToFolderBtn, false);
       }
     });
   }
@@ -8794,8 +8797,8 @@ if (rounded) {
       const state = stateManager.getState();
       if (!state.uploadedFile) return;
 
-      if (manifestSaveCopyBtn.disabled) return;
-      manifestSaveCopyBtn.disabled = true;
+      if (isBusy(manifestSaveCopyBtn)) return;
+      setBusy(manifestSaveCopyBtn, true);
 
       const origin = state.manifestOrigin;
       const projectName = state.uploadedFile.name.replace('.scad', '');
@@ -8821,7 +8824,7 @@ if (rounded) {
         if (duplicate) {
           const overwrite = await showManifestOverwriteConfirm(projectName);
           if (overwrite === 'cancel') {
-            manifestSaveCopyBtn.disabled = false;
+            setBusy(manifestSaveCopyBtn, false);
             return;
           }
           if (overwrite === 'overwrite') {
@@ -8837,7 +8840,7 @@ if (rounded) {
               currentSavedProjectId = duplicate.id;
             } else {
               updateStatus(`Save failed: ${result.error}`, 'error');
-              manifestSaveCopyBtn.disabled = false;
+              setBusy(manifestSaveCopyBtn, false);
               return;
             }
           } else {
@@ -8854,7 +8857,7 @@ if (rounded) {
               currentSavedProjectId = result.id;
             } else {
               updateStatus(`Save failed: ${result.error}`, 'error');
-              manifestSaveCopyBtn.disabled = false;
+              setBusy(manifestSaveCopyBtn, false);
               return;
             }
           }
@@ -8872,7 +8875,7 @@ if (rounded) {
             currentSavedProjectId = result.id;
           } else {
             updateStatus(`Save failed: ${result.error}`, 'error');
-            manifestSaveCopyBtn.disabled = false;
+            setBusy(manifestSaveCopyBtn, false);
             return;
           }
         }
@@ -8886,7 +8889,7 @@ if (rounded) {
       } catch (err) {
         console.error('[Manifest] Save copy failed:', err);
         updateStatus('Failed to save local copy', 'error');
-        manifestSaveCopyBtn.disabled = false;
+        setBusy(manifestSaveCopyBtn, false);
       }
     });
   }
@@ -12503,6 +12506,7 @@ if (rounded) {
   const saveToFolderBtn = document.getElementById('saveToFolderBtn');
   if (saveToFolderBtn) {
     saveToFolderBtn.addEventListener('click', async () => {
+      if (isBusy(saveToFolderBtn)) return;
       const state = stateManager.getState();
       if (!state.stl || !state.uploadedFile) {
         showErrorToast({
@@ -12523,7 +12527,7 @@ if (rounded) {
         outputFormat,
         getBrailleDownloadName()
       );
-      saveToFolderBtn.disabled = true;
+      setBusy(saveToFolderBtn, true);
       try {
         await folderSaveActions.saveExport({
           fileName,
@@ -12531,7 +12535,7 @@ if (rounded) {
           mainFilePath: state.mainFilePath,
         });
       } finally {
-        saveToFolderBtn.disabled = false;
+        setBusy(saveToFolderBtn, false);
       }
     });
   }
