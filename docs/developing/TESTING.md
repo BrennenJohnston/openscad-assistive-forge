@@ -197,7 +197,7 @@ After any changes, verify:
 - [ ] `npm run build && npm run check-bundle` -- budgets met.
 
 Measured 2026-10-11: core app **459 KB** gzipped against a 586 KB budget, main
-CSS 63 KB against 150 KB, all assets **1.19 MB** against 1.25 MB. All assets
+CSS 63 KB against 150 KB, all assets **1.13 MB** against 1.19 MB. All assets
 are at 95% of their budget, so a new dependency is a real decision rather than
 a formality.
 
