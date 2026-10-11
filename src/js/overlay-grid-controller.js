@@ -305,6 +305,9 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
         gridPresetSelect.value = newValue;
       }
       _updateGridPresetActionRows();
+      // Choosing the new preset hides the Save row, and the focused button
+      // with it; the chooser shows what was saved.
+      gridPresetSelect?.focus();
       updateStatus(`Custom grid preset "${name.trim()}" saved`);
     });
   }
@@ -321,6 +324,8 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       _populateCustomGridPresets();
       if (gridPresetSelect) gridPresetSelect.value = 'custom';
       _updateGridPresetActionRows();
+      // The Delete row hides with the preset, and the focused button with it.
+      gridPresetSelect?.focus();
       updateStatus(`Custom grid preset "${name}" deleted`);
     });
   }
@@ -499,6 +504,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       showAll.type = 'button';
       showAll.textContent = `${count} group${count !== 1 ? 's' : ''} hidden: Show all`;
       showAll.addEventListener('click', () => {
+        const firstShown = container.querySelector('.param-group[hidden]');
         container.querySelectorAll('.param-group[hidden]').forEach((el) => {
           el.removeAttribute('hidden');
           const btn = hideButtonFor(el);
@@ -506,6 +512,8 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
         });
         saveHidden(new Set());
         refreshShowAll();
+        // The bar and this button are gone: land on the first group shown.
+        firstShown?.querySelector(':scope > summary')?.focus();
         announceImmediate('All parameter groups shown');
       });
       bar.appendChild(showAll);
@@ -527,6 +535,8 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
           hiddenSet.delete(groupEl.dataset.groupId);
           saveHidden(hiddenSet);
           refreshShowAll();
+          // The chip is gone with the rebuilt bar: land on the group itself.
+          groupEl.querySelector(':scope > summary')?.focus();
           announceImmediate(`${label} group shown`);
         });
         bar.appendChild(chip);

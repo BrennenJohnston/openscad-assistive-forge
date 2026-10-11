@@ -382,3 +382,25 @@ export function disableKeepingFocus(button, fallback) {
   }
   button.disabled = true;
 }
+
+/**
+ * The first parameter control a person can reach: the first input on show,
+ * else the first group's heading when every group is folded (an input in a
+ * folded group is in the page, but focus() on it does nothing).
+ * @param {HTMLElement|null} container - The parameters container
+ * @returns {HTMLElement|null}
+ */
+export function firstParameterControl(container) {
+  if (!container) return null;
+  const drawn = (el) =>
+    typeof el.checkVisibility !== 'function' || el.checkVisibility();
+  return (
+    [
+      ...container.querySelectorAll(
+        'input:not([type="hidden"]), select, textarea'
+      ),
+    ].find(drawn) ||
+    [...container.querySelectorAll('summary')].find(drawn) ||
+    null
+  );
+}

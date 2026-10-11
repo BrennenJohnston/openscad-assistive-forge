@@ -9,6 +9,7 @@
 
 import { isEnabled } from './feature-flags.js';
 import { announceImmediate } from './announcer.js';
+import { firstParameterControl } from './focus-trap.js';
 
 /**
  * @typedef {'standard' | 'expert'} EditorMode
@@ -336,13 +337,15 @@ export class ModeManager {
   _manageFocusAfterSwitch(mode) {
     try {
       if (mode === 'standard') {
-        // Focus the first parameter control input
-        const firstInput = document.querySelector(
-          '.param-control input:not([type="hidden"]), .param-control select, .param-control textarea'
+        // The first parameter a person can reach: the first input usually
+        // sits in a folded group, where focus() does nothing, and focus fell
+        // to the page body.
+        const first = firstParameterControl(
+          document.getElementById('parametersContainer')
         );
-        if (firstInput) {
-          firstInput.focus();
-          return;
+        if (first) {
+          first.focus();
+          if (document.activeElement === first) return;
         }
       } else if (mode === 'expert') {
         const cmContent = document.querySelector('.cm-content');
