@@ -7,98 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.0] - 2026-10-11
+
+What a screen reader hears, across the app: each status once, focus that
+never falls to the page body, controls named by the words on them. The
+engine recovers from a failed preview, and the sample projects' folders and
+phones work as they should.
+
 ### Added
 
-- The preview draws a model's `%` shapes see-through, in their own color,
-  as desktop OpenSCAD does: the Plug Puller's plug shows.
+- The preview draws a model's `%` shapes see-through, in their own color, as
+  desktop OpenSCAD does.
 
 ### Changed
 
 - The Actions drawer is shorter: the render queue, Compare, Export
-  Customizer Settings and its Console button are gone, and Publish is in
+  Customizer Settings and its Console button are gone; Publish is in
   Standard view.
-- The header's controls are named by the words on them, first: "Keys",
-  "HC", "Full Screen", "Help", "Main Page", "Publish", "Copy Link", "Edit
-  Drawing" (the longer words are their descriptions). The theme button says
-  "Theme: Auto", "Theme: Light" or "Theme: Dark"; the interface switch is
-  "Interface mode" with its two options; "Main Page" mentions unsaved
-  changes only when there are some.
+- Controls are named by the words on them, first: the header ("Keys", "HC",
+  "Full Screen", "Help", "Main Page"), the Actions drawer, the Main Page's
+  folder buttons, Classic's "A. Forge", each key in Keyboard Shortcuts, and
+  every saved project card button names its project. The theme button says
+  which theme is on; the interface switch says its two options; "Main Page"
+  mentions unsaved changes only when there are some.
+- Downloads are named for the project and the day, the two STL kinds apart
+  (`-ascii.stl`, `-binary.stl`); the viewport image and Export Changed
+  Settings name the project.
 
 ### Fixed
 
 - After a preview fails or runs past its time limit, the next change
-  previews again, and the message says what happened: a model too deep
-  for the browser, or how long it waited.
-- Folder and ZIP projects keep their STL, 3MF, OBJ and AMF files, so a
-  model that imports one previews whole, even one that builds the file's
-  name as it runs.
-- A folder of several projects offers every model, grouped by folder, and
-  a file with two dots in its name is no longer left out.
+  previews again, and the message says what happened.
+- Folder and ZIP projects keep their STL, 3MF, OBJ and AMF files, so a model
+  that imports one previews whole; a folder of several projects offers every
+  model, grouped by folder.
 - Text settings apply from a phone's keyboard, and a preset chosen while a
   text setting is being edited lands whole.
 - On a phone, the preview's messages stay above the Actions and Camera
-  buttons; the bar is named by its words, and each line shows its level
-  once.
+  buttons, named by their words, each line's level shown once.
 - A color name such as "Chartreuse" no longer reads as a missing include
-  file, in the preview's messages or when a ZIP opens.
-- Escape stops a Generate, as the Cancel button does, and a Generate
-  stopped either way is no longer reported as an error.
-- The open Actions drawer stays on top of Preview Settings & Info in a
-  short window, so every button it shows can be pressed.
+  file.
+- Escape stops a Generate, as Cancel does; a stopped Generate is not
+  reported as an error.
+- The open Actions drawer stays on top of Preview Settings & Info in a short
+  window.
 - Models that repeat a module many levels deep preview in Firefox and
-  Safari: the engine now has the 8 MiB stack desktop OpenSCAD assumes.
-- Dialogs take focus as they open, close on Escape (the browser's own
-  dialogs too), and give focus back to what opened them, or to the
-  nearest sensible place: focus no longer falls to the page body.
-- A saved project card's Edit, Files, Export and Delete buttons work
-  with Enter and Space.
-- Buttons that turn themselves off or work for a while (Undo and Redo,
-  Generate, Save to Folder, the tutorial's Back and Next, Classic's
-  pane close buttons) keep focus nearby.
-- Greyed-out menu items are reached by the arrow keys and say why they
-  are off.
-- A screen reader hears each status once: "Preview ready", "Generating"
-  and a Generate's result were said up to four times. With Automatic
-  preview off, the status bars say "Preview outdated" after a change.
-- The code editor no longer reads its own changes aloud, and a screen
-  reader no longer finds "Generating preview" when nothing is generating.
-- The console reads each new line once: warnings are no longer alerts,
-  the log is not read again from the top after each run, a line no
-  longer says its level twice ("Warning: WARNING:"), and the full console
-  no longer announces that it opened.
-- Braille preview lines are read without "und (not supported)" in front
-  of every line.
-- An example opened from the Features Guide leaves focus on its first
-  setting, and closing the guide from the Main Page goes back to Help.
-- Tours open on Next, and each step's heading takes focus so its text is
-  read; the step number is said once, the last button is named Finish,
-  and finishing a tour says so once.
-- A failed preview or Generate says so once, with OpenSCAD's own error,
-  and messages name your files instead of the engine's (`/tmp/input.scad`).
-- Downloads are named for the project and the day (`simple_box-2026-10-11.obj`),
-  the two STL kinds apart (`-ascii.stl`, `-binary.stl`), the viewport image
-  `simple_box-preview.png`, and Export Changed Settings names your project
-  instead of "Unknown Model".
+  Safari: the engine has the 8 MiB stack desktop OpenSCAD assumes.
+- Dialogs take focus as they open, close on Escape, and give focus back to
+  what opened them: focus no longer falls to the page body. Buttons that
+  turn themselves off keep focus nearby; greyed-out menu items are reached
+  by the arrow keys and say why they are off; a saved project card's buttons
+  work with Enter and Space.
+- A screen reader hears each status once: "Preview ready", "Generating" and
+  a Generate's result were said up to four times. With Automatic preview
+  off, the status bars say "Preview outdated".
+- The code editor no longer reads its own changes aloud; the console reads
+  each new line once, warnings are no longer alerts, and the full console no
+  longer announces that it opened.
+- Braille preview lines are read without "und (not supported)" in front.
+- Tours open on Next, each step's heading takes focus so its text is read,
+  the last button is named Finish, and finishing says so once. An example
+  opened from the Features Guide leaves focus on its first setting.
+- A failed preview or Generate says so once, with OpenSCAD's own error, and
+  messages name your files instead of `/tmp/input.scad`.
 - A PDF export of a 3D model says what works instead: SVG or DXF, which
-  offer an approximate outline.
-- The drawing editor says "1 shape", not "1 shapes".
-- In Keyboard Shortcuts, each key button is named by its key, so a screen
-  reader can learn the shortcut; a saved project card's buttons name the
-  project ("Load Simple box", "Delete Simple box").
-- In Classic, the pane separators say their real share from the start
-  ("Editor: 26%", not "0%"); the "A. Forge" and "Classic" button is named by
-  its words; Play has one state signal; a font radio says its style
-  ("Liberation Sans Bold"); the opacity, brightness and contrast sliders say
-  their value with its unit.
+  offer an approximate outline. The drawing editor says "1 shape".
+- In Classic, the pane separators say their real share from the start; Play
+  has one state signal; a font radio says its style; the opacity, brightness
+  and contrast sliders say their value.
 - Touch targets of at least 44 px: the Customizer's "?" and reset buttons,
-  the camera view buttons, a dialog's close, the Clear Cache dialog's Keep
-  checkbox, and the code editor's search panel. A parameter's help tip opens
-  inside the panel instead of being cut off at its edge. The Main Page's
-  folder buttons are named by their visible words.
-- Automatic preview, switched off, stays off on the next visit (recovery mode
-  switched it off and the app forgot); Viewport Control's fields accept the
-  fractions the app writes into them.
-
+  the camera view buttons, dialog close buttons, the Clear Cache dialog's
+  Keep checkbox, the code editor's search panel; a parameter's help tip
+  opens inside the panel.
+- Automatic preview, switched off, stays off on the next visit; Viewport
+  Control's fields accept the fractions the app writes into them.
 ## [5.2.2] - 2026-10-09
 
 The OpenSCAD engine starts again in browsers that opened the app before
