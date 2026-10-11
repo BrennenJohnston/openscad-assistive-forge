@@ -103,6 +103,10 @@ test('a Generate says its result once', async ({ page }) => {
     'data-action',
     'generate'
   );
+  // Open, as it is in a tall window, so its size line could speak.
+  const drawer = page.locator('#previewDrawerToggle');
+  if ((await drawer.getAttribute('aria-expanded')) !== 'true') await drawer.click();
+  await expect(page.locator('#stats')).toBeVisible();
 
   const mark = await announcementMark(page);
   await page.locator('#primaryActionBtn').click();
@@ -122,6 +126,11 @@ test('a Generate says its result once', async ({ page }) => {
   expect(result, JSON.stringify(said)).toHaveLength(1);
   expect(
     said.filter((a) => /Preview ready/.test(a.text)),
+    JSON.stringify(said)
+  ).toHaveLength(0);
+  // The size and triangle line is there to be read, not said.
+  expect(
+    said.filter((a) => /Size:/.test(a.text)),
     JSON.stringify(said)
   ).toHaveLength(0);
 });
