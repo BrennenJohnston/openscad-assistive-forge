@@ -82,6 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A PDF export of a 3D model says what works instead: SVG or DXF, which
   offer an approximate outline.
 - The drawing editor says "1 shape", not "1 shapes".
+- In Keyboard Shortcuts, each key button is named by its key, so a screen
+  reader can learn the shortcut; a saved project card's buttons name the
+  project ("Load Simple box", "Delete Simple box").
 
 ## [5.2.2] - 2026-10-09
 

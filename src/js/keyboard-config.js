@@ -1008,10 +1008,15 @@ export function generateShortcutsEditorHTML() {
         const isCustomized = keyboardConfig.isCustomized(action);
         const customizedClass = isCustomized ? ' shortcut-customized' : '';
 
+        // The key is the button's name, so a screen reader hears "F6, button"
+        // and can learn the shortcut; what pressing it does is its
+        // description. An aria-label here replaced the key, so the key was
+        // never spoken.
         html += `<div class="shortcut-item${customizedClass}" data-action="${action}">`;
         html += `  <span class="shortcut-description">${shortcut.description}</span>`;
+        html += `  <span class="sr-only" id="shortcut-change-${action}">Change shortcut for ${shortcut.description}</span>`;
         html += `  <div class="shortcut-key-group">`;
-        html += `    <button type="button" class="shortcut-key-btn" data-action="${action}" aria-label="Change shortcut for ${shortcut.description}">`;
+        html += `    <button type="button" class="shortcut-key-btn" data-action="${action}" aria-describedby="shortcut-change-${action}">`;
         html += `      <kbd>${formatted}</kbd>`;
         html += `    </button>`;
         if (isCustomized) {
