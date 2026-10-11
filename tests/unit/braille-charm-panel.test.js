@@ -419,13 +419,13 @@ describe('resolveDownloadFilename', () => {
     expect(name).not.toMatch(/[<>:]/);
   });
 
-  it('falls back to the hashed name without an override', () => {
+  it('falls back to the project-and-day name without an override', () => {
     const name = resolveDownloadFilename(
       'braille_charm.scad',
       { a: 1 },
       'stl',
       null
     );
-    expect(name).toMatch(/^braille_charm-[a-z0-9]+-\d{8}\.stl$/);
+    expect(name).toMatch(/^braille_charm-\d{4}-\d{2}-\d{2}\.stl$/);
   });
 });

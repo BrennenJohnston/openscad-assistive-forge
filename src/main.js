@@ -34,6 +34,8 @@ import {
   downloadFile,
   generateFilename,
   resolveDownloadFilename,
+  projectStem,
+  todayStamp,
   formatFileSize,
   sanitizeFilename,
   OUTPUT_FORMATS,
@@ -3597,12 +3599,20 @@ async function initApp() {
       return 'ready';
     } catch (error) {
       console.error(`[Export] ${formatName} render failed:`, error);
-      updateStatus(`${formatName} export failed: ${error.message || error}`);
+      // A PDF has no approximate outline to offer, unlike SVG and DXF, and
+      // the engine's refusal named a setting this model may not have.
+      const message =
+        format === 'pdf' && error?.code === 'MODEL_NOT_2D'
+          ? 'PDF export needs a 2D model. For this 3D model, export SVG or DXF, which offer an approximate outline.'
+          : error.message || String(error);
+      updateStatus(`${formatName} export failed: ${message}`, 'error', {
+        announce: false,
+      });
+      // The toast is an alert and says it; a second voice said it twice.
       showErrorToast({
         title: `${formatName} Export Failed`,
-        message: error.message || String(error),
+        message,
       });
-      announceImmediate(`${formatName} export failed.`);
       return false;
     }
   }
@@ -3646,7 +3656,8 @@ async function initApp() {
       const dataUrl = canvas.toDataURL('image/png');
       if (!dataUrl || dataUrl.length < 100) return;
       const link = document.createElement('a');
-      link.download = 'openscad-preview.png';
+      // Named for the project, so a picture found later says which one.
+      link.download = `${projectStem(stateManager.getState().uploadedFile?.name)}-preview.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
@@ -15535,10 +15546,14 @@ if (rounded) {
 
     const defaultParams = state.schema.parameters || {};
 
+    // The file names the project it belongs to; currentModelName is not
+    // always set, and the file then said "Unknown Model".
+    const modelName =
+      state.uploadedFile?.name || state.currentModelName || 'model';
     const changedJson = presetManager.exportChangedParametersJSON(
       state.parameters,
       defaultParams,
-      state.currentModelName || 'Unknown Model'
+      modelName
     );
 
     const parsed = JSON.parse(changedJson);
@@ -15555,13 +15570,8 @@ if (rounded) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
 
-    const baseName = (state.currentModelName || 'model').replace(
-      /\.(scad|zip)$/i,
-      ''
-    );
-    const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
     a.href = url;
-    a.download = `${baseName}-changed-params-${date}.json`;
+    a.download = `${projectStem(modelName)}-${todayStamp()}-changed-settings.json`;
     a.click();
     URL.revokeObjectURL(url);
 

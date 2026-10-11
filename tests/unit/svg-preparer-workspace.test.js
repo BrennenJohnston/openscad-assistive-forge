@@ -3054,6 +3054,16 @@ describe('deleting shapes from the list', () => {
     ws.destroy();
   });
 
+  it('says one shape as one, not "1 shapes"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 2);
+    deleteRow(ws, 0);
+    expect(announce.mock.calls.map((c) => c[0]).join(' | ')).toMatch(
+      /1 shape left\./
+    );
+    ws.destroy();
+  });
+
   it('announces the delete and the undo, with the count left', () => {
     const ws = createSvgPrepWorkspace(container);
     openWith(ws, 3);

@@ -126,6 +126,17 @@ export const EDITOR_STRINGS = Object.freeze({
    */
   opened: 'Drawing editor open. The model preview is behind it.',
 
+  /**
+   * What is said as a drawing opens: traced from a picture, converted from
+   * a photo, or opened as it is. A11Y.
+   */
+  openedForEditing: (fileName, shapes, { traced, converted, seconds } = {}) =>
+    traced
+      ? `${fileName} traced into ${count(shapes, 'shape', 'shapes')}. Editor opened.`
+      : converted
+        ? `${fileName} converted in ${seconds.toFixed(1)} seconds, ${count(shapes, 'shape', 'shapes')}. Editor opened.`
+        : `${fileName} opened for editing, ${count(shapes, 'shape', 'shapes')}.`,
+
   /** The status line while the color engine is on its way. A11Y. */
   findingRegions: 'Finding the regions in this drawing.',
 

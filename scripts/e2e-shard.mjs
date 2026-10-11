@@ -329,6 +329,8 @@ export const MEASURED_SECONDS = {
   'dialog-focus-sweep.spec.js': 40.0,
   // Six cases, about 5 s each locally with a warm engine; booked at 50.
   'status-announcements.spec.js': 50.0,
+  // Three cases, about 8 s each locally (each loads the app); booked at 30.
+  'export-messages.spec.js': 30.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

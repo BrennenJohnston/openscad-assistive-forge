@@ -95,7 +95,8 @@ export async function exportFormatFromMenu(
     current.uploadedFile?.name || 'model',
     current.parameters || {},
     format,
-    getBrailleDownloadName()
+    getBrailleDownloadName(),
+    { stlBinary }
   );
   downloadFile(outputData, filename, format);
 }
