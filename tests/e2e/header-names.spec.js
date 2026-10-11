@@ -107,7 +107,9 @@ test('the theme button says which theme is on; the mode switch its two options',
   );
 
   const mode = page.locator('#uiModeToggle');
-  expect(await nameOf(page, '#uiModeToggle')).toBe('Interface mode');
+  expect(await nameOf(page, '#uiModeToggle')).toBe(
+    'Interface mode: Simplified, Standard'
+  );
   expect(await visibleWordsOf(page, '#uiModeToggle')).toBe(
     'Simplified Standard'
   );

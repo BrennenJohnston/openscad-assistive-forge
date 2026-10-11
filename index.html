@@ -184,7 +184,7 @@
               class="ui-mode-toggle hidden"
               role="switch"
               aria-checked="false"
-              aria-label="Interface mode: Simplified. Click to switch to Standard mode"
+              aria-label="Interface mode: Simplified, Standard"
               title="Switch between Simplified and Standard interface modes"
             >
               <!-- The two words are the switch's options, read with its
@@ -206,7 +206,7 @@
               class="ui-mode-toggle classic-density-toggle ui-mode-toggle--basic"
               role="switch"
               aria-checked="false"
-              aria-label="Classic view: Simplified. Click to switch to Standard"
+              aria-label="Classic view: Simplified, Standard"
               title="Switch between the Simplified and Standard Classic views"
             >
               <span
@@ -1166,7 +1166,7 @@
                       type="button"
                       class="btn btn-large btn-outline"
                       id="uploadZoneFolderBtn"
-                      aria-label="Open a project folder from your computer"
+                      title="Open a project folder from your computer"
                     >
                       Open Project Folder…
                     </button>
@@ -1261,8 +1261,8 @@
                         type="button"
                         class="btn btn-sm btn-outline"
                         id="importFolderBtn"
-                        aria-label="Import project folder"
-                        title="Import Folder"
+                        aria-label="Import Folder: a project folder from your computer"
+                        title="Import a project folder"
                         hidden
                       >
                         <svg
@@ -1287,8 +1287,8 @@
                         type="button"
                         class="btn btn-sm btn-outline"
                         id="connectFolderBtn"
-                        aria-label="Connect to a folder on disk for persistent two-way access"
-                        title="Connect to a folder (Chromium only)"
+                        aria-label="Connect Folder: a folder on disk, kept in step both ways"
+                        title="Connect a folder on disk (Chromium only)"
                         hidden
                       >
                         <svg
@@ -2663,34 +2663,34 @@
                   <legend>Details</legend>
                   <div class="classic-vp-field">
                     <label for="vpTx">Translation X</label>
-                    <input type="number" id="vpTx" step="1" />
+                    <input type="number" id="vpTx" step="any" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpTy">Translation Y</label>
-                    <input type="number" id="vpTy" step="1" />
+                    <input type="number" id="vpTy" step="any" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpTz">Translation Z</label>
-                    <input type="number" id="vpTz" step="1" />
+                    <input type="number" id="vpTz" step="any" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpRx">Rotation X</label>
-                    <input type="number" id="vpRx" step="1" />
+                    <input type="number" id="vpRx" step="any" />
                     <span class="classic-vp-unit">&deg;</span>
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpRy">Rotation Y</label>
-                    <input type="number" id="vpRy" step="1" />
+                    <input type="number" id="vpRy" step="any" />
                     <span class="classic-vp-unit">&deg;</span>
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpRz">Rotation Z</label>
-                    <input type="number" id="vpRz" step="1" />
+                    <input type="number" id="vpRz" step="any" />
                     <span class="classic-vp-unit">&deg;</span>
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpDistance">Distance</label>
-                    <input type="number" id="vpDistance" step="1" min="0" />
+                    <input type="number" id="vpDistance" step="any" min="0" />
                   </div>
                   <div class="classic-vp-field">
                     <label for="vpFov">FOV</label>
@@ -3842,7 +3842,8 @@
                           type="button"
                           class="btn btn-sm btn-outline companion-save-btn hidden"
                           id="companionSaveBtn"
-                          aria-label="Save companion files to this project"
+                          aria-label="Save as Project: the companion files with this project"
+                          title="Save the companion files with this project"
                         >
                           Save as Project
                         </button>
@@ -4169,7 +4170,7 @@
                         type="button"
                         id="managePresetsBtn"
                         class="btn btn-sm btn-outline"
-                        aria-label="Import and export presets"
+                        aria-label="Import / Export presets"
                         title="Import and export presets"
                       >
                         📋 Import / Export

@@ -113,6 +113,9 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     // Log violations for debugging
@@ -163,6 +166,9 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     // Run accessibility scan on parameter UI
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     expectOnlyAllowedViolations(results);
@@ -1561,6 +1567,9 @@ test.describe('Color System and Theme Accessibility', () => {
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     expect(results.violations).toEqual([]);
@@ -1582,6 +1591,9 @@ test.describe('Color System and Theme Accessibility', () => {
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     expect(results.violations).toEqual([]);
@@ -1899,6 +1911,9 @@ test.describe('Mono / Alt View Theme State Accessibility', () => {
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     expect(results.violations).toEqual([]);
@@ -1917,6 +1932,9 @@ test.describe('Mono / Alt View Theme State Accessibility', () => {
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     expect(results.violations).toEqual([]);
@@ -2081,6 +2099,9 @@ test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     expect(results.violations).toEqual([]);
@@ -2567,6 +2588,9 @@ test.describe('Drawer Accessibility', () => {
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     expectOnlyAllowedViolations(results);
@@ -3203,6 +3227,9 @@ test.describe('Axe-Core Scans for Missing Views', () => {
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     console.log(
@@ -3234,6 +3261,9 @@ test.describe('Axe-Core Scans for Missing Views', () => {
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     console.log(
@@ -3300,6 +3330,9 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     const atRoot = await new AxeBuilder({ page })
       .include('#projectFilesControls')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
     expectOnlyAllowedViolations(atRoot);
 
@@ -3314,6 +3347,9 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     const inFolder = await new AxeBuilder({ page })
       .include('#projectFilesControls')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
     expectOnlyAllowedViolations(inFolder);
   });
@@ -3353,6 +3389,9 @@ test.describe('Axe-Core Scans for Missing Views', () => {
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // A best practice the tags leave out: a control whose visible words are
+      // not in its name cannot be worked by saying them.
+      .withRules(['label-content-name-mismatch'])
       .analyze();
 
     console.log(

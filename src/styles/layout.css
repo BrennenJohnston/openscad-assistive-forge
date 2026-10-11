@@ -2084,10 +2084,12 @@ body[data-app-surface='welcome'] #uiModeToggle {
   gap: var(--space-xs);
 }
 
-.camera-view-btn {
+/* .btn.camera-view-btn, not .camera-view-btn: .btn-sm's smaller target comes
+   later in the cascade and won at equal specificity, leaving these 36 px. */
+.btn.camera-view-btn {
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-size-sm);
-  min-height: 36px;
+  min-height: var(--size-touch-target);
 }
 
 .btn.camera-view-btn:hover:not(:disabled) {

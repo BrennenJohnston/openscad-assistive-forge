@@ -71,6 +71,12 @@ test('A. Forge is named by its words, with no pressed state', async ({
   await expect(page.locator(`#${describedBy}`)).toHaveText(
     'Switch to the Assistive Forge interface'
   );
+  // The Classic view switch, like the interface switch: a name with its two
+  // words, its state the switch's own.
+  await expect(page.locator('#classicDensityToggle')).toHaveAttribute(
+    'aria-label',
+    'Classic view: Simplified, Standard'
+  );
 });
 
 test('Play says its action and carries no pressed state', async ({ page }) => {

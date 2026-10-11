@@ -944,7 +944,9 @@ export class UIModeController {
     // A two-option choice named "Interface mode": the switch's state and
     // its two visible words say the rest. The old name put the whole
     // sentence in front, and read its old state before it changed.
-    btn.setAttribute('aria-label', 'Interface mode');
+    // The two words on the switch are in its name too: a control whose
+    // visible words are not in its name cannot be worked by saying them.
+    btn.setAttribute('aria-label', 'Interface mode: Simplified, Standard');
     btn.classList.toggle('ui-mode-toggle--basic', isSimplified);
   }
 
@@ -1023,12 +1025,9 @@ export class UIModeController {
     const isSimplified = this.getClassicDensity() === 'simplified';
     btn.setAttribute('aria-checked', String(!isSimplified));
     btn.classList.toggle('ui-mode-toggle--basic', isSimplified);
-    btn.setAttribute(
-      'aria-label',
-      isSimplified
-        ? 'Classic view: Simplified. Click to switch to Standard'
-        : 'Classic view: Standard. Click to switch to Simplified'
-    );
+    // The name carries the two words on the switch; aria-checked carries
+    // which one is on, so the name itself never changes.
+    btn.setAttribute('aria-label', 'Classic view: Simplified, Standard');
   }
 
   /**

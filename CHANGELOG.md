@@ -90,6 +90,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its words; Play has one state signal; a font radio says its style
   ("Liberation Sans Bold"); the opacity, brightness and contrast sliders say
   their value with its unit.
+- Touch targets of at least 44 px: the Customizer's "?" and reset buttons,
+  the camera view buttons, a dialog's close, the Clear Cache dialog's Keep
+  checkbox, and the code editor's search panel. A parameter's help tip opens
+  inside the panel instead of being cut off at its edge. The Main Page's
+  folder buttons are named by their visible words.
+- Automatic preview, switched off, stays off on the next visit (recovery mode
+  switched it off and the app forgot); Viewport Control's fields accept the
+  fractions the app writes into them.
 
 ## [5.2.2] - 2026-10-09
 

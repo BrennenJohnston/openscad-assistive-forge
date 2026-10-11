@@ -1937,10 +1937,10 @@ dialog:modal {
 }
 
 .cache-clear-option input[type='checkbox'] {
-  margin-top: 2px;
-  width: 20px;
-  height: 20px;
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .cache-clear-option-content {
@@ -3864,9 +3864,13 @@ dialog:modal {
 }
 
 .param-help-button {
-  width: 20px;
-  height: 20px;
+  /* The round mark stays 20 px; the target around it is the touch size. */
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
+  margin: calc((20px - var(--size-touch-target)) / 2);
   border-radius: 50%;
+  background-clip: content-box;
+  padding: calc((var(--size-touch-target) - 20px) / 2);
   background: var(--color-accent);
   color: var(--color-accent-text);
   border: none;
@@ -3900,11 +3904,47 @@ dialog:modal {
   background: var(--color-accent-hover);
 }
 
+/* CodeMirror's own search panel ships 21 px buttons, 13 px checkboxes and a
+   10 px close; here every control is a touch target. */
+.cm-search button,
+.cm-search .cm-button,
+.cm-search input[type='text'],
+.cm-search .cm-textfield {
+  min-height: var(--size-touch-target);
+  padding-inline: var(--space-sm);
+  font-size: var(--font-size-sm);
+}
+
+.cm-search button,
+.cm-search .cm-button {
+  min-width: var(--size-touch-target);
+}
+
+.cm-search input[type='checkbox'] {
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
+  margin: 0;
+  vertical-align: middle;
+}
+
+.cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+}
+
+.cm-search button[name='close'] {
+  min-width: var(--size-touch-target);
+}
+
 .param-tooltip {
   position: absolute;
   top: calc(100% + var(--space-sm));
-  left: 50%;
-  transform: translateX(-50%);
+  /* Anchored at the panel's left edge, not centred on its "?": centred, a
+     tip of 200 px and more was clipped by the group it sits in. */
+  left: 0;
+  transform: none;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -6293,8 +6333,8 @@ body.first-visit-blocking #app {
   color: var(--color-text-secondary);
   padding: var(--space-xs);
   line-height: 1;
-  min-width: var(--size-touch-target-sm);
-  min-height: var(--size-touch-target-sm);
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
   border-radius: var(--border-radius-sm);
 }
 
@@ -9383,6 +9423,8 @@ button.file-nav-folder-row {
 
 .param-reset-btn {
   padding: var(--space-2xs) var(--space-xs);
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
   font-size: var(--font-size-xs);
   background: transparent;
   border: 1px solid var(--color-border);

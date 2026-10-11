@@ -333,6 +333,10 @@ export const MEASURED_SECONDS = {
   'export-messages.spec.js': 30.0,
   // Five cases, about 3 s each locally with a warm engine; booked at 25.
   'header-names.spec.js': 25.0,
+  // Four cases, about 6 s each locally (one opens the code editor); booked at 30.
+  'touch-targets.spec.js': 30.0,
+  // Four cases in Classic Standard, about 4 s each locally; booked at 25.
+  'classic-names.spec.js': 25.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

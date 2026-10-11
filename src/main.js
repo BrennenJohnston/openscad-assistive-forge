@@ -114,6 +114,10 @@ import {
 } from './js/modal-manager.js';
 import { disableKeepingFocus, setBusy, isBusy } from './js/focus-trap.js';
 import {
+  readAutoPreviewChoice,
+  writeAutoPreviewChoice,
+} from './js/auto-preview-choice.js';
+import {
   translateError,
   previewFailureSentence,
   engineErrorLine,
@@ -1231,7 +1235,8 @@ async function initApp() {
 
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
-  let autoPreviewEnabled = true;
+  // The person's choice, read back at every start (recovery mode writes it off).
+  let autoPreviewEnabled = readAutoPreviewChoice();
   // Runtime mapping from preset name to companion file paths (built on ZIP load).
   // Stores path references only — content is resolved lazily on preset activation.
   let presetCompanionMap = null;
@@ -1243,7 +1248,7 @@ async function initApp() {
   let isLoadingPreset = false;
   let currentPresetSignature = null;
   let isPresetDirty = false;
-  let autoPreviewUserEnabled = true;
+  let autoPreviewUserEnabled = autoPreviewEnabled;
   let previewQuality = RENDER_QUALITY.DESKTOP_DEFAULT;
 
   // CRITICAL: Declare DOM element variables early to avoid Temporal Dead Zone errors
@@ -6719,6 +6724,7 @@ async function initApp() {
     autoPreviewToggle.addEventListener('change', () => {
       autoPreviewUserEnabled = autoPreviewToggle.checked;
       autoPreviewEnabled = autoPreviewUserEnabled;
+      writeAutoPreviewChoice(autoPreviewEnabled);
       if (autoPreviewController) {
         autoPreviewController.setEnabled(
           autoPreviewEnabled,
