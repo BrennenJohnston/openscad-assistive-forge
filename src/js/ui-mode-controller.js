@@ -989,13 +989,19 @@ export class UIModeController {
     // predicate). The reason is shown on the first-visit modal's gate note
     // (#firstVisitClassicGate), which appears on exactly this predicate.
     const gated = !isClassic && !isViewportDesktopShaped();
-    btn.classList.toggle('hidden', !isEnabled('classic_mode') || gated);
+    const absent = !isEnabled('classic_mode') || gated;
+    btn.classList.toggle('hidden', absent);
     // Nothing visible is ever aria-disabled now, so no live control points
-    // at #classicModeToggleReason and no describedby can dangle at a
-    // control the user cannot see.
+    // at #classicModeToggleReason; and an absent button carries no
+    // description either, so nothing dangles at a control no one can see.
     btn.removeAttribute('aria-disabled');
-    btn.setAttribute('aria-describedby', 'classicModeToggleDescription');
-    btn.setAttribute('title', does);
+    if (absent) {
+      btn.removeAttribute('aria-describedby');
+      btn.removeAttribute('title');
+    } else {
+      btn.setAttribute('aria-describedby', 'classicModeToggleDescription');
+      btn.setAttribute('title', does);
+    }
   }
 
   /**
