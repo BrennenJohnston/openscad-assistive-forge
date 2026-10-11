@@ -8,6 +8,7 @@
 
 import { test, expect } from '@playwright/test'
 import { attachInvariants, expectNoNativeDialog, expectNoPageErrors } from './helpers/invariants.js'
+import { draftQuestion } from './helpers/draft-question.js'
 
 const ENGINE_TIMEOUT = 240_000
 const PREVIEW_TIMEOUT = 180_000
@@ -64,9 +65,7 @@ async function waitForDraft(page) {
  * loses work.
  */
 async function restoreDraft(page) {
-  const question = page
-    .locator('[role="alertdialog"]')
-    .filter({ has: page.getByRole('heading', { name: 'Restore a saved draft?', exact: true }) })
+  const question = draftQuestion(page)
   await expect(question).toBeVisible({ timeout: 60_000 })
   await expect(question).toContainText('A draft of "simple_box.scad" from')
   const restore = question.getByRole('button', { name: 'Restore draft', exact: true })

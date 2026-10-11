@@ -10,6 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { answerDraftQuestion } from './helpers/draft-question.js'
 
 const payload = (params) =>
   `#v=1&params=${encodeURIComponent(JSON.stringify(params))}`
@@ -37,12 +38,13 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-async function openSimpleBox(page, fragment = '') {
+async function openSimpleBox(page, fragment = '', { draft } = {}) {
   await page.goto(`/?example=simple-box${fragment}`)
   await page
     .locator('.param-control')
     .first()
     .waitFor({ state: 'attached', timeout: 40000 })
+  if (draft) await answerDraftQuestion(page, draft)
   const notNow = page.locator('#saveProjectNotNow')
   try {
     await notNow.waitFor({ state: 'visible', timeout: 2000 })
@@ -223,7 +225,8 @@ test.describe('Shared parameter links', () => {
       .toContain('params=')
     const shared = await page.evaluate(() => window.location.hash)
 
-    await openSimpleBox(page, shared)
+    // The edit left a draft; the link, not the draft, is what is opened here.
+    await openSimpleBox(page, shared, { draft: 'Discard draft' })
     await expect(page.locator('#param-width')).toHaveValue('88')
   })
 })

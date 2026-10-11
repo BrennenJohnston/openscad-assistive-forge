@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
+import { answerDraftQuestion } from './helpers/draft-question.js'
 
 // Folder import — copy path (entry B, webkitdirectory input).
 //
@@ -451,6 +452,8 @@ test.describe('folder import (copy path)', () => {
         state: 'attached',
         timeout: WASM_READY_TIMEOUT,
       })
+      // The import left a draft; this test is about the card, not the draft.
+      await answerDraftQuestion(page, 'Discard draft')
       await expect(card).toHaveCount(1)
       await card.locator('.btn-load-project').click()
       await expect(page.locator('#mainInterface')).toBeVisible({
