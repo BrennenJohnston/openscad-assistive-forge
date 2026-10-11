@@ -676,11 +676,54 @@ export class ClassicLayoutController {
     return this._panes.viewportControlVisible;
   }
 
+  /**
+   * The element of a pane, to tell whether focus is inside it.
+   * @param {string} pane - a DOCK_PANELS id
+   * @returns {HTMLElement|null}
+   * @private
+   */
+  _paneElement(pane) {
+    const def = DOCK_PANELS.find((p) => p.id === pane);
+    return def ? document.getElementById(def.elementId) : null;
+  }
+
+  /**
+   * After a pane hid with focus inside it (its own ✕, or a shortcut pressed
+   * there), focus would fall to the page body: it goes to the control that
+   * brings the pane back, the toolbar's Customizer button for the
+   * Customizer, else the Window menu's button.
+   * @param {string} pane - a DOCK_PANELS id
+   * @private
+   */
+  _focusRestoreControl(pane) {
+    const ids =
+      pane === 'customizer'
+        ? ['classicTbCustomizerBtn', 'windowMenuBtn']
+        : ['windowMenuBtn'];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (
+        !el ||
+        (typeof el.checkVisibility === 'function' && !el.checkVisibility())
+      ) {
+        continue;
+      }
+      el.focus();
+      if (document.activeElement === el) return;
+    }
+  }
+
   /** Show/hide the editor pane (Window > Editor, titlebar ✕). */
   toggleEditor() {
+    const hadFocus = this._paneElement('editor')?.contains(
+      document.activeElement
+    );
     this._panes.editorVisible = !this._panes.editorVisible;
     this._applyPaneAttributes();
     this._savePaneState();
+    if (!this._panes.editorVisible && hadFocus) {
+      this._focusRestoreControl('editor');
+    }
     if (this.active) {
       document.dispatchEvent(
         new CustomEvent(
@@ -698,9 +741,15 @@ export class ClassicLayoutController {
 
   /** Show/hide the Customizer dock (Window > Customizer, titlebar ✕). */
   toggleCustomizer() {
+    const hadFocus = this._paneElement('customizer')?.contains(
+      document.activeElement
+    );
     this._panes.customizerVisible = !this._panes.customizerVisible;
     this._applyPaneAttributes();
     this._savePaneState();
+    if (!this._panes.customizerVisible && hadFocus) {
+      this._focusRestoreControl('customizer');
+    }
     announceImmediate(
       this._panes.customizerVisible ? 'Customizer shown' : 'Customizer hidden'
     );
@@ -717,10 +766,12 @@ export class ClassicLayoutController {
    */
   _toggleOptionalPane(pane) {
     const key = `${pane}Visible`;
+    const hadFocus = this._paneElement(pane)?.contains(document.activeElement);
     this._panes[key] = !this._panes[key];
     this._applyPaneAttributes();
     this._savePaneState();
     if (this._panes[key]) this._revealPane(pane);
+    else if (hadFocus) this._focusRestoreControl(pane);
     announceImmediate(
       `${panelLabel(pane)} ${this._panes[key] ? 'shown' : 'hidden'}`
     );
@@ -1337,6 +1388,11 @@ export class ClassicLayoutController {
     body.dataset.classicCustomizerHidden = String(
       !this._panes.customizerVisible
     );
+    // The toolbar's Customizer button says whether the pane is shown, however
+    // it was shown or hidden (its own press, the ✕, the Window menu, a key).
+    document
+      .getElementById('classicTbCustomizerBtn')
+      ?.setAttribute('aria-pressed', String(this._panes.customizerVisible));
 
     // Simplified hides Viewport-Control without clearing its preference, so
     // the visible-attribute follows the same rule the occupancy does.

@@ -70,4 +70,20 @@ test.describe('A folder of several projects', () => {
       '156 triangles'
     )
   })
+
+  test('Escape closes the main-file prompt, opens nothing, and returns focus', async ({
+    page,
+  }) => {
+    await page.locator('#importFolderBtn').focus()
+    await page.locator('#importFolderInput').setInputFiles(FOLDER)
+
+    const dialog = page.locator('dialog.folder-scad-select-dialog')
+    await expect(dialog).toBeVisible({ timeout: 30_000 })
+    await expect(dialog.locator('input[name="scadFile"]:checked')).toBeFocused()
+    await page.keyboard.press('Escape')
+
+    await expect(dialog).toHaveCount(0)
+    await expect(page.locator('#welcomeScreen')).toBeVisible()
+    await expect(page.locator('#importFolderBtn')).toBeFocused()
+  })
 })

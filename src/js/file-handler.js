@@ -44,6 +44,7 @@ import { PREVIEW_STATE } from './auto-preview-controller.js';
 import { LIBRARY_DEFINITIONS } from './library-manager.js';
 import { presetManager } from './preset-manager.js';
 import { closeModal } from './modal-manager.js';
+import { firstParameterControl } from './focus-trap.js';
 import { themeManager } from './theme-manager.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import {
@@ -1494,8 +1495,12 @@ export function initFileHandler({
           const promptState = currentExampleKey
             ? { ...state, sourceExampleKey: currentExampleKey }
             : state;
-          const promptResult =
-            await getSavedProjectsUI().showSaveProjectPrompt(promptState);
+          // After Save or Not now, back to the model just loaded: its first
+          // parameter, looked up again on closing in case it was redrawn.
+          const promptResult = await getSavedProjectsUI().showSaveProjectPrompt(
+            promptState,
+            { focusAfter: () => firstParameterControl(parametersContainer) }
+          );
 
           if (promptResult?.saved && promptResult.projectId) {
             await loadUserSvgsIntoGallery(promptResult.projectId);

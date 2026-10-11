@@ -114,6 +114,49 @@ export function initSavedProjectsUI({
   }
 
   /**
+   * A project's control in the list as drawn now. Saving an edit or deleting
+   * draws every card again, so the button that was pressed is gone. Matched
+   * on dataset rather than a selector, so no id can break the lookup.
+   */
+  function findCardControl(projectId, selector) {
+    const card = [...document.querySelectorAll('.saved-project-card')].find(
+      (el) => el.dataset.projectId === projectId
+    );
+    return card?.querySelector(selector) || null;
+  }
+
+  /** A folder's row in the tree as drawn now. */
+  function findFolderRow(folderId) {
+    if (!folderId) return null;
+    const item = [...document.querySelectorAll('.folder-item')].find(
+      (el) => el.dataset.folderId === folderId
+    );
+    return item?.querySelector('.folder-header') || null;
+  }
+
+  /**
+   * Focus once a deleted project's card is gone: the card now in its place,
+   * else the one before it, else its folder's row, else the note that
+   * nothing is saved, else the section's heading. Never the page body.
+   * @param {number} index - Where the card stood in the list, or -1
+   * @param {string|null} folderId - The folder it was in
+   */
+  function focusAfterDelete(index, folderId) {
+    const cards = document.querySelectorAll(
+      '#savedProjectsList .saved-project-card'
+    );
+    const empty = document.getElementById('savedProjectsEmpty');
+    const target =
+      (index >= 0 && (cards[index] || cards[index - 1])) ||
+      findFolderRow(folderId) ||
+      (empty && !empty.classList.contains('hidden') ? empty : null) ||
+      document.getElementById('saved-projects-heading');
+    if (!target) return;
+    if (!target.matches('button, [tabindex]')) target.tabIndex = -1;
+    target.focus();
+  }
+
+  /**
    * Render the saved projects list on the welcome screen, with its folder
    * tree.
    */
@@ -405,8 +448,10 @@ export function initSavedProjectsUI({
         navigateToFolder(folderId);
       });
 
-      // Keyboard navigation
+      // Keyboard navigation, for the row itself and not its Rename and
+      // Delete buttons
       header.addEventListener('keydown', (e) => {
+        if (e.target !== header) return;
         const folderId = header.closest('.folder-item').dataset.folderId;
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -485,6 +530,10 @@ export function initSavedProjectsUI({
 
       card.setAttribute('tabindex', '0');
       card.addEventListener('keydown', (e) => {
+        // The card's own keys only: Enter or Space on one of its buttons is
+        // that button's (it was taken here, so Edit, Files, Export and
+        // Delete could not be pressed from the keyboard).
+        if (e.target !== card) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           loadSavedProject(card.dataset.projectId);
@@ -1143,6 +1192,12 @@ export function initSavedProjectsUI({
       dismissFileManager();
       loadSavedProject(projectId);
     });
+    // Escape closes, unless a folder row has just used it to go up a level.
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      dismissFileManager();
+    });
 
     // Add file button
     const addFileBtn = modal.querySelector('#addFileToProjectBtn');
@@ -1300,6 +1355,11 @@ export function initSavedProjectsUI({
     modal
       .querySelector('#filePreviewCloseBtn')
       .addEventListener('click', dismissPreview);
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      dismissPreview();
+    });
   }
 
   /**
@@ -1509,9 +1569,16 @@ export function initSavedProjectsUI({
    * @param {Object} fileData - Current file state
    * @param {Object} [options]
    * @param {boolean} [options.preSave=false] - Pre-check the save box (explicit Save action)
+   * @param {() => HTMLElement|null} [options.focusAfter] - Where focus goes
+   *   when the prompt closes, looked up on opening and again on closing. The
+   *   prompt after a load opens without a press, so what had focus before it
+   *   is no place to go back to.
    * @returns {Promise<{saved: boolean, projectId?: string}>}
    */
-  async function showSaveProjectPrompt(fileData, { preSave = false } = {}) {
+  async function showSaveProjectPrompt(
+    fileData,
+    { preSave = false, focusAfter = null } = {}
+  ) {
     const { uploadedFile, projectFiles, mainFilePath, sourceExampleKey } =
       fileData;
 
@@ -1661,7 +1728,7 @@ export function initSavedProjectsUI({
           });
         }
 
-        closeModal(modal);
+        closeModal(modal, { fallbackFocus: focusAfter?.() });
         modal.remove();
         resolvePrompt({
           saved: result.success,
@@ -1696,15 +1763,20 @@ export function initSavedProjectsUI({
       });
 
       const closeHandler = () => {
-        closeModal(modal);
+        closeModal(modal, { fallbackFocus: focusAfter?.() });
         modal.remove();
         resolvePrompt({ saved: false });
       };
 
       notNowBtn.addEventListener('click', closeHandler);
       closeBtn.addEventListener('click', closeHandler);
+      modal.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        closeHandler();
+      });
 
-      openModal(modal);
+      openModal(modal, { returnFocus: focusAfter?.() || undefined });
 
       nameInput.focus();
       nameInput.select();
@@ -1804,7 +1876,11 @@ export function initSavedProjectsUI({
           showErrorToast({ title: 'Update Failed', message: result.error });
         }
 
-        closeModal(modal);
+        closeModal(modal, {
+          fallbackFocus:
+            findCardControl(projectId, '.btn-edit-project') ||
+            findFolderRow(project.folderId),
+        });
         modal.remove();
       });
 
@@ -1816,6 +1892,11 @@ export function initSavedProjectsUI({
 
       cancelBtn.addEventListener('click', closeHandler);
       closeBtn.addEventListener('click', closeHandler);
+      modal.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        closeHandler();
+      });
 
       // Open modal with focus management
       openModal(modal);
@@ -1855,12 +1936,17 @@ export function initSavedProjectsUI({
 
       if (!confirmed) return;
 
+      const index = [
+        ...document.querySelectorAll('#savedProjectsList .saved-project-card'),
+      ].findIndex((el) => el.dataset.projectId === projectId);
+
       const result = await deleteProject(projectId);
 
       if (result.success) {
         stateManager.announceChange(`Deleted project: ${project.name}`);
         updateStatus(`Deleted: ${project.name}`);
         await renderSavedProjectsList();
+        focusAfterDelete(index, project.folderId);
       } else {
         showErrorToast({ title: 'Delete Failed', message: result.error });
       }

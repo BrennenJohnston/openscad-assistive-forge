@@ -122,18 +122,20 @@ export function createFocusTrap(container, options = {}) {
       isActive = true;
       container.addEventListener('keydown', handleKeydown);
 
-      // Set initial focus
-      if (activateOptions.initialFocus) {
+      // Set initial focus at once, not only in the next frame: a busy page,
+      // or a tab in the background, can hold that frame back, and a key
+      // pressed meanwhile went to whatever was behind the dialog (Escape to
+      // the menu that opened it, leaving the dialog open). The frame stays as
+      // a retry for a container that only becomes focusable once laid out.
+      const target =
+        activateOptions.initialFocus || getFocusableElements(container)[0];
+      if (target) {
+        target.focus();
         requestAnimationFrame(() => {
-          activateOptions.initialFocus.focus();
+          if (isActive && !container.contains(document.activeElement)) {
+            target.focus();
+          }
         });
-      } else {
-        const focusable = getFocusableElements(container);
-        if (focusable.length > 0) {
-          requestAnimationFrame(() => {
-            focusable[0].focus();
-          });
-        }
       }
     },
 
@@ -318,7 +320,17 @@ export function createDocumentFocusTrap(container, options = {}) {
       if (delay > 0) {
         setTimeout(setFocus, delay);
       } else {
-        requestAnimationFrame(setFocus);
+        // At once, not only in the next frame: a busy page, or a tab in the
+        // background, can hold that frame back, and a key pressed meanwhile
+        // went to whatever was behind the dialog (Escape to an open menu,
+        // leaving the dialog open). The frame stays as a retry for a
+        // container that only becomes focusable once it is laid out.
+        setFocus();
+        requestAnimationFrame(() => {
+          if (isActive && !container.contains(document.activeElement)) {
+            setFocus();
+          }
+        });
       }
     },
 
@@ -350,4 +362,75 @@ export function createDocumentFocusTrap(container, options = {}) {
  */
 export function trapFocusHandler(container) {
   return createFocusTrap(container).getHandler();
+}
+
+/**
+ * Disable a button without dropping focus on the page body. A focused button
+ * that becomes disabled loses focus, and a keyboard or screen reader user
+ * loses their place, so focus moves to the fallback first.
+ *
+ * @param {HTMLButtonElement|null} button - The button to disable
+ * @param {HTMLElement|null} fallback - Where focus goes if the button had it
+ */
+export function disableKeepingFocus(button, fallback) {
+  if (!button) return;
+  if (
+    document.activeElement === button &&
+    typeof fallback?.focus === 'function'
+  ) {
+    fallback.focus();
+  }
+  button.disabled = true;
+}
+
+/**
+ * The first parameter control a person can reach: the first input on show,
+ * else the first group's heading when every group is folded (an input in a
+ * folded group is in the page, but focus() on it does nothing).
+ * @param {HTMLElement|null} container - The parameters container
+ * @returns {HTMLElement|null}
+ */
+export function firstParameterControl(container) {
+  if (!container) return null;
+  const drawn = (el) =>
+    typeof el.checkVisibility !== 'function' || el.checkVisibility();
+  return (
+    [
+      ...container.querySelectorAll(
+        'input:not([type="hidden"]), select, textarea'
+      ),
+    ].find(drawn) ||
+    [...container.querySelectorAll('summary')].find(drawn) ||
+    null
+  );
+}
+
+/**
+ * Mark a button busy with its own action, or no longer. Not `disabled`: a
+ * disabled button loses focus to the page body, and the person who pressed
+ * it loses their place. `aria-disabled` keeps it focusable and says it is
+ * unavailable (`data-busy` gives it the disabled look); its click handler
+ * checks isBusy() and ignores a second press.
+ *
+ * @param {HTMLButtonElement|null} button
+ * @param {boolean} busy
+ */
+export function setBusy(button, busy) {
+  if (!button) return;
+  if (busy) {
+    button.setAttribute('aria-disabled', 'true');
+    button.dataset.busy = 'true';
+  } else {
+    button.removeAttribute('aria-disabled');
+    delete button.dataset.busy;
+  }
+}
+
+/**
+ * Whether a button is busy with its own action (see setBusy).
+ * @param {Element|null} button
+ * @returns {boolean}
+ */
+export function isBusy(button) {
+  return button?.dataset?.busy === 'true';
 }

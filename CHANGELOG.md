@@ -36,6 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   short window, so every button it shows can be pressed.
 - Models that repeat a module many levels deep preview in Firefox and
   Safari: the engine now has the 8 MiB stack desktop OpenSCAD assumes.
+- Dialogs take focus as they open, close on Escape (the browser's own
+  dialogs too), and give focus back to what opened them, or to the
+  nearest sensible place: focus no longer falls to the page body.
+- A saved project card's Edit, Files, Export and Delete buttons work
+  with Enter and Space.
+- Buttons that turn themselves off or work for a while (Undo and Redo,
+  Generate, Save to Folder, the tutorial's Back and Next, Classic's
+  pane close buttons) keep focus nearby.
+- Greyed-out menu items are reached by the arrow keys and say why they
+  are off.
 
 ## [5.2.2] - 2026-10-09
 

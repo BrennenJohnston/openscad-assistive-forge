@@ -12,7 +12,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-vi.mock('../../src/js/focus-trap.js', () => ({
+vi.mock('../../src/js/focus-trap.js', async (importOriginal) => ({
+  // The real helpers (disableKeepingFocus and the like); only the trap is
+  // stubbed.
+  ...(await importOriginal()),
   createDocumentFocusTrap: vi.fn(() => ({
     activate: vi.fn(),
     deactivate: vi.fn(),

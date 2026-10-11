@@ -298,14 +298,31 @@ export const MEASURED_SECONDS = {
   'engine-recovery.spec.js': 20.0,
   // Two cases, about 10 s locally with a warm engine; booked at 20 likewise.
   'mesh-companion.spec.js': 20.0,
-  // One case, about 8 s locally with a warm engine; booked at 15.
-  'folder-projects.spec.js': 15.0,
+  // Two cases, about 8 s and 2 s locally with a warm engine; booked at 20.
+  'folder-projects.spec.js': 20.0,
   // One case, about 9 s locally with a warm engine; booked at 15.
   'typed-preset.spec.js': 15.0,
   // One case, about 4 s locally with a warm engine; booked at 15.
   'background-shapes.spec.js': 15.0,
   // Two cases, about 7 s locally with a warm engine; booked at 20.
   'echo-drawer-phone.spec.js': 20.0,
+  // Six cases, 34.6 to 41.1 s locally (each one loads the app); booked at 45.
+  'menu-dialog-focus.spec.js': 45.0,
+  // Five cases, about 2 s each locally with a warm engine; booked at 30 for
+  // the cold engine load two of them wait for on CI.
+  'saved-projects-focus.spec.js': 30.0,
+  // Eight cases, 44.6 s locally (each one loads the app); booked at 55.
+  'dialog-focus-return.spec.js': 55.0,
+  // One case, about 6 s locally; booked at 15.
+  'guide-example-focus.spec.js': 15.0,
+  // Eight cases, 48.8 s locally (each one loads the app; one generates); 60.
+  'self-disabling-controls-focus.spec.js': 60.0,
+  // Three cases, about 3 s each locally with a warm engine; booked at 20.
+  'classic-pane-focus.spec.js': 20.0,
+  // One case, about 3 s locally with a warm engine; booked at 20.
+  'drawing-editor-close-focus.spec.js': 20.0,
+  // Four cases, about 7 s each locally (a first visit; three load the app).
+  'dialog-focus-sweep.spec.js': 40.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
