@@ -167,3 +167,100 @@ test('a project’s files are renamed, added and deleted through the app’s own
 
   expectNoNativeDialog(page)
 })
+
+const foldersProject = {
+  name: 'Parts kit',
+  originalName: 'parts-kit.zip',
+  kind: 'zip',
+  mainFilePath: 'main.scad',
+  content: 'cube(10);',
+  projectFiles: {
+    'main.scad': 'cube(10);',
+    'parts/hinge.scad': 'cube(2);',
+    'parts/deep/pin.scad': 'cube(1);',
+    'docs/.folder': '',
+  },
+}
+
+async function openFileManager(page) {
+  await seed(page, { project: foldersProject })
+  const card = page.locator('.saved-project-card').filter({ hasText: 'Parts kit' })
+  await expect(card).toBeVisible({ timeout: 30_000 })
+  await card.locator('.btn-manage-files').click()
+  const manager = page.locator('[role="dialog"]').filter({ has: page.locator('#fmTree') })
+  await expect(manager).toBeVisible()
+  return manager
+}
+
+/** The folder row or crumb that has focus, by what it opens. */
+function focusedPlace(page) {
+  return page.evaluate(() => {
+    const el = document.activeElement
+    if (!el || el === document.body) return 'BODY'
+    if (el.dataset.folderEnter) return `row ${el.dataset.folderEnter}`
+    if (el.classList.contains('file-nav-breadcrumb-btn')) return `crumb ${el.getAttribute('aria-label')}`
+    if (el.dataset.path) return `file ${el.dataset.path}`
+    return `${el.tagName.toLowerCase()} ${el.className}`
+  })
+}
+
+test('a folder row’s Rename and Delete answer Enter and Space, not the row', async ({ page }) => {
+  attachInvariants(page)
+  const manager = await openFileManager(page)
+  const tree = manager.locator('#fmTree')
+
+  await tree.locator('.btn-rename-project-folder[data-folder="parts"]').focus()
+  await page.keyboard.press('Enter')
+  const rename = appDialog(page, 'Rename Folder')
+  await expect(rename).toBeVisible()
+  await expect(rename.getByLabel('Folder name', { exact: true })).toHaveValue('parts')
+  await page.keyboard.press('Escape')
+  await expect(rename).toHaveCount(0)
+  await expect(tree.locator('.btn-rename-project-folder[data-folder="parts"]')).toBeFocused()
+
+  await tree.locator('.btn-delete-project-folder[data-folder="parts"]').focus()
+  await page.keyboard.press(' ')
+  const remove = appDialog(page, 'Delete Folder')
+  await expect(remove).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(remove).toHaveCount(0)
+  await expect(tree.locator('.btn-delete-project-folder[data-folder="parts"]')).toBeFocused()
+  await expect(manager.locator('#fmBreadcrumbs')).toHaveText('')
+
+  expectNoNativeDialog(page)
+})
+
+test('moving between a project’s folders keeps focus in the file manager', async ({ page }) => {
+  attachInvariants(page)
+  const manager = await openFileManager(page)
+  const tree = manager.locator('#fmTree')
+  const crumbs = manager.locator('#fmBreadcrumbs')
+
+  // In: the first row of the folder opened.
+  await tree.locator('.file-nav-folder-row[data-folder-enter="parts"]').focus()
+  await page.keyboard.press('Enter')
+  await expect(crumbs).toContainText('parts')
+  await expect.poll(() => focusedPlace(page)).toBe('row deep')
+
+  // Up by Escape on a folder row: the row of the folder just left.
+  await page.keyboard.press('Escape')
+  await expect(crumbs).toHaveText('')
+  await expect(manager).toBeVisible()
+  await expect.poll(() => focusedPlace(page)).toBe('row parts')
+
+  // Up by the breadcrumb: the same.
+  await page.keyboard.press('Enter')
+  await expect.poll(() => focusedPlace(page)).toBe('row deep')
+  await crumbs.getByRole('button', { name: 'Navigate to root' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(crumbs).toHaveText('')
+  await expect.poll(() => focusedPlace(page)).toBe('row parts')
+
+  // An empty folder has no row to land on: its own breadcrumb says where focus is.
+  await tree.locator('.file-nav-folder-row[data-folder-enter="docs"]').focus()
+  await page.keyboard.press('Enter')
+  await expect(crumbs).toContainText('docs')
+  await expect.poll(() => focusedPlace(page)).toBe('crumb Navigate to docs')
+
+  expectNoNativeDialog(page)
+})

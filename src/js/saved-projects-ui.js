@@ -844,6 +844,23 @@ export function initSavedProjectsUI({
       target.focus();
     }
 
+    /**
+     * Focus after moving to another folder, which draws the tree again: the
+     * row of the folder just left when going up, else the first row, else
+     * (an empty folder) the breadcrumb that names it.
+     * @param {string} [leftFolder]
+     */
+    function focusAfterFolderMove(leftFolder) {
+      const left = leftFolder
+        ? fmControl('file-nav-folder-row', 'folderEnter', leftFolder)
+        : null;
+      const hasRows = !!modal.querySelector('#fmTree .file-manager-item');
+      const crumbs = modal.querySelectorAll(
+        '#fmBreadcrumbs .file-nav-breadcrumb-btn'
+      );
+      focusFmTree(left || (hasRows ? null : crumbs[crumbs.length - 1]), 0);
+    }
+
     // ------------------------------------------------------------------ //
     // renderFmView — re-renders breadcrumbs + tree without closing modal  //
     // ------------------------------------------------------------------ //
@@ -885,11 +902,11 @@ export function initSavedProjectsUI({
           .querySelectorAll('.file-nav-breadcrumb-btn')
           .forEach((btn) => {
             btn.addEventListener('click', () => {
-              fmCurrentPath = fmCurrentPath.slice(
-                0,
-                parseInt(btn.dataset.depth, 10)
-              );
+              const depth = parseInt(btn.dataset.depth, 10);
+              const left = fmCurrentPath[depth];
+              fmCurrentPath = fmCurrentPath.slice(0, depth);
               renderFmView();
+              focusAfterFolderMove(left);
             });
           });
       } else {
@@ -1001,20 +1018,25 @@ export function initSavedProjectsUI({
         const enter = () => {
           fmCurrentPath = [...fmCurrentPath, folderName];
           renderFmView();
+          focusAfterFolderMove();
         };
         row.addEventListener('click', (e) => {
           // Don't navigate if a button inside the row was clicked
           if (e.target.closest('button')) return;
           enter();
         });
+        // Enter and Space open the folder from the row itself; its Rename
+        // and Delete buttons keep their own.
         row.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if ((e.key === 'Enter' || e.key === ' ') && e.target === row) {
             e.preventDefault();
             enter();
           } else if (e.key === 'Escape' && fmCurrentPath.length > 0) {
             e.preventDefault();
+            const left = fmCurrentPath[fmCurrentPath.length - 1];
             fmCurrentPath = fmCurrentPath.slice(0, -1);
             renderFmView();
+            focusAfterFolderMove(left);
           }
         });
       });
