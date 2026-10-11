@@ -337,6 +337,8 @@ export const MEASURED_SECONDS = {
   'touch-targets.spec.js': 30.0,
   // Four cases in Classic Standard, about 4 s each locally; booked at 25.
   'classic-names.spec.js': 25.0,
+  // Two cases, 7.1 s together locally (no engine wait); booked at 20.
+  'saved-projects-dialogs.spec.js': 20.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

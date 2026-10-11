@@ -9,6 +9,7 @@ import { stateManager } from './state.js';
 import { escapeHtml, setupNotesCounter } from './html-utils.js';
 import { formatFileSize } from './download.js';
 import { openModal, closeModal } from './modal-manager.js';
+import { showPromptDialog } from './dialogs.js';
 
 // The delete dialog's title, exported so the terminology suite can
 // pin the exact string at the module boundary.
@@ -665,12 +666,18 @@ export function initSavedProjectsUI({
     const folder = await getFolder(folderId);
     if (!folder) return;
 
-    const newName = prompt('Enter new folder name:', folder.name);
-    if (newName && newName.trim() && newName !== folder.name) {
-      const result = await renameFolder(folderId, newName.trim());
+    const newName = await showPromptDialog('', {
+      title: 'Rename Folder',
+      label: 'Folder name',
+      defaultValue: folder.name,
+      confirmLabel: 'Rename',
+    });
+    if (newName && newName !== folder.name) {
+      const result = await renameFolder(folderId, newName);
       if (result.success) {
         await renderSavedProjectsList();
-        stateManager.announceChange(`Folder renamed to ${newName.trim()}`);
+        findFolderRow(folderId)?.querySelector('.btn-rename-folder')?.focus();
+        stateManager.announceChange(`Folder renamed to ${newName}`);
       } else {
         showErrorToast({ title: 'Rename Failed', message: result.error });
       }
@@ -687,18 +694,30 @@ export function initSavedProjectsUI({
     const projectsInFolder = await getProjectsInFolder(folderId);
     const hasContents = projectsInFolder.length > 0;
 
-    let message = `Delete folder "${folder.name}"?`;
+    let message = `Delete the folder "${folder.name}"?`;
     if (hasContents) {
-      message = `Delete folder "${folder.name}"?\n\nThis folder contains ${projectsInFolder.length} project(s). They will be moved to the root level.`;
+      message = `Delete the folder "${folder.name}"?\n\nThis folder contains ${projectsInFolder.length} project(s). They will be moved to the root level.`;
     }
+    const index = [...document.querySelectorAll('.folder-item')].findIndex(
+      (el) => el.dataset.folderId === folderId
+    );
 
-    if (confirm(message)) {
+    if (
+      await showConfirmDialog(message, 'Delete Folder', 'Delete', 'Cancel', {
+        destructive: true,
+      })
+    ) {
       const result = await deleteFolder(folderId, false); // Don't delete contents, move to root
       if (result.success) {
         if (currentFolderId === folderId) {
           currentFolderId = null; // Navigate back to root if we deleted current folder
         }
         await renderSavedProjectsList();
+        // The folder now in its place, else the one before, else the list.
+        const rows = document.querySelectorAll('.folder-item .folder-header');
+        const row = index >= 0 ? rows[index] || rows[index - 1] : null;
+        if (row) row.focus();
+        else focusAfterDelete(-1, null);
         stateManager.announceChange(`Folder "${folder.name}" deleted`);
       } else {
         showErrorToast({ title: 'Delete Failed', message: result.error });
@@ -793,6 +812,37 @@ export function initSavedProjectsUI({
       closeModal(modal);
       document.body.removeChild(modal);
     };
+
+    /** A control in the tree as drawn now, matched on dataset, not a selector. */
+    const fmControl = (className, key, value) =>
+      [...modal.querySelectorAll(`#fmTree .${className}`)].find(
+        (el) => el.dataset[key] === value
+      ) || null;
+
+    /** Where a control's row stands in the tree, before it is drawn again. */
+    const fmRowIndex = (control) =>
+      [...modal.querySelectorAll('#fmTree .file-manager-item')].indexOf(
+        control.closest('.file-manager-item')
+      );
+
+    /**
+     * Focus once the tree is drawn again, which replaces every row: the
+     * control given, else the row now where a removed one stood, else the
+     * tree itself. Never the page body while the file manager is open.
+     * @param {HTMLElement|null} control
+     * @param {number} [rowIndex=-1]
+     */
+    function focusFmTree(control, rowIndex = -1) {
+      const tree = modal.querySelector('#fmTree');
+      const rows = tree.querySelectorAll('.file-manager-item');
+      const row = rowIndex >= 0 ? rows[rowIndex] || rows[rowIndex - 1] : null;
+      const rowTarget = row?.matches('[tabindex]')
+        ? row
+        : row?.querySelector('button:not([disabled])');
+      const target = control || rowTarget || tree;
+      if (target === tree) tree.tabIndex = -1;
+      target.focus();
+    }
 
     // ------------------------------------------------------------------ //
     // renderFmView — re-renders breadcrumbs + tree without closing modal  //
@@ -999,9 +1049,14 @@ export function initSavedProjectsUI({
           e.stopPropagation();
           const oldFullPath = btn.dataset.folder; // e.g. "Cases/iPad 7,8,9"
           const oldName = oldFullPath.split('/').pop();
-          const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
-          if (!newName || !newName.trim() || newName.trim() === oldName) return;
-          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+          const newName = await showPromptDialog('', {
+            title: 'Rename Folder',
+            label: 'Folder name',
+            defaultValue: oldName,
+            confirmLabel: 'Rename',
+          });
+          if (!newName || newName === oldName) return;
+          const safeName = newName.replace(/[\\/:*?"<>|]/g, '_');
           const parentPrefix = oldFullPath.includes('/')
             ? oldFullPath.slice(0, oldFullPath.lastIndexOf('/') + 1)
             : '';
@@ -1051,6 +1106,9 @@ export function initSavedProjectsUI({
             });
             stateManager.announceChange(`Folder renamed to "${safeName}"`);
             renderFmView();
+            focusFmTree(
+              fmControl('btn-rename-project-folder', 'folder', newFullPath)
+            );
           } else {
             showErrorToast({ title: 'Rename Failed', message: result.error });
           }
@@ -1065,9 +1123,14 @@ export function initSavedProjectsUI({
           const oldName = parts[parts.length - 1];
           const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
 
-          const newName = prompt(`Rename "${oldName}" to:`, oldName);
-          if (!newName || !newName.trim() || newName.trim() === oldName) return;
-          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+          const newName = await showPromptDialog('', {
+            title: 'Rename File',
+            label: 'New name',
+            defaultValue: oldName,
+            confirmLabel: 'Rename',
+          });
+          if (!newName || newName === oldName) return;
+          const safeName = newName.replace(/[\\/:*?"<>|]/g, '_');
           const newPath = folder ? `${folder}/${safeName}` : safeName;
 
           if (newPath === oldPath) return;
@@ -1098,6 +1161,7 @@ export function initSavedProjectsUI({
             project.mainFilePath = newMainFilePath;
             stateManager.announceChange(`File renamed to "${safeName}"`);
             renderFmView();
+            focusFmTree(fmControl('btn-rename-project-file', 'path', newPath));
           } else {
             showErrorToast({ title: 'Rename Failed', message: result.error });
           }
@@ -1111,7 +1175,15 @@ export function initSavedProjectsUI({
           if (filePath === project.mainFilePath) return;
 
           const fileName = filePath.split('/').pop();
-          if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+          const rowIndex = fmRowIndex(btn);
+          const confirmed = await showConfirmDialog(
+            `Delete "${fileName}"? This cannot be undone.`,
+            'Delete File',
+            'Delete',
+            'Cancel',
+            { destructive: true }
+          );
+          if (!confirmed) return;
 
           const updatedFiles = { ...currentFiles };
           delete updatedFiles[filePath];
@@ -1125,6 +1197,7 @@ export function initSavedProjectsUI({
             currentFiles = updatedFiles;
             stateManager.announceChange(`Deleted file "${fileName}"`);
             renderFmView();
+            focusFmTree(null, rowIndex);
           } else {
             showErrorToast({ title: 'Delete Failed', message: result.error });
           }
@@ -1155,10 +1228,18 @@ export function initSavedProjectsUI({
           ).length;
           const message =
             fileCount > 0
-              ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
-              : `Delete empty folder "${folderName}"?`;
+              ? `Delete the folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
+              : `Delete the empty folder "${folderName}"?`;
+          const rowIndex = fmRowIndex(btn);
 
-          if (!confirm(message)) return;
+          const confirmed = await showConfirmDialog(
+            message,
+            'Delete Folder',
+            'Delete',
+            'Cancel',
+            { destructive: true }
+          );
+          if (!confirmed) return;
 
           const updatedFiles = {};
           for (const [path, content] of Object.entries(currentFiles)) {
@@ -1185,6 +1266,7 @@ export function initSavedProjectsUI({
             }
             stateManager.announceChange(`Deleted folder "${folderName}"`);
             renderFmView();
+            focusFmTree(null, rowIndex);
           } else {
             showErrorToast({ title: 'Delete Failed', message: result.error });
           }
@@ -1285,9 +1367,13 @@ export function initSavedProjectsUI({
     const addFolderBtn = modal.querySelector('#addFolderToProjectBtn');
     if (addFolderBtn) {
       addFolderBtn.addEventListener('click', async () => {
-        const folderName = prompt('Enter folder name:');
-        if (!folderName || !folderName.trim()) return;
-        const safeName = folderName.trim().replace(/[\\/:*?"<>|]/g, '_');
+        const folderName = await showPromptDialog('', {
+          title: 'New Folder',
+          label: 'Folder name',
+          confirmLabel: 'Create',
+        });
+        if (!folderName) return;
+        const safeName = folderName.replace(/[\\/:*?"<>|]/g, '_');
         const parentPrefix =
           fmCurrentPath.length > 0 ? fmCurrentPath.join('/') + '/' : '';
         const newFolderPrefix = parentPrefix + safeName + '/';
