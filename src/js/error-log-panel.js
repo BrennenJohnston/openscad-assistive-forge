@@ -8,7 +8,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { announceError, announceImmediate } from './announcer.js';
+import { announceImmediate } from './announcer.js';
 
 /**
  * Error entry types (matches desktop OpenSCAD ErrorLog groups)
@@ -87,10 +87,6 @@ export class ErrorLogPanel {
 
     /** @type {Function|null} Callback: (file, line) => void */
     this.onNavigate = options.onNavigate || null;
-
-    this.lastAnnouncement = 0;
-    this.announcementDebounce = 500;
-    this.pendingAnnouncement = null;
 
     if (this.container) {
       this._initFilters();
@@ -432,7 +428,9 @@ export class ErrorLogPanel {
     }
 
     this._updateBadge();
-    this._announceIfImportant(entry);
+    // Nothing is said here: this is a second view of the console's
+    // messages. A warning is said by the console line (or the summary when
+    // several arrive), an error by the failed run, once.
   }
 
   _updateBadge() {
@@ -448,43 +446,6 @@ export class ErrorLogPanel {
       );
     } else {
       this.badge.classList.add('hidden');
-    }
-  }
-
-  /** @param {ErrorLogEntry} entry */
-  _announceIfImportant(entry) {
-    // Errors are left to the failed run's own announcement, which carries
-    // the engine's line.
-    if (entry.type !== ERROR_LOG_TYPE.WARNING) return;
-    const now = Date.now();
-    if (now - this.lastAnnouncement < this.announcementDebounce) {
-      clearTimeout(this.pendingAnnouncement);
-      this.pendingAnnouncement = setTimeout(
-        () => this._doAnnounce(entry),
-        this.announcementDebounce
-      );
-      return;
-    }
-    this._doAnnounce(entry);
-  }
-
-  /** @param {ErrorLogEntry} entry */
-  _doAnnounce(entry) {
-    this.lastAnnouncement = Date.now();
-    this.pendingAnnouncement = null;
-    const label = TYPE_LABELS[entry.type] || 'Issue';
-    const loc = entry.line !== null ? ` at line ${entry.line}` : '';
-    // OpenSCAD's own lines start with their level ("WARNING: ..."); after
-    // the label it was said twice.
-    const text = entry.message.replace(
-      new RegExp(`^${label.toUpperCase()}:\\s*`),
-      ''
-    );
-    const msg = `${label}${loc}: ${text}`;
-    if (entry.type === ERROR_LOG_TYPE.ERROR) {
-      announceError(msg);
-    } else {
-      announceImmediate(msg);
     }
   }
 

@@ -15107,8 +15107,10 @@ if (rounded) {
       );
 
     // A run with an error has failed, and its failure is announced with the
-    // error; the count would be a second voice for the same news.
-    if (errorCount > 0) return;
+    // error; the count would be a second voice for the same news. A single
+    // message is said by its own line in the console; the count is for when
+    // several arrive at once.
+    if (errorCount > 0 || warnCount + echoCount < 2) return;
 
     // Build accessible announcement
     const summary = [];

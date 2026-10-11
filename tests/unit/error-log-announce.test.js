@@ -1,9 +1,9 @@
 /**
- * Unit tests for what the Error Log says aloud.
- *
- * A warning goes to the polite announcer with the label "Warning:". An error
- * says nothing here: it ends the run, and the run's failure is announced once
- * with the engine's line.
+ * Unit tests for what the Error Log says aloud: nothing. It is a second view
+ * of the console's messages; a warning is said by the console line (or the
+ * summary when several arrive), and an error by the failed run, once, with
+ * the engine's line. What it files each message as still matters to its
+ * table and its counts.
  *
  * @license GPL-3.0-or-later
  */
@@ -24,7 +24,7 @@ import {
 const FALLBACK =
   'WARNING: [manifold] Minkowski failed with error, falling back to Nef operation: CGAL ERROR: assertion violation!';
 
-describe('ErrorLogPanel: what a recovered engine warning says', () => {
+describe('ErrorLogPanel: what it files and what it says', () => {
   let panel;
 
   beforeEach(() => {
@@ -33,24 +33,25 @@ describe('ErrorLogPanel: what a recovered engine warning says', () => {
     panel = new ErrorLogPanel({ container: null, badge: null });
   });
 
-  it('says the minkowski fallback politely, as a warning, its level once', () => {
+  it('files the minkowski fallback as a warning, and says nothing', () => {
     panel.addOutput(FALLBACK);
+    expect(panel.getCounts().warning).toBe(1);
+    expect(panel.getCounts().error).toBe(0);
     expect(announceError).not.toHaveBeenCalled();
-    expect(announceImmediate).toHaveBeenCalledWith(
-      `Warning: ${FALLBACK.replace(/^WARNING:\s*/, '')}`
-    );
+    expect(announceImmediate).not.toHaveBeenCalled();
   });
 
-  it("says CGAL's violation printout politely, as a warning", () => {
+  it("files CGAL's violation printout as a warning, and says nothing", () => {
     panel.addOutput('CGAL error: assertion violation!');
+    expect(panel.getCounts().warning).toBe(1);
+    expect(panel.getCounts().error).toBe(0);
     expect(announceError).not.toHaveBeenCalled();
-    expect(announceImmediate).toHaveBeenCalledWith(
-      'Warning: CGAL error: assertion violation!'
-    );
+    expect(announceImmediate).not.toHaveBeenCalled();
   });
 
   it('leaves an error to the failed run, which says it once', () => {
     panel.addOutput('ERROR: Assertion failed in file model.scad, line 12');
+    expect(panel.getCounts().error).toBe(1);
     expect(announceError).not.toHaveBeenCalled();
     expect(announceImmediate).not.toHaveBeenCalled();
   });

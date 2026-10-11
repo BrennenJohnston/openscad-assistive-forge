@@ -217,3 +217,48 @@ test('Unlock Parameter Limits says its new state once, each way', async ({
     JSON.stringify(said)
   ).toHaveLength(1);
 });
+
+test('one warning is said by its line; several also by their count, once', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  await recordAnnouncements(page);
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 180_000,
+  });
+
+  async function open(name, lines) {
+    const mark = await announcementMark(page);
+    await page.locator('#fileInput').setInputFiles({
+      name,
+      mimeType: 'text/plain',
+      buffer: Buffer.from([...lines, ''].join('\n')),
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    await notNow.click({ timeout: 30_000 });
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: 120_000 }
+    );
+    await page.waitForTimeout(SETTLE_MS);
+    return announcementsSince(page, mark);
+  }
+
+  let said = await open('one_warning.scad', ['cube(size_a);']);
+  expect(
+    said.filter((a) => /Model has/.test(a.text)),
+    JSON.stringify(said)
+  ).toHaveLength(0);
+
+  said = await open('two_warnings.scad', ['cube(size_a);', 'sphere(size_b);']);
+  expect(
+    said.filter((a) => /Model has 2 warnings/.test(a.text)),
+    JSON.stringify(said)
+  ).toHaveLength(1);
+});
