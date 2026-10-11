@@ -319,6 +319,8 @@ export const MEASURED_SECONDS = {
   'self-disabling-controls-focus.spec.js': 45.0,
   // Three cases, about 3 s each locally with a warm engine; booked at 20.
   'classic-pane-focus.spec.js': 20.0,
+  // One case, about 3 s locally with a warm engine; booked at 20.
+  'drawing-editor-close-focus.spec.js': 20.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

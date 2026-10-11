@@ -3669,6 +3669,10 @@ function createFileControl(
 
   function handleEditorClose() {
     if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
+    // The card was drawn again, its "Open the drawing editor" with it, and
+    // the editor that had focus is hidden: back to the new button, the one
+    // that opened it, not the page body.
+    statusCard.querySelector('.svg-prep-edit-btn')?.focus();
   }
 
   function handleEditorKeep() {
