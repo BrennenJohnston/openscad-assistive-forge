@@ -2925,6 +2925,14 @@ async function initApp() {
   let hasUserAcceptedDownload = !isFirstVisit();
   let pendingWasmInit = false;
   let pendingDraft = null;
+  // Settles once a kept draft has been asked about and the answer carried
+  // out, or once start-up finds none to ask about. The app's own question
+  // leaves the page running, as the browser's did not, so the Main Page's
+  // tip waits for this rather than speak over the question.
+  let settleDraftQuestion;
+  const draftQuestionSettled = new Promise((resolve) => {
+    settleDraftQuestion = resolve;
+  });
   // The end of initApp: until then parts of the page that loading a project
   // reaches (the preview drawer's state among them) do not exist yet.
   let startupDone = false;
@@ -2937,34 +2945,42 @@ async function initApp() {
    * further down and lost the project.
    */
   async function restorePendingDraft() {
-    if (!pendingDraft || !startupDone) return;
+    if (!startupDone) return;
+    if (!pendingDraft) {
+      settleDraftQuestion();
+      return;
+    }
     const draftToRestore = pendingDraft;
     pendingDraft = null;
 
-    // Opens on Restore: the other answer deletes the draft, and Enter on the
-    // browser's own question used to restore.
-    const shouldRestore = await showConfirmDialog(
-      `A draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()} is kept in this browser. Restore it, or discard it?`,
-      'Restore a saved draft?',
-      'Restore draft',
-      'Discard draft',
-      { focusConfirm: true }
-    );
-
-    if (shouldRestore) {
-      console.log('Restoring draft...');
-      await fileHandler.handleFile(
-        { name: draftToRestore.fileName },
-        draftToRestore.fileContent,
-        null,
-        null,
-        'saved',
-        null,
-        { startingValues: draftToRestore.parameters }
+    try {
+      // Opens on Restore: the other answer deletes the draft, and Enter on
+      // the browser's own question used to restore.
+      const shouldRestore = await showConfirmDialog(
+        `A draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()} is kept in this browser. Restore it, or discard it?`,
+        'Restore a saved draft?',
+        'Restore draft',
+        'Discard draft',
+        { focusConfirm: true }
       );
-      updateStatus('Draft restored');
-    } else {
-      stateManager.clearLocalStorage();
+
+      if (shouldRestore) {
+        console.log('Restoring draft...');
+        await fileHandler.handleFile(
+          { name: draftToRestore.fileName },
+          draftToRestore.fileContent,
+          null,
+          null,
+          'saved',
+          null,
+          { startingValues: draftToRestore.parameters }
+        );
+        updateStatus('Draft restored');
+      } else {
+        stateManager.clearLocalStorage();
+      }
+    } finally {
+      settleDraftQuestion();
     }
   }
 
@@ -8590,6 +8606,7 @@ if (rounded) {
   void initWelcomeSpotlight({
     waitForFirstVisitAcceptance,
     waitForTourNudge: () => tourNudgeSettled,
+    waitForDraftQuestion: () => draftQuestionSettled,
   });
 
   // Wire charm variant selector to update the single Open button

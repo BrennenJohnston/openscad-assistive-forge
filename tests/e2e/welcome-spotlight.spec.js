@@ -15,6 +15,7 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import { draftQuestion } from './helpers/draft-question.js';
 
 const REGISTRY_KEY = 'openscad-forge-tutorial-state';
 const SPOTLIGHT_CARD = '.role-path-card.welcome-spotlight';
@@ -296,5 +297,51 @@ test.describe('Welcome spotlight', () => {
     await expect(card.locator('.welcome-spotlight-tag-text')).toHaveText(
       'New here? Start with this tour'
     );
+  });
+});
+
+// The draft question is the app's own dialog, which leaves the page running.
+// The tip is about a card behind it, so it waits for the answer instead of
+// being said over the question.
+test.describe('Welcome spotlight and the draft question', () => {
+  test('a kept draft is asked about first; the tip comes after the answer', async ({
+    page,
+  }) => {
+    await stampFirstVisitSeen(page);
+    await watchAnnouncements(page);
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('draft-seeded')) return;
+      sessionStorage.setItem('draft-seeded', 'true');
+      localStorage.setItem(
+        'openscad-forge-editor-draft',
+        JSON.stringify({
+          version: '1.0.0',
+          timestamp: Date.now(),
+          fileName: 'kept.scad',
+          fileContent: 'width = 20; // [10:50]\ncube(width);',
+          parameters: { width: 20 },
+          defaults: { width: 20 },
+        })
+      );
+    });
+    const tipCount = () =>
+      page.evaluate(
+        () => window.__said.filter((t) => t.includes('Main Page Tour')).length
+      );
+
+    await page.goto('/');
+    const question = draftQuestion(page);
+    await expect(question).toBeVisible({ timeout: 30_000 });
+    // Longer than the announcer's delay: had the tip not waited, it is said.
+    await page.waitForTimeout(1_500);
+    expect(await tipCount()).toBe(0);
+    await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(0);
+
+    await question
+      .getByRole('button', { name: 'Discard draft', exact: true })
+      .click();
+    await expect(question).toHaveCount(0);
+    await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
+    await expect.poll(tipCount).toBe(1);
   });
 });
