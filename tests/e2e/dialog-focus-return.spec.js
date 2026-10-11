@@ -9,6 +9,11 @@
 
 import { test, expect } from '@playwright/test'
 import { selectPreset } from './helpers/preset-helpers.js'
+import {
+  announcementMark,
+  announcementsSince,
+  recordAnnouncements,
+} from './helpers/invariants.js'
 
 test.describe.configure({ timeout: 120_000 })
 
@@ -71,6 +76,7 @@ test.describe('View Source and Customizer JSON', () => {
 test('the full console takes focus, and Escape and Close go back to View Full Console', async ({
   page,
 }) => {
+  await recordAnnouncements(page)
   await openExample(page)
   const NL = String.fromCharCode(10)
   await page.locator('#fileInput').setInputFiles({
@@ -96,9 +102,14 @@ test('the full console takes focus, and Escape and Close go back to View Full Co
   await expect(opener).toBeVisible({ timeout: 60_000 })
 
   const dialog = page.locator('#consoleOutputModal')
+  const mark = await announcementMark(page)
   await press(page, '#echoViewConsoleBtn')
   await expect(dialog).toBeVisible()
   await expect(page.locator('#consoleOutputTitle')).toBeFocused()
+  // The focused heading names the panel; nothing says it again.
+  await page.waitForTimeout(300)
+  const said = await announcementsSince(page, mark)
+  expect(said.filter((a) => /panel opened/.test(a.text))).toEqual([])
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
   await expect(opener).toBeFocused()

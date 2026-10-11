@@ -15148,9 +15148,8 @@ if (rounded) {
     if (consoleOutput) {
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
-
-    // Announce to screen readers
-    announceImmediate('Console output panel opened');
+    // No announcement: focus on the heading already says which panel this
+    // is, and "Console output panel opened" said it a second time.
   };
 
   // Echo drawer toggle
