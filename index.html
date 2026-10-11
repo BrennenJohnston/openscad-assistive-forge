@@ -8628,7 +8628,7 @@ No console output yet. Generate a model to see output.</pre
       id="first-visit-modal"
       role="dialog"
       aria-labelledby="first-visit-title"
-      aria-describedby="first-visit-intro"
+      aria-describedby="firstVisitDescription"
       aria-modal="true"
       aria-hidden="true"
     >
@@ -8650,14 +8650,19 @@ No console output yet. Generate a model to see output.</pre
           <!-- Heading + four short bullets, two columns of two on
                desktop (grid column flow keeps DOM order 1-4 for the
                virtual cursor), stacked at the modal's narrow breakpoint.
-               The id stays: the dialog's aria-describedby points here. -->
+               The dialog's description is the first sentence alone: NVDA
+               reads it each time it reports the dialog, and the whole note
+               (both copies of it) ran to about 160 words. The rest is read
+               by moving through the dialog. -->
           <div id="first-visit-intro" class="first-visit-note">
             <h3 class="first-visit-note-title">Note for first time users:</h3>
             <ul class="first-visit-note-list">
               <li>
-                This app runs entirely in your browser. All of your work stays
-                on your device. No information is sent to or collected by anyone
-                else.
+                <span id="firstVisitDescription"
+                  >This app runs entirely in your browser.</span
+                >
+                All of your work stays on your device. No information is sent to
+                or collected by anyone else.
               </li>
               <li>
                 Your first render downloads the OpenSCAD engine, about 15 to 30
