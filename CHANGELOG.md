@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a color name no longer reads as a missing include file.
 - The open Actions drawer stays on top of Preview Settings & Info in a
   short window, so every button it shows can be pressed.
+- Models that repeat a module many levels deep preview in Firefox and
+  Safari: the engine now has the 8 MiB stack desktop OpenSCAD assumes.
 
 ## [5.2.2] - 2026-10-09
 
