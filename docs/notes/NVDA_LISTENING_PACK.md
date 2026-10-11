@@ -2,15 +2,15 @@
 
 A scripted listening run for this app with NVDA — the verification step
 no measurement can perform. Everything in here has been *measured*
-correct (probes, the accessibility tree, automated scans); none of it
-has been *heard* correct until this run happens. Chrome, NVDA running,
-the app at `npm run dev`, a fresh profile or cleared site data so the
-first-visit dialog appears.
+correct (probes, the accessibility tree, automated scans); whether it is
+*heard* correct is this run's question, and what the last run heard is at
+the end. Chrome, NVDA running, the app at `npm run dev`, a fresh profile or
+cleared site data so the first-visit dialog appears.
 
 Budget about an hour and a half, and it splits cleanly: sections 1 to 6 are
 the core app, about half an hour; sections 7 to 11 are the picture-to-charm
-path, about another half hour; sections 12 to 15 are the flows a release walk
-repeats, about twenty minutes. Doing only part is a result too, as long as you
+path, about another half hour; sections 12 to 16 are the flows a release walk
+repeats, about half an hour. Doing only part is a result too, as long as you
 say which.
 
 Two traps to carry in, learned on a sibling project's runs:
@@ -108,11 +108,11 @@ and the elements list (`NVDA+F7`) rather than Tab.
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
 | The skip link is the first Tab stop and actually lands on the app content | ☐ | |
-| Landmarks: a banner (header), navigation, and main are all announced and distinct | ☐ | |
+| Landmarks: a banner (header) and main are announced and distinct, and the menu bar reads as "Application menu"; a navigation landmark appears only inside a saved-project folder, for its breadcrumbs | ☐ | |
 | The heading outline in the elements list reads like the app's real structure (one h1, panels as h2/h3) | ☐ | |
 | Finding the parameter list by landmarks/headings alone takes seconds, not wandering | ☐ | |
 
-## 7. Converting a picture (new this round)
+## 7. Converting a picture
 
 Standard mode, a charm design (Q charm, the charm maker or the logo plate).
 Choose a PNG or a JPG for the design file. Nothing is converted until you
@@ -135,7 +135,7 @@ ask for it.
 | Cancel pressed while the stage line reads "Preparing the drawing" says "Conversion canceled" once, and the design is as it was | ☐ | |
 | Crop first opens the editor with the status "Crop view open on your picture. Four sliders take an edge off; Save crop starts the conversion." and focus on the Top slider; Escape says "Crop canceled. Nothing was converted." once and focus is back on Crop first | ☐ | |
 
-## 8. The shapes list in the drawing editor (rebuilt this round)
+## 8. The shapes list in the drawing editor
 
 Open a charm design, give it a drawing, press **Edit Drawing**. Tab into the
 shapes panel and walk the rows.
@@ -163,8 +163,8 @@ announcer. MEASURED in the source: of the sixteen sentences it can say, eight
 go into BOTH regions in the same action - deleting shapes, undoing that,
 saving a file, the selection sentence, "Combining N shapes.", "Preview ready."
 By the second trap at the top of this pack that is a doubled announcement, and
-the markup cannot say whether NVDA speaks it once or twice. The
-pattern predates this round (2026-03-26); one of the eight is new this round.
+the markup cannot say whether NVDA speaks it once or twice. The pattern dates
+from 2026-03-26.
 **If you hear anything in this editor twice, it is almost certainly this, and
 knowing it is real is worth more than the whole rest of the section.**
 
@@ -224,10 +224,10 @@ which is correct — there is no charm to show.
 
 ## 11. The picture itself (mouse, finger, and what a screen reader gets)
 
-Know this going in: the picture became a **mouse and touch** surface this
-round, not a keyboard one. The list is the keyboard and screen-reader path
-to every shape and still is. So this section asks one question: does the
-list still say everything the picture now shows?
+Know this going in: the picture is a **mouse and touch** surface, not a
+keyboard one. The list is the keyboard and screen-reader path to every shape.
+So this section asks one question: does the list say everything the picture
+shows?
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
@@ -266,9 +266,9 @@ the Help menu.
 
 | What should happen | Heard it? | What NVDA actually said |
 |---|---|---|
-| Opening reads the dialog's name once, then what has focus inside it | ☐ | |
+| Opening reads the dialog's name, then what has focus inside it. When focus lands on a selected tab or radio (the Features Guide, the welcome dialog), NVDA itself says the dialog's name a second time; that is NVDA's, not the page's | ☐ | |
 | The Features Guide's tab strip reads as tabs with names and positions ("Libraries, tab, selected, 1 of 6") | ☐ | |
-| Escape, or the dialog's own close button, closes it and puts focus back on the Help menu button | ☐ | |
+| Escape, or the dialog's own close button, closes it and puts focus back on the Help menu button. With focus on a tab NVDA is in focus mode, and takes the first Escape to leave it; the dialog closes on the second | ☐ | |
 
 ## 14. Deleting a preset
 
@@ -290,6 +290,43 @@ and let it translate.
 |---|---|---|
 | Each line of the braille preview reads its number and its braille, with no language name ("und") before the cells | ☐ | |
 | "Translate to braille" reports its result once, and the whole Customizer panel is not read out again | ☐ | |
+
+## 16. The words on the controls
+
+Tab along the header, open the Actions drawer, open Keys (the Keyboard
+Shortcuts dialog), then switch to Classic and Tab to its top right.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| Each header button is named by the word on it, first: "Keys: keyboard shortcuts", "HC: high contrast" (a toggle, pressed or not), "Theme: Auto" (or Light, or Dark), "Full Screen: the preview alone" (a toggle), "Help: features guide and examples" | ☐ | |
+| The interface switch reads "Interface mode: Simplified, Standard, switch", on or off | ☐ | |
+| "Main Page, button" says nothing about unsaved changes until a value has changed; then "Main Page. Unsaved changes will be lost." | ☐ | |
+| The Actions drawer's buttons lead with their words: "Publish", "Copy Link", "Edit Drawing" | ☐ | |
+| In Keys, a key button reads its key ("F6"), then "Change shortcut for ..." as its description | ☐ | |
+| A saved project's card buttons name the project: "Load {name}", "Edit {name}", "Delete {name}" | ☐ | |
+| In Classic, "A. Forge, button" is described by "Switch to the Assistive Forge interface", with no "pressed"; a pane separator says its real share ("Editor: 26%"), never "0%"; the Font List radios say their style ("Liberation Sans Bold") | ☐ | |
+
+## The last run
+
+2026-10-11, on the development builds that followed 5.2.2, a scripted run:
+NVDA 2026.2 logging at Input/output, a headed Chromium at 1920 by 889, each
+step cut from the log with `nvda-tail`. Sections 1 to 6, 12 to
+14 and 16 were heard. Sections 7 to 11 were not run this time, and section 15
+was last heard on 2026-10-09, on the release before.
+
+- Sections 3 and 5: "Preview ready" once per change; a Generate says its
+  start, then "STL ready" (or "OBJ ready") once, with the download control
+  next.
+- Section 5's broken model: "Preview failed: Code Problem Found. Parser
+  error: syntax error in file my_mistake.scad, line 4", once.
+- Section 12: each tour step read once; the end says one sentence and
+  focus returns to the button that started the tour.
+- Sections 13 and 14: every dialog closed by Escape put focus back on the
+  control that opened it; the two NVDA behaviors in section 13's rows were
+  the only doubles heard.
+- Section 16: every row as written.
+- Open, not fixed: a console warning read from the Error Log says its level
+  word twice ("Warning: WARNING: ...").
 
 ## What to send back
 

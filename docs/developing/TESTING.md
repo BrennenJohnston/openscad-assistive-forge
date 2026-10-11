@@ -66,7 +66,9 @@ They catch what a person meets and a narrow assertion misses.
 `recordAnnouncements(page)` fails on nothing by itself. Called before the first
 navigation, it records every text written to a live region, including regions
 added later; `announcementMark(page)` and `announcementsSince(page, mark)` give a
-test what one action said, so it can count it.
+test what one action said, so it can count it. It leaves out what a screen
+reader leaves out: a region with `aria-live="off"`, one inside an element
+marked `aria-busy`, and one that is not drawn.
 
 ## Suites with a particular job
 
@@ -81,6 +83,19 @@ test what one action said, so it can count it.
 - `menu-reach.spec.js` opens File > Export with a real pointer at common
   window sizes and checks that a click at the center of each item reaches the
   item. In a short window it turns the wheel first, as a person would.
+- `status-announcements.spec.js` counts what one action says: a preview, a
+  Generate, a failure, a tour step, each one announcement from the one
+  announcer. The other status surfaces keep their text for the eye.
+- The focus suites (`dialog-focus-return`, `dialog-focus-sweep`,
+  `menu-dialog-focus`, `saved-projects-focus`, `self-disabling-controls-focus`,
+  `classic-pane-focus`, `guide-example-focus`, `drawing-editor-close-focus`)
+  open and close every dialog, menu and pane by keyboard and check where focus
+  lands afterwards, never the page body.
+- `header-names.spec.js` and `classic-names.spec.js` read each control's
+  name as a screen reader would and expect the words on the control first;
+  `touch-targets.spec.js` measures the small controls at a coarse pointer;
+  `settings-follow-the-person.spec.js` reloads and expects a person's
+  settings, not the project's, to be kept.
 
 ## Troubleshooting
 
@@ -173,16 +188,16 @@ record step by step. How to set that up, and what to listen for, is in the
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (232 files, 7,739 tests and 2 skipped, as of 2026-10-09).
+- [ ] `npm run test:run` -- all unit tests pass (251 files, 7,776 tests and 2 skipped, as of 2026-10-11).
 - [ ] `npm run test:e2e` -- E2E tests pass on Chromium.
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.
 - [ ] Share link generation and loading works.
-- [ ] `npx playwright test tests/e2e/accessibility.spec.js` -- axe-core passes.
+- [ ] `npx playwright test tests/e2e/accessibility.spec.js` -- axe-core passes, with the label-in-name rule on in every scan: a control's visible words must be in its name.
 - [ ] `npm run build && npm run check-bundle` -- budgets met.
 
-Measured 2026-10-09: core app **460 KB** gzipped against a 586 KB budget, main
-CSS 65 KB against 150 KB, all assets **1.14 MB** against 1.19 MB. All assets
+Measured 2026-10-11: core app **459 KB** gzipped against a 586 KB budget, main
+CSS 63 KB against 150 KB, all assets **1.19 MB** against 1.25 MB. All assets
 are at 95% of their budget, so a new dependency is a real decision rather than
 a formality.
 
