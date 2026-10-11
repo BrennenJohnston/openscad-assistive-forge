@@ -88,10 +88,10 @@ describe('Classic toggle viewport gate', () => {
     // aria-describedby left on a removed control is an orphan pointing at
     // text nothing can reach.
     expect(btn.hasAttribute('aria-disabled')).toBe(false);
-    // Described by what pressing it does, never by the gate's reason.
-    expect(btn.getAttribute('aria-describedby')).toBe(
-      'classicModeToggleDescription'
-    );
+    // A removed control carries no description at all, not even the one
+    // that says what pressing it does.
+    expect(btn.hasAttribute('aria-describedby')).toBe(false);
+    expect(btn.hasAttribute('title')).toBe(false);
   });
 
   it('shows the toggle, undecorated, on a desktop-shaped viewport', async () => {
