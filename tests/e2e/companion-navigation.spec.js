@@ -436,10 +436,14 @@ test.describe('Companion files: a way back', () => {
 
     // helpers.scad defines rounded_cube(), which main.scad's geometry calls.
     // Coarsening its cylinders must change the mesh the renderer produces.
-    const trianglesBefore = await page.evaluate(() =>
-      document.body.innerText.match(/([\d,]+)\s+triangles/)?.[1]
-    );
-    expect(trianglesBefore).toBeTruthy();
+    // The first preview may still be running when the tree is open, so wait
+    // for its count rather than read the page once.
+    const readTriangles = () =>
+      page.evaluate(() =>
+        document.body.innerText.match(/([\d,]+)\s+triangles/)?.[1]
+      );
+    await expect.poll(readTriangles, { timeout: 90_000 }).toBeTruthy();
+    const trianglesBefore = await readTriangles();
 
     await openEditor(page);
     await page.evaluate(() => {

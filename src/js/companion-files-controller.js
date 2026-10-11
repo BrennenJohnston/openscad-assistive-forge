@@ -830,9 +830,28 @@ export function initCompanionFilesController({
     textarea.value = content;
     textarea.dataset.editingPath = path;
 
+    // Named, not taken from what has focus: Safari does not focus a button
+    // it clicks, so focus came back to whatever held it before (a panel),
+    // not to this file's row.
     openModal(modal, {
       focusTarget: textarea,
+      returnFocus: fileRowEditButton(path) || undefined,
     });
+  }
+
+  /**
+   * The Edit button of a file's row in the list as drawn now. Matched on
+   * dataset rather than a selector so paths containing quotes cannot break
+   * the lookup.
+   * @param {string} path
+   * @returns {HTMLButtonElement|null}
+   */
+  function fileRowEditButton(path) {
+    const container = document.getElementById('projectFilesList');
+    const editButtons = container
+      ? [...container.querySelectorAll('button[data-action="edit"]')]
+      : [];
+    return editButtons.find((btn) => btn.dataset.path === path) || null;
   }
 
   /**
@@ -841,19 +860,13 @@ export function initCompanionFilesController({
    * closeModal cannot do this on its own: saving rebuilds the whole list with
    * innerHTML, so the button it captured as the opening trigger is detached by
    * the time it tries to restore, and focus() on a detached node is a no-op
-   * that leaves focus on <body>. Re-find the equivalent button instead. Match
-   * on dataset rather than a selector so paths containing quotes cannot break
-   * the lookup.
+   * that leaves focus on <body>. Re-find the equivalent button instead.
    *
    * @param {string} path - Path of the file that was saved
    */
   function restoreFocusToFileRow(path) {
-    const container = document.getElementById('projectFilesList');
-    const editButtons = container
-      ? [...container.querySelectorAll('button[data-action="edit"]')]
-      : [];
     const target =
-      editButtons.find((btn) => btn.dataset.path === path) ||
+      fileRowEditButton(path) ||
       document.querySelector('#projectFilesControls .project-files-summary');
     if (target) target.focus();
   }
