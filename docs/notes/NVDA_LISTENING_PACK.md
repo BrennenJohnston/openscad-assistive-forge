@@ -325,8 +325,6 @@ was last heard on 2026-10-09, on the release before.
   control that opened it; the two NVDA behaviors in section 13's rows were
   the only doubles heard.
 - Section 16: every row as written.
-- Open, not fixed: a console warning read from the Error Log says its level
-  word twice ("Warning: WARNING: ...").
 
 ## What to send back
 
