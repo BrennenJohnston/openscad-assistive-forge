@@ -906,6 +906,7 @@ export function initFileHandler({
       resetProjectUiState?.();
       stateManager.setState({
         uploadedFile: { name: originalFileName, content: fileContent },
+        sourceEdited: false,
         projectFiles: projectFiles || null,
         mainFilePath: mainFilePath || fileName,
         schema: extracted,

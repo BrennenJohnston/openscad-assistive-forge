@@ -9920,6 +9920,7 @@ if (rounded) {
     try {
       stateManager.setState({
         uploadedFile: { ...state.uploadedFile, content: code },
+        sourceEdited: true,
         // The generated output belongs to the source it was rendered from.
         // Keeping it would let Download and the Export menu hand back the
         // pre-edit model, since their staleness check keys on parameters.

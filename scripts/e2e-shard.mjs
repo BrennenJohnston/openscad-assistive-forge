@@ -124,6 +124,8 @@ export const MEASURED_SECONDS = {
   'parameter-filter.spec.js': 15.0,
   // Two cases on the simple box: measured 28 locally.
   'main-page-return.spec.js': 40.0,
+  // Two cases with a draft debounce each: measured 27 locally.
+  'draft-after-edit.spec.js': 40.0,
   'responsive-audit.spec.js': 91.9,
   'theme-switching.spec.js': 71.4,
   'editor-content-sync.spec.js': 70.4,
