@@ -1901,7 +1901,7 @@ async function initApp() {
     if (estimate.usage < 1024 * 1024 && isDevMode && !hasServiceWorker) {
       displayText += ' (dev mode: assets not cached)';
     } else if (estimate.usage < 1024 * 1024 && !hasServiceWorker) {
-      displayText += ' (service worker inactive)';
+      displayText += ' (offline copy not stored yet)';
     }
 
     if (usedEl) usedEl.textContent = displayText;
