@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Simplified view".
 - Classic's panel title bars put a panel away with Hide or Stow; the Collapse
   button, which could leave an empty column and started out blank, is gone.
+- The Customizer has one reset-all button, Reset All, at full size; it still
+  asks first. The second Reset in its top row is gone.
 
 ### Fixed
 

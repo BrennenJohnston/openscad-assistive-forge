@@ -9688,9 +9688,9 @@ if (rounded) {
     }
   };
 
-  // Reset button - with COGA-compliant confirmation dialog
-  const resetBtn = document.getElementById('resetBtn');
-  resetBtn.addEventListener('click', async () => {
+  // Reset All, the Customizer's one reset button, asks first (COGA)
+  const resetAllBtn = document.getElementById('resetAllBtn');
+  resetAllBtn.addEventListener('click', async () => {
     const state = stateManager.getState();
     if (!state.defaults) return;
 
@@ -15441,12 +15441,6 @@ if (rounded) {
     }
   });
 
-  // Reset All Button (in customizer header)
-  const resetAllBtn = document.getElementById('resetAllBtn');
-  resetAllBtn?.addEventListener('click', () => {
-    resetBtn?.click();
-  });
-
   // Expand all / Collapse all.
   // Setting `.open` programmatically fires the <details> 'toggle' event
   // which is already wired in ui-generator.js to persist per-file state,
@@ -16066,7 +16060,7 @@ if (rounded) {
   keyboardConfig.on('resetAllParams', () => {
     const state = stateManager.getState();
     if (state.uploadedFile) {
-      resetBtn?.click();
+      resetAllBtn.click();
     }
   });
 

@@ -14862,6 +14862,12 @@ body.tutorial-body-locked {
   margin-left: auto;
 }
 
+/* The Customizer's one reset button: the full target, as tall as the select
+   beside it, not .btn-sm's smaller one. */
+.customizer-header-row #resetAllBtn {
+  min-height: var(--size-touch-target);
+}
+
 /* ============================================================================
    Preset Panel Search + Combined Actions Row
    ============================================================================ */

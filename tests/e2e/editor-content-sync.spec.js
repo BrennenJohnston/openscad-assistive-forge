@@ -280,8 +280,8 @@ test.describe('Editor content sync', () => {
     await page.evaluate(() => {
       window.__resetClicks = 0;
       document
-        .getElementById('resetBtn')
-        ?.addEventListener('click', () => (window.__resetClicks += 1));
+        .getElementById('resetAllBtn')
+        .addEventListener('click', () => (window.__resetClicks += 1));
     });
     expect(await page.evaluate(() => typeof window.__resetClicks)).toBe(
       'number'
