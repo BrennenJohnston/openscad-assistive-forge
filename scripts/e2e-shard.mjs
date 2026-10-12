@@ -120,6 +120,8 @@ export const MEASURED_SECONDS = {
   'preferences-dialog.spec.js': 90.6,
   // One case, an example and a failing upload: measured 6 locally.
   'preview-stats.spec.js': 20.0,
+  // One case on the simple box: measured 5 locally.
+  'parameter-filter.spec.js': 15.0,
   'responsive-audit.spec.js': 91.9,
   'theme-switching.spec.js': 71.4,
   'editor-content-sync.spec.js': 70.4,

@@ -1131,7 +1131,23 @@ export function initParameterSearch() {
  * Filter parameters by search query
  * @param {string} query - Search query (lowercase)
  */
+// Each group's open state from before the first keystroke of a search, so
+// that clearing the search gives the groups back as the person had them.
+let groupStateBeforeSearch = null;
+
 function filterParameters(query) {
+  const groupsNow = document.querySelectorAll('.param-group');
+  if (query && groupStateBeforeSearch === null) {
+    groupStateBeforeSearch = new Map(
+      [...groupsNow].map((group) => [group, group.open])
+    );
+  }
+  if (!query && groupStateBeforeSearch !== null) {
+    for (const [group, wasOpen] of groupStateBeforeSearch) {
+      if (group.isConnected) group.open = wasOpen;
+    }
+    groupStateBeforeSearch = null;
+  }
   // A search that cannot find a parameter the design HAS is a lie, and
   // the starter wall would make it one. Searching drops the wall and says so.
   // It stays down afterwards: raising it again under someone who just went
