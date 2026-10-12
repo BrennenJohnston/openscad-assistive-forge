@@ -586,9 +586,13 @@ export class RenderController {
         break;
 
       case 'ERROR':
-        // Surface any console output captured before the error (warnings, echos)
+        // Surface any console output captured before the error (warnings,
+        // echos). Not for a 3D model asked for as a 2D drawing: the caller
+        // asks whether to make an approximate outline, and a declined
+        // question is no error.
         if (
           payload.consoleOutput &&
+          payload.code !== 'MODEL_NOT_2D' &&
           typeof window.updateConsoleOutput === 'function'
         ) {
           window.updateConsoleOutput(payload.consoleOutput);
