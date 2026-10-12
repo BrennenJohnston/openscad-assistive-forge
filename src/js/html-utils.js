@@ -26,6 +26,12 @@ export function escapeHtml(text) {
  * @param {string[]} allowedTypes - Array of allowed message types
  * @returns {boolean} - True if message is valid
  */
+/**
+ * Every message the app's own service worker sends: the cache's clearing,
+ * and its word that a new version took over (sent on a fresh visit, once).
+ */
+export const SERVICE_WORKER_MESSAGE_TYPES = ['CACHE_CLEARED', 'SW_UPDATED'];
+
 export function isValidServiceWorkerMessage(event, allowedTypes) {
   if (!event || !event.data || typeof event.data !== 'object') {
     return false;

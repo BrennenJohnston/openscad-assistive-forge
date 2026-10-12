@@ -60,7 +60,11 @@ import {
   describeAccepted,
 } from './js/upload-router.js';
 import { setStlViewActive, isStlViewActive } from './js/stl-view-mode.js';
-import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
+import {
+  escapeHtml,
+  isValidServiceWorkerMessage,
+  SERVICE_WORKER_MESSAGE_TYPES,
+} from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import {
   getThreeModule,
@@ -1594,11 +1598,17 @@ async function initApp() {
 
       navigator.serviceWorker.addEventListener('message', (event) => {
         // Validate message type against allowlist
-        if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) {
+        if (!isValidServiceWorkerMessage(event, SERVICE_WORKER_MESSAGE_TYPES)) {
           console.warn(
             '[SW] Ignoring invalid or unexpected message:',
             event.data
           );
+          return;
+        }
+
+        if (event.data.type === 'SW_UPDATED') {
+          // The worker's own word on a fresh visit: nothing to do here.
+          console.log(`[SW] Service worker ${event.data.version} is active`);
           return;
         }
 

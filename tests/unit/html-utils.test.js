@@ -4,7 +4,37 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { escapeHtml } from '../../src/js/html-utils.js';
+import {
+  escapeHtml,
+  isValidServiceWorkerMessage,
+  SERVICE_WORKER_MESSAGE_TYPES,
+} from '../../src/js/html-utils.js';
+
+describe('the service worker’s own messages', () => {
+  it('are expected, so a fresh visit raises no warning about them', () => {
+    expect(
+      isValidServiceWorkerMessage(
+        { data: { type: 'SW_UPDATED', version: 'v1' } },
+        SERVICE_WORKER_MESSAGE_TYPES
+      )
+    ).toBe(true);
+    expect(
+      isValidServiceWorkerMessage(
+        { data: { type: 'CACHE_CLEARED' } },
+        SERVICE_WORKER_MESSAGE_TYPES
+      )
+    ).toBe(true);
+  });
+
+  it('a message of another kind is still refused', () => {
+    expect(
+      isValidServiceWorkerMessage(
+        { data: { type: 'SOMETHING_ELSE' } },
+        SERVICE_WORKER_MESSAGE_TYPES
+      )
+    ).toBe(false);
+  });
+});
 
 describe('escapeHtml', () => {
   it('returns empty string for null, undefined, and empty input', () => {
