@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preferences > Editor's "Autocomplete as you type" is a working switch: on
   by default, and it can now be turned off.
+- The camera panel and the phone camera drawer have View All beside Reset
+  View: View All fits the model, Reset View keeps the default pose.
 
 ### Changed
 

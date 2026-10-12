@@ -864,6 +864,37 @@ test.describe('View menu parity', () => {
     expect(reset.position.map(Math.round)).toEqual([150, -150, 100])
     expect(distance(reset.position, fitted.position)).toBeGreaterThan(1)
   })
+
+  test('the camera panel has View All beside Reset View, and they differ', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await loadFixture(page)
+    test.skip(
+      (await page.locator('.preview-panel canvas').count()) === 0,
+      'this browser built no 3D canvas'
+    )
+    const toggle = page.locator('#cameraPanelToggle')
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+    const resetView = page.locator('#cameraResetView')
+    const viewAll = page.getByRole('button', {
+      name: 'View All: fit the view to the model',
+    })
+    await expect(resetView).toBeVisible()
+    await expect(viewAll.first()).toBeVisible()
+
+    const radius = (pose) =>
+      Math.hypot(...pose.position.map((v, i) => v - pose.target[i]))
+    await resetView.click()
+    await page.waitForTimeout(150)
+    const reset = await cameraPose(page)
+    expect(reset.position.map(Math.round)).toEqual([150, -150, 100])
+
+    await viewAll.first().click()
+    await page.waitForTimeout(150)
+    const fitted = await cameraPose(page)
+    expect(radius(fitted)).toBeLessThan(radius(reset) - 1)
+  })
 })
 
 // Upstream builds this menu from the docks, so its order is the dock
