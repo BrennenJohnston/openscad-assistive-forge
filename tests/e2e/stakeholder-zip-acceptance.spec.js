@@ -378,13 +378,13 @@ test.describe('Stakeholder Acceptance Tests - the keyguard ZIP', () => {
       expect(titleText).toContain('Import / Export')
     }
 
-    // Import Designs button visible (terminology updated from "Presets" to "Designs")
-    const importBtn = page.locator('button:has-text("Import Designs")')
+    // Import Presets button visible
+    const importBtn = page.locator('button:has-text("Import Presets")')
     const importVisible = await importBtn.isVisible().catch(() => false)
     console.log(`[Phase 7] Import button visible: ${importVisible}`)
 
-    // Export All Designs button visible
-    const exportBtn = page.locator('button:has-text("Export All Designs")')
+    // Export All Presets button visible
+    const exportBtn = page.locator('button:has-text("Export All Presets")')
     const exportVisible = await exportBtn.isVisible().catch(() => false)
     console.log(`[Phase 7] Export button visible: ${exportVisible}`)
 

@@ -1088,23 +1088,23 @@ const TUTORIALS = {
         ensure: [{ type: 'clickIfExpanded', selector: '#previewDrawerToggle' }],
       },
       {
-        title: 'Save a design (preset)',
+        title: 'Save a preset',
         content: `
-          <p><strong>Designs</strong> (presets) let you save and switch between different configurations.</p>
+          <p><strong>Presets</strong> let you save and switch between different configurations.</p>
           <details class="tutorial-more">
             <summary>What each button does</summary>
             <ul>
-              <li><strong>Select</strong> (dropdown): pick a saved design</li>
-              <li><strong>Save</strong>: overwrite the current design with your changes</li>
-              <li><strong>Add (+)</strong>: create a new design from current settings</li>
-              <li><strong>Delete (\u2212)</strong>: remove the selected design</li>
-              <li><strong>Import / Export</strong>: share designs as JSON files. You can sort designs or choose to merge or replace all when importing.</li>
+              <li><strong>Select</strong> (dropdown): pick a saved preset</li>
+              <li><strong>Save</strong>: overwrite the current preset with your changes</li>
+              <li><strong>Add (+)</strong>: create a new preset from current settings</li>
+              <li><strong>Delete (\u2212)</strong>: remove the selected preset</li>
+              <li><strong>Import / Export</strong>: share presets as JSON files. You can sort presets or choose to merge or replace all when importing.</li>
             </ul>
           </details>
-          <p class="tutorial-hint">Designs are saved in your browser for this model.</p>
+          <p class="tutorial-hint">Presets are saved in your browser for this model.</p>
         `,
         contentCompact: `
-          <p>Use <strong>Designs</strong> (presets) to save, load, and share configurations.</p>
+          <p>Use <strong>Presets</strong> to save, load, and share configurations.</p>
           <p class="tutorial-hint">Saved in your browser for this model.</p>
         `,
         // Target the clickable summary so the panel can avoid covering it.
@@ -1381,10 +1381,10 @@ const TUTORIALS = {
         position: 'auto',
       },
       {
-        title: 'Designs (presets)',
+        title: 'Presets',
         content: `
-          <p>The <strong>Designs</strong> row saves your favorite parameter setups. Pick one from the list, or use the plus button to save the current settings as a new design.</p>
-          <p class="tutorial-hint">Designs are stored in your browser for this model.</p>
+          <p>The <strong>Presets</strong> row saves your favorite parameter setups. Pick one from the list, or use the plus button to save the current settings as a new preset.</p>
+          <p class="tutorial-hint">Presets are stored in your browser for this model.</p>
         `,
         highlightSelector: '#classicPresetRow',
         position: 'left',
@@ -1788,17 +1788,17 @@ const TUTORIALS = {
         },
       },
       {
-        title: 'Import Designs',
+        title: 'Import Presets',
         content: `
-          <p>In <strong>Import / Export Designs</strong>, you can choose how imported designs are merged:</p>
+          <p>In <strong>Import / Export Presets</strong>, you can choose how imported presets are merged:</p>
           <ul>
-            <li><strong>Merge</strong>: add imports alongside your existing designs</li>
-            <li><strong>Replace all</strong>: delete existing designs and start fresh from the import file</li>
+            <li><strong>Merge</strong>: add imports alongside your existing presets</li>
+            <li><strong>Replace all</strong>: delete existing presets and start fresh from the import file</li>
           </ul>
           <p class="tutorial-hint">Replace mode always asks for confirmation before deleting.</p>
         `,
         contentCompact: `
-          <p>Import designs in <strong>Merge</strong> or <strong>Replace all</strong> mode.</p>
+          <p>Import presets in <strong>Merge</strong> or <strong>Replace all</strong> mode.</p>
         `,
         highlightSelector: '#presetControls summary, @preset-controls',
         position: 'right',

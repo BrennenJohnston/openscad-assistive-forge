@@ -268,7 +268,7 @@ test.describe('Preset Workflow', () => {
     await expect(importAction).toBeEnabled()
   })
 
-  test('Replace-mode import runs without TypeError and imports designs', async ({ page }) => {
+  test('Replace-mode import runs without TypeError and imports presets', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await loadSimpleBoxExample(page)
@@ -312,9 +312,9 @@ test.describe('Preset Workflow', () => {
     // answer deletes presets.
     const question = page
       .locator('[role="alertdialog"]')
-      .filter({ has: page.getByRole('heading', { name: 'Replace All Designs', exact: true }) })
+      .filter({ has: page.getByRole('heading', { name: 'Replace All Presets', exact: true }) })
     await expect(question).toBeVisible({ timeout: 10000 })
-    await expect(question).toContainText('permanently delete 1 existing design for "simple_box.scad"')
+    await expect(question).toContainText('permanently delete 1 existing preset for "simple_box.scad"')
     await expect(question.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
     await question.getByRole('button', { name: 'Replace all', exact: true }).click()
 

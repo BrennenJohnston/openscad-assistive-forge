@@ -34,7 +34,7 @@ If you are new to OpenSCAD, or you want the most accessible experience, choose t
 | Menus | File, Edit, Design, View, Window, Help (desktop shape) | The same menu bar plus Forge-specific View and File items |
 | Appearance | Light desktop look only | Light, dark, and high contrast themes |
 | Settings | Edit menu, then Preferences (a desktop-style dialog) | Preferences plus panel controls in the app |
-| Devices | Desktop only for now (a mobile version is planned) | Desktop, tablet, and phone |
+| Devices | Desktop windows | Desktop, tablet, and phone |
 
 ### The light desktop look
 

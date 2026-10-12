@@ -23,8 +23,8 @@ The app auto-adjusts quality settings on mobile. Test complex models on desktop 
 ## Which interface you get on a phone
 
 The **Assistive Forge** interface works on phones and tablets. The **Classic**
-interface does not: it reproduces a desktop application window, and there is no
-mobile version of it yet. On a narrow screen the app keeps you in the Assistive
+interface does not: it reproduces a desktop application window, and has no
+mobile version. On a narrow screen the app keeps you in the Assistive
 Forge interface, and it says so rather than silently ignoring the choice. Your
 saved preference is not overwritten, so Classic comes back when you next open
 the app on a desktop.

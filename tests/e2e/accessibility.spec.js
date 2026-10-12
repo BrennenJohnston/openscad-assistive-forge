@@ -1468,7 +1468,7 @@ test.describe('Screen Reader Support', () => {
       await expect(nextBtn).not.toBeDisabled();
 
       await nextTo(page, 'See the preview update');
-      await nextTo(page, 'Save a design (preset)');
+      await nextTo(page, 'Save a preset');
 
       // This step is gated: open the Presets disclosure to enable Next.
       await openDrawer(page);

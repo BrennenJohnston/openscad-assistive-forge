@@ -226,8 +226,8 @@
                  windows). Leaving Classic is never gated. Sits before the
                  button, because the toggle is the header's last element. -->
             <span id="classicModeToggleReason" class="sr-only"
-              >Classic is desktop-only for now. A mobile version is planned. Use
-              the Assistive Forge interface on phones and narrow windows.</span
+              >Classic is for desktop windows. On phones and narrow windows, use
+              the Assistive Forge interface.</span
             >
             <button
               type="button"
@@ -1808,8 +1808,9 @@
                           dialogs</span
                         >
                         <span class="spotlight-detail">
-                          Key actions announce status changes, and dialogs use
-                          focus trapping + focus restoration.
+                          Key actions say what happened. A dialog keeps focus
+                          inside it and, when it closes, puts focus back where
+                          you were.
                         </span>
                       </a>
                     </li>
@@ -1821,12 +1822,11 @@
                         data-feature-tab="accessibility"
                       >
                         <span class="spotlight-title"
-                          >Plain-language errors and guidance (not cryptic
-                          console logs)</span
+                          >Plain-language errors and guidance</span
                         >
                         <span class="spotlight-detail">
-                          Errors are translated into actionable messages so you
-                          can recover quickly.
+                          An error says what went wrong and what to try, in
+                          plain words. The console log is there if you want it.
                         </span>
                       </a>
                     </li>
@@ -1933,7 +1933,8 @@
                           <li>Toggle High Contrast mode via the HC button</li>
                           <li>Switch between light and dark themes</li>
                           <li>
-                            All interactive controls meet 44×44 px touch targets
+                            On phones and tablets, controls are at least 44 × 44
+                            px
                           </li>
                           <li>
                             Visible focus rings on every focusable element
@@ -1966,7 +1967,10 @@
                           <li>
                             Say button labels: "Click Generate", "Click Help"
                           </li>
-                          <li>Every control has a unique, speakable name</li>
+                          <li>
+                            Every control's name says what it does, in the words
+                            you see
+                          </li>
                           <li>
                             Toolbar menus open with "Click File", "Click View"
                           </li>
@@ -2006,7 +2010,8 @@
                             Plain-language error messages instead of raw alerts
                           </li>
                           <li>
-                            Accessible modal dialogs with focus management
+                            Dialogs keep focus inside and return it when they
+                            close
                           </li>
                         </ul>
                       </details>
@@ -7005,7 +7010,7 @@
             aria-labelledby="tab-presets"
             hidden
           >
-            <h3>Designs (Presets)</h3>
+            <h3>Presets</h3>
             <p>
               Save and load your favorite design configurations to quickly
               switch between different variations of your model.
@@ -8834,9 +8839,8 @@ No console output yet. Generate a model to see output.</pre
                   <span
                     class="first-visit-gate-note hidden"
                     id="firstVisitClassicGate"
-                    >Classic is desktop-only for now. A mobile version is
-                    planned. Use the Assistive Forge interface on phones and
-                    narrow windows.</span
+                    >Classic is for desktop windows. On phones and narrow
+                    windows, use the Assistive Forge interface.</span
                   >
                   <img
                     class="first-visit-shot"
