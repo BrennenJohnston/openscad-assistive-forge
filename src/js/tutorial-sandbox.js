@@ -4118,11 +4118,14 @@ function updateSpotlightAndPosition() {
   // Scroll target into view if needed
   const targetRect = target.getBoundingClientRect();
   const effectiveBottom = getEffectiveViewportBottom();
+  // A control flush with the window's edge can measure a pixel past it (the
+  // camera tab's right edge read 1281 in a 1280 window); that is on screen.
+  const EDGE_TOLERANCE = 2;
   const isVisible =
-    targetRect.top >= 0 &&
-    targetRect.bottom <= effectiveBottom &&
-    targetRect.left >= 0 &&
-    targetRect.right <= viewport.width;
+    targetRect.top >= -EDGE_TOLERANCE &&
+    targetRect.bottom <= effectiveBottom + EDGE_TOLERANCE &&
+    targetRect.left >= -EDGE_TOLERANCE &&
+    targetRect.right <= viewport.width + EDGE_TOLERANCE;
 
   if (!isVisible) {
     const scrollableParent = findScrollableParent(target);

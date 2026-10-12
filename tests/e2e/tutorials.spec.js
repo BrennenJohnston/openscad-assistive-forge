@@ -631,6 +631,32 @@ test.describe('The box tour ends by naming the way back', () => {
 // The walk above stops at the first step that waits for an action, so it
 // cannot tell a step that never completes from one it did not try. This one
 // performs each action the step's hint names and requires Next to unlock.
+async function openGettingStarted(page) {
+  await setBaseline(page)
+  await page.goto('/')
+  await page.locator('[data-example="simple-box"]').click()
+  await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 60_000 })
+  await waitForTutorialOverlay(page)
+}
+
+async function stepTo(page, wanted, actions) {
+  const title = page.locator('#tutorial-step-title')
+  const next = page.locator('#tutorialNextBtn')
+  for (let i = 0; i < 30; i += 1) {
+    const name = (await title.textContent()).trim()
+    if (name === wanted) return
+    if (!(await next.isEnabled())) {
+      expect(actions[name], `no action known for the step "${name}"`).toBeTruthy()
+      await actions[name](page)
+      await expect.poll(async () => (await title.textContent()).trim() !== name || (await next.isEnabled()), { timeout: 30_000 }).toBe(true)
+      if ((await title.textContent()).trim() !== name) continue
+    }
+    await next.click()
+    await expect.poll(async () => (await title.textContent()).trim()).not.toBe(name)
+  }
+  throw new Error(`never reached "${wanted}"`)
+}
+
 test.describe('Getting Started, action by action', () => {
   test.use({ viewport: { width: 1280, height: 720 } })
 
@@ -765,5 +791,47 @@ test.describe('A tour, as a screen reader meets it', () => {
     await openTourByKeyboard(page)
     const exit = page.locator('.tutorial-close')
     await expect(exit).toHaveAttribute('title', (await exit.getAttribute('aria-label')) ?? '')
+  })
+})
+
+test.describe('Getting Started, where the card sits', () => {
+  test.use({ viewport: { width: 1280, height: 720 } })
+  test('the Camera controls step points at the camera tab, not at the last step’s target', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await openGettingStarted(page)
+    const actions = {
+      'Expand a parameter group': (p) =>
+        p.locator('details.param-group > summary').filter({ hasText: 'Dimensions' }).first().click(),
+      'Adjust a parameter': async (p) => {
+        await p.locator('#param-width-spinbox').fill('60')
+        await p.locator('#param-width-spinbox').press('Tab')
+      },
+      'Save a preset': async (p) => {
+        await p.locator('#addPresetBtn').click()
+        await p.locator('.preset-modal #presetName').fill('Tour preset')
+        await p.locator('.preset-modal button[type="submit"]').first().click()
+      },
+    }
+    await stepTo(page, 'Camera controls', actions)
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const c = document.querySelector('.tutorial-spotlight-cutout')
+            const t = document.querySelector('#cameraPanelToggle').getBoundingClientRect()
+            const x = Number(c.getAttribute('x'))
+            const y = Number(c.getAttribute('y'))
+            const w = Number(c.getAttribute('width'))
+            const h = Number(c.getAttribute('height'))
+            return x <= t.left && y <= t.top && x + w >= t.right - 2 && y + h >= t.bottom
+          }),
+        { timeout: 5_000 }
+      )
+      .toBe(true)
+    const panel = await page.locator('.tutorial-panel').boundingBox()
+    const target = await page.locator('#cameraPanelToggle').boundingBox()
+    expect(panel.x + panel.width, 'the card stands left of the camera tab').toBeLessThanOrEqual(target.x)
   })
 })
