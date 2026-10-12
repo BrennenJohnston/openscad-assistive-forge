@@ -314,7 +314,7 @@ test.describe('Preset Workflow', () => {
       .locator('[role="alertdialog"]')
       .filter({ has: page.getByRole('heading', { name: 'Replace All Presets', exact: true }) })
     await expect(question).toBeVisible({ timeout: 10000 })
-    await expect(question).toContainText('permanently delete 1 existing design for "simple_box.scad"')
+    await expect(question).toContainText('permanently delete 1 existing preset for "simple_box.scad"')
     await expect(question.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
     await question.getByRole('button', { name: 'Replace all', exact: true }).click()
 
