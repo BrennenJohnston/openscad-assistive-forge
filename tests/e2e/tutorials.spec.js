@@ -696,8 +696,9 @@ test.describe('The box tour ends by naming the way back', () => {
     test.setTimeout(240_000);
     await startBoxTourAtTheEnd(page);
 
+    // The last of the steps this layout shows, whatever their number.
     await expect(page.locator('.tutorial-progress')).toContainText(
-      'Step 18 of 18'
+      /Step (\d+) of \1\b/
     );
     await expect(page.locator('#clearFileBtn')).toHaveClass(
       /tutorial-target-highlight/
