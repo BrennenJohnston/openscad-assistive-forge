@@ -12,6 +12,7 @@ import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { noteOverlayChanged } from './overlay-settings.js';
 import { createCropDialog } from './crop-dialog.js';
+import { showConfirmDialog } from './dialogs.js';
 // Auto-rotate and its speed are per-interface viewing preferences; the
 // reference-overlay cluster stays app-level.
 import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
@@ -313,13 +314,20 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   }
 
   if (deleteGridPresetBtn) {
-    deleteGridPresetBtn.addEventListener('click', () => {
+    deleteGridPresetBtn.addEventListener('click', async () => {
       const previewManager = getPreviewManager();
       if (!previewManager) return;
       const val = gridPresetSelect?.value || '';
       if (!val.startsWith(USER_GRID_PREFIX)) return;
       const name = val.slice(USER_GRID_PREFIX.length);
-      if (!confirm(`Delete custom grid preset "${name}"?`)) return;
+      const confirmed = await showConfirmDialog(
+        `Delete the grid preset "${name}"?`,
+        'Delete Grid Preset',
+        'Delete',
+        'Cancel',
+        { destructive: true }
+      );
+      if (!confirmed) return;
       previewManager.deleteCustomGridPreset(name);
       _populateCustomGridPresets();
       if (gridPresetSelect) gridPresetSelect.value = 'custom';

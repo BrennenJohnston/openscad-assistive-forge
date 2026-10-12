@@ -54,11 +54,13 @@ If a user would notice the change, add one line under "Unreleased" in
 ## Checks
 
 - Format: `npm run format`
-- Lint: `npm run lint`
+- Lint: `npm run lint`. It refuses the browser's `confirm()`, `prompt()` and
+  `alert()`; the app's own dialogs are in `src/js/dialogs.js`.
 - Unit tests: `npm run test:run`
 - Browser tests: `npm run test:e2e`. A new spec can use the shared checks in
-  `tests/e2e/helpers/invariants.js` (page errors, focus lost to the page body,
-  markup shown as text); `docs/developing/TESTING.md` lists them.
+  `tests/e2e/helpers/invariants.js` (page errors, a browser dialog, focus lost
+  to the page body, markup shown as text); `docs/developing/TESTING.md` lists
+  them.
 - Example models: `npm run validate:example public/examples/<your-folder>`
 
 On Windows, see `docs/developing/TROUBLESHOOTING.md#playwright-terminal-hangs-windows` if Playwright gets stuck.

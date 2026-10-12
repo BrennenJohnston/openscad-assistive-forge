@@ -42,6 +42,29 @@ export default [
     },
   },
   {
+    // The browser's own dialogs block the page, ignore the theme and high
+    // contrast, and drop focus where the browser likes; dialogs.js has the
+    // app's own for each.
+    files: ['src/**/*.js'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...['confirm', 'prompt', 'alert'].map((name) => ({
+          name,
+          message: `Use the app's own dialog from src/js/dialogs.js instead of ${name}().`,
+        })),
+      ],
+      'no-restricted-properties': [
+        'error',
+        ...['confirm', 'prompt', 'alert'].map((property) => ({
+          object: 'window',
+          property,
+          message: `Use the app's own dialog from src/js/dialogs.js instead of window.${property}().`,
+        })),
+      ],
+    },
+  },
+  {
     files: ['scripts/**/*.js', 'cli/**/*.js', 'tests/**/*.js'],
     rules: {
       'no-console': 'off',

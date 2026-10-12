@@ -22,7 +22,8 @@
  *
  * Sequencing: the caller hands in the first-visit gate's wait function —
  * inside the inert, aria-hidden #app a spotlight would be unreachable and
- * its announcement silenced.
+ * its announcement silenced — and the draft question's, which leaves the
+ * page running: the tip is not said over it.
  *
  * @license GPL-3.0-or-later
  */
@@ -119,15 +120,19 @@ function decorateCard(familyId, tutorialId, announcement) {
  * @param {() => Promise<{startedTour: boolean}|void>} [options.waitForTourNudge]
  *   Resolves once the tour nudge has been answered, or immediately
  *   when it never showed. Optional so the module still stands alone.
+ * @param {() => Promise<void>} [options.waitForDraftQuestion] Resolves once
+ *   a kept draft has been asked about and answered, or when there is none.
  */
 export async function initWelcomeSpotlight({
   waitForFirstVisitAcceptance,
   waitForTourNudge,
+  waitForDraftQuestion,
 }) {
   if (isFamilyCleared(WELCOME_FAMILY) && isFamilyCleared(INTRO_FAMILY)) return;
 
   await waitForFirstVisitAcceptance();
   const nudge = waitForTourNudge ? await waitForTourNudge() : null;
+  if (waitForDraftQuestion) await waitForDraftQuestion();
 
   // A tour merely opened hands the tip over on the next
   // visit, not on this one. Starting the tour from the nudge opens it during

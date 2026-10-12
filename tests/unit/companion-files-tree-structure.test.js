@@ -218,3 +218,82 @@ describe('what the Companion Files panel reports', () => {
     expect(document.getElementById('projectFilesBadge').textContent).toBe('1');
   });
 });
+
+// Removing a companion, or adding one whose name is taken, asks in the app's
+// own dialog (not the browser's confirm), opening on Cancel, and a removal
+// leaves focus in the list the redraw replaced.
+describe('the Companion Files panel asks in the app’s own dialog', () => {
+  const question = (title) =>
+    [...document.querySelectorAll('[role="alertdialog"]')].find(
+      (d) => d.querySelector('h3')?.textContent === title
+    );
+  const button = (dialog, name) =>
+    [...dialog.querySelectorAll('button')].find((b) => b.textContent.trim() === name);
+
+  beforeEach(() => {
+    document.body.innerHTML = PANEL_HTML;
+    vi.spyOn(window, 'confirm');
+    stateManager.setState({
+      uploadedFile: { name: 'main.scad', content: 'cube(10);' },
+      projectFiles: new Map([
+        ['main.scad', 'cube(10);'],
+        ['notes.txt', 'a note'],
+        ['readme.txt', 'read me'],
+      ]),
+      mainFilePath: 'main.scad',
+    });
+    controller = makeController();
+    controller.renderProjectFilesList(
+      stateManager.getState().projectFiles,
+      'main.scad',
+      null
+    );
+  });
+
+  it('removes a file only after the app’s question, then focuses the list', async () => {
+    const removeBtn = [
+      ...document.querySelectorAll('#projectFilesList button[data-action="remove"]'),
+    ].find((b) => b.dataset.path === 'notes.txt');
+    removeBtn.focus();
+    const removing = controller.removeProjectFile('notes.txt');
+
+    const dialog = question('Remove File');
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain('Remove "notes.txt" from the project?');
+    expect(document.activeElement).toBe(button(dialog, 'Cancel'));
+    button(dialog, 'Remove').click();
+    await removing;
+
+    expect(stateManager.getState().projectFiles.has('notes.txt')).toBe(false);
+    expect(document.activeElement.closest('#projectFilesList')).not.toBeNull();
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+
+  it('keeps the file when the question is cancelled', async () => {
+    const removing = controller.removeProjectFile('notes.txt');
+    button(question('Remove File'), 'Cancel').click();
+    await removing;
+
+    expect(stateManager.getState().projectFiles.has('notes.txt')).toBe(true);
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+
+  it('asks before an added file replaces one of the same name', async () => {
+    // jsdom's File has no text(); the controller reads nothing else from it.
+    const adding = controller.handleAddCompanionFile({
+      name: 'notes.txt',
+      type: 'text/plain',
+      text: async () => 'a new note',
+    });
+    await vi.waitFor(() => expect(question('Replace File')).toBeTruthy());
+    const dialog = question('Replace File');
+    expect(dialog.textContent).toContain(
+      'A file named "notes.txt" is already in the project. Replace it?'
+    );
+    button(dialog, 'Replace').click();
+    await adding;
+
+    expect(stateManager.getState().projectFiles.get('notes.txt')).toBe('a new note');
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+});

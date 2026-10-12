@@ -376,7 +376,6 @@ test.describe('Bug 4: Imported preset auto-selection', () => {
     // Delete the preset so we can verify it comes back after import
     const deleteBtn = page.locator('#deletePresetBtn')
     if (await deleteBtn.isVisible() && !(await deleteBtn.isDisabled())) {
-      page.on('dialog', dialog => dialog.accept())
       await deleteBtn.click({ force: true })
       await page.waitForTimeout(500)
       // Dismiss custom confirm modal if present

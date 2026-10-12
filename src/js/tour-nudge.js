@@ -43,9 +43,11 @@ const SCROLL_MARGIN = 16;
 // the same hazard the first-visit gate comment block in main.js
 // documents. Both overlays are created and removed rather than toggled,
 // and both are removed on the failure path too, so waiting for them
-// cannot hang on a broken engine.
+// cannot hang on a broken engine. The app's own questions (.confirm-modal:
+// a saved draft to restore, an engine download to allow) are created and
+// removed the same way, and are answered before the tour is offered.
 const COVERING_SELECTOR =
-  '#wasmLoadingOverlay, #processingOverlay, .friendly-error-modal';
+  '#wasmLoadingOverlay, #processingOverlay, .friendly-error-modal, .confirm-modal';
 
 const COPY = {
   title: 'Take a quick tour of this page?',
@@ -100,7 +102,7 @@ function screenIsCovered() {
 }
 
 /**
- * Resolve once nothing is covering the page. All three coverers are appended
+ * Resolve once nothing is covering the page. All the coverers are appended
  * to and `remove()`d from document.body directly, never toggled by class, so
  * body's own childList is the whole signal — and this can be armed through a
  * 15-30MB engine download without watching every mutation the boot makes.

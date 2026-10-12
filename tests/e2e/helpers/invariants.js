@@ -1,7 +1,8 @@
 /**
  * Checks every browser test can run after a step: no uncaught page error,
- * focus somewhere a person can see, no markup shown as text, a page that fits
- * its window, and a record of everything written to a live region.
+ * no browser confirm, prompt or alert, focus somewhere a person can see, no
+ * markup shown as text, a page that fits its window, and a record of
+ * everything written to a live region.
  *
  * @license GPL-3.0-or-later
  */
@@ -16,10 +17,13 @@ const BROKEN_CODE_TEXT =
   /Cannot read properties|Unexpected token|is not a function|before initialization|is not defined/
 
 const recorded = new WeakMap()
+const nativeDialogs = new WeakMap()
 
 /**
- * Start collecting uncaught page errors and console errors that name broken
- * code. Call before the first navigation.
+ * Start collecting uncaught page errors, console errors that name broken
+ * code, and any confirm, prompt or alert the browser itself shows (the app
+ * has its own dialogs for all three). Each browser dialog is dismissed, as
+ * Playwright does when nothing listens. Call before the first navigation.
  *
  * @param {import('@playwright/test').Page} page
  */
@@ -32,6 +36,22 @@ export function attachInvariants(page) {
     }
   })
   recorded.set(page, errors)
+
+  const dialogs = []
+  page.on('dialog', async (dialog) => {
+    if (dialog.type() !== 'beforeunload') {
+      dialogs.push(`${dialog.type()}: ${dialog.message()}`)
+    }
+    await dialog.dismiss()
+  })
+  nativeDialogs.set(page, dialogs)
+}
+
+/** @param {import('@playwright/test').Page} page */
+export function expectNoNativeDialog(page) {
+  const dialogs = nativeDialogs.get(page)
+  if (!dialogs) throw new Error('attachInvariants(page) was not called')
+  expect(dialogs, 'a browser confirm, prompt or alert opened').toEqual([])
 }
 
 /** @param {import('@playwright/test').Page} page */

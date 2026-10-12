@@ -289,7 +289,7 @@ import { getDisplayOptionsController } from './js/display-options-controller.js'
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
-import { showConfirmDialog } from './js/dialogs.js';
+import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
 import { initHfmController } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
@@ -2925,6 +2925,14 @@ async function initApp() {
   let hasUserAcceptedDownload = !isFirstVisit();
   let pendingWasmInit = false;
   let pendingDraft = null;
+  // Settles once a kept draft has been asked about and the answer carried
+  // out, or once start-up finds none to ask about. The app's own question
+  // leaves the page running, as the browser's did not, so the Main Page's
+  // tip waits for this rather than speak over the question.
+  let settleDraftQuestion;
+  const draftQuestionSettled = new Promise((resolve) => {
+    settleDraftQuestion = resolve;
+  });
   // The end of initApp: until then parts of the page that loading a project
   // reaches (the preview drawer's state among them) do not exist yet.
   let startupDone = false;
@@ -2937,28 +2945,42 @@ async function initApp() {
    * further down and lost the project.
    */
   async function restorePendingDraft() {
-    if (!pendingDraft || !startupDone) return;
+    if (!startupDone) return;
+    if (!pendingDraft) {
+      settleDraftQuestion();
+      return;
+    }
     const draftToRestore = pendingDraft;
     pendingDraft = null;
 
-    const shouldRestore = confirm(
-      `Found a saved draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()}.\n\nWould you like to restore it?`
-    );
-
-    if (shouldRestore) {
-      console.log('Restoring draft...');
-      await fileHandler.handleFile(
-        { name: draftToRestore.fileName },
-        draftToRestore.fileContent,
-        null,
-        null,
-        'saved',
-        null,
-        { startingValues: draftToRestore.parameters }
+    try {
+      // Opens on Restore: the other answer deletes the draft, and Enter on
+      // the browser's own question used to restore.
+      const shouldRestore = await showConfirmDialog(
+        `A draft of "${draftToRestore.fileName}" from ${new Date(draftToRestore.timestamp).toLocaleString()} is kept in this browser. Restore it, or discard it?`,
+        'Restore a saved draft?',
+        'Restore draft',
+        'Discard draft',
+        { focusConfirm: true }
       );
-      updateStatus('Draft restored');
-    } else {
-      stateManager.clearLocalStorage();
+
+      if (shouldRestore) {
+        console.log('Restoring draft...');
+        await fileHandler.handleFile(
+          { name: draftToRestore.fileName },
+          draftToRestore.fileContent,
+          null,
+          null,
+          'saved',
+          null,
+          { startingValues: draftToRestore.parameters }
+        );
+        updateStatus('Draft restored');
+      } else {
+        stateManager.clearLocalStorage();
+      }
+    } finally {
+      settleDraftQuestion();
     }
   }
 
@@ -5350,7 +5372,7 @@ async function initApp() {
   // Preset migration check: detect legacy presets for versioned format migration
   // Check for legacy presets that can be migrated to the new versioned format
   // ============================================================================
-  const checkPresetMigration = () => {
+  const checkPresetMigration = async () => {
     try {
       const migrationInfo = checkMigrationAvailable();
 
@@ -5365,7 +5387,15 @@ async function initApp() {
           `Found ${migrationInfo.legacyPresetCount} preset(s) from a previous version. ` +
           `Would you like to migrate them to preserve your work?`;
 
-        const shouldMigrate = confirm(message);
+        // Opens on Migrate: Skip ends the offer for good, and Enter on the
+        // browser's own question used to migrate.
+        const shouldMigrate = await showConfirmDialog(
+          message,
+          'Presets From an Earlier Version',
+          'Migrate',
+          'Skip',
+          { focusConfirm: true }
+        );
 
         if (shouldMigrate) {
           const result = migrateFromLegacyStorage({ createBackup: true });
@@ -5735,6 +5765,10 @@ async function initApp() {
 
   // Track WASM initialization state
   let wasmInitialized = false;
+  // The download question while it is open, shared with any caller that
+  // arrives meanwhile: the browser's own question held them back, the app's
+  // does not.
+  let downloadQuestion = null;
 
   /**
    * Ensure WASM is initialized before operations that need it
@@ -5757,11 +5791,15 @@ async function initApp() {
 
     // Check if we should defer large downloads on metered connections
     if (deferDownloads) {
-      const proceed = confirm(
-        'This app requires downloading ~15MB of WebAssembly files.\n\n' +
-          'You appear to be on a metered or slow connection.\n\n' +
-          'Do you want to proceed with the download?'
-      );
+      downloadQuestion ??= showConfirmDialog(
+        'This app needs about 15 MB of files, once. You seem to be on a slow or metered connection. Download them now?',
+        'Download the engine?',
+        'Download',
+        'Not now'
+      ).finally(() => {
+        downloadQuestion = null;
+      });
+      const proceed = await downloadQuestion;
       if (!proceed) {
         updateStatus('WASM download deferred', 'info');
         return false;
@@ -8571,6 +8609,7 @@ if (rounded) {
   void initWelcomeSpotlight({
     waitForFirstVisitAcceptance,
     waitForTourNudge: () => tourNudgeSettled,
+    waitForDraftQuestion: () => draftQuestionSettled,
   });
 
   // Wire charm variant selector to update the single Open button
@@ -8987,8 +9026,12 @@ if (rounded) {
     manifestResetBtn.addEventListener('click', async () => {
       const origin = stateManager.getState().manifestOrigin;
       if (!origin?.url) return;
-      const confirmed = confirm(
-        'Reset to the original shared project? Your unsaved changes will be lost.'
+      const confirmed = await showConfirmDialog(
+        'Reset to the original shared project? Your unsaved changes will be lost.',
+        'Reset Project',
+        'Reset',
+        'Cancel',
+        { destructive: true }
       );
       if (!confirmed) return;
       try {
@@ -12608,13 +12651,18 @@ if (rounded) {
     return null;
   }
 
-  async function copyTextWithFallback(text, promptLabel) {
+  /**
+   * Copy text, or hand it over to copy by hand when the browser refuses.
+   * @param {string} text
+   * @returns {Promise<boolean>} True only when the text reached the
+   *   clipboard, so a caller says "copied" only then
+   */
+  async function copyTextWithFallback(text) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
     } catch (_err) {
-      prompt(promptLabel, text);
-      return false;
+      return showTextToCopyDialog(text);
     }
   }
 
@@ -12669,7 +12717,7 @@ if (rounded) {
       const fragment = stateManager.getShareFragment();
       const base = projectReopenUrl();
       const link = `${base || window.location.origin + window.location.pathname}${fragment}`;
-      await copyTextWithFallback(link, 'Copy this link:');
+      if (!(await copyTextWithFallback(link))) return;
 
       if (!base) {
         updateStatus(
@@ -12755,21 +12803,17 @@ if (rounded) {
     // Copy manifest button
     if (copyManifestBtn && publishManifestOutput) {
       copyManifestBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(
-            publishManifestOutput.textContent
-          );
-          const textSpan =
-            copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
-          const original = textSpan.textContent;
-          textSpan.textContent = 'Copied!';
-          setTimeout(() => {
-            textSpan.textContent = original;
-          }, 2000);
-          updateStatus('Manifest copied to clipboard');
-        } catch (_err) {
-          prompt('Copy this manifest JSON:', publishManifestOutput.textContent);
+        if (!(await copyTextWithFallback(publishManifestOutput.textContent))) {
+          return;
         }
+        const textSpan =
+          copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
+        const original = textSpan.textContent;
+        textSpan.textContent = 'Copied!';
+        setTimeout(() => {
+          textSpan.textContent = original;
+        }, 2000);
+        updateStatus('Manifest copied to clipboard');
       });
     }
 
@@ -12882,16 +12926,12 @@ if (rounded) {
     // Copy shareable link button
     if (copyShareLinkBtn && publishShareLink) {
       copyShareLinkBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(publishShareLink.value);
-          copyShareLinkBtn.textContent = 'Copied!';
-          setTimeout(() => {
-            copyShareLinkBtn.textContent = 'Copy';
-          }, 2000);
-          updateStatus('Shareable link copied to clipboard');
-        } catch (_err) {
-          prompt('Copy this link:', publishShareLink.value);
-        }
+        if (!(await copyTextWithFallback(publishShareLink.value))) return;
+        copyShareLinkBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyShareLinkBtn.textContent = 'Copy';
+        }, 2000);
+        updateStatus('Shareable link copied to clipboard');
       });
     }
   }
@@ -14040,8 +14080,11 @@ if (rounded) {
             const paramSchema = currentState.schema?.parameters || {};
 
             if (!currentModelName) {
-              const proceed = confirm(
-                'No model is currently loaded. Presets will be saved as "Unknown Model" and may not appear in the dropdown until you load a matching model.\n\nContinue with import?'
+              const proceed = await showConfirmDialog(
+                'No model is currently loaded. Presets will be saved as "Unknown Model" and may not appear in the dropdown until you load a matching model.\n\nContinue with import?',
+                'Import Presets',
+                'Import',
+                'Cancel'
               );
               if (!proceed) return;
             }
@@ -14075,8 +14118,12 @@ if (rounded) {
               }
 
               if (realCount > 0) {
-                const confirmed = confirm(
-                  `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`
+                const confirmed = await showConfirmDialog(
+                  `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`,
+                  'Replace All Designs',
+                  'Replace all',
+                  'Cancel',
+                  { destructive: true }
                 );
                 if (!confirmed) return;
                 presetManager.clearPresetsForModel(currentModelName, {

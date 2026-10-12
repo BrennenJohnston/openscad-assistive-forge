@@ -7969,6 +7969,30 @@ button.file-nav-folder-row {
   text-align: left;
 }
 
+/* In the file manager the row also holds Rename and Delete, so its name and
+   count are a button of their own beside them. The row keeps its padding and
+   its own click, so a pointer still opens the folder from anywhere on it. */
+.file-nav-folder-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  min-height: var(--size-touch-target);
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-nav-folder-open:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
 .file-nav-folder-row:hover {
   background: var(--color-hover-bg);
 }
