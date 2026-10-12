@@ -639,7 +639,7 @@ test.describe('Getting Started, action by action', () => {
       await box.fill('60')
       await box.press('Tab')
     },
-    'Save a design (preset)': (page) => page.locator('#presetControls details > summary').first().click(),
+    'Save a preset': (page) => page.locator('#presetControls details > summary').first().click(),
     'Generate and download your file': (page) => page.locator('#primaryActionBtn').click(),
     'Help & Examples': (page) => page.locator('#featuresGuideBtn').click(),
     'Features Guide': (page) => page.keyboard.press('Escape'),

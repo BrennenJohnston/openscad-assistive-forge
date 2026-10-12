@@ -13860,15 +13860,15 @@ if (rounded) {
     modal.innerHTML = `
       <div class="preset-modal-content">
         <div class="preset-modal-header">
-          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Designs (Presets)</h3>
+          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Presets</h3>
           <button class="preset-modal-close" aria-label="Close dialog" data-action="close">&times;</button>
         </div>
         <div class="preset-import-export-actions" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border-color, #e0e0e0);">
           <button class="btn btn-primary" data-action="import" style="flex:1;padding:12px;font-size:1em;">
-            📂 Import Designs
+            📂 Import Presets
           </button>
           <button class="btn btn-primary" data-action="export-all" style="flex:1;padding:12px;font-size:1em;">
-            💾 Export All Designs
+            💾 Export All Presets
           </button>
         </div>
         ${
@@ -13892,7 +13892,7 @@ if (rounded) {
           </div>
         </details>
         `
-            : '<div class="preset-empty" style="padding:16px;">No designs saved for this model yet. Import a design file or use the + button to create one.</div>'
+            : '<div class="preset-empty" style="padding:16px;">No presets saved for this model yet. Import a preset file or use the + button to create one.</div>'
         }
         <div class="preset-modal-footer">
           <button class="btn btn-outline" data-action="close">Close</button>
@@ -13925,9 +13925,9 @@ if (rounded) {
               </p>
             </div>
             <div class="preset-item-actions">
-              <button class="btn btn-sm btn-primary" data-action="load" data-preset-id="${preset.id}" aria-label="Load design ${preset.name}">Load</button>
-              <button class="btn btn-sm btn-secondary" data-action="export" data-preset-id="${preset.id}" aria-label="Export design ${preset.name}">Export</button>
-              <button class="btn btn-sm btn-outline" data-action="delete" data-preset-id="${preset.id}" aria-label="Delete design ${preset.name}">Delete</button>
+              <button class="btn btn-sm btn-primary" data-action="load" data-preset-id="${preset.id}" aria-label="Load preset ${preset.name}">Load</button>
+              <button class="btn btn-sm btn-secondary" data-action="export" data-preset-id="${preset.id}" aria-label="Export preset ${preset.name}">Export</button>
+              <button class="btn btn-sm btn-outline" data-action="delete" data-preset-id="${preset.id}" aria-label="Delete preset ${preset.name}">Delete</button>
             </div>
           </div>`
           )
@@ -13936,7 +13936,7 @@ if (rounded) {
         updatePresetDropdown();
         const label =
           presetSortSelect.options[presetSortSelect.selectedIndex]?.text || '';
-        announceImmediate(`Designs sorted by ${label}`);
+        announceImmediate(`Presets sorted by ${label}`);
       });
     }
 
@@ -14001,7 +14001,7 @@ if (rounded) {
           a.download = `${sanitizeFilename(preset.name)}.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus(`Exported design: ${preset.name}`);
+          updateStatus(`Exported preset: ${preset.name}`);
         }
       } else if (action === 'export-all') {
         // Export in OpenSCAD native format (includes "design default values" as first entry)
@@ -14020,10 +14020,10 @@ if (rounded) {
           a.download = `${modelName.replace('.scad', '')}-presets.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus('Exported all designs (OpenSCAD native format)');
+          updateStatus('Exported all presets (OpenSCAD native format)');
         } else {
           updateStatus(
-            'No designs to export. Create some designs first using the + button.'
+            'No presets to export. Create some presets first using the + button.'
           );
         }
       } else if (action === 'import') {
@@ -14035,28 +14035,28 @@ if (rounded) {
         importModeDialog.setAttribute('aria-labelledby', 'importModeTitle');
         importModeDialog.innerHTML = `
           <form method="dialog" class="import-mode-form">
-            <h3 id="importModeTitle" class="import-mode-title">Import designs</h3>
+            <h3 id="importModeTitle" class="import-mode-title">Import presets</h3>
             <fieldset class="import-mode-fieldset">
               <legend class="import-mode-legend">Import mode</legend>
               <label class="import-mode-option">
                 <input type="radio" name="importMode" value="merge" checked />
                 <span class="import-mode-label">
                   <strong>Merge</strong>
-                  <span class="import-mode-desc">Add imported designs; skip any with the same name as existing ones</span>
+                  <span class="import-mode-desc">Add imported presets; skip any with the same name as existing ones</span>
                 </span>
               </label>
               <label class="import-mode-option">
                 <input type="radio" name="importMode" value="replace" />
                 <span class="import-mode-label">
                   <strong>Replace</strong>
-                  <span class="import-mode-desc">Delete all existing designs for this model, then import</span>
+                  <span class="import-mode-desc">Delete all existing presets for this model, then import</span>
                 </span>
               </label>
               <label class="import-mode-option">
                 <input type="radio" name="importMode" value="copies" />
                 <span class="import-mode-label">
                   <strong>Import as copies</strong>
-                  <span class="import-mode-desc">Import all designs; rename duplicates with (2), (3)… suffixes</span>
+                  <span class="import-mode-desc">Import all presets; rename duplicates with (2), (3)… suffixes</span>
                 </span>
               </label>
             </fieldset>
@@ -14133,15 +14133,15 @@ if (rounded) {
                 showErrorToast({
                   title: 'Invalid Import Data',
                   message:
-                    'The selected file(s) contain no valid preset data. Import canceled to protect your existing designs.',
+                    'The selected file(s) contain no valid preset data. Import canceled to protect your existing presets.',
                 });
                 return;
               }
 
               if (realCount > 0) {
                 const confirmed = await showConfirmDialog(
-                  `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`,
-                  'Replace All Designs',
+                  `Replace all presets? This will permanently delete ${realCount} existing preset${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`,
+                  'Replace All Presets',
                   'Replace all',
                   'Cancel',
                   { destructive: true }
