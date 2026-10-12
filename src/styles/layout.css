@@ -939,6 +939,10 @@ body[data-app-surface='welcome'] #uiModeToggle {
 }
 
 .param-panel {
+  /* The panel is the containing block for its visually hidden labels
+     (position: absolute); without this they anchor to the body and stretch
+     the document past the window when the panel's content is tall. */
+  position: relative;
   min-height: 300px;
   max-height: 50vh;
   overflow-y: auto;
