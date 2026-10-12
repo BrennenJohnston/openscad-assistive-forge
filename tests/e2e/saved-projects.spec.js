@@ -382,6 +382,18 @@ test.describe('Saved Projects', () => {
     await page.waitForSelector('.cache-clear-dialog', { state: 'visible', timeout: 10000 });
     const confirmText = await page.locator('.cache-clear-dialog').textContent();
     expect(confirmText).toContain('saved project');
+
+    // Saved projects are kept unless the person unticks the box.
+    const keep = page.locator('#preserveSavedDesigns');
+    await expect(keep).toBeChecked();
+    await expect(page.locator('#preserveIndicator')).toContainText('Will be kept');
+    await expect(page.locator('#cacheClearWarningText')).toContainText(
+      'Your saved projects are kept unless you untick Keep my Saved Projects below.'
+    );
+    await keep.uncheck();
+    await expect(page.locator('#preserveIndicator')).toContainText('Will be deleted');
+    await page.locator('#cacheClearCancelBtn').click();
+    await expect(page.locator('.cache-clear-dialog')).toHaveCount(0);
   });
 
   test('should validate notes character limit', async ({ page }) => {

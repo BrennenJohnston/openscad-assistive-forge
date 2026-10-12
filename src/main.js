@@ -1931,8 +1931,8 @@ async function initApp() {
             <div class="cache-clear-warning">
               <span class="cache-clear-warning-icon" aria-hidden="true">⚠️</span>
               <div class="cache-clear-warning-text" id="cacheClearWarningText">
-                <strong>Warning:</strong> This will delete all saved projects and cached app data by default.
-                Check the box below if you want to keep your saved projects.
+                <strong>Warning:</strong> This clears the app's cached data. Your saved projects
+                are kept unless you untick Keep my Saved Projects below.
               </div>
             </div>
 
@@ -1956,13 +1956,13 @@ async function initApp() {
                 </div>
               </label>
 
-              <label class="cache-clear-option preservation-off" id="preserveOption">
-                <input type="checkbox" id="preserveSavedDesigns" />
+              <label class="cache-clear-option preservation-on" id="preserveOption">
+                <input type="checkbox" id="preserveSavedDesigns" checked />
                 <div class="cache-clear-option-content">
                   <div class="cache-clear-option-label">
                     Keep my Saved Projects
-                    <span class="preservation-indicator danger" id="preserveIndicator">
-                      <span aria-hidden="true">⚠️</span> Will be deleted
+                    <span class="preservation-indicator safe" id="preserveIndicator">
+                      <span aria-hidden="true">✓</span> Will be kept
                     </span>
                   </div>
                   <div class="cache-clear-option-desc">

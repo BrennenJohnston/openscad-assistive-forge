@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asks first. The second Reset in its top row is gone.
 - File > Save As and File > Save a Copy each open a dialog of their own name
   that says where Save writes afterwards.
+- Clear Cache keeps your saved projects unless you untick Keep my Saved
+  Projects; it used to delete them by default.
 
 ### Fixed
 
