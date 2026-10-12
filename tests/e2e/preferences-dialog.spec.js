@@ -397,6 +397,7 @@ test('the Keyboard tab reaches the shortcuts editor', async ({ page }) => {
   test.setTimeout(240_000);
   await openPreferences(page);
 
+  await page.getByRole('tab', { name: 'Keyboard' }).click();
   await page.locator('#preferencesOpenShortcuts').click();
   await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
   // One dialog on screen at a time.
@@ -742,4 +743,24 @@ test('the selected tab’s words pass the contrast rule in the light theme', asy
     };
   });
   expect(ratio.ratio, `${ratio.fg} on ${ratio.bg}`).toBeGreaterThanOrEqual(4.5);
+});
+
+test('Preferences opens on the first tab unless a tab is asked for', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  await page.getByRole('tab', { name: 'Editor' }).click();
+  await page.locator('#preferencesModalDone').click();
+  await expect(page.locator('#preferencesModal')).toHaveClass(/hidden/);
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await expect(page.locator('#preferencesModal')).not.toHaveClass(/hidden/);
+  const selected = (await tabState(page))
+    .filter((t) => t.selected === 'true')
+    .map((t) => t.label);
+  expect(selected).toEqual(['3D View']);
 });
