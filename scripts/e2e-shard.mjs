@@ -118,6 +118,8 @@ export const MEASURED_SECONDS = {
   'tutorials.spec.js': 157.1,
   'tour-interaction.spec.js': 269.2,
   'preferences-dialog.spec.js': 90.6,
+  // One case, an example and a failing upload: measured 6 locally.
+  'preview-stats.spec.js': 20.0,
   'responsive-audit.spec.js': 91.9,
   'theme-switching.spec.js': 71.4,
   'editor-content-sync.spec.js': 70.4,
