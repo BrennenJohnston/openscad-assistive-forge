@@ -22,8 +22,8 @@ vi.mock('../../src/js/announcer.js', () => ({
 }));
 
 const REASON_TEXT =
-  'Classic is desktop-only for now. A mobile version is planned. ' +
-  'Use the Assistive Forge interface on phones and narrow windows.';
+  'Classic is for desktop windows. On phones and narrow windows, ' +
+  'use the Assistive Forge interface.';
 
 function setViewport(width, height) {
   Object.defineProperty(window, 'innerWidth', {
