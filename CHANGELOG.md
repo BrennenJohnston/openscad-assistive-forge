@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button, which could leave an empty column and started out blank, is gone.
 - The Customizer has one reset-all button, Reset All, at full size; it still
   asks first. The second Reset in its top row is gone.
+- File > Save As and File > Save a Copy each open a dialog of their own name
+  that says where Save writes afterwards.
 
 ### Fixed
 

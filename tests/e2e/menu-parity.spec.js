@@ -217,6 +217,32 @@ test.describe('File menu parity', () => {
     expect(items.find((i) => i.label === 'Save a Copy').disabled).toBe(false)
   })
 
+  test('Save As and Save a Copy each say where Save writes afterwards', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    for (const [label, title, sentence] of [
+      [
+        'Save As…',
+        'Save As',
+        'Saves this file as a new project. You go on working in the new one, and Save writes there.',
+      ],
+      [
+        'Save a Copy',
+        'Save a Copy',
+        'Saves a copy as a new project. Save keeps writing to what you have open, not to the copy.',
+      ],
+    ]) {
+      await page.locator('#fileMenuBtn').click()
+      await menuItem(page, 'file', label).click()
+      const dialog = page.getByRole('dialog', { name: title, exact: true })
+      await expect(dialog, label).toBeVisible()
+      await expect(dialog).toHaveAccessibleDescription(sentence)
+      await dialog.locator('#saveProjectNotNow').click()
+      await expect(dialog).toHaveCount(0)
+    }
+  })
+
   test('Recent Files disables what it cannot reopen and offers Clear Recent', async ({
     page,
   }) => {

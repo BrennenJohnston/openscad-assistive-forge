@@ -1699,11 +1699,20 @@ export function initSavedProjectsUI({
    *   when the prompt closes, looked up on opening and again on closing. The
    *   prompt after a load opens without a press, so what had focus before it
    *   is no place to go back to.
+   * @param {string} [options.title] - The dialog's title, for a File menu
+   *   command that opens it (Save As, Save a Copy)
+   * @param {string} [options.purpose] - One sentence saying where Save writes
+   *   afterwards, read as the dialog's description
    * @returns {Promise<{saved: boolean, projectId?: string}>}
    */
   async function showSaveProjectPrompt(
     fileData,
-    { preSave = false, focusAfter = null } = {}
+    {
+      preSave = false,
+      focusAfter = null,
+      title = 'Save this file for quick access?',
+      purpose = '',
+    } = {}
   ) {
     const { uploadedFile, projectFiles, mainFilePath, sourceExampleKey } =
       fileData;
@@ -1719,14 +1728,16 @@ export function initSavedProjectsUI({
       modal.setAttribute('role', 'dialog');
       modal.setAttribute('aria-labelledby', 'saveProjectTitle');
       modal.setAttribute('aria-modal', 'true');
+      if (purpose) modal.setAttribute('aria-describedby', 'saveProjectPurpose');
 
       modal.innerHTML = `
         <div class="preset-modal-content">
           <div class="preset-modal-header">
-            <h3 id="saveProjectTitle" class="preset-modal-title">Save this file for quick access?</h3>
+            <h3 id="saveProjectTitle" class="preset-modal-title">${escapeHtml(title)}</h3>
             <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
           </div>
           <div class="modal-body">
+            ${purpose ? `<p id="saveProjectPurpose" class="save-project-intro">${escapeHtml(purpose)}</p>` : ''}
             <p class="save-project-intro">
               Saved projects are stored in this browser. Clearing cache/site data will remove them.
             </p>

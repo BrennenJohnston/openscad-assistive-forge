@@ -3704,7 +3704,12 @@ async function initApp() {
     onSaveAs: async () => {
       const state = stateManager.getState();
       if (!state.uploadedFile?.content) return;
-      await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+      await savedProjectsUI.showSaveProjectPrompt(state, {
+        preSave: true,
+        title: 'Save As',
+        purpose:
+          'Saves this file as a new project. You go on working in the new one, and Save writes there.',
+      });
     },
     onSaveAll: () => _saveCurrentProject('All changes saved'),
     onExportImage: () => {
@@ -3789,7 +3794,12 @@ async function initApp() {
     const state = stateManager.getState();
     if (!state.uploadedFile?.content) return;
     const previousProjectId = currentSavedProjectId;
-    await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+    await savedProjectsUI.showSaveProjectPrompt(state, {
+      preSave: true,
+      title: 'Save a Copy',
+      purpose:
+        'Saves a copy as a new project. Save keeps writing to what you have open, not to the copy.',
+    });
     currentSavedProjectId = previousProjectId;
   }
 
