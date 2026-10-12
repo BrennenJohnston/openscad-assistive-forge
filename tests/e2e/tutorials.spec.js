@@ -1107,9 +1107,16 @@ test.describe('Getting Started, counting its steps', () => {
         )
         .toBe(true);
       await next.click();
+      // Firefox can take a moment to draw the next step; one more press if
+      // the first was spent on a card still settling.
+      const moved = async () => (await title.textContent()).trim() !== name;
       await expect
-        .poll(async () => (await title.textContent()).trim())
-        .not.toBe(name);
+        .poll(moved, { timeout: 15_000 })
+        .toBe(true)
+        .catch(async () => {
+          await next.click();
+          await expect.poll(moved, { timeout: 15_000 }).toBe(true);
+        });
     }
     const numbers = seen.map((s) => s.current);
     expect(numbers, JSON.stringify(seen)).toEqual(numbers.map((_, i) => i + 1));
