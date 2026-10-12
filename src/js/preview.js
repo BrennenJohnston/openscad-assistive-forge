@@ -3094,12 +3094,12 @@ export class PreviewManager {
     const width = dimensionLabelWidth(span);
     sprite.scale.set(width, width / 4, 1);
 
-    // Offset sprite from the line by its own height, so it sits beside the
-    // edge instead of over the model.
-    const offset = width / 4;
-    if (axis === 'X') midpoint.y -= offset;
-    if (axis === 'Y') midpoint.x -= offset;
-    if (axis === 'Z') midpoint.x -= offset;
+    // The width label hangs below its edge by its own height; the depth and
+    // height labels stand beside the model, clear of its left edge by half
+    // their width, instead of centred on the edge and half hidden by it.
+    if (axis === 'X') midpoint.y -= width / 4;
+    if (axis === 'Y') midpoint.x -= width * 0.625;
+    if (axis === 'Z') midpoint.x -= width * 0.625;
 
     sprite.position.copy(midpoint);
     this.measurementHelpers.add(sprite);
