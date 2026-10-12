@@ -142,3 +142,21 @@ test.describe('Libraries panel: names reflect reality', () => {
   });
 });
 
+test.describe('Libraries follow the project', () => {
+  test('a library on for one project is off in the next, which includes none', async ({
+    page,
+  }) => {
+    await openProject(page, stamp('standard', 'standard'));
+    const box = (id) => page.locator(`input[data-library-id="${id}"]`);
+    await expect(box('MCAD')).toBeChecked({ timeout: 15_000 });
+
+    await page.goto('/?example=simple-box');
+    await page
+      .locator('.param-control')
+      .first()
+      .waitFor({ state: 'attached', timeout: 120_000 });
+    await expect(box('MCAD')).not.toBeChecked({ timeout: 15_000 });
+    await expect(page.locator('#libraryBadge')).toHaveText('0');
+  });
+});
+

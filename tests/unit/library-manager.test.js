@@ -219,39 +219,56 @@ describe('LibraryManager', () => {
     })
   })
 
-  describe('autoEnable', () => {
-    it('auto-enables detected libraries', () => {
-      localStorage.clear()
-      const manager = new LibraryManager()
-      manager.reset() // Start fresh
-      const scad = `include <MCAD/gear.scad>`
-      
-      const autoEnabled = manager.autoEnable(scad)
-      
-      expect(autoEnabled).toContain('MCAD')
-      expect(manager.isEnabled('MCAD')).toBe(true)
-    })
-
-    it('does not re-enable already enabled libraries', () => {
+  describe('useForProject', () => {
+    it('turns on the libraries the project includes', () => {
       localStorage.clear()
       const manager = new LibraryManager()
       manager.reset()
-      manager.enable('MCAD')
-      const scad = `include <MCAD/gear.scad>`
-      
-      const autoEnabled = manager.autoEnable(scad)
-      
-      expect(autoEnabled).not.toContain('MCAD')
+
+      const on = manager.useForProject([`include <MCAD/gear.scad>`])
+
+      expect(on).toEqual(['MCAD'])
+      expect(manager.isEnabled('MCAD')).toBe(true)
     })
 
-    it('returns empty array when no libraries detected', () => {
+    it('turns off a library the next project does not include', () => {
       localStorage.clear()
       const manager = new LibraryManager()
-      const scad = `cube([10, 10, 10]);`
-      
-      const autoEnabled = manager.autoEnable(scad)
-      
-      expect(autoEnabled).toHaveLength(0)
+      manager.reset()
+      manager.useForProject([`include <MCAD/gear.scad>`])
+      manager.enable('BOSL2')
+
+      const on = manager.useForProject([`cube([10, 10, 10]);`])
+
+      expect(on).toEqual([])
+      expect(manager.getEnabled()).toEqual([])
+      expect(new LibraryManager().getEnabled()).toEqual([])
+    })
+
+    it('reads every file of the project, not only the main one', () => {
+      localStorage.clear()
+      const manager = new LibraryManager()
+      manager.reset()
+
+      const on = manager.useForProject([
+        `use <parts.scad>\npart();`,
+        `include <BOSL2/std.scad>\nmodule part() cuboid(10);`,
+      ])
+
+      expect(on).toEqual(['BOSL2'])
+    })
+
+    it('tells listeners once when the switches change, and not when they do not', () => {
+      localStorage.clear()
+      const manager = new LibraryManager()
+      manager.reset()
+      const heard = []
+      manager.subscribe((action) => heard.push(action))
+
+      manager.useForProject([`include <MCAD/gear.scad>`])
+      manager.useForProject([`include <MCAD/boxes.scad>`])
+
+      expect(heard).toEqual(['project'])
     })
   })
 

@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Projects; it used to delete them by default.
 - The question about saving a file for quick access is one step, Save or Not
   now, with no box to tick first.
+- Library switches follow the project: opening one turns on the libraries its
+  files include and turns the rest off.
 
 ### Fixed
 
