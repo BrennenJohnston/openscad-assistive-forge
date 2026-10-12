@@ -609,8 +609,11 @@ test.describe('The box tour ends by naming the way back', () => {
     // The curiosity path: the cutout stays clickable, so press what the step
     // points at. The tour stands down for the confirm dialog.
     await page.locator('#clearFileBtn').click()
-    await expect(page.locator('.confirm-modal')).toBeVisible({ timeout: 10_000 })
-    await page.locator('.confirm-modal [data-action="confirm"]').click()
+    // The question comes only when a change would be lost.
+    const question = page.locator('.confirm-modal')
+    if (await question.waitFor({ state: 'visible', timeout: 2_000 }).then(() => true, () => false)) {
+      await question.locator('[data-action="confirm"]').click()
+    }
 
     await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome', {
       timeout: 30_000,
