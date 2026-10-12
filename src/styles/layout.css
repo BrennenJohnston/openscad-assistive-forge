@@ -952,6 +952,9 @@ body[data-app-surface='welcome'] #uiModeToggle {
 }
 
 .preview-panel {
+  /* The open Actions drawer's width, shared with the messages drawer that
+     makes room for it (both live in this panel). */
+  --actions-drawer-open-width: 200px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1753,6 +1756,14 @@ body[data-app-surface='welcome'] #uiModeToggle {
 @media (min-width: 768px) {
   .preview-panel .actions-bar:has(.actions-drawer:not(.collapsed)) {
     z-index: calc(var(--z-index-sticky) + 15);
+  }
+
+  /* The open drawer's body stands where the OpenSCAD messages drawer shows
+     the first words of each line. The messages make room for it instead. */
+  .preview-panel:has(.actions-drawer:not(.collapsed))
+    .echo-drawer.visible
+    .echo-drawer-content {
+    padding-left: var(--actions-drawer-open-width);
   }
 }
 
@@ -2703,7 +2714,7 @@ details summary:focus,
   position: absolute;
   bottom: 100%; /* Position above the header */
   left: 0;
-  min-width: 200px;
+  min-width: var(--actions-drawer-open-width);
   background-color: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
