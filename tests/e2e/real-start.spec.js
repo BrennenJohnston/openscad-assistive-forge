@@ -8,7 +8,7 @@
 
 import { test, expect } from '@playwright/test'
 import { attachInvariants, expectNoNativeDialog, expectNoPageErrors } from './helpers/invariants.js'
-import { draftQuestion } from './helpers/draft-question.js'
+import { changeOneParameter, draftQuestion } from './helpers/draft-question.js'
 
 const ENGINE_TIMEOUT = 240_000
 const PREVIEW_TIMEOUT = 180_000
@@ -53,7 +53,9 @@ async function openSimpleBox(page) {
 }
 
 /** The draft is written two seconds after the last change. */
+/** A draft is kept only once something changed: change one parameter, then wait for it. */
 async function waitForDraft(page) {
+  await changeOneParameter(page)
   await page.waitForFunction(() => localStorage.getItem('openscad-forge-editor-draft') !== null, null, {
     timeout: 10_000,
   })

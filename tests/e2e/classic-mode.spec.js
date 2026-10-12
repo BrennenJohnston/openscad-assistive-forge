@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
-import { reloadAnsweringDraft } from './helpers/draft-question.js';
+import { changeOneParameter, reloadAnsweringDraft } from './helpers/draft-question.js';
 
 // Classic mode (desktop-OpenSCAD-style layout).
 //
@@ -892,6 +892,8 @@ test.describe('Classic acceptance', () => {
     // unsaved-changes confirmation the #clearFileBtn handler shows). With
     // upstream's Quit slot dropped, the single remaining close action has
     // the clearer name.
+    // The confirmation comes only when a change would be lost.
+    await changeOneParameter(page);
     await page.locator('#fileMenuBtn').click();
     // Target the visible label: a menu item's accessible name also carries
     // its sr-only tooltip, so an exact name match cannot be used here.
@@ -3030,6 +3032,7 @@ test.describe('Return to Main Page control', () => {
     await expect(btn).toBeVisible();
 
     // The existing unsaved-changes confirm flow is intact, and Cancel stays.
+    await changeOneParameter(page);
     await btn.click();
     await page.waitForSelector('.confirm-modal', { state: 'visible' });
     await page.locator('.confirm-modal button:has-text("Confirm")').click();
