@@ -117,8 +117,12 @@ test.describe('Preset Workflow', () => {
     await createPreset(page, 'Wide')
     await firstSlider.fill('30')
     await page.waitForTimeout(500)
-    const option = page.locator('#presetSelect option', { hasText: 'Wide' })
-    await page.locator('#presetSelect').selectOption({ value: await option.getAttribute('value') })
+    // The select stands behind a combobox; its change event is the load.
+    await page.locator('#presetSelect').evaluate((select) => {
+      const option = [...select.options].find((o) => o.textContent.includes('Wide'))
+      select.value = option.value
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     await expect(firstSlider).toHaveValue('75')
     await page.locator('#undoBtn').click()
     await expect(firstSlider).toHaveValue('30')
