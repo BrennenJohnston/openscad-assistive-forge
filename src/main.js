@@ -7339,6 +7339,13 @@ async function initApp() {
       [PREVIEW_STATE.ERROR]: '✗ Preview failed',
     };
     previewStateIndicator.textContent = stateMessages[state] || state;
+    // A failed preview leaves no model, so the size and count of the last
+    // one go with it.
+    if (state === PREVIEW_STATE.ERROR) {
+      const stats = document.getElementById('stats');
+      if (stats) stats.textContent = '';
+      clearPreviewStats();
+    }
     // A draft of the drawing is not the design, and the badge says so
     // for as long as it is what is on screen.
     const draftStands =
