@@ -20,3 +20,22 @@ export async function answerDraftQuestion(page, answer) {
   await question.getByRole('button', { name: answer, exact: true }).click()
   await expect(question).toHaveCount(0)
 }
+
+const DRAFT_KEY = 'openscad-forge-editor-draft'
+
+/**
+ * Reload a page that has a project open, and answer the question that brings.
+ * The app keeps a draft of the open project a moment after any change, edit
+ * or not, so whether a plain reload asks depends on how long the test took
+ * to get there. Waiting for the draft first makes it ask every time.
+ * "Discard draft" leaves the Main Page, as a reload did before.
+ */
+export async function reloadAnsweringDraft(page, answer = 'Discard draft') {
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key) !== null, DRAFT_KEY), {
+      timeout: 15_000,
+    })
+    .toBe(true)
+  await page.reload()
+  await answerDraftQuestion(page, answer)
+}

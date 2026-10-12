@@ -14,6 +14,7 @@ import {
   expectNoNativeDialog,
   expectNoRawTags,
 } from './helpers/invariants.js'
+import { reloadAnsweringDraft } from './helpers/draft-question.js'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -446,8 +447,9 @@ test.describe('Preset Workflow', () => {
       msg.includes('Preset') || msg.includes('localStorage') || msg.includes('Saved') || msg.includes('Failed')
     ))
 
-    // Reload page
-    await page.reload()
+    // Reload page. The open project's draft makes it ask; answered, the
+    // Main Page's example button can be pressed.
+    await reloadAnsweringDraft(page)
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(1000)
 

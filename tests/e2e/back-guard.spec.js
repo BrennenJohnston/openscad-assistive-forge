@@ -14,6 +14,7 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import { reloadAnsweringDraft } from './helpers/draft-question.js';
 
 const LEAVE_TITLE = 'Leave the app?';
 const LEAVE_BODY =
@@ -254,7 +255,9 @@ test.describe('A reload leaves an entry behind', () => {
 
   async function reloadAndReopen(page) {
     await openProject(page);
-    await page.reload();
+    // The open project's draft makes the reload ask; answered, the Main
+    // Page is clickable again.
+    await reloadAnsweringDraft(page);
     await expect(page.locator('#welcomeScreen')).toBeVisible({
       timeout: 60_000,
     });

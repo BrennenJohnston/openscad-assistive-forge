@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { reloadAnsweringDraft } from './helpers/draft-question.js';
 
 // Classic mode (desktop-OpenSCAD-style layout).
 //
@@ -119,7 +120,9 @@ test.describe('Classic header toggle', () => {
       'classic'
     );
 
-    await page.reload();
+    // A project is open, so the reload asks about its draft; the toggle
+    // below cannot be pressed while that question is up.
+    await reloadAnsweringDraft(page);
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       state: 'attached',
       timeout: WASM_READY_TIMEOUT,
