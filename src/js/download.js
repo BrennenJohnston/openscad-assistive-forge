@@ -212,6 +212,19 @@ export function formatFileSize(bytes) {
  * @param {string} name - Raw name to sanitize
  * @returns {string} Safe filename without extension (falls back to 'preset-export' if empty)
  */
+/**
+ * The short line under the preview: the file's size, and its triangle count
+ * when the format has one (a 2D drawing has none to report).
+ * @param {{size: number, triangles?: number}} stats
+ * @returns {string}
+ */
+export function formatPreviewStats(stats) {
+  const size = formatFileSize(stats.size);
+  return stats.triangles > 0
+    ? `${size} | ${stats.triangles.toLocaleString()} triangles`
+    : size;
+}
+
 export function sanitizeFilename(name) {
   if (!name || typeof name !== 'string') return 'preset-export';
   const sanitized = name

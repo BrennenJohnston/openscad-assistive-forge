@@ -37,6 +37,7 @@ import {
   projectStem,
   todayStamp,
   formatFileSize,
+  formatPreviewStats,
   sanitizeFilename,
   OUTPUT_FORMATS,
 } from './js/download.js';
@@ -7436,7 +7437,7 @@ async function initApp() {
     }
 
     // Simplified stats: just size and triangle count
-    previewStatusStats.textContent = `${formatFileSize(stats.size)} | ${stats.triangles.toLocaleString()} triangles`;
+    previewStatusStats.textContent = formatPreviewStats(stats);
     previewStatusBar.classList.remove('no-stats');
   }
 
