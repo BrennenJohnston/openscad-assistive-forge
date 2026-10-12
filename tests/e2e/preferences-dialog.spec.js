@@ -125,9 +125,20 @@ test('the tab bar follows the APG pattern', async ({ page }) => {
     walked.push(await page.evaluate(() => document.activeElement.id));
     await page.keyboard.press('ArrowRight');
   }
-  expect(walked).toEqual(TAB_ORDER.map((_, i) =>
-    ['3dview', 'editor', '3dprint', 'advanced', 'axes', 'buttons', 'keyboard'][i]
-  ).map((s) => `prefs-tab-${s}`));
+  expect(walked).toEqual(
+    TAB_ORDER.map(
+      (_, i) =>
+        [
+          '3dview',
+          'editor',
+          '3dprint',
+          'advanced',
+          'axes',
+          'buttons',
+          'keyboard',
+        ][i]
+    ).map((s) => `prefs-tab-${s}`)
+  );
 
   // Wrapped back to the start.
   expect(await page.evaluate(() => document.activeElement.id)).toBe(
@@ -664,4 +675,33 @@ test('the input-device tabs describe the gamepad support that exists', async ({
   await expect(buttons).toBeVisible();
   await expect(buttons).not.toContainText(/no input-device engine/i);
   await expect(buttons).toContainText(/D-pad/i);
+});
+
+test('the shortcuts dialog’s headings step down one level at a time', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await gotoWithFile(page);
+  await page.locator('#helpMenuBtn').click();
+  await page
+    .locator('#helpMenuItems')
+    .getByText('Keyboard Shortcuts…', { exact: true })
+    .click();
+  await expect(
+    page.locator('#shortcutsModal .shortcut-item').first()
+  ).toBeVisible();
+  const levels = await page
+    .locator('#shortcutsModal')
+    .evaluate((m) =>
+      [...m.querySelectorAll('h1, h2, h3, h4, h5, h6')]
+        .filter((h) => h.checkVisibility())
+        .map((h) => Number(h.tagName[1]))
+    );
+  expect(levels[0], 'the dialog’s title').toBe(2);
+  for (let i = 1; i < levels.length; i++) {
+    expect(
+      levels[i] - levels[i - 1],
+      `heading ${i} skips a level`
+    ).toBeLessThanOrEqual(1);
+  }
 });

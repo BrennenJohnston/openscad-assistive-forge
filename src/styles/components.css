@@ -13496,7 +13496,7 @@ body.tutorial-body-locked {
   margin-bottom: var(--space-lg);
 }
 
-.shortcuts-editor .shortcuts-category h4 {
+.shortcuts-editor .shortcuts-category h3 {
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-text-secondary);
