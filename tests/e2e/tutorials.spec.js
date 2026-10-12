@@ -1091,6 +1091,11 @@ test.describe('Getting Started, counting its steps', () => {
         if ((await title.textContent()).trim() !== name) continue;
       }
       if (name === 'Back to the Main Page') break;
+      // The guide, opened by the step's action, covers the card until it is
+      // closed; Firefox keeps the step until then.
+      if (await page.locator('#featuresGuideModal:not(.hidden)').count()) {
+        await page.keyboard.press('Escape');
+      }
       // The card can be minimized or covered for a moment after an action.
       await expect
         .poll(
