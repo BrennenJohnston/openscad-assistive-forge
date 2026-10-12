@@ -519,8 +519,12 @@ export class AutoPreviewController {
         return;
       }
 
+      // A model on screen is a preview, outdated now; "No preview" is for
+      // an empty viewport.
       this.setState(
-        this.previewCacheKey ? PREVIEW_STATE.STALE : PREVIEW_STATE.IDLE
+        this.previewCacheKey || this.previewManager?.mesh
+          ? PREVIEW_STATE.STALE
+          : PREVIEW_STATE.IDLE
       );
       return;
     }

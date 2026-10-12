@@ -45,6 +45,24 @@ describe('AutoPreviewController', () => {
     vi.useRealTimers()
   })
 
+  describe('the badge while a model is on screen', () => {
+    it('says the preview is outdated, never that there is none, when auto-preview is off', () => {
+      previewManager.mesh = {}
+      controller.setEnabled(false, 'user')
+      controller.previewCacheKey = null
+      controller.onParameterChange({ size: 2 })
+      expect(controller.state).toBe(PREVIEW_STATE.STALE)
+    })
+
+    it('still says there is no preview when nothing is on screen', () => {
+      previewManager.mesh = null
+      controller.setEnabled(false, 'user')
+      controller.previewCacheKey = null
+      controller.onParameterChange({ size: 2 })
+      expect(controller.state).toBe(PREVIEW_STATE.IDLE)
+    })
+  })
+
   describe('Constructor', () => {
     it('initializes with default options', () => {
       const ctrl = new AutoPreviewController(renderController, previewManager)
