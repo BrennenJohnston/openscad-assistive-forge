@@ -56,7 +56,9 @@ export class DesignPanelController {
 
     this.onFlushComplete();
     this._updateGeometryDisplay(null);
-    announceImmediate('Caches flushed: files, libraries, and geometry cleared');
+    const line = 'Caches flushed: files, libraries, and geometry cleared';
+    getConsolePanel()?.addSystemLine?.(line);
+    announceImmediate(line);
   }
 
   // ---------------------------------------------------------------------------
