@@ -106,6 +106,17 @@ describe('EditorStateManager', () => {
     });
   });
 
+  describe('dirty means different from the saved text', () => {
+    it('typing back to the saved text is clean again', () => {
+      stateManager.setSource('cube(10);', { markDirty: false });
+      stateManager.markClean();
+      stateManager.setSource('cube(12);');
+      expect(stateManager.getIsDirty()).toBe(true);
+      stateManager.setSource('cube(10);');
+      expect(stateManager.getIsDirty()).toBe(false);
+    });
+  });
+
   describe('markDirty / markClean / getIsDirty', () => {
     it('should mark as dirty', () => {
       stateManager.markDirty();

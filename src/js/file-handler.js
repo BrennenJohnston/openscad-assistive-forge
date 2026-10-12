@@ -1431,7 +1431,9 @@ export function initFileHandler({
       updateColorLegend(colorParamNames);
 
       if (autoPreviewController) {
-        autoPreviewController.setScadContent(fileContent);
+        autoPreviewController.setScadContent(fileContent, {
+          keepCamera: source === 'reload',
+        });
         autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
         const libsForRender = getEnabledLibrariesForRender();
         autoPreviewController.setEnabledLibraries(libsForRender);

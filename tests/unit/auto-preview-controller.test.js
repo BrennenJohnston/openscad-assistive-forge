@@ -63,6 +63,16 @@ describe('AutoPreviewController', () => {
     })
   })
 
+  describe('a reload of the same file', () => {
+    it('keeps the camera where it is', () => {
+      controller.initialPreviewDone = true
+      controller.setScadContent('cube(11);', { keepCamera: true })
+      expect(controller.initialPreviewDone).toBe(true)
+      controller.setScadContent('cube(12);')
+      expect(controller.initialPreviewDone).toBe(false)
+    })
+  })
+
   describe('Constructor', () => {
     it('initializes with default options', () => {
       const ctrl = new AutoPreviewController(renderController, previewManager)

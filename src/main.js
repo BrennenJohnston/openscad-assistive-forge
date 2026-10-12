@@ -3696,12 +3696,14 @@ async function initApp() {
     onReload: () => {
       const state = stateManager.getState();
       if (state.uploadedFile) {
+        // 'reload': the same file again, so the camera stays and the
+        // quick-access question is not asked a second time.
         fileHandler.handleFile(
           null,
           state.uploadedFile.content,
           state.projectFiles || null,
           state.mainFilePath || null,
-          'user',
+          'reload',
           state.uploadedFile.name
         );
       }
