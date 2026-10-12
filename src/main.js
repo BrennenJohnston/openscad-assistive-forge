@@ -5387,11 +5387,14 @@ async function initApp() {
           `Found ${migrationInfo.legacyPresetCount} preset(s) from a previous version. ` +
           `Would you like to migrate them to preserve your work?`;
 
+        // Opens on Migrate: Skip ends the offer for good, and Enter on the
+        // browser's own question used to migrate.
         const shouldMigrate = await showConfirmDialog(
           message,
           'Presets From an Earlier Version',
           'Migrate',
-          'Skip'
+          'Skip',
+          { focusConfirm: true }
         );
 
         if (shouldMigrate) {

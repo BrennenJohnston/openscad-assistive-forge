@@ -3,7 +3,9 @@ import { attachInvariants, expectNoNativeDialog } from './helpers/invariants.js'
 
 // The two questions the app can ask while it starts: presets left by an
 // older version, and the engine download on a slow or metered connection.
-// Both are the app's own dialogs; no browser dialog opens.
+// Both are the app's own dialogs; no browser dialog opens. The presets
+// question opens on Migrate, because Skip ends the offer for good; the
+// download question opens on Not now, because it asks again later.
 
 const LEGACY_PRESETS_KEY = 'openscad-customizer-presets'
 const STORAGE_PREFS_KEY = 'openscad-forge-storage-prefs'
@@ -34,6 +36,7 @@ test('presets from an earlier version are offered in the app’s own dialog', as
   const offer = question(page, 'Presets From an Earlier Version')
   await expect(offer).toBeVisible({ timeout: 30_000 })
   await expect(offer).toContainText('Found 1 preset(s) from a previous version.')
+  await expect(offer.getByRole('button', { name: 'Migrate', exact: true })).toBeFocused()
   await offer.getByRole('button', { name: 'Migrate', exact: true }).click()
   await expect(offer).toHaveCount(0)
   await expect
@@ -58,6 +61,7 @@ test('a metered connection is asked before the engine downloads, in the app’s 
   const ask = question(page, 'Download the engine?')
   await expect(ask).toBeVisible({ timeout: 30_000 })
   await expect(ask).toContainText('about 15 MB')
+  await expect(ask.getByRole('button', { name: 'Not now', exact: true })).toBeFocused()
   await ask.getByRole('button', { name: 'Not now', exact: true }).click()
   await expect(ask).toHaveCount(0)
   await expect(page.locator('#welcomeScreen')).toBeVisible()
