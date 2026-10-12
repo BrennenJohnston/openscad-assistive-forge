@@ -187,7 +187,7 @@ export const DESKTOP_SHININESS = 64;
 export const CAMERA_ZOOM_STEP = 15;
 
 /**
- * How wide a size label is, in model millimetres, for a model whose longest
+ * How wide a size label is, in model millimeters, for a model whose longest
  * side is `span`. A fixed 20 mm label hid a 22 mm charm under three of them;
  * about a third of the longest side keeps the three clear of each other and
  * of the model, never smaller than 4 mm or wider than 40 mm.
@@ -3096,7 +3096,7 @@ export class PreviewManager {
 
     // The width label hangs below its edge by its own height; the depth and
     // height labels stand beside the model, clear of its left edge by half
-    // their width, instead of centred on the edge and half hidden by it.
+    // their width, instead of centered on the edge and half hidden by it.
     if (axis === 'X') midpoint.y -= width / 4;
     if (axis === 'Y') midpoint.x -= width * 0.625;
     if (axis === 'Z') midpoint.x -= width * 0.625;
