@@ -814,6 +814,8 @@ const JUMP_TO_UNAVAILABLE_REASON =
   'Jump To is not available in the Simplified view';
 const CODE_EDITOR_UNAVAILABLE_REASON =
   'The Code Editor feature is turned off, so there is no editor to open.';
+const EDITOR_IN_STANDARD_REASON =
+  'The Editor is in the Standard view. Switch to Standard to open it.';
 
 /**
  * Can a Classic dock panel be reached right now? A merged panel that is not
@@ -922,11 +924,17 @@ function toggleCustomizerPanel() {
   );
 }
 
-/** Window ▸ Editor and Ctrl+Alt+3, likewise one command per host. */
+/** Window ▸ Editor, Ctrl+Alt+3 and Ctrl+E are one command per host. */
 function toggleEditorPanel() {
   const layout = getClassicLayoutController();
   if (document.body.dataset.uiMode === 'classic' && layout) {
     layout.toggleEditor(); // announces for itself
+    return;
+  }
+  // Simplified leaves the Editor out (its toolbar toggle is hidden there), so
+  // a key says where the Editor is rather than opening it out of sight.
+  if (getUIModeController().getMode() === 'simplified') {
+    announceImmediate(EDITOR_IN_STANDARD_REASON);
     return;
   }
   // Forge: open or close the Editor itself — the same command as its
@@ -16177,16 +16185,8 @@ if (rounded) {
   keyboardConfig.on('findPrevious', () => runEditorAction('findPrevious'));
   keyboardConfig.on('findReplace', () => runEditorAction('findReplace'));
 
-  // Code Editor toggle (Ctrl+E) -- not in Simplified UI mode per COGA principle
-  keyboardConfig.on('toggleExpertMode', () => {
-    if (
-      _isEnabled('expert_mode') &&
-      window._modeManager &&
-      getUIModeController()?.getMode() !== 'simplified'
-    ) {
-      window._modeManager.toggleMode();
-    }
-  });
+  // Ctrl+E is Window ▸ Editor's command as well, Simplified's answer included.
+  keyboardConfig.on('toggleExpertMode', () => toggleEditorPanel());
 
   // ========== Gamepad controller integration ==========
   if (gamepadController) {

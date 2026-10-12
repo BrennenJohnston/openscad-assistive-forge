@@ -970,6 +970,63 @@ test.describe('Window menu parity', () => {
   })
 })
 
+test.describe('Ctrl+E and Ctrl+Alt+3, one command', () => {
+  // Each key is pressed with nothing focused, as from the page itself: a
+  // focused field keeps some keys for its own use.
+  async function pressFromPage(page, key) {
+    await page.evaluate(() => document.activeElement?.blur())
+    await page.keyboard.press(key)
+  }
+  const editorMode = (page) =>
+    page.evaluate(() => window._modeManager?.currentMode)
+  async function recordSpeech(page) {
+    await page.evaluate(() => {
+      window.__said = []
+      const region = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const text = region.textContent.trim()
+        if (text && window.__said.at(-1) !== text) window.__said.push(text)
+      }).observe(region, { childList: true, subtree: true, characterData: true })
+    })
+  }
+
+  test('in Classic both show and hide the Editor panel', async ({ page }) => {
+    await loadFixture(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
+    const density = page.locator('#classicDensityToggle')
+    if ((await density.getAttribute('aria-checked')) !== 'true') await density.click()
+    const body = page.locator('body')
+    await expect(body).toHaveAttribute('data-classic-editor-hidden', 'false')
+    for (const key of ['Control+e', 'Control+Alt+3']) {
+      await pressFromPage(page, key)
+      await expect(body, key).toHaveAttribute('data-classic-editor-hidden', 'true')
+      await pressFromPage(page, key)
+      await expect(body, key).toHaveAttribute('data-classic-editor-hidden', 'false')
+    }
+    expect(await editorMode(page)).toBe('standard')
+  })
+
+  test('in Simplified both say where the Editor is, and open nothing', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await page.locator('#uiModeToggle').click()
+    await expect(page.locator('#uiModeToggle')).toHaveAttribute('aria-checked', 'false')
+    await recordSpeech(page)
+    for (const key of ['Control+e', 'Control+Alt+3']) {
+      await page.evaluate(() => (window.__said.length = 0))
+      await pressFromPage(page, key)
+      await expect
+        .poll(() => page.evaluate(() => window.__said.filter((l) => /editor/i.test(l))), {
+          message: key,
+        })
+        .toEqual(['The Editor is in the Standard view. Switch to Standard to open it.'])
+      expect(await editorMode(page), key).toBe('standard')
+    }
+  })
+})
+
 // The desktop's Help menu, then the Forge extras this app keeps.
 const HELP_MENU_ORDER = [
   'About',
