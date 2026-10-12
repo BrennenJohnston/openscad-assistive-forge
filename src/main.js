@@ -15103,10 +15103,9 @@ if (rounded) {
         if (!trimmed) return null;
 
         if (trimmed.startsWith('ECHO:')) {
-          const match = trimmed.match(/ECHO:\s*"?([^"]*)"?/);
-          const text = match
-            ? match[1].trim()
-            : trimmed.replace(/.*ECHO:\s*/, '').trim();
+          // The whole echo, quotes and every argument: a designer's
+          // echo("Width:", w) is read for its value.
+          const text = trimmed.replace(/^ECHO:\s*/, '').trim();
           return text.length > 0 ? { type: 'echo', text } : null;
         }
 
