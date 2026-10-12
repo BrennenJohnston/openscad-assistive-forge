@@ -107,6 +107,23 @@ test.describe('Preset Workflow', () => {
     await page.goto('/')
   })
 
+  test('Undo after loading a preset brings back the values before it', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+    await loadSimpleBoxExample(page, { expandGroups: true })
+    const firstSlider = page.locator('.param-control input[type="range"]').first()
+    await expect(firstSlider).toBeVisible()
+    await firstSlider.fill('75')
+    await page.waitForTimeout(500)
+    await createPreset(page, 'Wide')
+    await firstSlider.fill('30')
+    await page.waitForTimeout(500)
+    const option = page.locator('#presetSelect option', { hasText: 'Wide' })
+    await page.locator('#presetSelect').selectOption({ value: await option.getAttribute('value') })
+    await expect(firstSlider).toHaveValue('75')
+    await page.locator('#undoBtn').click()
+    await expect(firstSlider).toHaveValue('30')
+  })
+
   test('should save a preset with custom name', async ({ page }) => {
     // Skip in CI - requires WASM to process example files
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')

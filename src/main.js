@@ -14686,6 +14686,8 @@ if (rounded) {
     }
 
     // Handle "design default values" virtual preset (desktop OpenSCAD parity)
+    // The values a preset replaces are one Undo away.
+    stateManager.recordParameterState();
     if (presetId === DESIGN_DEFAULTS_ID) {
       isLoadingPreset = true;
 
