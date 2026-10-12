@@ -279,3 +279,25 @@ test('a folder row’s open, Rename and Delete buttons stand side by side, none 
   await expect(row.getByRole('button', { name: 'Open folder parts, 2 files', exact: true })).toBeVisible()
   await expect(row.getByRole('button', { name: 'Rename folder parts', exact: true })).toBeVisible()
 })
+
+test('every row button on the Main Page and in the file manager names its item', async ({ page }) => {
+  await seed(page, { folders: ['Gears'] })
+  const row = folderRow(page, 'Gears')
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  const names = (scope) =>
+    scope.locator('button').evaluateAll((els) => els.map((b) => b.getAttribute('aria-label') || b.textContent.trim()))
+  expect(await names(row)).toEqual(expect.arrayContaining(['Rename folder Gears', 'Delete folder Gears']))
+
+  const manager = await openFileManager(page)
+  const tree = manager.locator('#fmTree')
+  await expect(tree.locator('.file-manager-item').first()).toBeVisible()
+  expect(await names(tree)).toEqual(
+    expect.arrayContaining([
+      'Rename folder parts',
+      'Delete folder parts',
+      'Preview file main.scad',
+      'Rename file main.scad',
+      'Delete file main.scad',
+    ])
+  )
+})
