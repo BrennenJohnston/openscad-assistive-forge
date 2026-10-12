@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the date of the copy bundled and whether it is on.
 - Keyboard Shortcuts lists "Toggle Editor panel" and "Toggle Customizer
   panel" once each, with both of their keys.
+- The View menu's interface choices say where they go: "Assistive Forge,
+  Simplified" and "Assistive Forge, Standard", apart from Classic's own
+  "Simplified view".
 
 ### Fixed
 

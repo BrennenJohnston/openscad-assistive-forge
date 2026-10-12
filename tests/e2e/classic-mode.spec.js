@@ -361,6 +361,34 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     );
   });
 
+  test('classic-view-menu-words: the interface radios name where they go, apart from Simplified view', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await loadSampleProject(page);
+    await switchToStandardMode(page);
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+
+    await page.locator('#viewMenuBtn').click();
+    await expect(
+      page.getByRole('menuitemcheckbox', { name: 'Simplified view', exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+    for (const name of ['Assistive Forge, Simplified', 'Assistive Forge, Standard']) {
+      await expect(
+        page.getByRole('menuitemradio', { name, exact: true }),
+        name
+      ).toBeVisible();
+    }
+    await expect(
+      page.getByRole('menuitemradio', { name: 'Classic (Desktop Layout)' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('menuitemradio', { name: 'Simplified', exact: true })
+    ).toHaveCount(0);
+  });
+
   test('classic-density-shared: the choice carries out of Classic and survives reload', async ({
     page,
   }) => {
@@ -1146,7 +1174,7 @@ test.describe('Classic mode layout', () => {
     );
 
     // Exit back to Standard: exact DOM restore, slots removed
-    await pickInterfaceMode(page, 'Standard');
+    await pickInterfaceMode(page, 'Assistive Forge, Standard');
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',
       'standard'
@@ -1237,7 +1265,7 @@ test.describe('Classic mode layout', () => {
 
     await page.locator('#viewMenuBtn').click();
     await expect(
-      page.getByRole('menuitemradio', { name: 'Standard' })
+      page.getByRole('menuitemradio', { name: 'Assistive Forge, Standard' })
     ).toBeVisible({ timeout: 5_000 });
     await expect(
       page.getByRole('menuitemradio', { name: 'Classic (Desktop Layout)' })
@@ -1355,7 +1383,7 @@ test.describe('Classic dock shell', () => {
     );
     await expect(structuredTab).toHaveAttribute('aria-selected', 'false');
 
-    await pickInterfaceMode(page, 'Standard');
+    await pickInterfaceMode(page, 'Assistive Forge, Standard');
     await expect(page.locator('body')).not.toHaveAttribute(
       'data-ui-mode',
       'classic'
@@ -1577,7 +1605,7 @@ test.describe('Classic dock resizers', () => {
     await expect(page.locator('#classicResizerEditor')).toBeVisible();
 
     // Leaving Classic removes them and the properties they wrote
-    await pickInterfaceMode(page, 'Standard');
+    await pickInterfaceMode(page, 'Assistive Forge, Standard');
     await expect(page.locator('#classicResizerEditor')).toHaveCount(0);
     const leftovers = await page.evaluate(() => {
       const el = document.getElementById('mainInterface');
@@ -2040,7 +2068,7 @@ test.describe('Classic 3D view toolbar', () => {
     await expect(page.locator('#classicCrosshairsToggle')).toHaveCount(0);
 
     // Leaving Classic hands the bar back rather than destroying it
-    await pickInterfaceMode(page, 'Standard');
+    await pickInterfaceMode(page, 'Assistive Forge, Standard');
     await expect(page.locator('#classicCameraBar')).toHaveCount(1);
     await expect(page.locator('#classicCameraBar')).toBeHidden();
   });

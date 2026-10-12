@@ -4995,8 +4995,10 @@ async function initApp() {
         : []),
       { type: 'separator' },
       // -- Interface Mode Radio Group (Classic gated on classic_mode flag) --
-      interfaceModeRadio('Simplified', 'simplified'),
-      interfaceModeRadio('Standard', 'standard'),
+      // The radios name the layout they go to: Classic's own "Simplified
+      // view" sits in this same menu.
+      interfaceModeRadio('Assistive Forge, Simplified', 'simplified'),
+      interfaceModeRadio('Assistive Forge, Standard', 'standard'),
       ...(_isEnabled('classic_mode')
         ? [interfaceModeRadio('Classic (Desktop Layout)', 'classic')]
         : []),
