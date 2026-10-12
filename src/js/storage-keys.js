@@ -335,6 +335,11 @@ export const STORAGE_KEY_EDITOR_WRAP_ARROW = getAppPrefKey('editor-wrap-arrow');
 export const STORAGE_KEY_EDITOR_BRACE_MATCHING = getAppPrefKey(
   'editor-brace-matching'
 );
+// The desktop editor has an on-off switch for autocompletion. A popup on
+// every keystroke can get in a screen reader's way, so it is a real one here.
+export const STORAGE_KEY_EDITOR_AUTOCOMPLETE = getAppPrefKey(
+  'editor-autocomplete'
+);
 export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
   'camera-controls-collapsed'
 );

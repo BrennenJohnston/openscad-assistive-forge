@@ -763,6 +763,8 @@ export class CodeMirrorEditor {
     this._braceMatchCompartment = new Compartment();
     /** @type {Compartment} */
     this._activeLineCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._autocompleteCompartment = new Compartment();
 
     /** @type {import('./editor-prefs.js').EditorPrefs} */
     this._editorPrefs = loadEditorPrefs();
@@ -864,7 +866,11 @@ export class CodeMirrorEditor {
         ),
         this._themeCompartment.of(isDark ? darkEditorTheme : lightEditorTheme),
 
-        autocompletion({ override: [openscadCompletions] }),
+        this._autocompleteCompartment.of(
+          this._editorPrefs.autocomplete
+            ? autocompletion({ override: [openscadCompletions] })
+            : []
+        ),
 
         keymap.of([
           // Neither shortcut announces here: the keymap cannot know the
@@ -1120,6 +1126,16 @@ export class CodeMirrorEditor {
     this._view?.dispatch({
       effects: this._braceMatchCompartment.reconfigure(
         on ? bracketMatching() : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on Offer completions while typing. */
+  setAutocomplete(on) {
+    this._editorPrefs.autocomplete = on;
+    this._view?.dispatch({
+      effects: this._autocompleteCompartment.reconfigure(
+        on ? autocompletion({ override: [openscadCompletions] }) : []
       ),
     });
   }

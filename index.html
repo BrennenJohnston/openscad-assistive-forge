@@ -8210,6 +8210,13 @@
             </div>
 
             <div class="preferences-check-row">
+              <input type="checkbox" id="prefsEditorAutocomplete" />
+              <label for="prefsEditorAutocomplete"
+                >Autocomplete as you type</label
+              >
+            </div>
+
+            <div class="preferences-check-row">
               <input
                 type="checkbox"
                 id="prefsEditorTabIndents"
@@ -8272,23 +8279,6 @@
             <p id="prefs-reason-linenumbers" class="preferences-panel-reason">
               Always on here. Line numbers cannot be switched off in this
               editor.
-            </p>
-
-            <div class="preferences-check-row">
-              <input
-                type="checkbox"
-                id="prefsEditorAutocomplete"
-                checked
-                disabled
-                aria-describedby="prefs-reason-autocomplete"
-              />
-              <label for="prefsEditorAutocomplete"
-                >Autocomplete as you type</label
-              >
-            </div>
-            <p id="prefs-reason-autocomplete" class="preferences-panel-reason">
-              Always on here, starting from the first character. The desktop's
-              on-off switch and character threshold are not offered.
             </p>
 
             <p class="preferences-panel-reason">

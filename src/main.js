@@ -4420,6 +4420,7 @@ async function initApp() {
                 wrapIndent: () => editor?.setWrapIndent?.(stored),
                 wrapArrow: () => editor?.setWrapArrow?.(stored),
                 braceMatching: () => editor?.setBraceMatching?.(stored),
+                autocomplete: () => editor?.setAutocomplete?.(stored),
               };
               apply[name]?.();
 
@@ -4438,6 +4439,9 @@ async function initApp() {
                   stored ? 'on' : 'off'
                 }`,
                 braceMatching: `Highlight the matching bracket, ${
+                  stored ? 'on' : 'off'
+                }`,
+                autocomplete: `Autocomplete as you type, ${
                   stored ? 'on' : 'off'
                 }`,
               };

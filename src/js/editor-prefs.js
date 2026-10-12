@@ -13,9 +13,9 @@
  *
  * Every setting here is backed by a real CodeMirror facility (a theme for
  * the font size, the indentUnit and tabSize facets, the lineWrapping
- * extension, highlightActiveLine). Settings the desktop offers that this
- * build has no facility for are not represented here — they ship visibly
- * disabled with a reason instead.
+ * extension, highlightActiveLine, autocompletion). Settings the desktop
+ * offers that this build has no facility for are not represented here —
+ * they ship visibly disabled with a reason instead.
  *
  * @license GPL-3.0-or-later
  */
@@ -29,6 +29,7 @@ import {
   STORAGE_KEY_EDITOR_WRAP_INDENT,
   STORAGE_KEY_EDITOR_WRAP_ARROW,
   STORAGE_KEY_EDITOR_BRACE_MATCHING,
+  STORAGE_KEY_EDITOR_AUTOCOMPLETE,
   safeGetItem,
   safeSetItem,
 } from './storage-keys.js';
@@ -65,6 +66,8 @@ const BOOLEAN_PREF_SPEC = Object.freeze({
   wrapArrow: { key: STORAGE_KEY_EDITOR_WRAP_ARROW, default: true },
   // settings.cc: enableBraceMatching, default true.
   braceMatching: { key: STORAGE_KEY_EDITOR_BRACE_MATCHING, default: true },
+  // On by default: the editor has always offered completions as you type.
+  autocomplete: { key: STORAGE_KEY_EDITOR_AUTOCOMPLETE, default: true },
 });
 
 /** @param {number} value @param {{min: number, max: number}} spec */
@@ -82,6 +85,7 @@ function clamp(value, spec) {
  * @property {boolean} wrapIndent
  * @property {boolean} wrapArrow
  * @property {boolean} braceMatching
+ * @property {boolean} autocomplete
  */
 
 /** @returns {EditorPrefs} */
