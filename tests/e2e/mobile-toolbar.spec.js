@@ -545,11 +545,9 @@ test.describe('The row follows the surface, not just the viewport', () => {
       titleSrOnly: true,
     });
 
-    // The button warns before it leaves — "Go back to the Main Page? Any
-    // unsaved changes to your current project will be lost." — so the trip
-    // home is two steps, not one.
+    // Nothing was changed, so the trip home is one press: the button asks
+    // only when a change would be lost.
     await page.locator('#clearFileBtn').click();
-    await page.getByRole('button', { name: 'Confirm', exact: true }).click();
     await expect(page.locator('#welcomeScreen')).toBeVisible({
       timeout: 20_000,
     });

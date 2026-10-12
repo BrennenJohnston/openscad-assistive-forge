@@ -112,6 +112,8 @@ test.describe('Closing a project', () => {
     await expect(page.locator('#fileInfoSummary')).toHaveText('sample.scad')
     const mode = page.locator('#uiModeToggle')
     if ((await mode.getAttribute('aria-checked')) !== 'true') await mode.click()
+    // A change, so that closing has something to ask about.
+    await setNumber(page, 'width', 60)
 
     await page.locator('#fileMenuBtn').click()
     await page

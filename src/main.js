@@ -8461,7 +8461,15 @@ async function initApp() {
   // Back button - returns to welcome screen
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', async () => {
-      // Confirm before going back - warn about unsaved changes
+      // Ask only when there is something to lose: a changed parameter or an
+      // edit in the code editor. A project only looked at closes at once.
+      const somethingToLose =
+        stateManager.canUndo() ||
+        getEditorStateManager()?.getIsDirty?.() === true;
+      if (!somethingToLose) {
+        await closeProjectToWelcome();
+        return;
+      }
       const confirmed = await showConfirmDialog(
         'Any unsaved changes to your current project will be lost.',
         'Go back to the Main Page?',
