@@ -242,6 +242,27 @@ function isElementVisible(element) {
  * @param {Object|Function} showWhen - Condition object or function
  * @returns {boolean} - Whether step should be shown
  */
+/** The steps the current layout shows, in order. */
+function shownSteps() {
+  return (activeTutorial?.steps || []).filter(
+    (s) => !s.showWhen || evaluateShowWhenCondition(s.showWhen)
+  );
+}
+
+function shownStepCount() {
+  return shownSteps().length;
+}
+
+/** The 1-based place of a step among the shown steps. */
+function shownStepNumber(stepIndex) {
+  const steps = activeTutorial?.steps || [];
+  let n = 0;
+  for (let i = 0; i <= stepIndex && i < steps.length; i++) {
+    if (!steps[i].showWhen || evaluateShowWhenCondition(steps[i].showWhen)) n++;
+  }
+  return Math.max(1, n);
+}
+
 function evaluateShowWhenCondition(showWhen) {
   // If showWhen is a function, call it
   if (typeof showWhen === 'function') {
@@ -1190,8 +1211,11 @@ const TUTORIALS = {
         highlightSelector:
           '[data-tutorial-target="companion-files"], #projectFilesControls summary',
         position: 'right',
+        // Shown only where the section is on screen: Simplified keeps it in
+        // the page but hidden, and a step the layout hides takes no number.
         showWhen: {
-          condition: () => !!document.getElementById('projectFilesControls'),
+          condition: () =>
+            isElementVisible(document.getElementById('projectFilesControls')),
         },
       },
       {
@@ -3156,7 +3180,7 @@ function createTutorialOverlay() {
 
       <div class="tutorial-footer">
         <div class="tutorial-progress" id="tutorialProgress">
-          Step <span id="tutorial-step-current">1</span> of <span id="tutorial-step-total">${activeTutorial.steps.length}</span>
+          Step <span id="tutorial-step-current">1</span> of <span id="tutorial-step-total">${shownStepCount()}</span>
         </div>
         <div class="tutorial-nav">
           <button class="btn btn-sm tutorial-btn-back" id="tutorialBackBtn" type="button" disabled aria-label="Previous step">← Back</button>
@@ -3919,14 +3943,18 @@ async function showStep(stepIndex) {
   const bodyEl = tutorialOverlay.querySelector('.tutorial-body');
   if (bodyEl) bodyEl.scrollTop = 0;
 
-  // Update progress
+  // Update progress: the place among the steps this layout shows, so a
+  // skipped step (phone-only, or hidden in Simplified) costs no number.
+  const shownCurrent = shownStepNumber(stepIndex);
+  const shownTotal = shownStepCount();
   const stepCurrentEl = tutorialOverlay.querySelector('#tutorial-step-current');
-  if (stepCurrentEl) stepCurrentEl.textContent = stepIndex + 1;
+  if (stepCurrentEl) stepCurrentEl.textContent = shownCurrent;
+  const stepTotalEl = tutorialOverlay.querySelector('#tutorial-step-total');
+  if (stepTotalEl) stepTotalEl.textContent = shownTotal;
   const progressEl = tutorialOverlay.querySelector(
     '.tutorial-minimized-progress'
   );
-  if (progressEl)
-    progressEl.textContent = `${stepIndex + 1}/${activeTutorial.steps.length}`;
+  if (progressEl) progressEl.textContent = `${shownCurrent}/${shownTotal}`;
   const minimizedTextEl = tutorialOverlay.querySelector(
     '.tutorial-minimized-text'
   );
