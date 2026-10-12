@@ -290,6 +290,7 @@ import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
+import { showLibraryInfoDialog } from './js/library-info-dialog.js';
 import { initHfmController } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
@@ -5281,16 +5282,14 @@ async function initApp() {
         tooltip: OFFLINE_CHEAT_SHEET_REASON,
       },
       {
-        // Upstream's sentence case. It opens the guide's Libraries page; the live
-        // list of what is mounted is File > Show Library Folder.
+        // Upstream's sentence case. The switches themselves are where
+        // File > Show Library Folder goes.
         type: 'action',
         label: 'Library info',
-        handler: () => _openFeaturesTab('tab-libraries'),
+        handler: () => void showLibraryInfoDialog(),
       },
       { type: 'separator' },
       {
-        // Not the same target as Library info: it opens the guide at its
-        // Workflow page.
         type: 'action',
         label: 'Features Guide',
         handler: () => _openFeaturesTab('tab-workflow'),

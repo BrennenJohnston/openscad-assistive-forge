@@ -7226,6 +7226,35 @@ body.first-visit-blocking #app {
   font-variant-numeric: tabular-nums;
 }
 
+/* Help > Library info. At phone width the table scrolls inside its own box
+   rather than widening the dialog. */
+.library-info-intro {
+  margin: 0 0 var(--space-md);
+}
+
+.library-info-scroll {
+  overflow-x: auto;
+}
+
+.library-info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.library-info-table th,
+.library-info-table td {
+  text-align: left;
+  padding: var(--space-xs);
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.library-info-table thead th {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
 .design-ast-heading {
   font-size: var(--font-size-lg);
   font-weight: 600;

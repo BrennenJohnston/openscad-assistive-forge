@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Help > Library info lists the bundled libraries, each with its license,
+  the date of the copy bundled and whether it is on.
+
 ## [5.3.0] - 2026-10-11
 
 What a screen reader hears, across the app: each status once, focus that

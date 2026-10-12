@@ -1020,15 +1020,19 @@ test.describe('Help menu parity', () => {
     await page.locator('#aboutModalDone').click()
     await expect(about).toBeHidden()
 
-    // Library info and Features Guide must not open the same tab of the same
-    // modal.
+    // Library info lists the bundled libraries; it is not the Features Guide.
     await page.locator('#helpMenuBtn').click()
     await menuItem(page, 'help', 'Library info').click()
-    await expect(page.locator('#tab-libraries')).toHaveAttribute(
-      'aria-selected',
-      'true'
-    )
-    await page.locator('#featuresGuideClose').click()
+    const libraryInfo = page.getByRole('dialog', { name: 'Library Info' })
+    await expect(libraryInfo).toBeVisible()
+    await expect(page.locator('#featuresGuideModal')).toBeHidden()
+    const libraryRows = libraryInfo.locator('tbody tr')
+    await expect(libraryRows).toHaveCount(4)
+    await expect(libraryRows.first()).toContainText('MCAD')
+    await expect(libraryRows.first()).toContainText('LGPL-2.1')
+    await expect(libraryRows.first()).toContainText(/\d{4}-\d{2}-\d{2}/)
+    await libraryInfo.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(libraryInfo).toHaveCount(0)
 
     await page.locator('#helpMenuBtn').click()
     await menuItem(page, 'help', 'Features Guide').click()
