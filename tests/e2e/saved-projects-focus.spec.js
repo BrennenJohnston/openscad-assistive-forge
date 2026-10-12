@@ -116,8 +116,6 @@ const onFirstParameter = (page) =>
 test.describe('The quick-access prompt after a load', () => {
   test('Save leaves focus on the first parameter', async ({ page }) => {
     await uploadToPrompt(page)
-    await page.locator('#saveProjectCheckbox').focus()
-    await page.keyboard.press('Space')
     await page.locator('#saveProjectSave').focus()
     await page.keyboard.press('Enter')
 

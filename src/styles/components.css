@@ -1180,26 +1180,6 @@ body[data-mobile-toolbar='relocated']
   font-size: var(--font-size-sm);
 }
 
-.save-project-checkbox-wrapper {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm);
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius-sm);
-}
-
-.save-project-checkbox-wrapper input[type='checkbox'] {
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-}
-
-.save-project-checkbox-wrapper label {
-  cursor: pointer;
-  font-weight: 600;
-}
-
 .save-project-notes-field {
   display: flex;
   flex-direction: column;

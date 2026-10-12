@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that says where Save writes afterwards.
 - Clear Cache keeps your saved projects unless you untick Keep my Saved
   Projects; it used to delete them by default.
+- The question about saving a file for quick access is one step, Save or Not
+  now, with no box to tick first.
 
 ### Fixed
 

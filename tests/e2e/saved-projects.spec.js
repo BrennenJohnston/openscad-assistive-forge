@@ -68,11 +68,11 @@ test.describe('Saved Projects', () => {
     // Check that project name defaults to file name
     const nameInput = page.locator('#saveProjectName');
     await expect(nameInput).toHaveValue('sample.scad');
-    
-    // Check the "Save this file" checkbox
-    const checkbox = page.locator('#saveProjectCheckbox');
-    await checkbox.check();
-    
+
+    // One step: no box to tick, Save usable from the start.
+    await expect(page.locator('#saveProjectCheckbox')).toHaveCount(0);
+    await expect(page.locator('#saveProjectSave')).toBeEnabled();
+
     // Add notes
     const notesTextarea = page.locator('#saveProjectNotes');
     await notesTextarea.fill('Test project notes with https://example.com');
@@ -112,7 +112,6 @@ test.describe('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-    await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
     
@@ -154,7 +153,6 @@ test.describe('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-    await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectNotes').fill('Original notes');
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
@@ -202,7 +200,6 @@ test.describe('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-    await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
     
@@ -232,7 +229,6 @@ test.describe('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-    await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
     
@@ -262,7 +258,6 @@ test.describe('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-    await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
     
@@ -339,11 +334,7 @@ test.describe('Saved Projects', () => {
     // Change project name
     const nameInput = page.locator('#saveProjectName');
     await nameInput.fill('My Custom Project Name');
-    
-    // Check the "Save this file" checkbox
-    const checkbox = page.locator('#saveProjectCheckbox');
-    await checkbox.check();
-    
+
     // Save
     const saveBtn = page.locator('#saveProjectSave');
     await saveBtn.click();
@@ -365,7 +356,6 @@ test.describe('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-    await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
     
@@ -402,7 +392,6 @@ test.describe('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-    await page.locator('#saveProjectCheckbox').check();
     
     // Try to enter notes exceeding limit
     const notesTextarea = page.locator('#saveProjectNotes');
@@ -427,7 +416,6 @@ test.describe('Saved Projects', () => {
       await fileInput.setInputFiles(getFixturePath('sample.scad'));
       
       await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-      await page.locator('#saveProjectCheckbox').check();
       await page.locator('#saveProjectSave').click();
       await expect(page.locator('.save-project-modal')).not.toBeVisible();
       
@@ -455,7 +443,6 @@ test.describe('Saved Projects', () => {
       await fileInput.setInputFiles(getFixturePath('sample.scad'));
       
       await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
-      await page.locator('#saveProjectCheckbox').check();
       await page.locator('#saveProjectSave').click();
       await expect(page.locator('.save-project-modal')).not.toBeVisible();
       

@@ -243,8 +243,7 @@ test.describe('Editor content sync', () => {
       timeout: 30_000,
     });
     // Save the project so File > Save updates it instead of prompting.
-    await page.locator('#saveProjectCheckbox').waitFor({ timeout: 10_000 });
-    await page.locator('#saveProjectCheckbox').check();
+    await page.locator('#saveProjectSave').waitFor({ timeout: 10_000 });
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).toHaveCount(0, {
       timeout: 10_000,

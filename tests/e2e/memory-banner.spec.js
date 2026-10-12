@@ -45,8 +45,7 @@ async function setup(page, { save = false, banner = true } = {}) {
   await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 30_000 });
 
   if (save) {
-    await page.locator('#saveProjectCheckbox').waitFor({ timeout: 10_000 });
-    await page.locator('#saveProjectCheckbox').check();
+    await page.locator('#saveProjectSave').waitFor({ timeout: 10_000 });
     await page.locator('#saveProjectSave').click();
   } else {
     const notNow = page.locator('#saveProjectNotNow');

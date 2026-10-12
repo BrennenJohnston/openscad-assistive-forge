@@ -55,19 +55,6 @@ async function openCharm(page) {
 async function saveProject(page) {
   const notNow = page.getByRole('button', { name: 'Not now', exact: true });
   if (!(await notNow.isVisible().catch(() => false))) return false;
-  await page.evaluate(() => {
-    const cb = Array.from(document.querySelectorAll('input[type=checkbox]'))
-      .filter((c) => c.offsetParent !== null)
-      .find((c) =>
-        /Save this file to Saved Projects/i.test(
-          c.closest('label')?.textContent || c.parentElement?.textContent || ''
-        )
-      );
-    if (cb && !cb.checked) {
-      cb.checked = true;
-      cb.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  });
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.waitForTimeout(4000);
   return true;
