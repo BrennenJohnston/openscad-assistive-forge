@@ -1691,7 +1691,12 @@ async function initApp() {
   const savedProjectsUI = initSavedProjectsUI({
     showConfirmDialog,
     showProcessingOverlay,
-    handleFile: (...args) => fileHandler.handleFile(...args),
+    // A card pressed in the first seconds, before the file handler exists,
+    // waits for it instead of failing on nothing.
+    handleFile: async (...args) => {
+      while (!fileHandler) await new Promise((r) => setTimeout(r, 50));
+      return fileHandler.handleFile(...args);
+    },
     updateStatus,
     updateCompanionSaveButton: (...args) =>
       companionFilesCtrl.updateCompanionSaveButton(...args),
