@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { attachInvariants, expectNoNativeDialog } from './helpers/invariants.js'
 
 // The questions the saved projects ask (a folder's new name, a project
@@ -197,7 +198,8 @@ function focusedPlace(page) {
   return page.evaluate(() => {
     const el = document.activeElement
     if (!el || el === document.body) return 'BODY'
-    if (el.dataset.folderEnter) return `row ${el.dataset.folderEnter}`
+    const row = el.classList.contains('file-nav-folder-open') ? el.closest('[data-folder-enter]') : null
+    if (row) return `row ${row.dataset.folderEnter}`
     if (el.classList.contains('file-nav-breadcrumb-btn')) return `crumb ${el.getAttribute('aria-label')}`
     if (el.dataset.path) return `file ${el.dataset.path}`
     return `${el.tagName.toLowerCase()} ${el.className}`
@@ -237,7 +239,7 @@ test('moving between a project’s folders keeps focus in the file manager', asy
   const crumbs = manager.locator('#fmBreadcrumbs')
 
   // In: the first row of the folder opened.
-  await tree.locator('.file-nav-folder-row[data-folder-enter="parts"]').focus()
+  await tree.locator('.file-nav-folder-row[data-folder-enter="parts"] .file-nav-folder-open').focus()
   await page.keyboard.press('Enter')
   await expect(crumbs).toContainText('parts')
   await expect.poll(() => focusedPlace(page)).toBe('row deep')
@@ -257,10 +259,23 @@ test('moving between a project’s folders keeps focus in the file manager', asy
   await expect.poll(() => focusedPlace(page)).toBe('row parts')
 
   // An empty folder has no row to land on: its own breadcrumb says where focus is.
-  await tree.locator('.file-nav-folder-row[data-folder-enter="docs"]').focus()
+  await tree.locator('.file-nav-folder-row[data-folder-enter="docs"] .file-nav-folder-open').focus()
   await page.keyboard.press('Enter')
   await expect(crumbs).toContainText('docs')
   await expect.poll(() => focusedPlace(page)).toBe('crumb Navigate to docs')
 
   expectNoNativeDialog(page)
+})
+
+test('a folder row’s open, Rename and Delete buttons stand side by side, none inside another', async ({ page }) => {
+  // A screen reader's browse mode reads a button's content as one item, so a
+  // Rename inside a role="button" row could not be pressed: Enter went to the
+  // last control the reader had been on.
+  const manager = await openFileManager(page)
+  const results = await new AxeBuilder({ page }).include('#fmTree').analyze()
+  expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([])
+  const row = manager.locator('.file-nav-folder-row[data-folder-enter="parts"]')
+  await expect(row).not.toHaveAttribute('role', 'button')
+  await expect(row.getByRole('button', { name: 'Open folder parts, 2 files', exact: true })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Rename folder parts', exact: true })).toBeVisible()
 })

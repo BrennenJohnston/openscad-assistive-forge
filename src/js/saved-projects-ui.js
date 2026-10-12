@@ -852,7 +852,11 @@ export function initSavedProjectsUI({
      */
     function focusAfterFolderMove(leftFolder) {
       const left = leftFolder
-        ? fmControl('file-nav-folder-row', 'folderEnter', leftFolder)
+        ? fmControl(
+            'file-nav-folder-row',
+            'folderEnter',
+            leftFolder
+          )?.querySelector('.file-nav-folder-open')
         : null;
       const hasRows = !!modal.querySelector('#fmTree .file-manager-item');
       const crumbs = modal.querySelectorAll(
@@ -925,15 +929,19 @@ export function initSavedProjectsUI({
         .map(([folderName, childNode]) => {
           const count = countFilesRecursive(childNode);
           const fullPath = makeFolderFullPath(folderName);
+          // The name and count are the row's own button and Rename and Delete
+          // stand beside it: inside a role="button" row a screen reader's
+          // browse mode reads them as the row's text and cannot press them.
           return `
-          <div class="file-manager-item file-nav-folder-row" role="button" tabindex="0"
-               data-folder-enter="${escapeHtml(folderName)}"
-               aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
-            <svg class="file-manager-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span class="file-manager-item-path">${escapeHtml(folderName)}</span>
-            <span class="file-manager-item-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+          <div class="file-manager-item file-nav-folder-row" data-folder-enter="${escapeHtml(folderName)}">
+            <button type="button" class="file-nav-folder-open"
+                    aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
+              <svg class="file-manager-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span class="file-manager-item-path">${escapeHtml(folderName)}</span>
+              <span class="file-manager-item-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+            </button>
             <div class="file-manager-item-actions">
               <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(fullPath)}" aria-label="Rename folder ${escapeHtml(folderName)}" title="Rename">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1020,18 +1028,14 @@ export function initSavedProjectsUI({
           renderFmView();
           focusAfterFolderMove();
         };
+        // The open button, or anywhere on the row but Rename and Delete. The
+        // button brings Enter and Space with it.
         row.addEventListener('click', (e) => {
-          // Don't navigate if a button inside the row was clicked
-          if (e.target.closest('button')) return;
+          if (e.target.closest('button:not(.file-nav-folder-open)')) return;
           enter();
         });
-        // Enter and Space open the folder from the row itself; its Rename
-        // and Delete buttons keep their own.
         row.addEventListener('keydown', (e) => {
-          if ((e.key === 'Enter' || e.key === ' ') && e.target === row) {
-            e.preventDefault();
-            enter();
-          } else if (e.key === 'Escape' && fmCurrentPath.length > 0) {
+          if (e.key === 'Escape' && fmCurrentPath.length > 0) {
             e.preventDefault();
             const left = fmCurrentPath[fmCurrentPath.length - 1];
             fmCurrentPath = fmCurrentPath.slice(0, -1);
