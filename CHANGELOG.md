@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Help > Library info lists the bundled libraries, each with its license,
   the date of the copy bundled and whether it is on.
+- Keyboard Shortcuts lists "Toggle Editor panel" and "Toggle Customizer
+  panel" once each, with both of their keys.
 
 ### Fixed
 

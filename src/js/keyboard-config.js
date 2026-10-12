@@ -57,7 +57,7 @@ export const DEFAULT_SHORTCUTS = {
   toggleExpertMode: {
     key: 'e',
     ctrl: true,
-    description: 'Toggle Editor',
+    description: 'Toggle Editor panel',
   },
 
   // View controls
@@ -416,7 +416,7 @@ export const SHORTCUT_CATEGORIES = {
   },
   view: {
     label: 'View Controls',
-    actions: ['focusMode', 'toggleParameters', 'resetView', 'toggleExpertMode'],
+    actions: ['focusMode', 'resetView'],
   },
   cameraViews: {
     label: 'Camera Views',
@@ -479,11 +479,12 @@ export const SHORTCUT_CATEGORIES = {
   },
   panels: {
     label: 'Panels',
+    // A pair is one command with two keys, listed once.
     actions: [
       'toggleConsole',
       'toggleErrorLog',
-      'toggleCodeEditor',
-      'toggleCustomizer',
+      ['toggleExpertMode', 'toggleCodeEditor'],
+      ['toggleParameters', 'toggleCustomizer'],
       'jumpToPanel',
       'nextPanel',
       'prevPanel',
@@ -948,6 +949,19 @@ export function initKeyboardShortcuts(options = {}) {
 }
 
 /**
+ * The actions one list entry shows: a single action, or several keys for
+ * one command listed together.
+ * @param {string|string[]} entry - An item of a category's `actions`
+ * @param {Object} shortcuts - All shortcuts by action
+ * @returns {string[]} The entry's actions that have a shortcut
+ */
+function rowActions(entry, shortcuts) {
+  return (Array.isArray(entry) ? entry : [entry]).filter(
+    (action) => shortcuts[action]
+  );
+}
+
+/**
  * Generate keyboard shortcuts help HTML (read-only)
  * @returns {string} HTML string
  */
@@ -960,13 +974,14 @@ export function generateShortcutsHelpHTML() {
     html += `<h4>${category.label}</h4>`;
     html += '<dl>';
 
-    for (const action of category.actions) {
-      const shortcut = shortcuts[action];
-      if (shortcut) {
-        const formatted = formatShortcut(shortcut);
-        html += `<dt><kbd>${formatted}</kbd></dt>`;
-        html += `<dd>${shortcut.description}</dd>`;
-      }
+    for (const entry of category.actions) {
+      const actions = rowActions(entry, shortcuts);
+      if (actions.length === 0) continue;
+      const keys = actions
+        .map((action) => `<kbd>${formatShortcut(shortcuts[action])}</kbd>`)
+        .join(', ');
+      html += `<dt>${keys}</dt>`;
+      html += `<dd>${shortcuts[actions[0]].description}</dd>`;
     }
 
     html += '</dl></div>';
@@ -1001,25 +1016,32 @@ export function generateShortcutsEditorHTML() {
     html += `<h4>${category.label}</h4>`;
     html += '<div class="shortcuts-list">';
 
-    for (const action of category.actions) {
-      const shortcut = shortcuts[action];
-      if (shortcut) {
-        const formatted = formatShortcut(shortcut);
-        const isCustomized = keyboardConfig.isCustomized(action);
-        const customizedClass = isCustomized ? ' shortcut-customized' : '';
+    for (const entry of category.actions) {
+      const actions = rowActions(entry, shortcuts);
+      if (actions.length === 0) continue;
+      const { description } = shortcuts[actions[0]];
+      const customizedClass = actions.some((action) =>
+        keyboardConfig.isCustomized(action)
+      )
+        ? ' shortcut-customized'
+        : '';
 
-        // The key is the button's name, so a screen reader hears "F6, button"
-        // and can learn the shortcut; what pressing it does is its
-        // description. An aria-label here replaced the key, so the key was
-        // never spoken.
-        html += `<div class="shortcut-item${customizedClass}" data-action="${action}">`;
-        html += `  <span class="shortcut-description">${shortcut.description}</span>`;
-        html += `  <span class="sr-only" id="shortcut-change-${action}">Change shortcut for ${shortcut.description}</span>`;
-        html += `  <div class="shortcut-key-group">`;
+      // The key is the button's name, so a screen reader hears "F6, button"
+      // and can learn the shortcut; what pressing it does is its
+      // description. An aria-label here replaced the key, so the key was
+      // never spoken. A command with two keys is one row with a button per
+      // key, each changed on its own.
+      html += `<div class="shortcut-item${customizedClass}" data-action="${actions[0]}">`;
+      html += `  <span class="shortcut-description">${description}</span>`;
+      for (const action of actions) {
+        html += `  <span class="sr-only" id="shortcut-change-${action}">Change shortcut for ${description}</span>`;
+      }
+      html += `  <div class="shortcut-key-group">`;
+      for (const action of actions) {
         html += `    <button type="button" class="shortcut-key-btn" data-action="${action}" aria-describedby="shortcut-change-${action}">`;
-        html += `      <kbd>${formatted}</kbd>`;
+        html += `      <kbd>${formatShortcut(shortcuts[action])}</kbd>`;
         html += `    </button>`;
-        if (isCustomized) {
+        if (keyboardConfig.isCustomized(action)) {
           html += `    <button type="button" class="shortcut-reset-btn" data-action="${action}" aria-label="Reset to default" title="Reset to default">`;
           html += `      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">`;
           html += `        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>`;
@@ -1027,9 +1049,9 @@ export function generateShortcutsEditorHTML() {
           html += `      </svg>`;
           html += `    </button>`;
         }
-        html += `  </div>`;
-        html += `</div>`;
       }
+      html += `  </div>`;
+      html += `</div>`;
     }
 
     html += '</div></div>';
