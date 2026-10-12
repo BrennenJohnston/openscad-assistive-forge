@@ -11,11 +11,28 @@ import {
 } from 'three'
 import {
   PreviewManager,
+  dimensionLabelWidth,
   isThreeJsLoaded,
   DESKTOP_SHININESS,
   CORNFIELD_BACK_COLOR,
   SYNC_MESH_EXTRAS_MAX_TRIANGLES,
 } from '../../src/js/preview.js'
+
+describe('dimension labels scale with the model', () => {
+  it('three labels fit beside a 22 mm charm instead of covering it', () => {
+    expect(dimensionLabelWidth(22.02)).toBeLessThanOrEqual(22.02 / 2.5)
+    expect(dimensionLabelWidth(22.02)).toBeGreaterThanOrEqual(4)
+  })
+
+  it('stays readable on a tiny model and does not grow past a plate', () => {
+    expect(dimensionLabelWidth(3)).toBe(4)
+    expect(dimensionLabelWidth(600)).toBe(40)
+  })
+
+  it('keeps the size a 60 mm model always had', () => {
+    expect(dimensionLabelWidth(60)).toBeCloseTo(21, 0)
+  })
+})
 
 describe('PreviewManager', () => {
   let container

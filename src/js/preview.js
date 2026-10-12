@@ -186,6 +186,19 @@ export const DESKTOP_SHININESS = 64;
  */
 export const CAMERA_ZOOM_STEP = 15;
 
+/**
+ * How wide a size label is, in model millimetres, for a model whose longest
+ * side is `span`. A fixed 20 mm label hid a 22 mm charm under three of them;
+ * about a third of the longest side keeps the three clear of each other and
+ * of the model, never smaller than 4 mm or wider than 40 mm.
+ * @param {number} span - the model's longest side, mm
+ * @returns {number} label width, mm
+ */
+export function dimensionLabelWidth(span) {
+  const s = Number(span) || 0;
+  return Math.min(40, Math.max(4, s * 0.35));
+}
+
 // The model is a non-text graphical object, so `model`/`modelBack` must
 // reach 3:1 against `background` (WCAG 2.2 SC 1.4.11). The `edges`
 // overlay lines render 1px wide, so per W3C Low Vision Task Force
@@ -3070,12 +3083,20 @@ export class PreviewManager {
     const line = new Line(geometry, material);
     this.measurementHelpers.add(line);
 
-    // Create text sprite for label
+    // Create text sprite for label, sized with the model
     const midpoint = new Vector3().lerpVectors(start, end, 0.5);
     const sprite = this.createTextSprite(label, color);
+    const span = Math.max(
+      Number(this.dimensions?.x) || 0,
+      Number(this.dimensions?.y) || 0,
+      Number(this.dimensions?.z) || 0
+    );
+    const width = dimensionLabelWidth(span);
+    sprite.scale.set(width, width / 4, 1);
 
-    // Offset sprite slightly from the line
-    const offset = 5;
+    // Offset sprite from the line by its own height, so it sits beside the
+    // edge instead of over the model.
+    const offset = width / 4;
     if (axis === 'X') midpoint.y -= offset;
     if (axis === 'Y') midpoint.x -= offset;
     if (axis === 'Z') midpoint.x -= offset;
@@ -3127,7 +3148,6 @@ export class PreviewManager {
     // Create sprite
     const spriteMaterial = new SpriteMaterial({ map: texture });
     const sprite = new Sprite(spriteMaterial);
-    sprite.scale.set(20, 5, 1);
 
     return sprite;
   }
