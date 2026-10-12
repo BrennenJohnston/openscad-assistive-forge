@@ -38,7 +38,7 @@ const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 
 /**
  * Where the ⋮ belongs in a title bar. The order is
- * `[title …spacer… collapse ▾ | ⋮ | ✕ | stow »]`: the ⋮ follows the bar's
+ * `[title …spacer… ⋮ | ✕ | stow »]`: the ⋮ follows the bar's
  * disclosure controls and precedes its close button, and the field-stow
  * control holds the bar's outer corner past everything else. Simply
  * appending the ⋮ would put it to the right of every ✕.

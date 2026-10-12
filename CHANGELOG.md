@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The View menu's interface choices say where they go: "Assistive Forge,
   Simplified" and "Assistive Forge, Standard", apart from Classic's own
   "Simplified view".
+- Classic's panel title bars put a panel away with Hide or Stow; the Collapse
+  button, which could leave an empty column and started out blank, is gone.
 
 ### Fixed
 
