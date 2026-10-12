@@ -474,6 +474,25 @@ export function initCameraPanelController(options = {}) {
         }
       });
 
+    // View All beside Reset View, in the panel and the drawer: Reset View
+    // keeps the default pose, as desktop OpenSCAD does, and this one frames
+    // the model, as View ▸ View All does.
+    const viewAll = () => {
+      const pm = getPM();
+      if (pm?.mesh && pm.viewAllCamera) {
+        pm.viewAllCamera();
+        announceAction('View fitted to model');
+      } else {
+        announceAction('Load a model first');
+      }
+    };
+    document
+      .getElementById('cameraViewAll')
+      ?.addEventListener('click', viewAll);
+    document
+      .getElementById('mobileCameraViewAll')
+      ?.addEventListener('click', viewAll);
+
     // Standard view buttons for consistent viewing angles
     // These are in both desktop camera panel and mobile camera drawer
     const viewButtons = document.querySelectorAll('.camera-view-btn');

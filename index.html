@@ -2192,14 +2192,6 @@
                     <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
                   </svg>
                 </button>
-                <button
-                  type="button"
-                  id="resetBtn"
-                  class="btn btn-sm"
-                  aria-label="Reset all parameters to default values"
-                >
-                  Reset
-                </button>
                 <!-- Code Editor toggle, hidden until its feature flag is on -->
                 <button
                   type="button"
@@ -5710,6 +5702,29 @@
                         </svg>
                         <span>Reset</span>
                       </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm camera-drawer-btn camera-drawer-reset-btn"
+                        id="mobileCameraViewAll"
+                        aria-label="View All: fit the view to the model"
+                        title="View All"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          aria-hidden="true"
+                        >
+                          <polyline points="15 3 21 3 21 9"></polyline>
+                          <polyline points="9 21 3 21 3 15"></polyline>
+                          <line x1="21" y1="3" x2="14" y2="10"></line>
+                          <line x1="3" y1="21" x2="10" y2="14"></line>
+                        </svg>
+                        <span>View All</span>
+                      </button>
                     </div>
                   </div>
                   <!-- Right: Pan View D-pad with label in center -->
@@ -6328,6 +6343,32 @@
                     <polyline points="9 22 9 12 15 12 15 22"></polyline>
                   </svg>
                   <span>Reset View</span>
+                </button>
+              </div>
+              <!-- View All, beside it: frames the model, as View > View All does -->
+              <div class="camera-control-section">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline camera-btn-full"
+                  id="cameraViewAll"
+                  aria-label="View All: fit the view to the model"
+                  title="View All (Ctrl+Shift+V)"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <polyline points="9 21 3 21 3 15"></polyline>
+                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                  </svg>
+                  <span>View All</span>
                 </button>
               </div>
               <!-- Projection Toggle -->
@@ -8218,6 +8259,13 @@
             </div>
 
             <div class="preferences-check-row">
+              <input type="checkbox" id="prefsEditorAutocomplete" />
+              <label for="prefsEditorAutocomplete"
+                >Autocomplete as you type</label
+              >
+            </div>
+
+            <div class="preferences-check-row">
               <input
                 type="checkbox"
                 id="prefsEditorTabIndents"
@@ -8280,23 +8328,6 @@
             <p id="prefs-reason-linenumbers" class="preferences-panel-reason">
               Always on here. Line numbers cannot be switched off in this
               editor.
-            </p>
-
-            <div class="preferences-check-row">
-              <input
-                type="checkbox"
-                id="prefsEditorAutocomplete"
-                checked
-                disabled
-                aria-describedby="prefs-reason-autocomplete"
-              />
-              <label for="prefsEditorAutocomplete"
-                >Autocomplete as you type</label
-              >
-            </div>
-            <p id="prefs-reason-autocomplete" class="preferences-panel-reason">
-              Always on here, starting from the first character. The desktop's
-              on-off switch and character threshold are not offered.
             </p>
 
             <p class="preferences-panel-reason">

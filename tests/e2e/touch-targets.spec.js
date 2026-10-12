@@ -67,6 +67,33 @@ test('the Customizer’s help and reset buttons', async ({ page }) => {
   await expectAtLeast(page, '.param-reset-btn', 'a reset button');
 });
 
+test('the Customizer’s one reset-all button, full size, still asks first', async ({
+  page,
+}) => {
+  await openBox(page);
+  await expect(page.locator('#resetBtn')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: /^Reset all parameters/ })
+  ).toHaveCount(1);
+  await expectAtLeast(page, '#resetAllBtn', 'Reset All');
+
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('#parametersContainer details')
+      .forEach((d) => (d.open = true));
+  });
+  const width = page.locator('#param-width');
+  await width.fill('60');
+  await width.press('Tab');
+  await page.locator('#resetAllBtn').click();
+  const question = page
+    .locator('[role="alertdialog"]')
+    .filter({ has: page.getByRole('heading', { name: 'Reset the Customizer?' }) });
+  await expect(question).toBeVisible();
+  await question.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(width).toHaveValue('50');
+});
+
 test('the camera panel’s buttons', async ({ page }) => {
   await openBox(page);
   const toggle = page.locator('#cameraPanelToggle');

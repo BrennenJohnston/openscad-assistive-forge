@@ -1180,26 +1180,6 @@ body[data-mobile-toolbar='relocated']
   font-size: var(--font-size-sm);
 }
 
-.save-project-checkbox-wrapper {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm);
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius-sm);
-}
-
-.save-project-checkbox-wrapper input[type='checkbox'] {
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-}
-
-.save-project-checkbox-wrapper label {
-  cursor: pointer;
-  font-weight: 600;
-}
-
 .save-project-notes-field {
   display: flex;
   flex-direction: column;
@@ -7224,6 +7204,35 @@ body.first-visit-blocking #app {
 .design-geometry-dl dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* Help > Library info. At phone width the table scrolls inside its own box
+   rather than widening the dialog. */
+.library-info-intro {
+  margin: 0 0 var(--space-md);
+}
+
+.library-info-scroll {
+  overflow-x: auto;
+}
+
+.library-info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.library-info-table th,
+.library-info-table td {
+  text-align: left;
+  padding: var(--space-xs);
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.library-info-table thead th {
+  color: var(--color-text-secondary);
+  font-weight: 600;
 }
 
 .design-ast-heading {
@@ -14831,6 +14840,12 @@ body.tutorial-body-locked {
 /* Push Reset button to the right in the header row */
 .customizer-header-row > .btn:last-child {
   margin-left: auto;
+}
+
+/* The Customizer's one reset button: the full target, as tall as the select
+   beside it, not .btn-sm's smaller one. */
+.customizer-header-row #resetAllBtn {
+  min-height: var(--size-touch-target);
 }
 
 /* ============================================================================

@@ -165,7 +165,9 @@ test('Clear Cache reads its warning, holds Tab, and Escape and Cancel go back', 
       .map((id) => document.getElementById(id)?.textContent || '')
       .join(' ')
   )
-  expect(description).toContain('This will delete all saved projects')
+  expect(description.replace(/\s+/g, ' ')).toContain(
+    'Your saved projects are kept unless you untick Keep my Saved Projects below.'
+  )
   for (let i = 0; i < 6; i += 1) {
     await page.keyboard.press('Tab')
     expect(

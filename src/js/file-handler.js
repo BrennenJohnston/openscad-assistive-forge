@@ -1027,13 +1027,17 @@ export function initFileHandler({
         detectedLibraries,
       });
 
-      const libraryManager = getLibraryManager();
-      if (detectedLibraries.length > 0) {
-        const autoEnabled = libraryManager.autoEnable(fileContent);
-        if (autoEnabled.length > 0) {
-          console.log('Auto-enabled libraries:', autoEnabled);
-          updateStatus(`Enabled ${autoEnabled.length} required libraries`);
+      // Every .scad file in the project decides, not only the main one: a
+      // companion file can be the one that includes a library.
+      const sources = [fileContent];
+      for (const [path, content] of projectFiles || []) {
+        if (/\.scad$/i.test(path) && typeof content === 'string') {
+          sources.push(content);
         }
+      }
+      const librariesOn = getLibraryManager().useForProject(sources);
+      if (librariesOn.length > 0) {
+        updateStatus(`Enabled ${librariesOn.length} required libraries`);
       }
 
       renderLibraryUI(detectedLibraries);

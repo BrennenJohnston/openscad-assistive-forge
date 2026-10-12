@@ -290,6 +290,7 @@ import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog, showTextToCopyDialog } from './js/dialogs.js';
+import { showLibraryInfoDialog } from './js/library-info-dialog.js';
 import { initHfmController } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
@@ -813,6 +814,8 @@ const JUMP_TO_UNAVAILABLE_REASON =
   'Jump To is not available in the Simplified view';
 const CODE_EDITOR_UNAVAILABLE_REASON =
   'The Code Editor feature is turned off, so there is no editor to open.';
+const EDITOR_IN_STANDARD_REASON =
+  'The Editor is in the Standard view. Switch to Standard to open it.';
 
 /**
  * Can a Classic dock panel be reached right now? A merged panel that is not
@@ -921,11 +924,17 @@ function toggleCustomizerPanel() {
   );
 }
 
-/** Window ▸ Editor and Ctrl+Alt+3, likewise one command per host. */
+/** Window ▸ Editor, Ctrl+Alt+3 and Ctrl+E are one command per host. */
 function toggleEditorPanel() {
   const layout = getClassicLayoutController();
   if (document.body.dataset.uiMode === 'classic' && layout) {
     layout.toggleEditor(); // announces for itself
+    return;
+  }
+  // Simplified leaves the Editor out (its toolbar toggle is hidden there), so
+  // a key says where the Editor is rather than opening it out of sight.
+  if (getUIModeController().getMode() === 'simplified') {
+    announceImmediate(EDITOR_IN_STANDARD_REASON);
     return;
   }
   // Forge: open or close the Editor itself — the same command as its
@@ -1922,8 +1931,8 @@ async function initApp() {
             <div class="cache-clear-warning">
               <span class="cache-clear-warning-icon" aria-hidden="true">⚠️</span>
               <div class="cache-clear-warning-text" id="cacheClearWarningText">
-                <strong>Warning:</strong> This will delete all saved projects and cached app data by default.
-                Check the box below if you want to keep your saved projects.
+                <strong>Warning:</strong> This clears the app's cached data. Your saved projects
+                are kept unless you untick Keep my Saved Projects below.
               </div>
             </div>
 
@@ -1947,13 +1956,13 @@ async function initApp() {
                 </div>
               </label>
 
-              <label class="cache-clear-option preservation-off" id="preserveOption">
-                <input type="checkbox" id="preserveSavedDesigns" />
+              <label class="cache-clear-option preservation-on" id="preserveOption">
+                <input type="checkbox" id="preserveSavedDesigns" checked />
                 <div class="cache-clear-option-content">
                   <div class="cache-clear-option-label">
                     Keep my Saved Projects
-                    <span class="preservation-indicator danger" id="preserveIndicator">
-                      <span aria-hidden="true">⚠️</span> Will be deleted
+                    <span class="preservation-indicator safe" id="preserveIndicator">
+                      <span aria-hidden="true">✓</span> Will be kept
                     </span>
                   </div>
                   <div class="cache-clear-option-desc">
@@ -3390,7 +3399,7 @@ async function initApp() {
         });
       }
     } else {
-      await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+      await savedProjectsUI.showSaveProjectPrompt(state);
     }
   }
 
@@ -3695,7 +3704,11 @@ async function initApp() {
     onSaveAs: async () => {
       const state = stateManager.getState();
       if (!state.uploadedFile?.content) return;
-      await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+      await savedProjectsUI.showSaveProjectPrompt(state, {
+        title: 'Save As',
+        purpose:
+          'Saves this file as a new project. You go on working in the new one, and Save writes there.',
+      });
     },
     onSaveAll: () => _saveCurrentProject('All changes saved'),
     onExportImage: () => {
@@ -3780,7 +3793,11 @@ async function initApp() {
     const state = stateManager.getState();
     if (!state.uploadedFile?.content) return;
     const previousProjectId = currentSavedProjectId;
-    await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+    await savedProjectsUI.showSaveProjectPrompt(state, {
+      title: 'Save a Copy',
+      purpose:
+        'Saves a copy as a new project. Save keeps writing to what you have open, not to the copy.',
+    });
     currentSavedProjectId = previousProjectId;
   }
 
@@ -4401,6 +4418,7 @@ async function initApp() {
                 wrapIndent: () => editor?.setWrapIndent?.(stored),
                 wrapArrow: () => editor?.setWrapArrow?.(stored),
                 braceMatching: () => editor?.setBraceMatching?.(stored),
+                autocomplete: () => editor?.setAutocomplete?.(stored),
               };
               apply[name]?.();
 
@@ -4419,6 +4437,9 @@ async function initApp() {
                   stored ? 'on' : 'off'
                 }`,
                 braceMatching: `Highlight the matching bracket, ${
+                  stored ? 'on' : 'off'
+                }`,
+                autocomplete: `Autocomplete as you type, ${
                   stored ? 'on' : 'off'
                 }`,
               };
@@ -4986,8 +5007,10 @@ async function initApp() {
         : []),
       { type: 'separator' },
       // -- Interface Mode Radio Group (Classic gated on classic_mode flag) --
-      interfaceModeRadio('Simplified', 'simplified'),
-      interfaceModeRadio('Standard', 'standard'),
+      // The radios name the layout they go to: Classic's own "Simplified
+      // view" sits in this same menu.
+      interfaceModeRadio('Assistive Forge, Simplified', 'simplified'),
+      interfaceModeRadio('Assistive Forge, Standard', 'standard'),
       ...(_isEnabled('classic_mode')
         ? [interfaceModeRadio('Classic (Desktop Layout)', 'classic')]
         : []),
@@ -5281,16 +5304,14 @@ async function initApp() {
         tooltip: OFFLINE_CHEAT_SHEET_REASON,
       },
       {
-        // Upstream's sentence case. It opens the guide's Libraries page; the live
-        // list of what is mounted is File > Show Library Folder.
+        // Upstream's sentence case. The switches themselves are where
+        // File > Show Library Folder goes.
         type: 'action',
         label: 'Library info',
-        handler: () => _openFeaturesTab('tab-libraries'),
+        handler: () => void showLibraryInfoDialog(),
       },
       { type: 'separator' },
       {
-        // Not the same target as Library info: it opens the guide at its
-        // Workflow page.
         type: 'action',
         label: 'Features Guide',
         handler: () => _openFeaturesTab('tab-workflow'),
@@ -9679,9 +9700,9 @@ if (rounded) {
     }
   };
 
-  // Reset button - with COGA-compliant confirmation dialog
-  const resetBtn = document.getElementById('resetBtn');
-  resetBtn.addEventListener('click', async () => {
+  // Reset All, the Customizer's one reset button, asks first (COGA)
+  const resetAllBtn = document.getElementById('resetAllBtn');
+  resetAllBtn.addEventListener('click', async () => {
     const state = stateManager.getState();
     if (!state.defaults) return;
 
@@ -15432,12 +15453,6 @@ if (rounded) {
     }
   });
 
-  // Reset All Button (in customizer header)
-  const resetAllBtn = document.getElementById('resetAllBtn');
-  resetAllBtn?.addEventListener('click', () => {
-    resetBtn?.click();
-  });
-
   // Expand all / Collapse all.
   // Setting `.open` programmatically fires the <details> 'toggle' event
   // which is already wired in ui-generator.js to persist per-file state,
@@ -16057,7 +16072,7 @@ if (rounded) {
   keyboardConfig.on('resetAllParams', () => {
     const state = stateManager.getState();
     if (state.uploadedFile) {
-      resetBtn?.click();
+      resetAllBtn.click();
     }
   });
 
@@ -16178,16 +16193,8 @@ if (rounded) {
   keyboardConfig.on('findPrevious', () => runEditorAction('findPrevious'));
   keyboardConfig.on('findReplace', () => runEditorAction('findReplace'));
 
-  // Code Editor toggle (Ctrl+E) -- not in Simplified UI mode per COGA principle
-  keyboardConfig.on('toggleExpertMode', () => {
-    if (
-      _isEnabled('expert_mode') &&
-      window._modeManager &&
-      getUIModeController()?.getMode() !== 'simplified'
-    ) {
-      window._modeManager.toggleMode();
-    }
-  });
+  // Ctrl+E is Window ▸ Editor's command as well, Simplified's answer included.
+  keyboardConfig.on('toggleExpertMode', () => toggleEditorPanel());
 
   // ========== Gamepad controller integration ==========
   if (gamepadController) {

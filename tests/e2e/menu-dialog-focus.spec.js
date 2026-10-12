@@ -56,7 +56,7 @@ async function arrowTo(page, label) {
 test.describe('A dialog opened from a menu', () => {
   for (const [menu, label, dialog] of [
     ['help', 'About', '#aboutModal'],
-    ['help', 'Library info', '#featuresGuideModal'],
+    ['help', 'Library info', '.library-info-modal'],
     ['help', 'Features Guide', '#featuresGuideModal'],
     ['help', 'Keyboard Shortcuts', '#shortcutsModal'],
     ['edit', 'Preferences', '#preferencesModal'],

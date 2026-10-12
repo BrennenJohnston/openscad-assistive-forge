@@ -248,22 +248,29 @@ export class LibraryManager {
   }
 
   /**
-   * Auto-enable libraries detected in code
-   * @param {string} scadContent - OpenSCAD source code
-   * @returns {Array<string>} Array of auto-enabled library IDs
+   * Set the switches for a project that has just opened: the libraries its
+   * files include are on and every other is off, so a library turned on for
+   * one project does not follow the person into the next.
+   * @param {string[]} scadContents - The project's OpenSCAD sources
+   * @returns {string[]} The library IDs now on
    */
-  autoEnable(scadContent) {
-    const detected = detectLibraries(scadContent);
-    const autoEnabled = [];
-
-    for (const libId of detected) {
-      if (!this.isEnabled(libId)) {
-        this.enable(libId);
-        autoEnabled.push(libId);
+  useForProject(scadContents) {
+    const used = new Set(
+      scadContents.flatMap((content) => detectLibraries(content))
+    );
+    let changed = false;
+    for (const [id, lib] of Object.entries(this.libraries)) {
+      const on = used.has(id);
+      if (lib.enabled !== on) {
+        lib.enabled = on;
+        changed = true;
       }
     }
-
-    return autoEnabled;
+    if (changed) {
+      this.saveState();
+      this.notifyListeners('project', null);
+    }
+    return Object.keys(this.libraries).filter((id) => used.has(id));
   }
 
   /**

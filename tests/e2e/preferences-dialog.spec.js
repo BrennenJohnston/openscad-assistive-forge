@@ -497,6 +497,42 @@ test('the Editor tab names what it cannot do', async ({ page }) => {
   }
 });
 
+test('autocomplete is a real switch: off, typing brings no popup; on, it does', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  await page.locator('#prefs-tab-editor').click();
+  const box = page.locator('#prefsEditorAutocomplete');
+  await expect(box).toBeEnabled();
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  await page.locator('#preferencesModalDone').click();
+
+  await page.locator('#expertModeToggle').click();
+  const content = page.locator('#expertModeBody .cm-content').first();
+  await expect(content).toBeVisible({ timeout: 15_000 });
+  const popup = page.locator('.cm-tooltip-autocomplete');
+  await content.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\ncyl');
+  await page.waitForTimeout(1_000);
+  await expect(popup).toHaveCount(0);
+
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await page.locator('#prefs-tab-editor').click();
+  await page.locator('#prefsEditorAutocomplete').check();
+  await page.locator('#preferencesModalDone').click();
+  await content.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\ncub');
+  await expect(popup).toBeVisible();
+});
+
 test('in Classic the dialog leaves the viewport visible while arrow keys live-apply schemes', async ({
   page,
 }, testInfo) => {

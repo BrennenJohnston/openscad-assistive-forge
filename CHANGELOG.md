@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Preferences > Editor's "Autocomplete as you type" is a working switch: on
+  by default, and it can now be turned off.
+- The camera panel and the phone camera drawer have View All beside Reset
+  View: View All fits the model, Reset View keeps the default pose.
+
+### Changed
+
+- Help > Library info lists the bundled libraries, each with its license,
+  the date of the copy bundled and whether it is on.
+- Keyboard Shortcuts lists "Toggle Editor panel" and "Toggle Customizer
+  panel" once each, with both of their keys.
+- The View menu's interface choices say where they go: "Assistive Forge,
+  Simplified" and "Assistive Forge, Standard", apart from Classic's own
+  "Simplified view".
+- Classic's panel title bars put a panel away with Hide or Stow; the Collapse
+  button, which could leave an empty column and started out blank, is gone.
+- The Customizer has one reset-all button, Reset All, at full size; it still
+  asks first. The second Reset in its top row is gone.
+- File > Save As and File > Save a Copy each open a dialog of their own name
+  that says where Save writes afterwards.
+- Clear Cache keeps your saved projects unless you untick Keep my Saved
+  Projects; it used to delete them by default.
+- The question about saving a file for quick access is one step, Save or Not
+  now, with no box to tick first.
+- Library switches follow the project: opening one turns on the libraries its
+  files include and turns the rest off.
+
+### Fixed
+
+- Ctrl+E and Ctrl+Alt+3 do the same thing in every layout: in Classic they
+  show and hide the Editor panel, and in Simplified they say the Editor is in
+  the Standard view instead of announcing an editor that never appears.
+
 ## [5.3.0] - 2026-10-11
 
 What a screen reader hears, across the app: each status once, focus that

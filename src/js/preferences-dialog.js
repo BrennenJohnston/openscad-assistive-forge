@@ -195,6 +195,7 @@ const EDITOR_CONTROLS = [
   { id: 'prefsEditorWrapIndent', pref: 'wrapIndent', type: 'boolean' },
   { id: 'prefsEditorWrapArrow', pref: 'wrapArrow', type: 'boolean' },
   { id: 'prefsEditorBraceMatching', pref: 'braceMatching', type: 'boolean' },
+  { id: 'prefsEditorAutocomplete', pref: 'autocomplete', type: 'boolean' },
 ];
 
 /**

@@ -217,6 +217,32 @@ test.describe('File menu parity', () => {
     expect(items.find((i) => i.label === 'Save a Copy').disabled).toBe(false)
   })
 
+  test('Save As and Save a Copy each say where Save writes afterwards', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    for (const [label, title, sentence] of [
+      [
+        'Save As…',
+        'Save As',
+        'Saves this file as a new project. You go on working in the new one, and Save writes there.',
+      ],
+      [
+        'Save a Copy',
+        'Save a Copy',
+        'Saves a copy as a new project. Save keeps writing to what you have open, not to the copy.',
+      ],
+    ]) {
+      await page.locator('#fileMenuBtn').click()
+      await menuItem(page, 'file', label).click()
+      const dialog = page.getByRole('dialog', { name: title, exact: true })
+      await expect(dialog, label).toBeVisible()
+      await expect(dialog).toHaveAccessibleDescription(sentence)
+      await dialog.locator('#saveProjectNotNow').click()
+      await expect(dialog).toHaveCount(0)
+    }
+  })
+
   test('Recent Files disables what it cannot reopen and offers Clear Recent', async ({
     page,
   }) => {
@@ -838,6 +864,37 @@ test.describe('View menu parity', () => {
     expect(reset.position.map(Math.round)).toEqual([150, -150, 100])
     expect(distance(reset.position, fitted.position)).toBeGreaterThan(1)
   })
+
+  test('the camera panel has View All beside Reset View, and they differ', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await loadFixture(page)
+    test.skip(
+      (await page.locator('.preview-panel canvas').count()) === 0,
+      'this browser built no 3D canvas'
+    )
+    const toggle = page.locator('#cameraPanelToggle')
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+    const resetView = page.locator('#cameraResetView')
+    const viewAll = page.getByRole('button', {
+      name: 'View All: fit the view to the model',
+    })
+    await expect(resetView).toBeVisible()
+    await expect(viewAll.first()).toBeVisible()
+
+    const radius = (pose) =>
+      Math.hypot(...pose.position.map((v, i) => v - pose.target[i]))
+    await resetView.click()
+    await page.waitForTimeout(150)
+    const reset = await cameraPose(page)
+    expect(reset.position.map(Math.round)).toEqual([150, -150, 100])
+
+    await viewAll.first().click()
+    await page.waitForTimeout(150)
+    const fitted = await cameraPose(page)
+    expect(radius(fitted)).toBeLessThan(radius(reset) - 1)
+  })
 })
 
 // Upstream builds this menu from the docks, so its order is the dock
@@ -970,6 +1027,63 @@ test.describe('Window menu parity', () => {
   })
 })
 
+test.describe('Ctrl+E and Ctrl+Alt+3, one command', () => {
+  // Each key is pressed with nothing focused, as from the page itself: a
+  // focused field keeps some keys for its own use.
+  async function pressFromPage(page, key) {
+    await page.evaluate(() => document.activeElement?.blur())
+    await page.keyboard.press(key)
+  }
+  const editorMode = (page) =>
+    page.evaluate(() => window._modeManager?.currentMode)
+  async function recordSpeech(page) {
+    await page.evaluate(() => {
+      window.__said = []
+      const region = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const text = region.textContent.trim()
+        if (text && window.__said.at(-1) !== text) window.__said.push(text)
+      }).observe(region, { childList: true, subtree: true, characterData: true })
+    })
+  }
+
+  test('in Classic both show and hide the Editor panel', async ({ page }) => {
+    await loadFixture(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
+    const density = page.locator('#classicDensityToggle')
+    if ((await density.getAttribute('aria-checked')) !== 'true') await density.click()
+    const body = page.locator('body')
+    await expect(body).toHaveAttribute('data-classic-editor-hidden', 'false')
+    for (const key of ['Control+e', 'Control+Alt+3']) {
+      await pressFromPage(page, key)
+      await expect(body, key).toHaveAttribute('data-classic-editor-hidden', 'true')
+      await pressFromPage(page, key)
+      await expect(body, key).toHaveAttribute('data-classic-editor-hidden', 'false')
+    }
+    expect(await editorMode(page)).toBe('standard')
+  })
+
+  test('in Simplified both say where the Editor is, and open nothing', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await page.locator('#uiModeToggle').click()
+    await expect(page.locator('#uiModeToggle')).toHaveAttribute('aria-checked', 'false')
+    await recordSpeech(page)
+    for (const key of ['Control+e', 'Control+Alt+3']) {
+      await page.evaluate(() => (window.__said.length = 0))
+      await pressFromPage(page, key)
+      await expect
+        .poll(() => page.evaluate(() => window.__said.filter((l) => /editor/i.test(l))), {
+          message: key,
+        })
+        .toEqual(['The Editor is in the Standard view. Switch to Standard to open it.'])
+      expect(await editorMode(page), key).toBe('standard')
+    }
+  })
+})
+
 // The desktop's Help menu, then the Forge extras this app keeps.
 const HELP_MENU_ORDER = [
   'About',
@@ -1020,15 +1134,19 @@ test.describe('Help menu parity', () => {
     await page.locator('#aboutModalDone').click()
     await expect(about).toBeHidden()
 
-    // Library info and Features Guide must not open the same tab of the same
-    // modal.
+    // Library info lists the bundled libraries; it is not the Features Guide.
     await page.locator('#helpMenuBtn').click()
     await menuItem(page, 'help', 'Library info').click()
-    await expect(page.locator('#tab-libraries')).toHaveAttribute(
-      'aria-selected',
-      'true'
-    )
-    await page.locator('#featuresGuideClose').click()
+    const libraryInfo = page.getByRole('dialog', { name: 'Library Info' })
+    await expect(libraryInfo).toBeVisible()
+    await expect(page.locator('#featuresGuideModal')).toBeHidden()
+    const libraryRows = libraryInfo.locator('tbody tr')
+    await expect(libraryRows).toHaveCount(4)
+    await expect(libraryRows.first()).toContainText('MCAD')
+    await expect(libraryRows.first()).toContainText('LGPL-2.1')
+    await expect(libraryRows.first()).toContainText(/\d{4}-\d{2}-\d{2}/)
+    await libraryInfo.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(libraryInfo).toHaveCount(0)
 
     await page.locator('#helpMenuBtn').click()
     await menuItem(page, 'help', 'Features Guide').click()

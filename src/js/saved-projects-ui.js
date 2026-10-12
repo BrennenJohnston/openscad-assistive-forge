@@ -1694,16 +1694,23 @@ export function initSavedProjectsUI({
    * Show opt-in save prompt after file upload or program entry.
    * @param {Object} fileData - Current file state
    * @param {Object} [options]
-   * @param {boolean} [options.preSave=false] - Pre-check the save box (explicit Save action)
    * @param {() => HTMLElement|null} [options.focusAfter] - Where focus goes
    *   when the prompt closes, looked up on opening and again on closing. The
    *   prompt after a load opens without a press, so what had focus before it
    *   is no place to go back to.
+   * @param {string} [options.title] - The dialog's title, for a File menu
+   *   command that opens it (Save As, Save a Copy)
+   * @param {string} [options.purpose] - One sentence saying where Save writes
+   *   afterwards, read as the dialog's description
    * @returns {Promise<{saved: boolean, projectId?: string}>}
    */
   async function showSaveProjectPrompt(
     fileData,
-    { preSave = false, focusAfter = null } = {}
+    {
+      focusAfter = null,
+      title = 'Save this file for quick access?',
+      purpose = '',
+    } = {}
   ) {
     const { uploadedFile, projectFiles, mainFilePath, sourceExampleKey } =
       fileData;
@@ -1719,21 +1726,19 @@ export function initSavedProjectsUI({
       modal.setAttribute('role', 'dialog');
       modal.setAttribute('aria-labelledby', 'saveProjectTitle');
       modal.setAttribute('aria-modal', 'true');
+      if (purpose) modal.setAttribute('aria-describedby', 'saveProjectPurpose');
 
       modal.innerHTML = `
         <div class="preset-modal-content">
           <div class="preset-modal-header">
-            <h3 id="saveProjectTitle" class="preset-modal-title">Save this file for quick access?</h3>
+            <h3 id="saveProjectTitle" class="preset-modal-title">${escapeHtml(title)}</h3>
             <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
           </div>
           <div class="modal-body">
+            ${purpose ? `<p id="saveProjectPurpose" class="save-project-intro">${escapeHtml(purpose)}</p>` : ''}
             <p class="save-project-intro">
               Saved projects are stored in this browser. Clearing cache/site data will remove them.
             </p>
-            <div class="save-project-checkbox-wrapper">
-              <input type="checkbox" id="saveProjectCheckbox" />
-              <label for="saveProjectCheckbox">Save this file to Saved Projects</label>
-            </div>
             <div class="edit-project-field">
               <label for="saveProjectName">Project Name</label>
               <input type="text" id="saveProjectName" value="${escapeHtml(fileName)}" />
@@ -1756,14 +1761,13 @@ export function initSavedProjectsUI({
           </div>
           <div class="preset-modal-footer" id="saveProjectFooter">
             <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
-            <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
+            <button class="btn btn-primary" id="saveProjectSave">Save</button>
           </div>
         </div>
       `;
 
       document.body.appendChild(modal);
 
-      const checkbox = modal.querySelector('#saveProjectCheckbox');
       const nameInput = modal.querySelector('#saveProjectName');
       const notesTextarea = modal.querySelector('#saveProjectNotes');
       const notesCount = modal.querySelector('#saveProjectNotesCount');
@@ -1778,25 +1782,12 @@ export function initSavedProjectsUI({
         '#saveProjectDuplicateName'
       );
 
-      if (preSave) {
-        checkbox.checked = true;
-        saveBtn.disabled = false;
-      }
-
-      checkbox.addEventListener('change', () => {
-        saveBtn.disabled = !checkbox.checked;
-      });
-
       const counter = modal.querySelector('.save-project-notes-counter');
       setupNotesCounter(notesTextarea, notesCount, counter, {
         maxLength: 5000,
         warningThreshold: 4500,
         onValidChange: (isValid) => {
-          if (isValid) {
-            saveBtn.disabled = !checkbox.checked;
-          } else {
-            saveBtn.disabled = true;
-          }
+          saveBtn.disabled = !isValid;
         },
       });
 
@@ -1863,8 +1854,6 @@ export function initSavedProjectsUI({
       }
 
       saveBtn.addEventListener('click', async () => {
-        if (!checkbox.checked) return;
-
         const projectName = nameInput.value.trim() || fileName;
         const existingProjects = await listSavedProjects();
         const duplicate = existingProjects.find((p) => p.name === projectName);

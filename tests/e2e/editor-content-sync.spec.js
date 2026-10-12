@@ -243,8 +243,7 @@ test.describe('Editor content sync', () => {
       timeout: 30_000,
     });
     // Save the project so File > Save updates it instead of prompting.
-    await page.locator('#saveProjectCheckbox').waitFor({ timeout: 10_000 });
-    await page.locator('#saveProjectCheckbox').check();
+    await page.locator('#saveProjectSave').waitFor({ timeout: 10_000 });
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).toHaveCount(0, {
       timeout: 10_000,
@@ -280,8 +279,8 @@ test.describe('Editor content sync', () => {
     await page.evaluate(() => {
       window.__resetClicks = 0;
       document
-        .getElementById('resetBtn')
-        ?.addEventListener('click', () => (window.__resetClicks += 1));
+        .getElementById('resetAllBtn')
+        .addEventListener('click', () => (window.__resetClicks += 1));
     });
     expect(await page.evaluate(() => typeof window.__resetClicks)).toBe(
       'number'
