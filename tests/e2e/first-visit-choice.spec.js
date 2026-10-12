@@ -416,7 +416,7 @@ test.describe('First-visit choice on a phone-shaped viewport', () => {
     await expect(classicRadio).toBeDisabled();
     const note = page.locator('#firstVisitClassicGate');
     await expect(note).toBeVisible();
-    await expect(note).toContainText('desktop-only for now');
+    await expect(note).toContainText('for desktop windows');
     await expect(classicRadio).toHaveAttribute(
       'aria-describedby',
       /firstVisitClassicGate/
