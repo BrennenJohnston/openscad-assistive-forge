@@ -642,7 +642,16 @@ test.describe('Getting Started, action by action', () => {
       await box.fill('60')
       await box.press('Tab')
     },
-    'Save a preset': (page) => page.locator('#presetControls details > summary').first().click(),
+    'Save a preset': async (page) => {
+      // Opening the Presets section is not saving a preset: Next stays locked.
+      const presets = page.locator('#presetControls')
+      if (!(await presets.evaluate((d) => d.open))) await presets.locator('summary').first().click()
+      await page.waitForTimeout(500)
+      await expect(page.locator('#tutorialNextBtn')).toBeDisabled()
+      await page.locator('#addPresetBtn').click()
+      await page.locator('.preset-modal #presetName').fill('Tour preset')
+      await page.locator('.preset-modal button[type="submit"]').first().click()
+    },
     'Generate and download your file': (page) => page.locator('#primaryActionBtn').click(),
     'Help & Examples': (page) => page.locator('#featuresGuideBtn').click(),
     'Features Guide': (page) => page.keyboard.press('Escape'),
@@ -689,6 +698,7 @@ test.describe('Getting Started, action by action', () => {
     // Typing is the one the hint offers that used to do nothing. The presets
     // step waits only when its section starts closed.
     expect(completed).toContain('Adjust a parameter')
+    expect(completed).toContain('Save a preset')
     // Reached the steps after the last action, so no action ended the tour.
     expect(visited).toContain('Simplified or Standard')
   })

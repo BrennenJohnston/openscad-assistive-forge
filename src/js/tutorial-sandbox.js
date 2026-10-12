@@ -1110,9 +1110,11 @@ const TUTORIALS = {
         // Target the clickable summary so the panel can avoid covering it.
         highlightSelector: '#presetControls summary, @preset-controls',
         position: 'right',
+        // Saving a preset is the step, not opening the section it lives in.
         completion: {
-          type: 'detailsOpen',
-          selector: '#presetControls details, #presetControls',
+          type: 'domEvent',
+          selector: 'body',
+          event: 'forge:preset-saved',
         },
       },
       {

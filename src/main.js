@@ -13207,6 +13207,13 @@ if (rounded) {
    *
    * @param {Object} preset - Loaded preset with .parameters, .name, .id
    */
+  /** A preset was written: the tour's "Save a preset" step listens for it. */
+  function notePresetSaved(name) {
+    document.body.dispatchEvent(
+      new CustomEvent('forge:preset-saved', { bubbles: true, detail: { name } })
+    );
+  }
+
   function applyPresetParametersAndCompanions(preset) {
     // A value typed but not yet applied joins the current values first, so
     // the preset lands on top of it rather than on the values before it.
@@ -13726,6 +13733,7 @@ if (rounded) {
         );
 
         updateStatus(`Preset "${finalName}" saved`);
+        notePresetSaved(finalName);
 
         // OpenSCAD Customizer behavior:
         // - "+" creates a new preset AND selects it in the dropdown
@@ -14314,6 +14322,7 @@ if (rounded) {
       );
 
       updateStatus(`Preset "${preset.name}" saved`, 'success');
+      notePresetSaved(preset.name);
       setCurrentPresetSelection(savedPreset);
       return true;
     } catch (error) {
@@ -14385,6 +14394,7 @@ if (rounded) {
       updatePresetDropdown();
       setCurrentPresetSelection(savedPreset);
       updateStatus(`Preset copied to "${copyName}"`, 'success');
+      notePresetSaved(copyName);
     } catch (error) {
       updateStatus(`Failed to copy preset: ${error.message}`, 'error');
     }
