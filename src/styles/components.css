@@ -16819,7 +16819,9 @@ body.tutorial-body-locked {
 }
 
 .preferences-tab.active {
-  color: var(--color-accent);
+  /* The accent underline marks the tab; the words keep the text colour so
+     they read on the light theme (the accent is a yellow there). */
+  color: var(--color-text-primary);
   border-bottom-color: var(--color-accent);
 }
 

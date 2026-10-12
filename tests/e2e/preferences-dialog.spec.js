@@ -705,3 +705,41 @@ test('the shortcuts dialog’s headings step down one level at a time', async ({
     ).toBeLessThanOrEqual(1);
   }
 });
+
+test('the selected tab’s words pass the contrast rule in the light theme', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  const ratio = await page.evaluate(() => {
+    const tab = document.querySelector(
+      '#preferencesTablist [role="tab"][aria-selected="true"]'
+    );
+    const fg = getComputedStyle(tab).color;
+    let bg = 'rgba(0, 0, 0, 0)';
+    for (
+      let el = tab;
+      el && /rgba\(0, 0, 0, 0\)|transparent/.test(bg);
+      el = el.parentElement
+    ) {
+      bg = getComputedStyle(el).backgroundColor;
+    }
+    const lum = (c) => {
+      const [r, g, b] = c
+        .match(/[\d.]+/g)
+        .slice(0, 3)
+        .map((v) => {
+          const n = Number(v) / 255;
+          return n <= 0.03928 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
+        });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const [l1, l2] = [lum(fg), lum(bg)];
+    return {
+      fg,
+      bg,
+      ratio: (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05),
+    };
+  });
+  expect(ratio.ratio, `${ratio.fg} on ${ratio.bg}`).toBeGreaterThanOrEqual(4.5);
+});
