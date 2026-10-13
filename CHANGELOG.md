@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.4.0] - 2026-10-12
+
 ### Added
 
+- The app's questions are its own dialogs: a kept draft, a slow engine
+  download, presets from an earlier version, a folder or file's name, a
+  delete, a copy the browser refused. Each follows the theme, names its
+  fields and puts focus back where it was.
 - Preferences > Editor's "Autocomplete as you type" is a working switch: on
   by default, and it can now be turned off.
 - The camera panel and the phone camera drawer have View All beside Reset
@@ -19,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Help > Library info lists the bundled libraries, each with its license,
   the date of the copy bundled and whether it is on.
 - Keyboard Shortcuts lists "Toggle Editor panel" and "Toggle Customizer
-  panel" once each, with both of their keys.
+  panel" once each, with both of their keys, under headings that follow
+  the dialog's title.
 - The View menu's interface choices say where they go: "Assistive Forge,
   Simplified" and "Assistive Forge, Standard", apart from Classic's own
   "Simplified view".
@@ -35,12 +42,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now, with no box to tick first.
 - Library switches follow the project: opening one turns on the libraries its
   files include and turns the rest off.
+- The Main Page button asks before leaving only when a change would be lost,
+  and a draft is kept only once something changed.
+- The size labels in the preview scale with the model and stand beside it;
+  the OpenSCAD messages drawer makes room for the open Actions drawer.
+- Preferences opens on its first tab; every folder and file row button names
+  its item; the console's Copy says Copied once; Flush Caches writes its
+  line to the console; a project with its own reference image says so.
 
 ### Fixed
 
 - Ctrl+E and Ctrl+Alt+3 do the same thing in every layout: in Classic they
   show and hide the Editor panel, and in Simplified they say the Editor is in
   the Standard view instead of announcing an editor that never appears.
+- The page never grows past the window with the Customizer's Console open.
+- In a saved project's file manager, a folder's Rename and Delete work from
+  the keyboard and with a screen reader, and moving between folders keeps
+  focus.
+- Undo after loading a preset brings back the values before it; Reload keeps
+  the camera; the editor's edited mark means changed from the saved text.
+- A failed preview clears the size and triangle count; a 2D format's line
+  omits triangles; the messages drawer keeps every echo argument; the
+  viewport badge says outdated, never none, while a model shows.
+- The phone camera drawer's zoom buttons are 44 px; clearing the Customizer
+  search gives each group back as it was.
+- The Getting Started tour completes its preset step on a saved preset, keeps
+  its card beside a control at the window's edge, and numbers only the steps
+  it shows; the tour offer and tip wait for a start-up question.
+- A saved-project card pressed before start-up waits for it; a declined
+  approximate-outline question logs no error; the service worker's update
+  message raises no warning.
 
 ## [5.3.0] - 2026-10-11
 
