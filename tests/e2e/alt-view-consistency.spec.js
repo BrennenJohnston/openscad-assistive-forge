@@ -646,6 +646,92 @@ test.describe('The Alt View keeps to its tokens', () => {
   });
 });
 
+test.describe('The Alt View at a phone width', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('a project and its camera drawer', async ({ page }) => {
+    test.setTimeout(300_000);
+    await openProject(page);
+    expect(
+      await page.evaluate(() => [innerWidth, matchMedia('(pointer: coarse)').matches]),
+      'a phone: 390 px wide, a finger for a pointer'
+    ).toEqual([390, true]);
+    await altViewOn(page);
+    expectInTheLook(await audit(page, null), 'a project at a phone width');
+    await page.locator('#cameraDrawerToggle').click();
+    await page.waitForTimeout(800);
+    expectInTheLook(await audit(page, null), 'the camera drawer at a phone width');
+  });
+});
+
+test.describe('The Alt View with reduced motion', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('in the look, and the glow held off', async ({ page }) => {
+    test.setTimeout(300_000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openProject(page);
+    expect(
+      await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+      'the setting is on'
+    ).toBe(true);
+    await altViewOn(page);
+    expectInTheLook(await audit(page, null), 'a project with reduced motion');
+    await expect(page.locator('#_hfmPersistFade')).toBeDisabled();
+  });
+});
+
+test.describe('The Alt View with the system settings', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('high contrast keeps to its own palette', async ({ page }) => {
+    test.setTimeout(300_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-high-contrast', 'true');
+    });
+    await openProject(page);
+    await altViewOn(page);
+    await expect(page.locator('html')).toHaveAttribute('data-high-contrast', 'true');
+    expectInTheLook(await audit(page, null), 'a project with high contrast');
+  });
+
+  test('reduced transparency keeps a dialog backdrop solid', async ({ page }) => {
+    test.setTimeout(300_000);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
+    });
+    await openProject(page);
+    await altViewOn(page);
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /Preferences/ }).first().click();
+    await expect(page.locator('#preferencesModalOverlay')).toBeVisible();
+    const backdrop = await page.evaluate(() => {
+      const style = getComputedStyle(document.getElementById('preferencesModalOverlay'));
+      const alpha = style.backgroundColor.match(/[\d.]+(?=\)$)/);
+      return {
+        reduce: matchMedia('(prefers-reduced-transparency: reduce)').matches,
+        alpha: style.backgroundColor.startsWith('rgb(') ? 1 : Number(alpha?.[0] ?? 0),
+        blur: style.backdropFilter,
+      };
+    });
+    expect(backdrop.reduce, 'the setting is on').toBe(true);
+    expect(backdrop.blur, 'no blur behind the dialog').toBe('none');
+    expect(backdrop.alpha, 'a backdrop solid enough to read past').toBeGreaterThanOrEqual(
+      0.8
+    );
+    await page.keyboard.press('Escape');
+  });
+});
+
 test.describe('The standard look is untouched', () => {
   test.beforeEach(async ({ page }) => {
     await seed(page, { unlock: false, theme: 'dark' });
