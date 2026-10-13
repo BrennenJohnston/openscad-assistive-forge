@@ -60,7 +60,9 @@ If a user would notice the change, add one line under "Unreleased" in
 - Browser tests: `npm run test:e2e`. A new spec can use the shared checks in
   `tests/e2e/helpers/invariants.js` (page errors, a browser dialog, focus lost
   to the page body, markup shown as text); `docs/developing/TESTING.md` lists
-  them.
+  them. A change to the layout also runs
+  `npx playwright test tests/e2e/page-fits-window.spec.js`, which expects the
+  page to fit the window with every panel open.
 - Example models: `npm run validate:example public/examples/<your-folder>`
 
 On Windows, see `docs/developing/TROUBLESHOOTING.md#playwright-terminal-hangs-windows` if Playwright gets stuck.
