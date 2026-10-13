@@ -3123,3 +3123,48 @@ test('the Classic toolbar’s Export DXF says what a 3D model gets', async ({ pa
     /approximate outline/
   );
 });
+
+// With the Alt View on, Classic wears a retro look of its own, different
+// from the green and the amber: a token set on Classic's body, chosen by an
+// attribute the Alt View sets on the root and clears when it turns off.
+test.describe('Classic in the Alt View', () => {
+  test('wears a look of its own while the Alt View is on', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await loadSampleProject(page);
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-classic-retro',
+      'dos'
+    );
+
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    const tokens = await page.evaluate(() => {
+      const s = getComputedStyle(document.body);
+      return {
+        ground: s.getPropertyValue('--color-bg-primary').trim(),
+        text: s.getPropertyValue('--color-text-primary').trim(),
+        accent: s.getPropertyValue('--color-accent').trim(),
+      };
+    });
+    expect(tokens).toEqual({ ground: '#0000aa', text: '#e8e8ff', accent: '#ffff55' });
+    const icon = await page
+      .locator('.classic-tb-btn .classic-icon')
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(icon).toContain('url(');
+
+    await key.click();
+    await expect(page.locator('html')).not.toHaveAttribute('data-classic-retro');
+    const after = await page.evaluate(() =>
+      getComputedStyle(document.body).getPropertyValue('--color-bg-primary').trim()
+    );
+    expect(after).toBe('#ffffff');
+  });
+});

@@ -85,7 +85,12 @@ function audit(page, rootSelector) {
   return page.evaluate((rootSelector) => {
     const mono =
       document.documentElement.getAttribute('data-ui-variant') === 'mono';
-    const cs = getComputedStyle(document.documentElement);
+    // The standard look is read on the body, where Classic keeps its tokens
+    // and the body inherits the root's. The Alt View's palette is what its
+    // own rules declare: the root's values, and for the rules scoped to
+    // Classic's body, the values those resolve to there.
+    const cs = getComputedStyle(document.body);
+    const rootCs = getComputedStyle(document.documentElement);
     const probe = document.createElement('div');
     document.body.appendChild(probe);
     const toRgb = (value) => {
@@ -118,9 +123,12 @@ function audit(page, rootSelector) {
         rule.selectorText &&
         /data-ui-variant=['"]mono['"]/.test(rule.selectorText);
       for (const rule of rules.filter(monoRule)) {
+        const scope = /data-ui-mode=['"]classic['"]/.test(rule.selectorText)
+          ? cs
+          : rootCs;
         for (const prop of [...rule.style]) {
           if (prop.startsWith('--color')) {
-            const value = cs.getPropertyValue(prop).trim();
+            const value = scope.getPropertyValue(prop).trim();
             if (value) palette.add(toRgb(value));
           }
         }
@@ -336,6 +344,18 @@ function surfaces(page) {
         await page.waitForTimeout(400);
       },
     },
+    // Last: the page stays in Classic afterwards.
+    {
+      name: 'Classic',
+      act: async () => {
+        await page.locator('#classicModeToggle').click();
+        await expect(page.locator('body')).toHaveAttribute(
+          'data-ui-mode',
+          'classic'
+        );
+        await page.waitForTimeout(1_500);
+      },
+    },
   ];
 }
 
@@ -360,6 +380,7 @@ test.describe('The Alt View keeps to its tokens', () => {
   test('a project: Standard, Simplified, the editor, the camera panel, Preferences, Keyboard Shortcuts', async ({
     page,
   }) => {
+    test.setTimeout(300_000);
     await openProject(page);
     await altViewOn(page);
     const report = {};

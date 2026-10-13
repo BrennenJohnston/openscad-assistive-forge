@@ -40,6 +40,10 @@ let _hfmPanAdjustEnabled = false;
 let _hfmPanToggleButtons = null;
 let _hfmMotionListener = null;
 
+// Classic wears a retro look of its own while the Alt View is on; the root
+// carries which one, and the variant stylesheet gives it its values.
+const _HFM_CLASSIC_LOOK = 'dos';
+
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
 let _getDisplayOptionsController = () => null;
@@ -472,6 +476,14 @@ function _setFaviconForVariant(enabled) {
 function _setAssetsForVariant(enabled) {
   _setHeaderLogoForVariant(enabled);
   _setFaviconForVariant(enabled);
+  if (enabled) {
+    document.documentElement.setAttribute(
+      'data-classic-retro',
+      _HFM_CLASSIC_LOOK
+    );
+  } else {
+    document.documentElement.removeAttribute('data-classic-retro');
+  }
 }
 
 // ---------------------------------------------------------------------------

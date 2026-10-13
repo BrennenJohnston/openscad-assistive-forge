@@ -432,7 +432,7 @@ const monoEditorTheme = [
     dark: true,
     gutterBorder: 'var(--color-border-light)',
   }),
-  // CodeMirror marks focus with a dotted dark grey line of its own; the
+  // CodeMirror marks focus with a dotted dark gray line of its own; the
   // variant marks it with its accent, as every other control does.
   EditorView.theme({
     '&.cm-focused': {
