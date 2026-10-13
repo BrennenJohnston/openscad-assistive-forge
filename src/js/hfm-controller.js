@@ -86,6 +86,23 @@ const _HFM_EDGE_LEVELS = [
 ];
 let _hfmEdgeLevels = null;
 
+// The first Alt View in a page draws in from the top and the status line
+// types a greeting before its ordinary line; later ones start at once. The
+// line is not live, so the greeting is for the eye only.
+const _HFM_GREETING = 'ALT VIEW ONLINE';
+const _HFM_GREETING_LETTER_MS = 40;
+const _HFM_GREETING_HOLD_MS = 700;
+// The draw-in lasts the variant's --crt-reveal-duration (1 s) once it starts,
+// and a slow machine takes most of a second to start it (0.65 s measured
+// under 4x CPU throttling). This clears it if the animation never runs, as
+// with forced colors.
+const _HFM_REVEAL_FALLBACK_MS = 3000;
+let _hfmRevealPlayed = false;
+let _hfmRevealTimer = null;
+let _hfmGreetingPlayed = false;
+let _hfmGreetingTimer = null;
+let _hfmStatusOverride = null;
+
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
 let _getDisplayOptionsController = () => null;
@@ -151,7 +168,9 @@ function _updateHfmStatusBar() {
   if (controls) controls.hidden = false;
 
   let displayText;
-  if (_hfmPanAdjustEnabled) {
+  if (_hfmStatusOverride !== null) {
+    displayText = _hfmStatusOverride;
+  } else if (_hfmPanAdjustEnabled) {
     displayText =
       '[ALT ADJUST] \u25B2\u25BC edge \u00B7 \u25C4\u25BA size \u00B7 Shift+\u25B2\u25BC glow';
   } else {
@@ -665,6 +684,54 @@ function _loadSavedHfmSettings() {
   }
 }
 
+function _onAltViewRevealEnd(event) {
+  if (event.animationName === 'alt-view-reveal') _endAltViewReveal();
+}
+
+function _endAltViewReveal() {
+  clearTimeout(_hfmRevealTimer);
+  _hfmRevealTimer = null;
+  document.body?.removeEventListener('animationend', _onAltViewRevealEnd);
+  document.documentElement.removeAttribute('data-alt-view-reveal');
+}
+
+function _playAltViewReveal() {
+  if (_hfmRevealPlayed) return;
+  _hfmRevealPlayed = true;
+  if (_prefersReducedMotion()) return;
+  document.body?.addEventListener('animationend', _onAltViewRevealEnd);
+  _hfmRevealTimer = setTimeout(_endAltViewReveal, _HFM_REVEAL_FALLBACK_MS);
+  document.documentElement.setAttribute('data-alt-view-reveal', '');
+}
+
+function _typeAltViewGreeting() {
+  if (_hfmGreetingPlayed) return;
+  _hfmGreetingPlayed = true;
+  let shown = _prefersReducedMotion() ? _HFM_GREETING.length : 1;
+  const step = () => {
+    _hfmStatusOverride = _HFM_GREETING.slice(0, shown);
+    _updateHfmStatusBar();
+    if (shown < _HFM_GREETING.length) {
+      shown += 1;
+      _hfmGreetingTimer = setTimeout(step, _HFM_GREETING_LETTER_MS);
+      return;
+    }
+    _hfmGreetingTimer = setTimeout(() => {
+      _hfmGreetingTimer = null;
+      _hfmStatusOverride = null;
+      _updateHfmStatusBar();
+    }, _HFM_GREETING_HOLD_MS);
+  };
+  step();
+}
+
+function _stopAltViewStart() {
+  _endAltViewReveal();
+  clearTimeout(_hfmGreetingTimer);
+  _hfmGreetingTimer = null;
+  _hfmStatusOverride = null;
+}
+
 async function _enableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   if (!previewManager) return;
@@ -735,6 +802,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   });
   previewManager.applyGridForAltView?.(true);
 
+  _playAltViewReveal();
   root.setAttribute('data-ui-variant', 'mono');
 
   const newTheme = previewManager.detectTheme();
@@ -750,6 +818,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   toggleBtn?.setAttribute('aria-pressed', 'true');
   _hfmEnabled = true;
   _hfmPendingEnable = false;
+  _typeAltViewGreeting();
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -761,6 +830,8 @@ async function _enableAltViewWithPreview(toggleBtn) {
 function _disableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   const root = document.documentElement;
+
+  _stopAltViewStart();
 
   if (_hfmMotionListener) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -906,10 +977,12 @@ function _injectAltToggle() {
     if (!previewManager) {
       if (!isCurrentlyEnabled) {
         _setAssetsForVariant(true);
+        _playAltViewReveal();
         root.setAttribute('data-ui-variant', 'mono');
         toggleBtn.setAttribute('aria-pressed', 'true');
         _hfmPendingEnable = true;
       } else {
+        _stopAltViewStart();
         root.removeAttribute('data-ui-variant');
         _setAssetsForVariant(false);
         toggleBtn.setAttribute('aria-pressed', 'false');

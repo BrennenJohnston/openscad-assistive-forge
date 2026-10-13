@@ -123,6 +123,7 @@
     color-mix(in srgb, var(--color-accent) 10%, transparent);
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
+  --crt-reveal-duration: 1s;
 
   /* A black drawing turned into the accent with its white details black,
    * for pictures no color property reaches; the grays of its edges stay on
@@ -1612,6 +1613,37 @@
   font-size: 0.85em;
   flex-shrink: 0;
   opacity: 0.8;
+}
+
+/* ----------------------------------------
+ * 4f. The first Alt View in a page draws in
+ *
+ * A cover in the screen's own ground slides off downward behind a line of
+ * the accent, so the interface appears from the top like a screen being
+ * drawn. The controller sets data-alt-view-reveal once per page and removes
+ * it when the animation ends. body::after is the scanlines; ::before is free.
+ * ---------------------------------------- */
+@keyframes alt-view-reveal {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  :root[data-ui-variant='mono'][data-alt-view-reveal] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: var(--z-index-app-overlay);
+    background-color: var(--color-bg-primary);
+    border-top: 2px solid var(--color-accent);
+    animation: alt-view-reveal var(--crt-reveal-duration) steps(32, end)
+      forwards;
+  }
 }
 
 /* ========================================

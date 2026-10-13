@@ -130,8 +130,11 @@ export const MEASURED_SECONDS = {
   'page-fits-window.spec.js': 40.0,
   'responsive-audit.spec.js': 91.9,
   'theme-switching.spec.js': 71.4,
-  // Three cases over eight surfaces, each read element by element: booked with room.
+  // Nine cases, the surfaces read element by element, then a phone width and
+  // the system settings: about 84 s locally, booked with room.
   'alt-view-consistency.spec.js': 120.0,
+  // Two cases, each loading the box: 17.6 s locally; booked at 30.
+  'alt-view-reveal.spec.js': 30.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,

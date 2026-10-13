@@ -78,15 +78,22 @@ async function altViewOn(page) {
 }
 
 // A transition still running when a surface is read (the mode toggle's
-// colours on a slow machine) shows as a colour off the tokens: let every
-// CSS transition finish or be cancelled first, within a bound.
+// colours on a slow machine) shows as a colour off the tokens, and the first
+// Alt View's draw-in covers the screen for a second: let every CSS
+// transition and every animation that ends finish or be cancelled first,
+// within a bound.
 async function settle(page) {
   await page.evaluate(() =>
     Promise.race([
       Promise.allSettled(
         document
           .getAnimations()
-          .filter((animation) => animation instanceof CSSTransition)
+          .filter(
+            (animation) =>
+              animation instanceof CSSTransition ||
+              (animation instanceof CSSAnimation &&
+                Number.isFinite(animation.effect?.getComputedTiming().endTime))
+          )
           .map((animation) => animation.finished)
       ),
       new Promise((resolve) => setTimeout(resolve, 3_000)),
