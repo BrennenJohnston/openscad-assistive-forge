@@ -5,6 +5,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { announcementsSince, recordAnnouncements } from './helpers/invariants.js';
 import path from 'path';
 import fs from 'fs';
 import JSZip from 'jszip';
@@ -597,6 +598,29 @@ test.describe('OpenSCAD Output Exposure', () => {
 });
 
 test.describe('Reference Image', () => {
+  test('a project that turns the reference image on says so once', async ({ page }) => {
+    await recordAnnouncements(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+    await page.goto('/?example=logo-plate');
+    await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 60000 });
+    // The example's companion files raise the quick-access question first.
+    const notNow = page.locator('#saveProjectNotNow');
+    if (await notNow.waitFor({ timeout: 15000 }).then(() => true, () => false)) {
+      await notNow.click();
+      await notNow.waitFor({ state: 'hidden' });
+    }
+    await switchToStandardMode(page);
+    await expect(page.locator('#overlayStatus')).toHaveText('On', { timeout: 60000 });
+    await page.waitForTimeout(1000);
+    const said = (await announcementsSince(page, 0))
+      .map((a) => a.text)
+      .filter((t) => t.startsWith('Reference image on'));
+    expect(said).toEqual(['Reference image on: sample-logo.svg']);
+  });
+
   /**
    * Create a keyguard ZIP with SVG screenshot file
    * @returns {Promise<string>} Path to the created ZIP file

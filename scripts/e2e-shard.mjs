@@ -126,6 +126,8 @@ export const MEASURED_SECONDS = {
   'main-page-return.spec.js': 40.0,
   // Two cases with a draft debounce each: measured 27 locally.
   'draft-after-edit.spec.js': 40.0,
+  // Six cases, each an upload and a preview: measured 26 locally, booked with room.
+  'page-fits-window.spec.js': 40.0,
   'responsive-audit.spec.js': 91.9,
   'theme-switching.spec.js': 71.4,
   'editor-content-sync.spec.js': 70.4,
