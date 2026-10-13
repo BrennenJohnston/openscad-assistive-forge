@@ -896,3 +896,58 @@ test.describe('The Alt View starts with finer characters', () => {
     await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
   });
 });
+
+// The Alt View shows the model where the ordinary preview does: its bottom
+// on the grid, the orbit about its middle.
+test.describe('The model stays on the bed in the Alt View', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('keeps the bottom at Z 0 and the orbit target at the middle', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const bed = () =>
+      page.evaluate(() => {
+        const pm = window.previewManager;
+        pm.mesh.updateWorldMatrix(true, false);
+        pm.mesh.geometry.computeBoundingBox();
+        const box = pm.mesh.geometry.boundingBox
+          .clone()
+          .applyMatrix4(pm.mesh.matrixWorld);
+        return {
+          bottom: Math.round(box.min.z * 100) / 100,
+          middle: Math.round(((box.min.z + box.max.z) / 2) * 100) / 100,
+          target: Math.round(pm.controls.target.z * 100) / 100,
+        };
+      });
+    const before = await bed();
+    expect(before.bottom).toBe(0);
+
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await page.waitForTimeout(500);
+    const inAltView = await bed();
+    expect(inAltView.bottom).toBe(0);
+    expect(inAltView.target).toBe(inAltView.middle);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(await bed()).toEqual(before);
+  });
+});

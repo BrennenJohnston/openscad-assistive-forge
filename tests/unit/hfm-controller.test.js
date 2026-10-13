@@ -9,6 +9,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import {
+  BoxGeometry,
+  Box3,
+  Mesh,
+  MeshBasicMaterial,
+  PerspectiveCamera,
+  Vector3,
+} from 'three'
 import { PreviewManager } from '../../src/js/preview.js'
 
 vi.mock('../../src/js/_hfm.js', () => ({
@@ -122,5 +130,57 @@ describe('the grid when the Alt View turns on and off', () => {
 
     controller.disableAltViewWithPreview(toggle)
     expect(pm.gridHelper.visible).toBe(false)
+  })
+})
+
+describe('the model stays on the bed in the Alt View', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  // A 50 x 40 x 30 box as a load leaves it: centred, then raised by the
+  // auto-bed so its bottom sits on the grid at Z 0 and the orbit target at
+  // its middle.
+  function previewManagerWithBox() {
+    const pm = previewManagerStub()
+    const geometry = new BoxGeometry(50, 40, 30)
+    geometry.translate(0, 0, 15)
+    pm.mesh = new Mesh(geometry, new MeshBasicMaterial())
+    pm.autoBedEnabled = true
+    pm.autoBedOffset = 15
+    pm.rotationCenteringEnabled = false
+    pm.referenceOverlay = null
+    pm.camera = new PerspectiveCamera()
+    pm.camera.position.set(100, -100, 100)
+    pm.projectionMode = 'perspective'
+    pm.controls = { target: new Vector3(0, 0, 15), update: vi.fn() }
+    delete pm.disableRotationCentering
+    return pm
+  }
+
+  const bottomZ = (pm) => {
+    pm.mesh.updateMatrixWorld(true)
+    return new Box3().setFromObject(pm.mesh).min.z
+  }
+
+  it('keeps the bottom on the grid and the orbit about the middle, on and off', async () => {
+    const pm = previewManagerWithBox()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+    expect(bottomZ(pm)).toBeCloseTo(0)
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(bottomZ(pm)).toBeCloseTo(0)
+    expect(pm.controls.target.z).toBeCloseTo(15)
+
+    controller.disableAltViewWithPreview(toggle)
+    expect(bottomZ(pm)).toBeCloseTo(0)
+    expect(pm.controls.target.z).toBeCloseTo(15)
   })
 })
