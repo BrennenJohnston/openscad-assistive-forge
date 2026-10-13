@@ -162,3 +162,19 @@ test.describe('the phone camera drawer', () => {
     );
   });
 });
+
+test.describe('the Alt View’s Characters control on a phone', () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+  test('its smaller and larger buttons', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await openBox(page);
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible();
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await expectAtLeast(page, '.alt-view-stepper-btn', 'a characters button');
+    await expectAtLeast(page, '.alt-view-level-btn', 'an edges button');
+  });
+});

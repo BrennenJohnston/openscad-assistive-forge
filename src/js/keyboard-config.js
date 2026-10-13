@@ -65,6 +65,16 @@ export const DEFAULT_SHORTCUTS = {
     key: 'f',
     description: 'Toggle focus mode (maximize preview)',
   },
+  // The Alt View's character size: the bare minus and equals keys, the
+  // same pair as the stepper's buttons, free of Chrome's own shortcuts.
+  altViewSmaller: {
+    key: '-',
+    description: 'Alt View: smaller or larger characters',
+  },
+  altViewLarger: {
+    key: '=',
+    description: 'Alt View: smaller or larger characters',
+  },
   toggleParameters: {
     key: 'b',
     ctrl: true,
@@ -417,6 +427,10 @@ export const SHORTCUT_CATEGORIES = {
   view: {
     label: 'View Controls',
     actions: ['focusMode', 'resetView'],
+  },
+  altView: {
+    label: 'Alt View',
+    actions: [['altViewSmaller', 'altViewLarger']],
   },
   cameraViews: {
     label: 'Camera Views',
