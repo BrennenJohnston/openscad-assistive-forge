@@ -657,6 +657,50 @@
   backdrop-filter: none;
 }
 
+/* The Alt View's controls in the status strip. The strip itself lets
+   pointer events through to the preview; these must catch them. */
+:root[data-ui-variant='mono'] .preview-status-bar .alt-view-controls {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-2xs);
+  pointer-events: auto;
+}
+
+:root[data-ui-variant='mono'] .preview-status-bar .alt-view-controls[hidden] {
+  display: none;
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* A legend is laid out apart from its fieldset's row; floated, it keeps its
+   meaning and takes its place in the row. */
+:root[data-ui-variant='mono'] .alt-view-stepper-label {
+  float: left;
+  padding: 0;
+  margin-right: var(--space-2xs);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper-value {
+  min-width: 4.5em;
+  text-align: center;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
 /* Alt adjust info line - visible only in mono variant */
 :root[data-ui-variant='mono']
   .preview-status-bar.has-alt-adjust

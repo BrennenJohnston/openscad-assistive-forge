@@ -5242,6 +5242,33 @@
                     class="preview-status-alt-adjust"
                     id="previewStatusAltAdjust"
                   ></span>
+                  <!-- The Alt View's own controls, beside the line that shows
+                       their values; shown only while the Alt View is on. -->
+                  <div class="alt-view-controls" id="altViewControls" hidden>
+                    <fieldset class="alt-view-stepper" id="altViewCharacters">
+                      <legend class="alt-view-stepper-label">Characters</legend>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-icon forge-control alt-view-stepper-btn"
+                        id="altViewCharactersSmaller"
+                        aria-label="Smaller characters"
+                      >
+                        <span aria-hidden="true">&minus;</span>
+                      </button>
+                      <span
+                        class="alt-view-stepper-value"
+                        id="altViewCharactersValue"
+                      ></span>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-icon forge-control alt-view-stepper-btn"
+                        id="altViewCharactersLarger"
+                        aria-label="Larger characters"
+                      >
+                        <span aria-hidden="true">+</span>
+                      </button>
+                    </fieldset>
+                  </div>
                 </div>
                 <!-- ECHO message drawer (console output display) -->
                 <div class="echo-drawer collapsed" id="echoDrawer">

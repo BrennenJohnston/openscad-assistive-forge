@@ -60,6 +60,16 @@ const _HFM_PAN_ADJUST_ON_SENTENCE =
   'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.';
 const _HFM_PAN_ADJUST_OFF_SENTENCE = 'Pan arrows move the view again.';
 
+// The character sizes a person steps through from the status strip. The
+// slider and the pan arrows still move in 5% steps between them.
+const _HFM_CHARACTER_STEPS = [
+  { name: 'Fine', scale: 0.5 },
+  { name: 'Normal', scale: 0.6 },
+  { name: 'Bold', scale: 1 },
+];
+const _HFM_STEP_TOLERANCE = 0.001;
+let _hfmCharacterStepper = null;
+
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
 let _getDisplayOptionsController = () => null;
@@ -115,11 +125,14 @@ function _updateHfmStatusBar() {
 
   if (!statusBar || !altAdjustEl) return;
 
+  const controls = document.getElementById('altViewControls');
   if (!isMono || !_hfmEnabled) {
     statusBar.classList.remove('has-alt-adjust');
     altAdjustEl.textContent = '';
+    if (controls) controls.hidden = true;
     return;
   }
+  if (controls) controls.hidden = false;
 
   let displayText;
   if (_hfmPanAdjustEnabled) {
@@ -220,6 +233,7 @@ function _applyHfmFontScale(scale) {
   }
 
   _hfmFontScaleControls?.sync?.(clamped);
+  _initHfmCharacterStepper()?.sync(clamped);
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_FONT_SCALE, clamped);
 
@@ -381,6 +395,49 @@ function _buildHfmSliderControls({
   controls.sync(getValue());
 
   return controls;
+}
+
+/**
+ * The Characters stepper in the preview's status strip: Smaller and Larger
+ * move to the next named step; the value shows the step's name, or the
+ * percentage when the size was set between steps elsewhere.
+ * @returns {{ sync: (scale: number) => void }|null} null when the strip is
+ *   not on the page
+ */
+function _initHfmCharacterStepper() {
+  if (_hfmCharacterStepper) return _hfmCharacterStepper;
+  const smaller = document.getElementById('altViewCharactersSmaller');
+  const larger = document.getElementById('altViewCharactersLarger');
+  const valueEl = document.getElementById('altViewCharactersValue');
+  if (!smaller || !larger || !valueEl) return null;
+
+  const stepTo = (scale) => {
+    const next = _applyHfmFontScale(scale);
+    announceImmediate(`Characters ${_formatPercent(next)}`);
+  };
+  smaller.addEventListener('click', () => {
+    const below = _HFM_CHARACTER_STEPS.filter(
+      (step) => step.scale < _hfmFontScale - _HFM_STEP_TOLERANCE
+    );
+    stepTo(below.length ? below[below.length - 1].scale : _hfmFontScale);
+  });
+  larger.addEventListener('click', () => {
+    const above = _HFM_CHARACTER_STEPS.find(
+      (step) => step.scale > _hfmFontScale + _HFM_STEP_TOLERANCE
+    );
+    stepTo(above ? above.scale : _hfmFontScale);
+  });
+
+  _hfmCharacterStepper = {
+    sync(scale) {
+      const step = _HFM_CHARACTER_STEPS.find(
+        (s) => Math.abs(s.scale - scale) < _HFM_STEP_TOLERANCE
+      );
+      valueEl.textContent = step ? step.name : _formatPercent(scale);
+    },
+  };
+  _hfmCharacterStepper.sync(_hfmFontScale);
+  return _hfmCharacterStepper;
 }
 
 function _initHfmContrastControls() {

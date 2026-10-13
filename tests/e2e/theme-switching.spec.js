@@ -979,3 +979,82 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     ]);
   });
 });
+
+// The character size has a control where its value shows: a stepper in the
+// preview's status strip with three named steps, present only in the Alt
+// View, kept in step with the camera panel's slider.
+test.describe('The Characters control beside the status line', () => {
+  test('steps through Fine, Normal and Bold, and the slider follows', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const controls = page.locator('#altViewControls');
+    await expect(controls).toBeHidden();
+
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await expect(controls).toBeVisible();
+    const smaller = page.getByRole('button', { name: 'Smaller characters' });
+    const larger = page.getByRole('button', { name: 'Larger characters' });
+    const value = page.locator('#altViewCharactersValue');
+    const status = page.locator('#previewStatusAltAdjust');
+    const slider = page.locator('#_hfmFontScale');
+
+    // Start from a known step, whatever the default is.
+    await slider.evaluate((el) => {
+      el.value = '0.6';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(value).toHaveText('Normal');
+
+    await larger.click();
+    await expect(value).toHaveText('Bold');
+    await expect(status).toContainText('SIZE 100%');
+    await expect(slider).toHaveValue('1');
+
+    await larger.click();
+    await expect(value).toHaveText('Bold');
+
+    await smaller.click();
+    await expect(value).toHaveText('Normal');
+    await expect(status).toContainText('SIZE 60%');
+    await expect(slider).toHaveValue('0.6');
+
+    await smaller.click();
+    await expect(value).toHaveText('Fine');
+    await expect(status).toContainText('SIZE 50%');
+
+    await smaller.click();
+    await expect(value).toHaveText('Fine');
+
+    // A value set elsewhere shows as its percentage.
+    await slider.evaluate((el) => {
+      el.value = '0.75';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(value).toHaveText('75%');
+
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'false');
+    await expect(controls).toBeHidden();
+  });
+});
