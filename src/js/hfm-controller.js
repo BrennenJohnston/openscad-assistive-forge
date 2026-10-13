@@ -28,7 +28,9 @@ const _HFM_CONTRAST_RANGE = { min: 0.5, max: 4.0, step: 0.05, default: 1 };
 let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
 let _hfmContrastControls = null;
 
-const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 1 };
+// The default is finer than the renderer's own 1: at full size the first
+// frame drew the model as a blob with no faces. A saved size wins.
+const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 0.6 };
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
 
@@ -698,14 +700,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _applyHfmPersistFade(_hfmPersistFade);
   _setHfmSlidersEnabled(true);
 
-  if (previewManager?.mesh && previewManager.enableRotationCentering) {
-    previewManager.enableRotationCentering();
-  }
-
+  // The model stays where the ordinary preview puts it, its bottom on the
+  // grid: the orbit target is already at its middle, so nothing is moved.
   previewManager?.setPostLoadHook?.(() => {
-    if (previewManager?.mesh && previewManager.enableRotationCentering) {
-      previewManager.enableRotationCentering();
-    }
     _getDisplayOptionsController().refreshOverlays();
     _hfmAltView?.invalidate?.();
   });
@@ -715,6 +712,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
     _hfmAltView.resize(width, height);
     _hfmAltView.invalidate?.();
   });
+  previewManager.applyGridForAltView?.(true);
 
   root.setAttribute('data-ui-variant', 'mono');
 
@@ -755,10 +753,7 @@ function _disableAltViewWithPreview(toggleBtn) {
   previewManager?.clearRenderOverride();
   previewManager?.clearResizeHook();
   previewManager?.clearPostLoadHook?.();
-
-  if (previewManager?.disableRotationCentering) {
-    previewManager.disableRotationCentering();
-  }
+  previewManager?.applyGridForAltView?.(false);
 
   root.removeAttribute('data-ui-variant');
   _setAssetsForVariant(false);

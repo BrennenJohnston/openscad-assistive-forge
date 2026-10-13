@@ -63,6 +63,7 @@ import {
   STORAGE_KEY_ZOOM_TO_CURSOR,
   STORAGE_KEY_VIEWPORT_SCHEME,
   STORAGE_KEY_LOD_WARNING_DISMISSED,
+  STORAGE_KEY_HFM_GRID,
   safeGetItem,
   safeSetItem,
   safeRemoveItem,
@@ -503,6 +504,7 @@ export class PreviewManager {
 
     // Grid visibility
     this.gridEnabled = this.loadGridPreference();
+    this.altViewGridActive = false;
 
     // Grid size (mm) — configurable to match printer bed
     this.gridConfig = this.loadGridSizePreference();
@@ -3194,13 +3196,41 @@ export class PreviewManager {
    */
   toggleGrid(enabled) {
     this.gridEnabled = enabled;
-    this.saveGridPreference(enabled);
+    if (this.altViewGridActive) {
+      safeSetItem(STORAGE_KEY_HFM_GRID, enabled ? 'true' : 'false');
+    } else {
+      this.saveGridPreference(enabled);
+    }
 
     if (this.gridHelper) {
       this.gridHelper.visible = enabled;
     }
 
     console.log(`[Preview] Grid ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Switch the grid between the Alt View's own preference and the ordinary
+   * one. At character resolution the grid draws as scattered punctuation,
+   * so the Alt View starts without it unless it was turned on there.
+   * @param {boolean} active - True while the Alt View is on
+   */
+  applyGridForAltView(active) {
+    this.altViewGridActive = Boolean(active);
+    this.gridEnabled = this._loadEffectiveGridPreference();
+    if (this.gridHelper) {
+      this.gridHelper.visible = this.gridEnabled;
+    }
+  }
+
+  /**
+   * @returns {boolean} The grid preference that applies now: the Alt
+   *   View's own while it is on, the ordinary one otherwise
+   */
+  _loadEffectiveGridPreference() {
+    return this.altViewGridActive
+      ? safeGetItem(STORAGE_KEY_HFM_GRID) === 'true'
+      : this.loadGridPreference();
   }
 
   /**
@@ -3720,7 +3750,7 @@ export class PreviewManager {
    */
   reloadScopedViewPreferences() {
     this.measurementsEnabled = this.loadMeasurementPreference();
-    this.gridEnabled = this.loadGridPreference();
+    this.gridEnabled = this._loadEffectiveGridPreference();
     this.gridConfig = this.loadGridSizePreference();
     this.gridColorOverride = this.loadGridColorPreference();
     this.gridOpacity = this.loadGridOpacityPreference();

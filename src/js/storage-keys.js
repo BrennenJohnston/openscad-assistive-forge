@@ -522,6 +522,13 @@ export const STORAGE_KEY_HFM_FONT_SCALE = 'openscad-forge-hfm-font-scale';
 export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';
 
 /**
+ * localStorage key for the grid while the Alt View is on: 'true' only after
+ * a person turns the grid on there; absent means hidden. One key for both
+ * interfaces, apart from the ordinary per-interface grid preference.
+ */
+export const STORAGE_KEY_HFM_GRID = getAppPrefKey('hfm-grid');
+
+/**
  * localStorage key for the City Walk game's walking-speed multiplier.
  * Decimal string in [0.5, 3]; a comfort/accessibility preference,
  * so it persists across sessions.
