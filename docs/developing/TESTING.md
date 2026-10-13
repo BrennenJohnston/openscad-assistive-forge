@@ -92,6 +92,9 @@ marked `aria-busy`, and one that is not drawn.
   `classic-pane-focus`, `guide-example-focus`, `drawing-editor-close-focus`)
   open and close every dialog, menu and pane by keyboard and check where focus
   lands afterwards, never the page body.
+- `page-fits-window.spec.js` opens every panel, the Console included, in
+  each of the three layouts at two window sizes and expects the page to
+  fit the window. A change to the layout runs it first.
 - `header-names.spec.js` and `classic-names.spec.js` read each control's
   name as a screen reader would and expect the words on the control first;
   `touch-targets.spec.js` measures the small controls at a coarse pointer;
@@ -181,6 +184,12 @@ automated suites can pass while a person still cannot finish a task, and a
 walk finds that. I write down what each step did, in my own words, and
 anything wrong is fixed before the release.
 
+When a release closes a set of fixes from one of those walks, the whole walk
+comes back: every finding, row by row, is checked again on the release
+candidate, or carried with the note of when it was last checked and on what.
+Each row ends as fixed, still open, kept as it is, or not run with the
+reason; the rows still open go to `docs/accessibility/KNOWN_ISSUES.md`.
+
 NVDA's log keeps everything it says, and `npm run nvda-tail` turns it into a
 record step by step. How to set that up, and what to listen for, is in the
 [NVDA listening pack](../notes/NVDA_LISTENING_PACK.md).
@@ -189,7 +198,7 @@ record step by step. How to set that up, and what to listen for, is in the
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (251 files, 7,776 tests and 2 skipped, as of 2026-10-11).
+- [ ] `npm run test:run` -- all unit tests pass (254 files, 7,810 tests and 2 skipped, as of 2026-10-12).
 - [ ] `npm run test:e2e` -- E2E tests pass on Chromium.
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.

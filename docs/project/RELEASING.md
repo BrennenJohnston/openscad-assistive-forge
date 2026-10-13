@@ -25,7 +25,8 @@ pull request and nothing to merge back.
    minutes; `main` requires its Edge and Lighthouse checks as well.
 4. Walk the release candidate's preview by hand, with NVDA running ("Walking
    a release candidate" in `docs/developing/TESTING.md`). Anything wrong is
-   fixed before the release.
+   fixed before the release. When the release closes a set of fixes from a
+   walk, that section's full comparison runs too.
 
 ### Braille tools
 

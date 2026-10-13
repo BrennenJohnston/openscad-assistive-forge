@@ -9,7 +9,7 @@ cleared site data so the first-visit dialog appears.
 
 Budget about an hour and a half, and it splits cleanly: sections 1 to 6 are
 the core app, about half an hour; sections 7 to 11 are the picture-to-charm
-path, about another half hour; sections 12 to 16 are the flows a release walk
+path, about another half hour; sections 12 to 17 are the flows a release walk
 repeats, about half an hour. Doing only part is a result too, as long as you
 say which.
 
@@ -305,6 +305,23 @@ Shortcuts dialog), then switch to Classic and Tab to its top right.
 | In Keys, a key button reads its key ("F6"), then "Change shortcut for ..." as its description | ☐ | |
 | A saved project's card buttons name the project: "Load {name}", "Edit {name}", "Delete {name}" | ☐ | |
 | In Classic, "A. Forge, button" is described by "Switch to the Assistive Forge interface", with no "pressed"; a pane separator says its real share ("Editor: 26%"), never "0%"; the Font List radios say their style ("Liberation Sans Bold") | ☐ | |
+
+## 17. The questions the app asks
+
+Open a few of the app's questions: come back with a draft kept (the question
+on arrival), New Folder and Rename Folder in Project Files, Delete on a
+project file, Copy Link with the clipboard refused, Remove on a companion
+file, Delete on a grid preset. Each is the app's own dialog; the browser's
+box, with the site's address in its title, is never heard.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| A question reads its title, then its message, then the focused button, each once: "Restore a saved draft?", `A draft of "simple_box.scad" from <date> is kept in this browser. Restore it, or discard it?`, "Restore draft, button" | ☐ | |
+| A question that deletes or removes opens on Cancel: "Delete File", `Delete "helpers.scad"? This cannot be undone.`, "Cancel, button"; Tab reaches Delete | ☐ | |
+| A question that asks for a name opens in its field: New Folder reads "Folder name, edit, blank"; Rename Folder reads the field with the current name selected, so typing replaces it | ☐ | |
+| Copy by hand (the browser refused the clipboard) reads its sentence, then the link, selected, in a read-only field | ☐ | |
+| Escape, or Cancel, closes the question and puts focus back on the control that asked (Rename, Copy Link, the Companion Files heading), with no announcement | ☐ | |
+| After the answer, what happened is said once: "Draft restored", `Created folder "docs"`, `Deleted file "helpers.scad"`, "Removed file: walk-note.txt" | ☐ | |
 
 ## The last run
 
