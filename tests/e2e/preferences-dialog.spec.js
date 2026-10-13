@@ -125,9 +125,20 @@ test('the tab bar follows the APG pattern', async ({ page }) => {
     walked.push(await page.evaluate(() => document.activeElement.id));
     await page.keyboard.press('ArrowRight');
   }
-  expect(walked).toEqual(TAB_ORDER.map((_, i) =>
-    ['3dview', 'editor', '3dprint', 'advanced', 'axes', 'buttons', 'keyboard'][i]
-  ).map((s) => `prefs-tab-${s}`));
+  expect(walked).toEqual(
+    TAB_ORDER.map(
+      (_, i) =>
+        [
+          '3dview',
+          'editor',
+          '3dprint',
+          'advanced',
+          'axes',
+          'buttons',
+          'keyboard',
+        ][i]
+    ).map((s) => `prefs-tab-${s}`)
+  );
 
   // Wrapped back to the start.
   expect(await page.evaluate(() => document.activeElement.id)).toBe(
@@ -386,6 +397,7 @@ test('the Keyboard tab reaches the shortcuts editor', async ({ page }) => {
   test.setTimeout(240_000);
   await openPreferences(page);
 
+  await page.getByRole('tab', { name: 'Keyboard' }).click();
   await page.locator('#preferencesOpenShortcuts').click();
   await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
   // One dialog on screen at a time.
@@ -664,4 +676,91 @@ test('the input-device tabs describe the gamepad support that exists', async ({
   await expect(buttons).toBeVisible();
   await expect(buttons).not.toContainText(/no input-device engine/i);
   await expect(buttons).toContainText(/D-pad/i);
+});
+
+test('the shortcuts dialog’s headings step down one level at a time', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await gotoWithFile(page);
+  await page.locator('#helpMenuBtn').click();
+  await page
+    .locator('#helpMenuItems')
+    .getByText('Keyboard Shortcuts…', { exact: true })
+    .click();
+  await expect(
+    page.locator('#shortcutsModal .shortcut-item').first()
+  ).toBeVisible();
+  const levels = await page
+    .locator('#shortcutsModal')
+    .evaluate((m) =>
+      [...m.querySelectorAll('h1, h2, h3, h4, h5, h6')]
+        .filter((h) => h.checkVisibility())
+        .map((h) => Number(h.tagName[1]))
+    );
+  expect(levels[0], 'the dialog’s title').toBe(2);
+  for (let i = 1; i < levels.length; i++) {
+    expect(
+      levels[i] - levels[i - 1],
+      `heading ${i} skips a level`
+    ).toBeLessThanOrEqual(1);
+  }
+});
+
+test('the selected tab’s words pass the contrast rule in the light theme', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  const ratio = await page.evaluate(() => {
+    const tab = document.querySelector(
+      '#preferencesTablist [role="tab"][aria-selected="true"]'
+    );
+    const fg = getComputedStyle(tab).color;
+    let bg = 'rgba(0, 0, 0, 0)';
+    for (
+      let el = tab;
+      el && /rgba\(0, 0, 0, 0\)|transparent/.test(bg);
+      el = el.parentElement
+    ) {
+      bg = getComputedStyle(el).backgroundColor;
+    }
+    const lum = (c) => {
+      const [r, g, b] = c
+        .match(/[\d.]+/g)
+        .slice(0, 3)
+        .map((v) => {
+          const n = Number(v) / 255;
+          return n <= 0.03928 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
+        });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const [l1, l2] = [lum(fg), lum(bg)];
+    return {
+      fg,
+      bg,
+      ratio: (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05),
+    };
+  });
+  expect(ratio.ratio, `${ratio.fg} on ${ratio.bg}`).toBeGreaterThanOrEqual(4.5);
+});
+
+test('Preferences opens on the first tab unless a tab is asked for', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  await page.getByRole('tab', { name: 'Editor' }).click();
+  await page.locator('#preferencesModalDone').click();
+  await expect(page.locator('#preferencesModal')).toHaveClass(/hidden/);
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await expect(page.locator('#preferencesModal')).not.toHaveClass(/hidden/);
+  const selected = (await tabState(page))
+    .filter((t) => t.selected === 'true')
+    .map((t) => t.label);
+  expect(selected).toEqual(['3D View']);
 });

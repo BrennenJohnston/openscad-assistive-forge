@@ -329,7 +329,7 @@ export class AutoPreviewController {
    * Set the SCAD content (called when file is loaded)
    * @param {string} scadContent - OpenSCAD source code
    */
-  setScadContent(scadContent) {
+  setScadContent(scadContent, { keepCamera = false } = {}) {
     // New file/content loaded: cancel any existing work and bump version so in-flight results are ignored.
     this.scadVersion += 1;
     this.cancelPending();
@@ -338,8 +338,8 @@ export class AutoPreviewController {
     this.currentParamHash = null;
     this.pendingParameters = null;
     this.pendingParamHash = null;
-    // Reset initial preview flag - new file needs camera fit
-    this.initialPreviewDone = false;
+    // A new file needs the camera fitted; a reload of the same one keeps it.
+    if (!keepCamera) this.initialPreviewDone = false;
 
     // Reset auto-color override so previous project's colors don't leak
     if (
@@ -519,8 +519,12 @@ export class AutoPreviewController {
         return;
       }
 
+      // A model on screen is a preview, outdated now; "No preview" is for
+      // an empty viewport.
       this.setState(
-        this.previewCacheKey ? PREVIEW_STATE.STALE : PREVIEW_STATE.IDLE
+        this.previewCacheKey || this.previewManager?.mesh
+          ? PREVIEW_STATE.STALE
+          : PREVIEW_STATE.IDLE
       );
       return;
     }

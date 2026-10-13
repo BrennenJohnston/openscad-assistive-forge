@@ -4130,7 +4130,7 @@ details summary:focus,
       - the center zoom column
       while still being reasonably large for touch accessibility.
     */
-    --camera-btn-size: clamp(40px, 10vw, 44px);
+    --camera-btn-size: var(--size-touch-target);
   }
 
   /* Camera drawer D-pads - scale based on viewport width */

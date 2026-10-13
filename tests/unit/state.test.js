@@ -406,6 +406,32 @@ describe('State Management', () => {
       vi.useRealTimers()
     })
 
+    it('keeps no draft of a project only looked at', () => {
+      vi.useFakeTimers()
+      state.setState({
+        uploadedFile: { name: 'test.scad', content: 'cube([10,10,10]);' },
+        parameters: { width: 50 },
+        defaults: { width: 50 },
+        sourceEdited: false,
+      })
+      vi.advanceTimersByTime(2000)
+      expect(localStorage.getItem(state.localStorageKey)).toBeNull()
+      vi.useRealTimers()
+    })
+
+    it('keeps a draft once the code was edited, even with the parameters as they were', () => {
+      vi.useFakeTimers()
+      state.setState({
+        uploadedFile: { name: 'test.scad', content: 'cube([12,10,10]);' },
+        parameters: { width: 50 },
+        defaults: { width: 50 },
+        sourceEdited: true,
+      })
+      vi.advanceTimersByTime(2000)
+      expect(localStorage.getItem(state.localStorageKey)).not.toBeNull()
+      vi.useRealTimers()
+    })
+
     it('should save draft to localStorage after debounce', () => {
       vi.useFakeTimers()
       

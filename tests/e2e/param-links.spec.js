@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { answerDraftQuestion } from './helpers/draft-question.js'
+import { answerDraftQuestion, waitForDraft } from './helpers/draft-question.js'
 
 const payload = (params) =>
   `#v=1&params=${encodeURIComponent(JSON.stringify(params))}`
@@ -226,6 +226,9 @@ test.describe('Shared parameter links', () => {
     const shared = await page.evaluate(() => window.location.hash)
 
     // The edit left a draft; the link, not the draft, is what is opened here.
+    // The draft is written two seconds after the change; the link's reload
+    // asks about it only once it is there.
+    await waitForDraft(page)
     await openSimpleBox(page, shared, { draft: 'Discard draft' })
     await expect(page.locator('#param-width')).toHaveValue('88')
   })

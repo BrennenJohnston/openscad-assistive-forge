@@ -166,7 +166,11 @@ test.describe('The guard belongs to the project surface', () => {
     await openProject(page);
 
     await page.locator('#clearFileBtn').click();
-    await page.locator('.confirm-modal [data-action="confirm"]').click();
+    // The question comes only when a change would be lost.
+    const question = page.locator('.confirm-modal');
+    if (await question.waitFor({ state: 'visible', timeout: 2_000 }).then(() => true, () => false)) {
+      await question.locator('[data-action="confirm"]').click();
+    }
     await expect(page.locator('body')).toHaveAttribute(
       'data-app-surface',
       'welcome',
@@ -188,7 +192,11 @@ test.describe('The guard belongs to the project surface', () => {
     await openProject(page);
 
     await page.locator('#clearFileBtn').click();
-    await page.locator('.confirm-modal [data-action="confirm"]').click();
+    // The question comes only when a change would be lost.
+    const question = page.locator('.confirm-modal');
+    if (await question.waitFor({ state: 'visible', timeout: 2_000 }).then(() => true, () => false)) {
+      await question.locator('[data-action="confirm"]').click();
+    }
     await expect(page.locator('body')).toHaveAttribute(
       'data-app-surface',
       'welcome',

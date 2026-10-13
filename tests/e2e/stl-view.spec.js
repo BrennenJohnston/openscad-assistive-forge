@@ -85,10 +85,11 @@ test.describe('STL view-only mode', () => {
     })
 
     await page.locator('#clearFileBtn').click()
-    // Confirm dialog
-    await page
-      .locator('.confirm-modal button:has-text("Confirm")')
-      .click({ timeout: 5_000 })
+    // The question comes only when a change would be lost.
+    const question = page.locator('.confirm-modal')
+    if (await question.waitFor({ state: 'visible', timeout: 2_000 }).then(() => true, () => false)) {
+      await question.locator('button:has-text("Confirm")').click()
+    }
 
     await expect(page.locator('#welcomeScreen')).toBeVisible({
       timeout: 10_000,

@@ -146,3 +146,19 @@ test('the code editor’s search panel', async ({ page }) => {
     'a search field'
   );
 });
+
+test.describe('the phone camera drawer', () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+  test('its zoom column, View All included', async ({ page }) => {
+    await openBox(page);
+    const toggle = page.locator('#cameraDrawerToggle');
+    await expect(toggle).toBeVisible();
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true')
+      await toggle.click();
+    await expectAtLeast(
+      page,
+      '.camera-drawer-zoom-controls .camera-drawer-btn',
+      'a zoom button'
+    );
+  });
+});

@@ -315,3 +315,17 @@ test.describe('Error-Log chrome', () => {
     });
   });
 });
+
+test.describe('the OpenSCAD messages drawer', () => {
+  test('an echo keeps every argument, not just the first quoted one', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await loadProject(page, ECHO_FIXTURE);
+    await waitForPreviewReady(page);
+    await expect(page.locator('#echoMessages')).toContainText(
+      'ECHO: "fidelity-marker size=", 10',
+      { timeout: 30_000 }
+    );
+  });
+});

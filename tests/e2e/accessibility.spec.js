@@ -919,8 +919,10 @@ test.describe('Screen Reader Support', () => {
       const bar = page.locator(
         '.tutorial-minimized:not(.hidden) .tutorial-restore'
       );
-      if ((await bar.count()) === 0) return;
-      await bar.click();
+      // The card restores itself after some actions; a hidden pill is no pill.
+      if (!(await bar.isVisible().catch(() => false))) return;
+      // The pill can be on its way out when the card restores itself.
+      await bar.click({ timeout: 3000 }).catch(() => {});
       await expect(page.locator('.tutorial-panel')).toBeVisible({
         timeout: 10000,
       });
@@ -1470,11 +1472,15 @@ test.describe('Screen Reader Support', () => {
       await nextTo(page, 'See the preview update');
       await nextTo(page, 'Save a preset');
 
-      // This step is gated: open the Presets disclosure to enable Next.
+      // This step is gated on a saved preset, not on the section being open.
       await openDrawer(page);
       const presets = page.locator('#presetControls');
-      await presets.locator('summary').click();
-      // Toggle event can be delayed by animations/layout; give it a moment.
+      if (!(await presets.evaluate((d) => d.open))) {
+        await presets.locator('summary').click();
+      }
+      await page.locator('#addPresetBtn').click();
+      await page.locator('.preset-modal #presetName').fill('Tour preset');
+      await page.locator('.preset-modal button[type="submit"]').first().click();
       await expect(nextBtn).not.toBeDisabled({ timeout: 20000 });
 
       await nextTo(page, 'Preview Settings & Info');

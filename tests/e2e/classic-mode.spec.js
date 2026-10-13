@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
-import { reloadAnsweringDraft } from './helpers/draft-question.js';
+import { changeOneParameter, reloadAnsweringDraft } from './helpers/draft-question.js';
 
 // Classic mode (desktop-OpenSCAD-style layout).
 //
@@ -892,6 +892,8 @@ test.describe('Classic acceptance', () => {
     // unsaved-changes confirmation the #clearFileBtn handler shows). With
     // upstream's Quit slot dropped, the single remaining close action has
     // the clearer name.
+    // The confirmation comes only when a change would be lost.
+    await changeOneParameter(page);
     await page.locator('#fileMenuBtn').click();
     // Target the visible label: a menu item's accessible name also carries
     // its sr-only tooltip, so an exact name match cannot be used here.
@@ -3030,6 +3032,7 @@ test.describe('Return to Main Page control', () => {
     await expect(btn).toBeVisible();
 
     // The existing unsaved-changes confirm flow is intact, and Cancel stays.
+    await changeOneParameter(page);
     await btn.click();
     await page.waitForSelector('.confirm-modal', { state: 'visible' });
     await page.locator('.confirm-modal button:has-text("Confirm")').click();
@@ -3103,4 +3106,20 @@ test.describe('The Classic Console dock is never an empty frame', () => {
       .toBe(false);
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
   });
+});
+
+test('the Classic toolbar’s Export DXF says what a 3D model gets', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  await page.goto('/?example=simple-box');
+  await page.locator('.param-control').first().waitFor({ state: 'attached', timeout: 60_000 });
+  const mode = page.locator('#uiModeToggle');
+  if ((await mode.getAttribute('aria-checked')) !== 'true') await mode.click();
+  await page.locator('#classicModeToggle').click();
+  await page.locator('body[data-ui-mode="classic"]').waitFor({ timeout: 10_000 });
+  await expect(page.locator('#classicTbExportDxfBtn')).toHaveAccessibleDescription(
+    /approximate outline/
+  );
 });

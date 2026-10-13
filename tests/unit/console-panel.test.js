@@ -132,3 +132,20 @@ describe('the console log, as a screen reader meets it', () => {
     expect(announceImmediate).not.toHaveBeenCalled()
   })
 })
+
+describe('copying the console', () => {
+  it('says Copied once, to the eye and to a screen reader', async () => {
+    document.body.innerHTML = '<button id="console-copy-btn" aria-label="Copy console output to clipboard">📋</button>'
+    const writeText = vi.fn().mockResolvedValue()
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const p = panel()
+    p.addSystemLine('one line')
+    vi.mocked(announceImmediate).mockClear()
+    await p.copyToClipboard()
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(announceImmediate).mock.calls.map((c) => c[0])).toEqual(['Console copied'])
+    const btn = document.getElementById('console-copy-btn')
+    expect(btn.textContent.trim()).toBe('Copied')
+    document.body.innerHTML = ''
+  })
+})

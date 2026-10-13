@@ -183,6 +183,10 @@ test.describe('File > Export by pointer', () => {
     await expect(ask).toBeVisible({ timeout: 180_000 })
     await ask.getByRole('button', { name: 'Cancel' }).click()
     await expect(ask).toBeHidden()
+    // A question asked and declined is not an error: the log stays as it was.
+    await expect(
+      page.locator('#error-log-output .error-log-table tbody tr')
+    ).toHaveCount(0)
     expectNoPageErrors(page)
   })
 })

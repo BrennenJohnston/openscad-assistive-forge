@@ -8,6 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { changeOneParameter } from './helpers/draft-question.js'
 import { selectPreset } from './helpers/preset-helpers.js'
 import {
   announcementMark,
@@ -123,6 +124,8 @@ test('the full console takes focus, and Escape and Close go back to View Full Co
 
 test('going back to the Main Page lands on its heading', async ({ page }) => {
   await openExample(page)
+  // The question is asked only when a change would be lost.
+  await changeOneParameter(page)
   await press(page, '#clearFileBtn')
   const confirm = page.locator('.confirm-modal button[data-action="confirm"]')
   await expect(confirm).toBeVisible()

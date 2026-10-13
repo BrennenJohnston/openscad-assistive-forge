@@ -4,6 +4,20 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { formatPreviewStats } from '../../src/js/download.js';
+
+describe('formatPreviewStats', () => {
+  it('names the triangles when there is a count', () => {
+    expect(formatPreviewStats({ size: 2048, triangles: 1234 })).toBe(
+      '2.0 KB | 1,234 triangles'
+    );
+  });
+
+  it('leaves the triangles out for a format that has none', () => {
+    expect(formatPreviewStats({ size: 2048 })).toBe('2.0 KB');
+    expect(formatPreviewStats({ size: 2048, triangles: 0 })).toBe('2.0 KB');
+  });
+});
 import {
   OUTPUT_FORMATS,
   generateFilename,

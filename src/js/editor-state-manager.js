@@ -133,8 +133,12 @@ export class EditorStateManager {
     const previousSource = this.source;
     this.source = code;
 
-    if (markDirty && code !== previousSource) {
-      this.isDirty = true;
+    if (markDirty) {
+      // Dirty means different from the text last saved or loaded, so typing
+      // back to it is clean again.
+      this.isDirty = code !== this.cleanSource;
+    } else {
+      this.cleanSource = code;
     }
 
     this._notifySubscribers({ type: 'source', origin, previousSource });
@@ -179,6 +183,7 @@ export class EditorStateManager {
    * Mark as clean (saved)
    */
   markClean() {
+    this.cleanSource = this.source;
     this.isDirty = false;
     this._notifySubscribers({ type: 'dirty', isDirty: false });
   }

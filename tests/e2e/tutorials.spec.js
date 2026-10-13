@@ -7,45 +7,55 @@
  *
  * Scope: 6 tutorials × 2 viewports = 12 full runs.
  */
-import { test, expect } from '@playwright/test'
+import { test, expect } from '@playwright/test';
 import {
   announcementMark,
   announcementsSince,
   recordAnnouncements,
-} from './helpers/invariants.js'
+} from './helpers/invariants.js';
 
 // ── Viewports ────────────────────────────────────────────────────────────────
 
 const VIEWPORTS = [
   { name: 'desktop', width: 1280, height: 720 },
   { name: 'mobile', width: 375, height: 667 },
-]
+];
 
-const TUTORIAL_IDS = ['intro', 'makers', 'keyboard-only', 'low-vision', 'screen-reader']
+const TUTORIAL_IDS = [
+  'intro',
+  'makers',
+  'keyboard-only',
+  'low-vision',
+  'screen-reader',
+];
 
 // Timeout for spotlight target to resolve after step activation
-const SPOTLIGHT_TIMEOUT_MS = 1500
+const SPOTLIGHT_TIMEOUT_MS = 1500;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Set baseline localStorage flags to bypass first-visit modal */
 async function setBaseline(page) {
   await page.addInitScript(() => {
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-  })
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
 }
 
 /** Open a tutorial by programmatically calling startTutorial() in the page */
 async function startTutorial(page, tutorialId) {
   // Wait for the app to expose window.startTutorial (set during app init)
-  await page.waitForFunction(() => typeof window.startTutorial === 'function', null, {
-    timeout: 10000,
-  })
+  await page.waitForFunction(
+    () => typeof window.startTutorial === 'function',
+    null,
+    {
+      timeout: 10000,
+    }
+  );
   // Invoke and wait for the async startTutorial to complete
   await page.evaluate(async (id) => {
-    await window.startTutorial(id)
-  }, tutorialId)
+    await window.startTutorial(id);
+  }, tutorialId);
 }
 
 /** Wait for the tutorial overlay to appear */
@@ -53,7 +63,7 @@ async function waitForTutorialOverlay(page) {
   await page.waitForSelector('.tutorial-overlay, [class*="tutorial-panel"]', {
     state: 'visible',
     timeout: 5000,
-  })
+  });
 }
 
 /**
@@ -66,18 +76,22 @@ async function waitForTutorialOverlay(page) {
 async function waitForSpotlightSettled(page, timeoutMs = SPOTLIGHT_TIMEOUT_MS) {
   const appeared = await page
     .waitForFunction(
-      () => !!document.querySelector('.tutorial-spotlight, [class*="spotlight-cutout"]'),
-      null, { timeout: timeoutMs }
+      () =>
+        !!document.querySelector(
+          '.tutorial-spotlight, [class*="spotlight-cutout"]'
+        ),
+      null,
+      { timeout: timeoutMs }
     )
     .then(() => true)
-    .catch(() => false)
-  if (!appeared) return // step has no spotlight target
+    .catch(() => false);
+  if (!appeared) return; // step has no spotlight target
 
   // Wait for the spotlight rect to stop moving (position animation settled)
-  let prev = null
-  const deadline = Date.now() + timeoutMs
+  let prev = null;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const rect = await getSpotlightRect(page)
+    const rect = await getSpotlightRect(page);
     if (
       rect &&
       prev &&
@@ -86,51 +100,59 @@ async function waitForSpotlightSettled(page, timeoutMs = SPOTLIGHT_TIMEOUT_MS) {
       rect.width === prev.width &&
       rect.height === prev.height
     ) {
-      return
+      return;
     }
-    prev = rect
-    await page.waitForTimeout(100)
+    prev = rect;
+    await page.waitForTimeout(100);
   }
 }
 
 /** Get the spotlight cutout bounding rect (if any) */
 async function getSpotlightRect(page) {
   return page.evaluate(() => {
-    const el = document.querySelector('.tutorial-spotlight, [class*="spotlight-cutout"]')
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { x: r.x, y: r.y, width: r.width, height: r.height }
-  })
+    const el = document.querySelector(
+      '.tutorial-spotlight, [class*="spotlight-cutout"]'
+    );
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
 }
 
 /** Get the tutorial panel bounding rect */
 async function getTutorialPanelRect(page) {
   return page.evaluate(() => {
-    const el = document.querySelector('.tutorial-panel, [class*="tutorial-content"]')
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { x: r.x, y: r.y, width: r.width, height: r.height }
-  })
+    const el = document.querySelector(
+      '.tutorial-panel, [class*="tutorial-content"]'
+    );
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
 }
 
 /** Navigate to next tutorial step (skips if button is disabled) */
 async function nextStep(page) {
-  const nextBtn = page.locator(
-    'button:has-text("Next"), button[class*="tutorial-next"], button[aria-label*="Next"]'
-  ).first()
-  const isEnabled = await nextBtn.isEnabled().catch(() => false)
-  if (!isEnabled) return
-  await nextBtn.click()
-  await page.waitForTimeout(300) // allow animation
+  const nextBtn = page
+    .locator(
+      'button:has-text("Next"), button[class*="tutorial-next"], button[aria-label*="Next"]'
+    )
+    .first();
+  const isEnabled = await nextBtn.isEnabled().catch(() => false);
+  if (!isEnabled) return;
+  await nextBtn.click();
+  await page.waitForTimeout(300); // allow animation
 }
 
 /** Close the tutorial */
 async function closeTutorial(page) {
-  const closeBtn = page.locator(
-    'button:has-text("Exit"), button[aria-label*="Exit tutorial"], button[aria-label*="Close tutorial"]'
-  ).first()
+  const closeBtn = page
+    .locator(
+      'button:has-text("Exit"), button[aria-label*="Exit tutorial"], button[aria-label*="Close tutorial"]'
+    )
+    .first();
   if (await closeBtn.isVisible()) {
-    await closeBtn.click()
+    await closeBtn.click();
   }
 }
 
@@ -141,45 +163,52 @@ async function closeTutorial(page) {
  * The panel should be adjacent to (not covering) the highlighted element.
  */
 async function assertNoSpotlightPanelOverlap(page, stepLabel) {
-  const spotlight = await getSpotlightRect(page)
-  const panel = await getTutorialPanelRect(page)
-  if (!spotlight || !panel) return // no spotlight on this step
+  const spotlight = await getSpotlightRect(page);
+  const panel = await getTutorialPanelRect(page);
+  if (!spotlight || !panel) return; // no spotlight on this step
 
-  const spotlightRight = spotlight.x + spotlight.width
-  const spotlightBottom = spotlight.y + spotlight.height
-  const panelRight = panel.x + panel.width
-  const panelBottom = panel.y + panel.height
+  const spotlightRight = spotlight.x + spotlight.width;
+  const spotlightBottom = spotlight.y + spotlight.height;
+  const panelRight = panel.x + panel.width;
+  const panelBottom = panel.y + panel.height;
 
-  const overlapsX = panel.x < spotlightRight && panelRight > spotlight.x
-  const overlapsY = panel.y < spotlightBottom && panelBottom > spotlight.y
-  const overlaps = overlapsX && overlapsY
+  const overlapsX = panel.x < spotlightRight && panelRight > spotlight.x;
+  const overlapsY = panel.y < spotlightBottom && panelBottom > spotlight.y;
+  const overlaps = overlapsX && overlapsY;
 
-  expect(overlaps, `[${stepLabel}] Tutorial panel overlaps spotlight cutout`).toBe(false)
+  expect(
+    overlaps,
+    `[${stepLabel}] Tutorial panel overlaps spotlight cutout`
+  ).toBe(false);
 }
 
 /** Assert spotlight fully encompasses its target element */
 async function assertSpotlightCoversTarget(page, stepLabel) {
   const result = await page.evaluate(() => {
-    const spotEl = document.querySelector('.tutorial-spotlight, [class*="spotlight"]')
-    const targetAttr = document.querySelector('[data-tutorial-highlighted="true"], .tutorial-target')
-    if (!spotEl || !targetAttr) return null
+    const spotEl = document.querySelector(
+      '.tutorial-spotlight, [class*="spotlight"]'
+    );
+    const targetAttr = document.querySelector(
+      '[data-tutorial-highlighted="true"], .tutorial-target'
+    );
+    if (!spotEl || !targetAttr) return null;
 
-    const sr = spotEl.getBoundingClientRect()
-    const tr = targetAttr.getBoundingClientRect()
+    const sr = spotEl.getBoundingClientRect();
+    const tr = targetAttr.getBoundingClientRect();
     return {
       spotlightCoversTarget:
         sr.left <= tr.left &&
         sr.right >= tr.right &&
         sr.top <= tr.top &&
         sr.bottom >= tr.bottom,
-    }
-  })
+    };
+  });
 
   if (result !== null) {
     expect(
       result.spotlightCoversTarget,
       `[${stepLabel}] Spotlight does not fully cover target element`
-    ).toBe(true)
+    ).toBe(true);
   }
 }
 
@@ -187,182 +216,209 @@ async function assertSpotlightCoversTarget(page, stepLabel) {
 
 for (const vp of VIEWPORTS) {
   test.describe(`Tutorials — ${vp.name} (${vp.width}×${vp.height})`, () => {
-    test.use({ viewport: { width: vp.width, height: vp.height } })
+    test.use({ viewport: { width: vp.width, height: vp.height } });
 
     for (const tutorialId of TUTORIAL_IDS) {
-      test(`${tutorialId}: opens, spotlights resolve, panel doesn't overlap`, async ({ page }) => {
-        await setBaseline(page)
-        await page.goto('/')
+      test(`${tutorialId}: opens, spotlights resolve, panel doesn't overlap`, async ({
+        page,
+      }) => {
+        await setBaseline(page);
+        await page.goto('/');
 
         // Start tutorial
-        await startTutorial(page, tutorialId)
-        await waitForTutorialOverlay(page)
+        await startTutorial(page, tutorialId);
+        await waitForTutorialOverlay(page);
 
         // Step through up to 5 steps and validate spotlight + panel
         for (let i = 0; i < 5; i++) {
-          const label = `${tutorialId}[${i}]`
+          const label = `${tutorialId}[${i}]`;
 
           // Wait for spotlight to resolve and settle (up to SPOTLIGHT_TIMEOUT_MS)
-          await waitForSpotlightSettled(page)
+          await waitForSpotlightSettled(page);
 
-          await assertNoSpotlightPanelOverlap(page, label)
+          await assertNoSpotlightPanelOverlap(page, label);
 
           // Check tutorial panel is visible
-          const panel = await getTutorialPanelRect(page)
+          const panel = await getTutorialPanelRect(page);
           if (panel) {
-            expect(panel.width, `[${label}] Panel has zero width`).toBeGreaterThan(0)
-            expect(panel.height, `[${label}] Panel has zero height`).toBeGreaterThan(0)
+            expect(
+              panel.width,
+              `[${label}] Panel has zero width`
+            ).toBeGreaterThan(0);
+            expect(
+              panel.height,
+              `[${label}] Panel has zero height`
+            ).toBeGreaterThan(0);
           }
 
           // Try to advance; stop if no Next button or if button is disabled
           // (disabled means step has a completion requirement the test can't fulfill)
-          const nextBtn = page.locator(
-            'button:has-text("Next"), button[class*="tutorial-next"]'
-          ).first()
-          const isNextVisible = await nextBtn.isVisible().catch(() => false)
-          if (!isNextVisible) break
-          const isNextEnabled = await nextBtn.isEnabled().catch(() => false)
-          if (!isNextEnabled) break
-          await nextBtn.click()
-          await page.waitForTimeout(300)
+          const nextBtn = page
+            .locator('button:has-text("Next"), button[class*="tutorial-next"]')
+            .first();
+          const isNextVisible = await nextBtn.isVisible().catch(() => false);
+          if (!isNextVisible) break;
+          const isNextEnabled = await nextBtn.isEnabled().catch(() => false);
+          if (!isNextEnabled) break;
+          await nextBtn.click();
+          await page.waitForTimeout(300);
         }
 
-        await closeTutorial(page)
-      })
+        await closeTutorial(page);
+      });
     }
 
-    test('intro: failure recovery dialog appears when target removed', async ({ page }) => {
-      await setBaseline(page)
-      await page.goto('/')
-      await startTutorial(page, 'intro')
-      await waitForTutorialOverlay(page)
+    test('intro: failure recovery dialog appears when target removed', async ({
+      page,
+    }) => {
+      await setBaseline(page);
+      await page.goto('/');
+      await startTutorial(page, 'intro');
+      await waitForTutorialOverlay(page);
 
       // Advance to a step with a DOM target
-      await nextStep(page)
-      await nextStep(page)
+      await nextStep(page);
+      await nextStep(page);
 
       // Remove a commonly targeted element to trigger failure recovery
       await page.evaluate(() => {
-        const target = document.querySelector('[data-tutorial-target]')
-        if (target) target.remove()
-      })
+        const target = document.querySelector('[data-tutorial-target]');
+        if (target) target.remove();
+      });
 
       // Trigger retry by advancing
-      await nextStep(page)
-      await page.waitForTimeout(SPOTLIGHT_TIMEOUT_MS * 4) // allow retries
+      await nextStep(page);
+      await page.waitForTimeout(SPOTLIGHT_TIMEOUT_MS * 4); // allow retries
 
       // The tutorial should either show a recovery dialog or auto-advance
       const recoveryDialog = page.locator(
         '.tutorial-error-modal, .tutorial-recovery, [class*="tutorial-help"], [data-testid="tutorial-error-dialog"]'
-      )
-      const recovered = await recoveryDialog.isVisible().catch(() => false)
+      );
+      const recovered = await recoveryDialog.isVisible().catch(() => false);
       // Either recovery dialog is shown OR tutorial advanced gracefully
       // (both are acceptable outcomes)
-      const panelStillVisible = await page.locator('.tutorial-overlay').isVisible().catch(() => false)
-      expect(recovered || panelStillVisible, 'Tutorial should recover or advance gracefully').toBe(true)
+      const panelStillVisible = await page
+        .locator('.tutorial-overlay')
+        .isVisible()
+        .catch(() => false);
+      expect(
+        recovered || panelStillVisible,
+        'Tutorial should recover or advance gracefully'
+      ).toBe(true);
 
-      await closeTutorial(page)
-    })
+      await closeTutorial(page);
+    });
 
-    test('intro: "Moving to next step" is announced to screen reader', async ({ page }) => {
-      await setBaseline(page)
-      await page.goto('/')
+    test('intro: "Moving to next step" is announced to screen reader', async ({
+      page,
+    }) => {
+      await setBaseline(page);
+      await page.goto('/');
 
       // Listen for aria-live announcements
-      const announcements = []
+      const announcements = [];
       page.on('console', (msg) => {
         if (msg.type() === 'log' && msg.text().includes('Moving to next')) {
-          announcements.push(msg.text())
+          announcements.push(msg.text());
         }
-      })
+      });
 
-      await startTutorial(page, 'intro')
-      await waitForTutorialOverlay(page)
-      await nextStep(page)
+      await startTutorial(page, 'intro');
+      await waitForTutorialOverlay(page);
+      await nextStep(page);
 
       // Check live region text
       const liveText = await page.evaluate(() => {
-        const live = document.querySelector('[aria-live][class*="tutorial"], [role="status"]')
-        return live?.textContent?.trim() || ''
-      })
+        const live = document.querySelector(
+          '[aria-live][class*="tutorial"], [role="status"]'
+        );
+        return live?.textContent?.trim() || '';
+      });
 
       // Either live region has content OR console announcement was fired
       expect(
         liveText.length > 0 || announcements.length > 0,
         'Screen reader announcement should fire on step advance'
-      ).toBe(true)
+      ).toBe(true);
 
-      await closeTutorial(page)
-    })
+      await closeTutorial(page);
+    });
 
     test('intro step 14 and screen-reader step 5: both spotlight the Help button', async ({
       page,
     }) => {
-      await setBaseline(page)
-      await page.goto('/')
+      await setBaseline(page);
+      await page.goto('/');
 
       // Verify the help button exists in the DOM with correct tutorial targeting attributes.
       // The button is inside the workflow progress bar which is hidden on the welcome screen,
       // so we check attachment (presence in DOM) rather than visibility.
-      const helpBtn = page.locator(
-        '#featuresGuideBtn, [data-tutorial-target="features-guide"]'
-      ).first()
-      await expect(helpBtn).toBeAttached()
-    })
-  })
+      const helpBtn = page
+        .locator('#featuresGuideBtn, [data-tutorial-target="features-guide"]')
+        .first();
+      await expect(helpBtn).toBeAttached();
+    });
+  });
 }
 
 // ── No-retry infinite loop guard ──────────────────────────────────────────────
 
-test('tutorial: no infinite retry loop when target is missing', async ({ page }) => {
+test('tutorial: no infinite retry loop when target is missing', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-  })
-  await page.goto('/')
-  await startTutorial(page, 'intro')
-  await waitForTutorialOverlay(page)
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  await page.goto('/');
+  await startTutorial(page, 'intro');
+  await waitForTutorialOverlay(page);
 
   // Advance past the intro step (step 0 has no target) to a step that has
   // a spotlight target, so removal triggers the failure-recovery path.
-  await nextStep(page) // step 0 → 1
-  await page.waitForTimeout(500)
-  await nextStep(page) // step 1 → 2 (step 2 has highlightSelector)
-  await page.waitForTimeout(500)
+  await nextStep(page); // step 0 → 1
+  await page.waitForTimeout(500);
+  await nextStep(page); // step 1 → 2 (step 2 has highlightSelector)
+  await page.waitForTimeout(500);
 
   // Remove ALL tutorial targets to force maximum consecutive failures
   await page.evaluate(() => {
-    document.querySelectorAll('[data-tutorial-target]').forEach((el) => el.remove())
-  })
+    document
+      .querySelectorAll('[data-tutorial-target]')
+      .forEach((el) => el.remove());
+  });
 
   // Wait longer than the max retry window (MAX_CONSECUTIVE_FAILURES × retryDelay) + buffer
-  await page.waitForTimeout(10_000)
+  await page.waitForTimeout(10_000);
 
   // The tutorial should have either exited or shown a recovery dialog.
   // It should NOT still be cycling retries indefinitely.
-  const panelExists = await page.locator('.tutorial-overlay').isVisible().catch(() => false)
+  const panelExists = await page
+    .locator('.tutorial-overlay')
+    .isVisible()
+    .catch(() => false);
   const recoveryVisible = await page
     .locator('.tutorial-error-modal, [data-testid="tutorial-error-dialog"]')
     .isVisible()
-    .catch(() => false)
+    .catch(() => false);
 
   // Acceptable outcomes: tutorial exited (no panel) OR recovery dialog is shown
   expect(
     !panelExists || recoveryVisible,
     'Tutorial should exit or show recovery dialog after max failures — not loop indefinitely'
-  ).toBe(true)
-})
+  ).toBe(true);
+});
 
 // ── Welcome page tour ────────────────────────────────────────────────────────
 
 test.describe('Welcome page tour', () => {
-  const REGISTRY_KEY = 'openscad-forge-tutorial-state'
+  const REGISTRY_KEY = 'openscad-forge-tutorial-state';
 
   const readRegistry = (page) =>
     page.evaluate((key) => {
-      const raw = localStorage.getItem(key)
-      return raw ? JSON.parse(raw) : null
-    }, REGISTRY_KEY)
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    }, REGISTRY_KEY);
 
   /** Click Next/Finish until the tour closes (welcome steps are all passive). */
   async function walkToFinish(page, maxClicks = 20) {
@@ -370,186 +426,238 @@ test.describe('Welcome page tour', () => {
       const overlayGone = await page
         .locator('.tutorial-panel')
         .isHidden()
-        .catch(() => true)
-      if (overlayGone) return
-      await page.locator('#tutorialNextBtn').click()
-      await page.waitForTimeout(300)
+        .catch(() => true);
+      if (overlayGone) return;
+      await page.locator('#tutorialNextBtn').click();
+      await page.waitForTimeout(300);
     }
   }
 
   test('Forge: end to end from the card, recording the family and chaining to Beginners once', async ({
     page,
   }) => {
-    await setBaseline(page)
-    await page.goto('/')
-    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    await setBaseline(page);
+    await page.goto('/');
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 30_000,
+    });
 
-    await page.locator('#startWelcomeTourBtn').click()
-    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator('#tutorial-step-title')).toHaveText('Welcome to the Forge!')
+    await page.locator('#startWelcomeTourBtn').click();
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Welcome to the Forge!'
+    );
 
     // opened is written at the commitment point, before any step outcome
     await expect
-      .poll(async () => (await readRegistry(page))?.welcome?.opened, { timeout: 10_000 })
-      .toEqual(expect.any(Number))
+      .poll(async () => (await readRegistry(page))?.welcome?.opened, {
+        timeout: 10_000,
+      })
+      .toEqual(expect.any(Number));
 
-    await walkToFinish(page)
-    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    await walkToFinish(page);
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, {
+      timeout: 10_000,
+    });
 
-    const registry = await readRegistry(page)
-    expect(registry.welcome.completed).toEqual(expect.any(Number))
+    const registry = await readRegistry(page);
+    expect(registry.welcome.completed).toEqual(expect.any(Number));
     // The family rule: nothing records under the variant id
-    expect(registry['welcome-classic']).toBeUndefined()
+    expect(registry['welcome-classic']).toBeUndefined();
 
     // The chain: exactly one spotlight, on the Beginners card
-    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(1)
+    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(1);
     await expect(
       page.locator('.role-path-card.welcome-spotlight .role-path-title')
-    ).toHaveText('Beginners Start Here')
-  })
+    ).toHaveText('Beginners Start Here');
+  });
 
   test('Classic: the welcome-classic variant walks the chrome-free welcome end to end', async ({
     page,
   }) => {
-    await setBaseline(page)
+    await setBaseline(page);
     await page.addInitScript(() => {
       localStorage.setItem(
         'openscad-forge-ui-mode',
         JSON.stringify({ mode: 'classic', lastCustomMode: 'standard' })
-      )
-    })
-    await page.goto('/')
-    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
-    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome')
+      );
+    });
+    await page.goto('/');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-app-surface',
+      'welcome'
+    );
 
-    await page.locator('#startWelcomeTourBtn').click()
-    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await page.locator('#startWelcomeTourBtn').click();
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 10_000,
+    });
     // The modeVariants hop: the Classic variant runs, not the Forge tour
-    await expect(page.locator('#tutorial-step-title')).toHaveText('Welcome to Classic!')
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Welcome to Classic!'
+    );
 
-    await walkToFinish(page)
-    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    await walkToFinish(page);
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, {
+      timeout: 10_000,
+    });
 
     // The family rule: the variant records as the welcome family
-    const registry = await readRegistry(page)
-    expect(registry.welcome.opened).toEqual(expect.any(Number))
-    expect(registry.welcome.completed).toEqual(expect.any(Number))
-    expect(registry['welcome-classic']).toBeUndefined()
-  })
+    const registry = await readRegistry(page);
+    expect(registry.welcome.opened).toEqual(expect.any(Number));
+    expect(registry.welcome.completed).toEqual(expect.any(Number));
+    expect(registry['welcome-classic']).toBeUndefined();
+  });
 
-  test('chaining declines when the intro family already has a record', async ({ page }) => {
-    await setBaseline(page)
+  test('chaining declines when the intro family already has a record', async ({
+    page,
+  }) => {
+    await setBaseline(page);
     await page.addInitScript((key) => {
-      localStorage.setItem(key, JSON.stringify({ intro: { opened: 1 } }))
-    }, REGISTRY_KEY)
-    await page.goto('/')
-    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+      localStorage.setItem(key, JSON.stringify({ intro: { opened: 1 } }));
+    }, REGISTRY_KEY);
+    await page.goto('/');
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Precedence: the welcome card still wears the tip (its family is clear)
     await expect(
       page.locator('.role-path-card.welcome-spotlight .role-path-title')
-    ).toHaveText('Main Page Tour')
+    ).toHaveText('Main Page Tour');
 
-    await page.locator('#startWelcomeTourBtn').click()
-    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
-    await walkToFinish(page)
-    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    await page.locator('#startWelcomeTourBtn').click();
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 10_000,
+    });
+    await walkToFinish(page);
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, {
+      timeout: 10_000,
+    });
 
     // No chain: intro already has a record, so no card is decorated
-    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(0)
-    await expect(page.locator('.role-path-card.welcome-spotlight')).toHaveCount(0)
-  })
+    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(0);
+    await expect(page.locator('.role-path-card.welcome-spotlight')).toHaveCount(
+      0
+    );
+  });
 
   test('opening a project through the spotlight cutout closes the tour without completing it', async ({
     page,
   }) => {
-    test.setTimeout(240_000)
-    await setBaseline(page)
-    await page.goto('/')
-    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    test.setTimeout(240_000);
+    await setBaseline(page);
+    await page.goto('/');
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.waitForSelector('body[data-wasm-ready="true"]', {
       state: 'attached',
       timeout: 180_000,
-    })
+    });
 
     // Watch the live regions: the close announcement is this case's subject.
     await page.evaluate(() => {
-      window.__said = []
+      window.__said = [];
       for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
-        const el = document.getElementById(id)
-        if (!el || el.__watched) continue
-        el.__watched = true
+        const el = document.getElementById(id);
+        if (!el || el.__watched) continue;
+        el.__watched = true;
         new MutationObserver(() => {
-          const text = el.textContent.trim()
-          if (text) window.__said.push(text)
-        }).observe(el, { childList: true, characterData: true, subtree: true })
+          const text = el.textContent.trim();
+          if (text) window.__said.push(text);
+        }).observe(el, { childList: true, characterData: true, subtree: true });
       }
-    })
+    });
 
-    await page.locator('#startWelcomeTourBtn').click()
-    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await page.locator('#startWelcomeTourBtn').click();
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Walk to the Open-or-start step, whose cutout exposes Start New Project.
     // By title, not by a click count, so a change in the tour's length cannot
     // make the walk overshoot.
     for (let i = 0; i < 12; i++) {
-      const title = await page.locator('#tutorial-step-title').textContent()
-      if (title === 'Open or start a project') break
-      await page.locator('#tutorialNextBtn').click()
-      await page.waitForTimeout(300)
+      const title = await page.locator('#tutorial-step-title').textContent();
+      if (title === 'Open or start a project') break;
+      await page.locator('#tutorialNextBtn').click();
+      await page.waitForTimeout(300);
     }
-    await expect(page.locator('#tutorial-step-title')).toHaveText('Open or start a project')
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Open or start a project'
+    );
 
-    await page.locator('#startNewProjectBtn').click()
-    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'project', {
-      timeout: 60_000,
-    })
+    await page.locator('#startNewProjectBtn').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-app-surface',
+      'project',
+      {
+        timeout: 60_000,
+      }
+    );
 
     // The user's action wins: the tour is gone, opened recorded, completed not
-    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
-    const registry = await readRegistry(page)
-    expect(registry.welcome.opened).toEqual(expect.any(Number))
-    expect(registry.welcome.completed).toBeUndefined()
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, {
+      timeout: 10_000,
+    });
+    const registry = await readRegistry(page);
+    expect(registry.welcome.opened).toEqual(expect.any(Number));
+    expect(registry.welcome.completed).toBeUndefined();
 
     // The close announcement is pinned word for word.
-    const announcements = await page.evaluate(() => window.__said)
+    const announcements = await page.evaluate(() => window.__said);
     expect(announcements.join(' | ')).toContain(
       'Main Page Tour closed because a project opened. Progress saved.'
-    )
-  })
+    );
+  });
 
   test('the closing step names the Main Page button as the way back', async ({
     page,
   }) => {
-    await setBaseline(page)
-    await page.goto('/')
-    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
-    await page.locator('#startWelcomeTourBtn').click()
-    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await setBaseline(page);
+    await page.goto('/');
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.locator('#startWelcomeTourBtn').click();
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 10_000,
+    });
 
     for (let i = 0; i < 16; i++) {
-      const title = await page.locator('#tutorial-step-title').textContent()
-      if (title === 'Your next step') break
-      await page.locator('#tutorialNextBtn').click()
-      await page.waitForTimeout(250)
+      const title = await page.locator('#tutorial-step-title').textContent();
+      if (title === 'Your next step') break;
+      await page.locator('#tutorialNextBtn').click();
+      await page.waitForTimeout(250);
     }
-    await expect(page.locator('#tutorial-step-title')).toHaveText('Your next step')
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Your next step'
+    );
     await expect(page.locator('.tutorial-body')).toContainText(
       'The Main Page button in the top left corner brings you back here from a project.'
-    )
-  })
+    );
+  });
 
-  test('no tour can exist while the first-visit modal blocks', async ({ page }) => {
+  test('no tour can exist while the first-visit modal blocks', async ({
+    page,
+  }) => {
     // Deliberately no baseline stamp: the modal must be up
-    await page.goto('/')
+    await page.goto('/');
     await page
       .locator('#first-visit-modal:not(.hidden)')
-      .waitFor({ state: 'visible', timeout: 10_000 })
+      .waitFor({ state: 'visible', timeout: 10_000 });
 
-    await expect(page.locator('#app')).toHaveAttribute('inert', '')
-    await expect(page.locator('.tutorial-overlay')).toHaveCount(0)
-  })
-})
+    await expect(page.locator('#app')).toHaveAttribute('inert', '');
+    await expect(page.locator('.tutorial-overlay')).toHaveCount(0);
+  });
+});
 
 /**
  * The box tour ends by naming the way out of a project: the button that
@@ -557,200 +665,464 @@ test.describe('Welcome page tour', () => {
  * Pressing it there is a first-class path, not an accident.
  */
 test.describe('The box tour ends by naming the way back', () => {
-  test.use({ viewport: { width: 1280, height: 800 } })
+  test.use({ viewport: { width: 1280, height: 800 } });
 
   async function startBoxTourAtTheEnd(page) {
-    await setBaseline(page)
-    await page.goto('/')
-    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
-    await page.locator('.btn-role-try[data-tutorial="intro"]').click()
-    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'project', {
-      timeout: 180_000,
-    })
-    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 60_000 })
+    await setBaseline(page);
+    await page.goto('/');
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.locator('.btn-role-try[data-tutorial="intro"]').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-app-surface',
+      'project',
+      {
+        timeout: 180_000,
+      }
+    );
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 60_000,
+    });
     // End clears every completion gate between here and the last step.
-    await page.keyboard.press('End')
+    await page.keyboard.press('End');
     await expect(page.locator('#tutorial-step-title')).toHaveText(
       'Back to the Main Page',
       { timeout: 15_000 }
-    )
+    );
   }
 
   test('the last step spotlights the Main Page button', async ({ page }) => {
-    test.setTimeout(240_000)
-    await startBoxTourAtTheEnd(page)
+    test.setTimeout(240_000);
+    await startBoxTourAtTheEnd(page);
 
-    await expect(page.locator('.tutorial-progress')).toContainText('Step 18 of 18')
-    await expect(page.locator('#clearFileBtn')).toHaveClass(/tutorial-target-highlight/)
+    // The last of the steps this layout shows, whatever their number.
+    await expect(page.locator('.tutorial-progress')).toContainText(
+      /Step (\d+) of \1\b/
+    );
+    await expect(page.locator('#clearFileBtn')).toHaveClass(
+      /tutorial-target-highlight/
+    );
     await expect(page.locator('.tutorial-body')).toContainText(
       "Use it instead of the browser's Back button"
-    )
-  })
+    );
+  });
 
   test('pressing the spotlighted button ends the tour with its surface', async ({
     page,
   }) => {
-    test.setTimeout(240_000)
-    await startBoxTourAtTheEnd(page)
+    test.setTimeout(240_000);
+    await startBoxTourAtTheEnd(page);
 
     await page.evaluate(() => {
-      window.__said = []
+      window.__said = [];
       for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
-        const el = document.getElementById(id)
-        if (!el || el.__watched) continue
-        el.__watched = true
+        const el = document.getElementById(id);
+        if (!el || el.__watched) continue;
+        el.__watched = true;
         new MutationObserver(() => {
-          const text = el.textContent.trim()
-          if (text) window.__said.push(text)
-        }).observe(el, { childList: true, characterData: true, subtree: true })
+          const text = el.textContent.trim();
+          if (text) window.__said.push(text);
+        }).observe(el, { childList: true, characterData: true, subtree: true });
       }
-    })
+    });
 
     // The curiosity path: the cutout stays clickable, so press what the step
     // points at. The tour stands down for the confirm dialog.
-    await page.locator('#clearFileBtn').click()
-    await expect(page.locator('.confirm-modal')).toBeVisible({ timeout: 10_000 })
-    await page.locator('.confirm-modal [data-action="confirm"]').click()
+    await page.locator('#clearFileBtn').click();
+    // The question comes only when a change would be lost.
+    const question = page.locator('.confirm-modal');
+    if (
+      await question.waitFor({ state: 'visible', timeout: 2_000 }).then(
+        () => true,
+        () => false
+      )
+    ) {
+      await question.locator('[data-action="confirm"]').click();
+    }
 
-    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome', {
-      timeout: 30_000,
-    })
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-app-surface',
+      'welcome',
+      {
+        timeout: 30_000,
+      }
+    );
     // The tour closes with its surface, the same rule the welcome tours obey,
     // mirrored for the surface a box tour lives on.
-    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
-    const announcements = await page.evaluate(() => window.__said)
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, {
+      timeout: 10_000,
+    });
+    const announcements = await page.evaluate(() => window.__said);
     expect(announcements.join(' | ')).toContain(
       'closed because you went back to the Main Page'
-    )
-  })
-})
+    );
+  });
+});
 
 // The walk above stops at the first step that waits for an action, so it
 // cannot tell a step that never completes from one it did not try. This one
 // performs each action the step's hint names and requires Next to unlock.
+async function openGettingStarted(page) {
+  await setBaseline(page);
+  await page.goto('/');
+  await page.locator('[data-example="simple-box"]').click();
+  await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 60_000 });
+  await waitForTutorialOverlay(page);
+}
+
+async function stepTo(page, wanted, actions) {
+  const title = page.locator('#tutorial-step-title');
+  const next = page.locator('#tutorialNextBtn');
+  for (let i = 0; i < 30; i += 1) {
+    const name = (await title.textContent()).trim();
+    if (name === wanted) return;
+    if (!(await next.isEnabled())) {
+      expect(
+        actions[name],
+        `no action known for the step "${name}"`
+      ).toBeTruthy();
+      await actions[name](page);
+      await expect
+        .poll(
+          async () =>
+            (await title.textContent()).trim() !== name ||
+            (await next.isEnabled()),
+          { timeout: 30_000 }
+        )
+        .toBe(true);
+      if ((await title.textContent()).trim() !== name) continue;
+    }
+    await next.click();
+    await expect
+      .poll(async () => (await title.textContent()).trim())
+      .not.toBe(name);
+  }
+  throw new Error(`never reached "${wanted}"`);
+}
+
 test.describe('Getting Started, action by action', () => {
-  test.use({ viewport: { width: 1280, height: 720 } })
+  test.use({ viewport: { width: 1280, height: 720 } });
 
   const ACTIONS = {
     'Expand a parameter group': (page) =>
-      page.locator('details.param-group > summary').filter({ hasText: 'Dimensions' }).first().click(),
+      page
+        .locator('details.param-group > summary')
+        .filter({ hasText: 'Dimensions' })
+        .first()
+        .click(),
     'Adjust a parameter': async (page) => {
-      const box = page.locator('#param-width-spinbox')
-      await box.fill('60')
-      await box.press('Tab')
+      const box = page.locator('#param-width-spinbox');
+      await box.fill('60');
+      await box.press('Tab');
     },
-    'Save a preset': (page) => page.locator('#presetControls details > summary').first().click(),
-    'Generate and download your file': (page) => page.locator('#primaryActionBtn').click(),
+    'Save a preset': async (page) => {
+      // Opening the Presets section is not saving a preset: Next stays locked.
+      const presets = page.locator('#presetControls');
+      if (!(await presets.evaluate((d) => d.open)))
+        await presets.locator('summary').first().click();
+      await page.waitForTimeout(500);
+      await expect(page.locator('#tutorialNextBtn')).toBeDisabled();
+      await page.locator('#addPresetBtn').click();
+      await page.locator('.preset-modal #presetName').fill('Tour preset');
+      await page.locator('.preset-modal button[type="submit"]').first().click();
+    },
+    'Generate and download your file': (page) =>
+      page.locator('#primaryActionBtn').click(),
     'Help & Examples': (page) => page.locator('#featuresGuideBtn').click(),
     'Features Guide': (page) => page.keyboard.press('Escape'),
-  }
+  };
 
-  test('every step that waits for an action is completed by that action', async ({ page }) => {
-    test.setTimeout(240_000)
-    await setBaseline(page)
-    await page.goto('/')
+  test('every step that waits for an action is completed by that action', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await setBaseline(page);
+    await page.goto('/');
     // The way a person starts it: the simple box's card on the Main Page
     // opens the box and starts the tour on it.
-    await page.locator('[data-example="simple-box"]').click()
-    await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 60_000 })
-    await waitForTutorialOverlay(page)
+    await page.locator('[data-example="simple-box"]').click();
+    await expect(page.locator('#mainInterface')).toBeVisible({
+      timeout: 60_000,
+    });
+    await waitForTutorialOverlay(page);
 
-    const title = page.locator('#tutorial-step-title')
-    const next = page.locator('#tutorialNextBtn')
+    const title = page.locator('#tutorial-step-title');
+    const next = page.locator('#tutorialNextBtn');
     const stepName = async () =>
-      (await title.count()) ? (await title.textContent()).trim() : null
-    const ready = async () => (await next.isEnabled()) && (await next.isVisible())
-    const completed = []
-    const visited = []
+      (await title.count()) ? (await title.textContent()).trim() : null;
+    const ready = async () =>
+      (await next.isEnabled()) && (await next.isVisible());
+    const completed = [];
+    const visited = [];
 
     for (let i = 0; i < 30 && (await next.count()) > 0; i += 1) {
-      const name = await stepName()
-      visited.push(name)
+      const name = await stepName();
+      visited.push(name);
       if (!(await next.isEnabled())) {
-        expect(ACTIONS[name], `no action known for the step "${name}"`).toBeTruthy()
-        await ACTIONS[name](page)
+        expect(
+          ACTIONS[name],
+          `no action known for the step "${name}"`
+        ).toBeTruthy();
+        await ACTIONS[name](page);
         // The action unlocks Next, or (opening the guide) moves the tour on.
         await expect
           .poll(async () => (await stepName()) !== name || (await ready()), {
             message: `"${name}" stays locked after its action`,
             timeout: 30_000,
           })
-          .toBe(true)
-        completed.push(name)
-        if ((await stepName()) !== name) continue
+          .toBe(true);
+        completed.push(name);
+        if ((await stepName()) !== name) continue;
       }
-      await next.click()
-      await expect.poll(stepName).not.toBe(name)
+      await next.click();
+      await expect.poll(stepName).not.toBe(name);
     }
 
     // Typing is the one the hint offers that used to do nothing. The presets
     // step waits only when its section starts closed.
-    expect(completed).toContain('Adjust a parameter')
+    expect(completed).toContain('Adjust a parameter');
+    expect(completed).toContain('Save a preset');
     // Reached the steps after the last action, so no action ended the tour.
-    expect(visited).toContain('Simplified or Standard')
-  })
-})
+    expect(visited).toContain('Simplified or Standard');
+  });
+});
 
 test.describe('A tour, as a screen reader meets it', () => {
   async function openTourByKeyboard(page) {
-    await setBaseline(page)
-    await recordAnnouncements(page)
-    await page.goto('/')
-    const start = page.locator('#startWelcomeTourBtn')
-    await expect(start).toBeVisible({ timeout: 30_000 })
-    await page.waitForFunction(() => typeof window.startTutorial === 'function')
-    await start.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await setBaseline(page);
+    await recordAnnouncements(page);
+    await page.goto('/');
+    const start = page.locator('#startWelcomeTourBtn');
+    await expect(start).toBeVisible({ timeout: 30_000 });
+    await page.waitForFunction(
+      () => typeof window.startTutorial === 'function'
+    );
+    await start.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 10_000,
+    });
   }
 
   test('opens on Next, not on Minimize', async ({ page }) => {
-    await openTourByKeyboard(page)
-    await expect(page.locator('#tutorialNextBtn')).toBeFocused()
-  })
+    await openTourByKeyboard(page);
+    await expect(page.locator('#tutorialNextBtn')).toBeFocused();
+  });
 
   test('each Next brings focus to the step heading, which says its place once', async ({
     page,
   }) => {
-    await openTourByKeyboard(page)
-    const mark = await announcementMark(page)
-    await page.keyboard.press('Enter')
+    await openTourByKeyboard(page);
+    const mark = await announcementMark(page);
+    await page.keyboard.press('Enter');
 
-    const heading = page.locator('#tutorial-step-title')
-    await expect(heading).toBeFocused()
-    await expect(heading).toHaveAttribute('aria-describedby', 'tutorialProgress')
-    await expect(page.locator('#tutorialProgress')).toHaveText(/Step 2 of \d+/)
-    await expect(page.locator('#tutorialProgress')).not.toHaveAttribute('aria-live', /.*/)
+    const heading = page.locator('#tutorial-step-title');
+    await expect(heading).toBeFocused();
+    await expect(heading).toHaveAttribute(
+      'aria-describedby',
+      'tutorialProgress'
+    );
+    await expect(page.locator('#tutorialProgress')).toHaveText(/Step 2 of \d+/);
+    await expect(page.locator('#tutorialProgress')).not.toHaveAttribute(
+      'aria-live',
+      /.*/
+    );
 
-    await page.waitForTimeout(500)
-    const said = await announcementsSince(page, mark)
-    expect(said.filter((a) => /Step 2/.test(a.text)), JSON.stringify(said)).toHaveLength(0)
-  })
+    await page.waitForTimeout(500);
+    const said = await announcementsSince(page, mark);
+    expect(
+      said.filter((a) => /Step 2/.test(a.text)),
+      JSON.stringify(said)
+    ).toHaveLength(0);
+  });
 
-  test('the last step is named Finish, and finishing says so once', async ({ page }) => {
-    await openTourByKeyboard(page)
-    const next = page.locator('#tutorialNextBtn')
+  test('the last step is named Finish, and finishing says so once', async ({
+    page,
+  }) => {
+    await openTourByKeyboard(page);
+    const next = page.locator('#tutorialNextBtn');
     for (let i = 0; i < 30; i++) {
-      if ((await next.textContent()).includes('Finish')) break
-      await next.focus()
-      await page.keyboard.press('Enter')
-      await expect(page.locator('#tutorial-step-title')).toBeFocused()
+      if ((await next.textContent()).includes('Finish')) break;
+      await next.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#tutorial-step-title')).toBeFocused();
     }
-    await expect(page.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Finish', exact: true })
+    ).toBeVisible();
 
-    const mark = await announcementMark(page)
-    await next.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
-    await page.waitForTimeout(500)
-    const said = await announcementsSince(page, mark)
-    expect(said.filter((a) => /Tutorial completed/.test(a.text)), JSON.stringify(said)).toHaveLength(1)
-    expect(said.filter((a) => /Tutorial closed/.test(a.text)), JSON.stringify(said)).toHaveLength(0)
-  })
+    const mark = await announcementMark(page);
+    await next.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, {
+      timeout: 10_000,
+    });
+    await page.waitForTimeout(500);
+    const said = await announcementsSince(page, mark);
+    expect(
+      said.filter((a) => /Tutorial completed/.test(a.text)),
+      JSON.stringify(said)
+    ).toHaveLength(1);
+    expect(
+      said.filter((a) => /Tutorial closed/.test(a.text)),
+      JSON.stringify(said)
+    ).toHaveLength(0);
+  });
 
   test('Exit says one thing', async ({ page }) => {
-    await openTourByKeyboard(page)
-    const exit = page.locator('.tutorial-close')
-    await expect(exit).toHaveAttribute('title', (await exit.getAttribute('aria-label')) ?? '')
-  })
-})
+    await openTourByKeyboard(page);
+    const exit = page.locator('.tutorial-close');
+    await expect(exit).toHaveAttribute(
+      'title',
+      (await exit.getAttribute('aria-label')) ?? ''
+    );
+  });
+});
+
+test.describe('Getting Started, where the card sits', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+  test('the Camera controls step points at the camera tab, not at the last step’s target', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openGettingStarted(page);
+    const actions = {
+      'Expand a parameter group': (p) =>
+        p
+          .locator('details.param-group > summary')
+          .filter({ hasText: 'Dimensions' })
+          .first()
+          .click(),
+      'Adjust a parameter': async (p) => {
+        await p.locator('#param-width-spinbox').fill('60');
+        await p.locator('#param-width-spinbox').press('Tab');
+      },
+      'Save a preset': async (p) => {
+        await p.locator('#addPresetBtn').click();
+        await p.locator('.preset-modal #presetName').fill('Tour preset');
+        await p.locator('.preset-modal button[type="submit"]').first().click();
+      },
+    };
+    await stepTo(page, 'Camera controls', actions);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const c = document.querySelector('.tutorial-spotlight-cutout');
+            const t = document
+              .querySelector('#cameraPanelToggle')
+              .getBoundingClientRect();
+            const x = Number(c.getAttribute('x'));
+            const y = Number(c.getAttribute('y'));
+            const w = Number(c.getAttribute('width'));
+            const h = Number(c.getAttribute('height'));
+            return (
+              x <= t.left &&
+              y <= t.top &&
+              x + w >= t.right - 2 &&
+              y + h >= t.bottom
+            );
+          }),
+        { timeout: 5_000 }
+      )
+      .toBe(true);
+    const panel = await page.locator('.tutorial-panel').boundingBox();
+    const target = await page.locator('#cameraPanelToggle').boundingBox();
+    expect(
+      panel.x + panel.width,
+      'the card stands left of the camera tab'
+    ).toBeLessThanOrEqual(target.x);
+  });
+});
+
+test.describe('Getting Started, counting its steps', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+  test('the step numbers count only the steps that are shown, with no jumps', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openGettingStarted(page);
+    const title = page.locator('#tutorial-step-title');
+    const next = page.locator('#tutorialNextBtn');
+    const progress = page.locator('#tutorialProgress');
+    const actions = {
+      'Expand a parameter group': (p) =>
+        p
+          .locator('details.param-group > summary')
+          .filter({ hasText: 'Dimensions' })
+          .first()
+          .click(),
+      'Adjust a parameter': async (p) => {
+        await p.locator('#param-width-spinbox').fill('60');
+        await p.locator('#param-width-spinbox').press('Tab');
+      },
+      'Save a preset': async (p) => {
+        await p.locator('#addPresetBtn').click();
+        await p.locator('.preset-modal #presetName').fill('Tour preset');
+        await p.locator('.preset-modal button[type="submit"]').first().click();
+      },
+      'Generate and download your file': (p) =>
+        p.locator('#primaryActionBtn').click(),
+      'Help & Examples': (p) => p.locator('#featuresGuideBtn').click(),
+      'Features Guide': (p) => p.keyboard.press('Escape'),
+    };
+    const seen = [];
+    for (let i = 0; i < 30 && (await next.count()) > 0; i += 1) {
+      const name = (await title.textContent()).trim();
+      const text = (await progress.textContent()).replace(/\s+/g, ' ').trim();
+      const m = /Step (\d+) of (\d+)/.exec(text);
+      seen.push({ name, current: Number(m[1]), total: Number(m[2]) });
+      if (!(await next.isEnabled())) {
+        expect(
+          actions[name],
+          `no action known for the step "${name}"`
+        ).toBeTruthy();
+        await actions[name](page);
+        // The action unlocks Next, or (opening the guide) moves the tour on.
+        await expect
+          .poll(
+            async () =>
+              (await title.textContent()).trim() !== name ||
+              ((await next.isVisible()) && (await next.isEnabled())),
+            { timeout: 30_000 }
+          )
+          .toBe(true);
+        if ((await title.textContent()).trim() !== name) continue;
+      }
+      if (name === 'Back to the Main Page') break;
+      // The guide, opened by the step's action, covers the card until it is
+      // closed; Firefox keeps the step until then.
+      if (await page.locator('#featuresGuideModal:not(.hidden)').count()) {
+        await page.keyboard.press('Escape');
+      }
+      // The card can be minimized or covered for a moment after an action.
+      await expect
+        .poll(
+          async () => (await next.isVisible()) && (await next.isEnabled()),
+          {
+            message: `Next hidden or locked at "${name}" (${JSON.stringify(seen)})`,
+            timeout: 30_000,
+          }
+        )
+        .toBe(true);
+      await next.click();
+      // Firefox can take a moment to draw the next step; one more press if
+      // the first was spent on a card still settling.
+      const moved = async () => (await title.textContent()).trim() !== name;
+      await expect
+        .poll(moved, { timeout: 15_000 })
+        .toBe(true)
+        .catch(async () => {
+          await next.click();
+          await expect.poll(moved, { timeout: 15_000 }).toBe(true);
+        });
+    }
+    const numbers = seen.map((s) => s.current);
+    expect(numbers, JSON.stringify(seen)).toEqual(numbers.map((_, i) => i + 1));
+    expect(new Set(seen.map((s) => s.total)).size, 'one total throughout').toBe(
+      1
+    );
+    expect(seen[0].total).toBe(seen.length);
+  });
+});

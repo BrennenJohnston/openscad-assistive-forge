@@ -810,15 +810,6 @@ export class ConsolePanel {
 
     try {
       await navigator.clipboard.writeText(text);
-
-      const copyBtn = document.getElementById('console-copy-btn');
-      if (copyBtn) {
-        const originalText = copyBtn.textContent;
-        copyBtn.textContent = 'Copied!';
-        setTimeout(() => {
-          copyBtn.textContent = originalText;
-        }, 1500);
-      }
     } catch (_error) {
       const textarea = document.createElement('textarea');
       textarea.value = text;
@@ -827,6 +818,20 @@ export class ConsolePanel {
       document.execCommand('copy');
       document.body.removeChild(textarea);
     }
+    this._confirmCopied();
+  }
+
+  /** One word on the button for a moment, and the same word said once. */
+  _confirmCopied() {
+    const copyBtn = document.getElementById('console-copy-btn');
+    if (copyBtn) {
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+      }, 1500);
+    }
+    announceImmediate('Console copied');
   }
 
   /**

@@ -592,8 +592,11 @@ test.describe('The welcome page does not offer an inert switch', () => {
   }) => {
     await boot(page);
     await startWelcomeTour(page);
+    // 13 steps, less the Connect Folder step where the browser has no
+    // directory picker (Firefox): the count names only the steps it shows.
+    const total = await page.evaluate(() => ('showDirectoryPicker' in window ? 13 : 12));
     await expect(page.locator('.tutorial-progress')).toContainText(
-      'Step 1 of 13'
+      `Step 1 of ${total}`
     );
     await expect(page.locator('#tutorial-step-title')).toHaveText(
       'Welcome to the Forge!'
@@ -608,8 +611,9 @@ test.describe('The welcome page does not offer an inert switch', () => {
   }) => {
     await boot(page, { classic: true });
     await startWelcomeTour(page);
+    const total = await page.evaluate(() => ('showDirectoryPicker' in window ? 10 : 9));
     await expect(page.locator('.tutorial-progress')).toContainText(
-      'Step 1 of 10'
+      `Step 1 of ${total}`
     );
     await walkTo(page, 'Open or start a project');
     expect(await page.locator('#tutorial-step-current').textContent()).toBe('3');

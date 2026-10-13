@@ -971,7 +971,7 @@ export function generateShortcutsHelpHTML() {
 
   for (const [categoryId, category] of Object.entries(SHORTCUT_CATEGORIES)) {
     html += `<div class="shortcuts-category" data-category="${categoryId}">`;
-    html += `<h4>${category.label}</h4>`;
+    html += `<h3>${category.label}</h3>`;
     html += '<dl>';
 
     for (const entry of category.actions) {
@@ -1013,7 +1013,7 @@ export function generateShortcutsEditorHTML() {
 
   for (const [categoryId, category] of Object.entries(SHORTCUT_CATEGORIES)) {
     html += `<div class="shortcuts-category" data-category="${categoryId}">`;
-    html += `<h4>${category.label}</h4>`;
+    html += `<h3>${category.label}</h3>`;
     html += '<div class="shortcuts-list">';
 
     for (const entry of category.actions) {

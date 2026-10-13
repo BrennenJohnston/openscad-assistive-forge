@@ -906,6 +906,7 @@ export function initFileHandler({
       resetProjectUiState?.();
       stateManager.setState({
         uploadedFile: { name: originalFileName, content: fileContent },
+        sourceEdited: false,
         projectFiles: projectFiles || null,
         mainFilePath: mainFilePath || fileName,
         schema: extracted,
@@ -1431,7 +1432,9 @@ export function initFileHandler({
       updateColorLegend(colorParamNames);
 
       if (autoPreviewController) {
-        autoPreviewController.setScadContent(fileContent);
+        autoPreviewController.setScadContent(fileContent, {
+          keepCamera: source === 'reload',
+        });
         autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
         const libsForRender = getEnabledLibrariesForRender();
         autoPreviewController.setEnabledLibraries(libsForRender);

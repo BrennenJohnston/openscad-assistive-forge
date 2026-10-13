@@ -23,6 +23,15 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/** Confirm the Main Page question if it is asked; it is only when a change would be lost. */
+async function answerMainPageQuestion(page) {
+  const question = page.locator('.confirm-modal');
+  const asked = await question
+    .waitFor({ state: 'visible', timeout: 2_000 })
+    .then(() => true, () => false);
+  if (asked) await question.locator('button:has-text("Confirm")').click();
+}
+
 test.describe('Saved Projects', () => {
   test.describe.configure({ timeout: 150_000 });
 
@@ -88,11 +97,8 @@ test.describe('Saved Projects', () => {
     // Go back to welcome screen
     const clearBtn = page.locator('#clearFileBtn');
     await clearBtn.click();
-    
-    // Confirm clear
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    const confirmBtn = page.locator('.confirm-modal button:has-text("Confirm")');
-    await confirmBtn.click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Should see saved project on welcome screen
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -117,8 +123,8 @@ test.describe('Saved Projects', () => {
     
     // Clear the file
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Now load it from saved projects
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -159,8 +165,8 @@ test.describe('Saved Projects', () => {
     
     // Clear the file
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Click Edit button
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -205,8 +211,8 @@ test.describe('Saved Projects', () => {
     
     // Clear the file
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Click Delete button
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -241,8 +247,8 @@ test.describe('Saved Projects', () => {
     
     // Try to load saved project
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
     const loadBtn = page.locator('.btn-load-project').first();
@@ -263,8 +269,8 @@ test.describe('Saved Projects', () => {
     
     // Clear the file
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Check initial state (no "Opened" time yet)
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -277,8 +283,8 @@ test.describe('Saved Projects', () => {
     
     // Go back to welcome
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Check that "Opened" time is now shown
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -315,8 +321,8 @@ test.describe('Saved Projects', () => {
     
     // Go back to welcome screen
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // No saved projects should exist
     await expect(page.locator('#savedProjectsEmpty')).toBeVisible();
@@ -341,8 +347,8 @@ test.describe('Saved Projects', () => {
     
     // Go back to welcome screen
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Should see custom project name
     await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -361,8 +367,8 @@ test.describe('Saved Projects', () => {
     
     // Clear the file to go back to welcome
     await page.locator('#clearFileBtn').click();
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    // The question comes only when a change would be lost.
+    await answerMainPageQuestion(page);
     
     // Try to clear cache
     const clearCacheBtn = page.locator('#clearStorageBtn');
@@ -421,8 +427,8 @@ test.describe('Saved Projects', () => {
       
       // Clear file
       await page.locator('#clearFileBtn').click();
-      await page.waitForSelector('.confirm-modal', { state: 'visible' });
-      await page.locator('.confirm-modal button:has-text("Confirm")').click();
+      // The question comes only when a change would be lost.
+      await answerMainPageQuestion(page);
       
       // Check that saved projects are displayed
       await page.waitForSelector('.saved-project-card', { state: 'visible' });
@@ -448,8 +454,8 @@ test.describe('Saved Projects', () => {
       
       // Clear file
       await page.locator('#clearFileBtn').click();
-      await page.waitForSelector('.confirm-modal', { state: 'visible' });
-      await page.locator('.confirm-modal button:has-text("Confirm")').click();
+      // The question comes only when a change would be lost.
+      await answerMainPageQuestion(page);
       
       // Wait for saved projects to be visible
       await page.waitForSelector('.saved-project-card', { state: 'visible' });

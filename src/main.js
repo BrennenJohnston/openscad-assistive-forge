@@ -37,6 +37,7 @@ import {
   projectStem,
   todayStamp,
   formatFileSize,
+  formatPreviewStats,
   sanitizeFilename,
   OUTPUT_FORMATS,
 } from './js/download.js';
@@ -59,7 +60,11 @@ import {
   describeAccepted,
 } from './js/upload-router.js';
 import { setStlViewActive, isStlViewActive } from './js/stl-view-mode.js';
-import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
+import {
+  escapeHtml,
+  isValidServiceWorkerMessage,
+  SERVICE_WORKER_MESSAGE_TYPES,
+} from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import {
   getThreeModule,
@@ -1593,11 +1598,17 @@ async function initApp() {
 
       navigator.serviceWorker.addEventListener('message', (event) => {
         // Validate message type against allowlist
-        if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) {
+        if (!isValidServiceWorkerMessage(event, SERVICE_WORKER_MESSAGE_TYPES)) {
           console.warn(
             '[SW] Ignoring invalid or unexpected message:',
             event.data
           );
+          return;
+        }
+
+        if (event.data.type === 'SW_UPDATED') {
+          // The worker's own word on a fresh visit: nothing to do here.
+          console.log(`[SW] Service worker ${event.data.version} is active`);
           return;
         }
 
@@ -1690,7 +1701,12 @@ async function initApp() {
   const savedProjectsUI = initSavedProjectsUI({
     showConfirmDialog,
     showProcessingOverlay,
-    handleFile: (...args) => fileHandler.handleFile(...args),
+    // A card pressed in the first seconds, before the file handler exists,
+    // waits for it instead of failing on nothing.
+    handleFile: async (...args) => {
+      while (!fileHandler) await new Promise((r) => setTimeout(r, 50));
+      return fileHandler.handleFile(...args);
+    },
     updateStatus,
     updateCompanionSaveButton: (...args) =>
       companionFilesCtrl.updateCompanionSaveButton(...args),
@@ -3690,12 +3706,14 @@ async function initApp() {
     onReload: () => {
       const state = stateManager.getState();
       if (state.uploadedFile) {
+        // 'reload': the same file again, so the camera stays and the
+        // quick-access question is not asked a second time.
         fileHandler.handleFile(
           null,
           state.uploadedFile.content,
           state.projectFiles || null,
           state.mainFilePath || null,
-          'user',
+          'reload',
           state.uploadedFile.name
         );
       }
@@ -7338,6 +7356,13 @@ async function initApp() {
       [PREVIEW_STATE.ERROR]: '✗ Preview failed',
     };
     previewStateIndicator.textContent = stateMessages[state] || state;
+    // A failed preview leaves no model, so the size and count of the last
+    // one go with it.
+    if (state === PREVIEW_STATE.ERROR) {
+      const stats = document.getElementById('stats');
+      if (stats) stats.textContent = '';
+      clearPreviewStats();
+    }
     // A draft of the drawing is not the design, and the badge says so
     // for as long as it is what is on screen.
     const draftStands =
@@ -7436,7 +7461,7 @@ async function initApp() {
     }
 
     // Simplified stats: just size and triangle count
-    previewStatusStats.textContent = `${formatFileSize(stats.size)} | ${stats.triangles.toLocaleString()} triangles`;
+    previewStatusStats.textContent = formatPreviewStats(stats);
     previewStatusBar.classList.remove('no-stats');
   }
 
@@ -8453,7 +8478,15 @@ async function initApp() {
   // Back button - returns to welcome screen
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', async () => {
-      // Confirm before going back - warn about unsaved changes
+      // Ask only when there is something to lose: a changed parameter or an
+      // edit in the code editor. A project only looked at closes at once.
+      const somethingToLose =
+        stateManager.canUndo() ||
+        getEditorStateManager()?.getIsDirty?.() === true;
+      if (!somethingToLose) {
+        await closeProjectToWelcome();
+        return;
+      }
       const confirmed = await showConfirmDialog(
         'Any unsaved changes to your current project will be lost.',
         'Go back to the Main Page?',
@@ -9897,6 +9930,7 @@ if (rounded) {
     try {
       stateManager.setState({
         uploadedFile: { ...state.uploadedFile, content: code },
+        sourceEdited: true,
         // The generated output belongs to the source it was rendered from.
         // Keeping it would let Download and the Export menu hand back the
         // pre-edit model, since their staleness check keys on parameters.
@@ -13183,6 +13217,13 @@ if (rounded) {
    *
    * @param {Object} preset - Loaded preset with .parameters, .name, .id
    */
+  /** A preset was written: the tour's "Save a preset" step listens for it. */
+  function notePresetSaved(name) {
+    document.body.dispatchEvent(
+      new CustomEvent('forge:preset-saved', { bubbles: true, detail: { name } })
+    );
+  }
+
   function applyPresetParametersAndCompanions(preset) {
     // A value typed but not yet applied joins the current values first, so
     // the preset lands on top of it rather than on the values before it.
@@ -13702,6 +13743,7 @@ if (rounded) {
         );
 
         updateStatus(`Preset "${finalName}" saved`);
+        notePresetSaved(finalName);
 
         // OpenSCAD Customizer behavior:
         // - "+" creates a new preset AND selects it in the dropdown
@@ -14290,6 +14332,7 @@ if (rounded) {
       );
 
       updateStatus(`Preset "${preset.name}" saved`, 'success');
+      notePresetSaved(preset.name);
       setCurrentPresetSelection(savedPreset);
       return true;
     } catch (error) {
@@ -14361,6 +14404,7 @@ if (rounded) {
       updatePresetDropdown();
       setCurrentPresetSelection(savedPreset);
       updateStatus(`Preset copied to "${copyName}"`, 'success');
+      notePresetSaved(copyName);
     } catch (error) {
       updateStatus(`Failed to copy preset: ${error.message}`, 'error');
     }
@@ -14670,6 +14714,8 @@ if (rounded) {
     }
 
     // Handle "design default values" virtual preset (desktop OpenSCAD parity)
+    // The values a preset replaces are one Undo away.
+    stateManager.recordParameterState();
     if (presetId === DESIGN_DEFAULTS_ID) {
       isLoadingPreset = true;
 
@@ -15102,10 +15148,9 @@ if (rounded) {
         if (!trimmed) return null;
 
         if (trimmed.startsWith('ECHO:')) {
-          const match = trimmed.match(/ECHO:\s*"?([^"]*)"?/);
-          const text = match
-            ? match[1].trim()
-            : trimmed.replace(/.*ECHO:\s*/, '').trim();
+          // The whole echo, quotes and every argument: a designer's
+          // echo("Width:", w) is read for its value.
+          const text = trimmed.replace(/^ECHO:\s*/, '').trim();
           return text.length > 0 ? { type: 'echo', text } : null;
         }
 

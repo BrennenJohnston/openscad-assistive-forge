@@ -48,6 +48,23 @@ function tetrahedronMesh() {
 
 let opener;
 
+describe('Flush Caches', () => {
+  it('writes its one line to the console as well as saying it', () => {
+    const controller = new DesignPanelController({
+      getWorker: () => null,
+      getPreviewManager: () => null,
+      getScadContent: () => '',
+      getParameters: () => ({}),
+      onFlushComplete: () => {},
+    });
+    vi.mocked(getConsolePanel().addSystemLine).mockClear();
+    controller.flushCaches();
+    expect(vi.mocked(getConsolePanel().addSystemLine)).toHaveBeenCalledWith(
+      'Caches flushed: files, libraries, and geometry cleared'
+    );
+  });
+});
+
 beforeEach(() => {
   document.body.innerHTML = '';
   opener = document.createElement('button');

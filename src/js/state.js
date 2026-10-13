@@ -268,6 +268,16 @@ export class StateManager {
     if (!this.state.uploadedFile || !this.state.parameters) {
       return;
     }
+    // A draft is worth a question on the next visit only once something
+    // changed: a parameter away from its default, or an edit to the code.
+    const defaults = this.state.defaults || {};
+    const parameterChanged = Object.keys(defaults).some(
+      (k) =>
+        JSON.stringify(this.state.parameters[k]) !== JSON.stringify(defaults[k])
+    );
+    if (!parameterChanged && this.state.sourceEdited !== true) {
+      return;
+    }
 
     try {
       const draft = {

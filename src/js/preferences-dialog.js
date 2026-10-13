@@ -392,11 +392,10 @@ export function openPreferencesDialog(options = {}) {
 
   if (options.returnFocusTo?.focus) options.returnFocusTo.focus();
 
+  // The first tab unless a menu asked for one: a dialog that opened on
+  // whatever tab was last used read as a different dialog each time.
   const wanted = options.tab ? el(`prefs-tab-${options.tab}`) : null;
-  const target =
-    wanted ||
-    tabs().find((t) => t.getAttribute('aria-selected') === 'true') ||
-    tabs()[0];
+  const target = wanted || tabs()[0];
 
   // Controls first: a radio that still shows the previous session's choice
   // would be read out before the sync landed.
