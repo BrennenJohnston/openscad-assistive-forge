@@ -893,6 +893,14 @@ test.describe('The unlock is heard', () => {
 // The key says what it is; turning the Alt View on or off says one sentence;
 // pan adjust keeps one name and says one sentence per state.
 test.describe('The Alt View and pan adjust speak plainly', () => {
+  // The memory readout under the preview is a status of its own, written
+  // when the engine's first reading arrives; on a slow machine that can land
+  // inside an action's window, so it is left out of what the action said.
+  const spoken = async (page, mark) =>
+    (await announcementsSince(page, mark))
+      .filter((a) => a.region !== '#memoryIndicator')
+      .map((a) => a.text);
+
   test('the key: its name, and one sentence on and off', async ({ page }) => {
     await recordAnnouncements(page);
     await page.goto('/?hfm=unlock');
@@ -905,7 +913,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
     await page.waitForTimeout(600);
-    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+    expect(await spoken(page, mark)).toEqual([
       'Alt View on. The preview is drawn with characters and the interface follows.',
     ]);
 
@@ -913,7 +921,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'false');
     await page.waitForTimeout(600);
-    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+    expect(await spoken(page, mark)).toEqual([
       'Alt View off.',
     ]);
   });
@@ -959,14 +967,14 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
       'Adjust the Alt View with the pan arrows'
     );
     await page.waitForTimeout(600);
-    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+    expect(await spoken(page, mark)).toEqual([
       'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.',
     ]);
 
     mark = await announcementMark(page);
     await page.locator('#cameraPanUp').click();
     await page.waitForTimeout(600);
-    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+    expect(await spoken(page, mark)).toEqual([
       'Edges 105%',
     ]);
 
@@ -974,7 +982,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
     await adjust.click();
     await expect(adjust).toHaveAttribute('aria-pressed', 'false');
     await page.waitForTimeout(600);
-    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+    expect(await spoken(page, mark)).toEqual([
       'Pan arrows move the view again.',
     ]);
   });
