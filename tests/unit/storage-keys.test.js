@@ -87,6 +87,7 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_HFM_CONTRAST_SCALE: 'openscad-forge-hfm-contrast-scale',
   STORAGE_KEY_HFM_FONT_SCALE: 'openscad-forge-hfm-font-scale',
   STORAGE_KEY_HFM_PERSIST_FADE: 'openscad-forge-hfm-persist-fade',
+  STORAGE_KEY_HFM_GRID: 'openscad-forge-hfm-grid',
 
   // City Walk game: persistent walking-speed multiplier
   STORAGE_KEY_CITY_WALK_SPEED: 'openscad-forge-city-walk-speed',

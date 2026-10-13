@@ -815,3 +815,139 @@ test.describe('the unlock door keeps the fragment', () => {
     expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me');
   });
 });
+
+// At character resolution the grid draws as scattered punctuation, so the
+// Alt View starts without it; a grid turned on there is kept for the Alt
+// View, and leaving it brings the ordinary grid back.
+test.describe('The grid in the Alt View', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('starts hidden, keeps a grid turned on there, and the ordinary grid comes back', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const gridShown = () =>
+      page.evaluate(() => window.previewManager.gridHelper.visible);
+    expect(await gridShown()).toBe(true);
+
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(gridShown).toBe(false);
+
+    await page.evaluate(() => window.previewManager.toggleGrid(true));
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(gridShown).toBe(true);
+    expect(
+      await page.evaluate(() => localStorage.getItem('openscad-forge-hfm-grid'))
+    ).toBe('true');
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-grid--forge')
+      )
+    ).toBeNull();
+  });
+});
+
+// The first Alt View draws finer characters: at the old full size the box
+// was a blob of characters with no visible faces.
+test.describe('The Alt View starts with finer characters', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('shows 60% characters when nothing is saved', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#previewStatusAltAdjust')).toContainText(
+      'SIZE 60%'
+    );
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
+  });
+});
+
+// The Alt View shows the model where the ordinary preview does: its bottom
+// on the grid, the orbit about its middle.
+test.describe('The model stays on the bed in the Alt View', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('keeps the bottom at Z 0 and the orbit target at the middle', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const bed = () =>
+      page.evaluate(() => {
+        const pm = window.previewManager;
+        pm.mesh.updateWorldMatrix(true, false);
+        pm.mesh.geometry.computeBoundingBox();
+        const box = pm.mesh.geometry.boundingBox
+          .clone()
+          .applyMatrix4(pm.mesh.matrixWorld);
+        return {
+          bottom: Math.round(box.min.z * 100) / 100,
+          middle: Math.round(((box.min.z + box.max.z) / 2) * 100) / 100,
+          target: Math.round(pm.controls.target.z * 100) / 100,
+        };
+      });
+    const before = await bed();
+    expect(before.bottom).toBe(0);
+
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await page.waitForTimeout(500);
+    const inAltView = await bed();
+    expect(inAltView.bottom).toBe(0);
+    expect(inAltView.target).toBe(inAltView.middle);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(await bed()).toEqual(before);
+  });
+});
