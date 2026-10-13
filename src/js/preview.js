@@ -3094,10 +3094,11 @@ export class PreviewManager {
     const width = dimensionLabelWidth(span);
     sprite.scale.set(width, width / 4, 1);
 
-    // The width label hangs below its edge by its own height; the depth and
+    // The width label hangs below its edge by one and a half times its height
+    // (the top view sees it on the model's base plane, nearer the edge); the depth and
     // height labels stand beside the model, clear of its left edge by half
     // their width, instead of centered on the edge and half hidden by it.
-    if (axis === 'X') midpoint.y -= width / 4;
+    if (axis === 'X') midpoint.y -= width * 0.375;
     if (axis === 'Y') midpoint.x -= width * 0.625;
     if (axis === 'Z') midpoint.x -= width * 0.625;
 
