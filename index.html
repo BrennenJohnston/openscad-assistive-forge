@@ -7490,25 +7490,26 @@
             hidden
             data-hfm-gated
           >
-            <h3>ASCII Render Mode (Alt View)</h3>
+            <h3>Alt View</h3>
             <p>
-              Alt View converts the 3D preview into character-based ASCII art.
-              This hidden feature is unlocked via a special input sequence or
-              developer bypass.
+              Alt View draws the 3D preview with text characters, the way
+              terminals once drew pictures, and gives the whole interface the
+              look of a phosphor screen. It is a hidden extra: finding it is
+              part of the fun. When it is on, a key button sits next to the
+              theme button; the Characters and Edges controls beside the preview
+              set how fine the drawing is and how strong its outlines are, and
+              the camera panel has sliders for fine steps.
             </p>
-            <h4>What is Alt View?</h4>
+            <h4>What to know</h4>
             <ul class="features-list">
               <li>
-                <strong>Purpose</strong>: ASCII art rendering mode that converts
-                the 3D preview into character-based art
+                <strong>The key</strong>: the button next to the theme button
+                turns Alt View on and off, on the Main Page or in a project
               </li>
               <li>
-                <strong>Location</strong>: Toggle button appears in the header
-                next to the Theme toggle after unlock
-              </li>
-              <li>
-                <strong>Effect</strong>: Activates the mono UI theme variant and
-                replaces the WebGL preview with ASCII character output
+                <strong>The look</strong>: green on black with the dark theme,
+                amber with the light theme, and a blue text-mode screen in
+                Classic
               </li>
               <li>
                 <strong>Session-only</strong>: The theme switch does not
@@ -7533,37 +7534,15 @@
                 ></a
               >.
             </p>
-            <h4>ASCII Rendering Technology</h4>
+            <h4>How the drawing works</h4>
             <p>
-              The ASCII renderer uses a 6D shape-vector character model for
-              glyph selection:
+              Each character is the one whose shape best matches the picture in
+              its cell, drawn in the screen's one color, so denser characters
+              read brighter, as on a real terminal. The drawing changes only
+              when the view moves or a setting changes. It is based on research
+              into shape-vector ASCII rendering (credited in
+              THIRD_PARTY_NOTICES.md).
             </p>
-            <ul class="features-list">
-              <li>
-                Each cell is sampled at 6 internal points to create a "shape
-                signature"; directional and per-cell contrast enhancement
-                sharpens edges
-              </li>
-              <li>
-                Characters are matched by finding the glyph whose shape vector
-                is closest, using a lazily-filled lookup cache (computed on
-                first use, instant afterwards)
-              </li>
-              <li>
-                Glyphs render in a single phosphor color (green or amber) from a
-                pre-tinted glyph atlas: character density carries the brightness
-                signal, just like a real terminal
-              </li>
-              <li>
-                Rendering is on-demand: the ASCII conversion only runs when the
-                camera moves or a setting changes, so an idle preview costs
-                almost nothing
-              </li>
-              <li>
-                Based on research into shape-vector ASCII rendering (credited in
-                THIRD_PARTY_NOTICES.md)
-              </li>
-            </ul>
             <h4>Controls Reference</h4>
             <div class="altview-controls-diagram">
               <div class="altview-dpad-group">
@@ -7586,90 +7565,80 @@
                   <div class="altview-dpad-arrow altview-dpad-right">►</div>
                   <div class="altview-dpad-arrow altview-dpad-down">▼</div>
                 </div>
-                <div class="altview-dpad-hint">Center: Pan Adjust Toggle</div>
+                <div class="altview-dpad-hint">
+                  Center: adjust with the arrows
+                </div>
               </div>
             </div>
             <p class="altview-adjust-legend">
-              <strong>When Pan Adjust is ON:</strong> ▲/▼ = Edge ±, ◄/► = Size
+              <strong>While adjusting:</strong> ▲/▼ = Edges ±, ◄/► = Characters
               ±, Shift+▲/▼ = Glow ±
             </p>
             <h4>Auto-Rotate (Rotate D-pad center)</h4>
             <ul class="features-list">
-              <li>Toggles automatic model rotation around the Z-axis</li>
-              <li>Enabled by default when Alt View is activated</li>
-              <li>Click to pause/resume rotation</li>
+              <li>Turns the model slowly around its vertical axis</li>
+              <li>Press it again to stop</li>
             </ul>
-            <h4>Pan Adjust Toggle (Pan D-pad center)</h4>
-            <p>Switches the Pan D-pad between two modes:</p>
+            <h4>Adjust with the pan arrows (Pan D-pad center)</h4>
+            <p>Switches the Pan D-pad between two jobs:</p>
             <ul class="features-list">
               <li>
-                <strong>OFF (default)</strong>: Normal pan behavior (moves the
-                camera)
+                <strong>Off (to begin with)</strong>: the arrows move the view
               </li>
               <li>
-                <strong>ON</strong>: Adjustment mode for Edge and Size
-                parameters
+                <strong>On</strong>: the arrows adjust Edges, Characters and
+                Glow
               </li>
             </ul>
-            <h4>Edge, Size &amp; Glow Adjustment</h4>
+            <h4>Edges, Characters and Glow</h4>
+            <p>While adjusting, the Pan D-pad's arrows set:</p>
+            <ul class="features-list">
+              <li>
+                <strong>Up arrow</strong>: stronger edges (sharper outlines,
+                more contrast)
+              </li>
+              <li><strong>Down arrow</strong>: softer edges (less contrast)</li>
+              <li>
+                <strong>Right arrow</strong>: larger characters (fewer columns)
+              </li>
+              <li>
+                <strong>Left arrow</strong>: smaller characters (more columns)
+              </li>
+              <li>
+                <strong>Shift + Up or Down</strong>: Glow, a faint afterglow
+                behind moving edges
+              </li>
+            </ul>
             <p>
-              When Pan Adjust is ON, the D-pad arrows control rendering
-              parameters:
+              Edges go from 50% to 400%, Characters from 50% to 250%, and Glow
+              from 0% to 100%. They start at Edges 100%, Characters 60% and Glow
+              15%; when your system asks for reduced motion, Glow stays at 0%.
             </p>
-            <ul class="features-list">
-              <li>
-                <strong>Up arrow</strong>: Increase Edge (sharper outlines, more
-                contrast)
-              </li>
-              <li>
-                <strong>Down arrow</strong>: Decrease Edge (softer outlines,
-                less contrast)
-              </li>
-              <li>
-                <strong>Right arrow</strong>: Increase Size (larger characters,
-                fewer columns)
-              </li>
-              <li>
-                <strong>Left arrow</strong>: Decrease Size (smaller characters,
-                more columns)
-              </li>
-              <li>
-                <strong>Shift + Up/Down</strong>: Adjust Glow (phosphor
-                afterglow trail; off by default)
-              </li>
-            </ul>
+            <h4>Beside the preview</h4>
             <p>
-              Edge range: 50%–400% &nbsp;|&nbsp; Size range: 50%–250%
-              &nbsp;|&nbsp; Glow range: 0%–100% &nbsp;(all default to plain
-              values: Edge 100%, Size 100%, Glow 0%)
+              The status line under the preview shows the current values, for
+              example
+              <code>[ALT VIEW] EDGE 100% · SIZE 60% · GLOW 15%</code>. Beside
+              it, Characters steps through Fine, Normal and Bold (the minus and
+              equals keys do the same), and Edges chooses Soft, Normal or Sharp.
             </p>
             <h4>Sliders</h4>
             <p>
-              While Alt View is enabled, three sliders appear in the camera
-              panel (and the mobile camera drawer): Alt View Contrast, Alt View
-              Font Size, and Alt View Afterglow. They mirror the D-pad
-              adjustments and stay in sync with them. The Afterglow slider is
-              hidden when your system requests reduced motion.
-            </p>
-            <h4>Status Bar</h4>
-            <p>
-              When Alt View is active, the status bar shows current values.
-              Example:
-              <code>[ALT VIEW] EDGE 100% · SIZE 100% · GLOW 0%</code>
+              While Alt View is on, three sliders appear in the camera panel
+              (and the phone camera drawer): Edges, Characters and Glow, for
+              fine steps. The Glow slider is hidden when your system asks for
+              reduced motion.
             </p>
             <h4>Tips</h4>
             <ul class="features-list">
               <li>
-                Double-click the Pan Adjust toggle to reset Edge, Size, and Glow
-                to their defaults
+                Double-click the Pan D-pad's center to put Edges, Characters and
+                Glow back where they start
               </li>
+              <li>Your settings are kept for the next time you turn it on</li>
               <li>
-                Your adjustments are saved and restored the next time you enable
-                Alt View
-              </li>
-              <li>
-                The sliders and the D-pad provide the same adjustments: use
-                whichever you prefer
+                The controls beside the preview, the sliders and the D-pad set
+                the same values: use whichever you prefer
               </li>
             </ul>
           </div>
