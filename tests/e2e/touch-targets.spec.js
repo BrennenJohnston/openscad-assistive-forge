@@ -175,5 +175,6 @@ test.describe('the Alt View’s Characters control on a phone', () => {
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
     await expectAtLeast(page, '.alt-view-stepper-btn', 'a characters button');
+    await expectAtLeast(page, '.alt-view-level-btn', 'an edges button');
   });
 });

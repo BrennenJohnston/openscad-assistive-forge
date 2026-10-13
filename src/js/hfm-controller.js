@@ -70,6 +70,15 @@ const _HFM_CHARACTER_STEPS = [
 const _HFM_STEP_TOLERANCE = 0.001;
 let _hfmCharacterStepper = null;
 
+// The edge levels a person chooses by name from the status strip; the slider
+// still moves in 5% steps between them. The curve itself is unchanged.
+const _HFM_EDGE_LEVELS = [
+  { level: 'soft', scale: 0.7 },
+  { level: 'normal', scale: 1 },
+  { level: 'sharp', scale: 1.6 },
+];
+let _hfmEdgeLevels = null;
+
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
 let _getDisplayOptionsController = () => null;
@@ -212,6 +221,7 @@ function _applyHfmContrastScale(scale) {
   }
 
   _hfmContrastControls?.sync?.(clamped);
+  _initHfmEdgeLevels()?.sync(clamped);
   _syncHfmPanToggleUi();
   _debouncedSave(STORAGE_KEY_HFM_CONTRAST_SCALE, clamped);
 
@@ -451,11 +461,52 @@ function _initHfmCharacterStepper() {
   return _hfmCharacterStepper;
 }
 
+/**
+ * The Edges level buttons in the preview's status strip: each sets its
+ * level's scale and says it; the button whose level the current scale
+ * matches reads pressed, none when the slider sits between levels.
+ * @returns {{ sync: (scale: number) => void }|null} null when the strip is
+ *   not on the page
+ */
+function _initHfmEdgeLevels() {
+  if (_hfmEdgeLevels) return _hfmEdgeLevels;
+  const buttons = [
+    ...document.querySelectorAll('#altViewEdges .alt-view-level-btn'),
+  ];
+  if (!buttons.length) return null;
+
+  buttons.forEach((button) => {
+    const level = _HFM_EDGE_LEVELS.find(
+      (entry) => entry.level === button.dataset.level
+    );
+    if (!level) return;
+    button.addEventListener('click', () => {
+      const next = _applyHfmContrastScale(level.scale);
+      announceImmediate(`Edges ${_formatPercent(next)}`);
+    });
+  });
+
+  _hfmEdgeLevels = {
+    sync(scale) {
+      buttons.forEach((button) => {
+        const level = _HFM_EDGE_LEVELS.find(
+          (entry) => entry.level === button.dataset.level
+        );
+        const pressed =
+          Boolean(level) && Math.abs(level.scale - scale) < _HFM_STEP_TOLERANCE;
+        button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      });
+    },
+  };
+  _hfmEdgeLevels.sync(_hfmContrastScale);
+  return _hfmEdgeLevels;
+}
+
 function _initHfmContrastControls() {
   if (_hfmContrastControls) return _hfmContrastControls;
   _hfmContrastControls = _buildHfmSliderControls({
     idBase: '_hfmContrast',
-    titleText: 'Alt View Contrast',
+    titleText: 'Edges',
     range: _HFM_CONTRAST_RANGE,
     getValue: () => _hfmContrastScale,
     onInput: (value) => _applyHfmContrastScale(value),
@@ -467,7 +518,7 @@ function _initHfmFontScaleControls() {
   if (_hfmFontScaleControls) return _hfmFontScaleControls;
   _hfmFontScaleControls = _buildHfmSliderControls({
     idBase: '_hfmFontScale',
-    titleText: 'Alt View Font Size',
+    titleText: 'Characters',
     range: _HFM_FONT_SCALE_RANGE,
     getValue: () => _hfmFontScale,
     onInput: (value) => _applyHfmFontScale(value),
@@ -479,7 +530,7 @@ function _initHfmPersistFadeControls() {
   if (_hfmPersistFadeControls) return _hfmPersistFadeControls;
   const base = _buildHfmSliderControls({
     idBase: '_hfmPersistFade',
-    titleText: 'Alt View Afterglow',
+    titleText: 'Glow',
     range: _HFM_PERSIST_FADE_RANGE,
     getValue: () => _hfmPersistFade,
     onInput: (value) => _applyHfmPersistFade(value),

@@ -1124,3 +1124,72 @@ test.describe('The character-size shortcuts', () => {
     ).toHaveAttribute('aria-keyshortcuts', '=');
   });
 });
+
+// The contrast becomes a named control: three levels beside Characters, the
+// slider kept in step, and the camera panel's sliders named plainly.
+test.describe('The Edges control beside the status line', () => {
+  test('sets a level by name, follows the slider, and the panel says Characters, Edges, Glow', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+
+    const edges = page.locator('#altViewEdges');
+    await expect(edges).toBeVisible();
+    const soft = edges.getByRole('button', { name: 'Soft' });
+    const normal = edges.getByRole('button', { name: 'Normal' });
+    const sharp = edges.getByRole('button', { name: 'Sharp' });
+    const status = page.locator('#previewStatusAltAdjust');
+    const slider = page.locator('#_hfmContrast');
+
+    await sharp.click();
+    await expect(sharp).toHaveAttribute('aria-pressed', 'true');
+    await expect(normal).toHaveAttribute('aria-pressed', 'false');
+    await expect(status).toContainText('EDGE 160%');
+    await expect(slider).toHaveValue('1.6');
+
+    await soft.click();
+    await expect(soft).toHaveAttribute('aria-pressed', 'true');
+    await expect(sharp).toHaveAttribute('aria-pressed', 'false');
+    await expect(status).toContainText('EDGE 70%');
+
+    // A value set elsewhere lights the matching level, or none.
+    await slider.evaluate((el) => {
+      el.value = '1';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(normal).toHaveAttribute('aria-pressed', 'true');
+    await slider.evaluate((el) => {
+      el.value = '2';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(normal).toHaveAttribute('aria-pressed', 'false');
+    await expect(soft).toHaveAttribute('aria-pressed', 'false');
+    await expect(sharp).toHaveAttribute('aria-pressed', 'false');
+
+    await page.locator('#cameraPanelToggle').click();
+    await expect(page.locator('#_hfmContrast-label')).toHaveText('Edges');
+    await expect(page.locator('#_hfmFontScale-label')).toHaveText('Characters');
+    await expect(page.locator('#_hfmPersistFade-label')).toHaveText('Glow');
+  });
+});
