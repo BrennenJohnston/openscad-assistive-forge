@@ -587,6 +587,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
     _hfmAltView.resize(width, height);
     _hfmAltView.invalidate?.();
   });
+  previewManager.applyGridForAltView?.(true);
 
   root.setAttribute('data-ui-variant', 'mono');
 
@@ -631,6 +632,7 @@ function _disableAltViewWithPreview(toggleBtn) {
   if (previewManager?.disableRotationCentering) {
     previewManager.disableRotationCentering();
   }
+  previewManager?.applyGridForAltView?.(false);
 
   root.removeAttribute('data-ui-variant');
   _setAssetsForVariant(false);

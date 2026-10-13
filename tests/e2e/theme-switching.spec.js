@@ -815,3 +815,52 @@ test.describe('the unlock door keeps the fragment', () => {
     expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me');
   });
 });
+
+// At character resolution the grid draws as scattered punctuation, so the
+// Alt View starts without it; a grid turned on there is kept for the Alt
+// View, and leaving it brings the ordinary grid back.
+test.describe('The grid in the Alt View', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('starts hidden, keeps a grid turned on there, and the ordinary grid comes back', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const gridShown = () =>
+      page.evaluate(() => window.previewManager.gridHelper.visible);
+    expect(await gridShown()).toBe(true);
+
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(gridShown).toBe(false);
+
+    await page.evaluate(() => window.previewManager.toggleGrid(true));
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(gridShown).toBe(true);
+    expect(
+      await page.evaluate(() => localStorage.getItem('openscad-forge-hfm-grid'))
+    ).toBe('true');
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-grid--forge')
+      )
+    ).toBeNull();
+  });
+});

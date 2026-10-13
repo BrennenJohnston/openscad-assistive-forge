@@ -3912,3 +3912,62 @@ describe('the animation loop draws only a canvas people can see', () => {
     expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('the grid in the Alt View', () => {
+  let container
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    document.body.removeChild(container)
+    localStorage.clear()
+  })
+
+  function managerWithGrid() {
+    const manager = new PreviewManager(container)
+    manager.gridHelper = { visible: manager.gridEnabled }
+    return manager
+  }
+
+  it('hides the grid when the Alt View starts with nothing stored, and brings the ordinary grid back after', () => {
+    const manager = managerWithGrid()
+    expect(manager.gridHelper.visible).toBe(true)
+
+    manager.applyGridForAltView(true)
+    expect(manager.gridEnabled).toBe(false)
+    expect(manager.gridHelper.visible).toBe(false)
+
+    manager.applyGridForAltView(false)
+    expect(manager.gridEnabled).toBe(true)
+    expect(manager.gridHelper.visible).toBe(true)
+  })
+
+  it('keeps a grid turned on in the Alt View for the Alt View only', () => {
+    const manager = managerWithGrid()
+    manager.toggleGrid(false)
+    expect(localStorage.getItem('openscad-forge-grid--forge')).toBe('false')
+
+    manager.applyGridForAltView(true)
+    manager.toggleGrid(true)
+    expect(manager.gridHelper.visible).toBe(true)
+    expect(localStorage.getItem('openscad-forge-hfm-grid')).toBe('true')
+    expect(localStorage.getItem('openscad-forge-grid--forge')).toBe('false')
+
+    manager.applyGridForAltView(false)
+    expect(manager.gridHelper.visible).toBe(false)
+
+    manager.applyGridForAltView(true)
+    expect(manager.gridHelper.visible).toBe(true)
+  })
+
+  it('keeps the Alt View grid when the interface preferences reload', () => {
+    const manager = managerWithGrid()
+    manager.applyGridForAltView(true)
+    manager.reloadScopedViewPreferences()
+    expect(manager.gridEnabled).toBe(false)
+  })
+})
