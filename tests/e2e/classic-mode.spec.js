@@ -3124,6 +3124,40 @@ test('the Classic toolbar’s Export DXF says what a 3D model gets', async ({ pa
   );
 });
 
+// The overlay canvas's painted pixels by colour family: the characters in
+// yellow (Classic's look) or in green (the Alt View's own phosphor).
+async function paintedInk(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('.hfm-overlay-canvas');
+    if (!canvas) return { yellow: -1, green: -1 };
+    const { data } = canvas
+      .getContext('2d')
+      .getImageData(0, 0, canvas.width, canvas.height);
+    let yellow = 0;
+    let green = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      if (r > 180 && g > 180 && b < 140) yellow += 1;
+      else if (g > 120 && r < 80 && b < 120) green += 1;
+    }
+    return { yellow, green };
+  });
+}
+
+async function expectYellowCharacters(page) {
+  await expect
+    .poll(
+      async () => {
+        const ink = await paintedInk(page);
+        return ink.yellow > 200 && ink.green < ink.yellow / 10;
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(true);
+}
+
 // With the Alt View on, Classic wears a retro look of its own, different
 // from the green and the amber: a token set on Classic's body, chosen by an
 // attribute the Alt View sets on the root and clears when it turns off.
@@ -3159,6 +3193,7 @@ test.describe('Classic in the Alt View', () => {
       .first()
       .evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(icon).toContain('url(');
+    await expectYellowCharacters(page);
 
     await key.click();
     await expect(page.locator('html')).not.toHaveAttribute('data-classic-retro');
@@ -3166,5 +3201,20 @@ test.describe('Classic in the Alt View', () => {
       getComputedStyle(document.body).getPropertyValue('--color-bg-primary').trim()
     );
     expect(after).toBe('#ffffff');
+  });
+
+  test('draws the characters in the look\'s accent when the Alt View starts inside Classic', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await loadSampleProject(page);
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await page.locator('#_hfmToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-ui-variant', 'mono');
+    await expectYellowCharacters(page);
   });
 });

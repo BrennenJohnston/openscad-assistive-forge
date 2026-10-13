@@ -39,9 +39,10 @@ let _hfmPersistFadeControls = null;
 let _hfmPanAdjustEnabled = false;
 let _hfmPanToggleButtons = null;
 let _hfmMotionListener = null;
+let _hfmModeListener = null;
 
 // Classic wears a retro look of its own while the Alt View is on; the root
-// carries which one, and the variant stylesheet gives it its values.
+// carries its name, and the variant stylesheet gives it its values.
 const _HFM_CLASSIC_LOOK = 'dos';
 
 // Late-bound dependencies set via initHfmController
@@ -575,6 +576,14 @@ async function _enableAltViewWithPreview(toggleBtn) {
   };
   motionMql.addEventListener('change', _hfmMotionListener);
 
+  // Classic's look carries an accent of its own, so the glyph atlas follows
+  // the layout mode as it follows the theme.
+  _hfmModeListener = () => {
+    _hfmAltView?.rebuildGlyphs?.();
+    _hfmAltView?.invalidate?.();
+  };
+  document.addEventListener('ui-mode-changed', _hfmModeListener);
+
   _loadSavedHfmSettings();
 
   _applyHfmContrastScale(_hfmContrastScale);
@@ -631,6 +640,10 @@ function _disableAltViewWithPreview(toggleBtn) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
     motionMql.removeEventListener('change', _hfmMotionListener);
     _hfmMotionListener = null;
+  }
+  if (_hfmModeListener) {
+    document.removeEventListener('ui-mode-changed', _hfmModeListener);
+    _hfmModeListener = null;
   }
 
   if (_hfmAltView) {

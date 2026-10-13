@@ -1454,10 +1454,10 @@
  *
  * Classic keeps its desktop tokens on the body, where they shadow the
  * phosphor tokens on the root. With the Alt View on, this block takes them
- * over with one set of names, and three looks give those names their
- * values. The look is chosen by data-classic-retro on the root, which the
- * Alt View sets and clears. The CRT glow tokens are restated here because
- * the root's resolve to the root's accent, not to this one.
+ * over with one set of names, and the look below gives those names their
+ * values, under data-classic-retro on the root, which the Alt View sets
+ * and clears. The CRT glow tokens are restated here because the root's
+ * resolve to the root's accent, not to this one.
  * ======================================== */
 :root[data-ui-variant='mono'] body[data-ui-mode='classic'] {
   --color-bg-primary: var(--retro-ground);
@@ -1520,7 +1520,8 @@
 }
 
 /* DOS blue: the text-mode desktop of the early 1990s, light text and
-   yellow accents on deep blue. */
+   yellow accents on deep blue; the preview's characters take the yellow
+   too, read from the body by the renderer. */
 :root[data-ui-variant='mono'][data-classic-retro='dos']
   body[data-ui-mode='classic'] {
   --retro-ground: #0000aa;
@@ -1543,54 +1544,8 @@
   --retro-vignette: rgba(0, 0, 0, 0.35);
 }
 
-/* Paper white: the white phosphor of the first desktop monitors. */
-:root[data-ui-variant='mono'][data-classic-retro='paper']
-  body[data-ui-mode='classic'] {
-  --retro-ground: #000000;
-  --retro-ground-rgb: 0, 0, 0;
-  --retro-strip: #0a0a0a;
-  --retro-raised: #121212;
-  --retro-text: #f0f0f0;
-  --retro-text-2: #c8c8c8;
-  --retro-text-3: #999999;
-  --retro-accent: #ffffff;
-  --retro-accent-hover: #ffffff;
-  --retro-on-accent: #000000;
-  --retro-subtle: #1a1a1a;
-  --retro-border: #f0f0f0;
-  --retro-border-light: #777777;
-  --retro-hover: #2a2a2a;
-  --retro-focus: #ffffff;
-  --retro-icon-filter: invert(1);
-  --retro-scanline: rgba(0, 0, 0, 0.12);
-  --retro-vignette: rgba(0, 0, 0, 0.52);
-}
-
-/* Pocket LCD: dark olive on the pale green of a handheld's unlit screen. */
-:root[data-ui-variant='mono'][data-classic-retro='lcd']
-  body[data-ui-mode='classic'] {
-  --retro-ground: #9bbc0f;
-  --retro-ground-rgb: 155, 188, 15;
-  --retro-strip: #8bac0f;
-  --retro-raised: #8bac0f;
-  --retro-text: #0f380f;
-  --retro-text-2: #1e4a1e;
-  --retro-text-3: #1e4a1e;
-  --retro-accent: #0f380f;
-  --retro-accent-hover: #306230;
-  --retro-on-accent: #9bbc0f;
-  --retro-subtle: #8bac0f;
-  --retro-border: #0f380f;
-  --retro-border-light: #306230;
-  --retro-hover: #8bac0f;
-  --retro-focus: #0f380f;
-  --retro-icon-filter: none;
-  --retro-scanline: rgba(15, 56, 15, 0.08);
-  --retro-vignette: rgba(15, 56, 15, 0.25);
-}
-
-/* Classic's toolbar icons are black drawings in an SVG sheet; the look says
-   whether they stay black (a pale ground) or turn light (a dark one). */
+/* Classic's toolbar icons are black drawings in an SVG sheet, turned light
+   for the look's dark ground. */
 :root[data-ui-variant='mono'] body[data-ui-mode='classic'] .classic-icon {
   filter: var(--retro-icon-filter, none);
 }
@@ -1599,4 +1554,12 @@
 :root[data-ui-variant='mono'] body[data-ui-mode='classic'] .app-header {
   background-color: var(--color-bg-secondary);
   color: var(--color-text-primary);
+}
+
+/* The title bars close with the double line of a text-mode window frame. */
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] .app-header,
+:root[data-ui-variant='mono']
+  body[data-ui-mode='classic']
+  .classic-pane-titlebar {
+  border-bottom: 3px double var(--color-border);
 }

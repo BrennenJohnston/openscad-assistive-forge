@@ -291,6 +291,17 @@ describe('getPhosphorColor', () => {
     // jsdom getComputedStyle returns '' for undefined custom properties
     expect(getPhosphorColor()).toBe('#00ff00')
   })
+
+  it('reads the accent on the body, where Classic keeps a look of its own', () => {
+    document.documentElement.style.setProperty('--color-accent', '#00ff00')
+    document.body.style.setProperty('--color-accent', '#ffff55')
+    try {
+      expect(getPhosphorColor()).toBe('#ffff55')
+    } finally {
+      document.documentElement.style.removeProperty('--color-accent')
+      document.body.style.removeProperty('--color-accent')
+    }
+  })
 })
 
 describe('paintFrame', () => {
