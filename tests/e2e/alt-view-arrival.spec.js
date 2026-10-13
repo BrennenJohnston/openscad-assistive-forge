@@ -8,6 +8,9 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { announcementsSince, recordAnnouncements } from './helpers/invariants.js';
+
+const SENTENCE = 'A key appeared next to the theme button.';
 
 const SEQUENCE = [
   'cameraRotateUp',
@@ -83,12 +86,31 @@ async function watch(page) {
   });
 }
 
+// Plays the sequence; returns the page's clock just before the last press.
 async function playSequence(page) {
-  for (const id of SEQUENCE) {
+  let before = 0;
+  for (const [i, id] of SEQUENCE.entries()) {
     const box = await page.locator(`#${id}`).boundingBox();
+    if (i === SEQUENCE.length - 1) before = await page.evaluate(() => performance.now());
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   }
+  return before;
 }
+
+// Every sound the page starts: when, and how long it lasts.
+async function listenForSound(page) {
+  await page.addInitScript(() => {
+    window.__sounds = [];
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args) {
+      window.__sounds.push({ at: performance.now(), seconds: this.buffer?.duration ?? null });
+      return start.apply(this, args);
+    };
+  });
+}
+
+const sentences = async (page) =>
+  (await announcementsSince(page, 0)).filter((a) => a.text === SENTENCE);
 
 test.describe('The key arrives', () => {
   test('it drops into its place, the buttons make room, and it becomes the ordinary key', async ({
@@ -146,5 +168,64 @@ test.describe('The key arrives', () => {
     const seen = await page.evaluate(() => window.__arrival);
     expect(seen.states).toEqual([]);
     await expect(page.locator('.alt-view-arrival')).toHaveCount(0);
+  });
+});
+
+// A short tune plays as the key drops, unless sounds are turned off in
+// Preferences; the screen reader's sentence waits until it has finished.
+test.describe('The tune', () => {
+  test('with sounds on, it plays as the key drops and the sentence follows it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await listenForSound(page);
+    await openBox(page);
+    const pressed = await playSequence(page);
+
+    await expect
+      .poll(() => page.evaluate(() => window.__sounds.length), { timeout: 5_000 })
+      .toBe(1);
+    const [sound] = await page.evaluate(() => window.__sounds);
+    expect(sound.seconds).toBeCloseTo(3.8, 1);
+    expect(sound.at - pressed).toBeLessThan(1_000);
+
+    await expect.poll(async () => (await sentences(page)).length, { timeout: 10_000 }).toBe(1);
+    const [said] = await sentences(page);
+    expect(said.t - sound.at).toBeGreaterThanOrEqual(3_800);
+    await page.waitForTimeout(1_000);
+    expect(await sentences(page)).toHaveLength(1);
+  });
+
+  test('with sounds off, no tune, and the sentence comes at once', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-sounds', 'false');
+    });
+    await recordAnnouncements(page);
+    await listenForSound(page);
+    await openBox(page);
+    const pressed = await playSequence(page);
+
+    await expect.poll(async () => (await sentences(page)).length, { timeout: 5_000 }).toBe(1);
+    const [said] = await sentences(page);
+    expect(said.t - pressed).toBeLessThan(2_000);
+    await page.waitForTimeout(1_000);
+    expect(await page.evaluate(() => window.__sounds)).toEqual([]);
+  });
+
+  test('Preferences offers it, on to begin with', async ({ page }) => {
+    test.setTimeout(240_000);
+    await openBox(page);
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /Preferences/ }).first().click();
+    await page.locator('#prefs-tab-advanced').click();
+    const sounds = page.getByRole('checkbox', { name: 'Play sounds' });
+    await expect(sounds).toBeVisible();
+    await expect(sounds).toBeChecked();
+    await sounds.uncheck();
+    expect(await page.evaluate(() => localStorage.getItem('openscad-forge-sounds'))).toBe(
+      'false'
+    );
   });
 });

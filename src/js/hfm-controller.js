@@ -10,8 +10,10 @@ import {
   STORAGE_KEY_HFM_CONTRAST_SCALE,
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
+  STORAGE_KEY_SOUNDS,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
+import { playUnlockJingle } from './unlock-jingle.js';
 
 // ---------------------------------------------------------------------------
 // HFM / Alt View state (module-level singleton)
@@ -54,6 +56,8 @@ const _HFM_UNLOCK_SENTENCE = 'A key appeared next to the theme button.';
 // held one. The button that completes the sequence speaks its own action
 // inside that hold, so the sentence waits past it and is written at once.
 const _HFM_UNLOCK_ANNOUNCE_DELAY_MS = 600;
+// With the tune playing, the sentence waits for its end and this pause.
+const _HFM_AFTER_TUNE_MS = 300;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -133,6 +137,15 @@ function _prefersReducedMotion() {
     typeof window !== 'undefined' &&
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
+}
+
+// Preferences ▸ Advanced ▸ Play sounds, on unless turned off.
+function _soundsOn() {
+  try {
+    return localStorage.getItem(STORAGE_KEY_SOUNDS) !== 'false';
+  } catch (_) {
+    return true;
+  }
 }
 
 function _formatPercent(value) {
@@ -1083,9 +1096,23 @@ function _handleUnlock({ moment = false } = {}) {
     el.hidden = false;
   });
 
-  window.setTimeout(() => {
-    announce(_HFM_UNLOCK_SENTENCE, { immediate: true });
-  }, _HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+  const sayIt = (delay) =>
+    window.setTimeout(() => {
+      announce(_HFM_UNLOCK_SENTENCE, { immediate: true });
+    }, delay);
+  if (moment && _soundsOn()) {
+    // The tune first, then the sentence, so neither covers the other. A tune
+    // that cannot play leaves the sentence at its usual time.
+    playUnlockJingle().then(
+      (seconds) => sayIt(seconds * 1000 + _HFM_AFTER_TUNE_MS),
+      (error) => {
+        console.warn('[Alt View] The unlock tune did not play:', error);
+        sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+      }
+    );
+  } else {
+    sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+  }
 
   const container = document.getElementById('previewContainer');
   if (container) {

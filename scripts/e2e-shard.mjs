@@ -135,9 +135,9 @@ export const MEASURED_SECONDS = {
   'alt-view-consistency.spec.js': 120.0,
   // Two cases, each loading the box: 17.6 s locally; booked at 30.
   'alt-view-reveal.spec.js': 30.0,
-  // Three cases, each loading the box and waiting out the key's 5 s arrival:
-  // 30.7 s locally; booked at 45.
-  'alt-view-arrival.spec.js': 45.0,
+  // Six cases, each loading the box, most waiting out the key's 5 s arrival
+  // or the tune: about 55 s locally; booked at 80.
+  'alt-view-arrival.spec.js': 80.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,

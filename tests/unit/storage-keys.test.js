@@ -63,6 +63,7 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_METRICS_LOG: 'openscad-forge-metrics-log',
   STORAGE_KEY_LAZY_UNION: 'openscad-forge-lazy-union',
   STORAGE_KEY_MANIFOLD_ENGINE: 'openscad-forge-manifold-engine',
+  STORAGE_KEY_SOUNDS: 'openscad-forge-sounds',
 
   // UI mode (ui-mode-controller.js)
   STORAGE_KEY_UI_MODE: 'openscad-forge-ui-mode',
