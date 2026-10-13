@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.5.0] - 2026-10-13
+
 ### Added
 
 - The Alt View has Characters (Fine, Normal, Bold) and Edges (Soft, Normal,
