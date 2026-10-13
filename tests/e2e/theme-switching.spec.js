@@ -875,7 +875,9 @@ test.describe('The unlock is heard', () => {
     const saidIt = async () =>
       (await announcementsSince(page, mark)).filter((a) => a.text === SENTENCE)
         .length;
-    await expect.poll(saidIt, { timeout: 5_000 }).toBe(1);
+    // Found this way, a short tune plays first and the sentence follows it,
+    // about 4 s after the last press.
+    await expect.poll(saidIt, { timeout: 10_000 }).toBe(1);
     await page.waitForTimeout(1_500);
     expect(await saidIt()).toBe(1);
   });

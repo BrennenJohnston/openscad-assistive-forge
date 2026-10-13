@@ -123,6 +123,67 @@ describe('the character size the Alt View starts with', () => {
   })
 })
 
+describe('the glow the Alt View starts with', () => {
+  const GLOW_KEY = 'openscad-forge-hfm-persist-fade'
+  let matchMedia
+
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    matchMedia = window.matchMedia
+  })
+
+  afterEach(() => {
+    window.matchMedia = matchMedia
+    vi.useRealTimers()
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  function reduceMotion() {
+    window.matchMedia = vi.fn((query) => ({
+      matches: query.includes('prefers-reduced-motion: reduce'),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  }
+
+  async function lastAltView() {
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    return initAltView.mock.results.at(-1).value
+  }
+
+  it('is a gentle 15% when nothing is saved, and a saved 0 stays 0', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0.15)
+    controller.disableAltViewWithPreview(toggle)
+
+    localStorage.setItem(GLOW_KEY, '0')
+    const controller2 = await freshController(previewManagerStub())
+    await controller2.enableAltViewWithPreview(toggle)
+    expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
+  })
+
+  it('with reduced motion is held at 0, says so, and leaves the saved choice alone', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    reduceMotion()
+    pageWithHeaderAndDpad()
+    localStorage.setItem(GLOW_KEY, '0.4')
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    document.documentElement.setAttribute('data-ui-variant', 'mono')
+    await controller.enableAltViewWithPreview(toggle)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
+    expect(document.getElementById('previewStatusAltAdjust').textContent).toContain('GLOW 0%')
+    expect(localStorage.getItem(GLOW_KEY)).toBe('0.4')
+  })
+})
+
 describe('the grid when the Alt View turns on and off', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -332,8 +393,9 @@ describe('the Alt View and pan adjust speak plainly', () => {
     expect(controller.onPanControl({ direction: 'left', shiftKey: false })).toBe(
       'Characters 55%'
     )
+    // One step up from the 15% the glow starts at.
     expect(controller.onPanControl({ direction: 'up', shiftKey: true })).toBe(
-      'Glow 5%'
+      'Glow 20%'
     )
 
     adjust.click()

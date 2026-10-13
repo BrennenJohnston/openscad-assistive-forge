@@ -763,6 +763,184 @@ body[data-app-surface='welcome'] #uiModeToggle {
   border-color: var(--color-accent) !important;
 }
 
+/* Found by the camera sequence, the key drops in from the top of the screen
+   wearing the look it would turn on, the buttons after it making room as it
+   comes down the last stretch; it rests, then redraws itself line by line as
+   the ordinary key. The controller steps data-arrival from dropping to
+   landed to settled, then removes it and the falling copy. With reduced
+   motion the key simply appears. */
+.alt-view-arrival {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .alt-view-toggle[data-arrival] {
+    --alt-view-drop-duration: 3.2s;
+    --alt-view-scan-duration: 1.6s;
+    position: relative;
+    z-index: var(--z-index-base);
+  }
+
+  .alt-view-toggle[data-arrival='dropping'],
+  .alt-view-toggle[data-arrival='landed'] {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .alt-view-toggle[data-arrival='dropping'] > svg,
+  .alt-view-toggle[data-arrival='landed'] > svg {
+    visibility: hidden;
+  }
+
+  .alt-view-toggle[data-arrival='dropping'] {
+    animation: alt-view-key-make-room calc(var(--alt-view-drop-duration) * 0.86)
+      linear both;
+  }
+
+  .alt-view-arrival {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 100%;
+    transform: translateX(-50%);
+    background: var(--alt-view-key-ground);
+    border: 1px solid var(--alt-view-key-accent);
+    color: var(--alt-view-key-accent);
+    pointer-events: none;
+    animation: alt-view-key-drop var(--alt-view-drop-duration) both;
+  }
+
+  .alt-view-arrival svg {
+    stroke: var(--alt-view-key-accent);
+    animation: alt-view-key-sparkle 600ms steps(4, end) infinite;
+  }
+
+  /* Glints around the key's ring. */
+  .alt-view-arrival::before {
+    content: '';
+    position: absolute;
+    top: 30%;
+    left: 30%;
+    width: 2px;
+    height: 2px;
+    background: var(--alt-view-key-accent);
+    box-shadow:
+      6px -4px 0 var(--alt-view-key-accent),
+      12px 8px 0 var(--alt-view-key-accent),
+      -3px 10px 0 var(--alt-view-key-accent);
+    animation: alt-view-key-glint 900ms steps(3, end) infinite;
+  }
+
+  /* The scan line at the redraw's edge. */
+  .alt-view-arrival::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 2px;
+    background: var(--alt-view-key-accent);
+    opacity: 0;
+  }
+
+  .alt-view-toggle[data-arrival='settled'] .alt-view-arrival {
+    animation: alt-view-key-scan var(--alt-view-scan-duration) steps(16, end)
+      forwards;
+  }
+
+  .alt-view-toggle[data-arrival='settled'] .alt-view-arrival::after {
+    opacity: 1;
+    animation: alt-view-key-scanline var(--alt-view-scan-duration)
+      steps(16, end) forwards;
+  }
+}
+
+/* Collapsed until the last stretch, then the key's own size: the end is the
+   button's ordinary width, padding and border. The negative margin takes
+   back the row's gap so nothing moves before the slot opens. */
+@keyframes alt-view-key-make-room {
+  0%,
+  81% {
+    width: 0;
+    min-width: 0;
+    padding-inline: 0;
+    border-inline-width: 0;
+    margin-inline-start: calc(-1 * var(--space-xs));
+  }
+}
+
+/* In from above the screen, a slow sparkling drift, the drop, one bounce. */
+@keyframes alt-view-key-drop {
+  0% {
+    transform: translate(-50%, var(--alt-view-drop-from, 0));
+    animation-timing-function: ease-out;
+  }
+  12% {
+    transform: translate(-50%, calc(var(--alt-view-drop-from, 0px) * 0.55));
+    animation-timing-function: linear;
+  }
+  70% {
+    transform: translate(-50%, calc(var(--alt-view-drop-from, 0px) * 0.35));
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  86% {
+    transform: translate(-50%, 0);
+    animation-timing-function: ease-out;
+  }
+  93% {
+    transform: translate(-50%, calc(-1 * var(--space-xs)));
+    animation-timing-function: ease-in;
+  }
+  100% {
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes alt-view-key-sparkle {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px var(--alt-view-key-accent));
+  }
+  50% {
+    filter: drop-shadow(0 0 3px var(--alt-view-key-accent)) brightness(1.5);
+  }
+}
+
+@keyframes alt-view-key-glint {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  33% {
+    opacity: 0.25;
+  }
+  66% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes alt-view-key-scan {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(100% 0 0 0);
+  }
+}
+
+@keyframes alt-view-key-scanline {
+  from {
+    top: 0;
+  }
+  to {
+    top: 100%;
+  }
+}
+
 /* Alt Adjust Toggle Button (placed in PAN D-pad center when alt-view is active) */
 .alt-pan-toggle {
   background: var(--color-bg-tertiary);

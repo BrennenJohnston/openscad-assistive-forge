@@ -202,6 +202,7 @@ import {
   STORAGE_KEY_PARAM_PANEL_COLLAPSED,
   STORAGE_KEY_LAYOUT_SIZES,
   STORAGE_KEY_MANIFOLD_ENGINE,
+  STORAGE_KEY_SOUNDS,
   STORAGE_KEY_WASM_INIT_STARTED,
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
@@ -6997,6 +6998,19 @@ async function initApp() {
     });
   }
 
+  // Play sounds: on unless turned off. The moments that play one read the
+  // stored choice when they happen.
+  const soundsToggle = document.getElementById('soundsToggle');
+  if (soundsToggle) {
+    soundsToggle.checked = localStorage.getItem(STORAGE_KEY_SOUNDS) !== 'false';
+    soundsToggle.addEventListener('change', () => {
+      localStorage.setItem(
+        STORAGE_KEY_SOUNDS,
+        soundsToggle.checked ? 'true' : 'false'
+      );
+    });
+  }
+
   // Wire model color picker and override toggle
   const modelColorPicker = document.getElementById('modelColorPicker');
   const modelColorReset = document.getElementById('modelColorReset');
@@ -11577,8 +11591,9 @@ if (rounded) {
       hfmCtrl.handleUnlock();
     }
 
-    // Initialize input sequence detector (still works for non-dev users)
-    initSequenceDetector(() => hfmCtrl.handleUnlock());
+    // Initialize input sequence detector (still works for non-dev users).
+    // Finding it this way is the moment the key's arrival is for.
+    initSequenceDetector(() => hfmCtrl.handleUnlock({ moment: true }));
 
     // Expose DevTools helper for manual unlock
     window.__unlockAltView = () => {

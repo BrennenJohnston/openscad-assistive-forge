@@ -10,8 +10,10 @@ import {
   STORAGE_KEY_HFM_CONTRAST_SCALE,
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
+  STORAGE_KEY_SOUNDS,
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
+import { playUnlockJingle } from './unlock-jingle.js';
 
 // ---------------------------------------------------------------------------
 // HFM / Alt View state (module-level singleton)
@@ -34,7 +36,9 @@ const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 0.6 };
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
 
-const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0 };
+// A gentle afterglow to begin with; a saved 0 stays 0, and reduced motion
+// holds it at 0.
+const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0.15 };
 let _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
 let _hfmPersistFadeControls = null;
 
@@ -54,6 +58,8 @@ const _HFM_UNLOCK_SENTENCE = 'A key appeared next to the theme button.';
 // held one. The button that completes the sequence speaks its own action
 // inside that hold, so the sentence waits past it and is written at once.
 const _HFM_UNLOCK_ANNOUNCE_DELAY_MS = 600;
+// With the tune playing, the sentence waits for its end and this pause.
+const _HFM_AFTER_TUNE_MS = 300;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -86,6 +92,37 @@ const _HFM_EDGE_LEVELS = [
 ];
 let _hfmEdgeLevels = null;
 
+// The first Alt View in a page draws in from the top and the status line
+// types a greeting before its ordinary line; later ones start at once. The
+// line is not live, so the greeting is for the eye only.
+const _HFM_GREETING = 'ALT VIEW ONLINE';
+const _HFM_GREETING_LETTER_MS = 40;
+const _HFM_GREETING_HOLD_MS = 700;
+// The draw-in lasts the variant's --crt-reveal-duration (1 s) once it starts,
+// and a slow machine takes most of a second to start it (0.65 s measured
+// under 4x CPU throttling). This clears it if the animation never runs, as
+// with forced colors.
+const _HFM_REVEAL_FALLBACK_MS = 3000;
+let _hfmRevealPlayed = false;
+let _hfmRevealTimer = null;
+let _hfmGreetingPlayed = false;
+let _hfmGreetingTimer = null;
+let _hfmStatusOverride = null;
+// The first picture rasters in once per page, after the draw-in when that
+// plays; the stylesheet times both. This clears it if it never ends.
+const _HFM_RASTER_FALLBACK_MS = 4000;
+let _hfmRasterPlayed = false;
+let _hfmRasterTimer = null;
+
+// Found by the camera sequence, the key drops into its place wearing the Alt
+// View's colors, rests a moment, then redraws itself as the ordinary key. The
+// stylesheet times the drop and the redraw; the rest is here.
+const _HFM_KEY_REST_MS = 300;
+// Clears the arrival if its animations never end, as in a hidden tab.
+const _HFM_ARRIVAL_FALLBACK_MS = 12000;
+let _hfmArrival = null;
+const _hfmArrivalTimers = { rest: null, fallback: null };
+
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
 let _getDisplayOptionsController = () => null;
@@ -107,6 +144,15 @@ function _prefersReducedMotion() {
     typeof window !== 'undefined' &&
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
+}
+
+// Preferences ▸ Advanced ▸ Play sounds, on unless turned off.
+function _soundsOn() {
+  try {
+    return localStorage.getItem(STORAGE_KEY_SOUNDS) !== 'false';
+  } catch (_) {
+    return true;
+  }
 }
 
 function _formatPercent(value) {
@@ -151,13 +197,15 @@ function _updateHfmStatusBar() {
   if (controls) controls.hidden = false;
 
   let displayText;
-  if (_hfmPanAdjustEnabled) {
+  if (_hfmStatusOverride !== null) {
+    displayText = _hfmStatusOverride;
+  } else if (_hfmPanAdjustEnabled) {
     displayText =
       '[ALT ADJUST] \u25B2\u25BC edge \u00B7 \u25C4\u25BA size \u00B7 Shift+\u25B2\u25BC glow';
   } else {
     const edge = _formatPercent(_hfmContrastScale);
     const size = _formatPercent(_hfmFontScale);
-    const glow = _formatPercent(_hfmPersistFade);
+    const glow = _formatPercent(_prefersReducedMotion() ? 0 : _hfmPersistFade);
     displayText = `[ALT VIEW] EDGE ${edge} \u00B7 SIZE ${size} \u00B7 GLOW ${glow}`;
   }
 
@@ -665,6 +713,84 @@ function _loadSavedHfmSettings() {
   }
 }
 
+function _onAltViewRevealEnd(event) {
+  if (event.animationName === 'alt-view-reveal') _endAltViewReveal();
+}
+
+function _endAltViewReveal() {
+  clearTimeout(_hfmRevealTimer);
+  _hfmRevealTimer = null;
+  document.body?.removeEventListener('animationend', _onAltViewRevealEnd);
+  document.documentElement.removeAttribute('data-alt-view-reveal');
+}
+
+/** @returns {boolean} Whether the draw-in is playing now. */
+function _playAltViewReveal() {
+  if (_hfmRevealPlayed) return false;
+  _hfmRevealPlayed = true;
+  if (_prefersReducedMotion()) return false;
+  document.body?.addEventListener('animationend', _onAltViewRevealEnd);
+  _hfmRevealTimer = setTimeout(_endAltViewReveal, _HFM_REVEAL_FALLBACK_MS);
+  document.documentElement.setAttribute('data-alt-view-reveal', '');
+  return true;
+}
+
+function _onRasterInEnd(event) {
+  if (event.animationName === 'alt-view-raster-in') _endRasterIn();
+}
+
+function _endRasterIn() {
+  clearTimeout(_hfmRasterTimer);
+  _hfmRasterTimer = null;
+  const canvas = document.querySelector('.hfm-overlay-canvas');
+  if (!canvas) return;
+  canvas.removeEventListener('animationend', _onRasterInEnd);
+  canvas.classList.remove(
+    'alt-view-raster-in',
+    'alt-view-raster-in--after-reveal'
+  );
+}
+
+function _rasterInFirstPicture(afterReveal) {
+  if (_hfmRasterPlayed) return;
+  _hfmRasterPlayed = true;
+  const canvas = document.querySelector('.hfm-overlay-canvas');
+  if (!canvas || _prefersReducedMotion()) return;
+  canvas.addEventListener('animationend', _onRasterInEnd);
+  _hfmRasterTimer = setTimeout(_endRasterIn, _HFM_RASTER_FALLBACK_MS);
+  canvas.classList.add('alt-view-raster-in');
+  if (afterReveal) canvas.classList.add('alt-view-raster-in--after-reveal');
+}
+
+function _typeAltViewGreeting() {
+  if (_hfmGreetingPlayed) return;
+  _hfmGreetingPlayed = true;
+  let shown = _prefersReducedMotion() ? _HFM_GREETING.length : 1;
+  const step = () => {
+    _hfmStatusOverride = _HFM_GREETING.slice(0, shown);
+    _updateHfmStatusBar();
+    if (shown < _HFM_GREETING.length) {
+      shown += 1;
+      _hfmGreetingTimer = setTimeout(step, _HFM_GREETING_LETTER_MS);
+      return;
+    }
+    _hfmGreetingTimer = setTimeout(() => {
+      _hfmGreetingTimer = null;
+      _hfmStatusOverride = null;
+      _updateHfmStatusBar();
+    }, _HFM_GREETING_HOLD_MS);
+  };
+  step();
+}
+
+function _stopAltViewStart() {
+  _endAltViewReveal();
+  _endRasterIn();
+  clearTimeout(_hfmGreetingTimer);
+  _hfmGreetingTimer = null;
+  _hfmStatusOverride = null;
+}
+
 async function _enableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   if (!previewManager) return;
@@ -718,7 +844,13 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   _applyHfmContrastScale(_hfmContrastScale);
   _applyHfmFontScale(_hfmFontScale);
-  _applyHfmPersistFade(_hfmPersistFade);
+  if (_prefersReducedMotion()) {
+    // Afterglow is motion: held at 0 without saving, so the person's own
+    // value is there when motion is allowed again.
+    _hfmAltView.setPersistFade?.(0);
+  } else {
+    _applyHfmPersistFade(_hfmPersistFade);
+  }
   _setHfmSlidersEnabled(true);
 
   // The model stays where the ordinary preview puts it, its bottom on the
@@ -735,7 +867,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
   });
   previewManager.applyGridForAltView?.(true);
 
+  const revealing = _playAltViewReveal();
   root.setAttribute('data-ui-variant', 'mono');
+  _rasterInFirstPicture(revealing);
 
   const newTheme = previewManager.detectTheme();
   previewManager.updateTheme(
@@ -750,6 +884,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   toggleBtn?.setAttribute('aria-pressed', 'true');
   _hfmEnabled = true;
   _hfmPendingEnable = false;
+  _typeAltViewGreeting();
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -761,6 +896,8 @@ async function _enableAltViewWithPreview(toggleBtn) {
 function _disableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   const root = document.documentElement;
+
+  _stopAltViewStart();
 
   if (_hfmMotionListener) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -808,6 +945,48 @@ function _disableAltViewWithPreview(toggleBtn) {
 // ---------------------------------------------------------------------------
 // Toggle injection & unlock
 // ---------------------------------------------------------------------------
+
+function _endKeyArrival() {
+  if (!_hfmArrival) return;
+  const { toggle, shown, onEnd } = _hfmArrival;
+  _hfmArrival = null;
+  clearTimeout(_hfmArrivalTimers.rest);
+  clearTimeout(_hfmArrivalTimers.fallback);
+  toggle.removeEventListener('animationend', onEnd);
+  toggle.removeAttribute('data-arrival');
+  shown.remove();
+}
+
+function _playKeyArrival(toggle) {
+  if (!toggle || _prefersReducedMotion()) return;
+  const shown = document.createElement('span');
+  shown.className = 'alt-view-arrival';
+  shown.setAttribute('aria-hidden', 'true');
+  shown.innerHTML = toggle.querySelector('svg')?.outerHTML ?? '';
+  // From just above the top of the screen to the key's place.
+  const bottom = Math.ceil(toggle.getBoundingClientRect().bottom);
+  shown.style.setProperty('--alt-view-drop-from', `${-bottom}px`);
+
+  const onEnd = (event) => {
+    if (event.target !== shown || event.pseudoElement) return;
+    if (event.animationName === 'alt-view-key-drop') {
+      toggle.setAttribute('data-arrival', 'landed');
+      _hfmArrivalTimers.rest = setTimeout(() => {
+        toggle.setAttribute('data-arrival', 'settled');
+      }, _HFM_KEY_REST_MS);
+    } else if (event.animationName === 'alt-view-key-scan') {
+      _endKeyArrival();
+    }
+  };
+  _hfmArrival = { toggle, shown, onEnd };
+  toggle.addEventListener('animationend', onEnd);
+  _hfmArrivalTimers.fallback = setTimeout(
+    _endKeyArrival,
+    _HFM_ARRIVAL_FALLBACK_MS
+  );
+  toggle.appendChild(shown);
+  toggle.setAttribute('data-arrival', 'dropping');
+}
 
 function _injectAltToggle() {
   const themeToggle = document.getElementById('themeToggle');
@@ -894,6 +1073,7 @@ function _injectAltToggle() {
   mobilePanToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
 
   toggleBtn.addEventListener('click', async () => {
+    _endKeyArrival();
     const root = document.documentElement;
     const isCurrentlyEnabled =
       toggleBtn.getAttribute('aria-pressed') === 'true';
@@ -906,10 +1086,12 @@ function _injectAltToggle() {
     if (!previewManager) {
       if (!isCurrentlyEnabled) {
         _setAssetsForVariant(true);
+        _playAltViewReveal();
         root.setAttribute('data-ui-variant', 'mono');
         toggleBtn.setAttribute('aria-pressed', 'true');
         _hfmPendingEnable = true;
       } else {
+        _stopAltViewStart();
         root.removeAttribute('data-ui-variant');
         _setAssetsForVariant(false);
         toggleBtn.setAttribute('aria-pressed', 'false');
@@ -942,19 +1124,39 @@ function _injectAltToggle() {
   }
 }
 
-function _handleUnlock() {
+/**
+ * @param {Object} [options]
+ * @param {boolean} [options.moment] - Found by the camera sequence: the key
+ *   arrives with its drop instead of simply appearing.
+ */
+function _handleUnlock({ moment = false } = {}) {
   if (_hfmUnlocked) return;
   _hfmUnlocked = true;
 
   _injectAltToggle();
+  if (moment) _playKeyArrival(document.getElementById('_hfmToggle'));
 
   document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
     el.hidden = false;
   });
 
-  window.setTimeout(() => {
-    announce(_HFM_UNLOCK_SENTENCE, { immediate: true });
-  }, _HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+  const sayIt = (delay) =>
+    window.setTimeout(() => {
+      announce(_HFM_UNLOCK_SENTENCE, { immediate: true });
+    }, delay);
+  if (moment && _soundsOn()) {
+    // The tune first, then the sentence, so neither covers the other. A tune
+    // that cannot play leaves the sentence at its usual time.
+    playUnlockJingle().then(
+      (seconds) => sayIt(seconds * 1000 + _HFM_AFTER_TUNE_MS),
+      (error) => {
+        console.warn('[Alt View] The unlock tune did not play:', error);
+        sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+      }
+    );
+  } else {
+    sayIt(_HFM_UNLOCK_ANNOUNCE_DELAY_MS);
+  }
 
   const container = document.getElementById('previewContainer');
   if (container) {
