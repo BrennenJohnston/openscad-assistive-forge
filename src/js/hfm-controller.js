@@ -36,7 +36,9 @@ const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 0.6 };
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
 
-const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0 };
+// A gentle afterglow to begin with; a saved 0 stays 0, and reduced motion
+// holds it at 0.
+const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0.15 };
 let _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
 let _hfmPersistFadeControls = null;
 
@@ -203,7 +205,7 @@ function _updateHfmStatusBar() {
   } else {
     const edge = _formatPercent(_hfmContrastScale);
     const size = _formatPercent(_hfmFontScale);
-    const glow = _formatPercent(_hfmPersistFade);
+    const glow = _formatPercent(_prefersReducedMotion() ? 0 : _hfmPersistFade);
     displayText = `[ALT VIEW] EDGE ${edge} \u00B7 SIZE ${size} \u00B7 GLOW ${glow}`;
   }
 
@@ -842,7 +844,13 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   _applyHfmContrastScale(_hfmContrastScale);
   _applyHfmFontScale(_hfmFontScale);
-  _applyHfmPersistFade(_hfmPersistFade);
+  if (_prefersReducedMotion()) {
+    // Afterglow is motion: held at 0 without saving, so the person's own
+    // value is there when motion is allowed again.
+    _hfmAltView.setPersistFade?.(0);
+  } else {
+    _applyHfmPersistFade(_hfmPersistFade);
+  }
   _setHfmSlidersEnabled(true);
 
   // The model stays where the ordinary preview puts it, its bottom on the
