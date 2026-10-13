@@ -8,6 +8,7 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -170,6 +171,10 @@ test.describe('the Alt View’s Characters control on a phone', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await openBox(page);
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
     const key = page.locator('#_hfmToggle');
     await expect(key).toBeVisible();
     await key.click();

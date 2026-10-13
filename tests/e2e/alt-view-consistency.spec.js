@@ -12,6 +12,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 test.describe.configure({ mode: 'serial', timeout: 240_000 });
 
@@ -63,7 +64,15 @@ async function openProject(page, example = 'simple-box') {
   }
 }
 
+// With a project open the Alt View draws from the 3D picture; on the Main
+// Page it is the interface alone, which needs no WebGL.
 async function altViewOn(page) {
+  if (await page.evaluate(() => Boolean(window.previewManager))) {
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
+  }
   const key = page.locator('#_hfmToggle');
   await key.waitFor({ state: 'attached', timeout: 60_000 });
   if ((await key.getAttribute('aria-pressed')) !== 'true') await key.click();
@@ -689,7 +698,8 @@ test.describe('The Alt View keeps to its tokens', () => {
 });
 
 test.describe('The Alt View at a phone width', () => {
-  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  // No isMobile: Firefox rejects it when the browser context is created.
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
   test.beforeEach(async ({ page }) => {
     await seed(page, { unlock: true, theme: 'dark' });
@@ -698,10 +708,12 @@ test.describe('The Alt View at a phone width', () => {
   test('a project and its camera drawer', async ({ page }) => {
     test.setTimeout(300_000);
     await openProject(page);
-    expect(
-      await page.evaluate(() => [innerWidth, matchMedia('(pointer: coarse)').matches]),
-      'a phone: 390 px wide, a finger for a pointer'
-    ).toEqual([390, true]);
+    const [width, coarse] = await page.evaluate(() => [
+      innerWidth,
+      matchMedia('(pointer: coarse)').matches,
+    ]);
+    expect(width, 'a phone: 390 px wide').toBe(390);
+    test.skip(!coarse, 'this browser does not emulate a finger for a pointer');
     await altViewOn(page);
     expectInTheLook(await audit(page, null), 'a project at a phone width');
     await page.locator('#cameraDrawerToggle').click();
@@ -755,8 +767,15 @@ test.describe('The Alt View with the system settings', () => {
     expectInTheLook(await audit(page, null), 'a project with high contrast');
   });
 
-  test('reduced transparency keeps a dialog backdrop solid', async ({ page }) => {
+  test('reduced transparency keeps a dialog backdrop solid', async ({
+    page,
+    browserName,
+  }) => {
     test.setTimeout(300_000);
+    test.skip(
+      browserName !== 'chromium',
+      'the setting is switched on through a Chromium DevTools session'
+    );
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setEmulatedMedia', {
       features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],

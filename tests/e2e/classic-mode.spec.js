@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { changeOneParameter, reloadAnsweringDraft } from './helpers/draft-question.js';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 // Classic mode (desktop-OpenSCAD-style layout).
 //
@@ -3170,6 +3171,10 @@ test.describe('Classic in the Alt View', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await loadSampleProject(page);
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
     const key = page.locator('#_hfmToggle');
     await key.click();
     await expect(page.locator('html')).toHaveAttribute(
@@ -3211,6 +3216,10 @@ test.describe('Classic in the Alt View', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await loadSampleProject(page);
+    await skipWithoutWebGL(
+      page,
+      'no WebGL: the Alt View draws its characters from the 3D picture'
+    );
     await page.locator('#classicModeToggle').click();
     await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
     await page.locator('#_hfmToggle').click();

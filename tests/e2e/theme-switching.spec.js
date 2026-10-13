@@ -9,6 +9,11 @@ import {
   announcementsSince,
   recordAnnouncements,
 } from './helpers/invariants.js';
+import { skipWithoutWebGL } from './helpers/webgl.js';
+
+// With a project open the Alt View draws from the 3D picture.
+const NEEDS_WEBGL =
+  'no WebGL: the Alt View draws its characters from the 3D picture';
 
 // Dismiss first-visit modal and seed an explicit theme preference on first
 // load so the theme cycle (auto→light→dark→auto) always produces a visible
@@ -937,6 +942,7 @@ test.describe('The Alt View and pan adjust speak plainly', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
     await page.waitForFunction(() => window.previewManager?.mesh, null, {
       timeout: 180_000,
     });
@@ -1002,6 +1008,7 @@ test.describe('The Characters control beside the status line', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
     await page.waitForFunction(() => window.previewManager?.mesh, null, {
       timeout: 180_000,
     });
@@ -1080,6 +1087,7 @@ test.describe('The character-size shortcuts', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
     await page.waitForFunction(() => window.previewManager?.mesh, null, {
       timeout: 180_000,
     });
@@ -1146,6 +1154,7 @@ test.describe('The Edges control beside the status line', () => {
       localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
     });
     await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
     await page.waitForFunction(() => window.previewManager?.mesh, null, {
       timeout: 180_000,
     });
@@ -1219,6 +1228,7 @@ test.describe('The grid in the Alt View', () => {
   }) => {
     test.setTimeout(240_000);
     await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
     await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
       timeout: 180_000,
     });
@@ -1265,6 +1275,7 @@ test.describe('The Alt View starts with finer characters', () => {
   test('shows 60% characters when nothing is saved', async ({ page }) => {
     test.setTimeout(240_000);
     await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
     await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
       timeout: 180_000,
     });
@@ -1299,6 +1310,7 @@ test.describe('The model stays on the bed in the Alt View', () => {
   }) => {
     test.setTimeout(240_000);
     await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
     await page.waitForFunction(() => window.previewManager?.mesh, null, {
       timeout: 180_000,
     });
