@@ -574,10 +574,13 @@ export function initCompanionFilesController({
           .loadOverlayFromProjectFile(resolved.key)
           .then(() => {
             overlayGridCtrl.autoApplyScreenDimensionsFromParams(parameters);
+            const wasOff = !overlayToggle.checked;
             overlayToggle.checked = true;
             previewManager.setOverlayEnabled(true);
             overlayGridCtrl.updateOverlayUIFromConfig();
             overlayGridCtrl.updateOverlayStatus?.();
+            if (wasOff)
+              announceImmediate(`Reference image on: ${resolved.key}`);
           })
           .catch((err) => {
             console.warn(
@@ -655,6 +658,7 @@ export function initCompanionFilesController({
             previewManager?.setOverlayEnabled(true);
             overlayGridCtrl.updateOverlayUIFromConfig();
             overlayGridCtrl.updateOverlayStatus?.();
+            announceImmediate(`Reference image on: ${screenshotFile}`);
             console.log(
               '[App] Overlay auto-enabled for screenshot companion file'
             );
