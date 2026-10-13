@@ -112,6 +112,30 @@ async function listenForSound(page) {
 const sentences = async (page) =>
   (await announcementsSince(page, 0)).filter((a) => a.text === SENTENCE);
 
+// Whether this browser can start a sound at all: some test machines have no
+// sound device, and an audio context there never starts. The next press on
+// the page tries one of its own; read the answer after it.
+async function probeSound(page) {
+  await page.evaluate(() => {
+    window.__canSound = new Promise((resolve) => {
+      document.addEventListener(
+        'click',
+        () => {
+          const Context = window.AudioContext || window.webkitAudioContext;
+          if (!Context) return resolve(false);
+          const context = new Context();
+          const timer = setTimeout(() => resolve(false), 1_000);
+          context.resume().then(() => {
+            clearTimeout(timer);
+            resolve(context.state === 'running');
+          });
+        },
+        { capture: true, once: true }
+      );
+    });
+  });
+}
+
 test.describe('The key arrives', () => {
   test('it drops into its place, the buttons make room, and it becomes the ordinary key', async ({
     page,
@@ -181,7 +205,12 @@ test.describe('The tune', () => {
     await recordAnnouncements(page);
     await listenForSound(page);
     await openBox(page);
+    await probeSound(page);
     const pressed = await playSequence(page);
+    test.skip(
+      !(await page.evaluate(() => window.__canSound)),
+      'this browser cannot start a sound here (no sound device)'
+    );
 
     await expect
       .poll(() => page.evaluate(() => window.__sounds.length), { timeout: 5_000 })
