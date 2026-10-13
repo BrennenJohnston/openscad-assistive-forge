@@ -325,23 +325,31 @@ box, with the site's address in its title, is never heard.
 
 ## The last run
 
-2026-10-11, on the development builds that followed 5.2.2, a scripted run:
-NVDA 2026.2 logging at Input/output, a headed Chromium at 1920 by 889, each
-step cut from the log with `nvda-tail`. Sections 1 to 6, 12 to
-14 and 16 were heard. Sections 7 to 11 were not run this time, and section 15
-was last heard on 2026-10-09, on the release before.
+2026-10-12, on the release candidate for 5.4.0, a scripted run: NVDA 2026.2
+logging at Input/output, a headed Chromium at 1920 by 889, each step cut
+from the log with `nvda-tail`. Sections 1 to 6, 12 to 14, 16 and 17 were
+heard on the flows the release changed; sections 7 to 11 were heard this
+time, on a small line drawing and the clip charm; section 15 on the same
+day.
 
-- Sections 3 and 5: "Preview ready" once per change; a Generate says its
-  start, then "STL ready" (or "OBJ ready") once, with the download control
-  next.
-- Section 5's broken model: "Preview failed: Code Problem Found. Parser
-  error: syntax error in file my_mistake.scad, line 4", once.
-- Section 12: each tour step read once; the end says one sentence and
-  focus returns to the button that started the tour.
-- Sections 13 and 14: every dialog closed by Escape put focus back on the
-  control that opened it; the two NVDA behaviors in section 13's rows were
-  the only doubles heard.
-- Section 16: every row as written.
+- Sections 3 and 5: "Preview ready" once per change; "Console copied" once
+  after Copy.
+- Section 7: a small picture converts as soon as it is chosen, "Converting
+  test-image.png" as a dialog with its Cancel button, then "Converted: 1
+  shape" once.
+- Section 8: the list reads "Shapes" with its help sentence, a row as "Role
+  for Path 1" with its three radios ("On, radio button, checked, 1 of 3"),
+  a role change says "Preview updated: 1 on, 0 cut out." once; "More for
+  Path 1" says expanded and collapsed.
+- Sections 8 to 11, the doubling the warning above describes is real: Ctrl+A
+  said "All 1 shape selected." twice, the View radios said "Showing the
+  charm." and "Showing the drawing." twice each, and Crop said "Crop view
+  open. Four sliders take an edge off the picture." twice, each pair word for
+  word and under half a second apart. Nothing else in the editor doubled.
+- Section 11: the Top slider reads its value and both description sentences.
+- Section 15: the braille cells read without "und".
+- Section 17: every question read its title, message and focused button once;
+  Escape put focus back on the control that asked.
 
 ## What to send back
 
