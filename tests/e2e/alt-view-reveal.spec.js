@@ -1,6 +1,7 @@
 /**
- * The Alt View's first moments in a page: the screen draws in from the top
- * and the status line types its greeting before the ordinary line, once.
+ * The Alt View's first moments in a page: the screen draws in from the top,
+ * the status line types its greeting before the ordinary line, and the
+ * first picture rasters in once the screen has drawn, once.
  * With reduced motion nothing moves and the greeting shows whole.
  *
  * @license GPL-3.0-or-later
@@ -39,10 +40,29 @@ async function openBox(page) {
   }
 }
 
-// Everything the reveal attribute and the status line do, from now on.
+// Everything the reveal attribute, the status line and the picture's
+// raster-in do, from now on.
 async function watch(page) {
   await page.evaluate(() => {
-    window.__altViewStart = { revealed: false, lines: [] };
+    window.__altViewStart = { revealed: false, lines: [], rasters: [] };
+    let rastering = false;
+    new MutationObserver(() => {
+      const canvas = document.querySelector('.hfm-overlay-canvas');
+      const on = Boolean(canvas?.classList.contains('alt-view-raster-in'));
+      if (on && !rastering) {
+        const raster = canvas
+          .getAnimations()
+          .find((a) => a.animationName === 'alt-view-raster-in');
+        window.__altViewStart.rasters.push({
+          delay: raster ? raster.effect.getTiming().delay : null,
+        });
+      }
+      rastering = on;
+    }).observe(document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    });
     new MutationObserver(() => {
       if (document.documentElement.hasAttribute('data-alt-view-reveal')) {
         window.__altViewStart.revealed = true;
@@ -73,7 +93,7 @@ async function turnOff(page) {
 }
 
 test.describe('The Alt View draws in once', () => {
-  test('the first time: the screen draws in and the greeting is typed', async ({
+  test('the first time: the screen draws in, the greeting is typed, the picture rasters in', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -96,17 +116,23 @@ test.describe('The Alt View draws in once', () => {
     // Typed: its first letters shown on their own before it.
     expect(lines.slice(0, greeting)).toContain('ALT');
     expect(lines.slice(0, greeting).every((l) => GREETING.startsWith(l))).toBe(true);
+    // The picture rasters in once, waiting the draw-in's second first.
+    expect((await seen(page)).rasters).toEqual([{ delay: 1000 }]);
+    await expect(page.locator('.hfm-overlay-canvas')).not.toHaveClass(/alt-view-raster-in/, {
+      timeout: 5_000,
+    });
 
     // The second time in the same page: neither.
     await turnOff(page);
     await page.evaluate(() => {
-      window.__altViewStart = { revealed: false, lines: [] };
+      window.__altViewStart = { revealed: false, lines: [], rasters: [] };
     });
     await turnOn(page);
     await page.waitForTimeout(2_500);
     const again = await seen(page);
     expect(again.revealed, 'no second draw-in').toBe(false);
     expect(again.lines, 'no second greeting').not.toContain(GREETING);
+    expect(again.rasters, 'no second raster-in').toEqual([]);
     await expect(page.locator('#previewStatusAltAdjust')).toHaveText(/^\[ALT VIEW\] EDGE/);
   });
 
@@ -126,8 +152,9 @@ test.describe('The Alt View draws in once', () => {
     await expect(page.locator('#previewStatusAltAdjust')).toHaveText(/^\[ALT VIEW\] EDGE/, {
       timeout: 6_000,
     });
-    const { revealed, lines } = await seen(page);
+    const { revealed, lines, rasters } = await seen(page);
     expect(revealed, 'no draw-in').toBe(false);
+    expect(rasters, 'no raster-in').toEqual([]);
     const greeting = lines.indexOf(GREETING);
     expect(greeting, 'the greeting shown').toBeGreaterThanOrEqual(0);
     // Whole at once: nothing of it was shown before.

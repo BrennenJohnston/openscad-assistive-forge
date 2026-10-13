@@ -106,6 +106,11 @@ let _hfmRevealTimer = null;
 let _hfmGreetingPlayed = false;
 let _hfmGreetingTimer = null;
 let _hfmStatusOverride = null;
+// The first picture rasters in once per page, after the draw-in when that
+// plays; the stylesheet times both. This clears it if it never ends.
+const _HFM_RASTER_FALLBACK_MS = 4000;
+let _hfmRasterPlayed = false;
+let _hfmRasterTimer = null;
 
 // Found by the camera sequence, the key drops into its place wearing the Alt
 // View's colors, rests a moment, then redraws itself as the ordinary key. The
@@ -717,13 +722,42 @@ function _endAltViewReveal() {
   document.documentElement.removeAttribute('data-alt-view-reveal');
 }
 
+/** @returns {boolean} Whether the draw-in is playing now. */
 function _playAltViewReveal() {
-  if (_hfmRevealPlayed) return;
+  if (_hfmRevealPlayed) return false;
   _hfmRevealPlayed = true;
-  if (_prefersReducedMotion()) return;
+  if (_prefersReducedMotion()) return false;
   document.body?.addEventListener('animationend', _onAltViewRevealEnd);
   _hfmRevealTimer = setTimeout(_endAltViewReveal, _HFM_REVEAL_FALLBACK_MS);
   document.documentElement.setAttribute('data-alt-view-reveal', '');
+  return true;
+}
+
+function _onRasterInEnd(event) {
+  if (event.animationName === 'alt-view-raster-in') _endRasterIn();
+}
+
+function _endRasterIn() {
+  clearTimeout(_hfmRasterTimer);
+  _hfmRasterTimer = null;
+  const canvas = document.querySelector('.hfm-overlay-canvas');
+  if (!canvas) return;
+  canvas.removeEventListener('animationend', _onRasterInEnd);
+  canvas.classList.remove(
+    'alt-view-raster-in',
+    'alt-view-raster-in--after-reveal'
+  );
+}
+
+function _rasterInFirstPicture(afterReveal) {
+  if (_hfmRasterPlayed) return;
+  _hfmRasterPlayed = true;
+  const canvas = document.querySelector('.hfm-overlay-canvas');
+  if (!canvas || _prefersReducedMotion()) return;
+  canvas.addEventListener('animationend', _onRasterInEnd);
+  _hfmRasterTimer = setTimeout(_endRasterIn, _HFM_RASTER_FALLBACK_MS);
+  canvas.classList.add('alt-view-raster-in');
+  if (afterReveal) canvas.classList.add('alt-view-raster-in--after-reveal');
 }
 
 function _typeAltViewGreeting() {
@@ -749,6 +783,7 @@ function _typeAltViewGreeting() {
 
 function _stopAltViewStart() {
   _endAltViewReveal();
+  _endRasterIn();
   clearTimeout(_hfmGreetingTimer);
   _hfmGreetingTimer = null;
   _hfmStatusOverride = null;
@@ -824,8 +859,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
   });
   previewManager.applyGridForAltView?.(true);
 
-  _playAltViewReveal();
+  const revealing = _playAltViewReveal();
   root.setAttribute('data-ui-variant', 'mono');
+  _rasterInFirstPicture(revealing);
 
   const newTheme = previewManager.detectTheme();
   previewManager.updateTheme(
