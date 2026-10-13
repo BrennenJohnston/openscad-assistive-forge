@@ -357,16 +357,54 @@ async function iconInk(page, option) {
   }, shot.toString('base64'));
 }
 
-// The drawing's own colors (a shape's swatch) and the layer tints the
-// picture paints, which the legend under it repeats: information, shown in
-// their true colors.
-const DRAWING_COLORS = [
-  '.svg-prep-swatch',
-  '.svg-prep-legend-chip--layer-1',
-  '.svg-prep-legend-chip--layer-2',
-  '.svg-prep-legend-chip--layer-3',
-  '.svg-prep-legend-chip--ignore',
-].join(', ');
+// The drawing's own colors (a shape's swatch): information, shown in their
+// true colors.
+const DRAWING_COLORS = '.svg-prep-swatch';
+
+/** A dialog backdrop's color channels (0 to 1), its opacity and its blur. */
+function backdropOf(page, overlayId) {
+  return page.evaluate((id) => {
+    const style = getComputedStyle(document.getElementById(id));
+    const n = (style.backgroundColor.match(/[\d.]+/g) || []).map(Number);
+    const color = style.backgroundColor.startsWith('color(')
+      ? n.slice(0, 3)
+      : n.slice(0, 3).map((v) => v / 255);
+    return { color, alpha: n.length > 3 ? n[3] : 1, blur: style.backdropFilter };
+  }, overlayId);
+}
+
+function expectFlatBlackBackdrop(backdrop, name) {
+  expect.soft(backdrop.color, `${name}: black`).toEqual([0, 0, 0]);
+  expect.soft(backdrop.alpha, `${name}: at 70%`).toBeCloseTo(0.7, 2);
+  expect.soft(backdrop.blur, `${name}: no blur`).toBe('none');
+}
+
+/**
+ * The drawing editor's picture as the page shows it, read back in the page:
+ * its pixels in the green phosphor's family and in blue.
+ */
+async function paneInk(page) {
+  const shot = await page.locator('.svg-prep-result-pane').first().screenshot();
+  return page.evaluate(async (data) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const { data: px } = ctx.getImageData(0, 0, img.width, img.height);
+    let green = 0;
+    let blue = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const [r, g, b] = [px[i], px[i + 1], px[i + 2]];
+      if (g > 120 && r < 90 && b < 90) green += 1;
+      else if (b > 150 && r < 100) blue += 1;
+    }
+    return { green, blue };
+  }, shot.toString('base64'));
+}
 
 /** A surface in the look: no color, font, corner or shadow of its own. */
 function expectInTheLook(result, name) {
@@ -460,6 +498,12 @@ function surfaces(page) {
         await expect(page.locator(DIALOG_VISIBLE).first()).toBeVisible();
         await page.waitForTimeout(600);
       },
+      check: async () => {
+        expectFlatBlackBackdrop(
+          await backdropOf(page, 'preferencesModalOverlay'),
+          'the backdrop behind Preferences'
+        );
+      },
       after: async () => {
         await page.keyboard.press('Escape');
         await page.waitForTimeout(400);
@@ -543,38 +587,22 @@ test.describe('The Alt View keeps to its tokens', () => {
       await surface.act();
       const result = await audit(page, surface.root ?? null);
       report[surface.name] = result;
+      if (surface.check) await surface.check();
       if (surface.after) await surface.after();
     }
     for (const [name, result] of Object.entries(report)) {
       expectInTheLook(result, name);
     }
 
-    // The page is in Classic now: a dialog's backdrop is tinted with this
-    // look's own accent, not the green of the Alt View's other looks.
-    // (Classic's Preferences opens as a window with no backdrop; About keeps
-    // one.)
+    // The page is in Classic now, and its dialogs' backdrop is the same flat
+    // black. (Classic's Preferences opens as a window with no backdrop;
+    // About keeps one.)
     await page.locator('#helpMenuBtn').click();
     await page.getByRole('menuitem', { name: /^About/ }).first().click();
     await expect(page.locator('#aboutModalOverlay')).toBeVisible();
-    const tint = await page.evaluate(() => {
-      const rgb = (value) => {
-        const n = (value.match(/[\d.]+/g) || []).map(Number).slice(0, 3);
-        return value.startsWith('color(') ? n : n.map((v) => v / 255);
-      };
-      const probe = document.createElement('div');
-      probe.style.color = getComputedStyle(document.body).getPropertyValue(
-        '--color-accent'
-      );
-      document.body.appendChild(probe);
-      const accent = rgb(getComputedStyle(probe).color);
-      probe.remove();
-      const overlay = document.getElementById('aboutModalOverlay');
-      return { accent, backdrop: rgb(getComputedStyle(overlay).backgroundColor) };
-    });
-    tint.backdrop.forEach((channel, i) =>
-      expect
-        .soft(channel, `Classic's backdrop, channel ${i}, against its accent`)
-        .toBeCloseTo(tint.accent[i], 1)
+    expectFlatBlackBackdrop(
+      await backdropOf(page, 'aboutModalOverlay'),
+      "Classic's backdrop behind About"
     );
     await page.locator('#aboutModalDone').click();
     console.log(
@@ -632,12 +660,19 @@ test.describe('The Alt View keeps to its tokens', () => {
     await expect(page.locator('.hfm-overlay-canvas')).toBeHidden();
     const editor = await audit(page, null, DRAWING_COLORS);
     expectInTheLook(editor, 'the page with the drawing editor open');
+    // The picture paints its layers in the look's own steps, not in blue,
+    // orange and green.
+    await page.waitForTimeout(1_000);
+    const pane = await paneInk(page);
+    expect.soft(pane.blue, 'blue pixels in the picture').toBe(0);
+    expect.soft(pane.green, 'green pixels in the picture').toBeGreaterThan(200);
     console.log(
       JSON.stringify({
         charm: charm.counts,
         'drawing editor': editor.counts,
         ordinary,
         ink,
+        pane,
       })
     );
 
@@ -692,7 +727,7 @@ test.describe('The Alt View with the system settings', () => {
     await seed(page, { unlock: true, theme: 'dark' });
   });
 
-  test('high contrast keeps to its own palette', async ({ page }) => {
+  test("high contrast keeps the look's green", async ({ page }) => {
     test.setTimeout(300_000);
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-high-contrast', 'true');
@@ -700,6 +735,16 @@ test.describe('The Alt View with the system settings', () => {
     await openProject(page);
     await altViewOn(page);
     await expect(page.locator('html')).toHaveAttribute('data-high-contrast', 'true');
+    const colors = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement);
+      return ['--color-accent', '--color-text-primary'].map((name) =>
+        root.getPropertyValue(name).trim()
+      );
+    });
+    expect.soft(colors, "the accent and the text in the look's green").toEqual([
+      '#00ff00',
+      '#00ff00',
+    ]);
     expectInTheLook(await audit(page, null), 'a project with high contrast');
   });
 

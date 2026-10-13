@@ -22,6 +22,11 @@
   font-display: swap;
 }
 
+/* With high contrast on, its own palette is as specific as this block's
+   plain selector and would replace the look's colors in the dark theme;
+   the second selector keeps them, as the amber block keeps the light
+   theme's. */
+:root[data-ui-variant='mono'][data-high-contrast='true'],
 :root[data-ui-variant='mono'] {
   /* Base mono settings - shared across color variants */
 
@@ -103,8 +108,8 @@
   --color-skip-link-bg: var(--color-accent);
   --color-skip-link-text: var(--color-accent-text);
 
-  /* A dialog's backdrop: a tenth of the accent over the blurred page. */
-  --color-backdrop: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  /* A dialog's backdrop: a flat black at 70%, the page behind sharp. */
+  --color-backdrop: rgba(0, 0, 0, 0.7);
 
   /* Focus ring — prevent default blue ring in non-HC mono */
   --focus-ring: 0 0 0 3px var(--color-focus);
@@ -588,6 +593,8 @@
 
 :root[data-ui-variant='mono'] .modal-overlay {
   background: var(--color-backdrop);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Tooltips — override to accent border/bg for mono terminal aesthetic */
@@ -1362,6 +1369,58 @@
   border-radius: 0;
 }
 
+/* --- The drawing editor's layers in the look's own steps ---
+   Bright, middle and dim for layers 1 to 3, the dim border color for Off.
+   The legend's chips take the steps as they are. The picture is drawn
+   inverted in the dark theme, so there its tints are the steps' inverses;
+   set on the workspace, they follow the look around it, Classic's too. */
+:root[data-ui-variant='mono'] .svg-prep-legend-chip {
+  filter: none;
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--layer-1 {
+  background: var(--color-text-primary);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--layer-2 {
+  background: var(--color-text-secondary);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--layer-3 {
+  background: var(--color-text-tertiary);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--ignore {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-border-light) 0 2px,
+    transparent 2px 5px
+  );
+  border-color: var(--color-border-light);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-workspace {
+  --svg-prep-layer-1: var(--color-text-primary);
+  --svg-prep-layer-2: var(--color-text-secondary);
+  --svg-prep-layer-3: var(--color-text-tertiary);
+  --svg-prep-off-ink: var(--color-border-light);
+}
+
+:root[data-ui-variant='mono'][data-theme='dark'] .svg-prep-workspace {
+  --svg-prep-layer-1: rgb(
+    from var(--color-text-primary) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+  --svg-prep-layer-2: rgb(
+    from var(--color-text-secondary) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+  --svg-prep-layer-3: rgb(
+    from var(--color-text-tertiary) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+  --svg-prep-off-ink: rgb(
+    from var(--color-border-light) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+}
+
 /* --- High-contrast exception: restore multicolor where specified --- */
 :root[data-ui-variant='mono'][data-high-contrast='true']
   .complexity-tier-label.tier-beginner {
@@ -1668,7 +1727,6 @@
   --color-on-warning: var(--retro-on-accent);
   --color-skip-link-bg: var(--retro-accent);
   --color-skip-link-text: var(--retro-on-accent);
-  --color-backdrop: color-mix(in srgb, var(--retro-accent) 10%, transparent);
   --focus-ring: 0 0 0 3px var(--retro-focus);
   --crt-glow-tight: 0 0 1px var(--retro-accent);
   --crt-glow-mid: 0 0 2px
