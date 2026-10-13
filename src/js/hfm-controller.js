@@ -40,6 +40,14 @@ let _hfmPanAdjustEnabled = false;
 let _hfmPanToggleButtons = null;
 let _hfmMotionListener = null;
 
+// Heard once when the key appears: that something appeared, and where.
+// Finding out what it does is the point, so the sentence says no more.
+const _HFM_UNLOCK_SENTENCE = 'A key appeared next to the theme button.';
+// announce() holds a polite message for 350 ms and a later call replaces a
+// held one. The button that completes the sequence speaks its own action
+// inside that hold, so the sentence waits past it and is written at once.
+const _HFM_UNLOCK_ANNOUNCE_DELAY_MS = 600;
+
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
 let _getDisplayOptionsController = () => null;
@@ -796,9 +804,9 @@ function _handleUnlock() {
     el.hidden = false;
   });
 
-  announce(
-    'Alt View unlocked. A new toggle appeared next to the theme button.'
-  );
+  window.setTimeout(() => {
+    announce(_HFM_UNLOCK_SENTENCE, { immediate: true });
+  }, _HFM_UNLOCK_ANNOUNCE_DELAY_MS);
 
   const container = document.getElementById('previewContainer');
   if (container) {

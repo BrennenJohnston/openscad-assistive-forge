@@ -4,6 +4,11 @@
  */
 
 import { test, expect } from '@playwright/test';
+import {
+  announcementMark,
+  announcementsSince,
+  recordAnnouncements,
+} from './helpers/invariants.js';
 
 // Dismiss first-visit modal and seed an explicit theme preference on first
 // load so the theme cycle (auto→light→dark→auto) always produces a visible
@@ -813,5 +818,74 @@ test.describe('the unlock door keeps the fragment', () => {
       .poll(() => page.evaluate(() => window.location.search))
       .toBe('?keepme=1');
     expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me');
+  });
+});
+
+// Finding the Alt View is heard as one short sentence on both doors. The
+// camera buttons that complete the sequence announce their own action a
+// moment later, which used to replace the sentence before it was spoken.
+test.describe('The unlock is heard', () => {
+  const SENTENCE = 'A key appeared next to the theme button.';
+
+  test('after the camera sequence, once', async ({ page }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    await page.locator('#cameraPanelToggle').click();
+    await expect(page.locator('#cameraRotateUp')).toBeVisible();
+
+    const mark = await announcementMark(page);
+    const ids = [
+      'cameraRotateUp',
+      'cameraRotateUp',
+      'cameraRotateDown',
+      'cameraRotateDown',
+      'cameraRotateLeft',
+      'cameraRotateRight',
+      'cameraRotateLeft',
+      'cameraRotateRight',
+      'cameraPanDown',
+      'cameraPanRight',
+    ];
+    for (const id of ids) {
+      const box = await page.locator(`#${id}`).boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+
+    const saidIt = async () =>
+      (await announcementsSince(page, mark)).filter((a) => a.text === SENTENCE)
+        .length;
+    await expect.poll(saidIt, { timeout: 5_000 }).toBe(1);
+    await page.waitForTimeout(1_500);
+    expect(await saidIt()).toBe(1);
+  });
+
+  test('after the address flag', async ({ page }) => {
+    await recordAnnouncements(page);
+    await page.goto('/?hfm=unlock');
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          (await announcementsSince(page, 0)).filter((a) => a.text === SENTENCE)
+            .length,
+        { timeout: 5_000 }
+      )
+      .toBe(1);
   });
 });
