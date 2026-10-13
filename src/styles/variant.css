@@ -103,6 +103,9 @@
   --color-skip-link-bg: var(--color-accent);
   --color-skip-link-text: var(--color-accent-text);
 
+  /* A dialog's backdrop: a tenth of the accent over the blurred page. */
+  --color-backdrop: color-mix(in srgb, var(--color-accent) 10%, transparent);
+
   /* Focus ring — prevent default blue ring in non-HC mono */
   --focus-ring: 0 0 0 3px var(--color-focus);
 
@@ -584,11 +587,7 @@
 }
 
 :root[data-ui-variant='mono'] .modal-overlay {
-  background: rgba(0, 255, 0, 0.1);
-}
-
-:root[data-ui-variant='mono'][data-theme='light'] .modal-overlay {
-  background: rgba(255, 176, 0, 0.1);
+  background: var(--color-backdrop);
 }
 
 /* Tooltips — override to accent border/bg for mono terminal aesthetic */
@@ -612,11 +611,41 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-/* Actions bar */
-:root[data-ui-variant='mono'] .actions-bar {
+/* Actions bar. The dark theme's shadow on the preview panel's bar is as
+   specific as the second selector, which comes later and wins. */
+:root[data-ui-variant='mono'] .actions-bar,
+:root[data-ui-variant='mono'] .preview-panel .actions-bar {
   background: var(--color-bg-primary);
   border-top: 1px solid var(--color-border);
   box-shadow: none;
+}
+
+/* The drawers that open over the preview lie flat, as the keys and notes
+   do; the dark theme's drawer shadow is as specific as the first selector. */
+:root[data-ui-variant='mono'] .preview-info-section.preview-drawer-expanded,
+:root[data-ui-variant='mono']
+  .actions-drawer:not(.collapsed)
+  .actions-drawer-body,
+:root[data-ui-variant='mono'] kbd {
+  box-shadow: none;
+}
+
+/* Square: the help buttons, the cards' links and code words. */
+:root[data-ui-variant='mono'] .panel-help-btn,
+:root[data-ui-variant='mono'] .role-path-meta a,
+:root[data-ui-variant='mono'] code {
+  border-radius: 0;
+}
+
+/* The Clear Cache question: its warning and its markers flat. */
+:root[data-ui-variant='mono'] .cache-clear-warning {
+  background: var(--color-bg-secondary);
+}
+
+:root[data-ui-variant='mono'] .preservation-indicator {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 0;
 }
 
 /* Mobile camera drawer (mono variant): remove translucency/blur, keep flat style */
@@ -1543,6 +1572,7 @@
   --color-on-warning: var(--retro-on-accent);
   --color-skip-link-bg: var(--retro-accent);
   --color-skip-link-text: var(--retro-on-accent);
+  --color-backdrop: color-mix(in srgb, var(--retro-accent) 10%, transparent);
   --focus-ring: 0 0 0 3px var(--retro-focus);
   --crt-glow-tight: 0 0 1px var(--retro-accent);
   --crt-glow-mid: 0 0 2px
@@ -1552,6 +1582,11 @@
   --crt-scanline-color: var(--retro-scanline);
   --crt-vignette-color: var(--retro-vignette);
   --crt-drawing-filter: var(--retro-drawing-filter);
+  /* Classic rounds its widgets by a hair; a text-mode screen does not. */
+  --border-radius-xs: 0px;
+  --border-radius-sm: 0px;
+  --border-radius-md: 0px;
+  --border-radius-lg: 0px;
 }
 
 /* DOS blue: the text-mode desktop of the early 1990s, light text and

@@ -1,10 +1,10 @@
 /**
  * The Alt View's look is a set of tokens. This spec reads every visible
  * element of the surfaces a person meets and compares its computed colors
- * and fonts with what the mono rules declare: a color outside the palette
- * or a font off the monospace stack is a failure. Corners, gradients and
- * shadows are counted and reported, not failed, until the leftovers are
- * fixed. The standard look is read the same way, against every token that
+ * and fonts with what the mono rules declare: a color outside the palette,
+ * a font off the monospace stack, a rounded corner or a shadow is a
+ * failure (gradients are counted). The standard look is read the same way,
+ * against every token that
  * resolves to a color, and pinned at the counts it had before this work
  * so the Alt View's rules cannot bleed into it.
  *
@@ -224,6 +224,20 @@ async function audit(page, rootSelector, contentColors = null) {
         r.left < innerWidth
       );
     };
+    // A shadow is decoration when it is cast (offset and not inset) or blurs
+    // in a color off the palette. An inset line with no blur (a divider, a
+    // selection bar) and a ring made by spread alone draw lines, as borders
+    // and outlines do; a glow in the look's own colors is its phosphor bloom.
+    const decorative = (value) =>
+      value !== 'none' &&
+      value.split(/,(?![^(]*\))/).some((layer) => {
+        const [x = 0, y = 0, blur = 0] = (layer.match(/-?[\d.]+px/g) || []).map(
+          parseFloat
+        );
+        const color = layer.replace(/-?[\d.]+px|inset/g, '').trim();
+        const cast = !/inset/.test(layer) && (x !== 0 || y !== 0);
+        return cast || (blur > 0 && !palette.has(color));
+      });
     const offenders = { color: [], font: [], radius: [], gradient: [], shadow: [] };
     let seen = 0;
     for (const el of root.querySelectorAll('*')) {
@@ -270,10 +284,12 @@ async function audit(page, rootSelector, contentColors = null) {
         el.tagName !== 'INPUT' &&
         !/circle|dot|badge|switch/i.test(el.className)
       ) {
-        offenders.radius.push(describe(el));
+        offenders.radius.push(`${describe(el)} ${s.borderTopLeftRadius}`);
       }
       if (/gradient\(/.test(s.backgroundImage)) offenders.gradient.push(describe(el));
-      if (s.boxShadow && s.boxShadow !== 'none') offenders.shadow.push(describe(el));
+      if (s.boxShadow && decorative(s.boxShadow)) {
+        offenders.shadow.push(`${describe(el)} ${s.boxShadow}`);
+      }
     }
     return {
       seen,
@@ -284,6 +300,8 @@ async function audit(page, rootSelector, contentColors = null) {
       samples: {
         color: offenders.color.slice(0, 8),
         font: offenders.font.slice(0, 4),
+        radius: offenders.radius.slice(0, 8),
+        shadow: offenders.shadow.slice(0, 8),
       },
     };
   }, { rootSelector, contentColors });
@@ -350,6 +368,16 @@ const DRAWING_COLORS = [
   '.svg-prep-legend-chip--ignore',
 ].join(', ');
 
+/** A surface in the look: no color, font, corner or shadow of its own. */
+function expectInTheLook(result, name) {
+  expect.soft(result.missingRoot, `${name}: found`).toBeUndefined();
+  expect.soft(result.mono, `${name}: the Alt View on`).toBe(true);
+  expect.soft(result.samples.color, `${name}: colors off the palette`).toEqual([]);
+  expect.soft(result.samples.font, `${name}: fonts off the stack`).toEqual([]);
+  expect.soft(result.samples.radius, `${name}: rounded corners`).toEqual([]);
+  expect.soft(result.samples.shadow, `${name}: shadows`).toEqual([]);
+}
+
 // The page keeps every dialog in the document; the audit reads the drawn one
 // (the first with a box), and the waits use Playwright's own visibility.
 const DIALOG = '[role="dialog"]';
@@ -399,6 +427,28 @@ function surfaces(page) {
       after: async () => {
         await page.locator('#cameraPanelToggle').click();
         await page.waitForTimeout(300);
+      },
+    },
+    {
+      name: 'Preview Settings open',
+      act: async () => {
+        await page.locator('#previewDrawerToggle').click();
+        await page.waitForTimeout(600);
+      },
+      after: async () => {
+        await page.locator('#previewDrawerToggle').click();
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      name: 'the Actions drawer open',
+      act: async () => {
+        await page.locator('#actionsDrawerToggle').click();
+        await page.waitForTimeout(600);
+      },
+      after: async () => {
+        await page.locator('#actionsDrawerToggle').click();
+        await page.waitForTimeout(400);
       },
     },
     {
@@ -455,13 +505,34 @@ test.describe('The Alt View keeps to its tokens', () => {
       timeout: WASM_READY_TIMEOUT,
     });
     await altViewOn(page);
-    const result = await audit(page, null);
-    expect(result.mono).toBe(true);
-    expect(result.samples.color, 'colors off the palette').toEqual([]);
-    expect(result.samples.font, 'fonts off the stack').toEqual([]);
+    expectInTheLook(await audit(page, null), 'the Main Page');
+
+    await page.locator('#clearStorageBtn').click();
+    await expect(page.locator('.cache-clear-dialog')).toBeVisible();
+    await page.waitForTimeout(600);
+    expectInTheLook(
+      await audit(page, '.cache-clear-dialog'),
+      'the Clear Cache question'
+    );
+    await page.keyboard.press('Escape');
   });
 
-  test('a project: Standard, Simplified, the editor, the camera panel, Preferences, Keyboard Shortcuts', async ({
+  test('the tour card', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await page.locator('.btn-role-try[data-tutorial="intro"]').click();
+    await expect(page.locator('.tutorial-panel').first()).toBeVisible({
+      timeout: 120_000,
+    });
+    await expect(page.locator('#tutorial-step-title')).not.toBeEmpty();
+    await altViewOn(page);
+    expectInTheLook(await audit(page, '.tutorial-panel'), 'the tour card');
+  });
+
+  test('a project: its views, panels, drawers, dialogs, the editor and Classic', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -475,14 +546,37 @@ test.describe('The Alt View keeps to its tokens', () => {
       if (surface.after) await surface.after();
     }
     for (const [name, result] of Object.entries(report)) {
-      expect(result.missingRoot, `${name}: root found`).toBeUndefined();
-      expect(result.mono, `${name}: the Alt View on`).toBe(true);
-      expect(result.samples.color, `${name}: colors off the palette`).toEqual(
-        []
-      );
-      expect(result.samples.font, `${name}: fonts off the stack`).toEqual([]);
+      expectInTheLook(result, name);
     }
-    // Corners, gradients and shadows are reported for the record.
+
+    // The page is in Classic now: a dialog's backdrop is tinted with this
+    // look's own accent, not the green of the Alt View's other looks.
+    // (Classic's Preferences opens as a window with no backdrop; About keeps
+    // one.)
+    await page.locator('#helpMenuBtn').click();
+    await page.getByRole('menuitem', { name: /^About/ }).first().click();
+    await expect(page.locator('#aboutModalOverlay')).toBeVisible();
+    const tint = await page.evaluate(() => {
+      const rgb = (value) => {
+        const n = (value.match(/[\d.]+/g) || []).map(Number).slice(0, 3);
+        return value.startsWith('color(') ? n : n.map((v) => v / 255);
+      };
+      const probe = document.createElement('div');
+      probe.style.color = getComputedStyle(document.body).getPropertyValue(
+        '--color-accent'
+      );
+      document.body.appendChild(probe);
+      const accent = rgb(getComputedStyle(probe).color);
+      probe.remove();
+      const overlay = document.getElementById('aboutModalOverlay');
+      return { accent, backdrop: rgb(getComputedStyle(overlay).backgroundColor) };
+    });
+    tint.backdrop.forEach((channel, i) =>
+      expect
+        .soft(channel, `Classic's backdrop, channel ${i}, against its accent`)
+        .toBeCloseTo(tint.accent[i], 1)
+    );
+    await page.locator('#aboutModalDone').click();
     console.log(
       JSON.stringify(
         Object.fromEntries(
@@ -511,8 +605,7 @@ test.describe('The Alt View keeps to its tokens', () => {
     const ordinary = await iconInk(page, firstDesign);
     await altViewOn(page);
     const charm = await audit(page, null);
-    expect(charm.samples.color, 'the charm: colors off the palette').toEqual([]);
-    expect(charm.samples.font, 'the charm: fonts off the stack').toEqual([]);
+    expectInTheLook(charm, 'the charm');
 
     // The chooser's drawings take the look's own color, not white, and keep
     // their details.
@@ -537,12 +630,8 @@ test.describe('The Alt View keeps to its tokens', () => {
       timeout: 90_000,
     });
     await expect(page.locator('.hfm-overlay-canvas')).toBeHidden();
-    const editor = await audit(page, '.drawing-editor', DRAWING_COLORS);
-    expect(editor.missingRoot, 'the drawing editor found').toBeUndefined();
-    expect(editor.samples.color, 'the drawing editor: colors off the palette').toEqual(
-      []
-    );
-    expect(editor.samples.font, 'the drawing editor: fonts off the stack').toEqual([]);
+    const editor = await audit(page, null, DRAWING_COLORS);
+    expectInTheLook(editor, 'the page with the drawing editor open');
     console.log(
       JSON.stringify({
         charm: charm.counts,
