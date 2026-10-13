@@ -355,6 +355,8 @@ export const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
 export const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
 export const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
 export const STORAGE_KEY_MANIFOLD_ENGINE = getAppPrefKey('manifold-engine');
+// Preferences ▸ Advanced ▸ Play sounds; on unless set to 'false'.
+export const STORAGE_KEY_SOUNDS = getAppPrefKey('sounds');
 
 // --- UI mode (ui-mode-controller.js) ---
 // The controller has always persisted under this name; centralized here so

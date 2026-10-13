@@ -22,6 +22,24 @@
   font-display: swap;
 }
 
+/* The key arrives wearing the look it would turn on, before that look is on:
+   each look's accent and its key's ground, outside the variant. A unit test
+   keeps these equal to the values below. */
+:root {
+  --alt-view-key-accent: #00ff00;
+  --alt-view-key-ground: #121212;
+}
+
+:root[data-theme='light'] {
+  --alt-view-key-accent: #ffb000;
+  --alt-view-key-ground: #121000;
+}
+
+body[data-ui-mode='classic'] {
+  --alt-view-key-accent: #ffff55;
+  --alt-view-key-ground: #0000cc;
+}
+
 /* With high contrast on, its own palette is as specific as this block's
    plain selector and would replace the look's colors in the dark theme;
    the second selector keeps them, as the amber block keeps the light
@@ -123,6 +141,8 @@
     color-mix(in srgb, var(--color-accent) 10%, transparent);
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
+  --crt-reveal-duration: 1s;
+  --crt-raster-duration: 600ms;
 
   /* A black drawing turned into the accent with its white details black,
    * for pictures no color property reaches; the grays of its edges stay on
@@ -1597,6 +1617,30 @@
   visibility: hidden;
 }
 
+/* The first picture in a page rasters in from the top, line by line, in
+   place of the power-on flourish; when the screen is drawing in, it waits
+   for that to finish, so the screen comes first and then the picture. The
+   controller adds the classes once and removes them at the end. */
+@keyframes alt-view-raster-in {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-ui-variant='mono'] .hfm-overlay-canvas.alt-view-raster-in {
+    animation: alt-view-raster-in var(--crt-raster-duration) steps(24, end) both;
+  }
+
+  :root[data-ui-variant='mono']
+    .hfm-overlay-canvas.alt-view-raster-in--after-reveal {
+    animation-delay: var(--crt-reveal-duration);
+  }
+}
+
 /* ----------------------------------------
  * 4e. Box-drawing character decorations on panel headers
  *
@@ -1612,6 +1656,37 @@
   font-size: 0.85em;
   flex-shrink: 0;
   opacity: 0.8;
+}
+
+/* ----------------------------------------
+ * 4f. The first Alt View in a page draws in
+ *
+ * A cover in the screen's own ground slides off downward behind a line of
+ * the accent, so the interface appears from the top like a screen being
+ * drawn. The controller sets data-alt-view-reveal once per page and removes
+ * it when the animation ends. body::after is the scanlines; ::before is free.
+ * ---------------------------------------- */
+@keyframes alt-view-reveal {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  :root[data-ui-variant='mono'][data-alt-view-reveal] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: var(--z-index-app-overlay);
+    background-color: var(--color-bg-primary);
+    border-top: 2px solid var(--color-accent);
+    animation: alt-view-reveal var(--crt-reveal-duration) steps(32, end)
+      forwards;
+  }
 }
 
 /* ========================================
