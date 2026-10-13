@@ -57,6 +57,40 @@ async function freshController(pm) {
   })
 }
 
+describe('the character size the Alt View starts with', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  async function lastAltView() {
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    return initAltView.mock.results.at(-1).value
+  }
+
+  it('draws finer characters when nothing is saved, and a saved size wins', async () => {
+    const pm = previewManagerStub()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+
+    await controller.enableAltViewWithPreview(toggle)
+    const altView = await lastAltView()
+    expect(altView.setFontScale).toHaveBeenLastCalledWith(0.6)
+    controller.disableAltViewWithPreview(toggle)
+
+    localStorage.setItem('openscad-forge-hfm-font-scale', '1.2')
+    const pm2 = previewManagerStub()
+    const controller2 = await freshController(pm2)
+    await controller2.enableAltViewWithPreview(toggle)
+    expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(1.2)
+  })
+})
+
 describe('the grid when the Alt View turns on and off', () => {
   beforeEach(() => {
     localStorage.clear()

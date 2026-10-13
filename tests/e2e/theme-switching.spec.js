@@ -864,3 +864,35 @@ test.describe('The grid in the Alt View', () => {
     ).toBeNull();
   });
 });
+
+// The first Alt View draws finer characters: at the old full size the box
+// was a blob of characters with no visible faces.
+test.describe('The Alt View starts with finer characters', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('shows 60% characters when nothing is saved', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#previewStatusAltAdjust')).toContainText(
+      'SIZE 60%'
+    );
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
+  });
+});
