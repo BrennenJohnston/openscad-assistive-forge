@@ -17,15 +17,16 @@ export const FIRST_CHAR_CODE = 32;
 export const SPACE_INDEX = 0;
 
 /**
- * Read the phosphor color from the active theme.
- * Green (#00ff00) in the dark variant, amber (#ffb000) in light — both are
- * carried by --color-accent under [data-ui-variant='mono'].
+ * Read the phosphor color from the active theme: --color-accent under
+ * [data-ui-variant='mono'], green (#00ff00) in the dark variant, amber
+ * (#ffb000) in light. Read on the body, which inherits the root's value
+ * and carries Classic's own accent while Classic wears its retro look.
  *
  * @returns {string} CSS color
  */
 export function getPhosphorColor() {
   try {
-    const val = getComputedStyle(document.documentElement)
+    const val = getComputedStyle(document.body || document.documentElement)
       .getPropertyValue('--color-accent')
       .trim();
     if (val) return val;

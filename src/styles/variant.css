@@ -22,6 +22,11 @@
   font-display: swap;
 }
 
+/* With high contrast on, its own palette is as specific as this block's
+   plain selector and would replace the look's colors in the dark theme;
+   the second selector keeps them, as the amber block keeps the light
+   theme's. */
+:root[data-ui-variant='mono'][data-high-contrast='true'],
 :root[data-ui-variant='mono'] {
   /* Base mono settings - shared across color variants */
 
@@ -103,6 +108,9 @@
   --color-skip-link-bg: var(--color-accent);
   --color-skip-link-text: var(--color-accent-text);
 
+  /* A dialog's backdrop: a flat black at 70%, the page behind sharp. */
+  --color-backdrop: rgba(0, 0, 0, 0.7);
+
   /* Focus ring — prevent default blue ring in non-HC mono */
   --focus-ring: 0 0 0 3px var(--color-focus);
 
@@ -115,6 +123,12 @@
     color-mix(in srgb, var(--color-accent) 10%, transparent);
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
+
+  /* A black drawing turned into the accent with its white details black,
+   * for pictures no color property reaches; the grays of its edges stay on
+   * the accent's hue. Each look has its own. */
+  --crt-drawing-filter: invert(1) sepia(1) saturate(4) hue-rotate(38deg)
+    saturate(10);
 }
 
 /* ========================================
@@ -141,6 +155,8 @@
   --color-accent-subtle: #1a0800;
   --color-accent-fg: #ffb000;
   --color-on-accent-subtle: var(--color-accent-fg); /* 10.63:1 on #1a0800 */
+  --crt-drawing-filter: invert(1) brightness(0.55) sepia(1) saturate(3.5)
+    hue-rotate(10deg) saturate(2);
   --color-on-accent: #000000;
   --color-on-success: #000000;
   --color-on-warning: #000000;
@@ -576,11 +592,9 @@
 }
 
 :root[data-ui-variant='mono'] .modal-overlay {
-  background: rgba(0, 255, 0, 0.1);
-}
-
-:root[data-ui-variant='mono'][data-theme='light'] .modal-overlay {
-  background: rgba(255, 176, 0, 0.1);
+  background: var(--color-backdrop);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Tooltips — override to accent border/bg for mono terminal aesthetic */
@@ -604,11 +618,41 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-/* Actions bar */
-:root[data-ui-variant='mono'] .actions-bar {
+/* Actions bar. The dark theme's shadow on the preview panel's bar is as
+   specific as the second selector, which comes later and wins. */
+:root[data-ui-variant='mono'] .actions-bar,
+:root[data-ui-variant='mono'] .preview-panel .actions-bar {
   background: var(--color-bg-primary);
   border-top: 1px solid var(--color-border);
   box-shadow: none;
+}
+
+/* The drawers that open over the preview lie flat, as the keys and notes
+   do; the dark theme's drawer shadow is as specific as the first selector. */
+:root[data-ui-variant='mono'] .preview-info-section.preview-drawer-expanded,
+:root[data-ui-variant='mono']
+  .actions-drawer:not(.collapsed)
+  .actions-drawer-body,
+:root[data-ui-variant='mono'] kbd {
+  box-shadow: none;
+}
+
+/* Square: the help buttons, the cards' links and code words. */
+:root[data-ui-variant='mono'] .panel-help-btn,
+:root[data-ui-variant='mono'] .role-path-meta a,
+:root[data-ui-variant='mono'] code {
+  border-radius: 0;
+}
+
+/* The Clear Cache question: its warning and its markers flat. */
+:root[data-ui-variant='mono'] .cache-clear-warning {
+  background: var(--color-bg-secondary);
+}
+
+:root[data-ui-variant='mono'] .preservation-indicator {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 0;
 }
 
 /* Mobile camera drawer (mono variant): remove translucency/blur, keep flat style */
@@ -906,8 +950,10 @@
  * (::before / ::after). CRT effect pseudo-elements — body::after (scanlines)
  * and .preview-container::after (vignette) — are therefore intentionally
  * exempt from background-image: none and will render their gradients correctly.
+ * Classic's toolbar icons are background images too (an SVG sheet), so they
+ * are left out as well and recoloured by Classic's own look below.
  */
-:root[data-ui-variant='mono'] * {
+:root[data-ui-variant='mono'] *:not(.classic-icon) {
   transition-duration: 0s !important;
   background-image: none !important;
   scrollbar-width: thin;
@@ -1306,6 +1352,75 @@
   border-radius: 0;
 }
 
+/* --- The design chooser's drawings in the look's own color ---
+   The drawings are black pictures in an <img>, which no color property
+   reaches; the look's drawing filter turns them into its accent and keeps
+   their white details (a face's eyes) dark. Forced colors keep their own
+   rules. */
+@media (forced-colors: none) {
+  :root[data-ui-variant='mono'] .svg-gallery-option .svg-gallery-thumb {
+    filter: var(--crt-drawing-filter);
+  }
+}
+
+/* --- The drawing editor's legend chips and shape swatches: square --- */
+:root[data-ui-variant='mono'] .svg-prep-legend-chip,
+:root[data-ui-variant='mono'] .svg-prep-swatch {
+  border-radius: 0;
+}
+
+/* --- The drawing editor's layers in the look's own steps ---
+   Bright, middle and dim for layers 1 to 3, the dim border color for Off.
+   The legend's chips take the steps as they are. The picture is drawn
+   inverted in the dark theme, so there its tints are the steps' inverses;
+   set on the workspace, they follow the look around it, Classic's too. */
+:root[data-ui-variant='mono'] .svg-prep-legend-chip {
+  filter: none;
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--layer-1 {
+  background: var(--color-text-primary);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--layer-2 {
+  background: var(--color-text-secondary);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--layer-3 {
+  background: var(--color-text-tertiary);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-legend-chip--ignore {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-border-light) 0 2px,
+    transparent 2px 5px
+  );
+  border-color: var(--color-border-light);
+}
+
+:root[data-ui-variant='mono'] .svg-prep-workspace {
+  --svg-prep-layer-1: var(--color-text-primary);
+  --svg-prep-layer-2: var(--color-text-secondary);
+  --svg-prep-layer-3: var(--color-text-tertiary);
+  --svg-prep-off-ink: var(--color-border-light);
+}
+
+:root[data-ui-variant='mono'][data-theme='dark'] .svg-prep-workspace {
+  --svg-prep-layer-1: rgb(
+    from var(--color-text-primary) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+  --svg-prep-layer-2: rgb(
+    from var(--color-text-secondary) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+  --svg-prep-layer-3: rgb(
+    from var(--color-text-tertiary) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+  --svg-prep-off-ink: rgb(
+    from var(--color-border-light) calc(255 - r) calc(255 - g) calc(255 - b)
+  );
+}
+
 /* --- High-contrast exception: restore multicolor where specified --- */
 :root[data-ui-variant='mono'][data-high-contrast='true']
   .complexity-tier-label.tier-beginner {
@@ -1473,6 +1588,15 @@
   transform-origin: center center;
 }
 
+/* The drawing editor takes the preview area, and the 3D canvas under it is
+   hidden while it is open. The character canvas sits above everything in
+   the area, so it steps back the same way, or it would cover the editor. */
+:root[data-ui-variant='mono']
+  .preview-canvas-section.has-drawing-editor
+  .hfm-overlay-canvas {
+  visibility: hidden;
+}
+
 /* ----------------------------------------
  * 4e. Box-drawing character decorations on panel headers
  *
@@ -1541,4 +1665,127 @@
   :root[data-ui-variant='mono'] .panel-header::before {
     content: none;
   }
+}
+
+/* ========================================
+ * Classic in the Alt View: a retro look of its own
+ *
+ * Classic keeps its desktop tokens on the body, where they shadow the
+ * phosphor tokens on the root. With the Alt View on, this block takes them
+ * over with one set of names, and the look below gives those names their
+ * values, under data-classic-retro on the root, which the Alt View sets
+ * and clears. The CRT glow tokens are restated here because the root's
+ * resolve to the root's accent, not to this one.
+ * ======================================== */
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] {
+  --color-bg-primary: var(--retro-ground);
+  --color-bg-secondary: var(--retro-strip);
+  --color-bg-tertiary: var(--retro-raised);
+  --color-bg-elevated: var(--retro-ground);
+  --color-bg-primary-rgb: var(--retro-ground-rgb);
+  --color-text-primary: var(--retro-text);
+  --color-text-secondary: var(--retro-text-2);
+  --color-text-tertiary: var(--retro-text-3);
+  --color-text-muted: var(--retro-text-3);
+  --color-accent: var(--retro-accent);
+  --color-accent-hover: var(--retro-accent-hover);
+  --color-accent-text: var(--retro-on-accent);
+  --color-accent-subtle: var(--retro-subtle);
+  --color-accent-fg: var(--retro-accent);
+  --color-on-accent-subtle: var(--retro-text);
+  --color-on-accent: var(--retro-on-accent);
+  --color-brand-yellow: var(--retro-accent);
+  --color-border: var(--retro-border);
+  --color-border-light: var(--retro-border-light);
+  --color-border-hover: var(--retro-accent);
+  --color-input-bg: var(--retro-strip);
+  --color-input-border: var(--retro-border);
+  --color-input-border-focus: var(--retro-focus);
+  --color-hover-bg: var(--retro-hover);
+  --color-hover-bg-strong: var(--retro-hover);
+  --color-focus: var(--retro-focus);
+  --color-success: var(--retro-accent);
+  --color-success-solid: var(--retro-accent);
+  --color-success-hover: var(--retro-accent-hover);
+  --color-success-text: var(--retro-text);
+  --color-success-bg: var(--retro-subtle);
+  --color-on-success: var(--retro-on-accent);
+  --color-info: var(--retro-accent);
+  --color-info-hover: var(--retro-accent-hover);
+  --color-info-text: var(--retro-text);
+  --color-info-bg: var(--retro-strip);
+  --color-on-info: var(--retro-on-accent);
+  --color-error: var(--retro-accent);
+  --color-error-hover: var(--retro-accent-hover);
+  --color-error-text: var(--retro-text);
+  --color-error-bg: var(--retro-subtle);
+  --color-on-error: var(--retro-on-accent);
+  --color-warning: var(--retro-accent);
+  --color-warning-hover: var(--retro-accent-hover);
+  --color-warning-text: var(--retro-text);
+  --color-warning-bg: var(--retro-subtle);
+  --color-on-warning: var(--retro-on-accent);
+  --color-skip-link-bg: var(--retro-accent);
+  --color-skip-link-text: var(--retro-on-accent);
+  --focus-ring: 0 0 0 3px var(--retro-focus);
+  --crt-glow-tight: 0 0 1px var(--retro-accent);
+  --crt-glow-mid: 0 0 2px
+    color-mix(in srgb, var(--retro-accent) 25%, transparent);
+  --crt-glow-wide: 0 0 6px
+    color-mix(in srgb, var(--retro-accent) 10%, transparent);
+  --crt-scanline-color: var(--retro-scanline);
+  --crt-vignette-color: var(--retro-vignette);
+  --crt-drawing-filter: var(--retro-drawing-filter);
+  /* Classic rounds its widgets by a hair; a text-mode screen does not. */
+  --border-radius-xs: 0px;
+  --border-radius-sm: 0px;
+  --border-radius-md: 0px;
+  --border-radius-lg: 0px;
+}
+
+/* DOS blue: the text-mode desktop of the early 1990s, light text and
+   yellow accents on deep blue; the preview's characters take the yellow
+   too, read from the body by the renderer. */
+:root[data-ui-variant='mono'][data-classic-retro='dos']
+  body[data-ui-mode='classic'] {
+  --retro-ground: #0000aa;
+  --retro-ground-rgb: 0, 0, 170;
+  --retro-strip: #000088;
+  --retro-raised: #0000cc;
+  --retro-text: #e8e8ff;
+  --retro-text-2: #c0c0ff;
+  --retro-text-3: #9999ff;
+  --retro-accent: #ffff55;
+  --retro-accent-hover: #ffff99;
+  --retro-on-accent: #0000aa;
+  --retro-subtle: #000066;
+  --retro-border: #c0c0ff;
+  --retro-border-light: #6060c0;
+  --retro-hover: #2020c0;
+  --retro-focus: #ffff55;
+  --retro-icon-filter: invert(1);
+  --retro-drawing-filter: invert(1) brightness(0.75) sepia(1) saturate(1.75)
+    hue-rotate(15deg) saturate(1.5) brightness(1.1);
+  --retro-scanline: rgba(0, 0, 0, 0.12);
+  --retro-vignette: rgba(0, 0, 0, 0.35);
+}
+
+/* Classic's toolbar icons are black drawings in an SVG sheet, turned light
+   for the look's dark ground. */
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] .classic-icon {
+  filter: var(--retro-icon-filter, none);
+}
+
+/* The desktop caption strip and the dock tabs follow the look's strip. */
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] .app-header {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+/* The title bars close with the double line of a text-mode window frame. */
+:root[data-ui-variant='mono'] body[data-ui-mode='classic'] .app-header,
+:root[data-ui-variant='mono']
+  body[data-ui-mode='classic']
+  .classic-pane-titlebar {
+  border-bottom: 3px double var(--color-border);
 }
