@@ -4,6 +4,11 @@
  */
 
 import { test, expect } from '@playwright/test';
+import {
+  announcementMark,
+  announcementsSince,
+  recordAnnouncements,
+} from './helpers/invariants.js';
 
 // Dismiss first-visit modal and seed an explicit theme preference on first
 // load so the theme cycle (auto→light→dark→auto) always produces a visible
@@ -813,5 +818,522 @@ test.describe('the unlock door keeps the fragment', () => {
       .poll(() => page.evaluate(() => window.location.search))
       .toBe('?keepme=1');
     expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me');
+  });
+});
+
+// Finding the Alt View is heard as one short sentence on both doors. The
+// camera buttons that complete the sequence announce their own action a
+// moment later, which used to replace the sentence before it was spoken.
+test.describe('The unlock is heard', () => {
+  const SENTENCE = 'A key appeared next to the theme button.';
+
+  test('after the camera sequence, once', async ({ page }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    await page.locator('#cameraPanelToggle').click();
+    await expect(page.locator('#cameraRotateUp')).toBeVisible();
+
+    const mark = await announcementMark(page);
+    const ids = [
+      'cameraRotateUp',
+      'cameraRotateUp',
+      'cameraRotateDown',
+      'cameraRotateDown',
+      'cameraRotateLeft',
+      'cameraRotateRight',
+      'cameraRotateLeft',
+      'cameraRotateRight',
+      'cameraPanDown',
+      'cameraPanRight',
+    ];
+    for (const id of ids) {
+      const box = await page.locator(`#${id}`).boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+
+    const saidIt = async () =>
+      (await announcementsSince(page, mark)).filter((a) => a.text === SENTENCE)
+        .length;
+    await expect.poll(saidIt, { timeout: 5_000 }).toBe(1);
+    await page.waitForTimeout(1_500);
+    expect(await saidIt()).toBe(1);
+  });
+
+  test('after the address flag', async ({ page }) => {
+    await recordAnnouncements(page);
+    await page.goto('/?hfm=unlock');
+    await expect(page.locator('#_hfmToggle')).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          (await announcementsSince(page, 0)).filter((a) => a.text === SENTENCE)
+            .length,
+        { timeout: 5_000 }
+      )
+      .toBe(1);
+  });
+});
+
+// The key says what it is; turning the Alt View on or off says one sentence;
+// pan adjust keeps one name and says one sentence per state.
+test.describe('The Alt View and pan adjust speak plainly', () => {
+  // The memory readout under the preview is a status of its own, written
+  // when the engine's first reading arrives; on a slow machine that can land
+  // inside an action's window, so it is left out of what the action said.
+  const spoken = async (page, mark) =>
+    (await announcementsSince(page, mark))
+      .filter((a) => a.region !== '#memoryIndicator')
+      .map((a) => a.text);
+
+  test('the key: its name, and one sentence on and off', async ({ page }) => {
+    await recordAnnouncements(page);
+    await page.goto('/?hfm=unlock');
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible();
+    await expect(key).toHaveAccessibleName('Alt View');
+    await page.waitForTimeout(1_000);
+
+    let mark = await announcementMark(page);
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await page.waitForTimeout(600);
+    expect(await spoken(page, mark)).toEqual([
+      'Alt View on. The preview is drawn with characters and the interface follows.',
+    ]);
+
+    mark = await announcementMark(page);
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'false');
+    await page.waitForTimeout(600);
+    expect(await spoken(page, mark)).toEqual([
+      'Alt View off.',
+    ]);
+  });
+
+  test('pan adjust: one name, one sentence per state, each value plainly', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#cameraPanelToggle').click();
+    const adjust = page.locator('#_hfmPanAdjust');
+    await expect(adjust).toBeVisible();
+    await expect(adjust).toHaveAccessibleName(
+      'Adjust the Alt View with the pan arrows'
+    );
+    await page.waitForTimeout(1_000);
+
+    let mark = await announcementMark(page);
+    await adjust.click();
+    await expect(adjust).toHaveAttribute('aria-pressed', 'true');
+    await expect(adjust).toHaveAccessibleName(
+      'Adjust the Alt View with the pan arrows'
+    );
+    await page.waitForTimeout(600);
+    expect(await spoken(page, mark)).toEqual([
+      'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.',
+    ]);
+
+    mark = await announcementMark(page);
+    await page.locator('#cameraPanUp').click();
+    await page.waitForTimeout(600);
+    expect(await spoken(page, mark)).toEqual([
+      'Edges 105%',
+    ]);
+
+    mark = await announcementMark(page);
+    await adjust.click();
+    await expect(adjust).toHaveAttribute('aria-pressed', 'false');
+    await page.waitForTimeout(600);
+    expect(await spoken(page, mark)).toEqual([
+      'Pan arrows move the view again.',
+    ]);
+  });
+});
+
+// The character size has a control where its value shows: a stepper in the
+// preview's status strip with three named steps, present only in the Alt
+// View, kept in step with the camera panel's slider.
+test.describe('The Characters control beside the status line', () => {
+  test('steps through Fine, Normal and Bold, and the slider follows', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const controls = page.locator('#altViewControls');
+    await expect(controls).toBeHidden();
+
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await expect(controls).toBeVisible();
+    const smaller = page.getByRole('button', { name: 'Smaller characters' });
+    const larger = page.getByRole('button', { name: 'Larger characters' });
+    const value = page.locator('#altViewCharactersValue');
+    const status = page.locator('#previewStatusAltAdjust');
+    const slider = page.locator('#_hfmFontScale');
+
+    // Start from a known step, whatever the default is.
+    await slider.evaluate((el) => {
+      el.value = '0.6';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(value).toHaveText('Normal');
+
+    await larger.click();
+    await expect(value).toHaveText('Bold');
+    await expect(status).toContainText('SIZE 100%');
+    await expect(slider).toHaveValue('1');
+
+    await larger.click();
+    await expect(value).toHaveText('Bold');
+
+    await smaller.click();
+    await expect(value).toHaveText('Normal');
+    await expect(status).toContainText('SIZE 60%');
+    await expect(slider).toHaveValue('0.6');
+
+    await smaller.click();
+    await expect(value).toHaveText('Fine');
+    await expect(status).toContainText('SIZE 50%');
+
+    await smaller.click();
+    await expect(value).toHaveText('Fine');
+
+    // A value set elsewhere shows as its percentage.
+    await slider.evaluate((el) => {
+      el.value = '0.75';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(value).toHaveText('75%');
+
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'false');
+    await expect(controls).toBeHidden();
+  });
+});
+
+// The minus and equals keys step the character size while the Alt View is
+// on, from anywhere but a text field, and do nothing when it is off.
+test.describe('The character-size shortcuts', () => {
+  test('step the size when the Alt View is on, and not otherwise', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const key = page.locator('#_hfmToggle');
+    const slider = page.locator('#_hfmFontScale');
+    const value = page.locator('#altViewCharactersValue');
+
+    // Off: the keys change nothing.
+    await page.locator('h1').click();
+    await page.keyboard.press('=');
+    await page.waitForTimeout(300);
+    await expect(page.locator('#altViewControls')).toBeHidden();
+
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await slider.evaluate((el) => {
+      el.value = '0.6';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(value).toHaveText('Normal');
+
+    await page.locator('h1').click();
+    await page.keyboard.press('=');
+    await expect(value).toHaveText('Bold');
+    await page.keyboard.press('-');
+    await expect(value).toHaveText('Normal');
+    await page.keyboard.press('-');
+    await expect(value).toHaveText('Fine');
+
+    // A text field keeps the keys for typing.
+    const search = page.locator('#paramSearchInput');
+    await search.click();
+    await search.pressSequentially('=');
+    await page.waitForTimeout(300);
+    await expect(value).toHaveText('Fine');
+    await expect(search).toHaveValue('=');
+
+    // The buttons advertise the keys.
+    await expect(
+      page.getByRole('button', { name: 'Larger characters' })
+    ).toHaveAttribute('aria-keyshortcuts', '=');
+  });
+});
+
+// The contrast becomes a named control: three levels beside Characters, the
+// slider kept in step, and the camera panel's sliders named plainly.
+test.describe('The Edges control beside the status line', () => {
+  test('sets a level by name, follows the slider, and the panel says Characters, Edges, Glow', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+
+    const edges = page.locator('#altViewEdges');
+    await expect(edges).toBeVisible();
+    const soft = edges.getByRole('button', { name: 'Soft' });
+    const normal = edges.getByRole('button', { name: 'Normal' });
+    const sharp = edges.getByRole('button', { name: 'Sharp' });
+    const status = page.locator('#previewStatusAltAdjust');
+    const slider = page.locator('#_hfmContrast');
+
+    await sharp.click();
+    await expect(sharp).toHaveAttribute('aria-pressed', 'true');
+    await expect(normal).toHaveAttribute('aria-pressed', 'false');
+    await expect(status).toContainText('EDGE 160%');
+    await expect(slider).toHaveValue('1.6');
+
+    await soft.click();
+    await expect(soft).toHaveAttribute('aria-pressed', 'true');
+    await expect(sharp).toHaveAttribute('aria-pressed', 'false');
+    await expect(status).toContainText('EDGE 70%');
+
+    // A value set elsewhere lights the matching level, or none.
+    await slider.evaluate((el) => {
+      el.value = '1';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(normal).toHaveAttribute('aria-pressed', 'true');
+    await slider.evaluate((el) => {
+      el.value = '2';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(normal).toHaveAttribute('aria-pressed', 'false');
+    await expect(soft).toHaveAttribute('aria-pressed', 'false');
+    await expect(sharp).toHaveAttribute('aria-pressed', 'false');
+
+    await page.locator('#cameraPanelToggle').click();
+    await expect(page.locator('#_hfmContrast-label')).toHaveText('Edges');
+    await expect(page.locator('#_hfmFontScale-label')).toHaveText('Characters');
+    await expect(page.locator('#_hfmPersistFade-label')).toHaveText('Glow');
+  });
+});
+
+// At character resolution the grid draws as scattered punctuation, so the
+// Alt View starts without it; a grid turned on there is kept for the Alt
+// View, and leaving it brings the ordinary grid back.
+test.describe('The grid in the Alt View', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('starts hidden, keeps a grid turned on there, and the ordinary grid comes back', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const gridShown = () =>
+      page.evaluate(() => window.previewManager.gridHelper.visible);
+    expect(await gridShown()).toBe(true);
+
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(gridShown).toBe(false);
+
+    await page.evaluate(() => window.previewManager.toggleGrid(true));
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(gridShown).toBe(true);
+    expect(
+      await page.evaluate(() => localStorage.getItem('openscad-forge-hfm-grid'))
+    ).toBe('true');
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-grid--forge')
+      )
+    ).toBeNull();
+  });
+});
+
+// The first Alt View draws finer characters: at the old full size the box
+// was a blob of characters with no visible faces.
+test.describe('The Alt View starts with finer characters', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('shows 60% characters when nothing is saved', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.gridHelper, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#previewStatusAltAdjust')).toContainText(
+      'SIZE 60%'
+    );
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.6');
+  });
+});
+
+// The Alt View shows the model where the ordinary preview does: its bottom
+// on the grid, the orbit about its middle.
+test.describe('The model stays on the bed in the Alt View', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+  });
+
+  test('keeps the bottom at Z 0 and the orbit target at the middle', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const bed = () =>
+      page.evaluate(() => {
+        const pm = window.previewManager;
+        pm.mesh.updateWorldMatrix(true, false);
+        pm.mesh.geometry.computeBoundingBox();
+        const box = pm.mesh.geometry.boundingBox
+          .clone()
+          .applyMatrix4(pm.mesh.matrixWorld);
+        return {
+          bottom: Math.round(box.min.z * 100) / 100,
+          middle: Math.round(((box.min.z + box.max.z) / 2) * 100) / 100,
+          target: Math.round(pm.controls.target.z * 100) / 100,
+        };
+      });
+    const before = await bed();
+    expect(before.bottom).toBe(0);
+
+    const toggle = page.locator('#_hfmToggle');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await page.waitForTimeout(500);
+    const inAltView = await bed();
+    expect(inAltView.bottom).toBe(0);
+    expect(inAltView.target).toBe(inAltView.middle);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(await bed()).toEqual(before);
   });
 });

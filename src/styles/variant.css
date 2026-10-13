@@ -694,6 +694,102 @@
   backdrop-filter: none;
 }
 
+/* The Alt View's controls in the status strip. The strip itself lets
+   pointer events through to the preview; these must catch them. The row
+   takes no part in the strip's own width (width 0) and then fills it
+   (min-width 100%), so the strip stays as wide as its status lines. */
+:root[data-ui-variant='mono'] .preview-status-bar .alt-view-controls {
+  flex-basis: 100%;
+  width: 0;
+  min-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-2xs);
+  padding-top: var(--space-2xs);
+  border-top: 1px solid var(--color-border);
+  pointer-events: auto;
+}
+
+:root[data-ui-variant='mono'] .preview-status-bar .alt-view-controls[hidden] {
+  display: none;
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* A legend is laid out apart from its fieldset's row; floated, it keeps its
+   meaning and takes its place in the row. */
+:root[data-ui-variant='mono'] .alt-view-stepper-label {
+  float: left;
+  padding: 0;
+  margin-right: var(--space-2xs);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper-value {
+  min-width: 4.5em;
+  text-align: center;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper-btn {
+  color: var(--color-accent);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-md);
+  line-height: 1;
+}
+
+:root[data-ui-variant='mono'] .alt-view-stepper-btn:hover {
+  color: var(--color-accent-text);
+  background: var(--color-accent);
+}
+
+:root[data-ui-variant='mono'] .alt-view-level-btn {
+  min-height: var(--size-touch-target);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  padding-inline: var(--space-sm);
+}
+
+:root[data-ui-variant='mono'] .alt-view-level-btn[aria-pressed='true'] {
+  color: var(--color-accent-text);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* The camera panel's Alt View sliders: the panel is narrow, so the value
+   takes only the room its four characters need and the row stays inside. */
+:root[data-ui-variant='mono'] .hfm-slider-section .slider-container {
+  gap: var(--space-xs);
+}
+
+/* A range input will not shrink below the browser's own width unless told
+   it may; in this narrow row it must. */
+:root[data-ui-variant='mono'] .hfm-slider-section input[type='range'] {
+  min-width: 0;
+  width: 100%;
+}
+
+:root[data-ui-variant='mono'] .hfm-slider-section .slider-value {
+  min-width: 3.5em;
+  font-size: var(--font-size-xs);
+  text-align: right;
+}
+
 /* Alt adjust info line - visible only in mono variant */
 :root[data-ui-variant='mono']
   .preview-status-bar.has-alt-adjust
