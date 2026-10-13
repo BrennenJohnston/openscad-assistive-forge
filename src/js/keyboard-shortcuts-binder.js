@@ -46,6 +46,8 @@ const ACTION_TARGETS = {
   viewLeft: '.camera-view-btn[data-view="left"]',
   viewRight: '.camera-view-btn[data-view="right"]',
   viewDiagonal: '.camera-view-btn[data-view="diagonal"]',
+  altViewSmaller: '#altViewCharactersSmaller',
+  altViewLarger: '#altViewCharactersLarger',
 };
 
 /**

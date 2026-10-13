@@ -398,6 +398,31 @@ function _buildHfmSliderControls({
 }
 
 /**
+ * Move the character size to the next named step below or above the
+ * current size, and say the new size. At either end the size stays and is
+ * said again.
+ * @param {number} direction - -1 for smaller, 1 for larger
+ * @returns {number} The size applied
+ */
+function _stepHfmCharacters(direction) {
+  let target = _hfmFontScale;
+  if (direction < 0) {
+    const below = _HFM_CHARACTER_STEPS.filter(
+      (step) => step.scale < _hfmFontScale - _HFM_STEP_TOLERANCE
+    );
+    if (below.length) target = below[below.length - 1].scale;
+  } else {
+    const above = _HFM_CHARACTER_STEPS.find(
+      (step) => step.scale > _hfmFontScale + _HFM_STEP_TOLERANCE
+    );
+    if (above) target = above.scale;
+  }
+  const next = _applyHfmFontScale(target);
+  announceImmediate(`Characters ${_formatPercent(next)}`);
+  return next;
+}
+
+/**
  * The Characters stepper in the preview's status strip: Smaller and Larger
  * move to the next named step; the value shows the step's name, or the
  * percentage when the size was set between steps elsewhere.
@@ -411,22 +436,8 @@ function _initHfmCharacterStepper() {
   const valueEl = document.getElementById('altViewCharactersValue');
   if (!smaller || !larger || !valueEl) return null;
 
-  const stepTo = (scale) => {
-    const next = _applyHfmFontScale(scale);
-    announceImmediate(`Characters ${_formatPercent(next)}`);
-  };
-  smaller.addEventListener('click', () => {
-    const below = _HFM_CHARACTER_STEPS.filter(
-      (step) => step.scale < _hfmFontScale - _HFM_STEP_TOLERANCE
-    );
-    stepTo(below.length ? below[below.length - 1].scale : _hfmFontScale);
-  });
-  larger.addEventListener('click', () => {
-    const above = _HFM_CHARACTER_STEPS.find(
-      (step) => step.scale > _hfmFontScale + _HFM_STEP_TOLERANCE
-    );
-    stepTo(above ? above.scale : _hfmFontScale);
-  });
+  smaller.addEventListener('click', () => _stepHfmCharacters(-1));
+  larger.addEventListener('click', () => _stepHfmCharacters(1));
 
   _hfmCharacterStepper = {
     sync(scale) {
@@ -963,6 +974,18 @@ export function initHfmController({
 
     isPendingEnable() {
       return _hfmPendingEnable && !_hfmEnabled;
+    },
+
+    /**
+     * The character-size shortcuts' action: a step smaller or larger while
+     * the Alt View is on.
+     * @param {number} direction - -1 for smaller, 1 for larger
+     * @returns {boolean} False when the Alt View is off (nothing changed)
+     */
+    stepCharacters(direction) {
+      if (!_hfmEnabled || !_hfmAltView) return false;
+      _stepHfmCharacters(direction);
+      return true;
     },
 
     /**

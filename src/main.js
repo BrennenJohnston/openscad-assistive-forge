@@ -15996,6 +15996,9 @@ if (rounded) {
     focusModeBtn?.click();
   });
 
+  keyboardConfig.on('altViewSmaller', () => hfmCtrl.stepCharacters(-1));
+  keyboardConfig.on('altViewLarger', () => hfmCtrl.stepCharacters(1));
+
   // Ctrl+B and Ctrl+Alt+4 carry the same description in the shortcuts
   // modal, "Toggle Customizer panel", and run the same command.
   keyboardConfig.on('toggleParameters', () => toggleCustomizerPanel());

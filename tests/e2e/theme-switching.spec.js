@@ -1058,3 +1058,69 @@ test.describe('The Characters control beside the status line', () => {
     await expect(controls).toBeHidden();
   });
 });
+
+// The minus and equals keys step the character size while the Alt View is
+// on, from anywhere but a text field, and do nothing when it is off.
+test.describe('The character-size shortcuts', () => {
+  test('step the size when the Alt View is on, and not otherwise', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const key = page.locator('#_hfmToggle');
+    const slider = page.locator('#_hfmFontScale');
+    const value = page.locator('#altViewCharactersValue');
+
+    // Off: the keys change nothing.
+    await page.locator('h1').click();
+    await page.keyboard.press('=');
+    await page.waitForTimeout(300);
+    await expect(page.locator('#altViewControls')).toBeHidden();
+
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await slider.evaluate((el) => {
+      el.value = '0.6';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(value).toHaveText('Normal');
+
+    await page.locator('h1').click();
+    await page.keyboard.press('=');
+    await expect(value).toHaveText('Bold');
+    await page.keyboard.press('-');
+    await expect(value).toHaveText('Normal');
+    await page.keyboard.press('-');
+    await expect(value).toHaveText('Fine');
+
+    // A text field keeps the keys for typing.
+    const search = page.locator('#paramSearchInput');
+    await search.click();
+    await search.pressSequentially('=');
+    await page.waitForTimeout(300);
+    await expect(value).toHaveText('Fine');
+    await expect(search).toHaveValue('=');
+
+    // The buttons advertise the keys.
+    await expect(
+      page.getByRole('button', { name: 'Larger characters' })
+    ).toHaveAttribute('aria-keyshortcuts', '=');
+  });
+});
