@@ -11577,8 +11577,9 @@ if (rounded) {
       hfmCtrl.handleUnlock();
     }
 
-    // Initialize input sequence detector (still works for non-dev users)
-    initSequenceDetector(() => hfmCtrl.handleUnlock());
+    // Initialize input sequence detector (still works for non-dev users).
+    // Finding it this way is the moment the key's arrival is for.
+    initSequenceDetector(() => hfmCtrl.handleUnlock({ moment: true }));
 
     // Expose DevTools helper for manual unlock
     window.__unlockAltView = () => {

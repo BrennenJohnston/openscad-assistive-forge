@@ -22,6 +22,24 @@
   font-display: swap;
 }
 
+/* The key arrives wearing the look it would turn on, before that look is on:
+   each look's accent and its key's ground, outside the variant. A unit test
+   keeps these equal to the values below. */
+:root {
+  --alt-view-key-accent: #00ff00;
+  --alt-view-key-ground: #121212;
+}
+
+:root[data-theme='light'] {
+  --alt-view-key-accent: #ffb000;
+  --alt-view-key-ground: #121000;
+}
+
+body[data-ui-mode='classic'] {
+  --alt-view-key-accent: #ffff55;
+  --alt-view-key-ground: #0000cc;
+}
+
 /* With high contrast on, its own palette is as specific as this block's
    plain selector and would replace the look's colors in the dark theme;
    the second selector keeps them, as the amber block keeps the light

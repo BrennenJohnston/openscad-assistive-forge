@@ -103,6 +103,15 @@ let _hfmGreetingPlayed = false;
 let _hfmGreetingTimer = null;
 let _hfmStatusOverride = null;
 
+// Found by the camera sequence, the key drops into its place wearing the Alt
+// View's colors, rests a moment, then redraws itself as the ordinary key. The
+// stylesheet times the drop and the redraw; the rest is here.
+const _HFM_KEY_REST_MS = 300;
+// Clears the arrival if its animations never end, as in a hidden tab.
+const _HFM_ARRIVAL_FALLBACK_MS = 12000;
+let _hfmArrival = null;
+const _hfmArrivalTimers = { rest: null, fallback: null };
+
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
 let _getDisplayOptionsController = () => null;
@@ -880,6 +889,48 @@ function _disableAltViewWithPreview(toggleBtn) {
 // Toggle injection & unlock
 // ---------------------------------------------------------------------------
 
+function _endKeyArrival() {
+  if (!_hfmArrival) return;
+  const { toggle, shown, onEnd } = _hfmArrival;
+  _hfmArrival = null;
+  clearTimeout(_hfmArrivalTimers.rest);
+  clearTimeout(_hfmArrivalTimers.fallback);
+  toggle.removeEventListener('animationend', onEnd);
+  toggle.removeAttribute('data-arrival');
+  shown.remove();
+}
+
+function _playKeyArrival(toggle) {
+  if (!toggle || _prefersReducedMotion()) return;
+  const shown = document.createElement('span');
+  shown.className = 'alt-view-arrival';
+  shown.setAttribute('aria-hidden', 'true');
+  shown.innerHTML = toggle.querySelector('svg')?.outerHTML ?? '';
+  // From just above the top of the screen to the key's place.
+  const bottom = Math.ceil(toggle.getBoundingClientRect().bottom);
+  shown.style.setProperty('--alt-view-drop-from', `${-bottom}px`);
+
+  const onEnd = (event) => {
+    if (event.target !== shown || event.pseudoElement) return;
+    if (event.animationName === 'alt-view-key-drop') {
+      toggle.setAttribute('data-arrival', 'landed');
+      _hfmArrivalTimers.rest = setTimeout(() => {
+        toggle.setAttribute('data-arrival', 'settled');
+      }, _HFM_KEY_REST_MS);
+    } else if (event.animationName === 'alt-view-key-scan') {
+      _endKeyArrival();
+    }
+  };
+  _hfmArrival = { toggle, shown, onEnd };
+  toggle.addEventListener('animationend', onEnd);
+  _hfmArrivalTimers.fallback = setTimeout(
+    _endKeyArrival,
+    _HFM_ARRIVAL_FALLBACK_MS
+  );
+  toggle.appendChild(shown);
+  toggle.setAttribute('data-arrival', 'dropping');
+}
+
 function _injectAltToggle() {
   const themeToggle = document.getElementById('themeToggle');
   if (!themeToggle) return;
@@ -965,6 +1016,7 @@ function _injectAltToggle() {
   mobilePanToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
 
   toggleBtn.addEventListener('click', async () => {
+    _endKeyArrival();
     const root = document.documentElement;
     const isCurrentlyEnabled =
       toggleBtn.getAttribute('aria-pressed') === 'true';
@@ -1015,11 +1067,17 @@ function _injectAltToggle() {
   }
 }
 
-function _handleUnlock() {
+/**
+ * @param {Object} [options]
+ * @param {boolean} [options.moment] - Found by the camera sequence: the key
+ *   arrives with its drop instead of simply appearing.
+ */
+function _handleUnlock({ moment = false } = {}) {
   if (_hfmUnlocked) return;
   _hfmUnlocked = true;
 
   _injectAltToggle();
+  if (moment) _playKeyArrival(document.getElementById('_hfmToggle'));
 
   document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
     el.hidden = false;
