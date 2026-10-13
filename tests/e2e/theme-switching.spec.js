@@ -889,3 +889,93 @@ test.describe('The unlock is heard', () => {
       .toBe(1);
   });
 });
+
+// The key says what it is; turning the Alt View on or off says one sentence;
+// pan adjust keeps one name and says one sentence per state.
+test.describe('The Alt View and pan adjust speak plainly', () => {
+  test('the key: its name, and one sentence on and off', async ({ page }) => {
+    await recordAnnouncements(page);
+    await page.goto('/?hfm=unlock');
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible();
+    await expect(key).toHaveAccessibleName('Alt View');
+    await page.waitForTimeout(1_000);
+
+    let mark = await announcementMark(page);
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await page.waitForTimeout(600);
+    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+      'Alt View on. The preview is drawn with characters and the interface follows.',
+    ]);
+
+    mark = await announcementMark(page);
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'false');
+    await page.waitForTimeout(600);
+    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+      'Alt View off.',
+    ]);
+  });
+
+  test('pan adjust: one name, one sentence per state, each value plainly', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click();
+    }
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#cameraPanelToggle').click();
+    const adjust = page.locator('#_hfmPanAdjust');
+    await expect(adjust).toBeVisible();
+    await expect(adjust).toHaveAccessibleName(
+      'Adjust the Alt View with the pan arrows'
+    );
+    await page.waitForTimeout(1_000);
+
+    let mark = await announcementMark(page);
+    await adjust.click();
+    await expect(adjust).toHaveAttribute('aria-pressed', 'true');
+    await expect(adjust).toHaveAccessibleName(
+      'Adjust the Alt View with the pan arrows'
+    );
+    await page.waitForTimeout(600);
+    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+      'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.',
+    ]);
+
+    mark = await announcementMark(page);
+    await page.locator('#cameraPanUp').click();
+    await page.waitForTimeout(600);
+    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+      'Edges 105%',
+    ]);
+
+    mark = await announcementMark(page);
+    await adjust.click();
+    await expect(adjust).toHaveAttribute('aria-pressed', 'false');
+    await page.waitForTimeout(600);
+    expect((await announcementsSince(page, mark)).map((a) => a.text)).toEqual([
+      'Pan arrows move the view again.',
+    ]);
+  });
+});

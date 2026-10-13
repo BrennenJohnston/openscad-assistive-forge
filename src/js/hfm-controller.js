@@ -11,7 +11,7 @@ import {
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
 } from './storage-keys.js';
-import { announce } from './announcer.js';
+import { announce, announceImmediate } from './announcer.js';
 
 // ---------------------------------------------------------------------------
 // HFM / Alt View state (module-level singleton)
@@ -47,6 +47,18 @@ const _HFM_UNLOCK_SENTENCE = 'A key appeared next to the theme button.';
 // held one. The button that completes the sequence speaks its own action
 // inside that hold, so the sentence waits past it and is written at once.
 const _HFM_UNLOCK_ANNOUNCE_DELAY_MS = 600;
+
+// The key's name says what it is; what it does is said once it is pressed.
+const _HFM_TOGGLE_NAME = 'Alt View';
+const _HFM_ON_SENTENCE =
+  'Alt View on. The preview is drawn with characters and the interface follows.';
+const _HFM_OFF_SENTENCE = 'Alt View off.';
+// Pan adjust keeps one name in both states; the values it changes show in
+// the preview's status line, and each change is spoken on its own.
+const _HFM_PAN_ADJUST_NAME = 'Adjust the Alt View with the pan arrows';
+const _HFM_PAN_ADJUST_ON_SENTENCE =
+  'Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow.';
+const _HFM_PAN_ADJUST_OFF_SENTENCE = 'Pan arrows move the view again.';
 
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
@@ -130,22 +142,11 @@ function _syncHfmPanToggleUi() {
     _hfmPanToggleButtons?.mobile,
   ].filter(Boolean);
 
-  const edge = _formatPercent(_hfmContrastScale);
-  const size = _formatPercent(_hfmFontScale);
-  const glow = _formatPercent(_hfmPersistFade);
-
   btns.forEach((btn) => {
     btn.setAttribute('aria-pressed', _hfmPanAdjustEnabled ? 'true' : 'false');
     btn.classList.toggle('active', _hfmPanAdjustEnabled);
-    btn.title = _hfmPanAdjustEnabled
-      ? `Alt adjust ON (Pan: Edge ${edge}, Size ${size}, Glow ${glow})`
-      : `Alt adjust OFF (Pan controls). Current: Edge ${edge}, Size ${size}, Glow ${glow}`;
-    btn.setAttribute(
-      'aria-label',
-      _hfmPanAdjustEnabled
-        ? `Alt adjust on. Pan up/down changes edge sharpness (${edge}). Pan left/right changes character size (${size}). Shift+up/down changes afterglow (${glow}).`
-        : `Alt adjust off. Pan controls. Current edge sharpness ${edge}, character size ${size}, afterglow ${glow}.`
-    );
+    btn.title = _HFM_PAN_ADJUST_NAME;
+    btn.setAttribute('aria-label', _HFM_PAN_ADJUST_NAME);
   });
 
   _updateHfmStatusBar();
@@ -678,8 +679,8 @@ function _injectAltToggle() {
   toggleBtn.id = '_hfmToggle';
   toggleBtn.className = 'btn btn-sm btn-secondary alt-view-toggle';
   toggleBtn.setAttribute('aria-pressed', 'false');
-  toggleBtn.setAttribute('aria-label', 'Toggle alternate view');
-  toggleBtn.setAttribute('title', 'Alternate view');
+  toggleBtn.setAttribute('aria-label', _HFM_TOGGLE_NAME);
+  toggleBtn.setAttribute('title', _HFM_TOGGLE_NAME);
   toggleBtn.innerHTML = `
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <!-- Key icon -->
@@ -697,11 +698,8 @@ function _injectAltToggle() {
   panToggleBtn.className =
     'btn btn-sm btn-icon camera-btn alt-pan-toggle dpad-center';
   panToggleBtn.setAttribute('aria-pressed', 'false');
-  panToggleBtn.setAttribute(
-    'aria-label',
-    'Toggle alternate pan adjustment mode'
-  );
-  panToggleBtn.setAttribute('title', 'Toggle alternate pan adjustment');
+  panToggleBtn.setAttribute('aria-label', _HFM_PAN_ADJUST_NAME);
+  panToggleBtn.setAttribute('title', _HFM_PAN_ADJUST_NAME);
   panToggleBtn.style.display = 'none';
   panToggleBtn.innerHTML = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -740,6 +738,11 @@ function _injectAltToggle() {
   const handlePanToggleClick = () => {
     if (!_hfmAltView || !_hfmEnabled) return;
     _setHfmPanAdjustEnabled(!_hfmPanAdjustEnabled);
+    announceImmediate(
+      _hfmPanAdjustEnabled
+        ? _HFM_PAN_ADJUST_ON_SENTENCE
+        : _HFM_PAN_ADJUST_OFF_SENTENCE
+    );
   };
   const handlePanToggleDblClick = (e) => {
     if (!_hfmAltView || !_hfmEnabled) return;
@@ -773,6 +776,9 @@ function _injectAltToggle() {
         toggleBtn.setAttribute('aria-pressed', 'false');
         _hfmPendingEnable = false;
       }
+      announceImmediate(
+        isCurrentlyEnabled ? _HFM_OFF_SENTENCE : _HFM_ON_SENTENCE
+      );
       return;
     }
 
@@ -781,6 +787,9 @@ function _injectAltToggle() {
     } else {
       _disableAltViewWithPreview(toggleBtn);
     }
+    announceImmediate(
+      isCurrentlyEnabled ? _HFM_OFF_SENTENCE : _HFM_ON_SENTENCE
+    );
   });
 
   if (_hfmEnabled) {
@@ -915,37 +924,37 @@ export function initHfmController({
         const next = _applyHfmPersistFade(
           _hfmPersistFade + _HFM_PERSIST_FADE_RANGE.step
         );
-        return `Alt view afterglow: ${_formatPercent(next)}`;
+        return `Glow ${_formatPercent(next)}`;
       }
       if (shiftKey && direction === 'down') {
         const next = _applyHfmPersistFade(
           _hfmPersistFade - _HFM_PERSIST_FADE_RANGE.step
         );
-        return `Alt view afterglow: ${_formatPercent(next)}`;
+        return `Glow ${_formatPercent(next)}`;
       }
       if (direction === 'up') {
         const next = _applyHfmContrastScale(
           _hfmContrastScale + _HFM_CONTRAST_RANGE.step
         );
-        return `Alt view contrast: ${_formatPercent(next)}`;
+        return `Edges ${_formatPercent(next)}`;
       }
       if (direction === 'down') {
         const next = _applyHfmContrastScale(
           _hfmContrastScale - _HFM_CONTRAST_RANGE.step
         );
-        return `Alt view contrast: ${_formatPercent(next)}`;
+        return `Edges ${_formatPercent(next)}`;
       }
       if (direction === 'left') {
         const next = _applyHfmFontScale(
           _hfmFontScale - _HFM_FONT_SCALE_RANGE.step
         );
-        return `Alt view font size: ${_formatPercent(next)}`;
+        return `Characters ${_formatPercent(next)}`;
       }
       if (direction === 'right') {
         const next = _applyHfmFontScale(
           _hfmFontScale + _HFM_FONT_SCALE_RANGE.step
         );
-        return `Alt view font size: ${_formatPercent(next)}`;
+        return `Characters ${_formatPercent(next)}`;
       }
       return true;
     },
