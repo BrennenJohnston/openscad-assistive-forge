@@ -81,7 +81,25 @@ async function altViewOn(page) {
  * Every visible element under `rootSelector` against the palette: the mono
  * rules' own colors when the Alt View is on, every color token otherwise.
  */
-function audit(page, rootSelector) {
+// A transition still running when a surface is read (the mode toggle's
+// colours on a slow machine) shows as a colour off the tokens: let every
+// CSS transition finish or be cancelled first, within a bound.
+async function settle(page) {
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.allSettled(
+        document
+          .getAnimations()
+          .filter((animation) => animation instanceof CSSTransition)
+          .map((animation) => animation.finished)
+      ),
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ])
+  );
+}
+
+async function audit(page, rootSelector) {
+  await settle(page);
   return page.evaluate((rootSelector) => {
     const mono =
       document.documentElement.getAttribute('data-ui-variant') === 'mono';
