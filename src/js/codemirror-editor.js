@@ -307,6 +307,47 @@ const lightHighlightStyle = highlightStyleFor(LIGHT_SCHEME);
 const darkHighlightStyle = highlightStyleFor(DARK_SCHEME);
 
 /**
+ * The Alt View's scheme: every value is one of the variant's own tokens, so
+ * the green and the amber phosphor both follow, and the consistency spec
+ * finds nothing outside the palette. A phosphor screen has one hue, so the
+ * tokens tell the kinds of text apart by brightness: keywords brightest,
+ * code at the text color, comments and strings a step dimmer. The gutter
+ * and the caret line are the variant's two darker surfaces.
+ * @type {import('./editor-color-scheme.js').EditorScheme}
+ */
+const MONO_SCHEME = Object.freeze({
+  paper: 'var(--color-bg-primary)',
+  text: 'var(--color-text-primary)',
+  caretLine: 'var(--color-bg-tertiary)',
+  marginBackground: 'var(--color-bg-secondary)',
+  marginForeground: 'var(--color-text-secondary)',
+  selectionBackground: 'var(--color-hover-bg)',
+  selectionForeground: 'var(--color-text-primary)',
+  matchedBraceBackground: 'var(--color-accent-subtle)',
+  matchedBraceForeground: 'var(--color-accent-hover)',
+  unmatchedBraceBackground: 'var(--color-error-bg)',
+  unmatchedBraceForeground: 'var(--color-error)',
+  tokens: Object.freeze({
+    keyword1: 'var(--color-accent-hover)',
+    keyword2: 'var(--color-text-primary)',
+    keyword3: 'var(--color-text-primary)',
+    comment: 'var(--color-text-secondary)',
+    number: 'var(--color-text-primary)',
+    string: 'var(--color-text-secondary)',
+    operator: 'var(--color-text-primary)',
+  }),
+});
+const monoHighlightStyle = highlightStyleFor(MONO_SCHEME);
+
+/** @returns {boolean} True while the page wears the Alt View's variant */
+function isMonoVariant() {
+  return (
+    typeof document !== 'undefined' &&
+    document.documentElement.getAttribute('data-ui-variant') === 'mono'
+  );
+}
+
+/**
  * CodeMirror has no font-size facility; a theme is the facility. Set on the
  * editor root and on .cm-gutters so the line numbers scale with the code —
  * sizing only the content leaves the gutter behind and the two stop lining
@@ -354,7 +395,7 @@ function editorThemeFor(scheme, options = {}) {
       '.cm-gutters': {
         backgroundColor: scheme.marginBackground,
         color: scheme.marginForeground,
-        borderRight: `1px solid ${options.dark ? '#333' : '#ddd'}`,
+        borderRight: `1px solid ${options.gutterBorder ?? (options.dark ? '#333' : '#ddd')}`,
       },
       '.cm-activeLineGutter': {
         color: scheme.text,
@@ -386,6 +427,20 @@ function editorThemeFor(scheme, options = {}) {
 
 const lightEditorTheme = editorThemeFor(LIGHT_SCHEME);
 const darkEditorTheme = editorThemeFor(DARK_SCHEME, { dark: true });
+const monoEditorTheme = [
+  editorThemeFor(MONO_SCHEME, {
+    dark: true,
+    gutterBorder: 'var(--color-border-light)',
+  }),
+  // CodeMirror marks focus with a dotted dark grey line of its own; the
+  // variant marks it with its accent, as every other control does.
+  EditorView.theme({
+    '&.cm-focused': {
+      outline: '2px solid var(--color-focus)',
+      outlineOffset: '2px',
+    },
+  }),
+];
 
 // ─── Autocomplete for OpenSCAD ──────────────────────────────────────────────
 
@@ -789,6 +844,9 @@ export class CodeMirrorEditor {
     /** @type {Function|null} */
     this._uiModeListener = null;
 
+    /** @type {MutationObserver|null} Follows the root's Alt View attribute */
+    this._variantObserver = null;
+
     /** @type {ResizeObserver|null} */
     this._resizeObserver = null;
   }
@@ -862,9 +920,9 @@ export class CodeMirrorEditor {
 
         openscadStreamLanguage,
         this._highlightCompartment.of(
-          syntaxHighlighting(isDark ? darkHighlightStyle : lightHighlightStyle)
+          syntaxHighlighting(this._highlightStyleFor(isDark))
         ),
-        this._themeCompartment.of(isDark ? darkEditorTheme : lightEditorTheme),
+        this._themeCompartment.of(this._editorThemeFor(isDark)),
 
         this._autocompleteCompartment.of(
           this._editorPrefs.autocomplete
@@ -937,6 +995,11 @@ export class CodeMirrorEditor {
     this._unsubscribeTheme = themeManager.addListener(() =>
       this._switchTheme(this._resolveIsDark())
     );
+    this._variantObserver = new MutationObserver(() => this.refreshTheme());
+    this._variantObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-ui-variant'],
+    });
     this._uiModeListener = () => this._switchTheme(this._resolveIsDark());
     document.addEventListener('ui-mode-changed', this._uiModeListener);
 
@@ -997,18 +1060,37 @@ export class CodeMirrorEditor {
   }
 
   /** @private */
+  _highlightStyleFor(isDark) {
+    if (isMonoVariant()) return monoHighlightStyle;
+    return isDark ? darkHighlightStyle : lightHighlightStyle;
+  }
+
+  /** @private */
+  _editorThemeFor(isDark) {
+    if (isMonoVariant()) return monoEditorTheme;
+    return isDark ? darkEditorTheme : lightEditorTheme;
+  }
+
+  /** @private */
   _switchTheme(isDark) {
     if (!this._view) return;
     this._view.dispatch({
       effects: [
-        this._themeCompartment.reconfigure(
-          isDark ? darkEditorTheme : lightEditorTheme
-        ),
+        this._themeCompartment.reconfigure(this._editorThemeFor(isDark)),
         this._highlightCompartment.reconfigure(
-          syntaxHighlighting(isDark ? darkHighlightStyle : lightHighlightStyle)
+          syntaxHighlighting(this._highlightStyleFor(isDark))
         ),
       ],
     });
+  }
+
+  /**
+   * Re-read the theme and the variant and apply them. The Alt View sets
+   * the root's variant attribute without going through the theme manager,
+   * so the editor watches that attribute itself (see initialize()).
+   */
+  refreshTheme() {
+    this._switchTheme(this._resolveIsDark());
   }
 
   /** @returns {string} */
@@ -1342,6 +1424,10 @@ export class CodeMirrorEditor {
     if (this._uiModeListener) {
       document.removeEventListener('ui-mode-changed', this._uiModeListener);
       this._uiModeListener = null;
+    }
+    if (this._variantObserver) {
+      this._variantObserver.disconnect();
+      this._variantObserver = null;
     }
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
