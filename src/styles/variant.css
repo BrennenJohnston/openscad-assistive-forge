@@ -115,6 +115,12 @@
     color-mix(in srgb, var(--color-accent) 10%, transparent);
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
+
+  /* A black drawing turned into the accent with its white details black,
+   * for pictures no color property reaches; the grays of its edges stay on
+   * the accent's hue. Each look has its own. */
+  --crt-drawing-filter: invert(1) sepia(1) saturate(4) hue-rotate(38deg)
+    saturate(10);
 }
 
 /* ========================================
@@ -141,6 +147,8 @@
   --color-accent-subtle: #1a0800;
   --color-accent-fg: #ffb000;
   --color-on-accent-subtle: var(--color-accent-fg); /* 10.63:1 on #1a0800 */
+  --crt-drawing-filter: invert(1) brightness(0.55) sepia(1) saturate(3.5)
+    hue-rotate(10deg) saturate(2);
   --color-on-accent: #000000;
   --color-on-success: #000000;
   --color-on-warning: #000000;
@@ -1212,6 +1220,23 @@
   border-radius: 0;
 }
 
+/* --- The design chooser's drawings in the look's own color ---
+   The drawings are black pictures in an <img>, which no color property
+   reaches; the look's drawing filter turns them into its accent and keeps
+   their white details (a face's eyes) dark. Forced colors keep their own
+   rules. */
+@media (forced-colors: none) {
+  :root[data-ui-variant='mono'] .svg-gallery-option .svg-gallery-thumb {
+    filter: var(--crt-drawing-filter);
+  }
+}
+
+/* --- The drawing editor's legend chips and shape swatches: square --- */
+:root[data-ui-variant='mono'] .svg-prep-legend-chip,
+:root[data-ui-variant='mono'] .svg-prep-swatch {
+  border-radius: 0;
+}
+
 /* --- High-contrast exception: restore multicolor where specified --- */
 :root[data-ui-variant='mono'][data-high-contrast='true']
   .complexity-tier-label.tier-beginner {
@@ -1379,6 +1404,15 @@
   transform-origin: center center;
 }
 
+/* The drawing editor takes the preview area, and the 3D canvas under it is
+   hidden while it is open. The character canvas sits above everything in
+   the area, so it steps back the same way, or it would cover the editor. */
+:root[data-ui-variant='mono']
+  .preview-canvas-section.has-drawing-editor
+  .hfm-overlay-canvas {
+  visibility: hidden;
+}
+
 /* ----------------------------------------
  * 4e. Box-drawing character decorations on panel headers
  *
@@ -1517,6 +1551,7 @@
     color-mix(in srgb, var(--retro-accent) 10%, transparent);
   --crt-scanline-color: var(--retro-scanline);
   --crt-vignette-color: var(--retro-vignette);
+  --crt-drawing-filter: var(--retro-drawing-filter);
 }
 
 /* DOS blue: the text-mode desktop of the early 1990s, light text and
@@ -1540,6 +1575,8 @@
   --retro-hover: #2020c0;
   --retro-focus: #ffff55;
   --retro-icon-filter: invert(1);
+  --retro-drawing-filter: invert(1) brightness(0.75) sepia(1) saturate(1.75)
+    hue-rotate(15deg) saturate(1.5) brightness(1.1);
   --retro-scanline: rgba(0, 0, 0, 0.12);
   --retro-vignette: rgba(0, 0, 0, 0.35);
 }

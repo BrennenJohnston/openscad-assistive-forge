@@ -41,8 +41,8 @@ async function seed(page, { unlock, theme }) {
   );
 }
 
-async function openProject(page) {
-  await page.goto('/?example=simple-box');
+async function openProject(page, example = 'simple-box') {
+  await page.goto(`/?example=${example}`);
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
@@ -77,10 +77,6 @@ async function altViewOn(page) {
   await page.waitForTimeout(1_000);
 }
 
-/**
- * Every visible element under `rootSelector` against the palette: the mono
- * rules' own colors when the Alt View is on, every color token otherwise.
- */
 // A transition still running when a surface is read (the mode toggle's
 // colours on a slow machine) shows as a colour off the tokens: let every
 // CSS transition finish or be cancelled first, within a bound.
@@ -98,9 +94,15 @@ async function settle(page) {
   );
 }
 
-async function audit(page, rootSelector) {
+/**
+ * Every visible element under `rootSelector` against the palette: the mono
+ * rules' own colors when the Alt View is on, every color token otherwise.
+ * Elements matching `contentColors` show colors that are information (a
+ * drawing's own colors), so their colors are not read.
+ */
+async function audit(page, rootSelector, contentColors = null) {
   await settle(page);
-  return page.evaluate((rootSelector) => {
+  return page.evaluate(({ rootSelector, contentColors }) => {
     const mono =
       document.documentElement.getAttribute('data-ui-variant') === 'mono';
     // The standard look is read on the body, where Classic keeps its tokens
@@ -251,8 +253,11 @@ async function audit(page, rootSelector) {
           parseFloat(s.outlineWidth) > 0 && s.outlineStyle !== 'none',
         ],
       ];
+      const isContent = Boolean(contentColors && el.matches(contentColors));
       for (const [prop, value, applies] of checks) {
-        if (!applies || !value || value === 'rgba(0, 0, 0, 0)') continue;
+        if (isContent || !applies || !value || value === 'rgba(0, 0, 0, 0)') {
+          continue;
+        }
         if (!palette.has(value)) {
           offenders.color.push(`${describe(el)} ${prop} ${value}`);
         }
@@ -281,8 +286,69 @@ async function audit(page, rootSelector) {
         font: offenders.font.slice(0, 4),
       },
     };
-  }, rootSelector);
+  }, { rootSelector, contentColors });
 }
+
+/**
+ * The pixels of a design chooser option's drawing as the page shows it: a
+ * picture of the option above its label, read back in the page. Counts the
+ * white pixels, those in the green phosphor's family, and the dark pixels
+ * inside the drawing (between a row's first and last lit pixel), which are
+ * its details: a face's eyes and mouth.
+ */
+async function iconInk(page, option) {
+  const box = await option.boundingBox();
+  const label = await option.locator('.svg-gallery-label').boundingBox();
+  const shot = await page.screenshot({
+    clip: {
+      x: box.x + 3,
+      y: box.y + 3,
+      width: box.width - 6,
+      height: label.y - box.y - 4,
+    },
+  });
+  return page.evaluate(async (data) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const { data: px } = ctx.getImageData(0, 0, img.width, img.height);
+    let white = 0;
+    let green = 0;
+    let details = 0;
+    for (let y = 0; y < img.height; y++) {
+      const lit = [];
+      for (let x = 0; x < img.width; x++) {
+        const i = (y * img.width + x) * 4;
+        const [r, g, b] = [px[i], px[i + 1], px[i + 2]];
+        if (r > 200 && g > 200 && b > 200) white += 1;
+        else if (g > 120 && r < 90 && b < 90) green += 1;
+        lit.push(Math.max(r, g, b));
+      }
+      const first = lit.findIndex((v) => v > 120);
+      const last = lit.findLastIndex((v) => v > 120);
+      for (let x = first + 1; first >= 0 && x < last; x++) {
+        if (lit[x] < 60) details += 1;
+      }
+    }
+    return { white, green, details };
+  }, shot.toString('base64'));
+}
+
+// The drawing's own colors (a shape's swatch) and the layer tints the
+// picture paints, which the legend under it repeats: information, shown in
+// their true colors.
+const DRAWING_COLORS = [
+  '.svg-prep-swatch',
+  '.svg-prep-legend-chip--layer-1',
+  '.svg-prep-legend-chip--layer-2',
+  '.svg-prep-legend-chip--layer-3',
+  '.svg-prep-legend-chip--ignore',
+].join(', ');
 
 // The page keeps every dialog in the document; the audit reads the drawn one
 // (the first with a box), and the waits use Playwright's own visibility.
@@ -424,6 +490,70 @@ test.describe('The Alt View keeps to its tokens', () => {
         )
       )
     );
+  });
+
+  test('the charm: the design chooser and the drawing editor', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await openProject(page, 'q-charm');
+    await page.evaluate(() => {
+      let group = document.querySelector('#param-design_file')?.closest('details');
+      while (group) {
+        group.open = true;
+        group = group.parentElement?.closest('details');
+      }
+    });
+    const chooser = page.locator('.svg-gallery-listbox').first();
+    await chooser.scrollIntoViewIfNeeded();
+    const firstDesign = chooser.locator('.svg-gallery-option').first();
+    // The ordinary look draws the design white with its details dark.
+    const ordinary = await iconInk(page, firstDesign);
+    await altViewOn(page);
+    const charm = await audit(page, null);
+    expect(charm.samples.color, 'the charm: colors off the palette').toEqual([]);
+    expect(charm.samples.font, 'the charm: fonts off the stack').toEqual([]);
+
+    // The chooser's drawings take the look's own color, not white, and keep
+    // their details.
+    const ink = await iconInk(page, firstDesign);
+    expect(ordinary.details, 'the first design has details').toBeGreaterThan(20);
+    expect.soft(ink.white, 'white pixels in the first design').toBe(0);
+    expect.soft(ink.green, 'green pixels in the first design').toBeGreaterThan(
+      ordinary.white / 2
+    );
+    expect
+      .soft(ink.details, 'the first design keeps its details')
+      .toBeGreaterThan(ordinary.details / 2);
+
+    // The drawing editor takes the preview area, as in the ordinary look:
+    // the characters step back while it is open and come back after.
+    await page.setInputFiles(
+      '#param-design_file',
+      'tests/fixtures/svg-edit/two-papers.svg'
+    );
+    await page.getByRole('button', { name: 'Open the drawing editor' }).first().click();
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible({
+      timeout: 90_000,
+    });
+    await expect(page.locator('.hfm-overlay-canvas')).toBeHidden();
+    const editor = await audit(page, '.drawing-editor', DRAWING_COLORS);
+    expect(editor.missingRoot, 'the drawing editor found').toBeUndefined();
+    expect(editor.samples.color, 'the drawing editor: colors off the palette').toEqual(
+      []
+    );
+    expect(editor.samples.font, 'the drawing editor: fonts off the stack').toEqual([]);
+    console.log(
+      JSON.stringify({
+        charm: charm.counts,
+        'drawing editor': editor.counts,
+        ordinary,
+        ink,
+      })
+    );
+
+    await page.locator('.drawing-editor .drawing-editor-close').first().click();
+    await expect(page.locator('.hfm-overlay-canvas')).toBeVisible();
   });
 });
 
