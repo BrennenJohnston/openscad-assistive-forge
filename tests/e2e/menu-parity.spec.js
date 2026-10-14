@@ -442,6 +442,12 @@ test.describe('Edit menu parity', () => {
     page,
   }) => {
     await loadFixture(page)
+    // The first preview's "Preview ready", finishing inside the announcer's
+    // hold, would replace a bookmark's sentence: begin once it is drawn.
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: 120_000 }
+    )
     await openEditor(page)
 
     const editor = page.locator('#expertModePanel .cm-content')
@@ -885,15 +891,18 @@ test.describe('View menu parity', () => {
 
     const radius = (pose) =>
       Math.hypot(...pose.position.map((v, i) => v - pose.target[i]))
+    // Each press is read once the view has moved, not after a fixed pause:
+    // a loaded runner moves it later.
     await resetView.click()
-    await page.waitForTimeout(150)
+    await expect
+      .poll(async () => (await cameraPose(page)).position.map(Math.round))
+      .toEqual([150, -150, 100])
     const reset = await cameraPose(page)
-    expect(reset.position.map(Math.round)).toEqual([150, -150, 100])
 
     await viewAll.first().click()
-    await page.waitForTimeout(150)
-    const fitted = await cameraPose(page)
-    expect(radius(fitted)).toBeLessThan(radius(reset) - 1)
+    await expect
+      .poll(async () => radius(await cameraPose(page)))
+      .toBeLessThan(radius(reset) - 1)
   })
 })
 

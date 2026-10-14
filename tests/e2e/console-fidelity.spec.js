@@ -201,7 +201,6 @@ test.describe('Renderer status routing', () => {
     // The other half of the same claim: quietening the status lines must not
     // quieten real ones.
     await loadProject(page, INVALID_SYNTAX_FIXTURE);
-    await openConsolePanel(page);
 
     // Polled on the ROW COUNT, not on the text: "No errors. Compile or render
     // to check for issues." contains the word, so matching /error/i here was
@@ -211,6 +210,9 @@ test.describe('Renderer status routing', () => {
         timeout: PREVIEW_TIMEOUT,
       })
       .toBeGreaterThan(0);
+    // The error opens the console by itself; opened only now, a press cannot
+    // land just after that and close it again.
+    await openConsolePanel(page);
 
     const row = page.locator('#error-log-output tbody tr').first();
     await expect(row).toContainText(/Parser error/i);
@@ -230,12 +232,13 @@ test.describe('Error-Log chrome', () => {
   }) => {
     test.setTimeout(300_000);
     await loadProject(page, INVALID_SYNTAX_FIXTURE);
-    await openConsolePanel(page);
     await expect
       .poll(() => page.locator('#error-log-output tbody tr').count(), {
         timeout: PREVIEW_TIMEOUT,
       })
       .toBeGreaterThan(0);
+    // After the error that opens the console by itself (see above).
+    await openConsolePanel(page);
 
     // Upstream's headers (OpenSCAD_1).
     const headers = await page
