@@ -60,6 +60,16 @@ function setReducedMotion(reduce) {
   })
 }
 
+/**
+ * The last sentence the editor said. Its status line is its voice once it
+ * is on screen, so the host's announcer never says that sentence as well.
+ */
+function lastSaid(surface, announce) {
+  const sentence = surface.querySelector('.drawing-editor-status').textContent
+  expect(announce).not.toHaveBeenCalledWith(sentence)
+  return sentence
+}
+
 describe('the canvas view', () => {
   let container
   let canvas
@@ -237,11 +247,11 @@ describe('the surface: Show original and the plate stepper', () => {
     btn.click()
     expect(btn.getAttribute('aria-pressed')).toBe('true')
     expect(editor.getView()).toBe('original')
-    expect(announce).toHaveBeenLastCalledWith(S.showingOriginal)
+    expect(lastSaid(surface, announce)).toBe(S.showingOriginal)
     btn.click()
     expect(btn.getAttribute('aria-pressed')).toBe('false')
     expect(editor.getView()).toBe('plan')
-    expect(announce).toHaveBeenLastCalledWith(S.showingPlan)
+    expect(lastSaid(surface, announce)).toBe(S.showingPlan)
   })
 
   it('focusing a row pulses the highlight on that region; the legend names the looks', async () => {
@@ -280,7 +290,7 @@ describe('the surface: Show original and the plate stepper', () => {
     expect(text.textContent).toBe(S.plateOfN(1, 3, 'Base coat'))
     expect(editor.getPlateIndex()).toBe(0)
     expect(editor._canvas.svg.dataset.plate).toBe('true')
-    expect(announce).toHaveBeenLastCalledWith(
+    expect(lastSaid(surface, announce)).toBe(
       `${S.plateOfN(1, 3, 'Base coat')}. ${paintSequence(['Base coat', 'Brown', 'White'])[0]}`
     )
     next.click()
@@ -294,7 +304,7 @@ describe('the surface: Show original and the plate stepper', () => {
     expect(next.disabled).toBe(true)
     text.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     expect(text.textContent).toBe(S.allPlates)
-    expect(announce).toHaveBeenLastCalledWith(S.showingAllPlates)
+    expect(lastSaid(surface, announce)).toBe(S.showingAllPlates)
     expect(editor._canvas.svg.dataset.plate).toBeUndefined()
 
     // A colour given to a region shows up on its plate.
@@ -621,14 +631,16 @@ describe('the crop view in the surface', () => {
     expect(surface.querySelector('.drawing-editor-crop-btn').hidden).toBe(true)
   })
 
-  it('pressing Crop opens the view in place of the drawing with focus on Top; Escape brings the drawing back, focus on Crop, the editor still open', () => {
+  it('pressing Crop opens the view in place of the drawing with focus on Top; Escape brings the drawing back, focus on Crop, the editor still open', async () => {
     openRelief({ onCrop: vi.fn() })
+    // Pressed on an editor already on screen, as a person presses it.
+    await new Promise((resolve) => requestAnimationFrame(resolve))
     const btn = surface.querySelector('.drawing-editor-crop-btn')
     btn.click()
     const view = surface.querySelector('.drawing-editor-crop')
     expect(view.hidden).toBe(false)
     expect(surface.querySelector('.drawing-editor-stage').hidden).toBe(true)
-    expect(announce).toHaveBeenLastCalledWith(S.cropViewOpen)
+    expect(lastSaid(surface, announce)).toBe(S.cropViewOpen)
     const top = view.querySelector('input[type="range"][data-inset="top"]')
     expect(document.activeElement).toBe(top)
     expect(view.querySelector('image').getAttribute('href')).toMatch(/^data:image\/svg\+xml/)

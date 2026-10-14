@@ -94,6 +94,31 @@ function makeAnalysis(elementCount = 3, opts = {}) {
 const SIMPLE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="black"/></svg>';
 
+/**
+ * What a person hears from the workspace from now on: every sentence its own
+ * live region is given, then every sentence handed to the app's announcer.
+ * The region is the workspace's voice, so a sentence in both is said twice.
+ */
+function listenTo(ws) {
+  const region = ws._root.querySelector(
+    ':scope > [aria-live="polite"][aria-atomic="true"]'
+  );
+  const written = [];
+  const text = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+  Object.defineProperty(region, 'textContent', {
+    configurable: true,
+    get() {
+      return text.get.call(this);
+    },
+    set(value) {
+      if (value) written.push(value);
+      text.set.call(this, value);
+    },
+  });
+  announce.mockClear();
+  return () => [...written, ...announce.mock.calls.map((c) => c[0])];
+}
+
 // ── Setup / teardown ─────────────────────────────────────────────────────────
 
 let container;
@@ -3057,25 +3082,23 @@ describe('deleting shapes from the list', () => {
   it('says one shape as one, not "1 shapes"', () => {
     const ws = createSvgPrepWorkspace(container);
     openWith(ws, 2);
+    const heard = listenTo(ws);
     deleteRow(ws, 0);
-    expect(announce.mock.calls.map((c) => c[0]).join(' | ')).toMatch(
-      /1 shape left\./
-    );
+    expect(heard().join(' | ')).toMatch(/1 shape left\./);
     ws.destroy();
   });
 
   it('announces the delete and the undo, with the count left', () => {
     const ws = createSvgPrepWorkspace(container);
     openWith(ws, 3);
+    const heard = listenTo(ws);
     deleteRow(ws, 0);
-    const said = announce.mock.calls.map((c) => c[0]).join(' | ');
-    expect(said).toMatch(/Deleted/);
-    expect(said).toMatch(/2 shapes left/);
-    expect(said).toMatch(/Undo available/);
+    const deleted = heard().filter((s) => s.startsWith('Deleted'));
+    expect(deleted).toHaveLength(1);
+    expect(deleted[0]).toMatch(/2 shapes left/);
+    expect(deleted[0]).toMatch(/Undo available/);
     ws._root.querySelector('[data-action="undo-delete"]').click();
-    expect(announce.mock.calls.map((c) => c[0]).join(' | ')).toMatch(
-      /Undone\. 3 shapes\./
-    );
+    expect(heard().filter((s) => s === 'Undone. 3 shapes.')).toHaveLength(1);
     ws.destroy();
   });
 
@@ -3753,7 +3776,7 @@ describe('choosing shapes and changing them together', () => {
     const ws = openThree();
     clickRow(ws, 0);
     clickRow(ws, 1, { ctrlKey: true });
-    announce.mockClear();
+    const heard = listenTo(ws);
 
     const e = press(rows(ws)[1], 'Delete');
 
@@ -3761,7 +3784,7 @@ describe('choosing shapes and changing them together', () => {
     expect(roleOf(ws, 1)).toBe('ignore');
     expect(roleOf(ws, 2)).not.toBe('ignore');
     // One sentence for the whole action, not one per shape.
-    const said = announce.mock.calls.map((c) => c[0]);
+    const said = heard();
     expect(said).toEqual(['2 shapes set to Off.']);
     // And the press is spent here: the app never sees it.
     expect(e.defaultPrevented).toBe(true);
@@ -3778,20 +3801,20 @@ describe('choosing shapes and changing them together', () => {
 
   it('with nothing selected, Delete acts on the row a person is standing on', () => {
     const ws = openThree();
-    announce.mockClear();
+    const heard = listenTo(ws);
     press(rows(ws)[1], 'Delete');
     expect(roleOf(ws, 1)).toBe('ignore');
     expect(roleOf(ws, 0)).not.toBe('ignore');
-    expect(announce.mock.calls.map((c) => c[0])[0]).toMatch(/set to Off\.$/);
+    expect(heard()).toEqual([expect.stringMatching(/set to Off\.$/)]);
     ws.destroy();
   });
 
   it('with nothing selected and nowhere to act, it asks rather than guessing', () => {
     const ws = openThree();
-    announce.mockClear();
+    const heard = listenTo(ws);
     press(ws._refs.objects, 'Delete');
     expect(rows(ws).some((_, i) => roleOf(ws, i) === 'ignore')).toBe(false);
-    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+    expect(heard()).toEqual([
       'Choose a shape first.',
     ]);
     ws.destroy();
@@ -3799,7 +3822,7 @@ describe('choosing shapes and changing them together', () => {
 
   it('Ctrl+A selects every row, and the press never reaches the page', () => {
     const ws = openThree();
-    announce.mockClear();
+    const heard = listenTo(ws);
     // What the app would hear, if the editor let the press through: 35,759
     // characters of page text going blue.
     const heardOutside = vi.fn();
@@ -3808,7 +3831,7 @@ describe('choosing shapes and changing them together', () => {
     const e = press(rows(ws)[0], 'a', { ctrlKey: true });
 
     expect(selectedRows(ws)).toHaveLength(3);
-    expect(announce.mock.calls.map((c) => c[0])).toEqual([
+    expect(heard()).toEqual([
       'All 3 shapes selected.',
     ]);
     // preventDefault is what stops the browser selecting the whole page...
@@ -4666,7 +4689,7 @@ describe('a role pressed on a chosen row is pressed for the selection', () => {
     await ws.whenReady();
     clickRow(ws, 0);
     clickRow(ws, 2, { ctrlKey: true });
-    announce.mockClear();
+    const heard = listenTo(ws);
     const radio = ws._refs.objects.querySelector(
       'input[name="svg-prep-role-2"][value="ignore"]'
     );
@@ -4678,7 +4701,7 @@ describe('a role pressed on a chosen row is pressed for the selection', () => {
     expect(checked(0)).toBe('ignore');
     expect(checked(2)).toBe('ignore');
     expect(checked(1)).toBe('foreground');
-    expect(announce.mock.calls.map((c) => c[0])).toContain('2 shapes set to Off.');
+    expect(heard().filter((s) => s === '2 shapes set to Off.')).toHaveLength(1);
     ws.destroy();
   });
 

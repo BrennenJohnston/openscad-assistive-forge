@@ -1313,7 +1313,10 @@ export function createSvgPrepWorkspace(containerEl) {
   // no cramped inline box to expand out of.
   let hosted = false;
 
-  // ARIA live region for role-change and preview announcements
+  // ARIA live region for role-change and preview announcements: the
+  // workspace's one voice for what a press did. A polite region reads its own
+  // changes, so nothing repeats them to the app's announcer (that said every
+  // sentence twice).
   const liveRegion = document.createElement('div');
   liveRegion.className = 'sr-only';
   liveRegion.setAttribute('aria-live', 'polite');
@@ -2696,7 +2699,6 @@ export function createSvgPrepWorkspace(containerEl) {
       if (rows.length === 0) {
         const sentence = 'Choose a shape first.';
         liveRegion.textContent = sentence;
-        announce(sentence);
         return true;
       }
       applyRole(rows, 'ignore', { announce: true });
@@ -2827,7 +2829,6 @@ export function createSvgPrepWorkspace(containerEl) {
         ? 'All 1 shape selected.'
         : `All ${all.size} shapes selected.`;
     liveRegion.textContent = sentence;
-    announce(sentence);
   }
 
   /** Change the selection and say what it is now. */
@@ -2837,7 +2838,6 @@ export function createSvgPrepWorkspace(containerEl) {
     if (say) {
       const sentence = selectionSentence();
       liveRegion.textContent = sentence;
-      announce(sentence);
     }
   }
 
@@ -3005,7 +3005,6 @@ export function createSvgPrepWorkspace(containerEl) {
           ? `${rowName(rows[0])} set to ${word}.`
           : `${rows.length} shapes set to ${word}.`;
       liveRegion.textContent = sentence;
-      announce(sentence);
     }
     return rows.length;
   }
@@ -3305,7 +3304,6 @@ export function createSvgPrepWorkspace(containerEl) {
         ? `Deleted ${what}. ${liveElements.length} ${liveElements.length === 1 ? 'shape' : 'shapes'} left. Undo available.`
         : `Deleted ${positions.length} shapes. ${liveElements.length} left. Undo available.`;
     liveRegion.textContent = message;
-    announce(message);
   }
 
   /** Put the last deletion back. One level, by design. */
@@ -3320,7 +3318,6 @@ export function createSvgPrepWorkspace(containerEl) {
     updateDeleteUi();
     const message = `Undone. ${liveElements.length} ${liveElements.length === 1 ? 'shape' : 'shapes'}.`;
     liveRegion.textContent = message;
-    announce(message);
   }
 
   // ── The shapes too thin to print ─────────────────────────────────────────
@@ -3430,7 +3427,6 @@ export function createSvgPrepWorkspace(containerEl) {
     if (rows.length === 0) {
       const nothing = `Nothing is thinner than ${thinFloorMm()} mm.`;
       liveRegion.textContent = nothing;
-      announce(nothing);
       return;
     }
     lastIgnore = { rows, roles: rows.map((i) => roles[i]) };
@@ -3441,7 +3437,6 @@ export function createSvgPrepWorkspace(containerEl) {
         ? '1 thin shape turned off. It can be turned back on in the list.'
         : `${rows.length} thin shapes turned off. Each can be turned back on in the list.`;
     liveRegion.textContent = sentence;
-    announce(sentence);
   }
 
   /** The last batch back to the roles it had. One level, by design. */
@@ -3463,7 +3458,6 @@ export function createSvgPrepWorkspace(containerEl) {
         ? 'Undone. 1 shape is back to how it was.'
         : `Undone. ${n} shapes are back to how they were.`;
     liveRegion.textContent = sentence;
-    announce(sentence);
   }
 
   /**
@@ -3575,7 +3569,6 @@ export function createSvgPrepWorkspace(containerEl) {
       if (doomed.length === 0) {
         const nothing = `Nothing is smaller than ${limit} square millimeters.`;
         liveRegion.textContent = nothing;
-        announce(nothing);
         return;
       }
       deleteRows(doomed, `${doomed.length} small shapes`);
@@ -3590,7 +3583,6 @@ export function createSvgPrepWorkspace(containerEl) {
       if (keep >= liveElements.length) {
         const nothing = `There are already ${liveElements.length} or fewer shapes.`;
         liveRegion.textContent = nothing;
-        announce(nothing);
         return;
       }
       const ranked = liveElements
@@ -3618,7 +3610,6 @@ export function createSvgPrepWorkspace(containerEl) {
         fileName
       );
       liveRegion.textContent = `Saved ${fileName}`;
-      announce(`Saved ${fileName}`);
       if (currentCallbacks.onSave) currentCallbacks.onSave(fileName);
     } else if (btn.dataset.action === 'save-dxf') {
       if (!currentResult || !currentCallbacks.onSaveDxf) return;

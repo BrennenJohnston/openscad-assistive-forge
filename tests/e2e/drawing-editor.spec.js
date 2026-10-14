@@ -15,6 +15,11 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import path from 'node:path'
+import {
+  recordAnnouncements,
+  announcementMark,
+  announcementsSince,
+} from './helpers/invariants.js'
 
 // Every press in this file waits for the CI runner's page. A press lands at
 // once and then waits for the page to acknowledge it, and on a slow CI
@@ -30,6 +35,34 @@ test.use({ actionTimeout: 120000 })
 
 const surface = (page) => page.locator('#drawingEditorSurface')
 const canvas = (page) => page.locator('#previewContainer canvas').first()
+
+/** Wait until no region that speaks has been written for a while. */
+async function quiet(page, ms = 3000) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((gap) => {
+          const writes = window.__announcements || []
+          const last = writes.length ? writes[writes.length - 1].t : 0
+          return performance.now() - last > gap
+        }, ms),
+      { timeout: 120000, intervals: [500] }
+    )
+    .toBe(true)
+}
+
+/**
+ * Every write of one sentence to a region that speaks, since a mark. Read
+ * after the app's announcer would have written its copy (it holds a sentence
+ * 350 ms first), so a second voice has had its chance to show up.
+ */
+async function writesOf(page, mark, sentence) {
+  await page.waitForTimeout(1500)
+  const writes = await announcementsSince(page, mark)
+  return writes.filter((w) =>
+    sentence instanceof RegExp ? sentence.test(w.text) : w.text === sentence
+  )
+}
 
 /**
  * The Drawing / Charm switch, and draft quality while editing.
@@ -116,12 +149,14 @@ test.describe('the Drawing / Charm switch', () => {
     page,
   }) => {
     test.setTimeout(300000)
+    await recordAnnouncements(page)
     await openCharmEditor(page)
 
     // The drawing is what is on screen, and the canvas behind is out of sight.
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
     await expect(canvas(page)).toBeHidden()
 
+    let mark = await announcementMark(page)
     await charm(page).click()
     // The canvas comes back WITHOUT the editor giving up the area: the toolbar
     // is still there and so is the way back.
@@ -134,13 +169,19 @@ test.describe('the Drawing / Charm switch', () => {
     await expect(page.locator('.drawing-editor-status')).toHaveText(
       'Showing the charm.'
     )
+    // One press, one sentence: the status line says it and nothing again.
+    let said = await writesOf(page, mark, 'Showing the charm.')
+    expect(said, JSON.stringify(said)).toHaveLength(1)
 
+    mark = await announcementMark(page)
     await drawing(page).click()
     await expect(canvas(page)).toBeHidden()
     await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
     await expect(page.locator('.drawing-editor-status')).toHaveText(
       'Showing the drawing.'
     )
+    said = await writesOf(page, mark, 'Showing the drawing.')
+    expect(said, JSON.stringify(said)).toHaveLength(1)
   })
 
   test('the drawer gets out of the charm\'s way, and comes back as it was', async ({
@@ -496,6 +537,7 @@ test.describe('the toolbar on the charm host', () => {
     page,
   }) => {
     test.setTimeout(300000)
+    await recordAnnouncements(page)
     await openCharmEditor(page)
 
     const rows = page.locator('.svg-prep-object')
@@ -529,11 +571,16 @@ test.describe('the toolbar on the charm host', () => {
 
     // Delete sets the selection to Off, in the relief purpose too.
     await rows.nth(1).focus()
+    let mark = await announcementMark(page)
     await page.keyboard.press('Delete')
     await expect.poll(() => roleOf(0)).toBe('ignore')
     await expect.poll(() => roleOf(1)).toBe('ignore')
+    // Each press says what it did once.
+    let said = await writesOf(page, mark, /^2 shapes set to /)
+    expect(said, JSON.stringify(said)).toHaveLength(1)
 
     // Ctrl+A selects every row, and not the page's text.
+    mark = await announcementMark(page)
     await page.keyboard.press('Control+a')
     await expect.poll(() => rows.count()).toBeGreaterThan(2)
     await expect(chosen).toHaveCount(await rows.count())
@@ -544,6 +591,8 @@ test.describe('the toolbar on the charm host', () => {
       pageTextSelected,
       `Ctrl+A selected ${pageTextSelected} characters of page text`
     ).toBeLessThan(50)
+    said = await writesOf(page, mark, /^All \d+ shapes selected\.$/)
+    expect(said, JSON.stringify(said)).toHaveLength(1)
   })
 
   test('Ignore takes a shape out of the picture without a render', async ({
@@ -1058,6 +1107,7 @@ test.describe('crop on the charm host', () => {
     page,
   }) => {
     test.setTimeout(480000)
+    await recordAnnouncements(page)
     await openCharmHost(page)
     await page.setInputFiles('#param-design_file', LOGO_TRACE)
     const editor = surface(page)
@@ -1068,12 +1118,23 @@ test.describe('crop on the charm host', () => {
 
     const cropBtn = editor.locator('.drawing-editor-crop-btn')
     await expect(cropBtn).toBeVisible()
+    // The charm's own render speaks its console message as the drawing
+    // arrives; pressed under it, a second voice would be cut off unheard.
+    await quiet(page)
+    const mark = await announcementMark(page)
     await cropBtn.click()
     const view = editor.locator('.drawing-editor-crop')
     await expect(view).toBeVisible()
     await expect(
       view.locator('input[type="range"][data-inset="top"]')
     ).toBeFocused()
+    // The view says it is open once, on the status line.
+    const said = await writesOf(
+      page,
+      mark,
+      'Crop view open. Four sliders take an edge off the picture.'
+    )
+    expect(said, JSON.stringify(said)).toHaveLength(1)
     await view.locator('.slider-spinbox[data-inset="bottom"]').fill('50')
     await expect(view.locator('.drawing-editor-crop-keeping')).toHaveText(
       'Keeping 100 % of the width and 50 % of the height.'

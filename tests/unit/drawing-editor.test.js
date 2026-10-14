@@ -92,6 +92,16 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+/**
+ * The last sentence the editor said. Its status line is its voice once it
+ * is on screen, so the host's announcer never says that sentence as well.
+ */
+function lastSaid(surface, announce) {
+  const sentence = surface.querySelector('.drawing-editor-status').textContent
+  expect(announce).not.toHaveBeenCalledWith(sentence)
+  return sentence
+}
+
 describe('the surface', () => {
   it('is built inside the given element and starts hidden', () => {
     const editor = make()
@@ -420,7 +430,7 @@ describe('the stencil purpose, on a real drawing', () => {
     expect(surface.querySelector('[data-count="colours"]').textContent).toBe('1')
     expect(surface.querySelector('[data-count="plates"]').textContent).toBe('1')
     expect(surface.querySelector('.drawing-editor-shapes').hidden).toBe(true)
-    expect(announce).toHaveBeenCalledWith(`${S.opened} ${S.regionsFound(21, 1)}`)
+    expect(lastSaid(surface, announce)).toBe(`${S.opened} ${S.regionsFound(21, 1)}`)
     expect(editor.getPlan().palette).toHaveLength(1)
   })
 
@@ -446,7 +456,7 @@ describe('the stencil purpose, on a real drawing', () => {
     expect(surface.querySelector('[data-count="plates"]').textContent).toBe('2')
     const options = [...table().querySelector('select').options].map((o) => o.textContent)
     expect(options).toEqual(['Base coat', 'Brown'])
-    expect(announce).toHaveBeenLastCalledWith(S.colourAdded('Brown'))
+    expect(lastSaid(surface, announce)).toBe(S.colourAdded('Brown'))
     const plan = editor.getPlan()
     expect(plan.palette.map((c) => c.hex)).toEqual(['#171411', '#997048'])
     expect(plan.order).toHaveLength(2)
@@ -484,7 +494,7 @@ describe('the stencil purpose, on a real drawing', () => {
 
     expect(row.querySelector('[data-plate]').textContent).toBe('2')
     const name = row.querySelector('th').textContent
-    expect(announce).toHaveBeenLastCalledWith(S.regionSet(name, 'Brown', 2))
+    expect(lastSaid(surface, announce)).toBe(S.regionSet(name, 'Brown', 2))
     const swatches = [...surface.querySelectorAll('.drawing-editor-swatch-row')]
     expect(swatches[1].textContent).toContain(S.usedBy(1))
     // Each plate line carries its order buttons after the sentence.
@@ -507,7 +517,7 @@ describe('the stencil purpose, on a real drawing', () => {
     select.value = 'unpainted'
     select.dispatchEvent(new Event('change', { bubbles: true }))
     expect(row.querySelector('[data-plate]').textContent).toBe(S.notCut)
-    expect(announce).toHaveBeenLastCalledWith(
+    expect(lastSaid(surface, announce)).toBe(
       S.regionSetUnpainted(row.querySelector('th').textContent)
     )
   })

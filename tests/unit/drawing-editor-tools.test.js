@@ -50,6 +50,16 @@ const CAT_SVG = readFileSync(join('tests', 'fixtures', 'harley', 'sketch4.svg'),
 
 // ── The command stack ───────────────────────────────────────────────────────
 
+/**
+ * The last sentence the editor said. Its status line is its voice once it
+ * is on screen, so the host's announcer never says that sentence as well.
+ */
+function lastSaid(surface, announce) {
+  const sentence = surface.querySelector('.drawing-editor-status').textContent
+  expect(announce).not.toHaveBeenCalledWith(sentence)
+  return sentence
+}
+
 describe('the command stack', () => {
   it('does, undoes, redoes, and names what it did', () => {
     const stack = createCommandStack()
@@ -364,12 +374,12 @@ describe('the stencil purpose with tools', () => {
     expect(editor.getSelection()).toEqual([keyOf(0)])
     expect(checkOf(0).checked).toBe(true)
     expect(checkOf(2).checked).toBe(false)
-    expect(announce).toHaveBeenLastCalledWith(S.selected(1))
+    expect(lastSaid(surface, announce)).toBe(S.selected(1))
     const other = surface.querySelector(`[data-layer="regions"] [data-region="${keyOf(1)}"]`)
     pointer(other, 'pointerdown', 10, 10, { shiftKey: true })
     pointer(other, 'pointerup', 10, 10, { shiftKey: true })
     expect(editor.getSelection().sort()).toEqual([keyOf(0), keyOf(1)].sort())
-    expect(announce).toHaveBeenLastCalledWith(S.selected(2))
+    expect(lastSaid(surface, announce)).toBe(S.selected(2))
   })
 
   it('a number key colours the selection and says how many; Undo says what came back', async () => {
@@ -380,19 +390,19 @@ describe('the stencil purpose with tools', () => {
     checkOf(4).checked = true
     checkOf(4).dispatchEvent(new Event('change', { bubbles: true }))
     key('2', checkOf(4))
-    expect(announce).toHaveBeenLastCalledWith(S.regionsSet(2, 'Brown', 2))
+    expect(lastSaid(surface, announce)).toBe(S.regionsSet(2, 'Brown', 2))
     expect(rowsOf()[3].querySelector('[data-plate]').textContent).toBe('2')
     expect(rowsOf()[4].querySelector('select').value).toBe(editor.getPlan().palette[1].id)
 
     key('z', checkOf(4), { ctrlKey: true })
-    expect(announce).toHaveBeenLastCalledWith(S.undone(S.labelSetColours(2, 'Brown')))
+    expect(lastSaid(surface, announce)).toBe(S.undone(S.labelSetColours(2, 'Brown')))
     expect(rowsOf()[3].querySelector('[data-plate]').textContent).toBe('1')
     key('y', checkOf(4), { ctrlKey: true })
-    expect(announce).toHaveBeenLastCalledWith(S.redone(S.labelSetColours(2, 'Brown')))
+    expect(lastSaid(surface, announce)).toBe(S.redone(S.labelSetColours(2, 'Brown')))
     expect(rowsOf()[3].querySelector('[data-plate]').textContent).toBe('2')
     // 0 is the base coat.
     key('0', checkOf(4))
-    expect(announce).toHaveBeenLastCalledWith(S.regionsSet(2, 'Base coat', 1))
+    expect(lastSaid(surface, announce)).toBe(S.regionsSet(2, 'Base coat', 1))
   })
 
   it('Delete removes the selection, the row says so, and Put back restores it', async () => {
@@ -401,7 +411,7 @@ describe('the stencil purpose with tools', () => {
     checkOf(5).checked = true
     checkOf(5).dispatchEvent(new Event('change', { bubbles: true }))
     key('Delete', checkOf(5))
-    expect(announce).toHaveBeenLastCalledWith(S.regionRemoved(name))
+    expect(lastSaid(surface, announce)).toBe(S.regionRemoved(name))
     const row = rowsOf()[5]
     expect(row.querySelector('[data-plate]').textContent).toBe(S.removedCell)
     expect(row.querySelector('select').disabled).toBe(true)
@@ -409,11 +419,11 @@ describe('the stencil purpose with tools', () => {
     expect(editor.getPlan().assignment[row.dataset.region]).toBe('removed')
     expect(editor.getSelection()).toEqual([])
     row.querySelector('.drawing-editor-region-remove').click()
-    expect(announce).toHaveBeenLastCalledWith(S.regionRestored(name))
+    expect(lastSaid(surface, announce)).toBe(S.regionRestored(name))
     expect(row.querySelector('[data-plate]').textContent).toBe('1')
     // The undo beside the table takes the restore back.
     surface.querySelector('.drawing-editor-table-undo').click()
-    expect(announce).toHaveBeenLastCalledWith(S.undone(S.labelRestore(name)))
+    expect(lastSaid(surface, announce)).toBe(S.undone(S.labelRestore(name)))
     expect(row.querySelector('[data-plate]').textContent).toBe(S.removedCell)
   })
 
@@ -422,12 +432,12 @@ describe('the stencil purpose with tools', () => {
     key('m', checkOf(0))
     expect(editor.getTool()).toBe('marquee')
     expect(surface.querySelector('[data-tool="marquee"]').getAttribute('aria-pressed')).toBe('true')
-    expect(announce).toHaveBeenLastCalledWith(S.toolChosen('Marquee'))
+    expect(lastSaid(surface, announce)).toBe(S.toolChosen('Marquee'))
     key('h', editor._canvas.svg)
     expect(editor.getTool()).toBe('hand')
     key('a', checkOf(0), { ctrlKey: true })
     expect(editor.getSelection()).toHaveLength(21)
-    expect(announce).toHaveBeenLastCalledWith(S.selected(21))
+    expect(lastSaid(surface, announce)).toBe(S.selected(21))
     // A letter typed into the name field is a letter, not a tool.
     const nameField = surface.querySelector('.drawing-editor-add-colour input[type="text"]')
     key('p', nameField)
@@ -461,7 +471,7 @@ describe('the stencil purpose with tools', () => {
     addColour('Brown', '#997048')
     expect(editor.getPlan().palette).toHaveLength(2)
     editor.undo()
-    expect(announce).toHaveBeenLastCalledWith(S.undone(S.labelAddColour('Brown')))
+    expect(lastSaid(surface, announce)).toBe(S.undone(S.labelAddColour('Brown')))
     expect(editor.getPlan().palette).toHaveLength(1)
     editor.redo()
     expect(editor.getPlan().palette).toHaveLength(2)
@@ -473,7 +483,7 @@ describe('the stencil purpose with tools', () => {
     expect(input).not.toBeNull()
     input.value = 'Rust'
     key('Enter', input)
-    expect(announce).toHaveBeenLastCalledWith(S.colourRenamed('Brown', 'Rust'))
+    expect(lastSaid(surface, announce)).toBe(S.colourRenamed('Brown', 'Rust'))
     expect(editor.getPlan().palette[1].name).toBe('Rust')
 
     // Give two regions Rust, add a third colour, merge Rust into it.
@@ -485,18 +495,18 @@ describe('the stencil purpose with tools', () => {
     const merge = rustRow.querySelector('[data-action="merge-colour"]')
     merge.value = editor.getPlan().palette[2].id
     merge.dispatchEvent(new Event('change', { bubbles: true }))
-    expect(announce).toHaveBeenLastCalledWith(S.colourMerged('Rust', 'Green', 1))
+    expect(lastSaid(surface, announce)).toBe(S.colourMerged('Rust', 'Green', 1))
     expect(editor.getPlan().palette.map((c) => c.name)).toEqual(['Base coat', 'Green'])
     expect(editor.getPlan().assignment[rowsOf()[1].dataset.region]).toBe(editor.getPlan().palette[1].id)
 
     // Remove Green: its region goes back to the base.
     const greenRow = surface.querySelectorAll('.drawing-editor-swatch-row')[1]
     greenRow.querySelector('[data-action="remove-colour"]').click()
-    expect(announce).toHaveBeenLastCalledWith(S.colourRemoved('Green', 1, 'Base coat'))
+    expect(lastSaid(surface, announce)).toBe(S.colourRemoved('Green', 1, 'Base coat'))
     expect(editor.getPlan().palette).toHaveLength(1)
     // The base coat of a line drawing cannot go.
     surface.querySelector('.drawing-editor-swatch-row [data-action="remove-colour"]').click()
-    expect(announce).toHaveBeenLastCalledWith(S.baseStays)
+    expect(lastSaid(surface, announce)).toBe(S.baseStays)
   })
 
   it('the paint order moves with its buttons, the ground plate stays first, and the rule switches', async () => {
@@ -509,7 +519,7 @@ describe('the stencil purpose with tools', () => {
     expect(items()[0].querySelector('[data-action="paint-later"]').disabled).toBe(true)
     expect(items()[1].querySelector('[data-action="paint-earlier"]').disabled).toBe(true)
     items()[2].querySelector('[data-action="paint-earlier"]').click()
-    expect(announce).toHaveBeenLastCalledWith(S.orderChanged('White', 2))
+    expect(lastSaid(surface, announce)).toBe(S.orderChanged('White', 2))
     expect(editor.getPlan().order[1]).toBe(editor.getPlan().palette[2].id)
     editor.undo()
     expect(editor.getPlan().order[1]).toBe(editor.getPlan().palette[1].id)
@@ -518,7 +528,7 @@ describe('the stencil purpose with tools', () => {
     expect(rule.checked).toBe(true)
     rule.checked = false
     rule.dispatchEvent(new Event('change', { bubbles: true }))
-    expect(announce).toHaveBeenLastCalledWith(S.ruleOwn)
+    expect(lastSaid(surface, announce)).toBe(S.ruleOwn)
     expect(editor.getPlan().rule).toBe('own')
     editor.undo()
     expect(editor.getPlan().rule).toBe('stacked')

@@ -826,10 +826,24 @@ export function createDrawingEditor({
   let showingOriginal = false;
   let plateIndex = -1;
 
+  // The status line is the editor's one voice: a polite region reads its own
+  // changes, and the host's announcer as well said every sentence twice. A
+  // region only reads a change it was already on screen for, though, so a
+  // sentence written in the turn the editor appears, or in the turn it goes,
+  // is the announcer's to say instead.
+  let statusOnScreen = false;
+  let saidThisTurn = null;
   const say = (message) => {
     if (!message) return;
     status.textContent = message;
-    if (typeof announce === 'function') announce(message);
+    if (!statusOnScreen) {
+      if (typeof announce === 'function') announce(message);
+      return;
+    }
+    saidThisTurn = message;
+    setTimeout(() => {
+      if (saidThisTurn === message) saidThisTurn = null;
+    }, 0);
   };
 
   /** Put a count beside a section name, or nothing when there is none. */
@@ -842,11 +856,17 @@ export function createDrawingEditor({
   function show() {
     surfaceEl.hidden = false;
     surfaceEl.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      statusOnScreen = !surfaceEl.hidden;
+    });
   }
 
   function hide() {
     surfaceEl.hidden = true;
     surfaceEl.classList.add('hidden');
+    statusOnScreen = false;
+    if (saidThisTurn && typeof announce === 'function') announce(saidThisTurn);
+    saidThisTurn = null;
   }
 
   /**
