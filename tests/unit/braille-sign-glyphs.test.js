@@ -5,12 +5,15 @@
  * @license GPL-3.0-or-later
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  SIGN_FONT_ARCHIVE_SHA256,
   SIGN_FONT_RANGES,
   charactersTheSignCannotDraw,
 } from '../../src/js/braille-sign-glyphs.js'
+
+const FONT = join(process.cwd(), 'public', 'fonts', 'LiberationSans-Regular.ttf')
 
 /**
  * The code points a TrueType font maps to a glyph other than 0 (.notdef,
@@ -62,9 +65,17 @@ function fontRanges(file) {
 }
 
 describe('the sign font\'s character map', () => {
-  it('is the map of the font the sign draws its letters with', () => {
-    const font = join(process.cwd(), 'public', 'fonts', 'LiberationSans-Regular.ttf')
-    expect(SIGN_FONT_RANGES).toEqual(fontRanges(font))
+  it('was read from the font archive the setup script pins', () => {
+    const script = readFileSync(join(process.cwd(), 'scripts', 'download-wasm.js'), 'utf8')
+    const pinned = /FONTS_ARCHIVE_SHA256 =\s*'([0-9a-f]{64})'/.exec(script)?.[1]
+    expect(pinned).toBe(SIGN_FONT_ARCHIVE_SHA256)
+  })
+
+  // The font is downloaded by npm run setup-wasm, not kept in the
+  // repository, so a checkout without it (CI's unit job) cannot read its
+  // map; the pin above keeps that font the same one.
+  it.skipIf(!existsSync(FONT))('is the map of the font the sign draws its letters with', () => {
+    expect(SIGN_FONT_RANGES).toEqual(fontRanges(FONT))
   })
 })
 

@@ -6,11 +6,17 @@
  *
  * SIGN_FONT_RANGES are the code points public/fonts/LiberationSans-Regular.ttf
  * maps to a glyph, as [first, last] pairs; the Bold face maps the same ones.
- * tests/unit/braille-sign-glyphs.test.js reads the font's own map and fails
- * if they ever differ.
+ * The font is downloaded by scripts/download-wasm.js from the archive whose
+ * SHA-256 it pins. tests/unit/braille-sign-glyphs.test.js fails if that pin
+ * moves away from SIGN_FONT_ARCHIVE_SHA256, and, where the font has been
+ * downloaded, if its own map differs from the ranges.
  *
  * @license GPL-3.0-or-later
  */
+
+/** The pinned font archive the ranges were read from. */
+export const SIGN_FONT_ARCHIVE_SHA256 =
+  '7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0';
 
 /** [first, last] code point ranges the sign's font draws, in order. */
 export const SIGN_FONT_RANGES = [
