@@ -139,6 +139,8 @@ export const MEASURED_SECONDS = {
   // Six cases, each loading the box, most waiting out the key's 5 s arrival
   // or the tune: about 55 s locally; booked at 80.
   'alt-view-arrival.spec.js': 80.0,
+  // One case on the box with WebGL switched off: 4.9 s locally; booked at 15.
+  'alt-view-without-webgl.spec.js': 15.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,

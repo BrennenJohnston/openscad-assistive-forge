@@ -1615,6 +1615,12 @@ body[data-app-surface='welcome'] #uiModeToggle {
   display: none;
 }
 
+/* Why the Alt View could not start shows outside its look as well */
+.preview-status-bar.has-alt-adjust .preview-status-alt-adjust[data-notice] {
+  display: block;
+  flex-basis: 100%;
+}
+
 /* =========================================
    ECHO Message Drawer
    ========================================= */
