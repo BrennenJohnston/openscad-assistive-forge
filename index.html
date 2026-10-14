@@ -2250,6 +2250,7 @@
                 <button
                   type="button"
                   id="collapseParamPanelBtn"
+                  data-travel-open="right"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="true"
                   aria-controls="paramPanelBody"
@@ -2258,22 +2259,38 @@
                   data-tutorial-target="collapse-param-panel"
                 >
                   <svg
+                    class="drawer-arrow drawer-arrow--solid"
                     width="20"
                     height="20"
                     viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
                     aria-hidden="true"
+                    focusable="false"
                   >
-                    <polyline points="11 18 5 12 11 6"></polyline>
-                    <line
-                      x1="17"
-                      y1="4"
-                      x2="17"
-                      y2="20"
+                    <polygon
+                      class="drawer-arrow-solid"
+                      points="6,4 18,12 6,20"
+                      fill="currentColor"
+                    ></polygon>
+                    <g
+                      class="drawer-arrow-double"
+                      fill="none"
+                      stroke="currentColor"
                       stroke-width="2"
-                    ></line>
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="6 6 12 12 6 18"></polyline>
+                      <polyline points="12 6 18 12 12 18"></polyline>
+                    </g>
+                    <g
+                      class="drawer-arrow-bar"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="13 6 19 12 13 18"></polyline>
+                      <line x1="7" y1="4" x2="7" y2="20"></line>
+                    </g>
                   </svg>
                 </button>
               </div>
@@ -4699,6 +4716,7 @@
                     <button
                       type="button"
                       id="mobileDrawerToggle"
+                      data-travel-open="right"
                       class="btn btn-sm btn-icon mobile-only"
                       aria-expanded="false"
                       aria-controls="paramPanel"
@@ -4725,6 +4743,7 @@
                     <button
                       type="button"
                       id="previewDrawerToggle"
+                      data-travel-open="down"
                       class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn forge-control"
                       aria-expanded="false"
                       aria-controls="previewInfoContent"
@@ -4733,22 +4752,38 @@
                       data-tutorial-target="preview-drawer-toggle"
                     >
                       <svg
+                        class="drawer-arrow drawer-arrow--solid"
                         width="20"
                         height="20"
                         viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
                         aria-hidden="true"
+                        focusable="false"
                       >
-                        <polyline points="13 6 7 12 13 18"></polyline>
-                        <line
-                          x1="17"
-                          y1="4"
-                          x2="17"
-                          y2="20"
+                        <polygon
+                          class="drawer-arrow-solid"
+                          points="6,4 18,12 6,20"
+                          fill="currentColor"
+                        ></polygon>
+                        <g
+                          class="drawer-arrow-double"
+                          fill="none"
+                          stroke="currentColor"
                           stroke-width="2"
-                        ></line>
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <polyline points="6 6 12 12 6 18"></polyline>
+                          <polyline points="12 6 18 12 12 18"></polyline>
+                        </g>
+                        <g
+                          class="drawer-arrow-bar"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <polyline points="13 6 19 12 13 18"></polyline>
+                          <line x1="7" y1="4" x2="7" y2="20"></line>
+                        </g>
                       </svg>
                     </button>
                     <h2
@@ -5335,6 +5370,7 @@
                   <button
                     class="echo-drawer-toggle forge-control--sm"
                     id="echoDrawerToggle"
+                    data-travel-open="up"
                     type="button"
                     aria-expanded="false"
                     aria-controls="echoDrawerContent"
@@ -5343,16 +5379,38 @@
                       >No echo messages</span
                     >
                     <svg
-                      class="echo-drawer-arrow"
+                      class="drawer-arrow drawer-arrow--solid echo-drawer-arrow"
                       width="16"
                       height="16"
                       viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
                       aria-hidden="true"
+                      focusable="false"
                     >
-                      <polyline points="6 9 12 15 18 9"></polyline>
+                      <polygon
+                        class="drawer-arrow-solid"
+                        points="6,4 18,12 6,20"
+                        fill="currentColor"
+                      ></polygon>
+                      <g
+                        class="drawer-arrow-double"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="6 6 12 12 6 18"></polyline>
+                        <polyline points="12 6 18 12 12 18"></polyline>
+                      </g>
+                      <g
+                        class="drawer-arrow-bar"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <polyline points="13 6 19 12 13 18"></polyline>
+                        <line x1="7" y1="4" x2="7" y2="20"></line>
+                      </g>
                     </svg>
                   </button>
                   <div
@@ -5395,6 +5453,7 @@
                   <button
                     type="button"
                     id="actionsDrawerToggle"
+                    data-travel-open="up"
                     class="btn btn-sm btn-icon btn-collapse-panel actions-drawer-toggle-btn forge-control"
                     aria-expanded="false"
                     aria-controls="actionsDrawerBody"
@@ -5402,22 +5461,38 @@
                     title="More Actions"
                   >
                     <svg
+                      class="drawer-arrow drawer-arrow--solid"
                       width="20"
                       height="20"
                       viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
                       aria-hidden="true"
+                      focusable="false"
                     >
-                      <polyline points="13 6 7 12 13 18"></polyline>
-                      <line
-                        x1="17"
-                        y1="4"
-                        x2="17"
-                        y2="20"
+                      <polygon
+                        class="drawer-arrow-solid"
+                        points="6,4 18,12 6,20"
+                        fill="currentColor"
+                      ></polygon>
+                      <g
+                        class="drawer-arrow-double"
+                        fill="none"
+                        stroke="currentColor"
                         stroke-width="2"
-                      ></line>
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="6 6 12 12 6 18"></polyline>
+                        <polyline points="12 6 18 12 12 18"></polyline>
+                      </g>
+                      <g
+                        class="drawer-arrow-bar"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <polyline points="13 6 19 12 13 18"></polyline>
+                        <line x1="7" y1="4" x2="7" y2="20"></line>
+                      </g>
                     </svg>
                   </button>
                   <h2 class="actions-drawer-title" id="actions-drawer-title">
@@ -5590,6 +5665,7 @@
                 <button
                   type="button"
                   id="cameraDrawerToggle"
+                  data-travel-open="up"
                   class="btn btn-sm camera-drawer-toggle-btn forge-control"
                   aria-expanded="false"
                   aria-controls="cameraDrawerBody"
@@ -5598,19 +5674,38 @@
                   data-tutorial-target="mobile-camera-drawer-toggle"
                 >
                   <svg
-                    class="camera-drawer-icon"
+                    class="drawer-arrow drawer-arrow--solid"
                     width="18"
                     height="18"
                     viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
                     aria-hidden="true"
+                    focusable="false"
                   >
-                    <polyline
-                      class="drawer-chevron"
-                      points="6 9 12 15 18 9"
-                    ></polyline>
+                    <polygon
+                      class="drawer-arrow-solid"
+                      points="6,4 18,12 6,20"
+                      fill="currentColor"
+                    ></polygon>
+                    <g
+                      class="drawer-arrow-double"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="6 6 12 12 6 18"></polyline>
+                      <polyline points="12 6 18 12 12 18"></polyline>
+                    </g>
+                    <g
+                      class="drawer-arrow-bar"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="13 6 19 12 13 18"></polyline>
+                      <line x1="7" y1="4" x2="7" y2="20"></line>
+                    </g>
                   </svg>
                   <span class="camera-drawer-label">Camera</span>
                 </button>
@@ -6040,6 +6135,7 @@
                 <button
                   type="button"
                   id="cameraPanelToggle"
+                  data-travel-open="left"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="false"
                   aria-controls="cameraPanelBody"
@@ -6048,16 +6144,38 @@
                   data-tutorial-target="camera-panel-toggle"
                 >
                   <svg
+                    class="drawer-arrow drawer-arrow--solid"
                     width="20"
                     height="20"
                     viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
                     aria-hidden="true"
+                    focusable="false"
                   >
-                    <polyline points="13 6 19 12 13 18"></polyline>
-                    <line x1="7" y1="4" x2="7" y2="20" stroke-width="2"></line>
+                    <polygon
+                      class="drawer-arrow-solid"
+                      points="6,4 18,12 6,20"
+                      fill="currentColor"
+                    ></polygon>
+                    <g
+                      class="drawer-arrow-double"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="6 6 12 12 6 18"></polyline>
+                      <polyline points="12 6 18 12 12 18"></polyline>
+                    </g>
+                    <g
+                      class="drawer-arrow-bar"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="13 6 19 12 13 18"></polyline>
+                      <line x1="7" y1="4" x2="7" y2="20"></line>
+                    </g>
                   </svg>
                 </button>
               </div>

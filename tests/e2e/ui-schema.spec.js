@@ -51,9 +51,7 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
 const NOT_MET_YET = {
-  S1: 'The drawer toggles carry no travel attribute and no shared arrow',
   S2: "The side panels' toggles drop a row when their panel opens",
-  S3: "An open drawer's toggle is not drawn in the accent",
   S4: 'The camera panel and the Customizer put their toggles on a second row',
   S5: 'The camera panel scrolls at 180 px wide',
   S7: "Menus open at the window's corner over a blurred page, with a title bar",
@@ -215,8 +213,22 @@ for (const size of SIZES) {
         }, TOGGLES);
       }
 
-      /** Wait until a toggle's box holds still (its drawer's move has ended). */
+      /**
+       * Wait until a toggle holds still: every CSS transition on the page has
+       * ended (a busy page can stall one mid-way, so two equal reads alone
+       * are not proof), then two reads agree.
+       */
       async function settle(sel) {
+        await page.waitForFunction(
+          () =>
+            !document
+              .getAnimations()
+              .some(
+                (a) => a instanceof CSSTransition && a.playState === 'running'
+              ),
+          null,
+          { timeout: 5_000 }
+        );
         let last = await page.evaluate(readToggle, sel);
         for (let i = 0; i < 20; i++) {
           await page.waitForTimeout(100);

@@ -686,8 +686,13 @@ body[data-ui-mode='classic'] {
     -webkit-backdrop-filter: none !important;
   }
 
-  :root[data-ui-variant='mono'] .camera-drawer-toggle-btn {
+  /* Closed only: open, the bar is drawn pressed in the look's accent. */
+  :root[data-ui-variant='mono']
+    .camera-drawer-toggle-btn:not([aria-expanded='true']) {
     background: var(--color-bg-secondary) !important;
+  }
+
+  :root[data-ui-variant='mono'] .camera-drawer-toggle-btn {
     border-bottom: 1px solid var(--color-border) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -874,6 +879,22 @@ body[data-ui-mode='classic'] {
 :root[data-ui-variant='mono'] .echo-drawer--error .echo-drawer-label,
 :root[data-ui-variant='mono'] .echo-drawer--error .echo-drawer-arrow {
   color: var(--color-error);
+}
+
+/* An open drawer's toggle in the look's accent: above the look's flat
+   surfaces for the echo bar and its message colors. */
+:root[data-ui-variant='mono'] [data-travel-open][aria-expanded='true'],
+:root[data-ui-variant='mono']
+  [data-travel-open][aria-expanded='true']:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+:root[data-ui-variant='mono']
+  [data-travel-open][aria-expanded='true']
+  :is(.drawer-arrow, .echo-drawer-label, .camera-drawer-label) {
+  color: inherit;
 }
 
 :root[data-ui-variant='mono'] .echo-messages {
