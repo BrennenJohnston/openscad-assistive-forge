@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The Alt View has Characters (Fine, Normal, Bold) and Edges (Soft, Normal,
+  Sharp) controls beside the preview; the minus and equals keys step the
+  characters.
+- Preferences > Advanced > Play sounds, on to begin with.
+
+### Changed
+
+- The Alt View starts with finer characters, no grid and a gentle afterglow,
+  and the model stands on the grid as in the ordinary preview.
+- Every surface takes the Alt View's look, the code editor and the drawing
+  editor included, without rounded corners or shadows; Classic has a look of
+  its own.
+- The Alt View's key and its pan adjust button say what they do in plain
+  words, once each, and the camera panel's sliders read Edges, Characters
+  and Glow.
+- The Features Guide's Alt View tab is in plain words.
+
+### Fixed
+
+- Screen readers hear the Alt View's key appear; the sentence used to be cut
+  off by the camera button's own words.
+- The drawing editor no longer opens hidden under the Alt View's characters.
+
 ## [5.4.0] - 2026-10-12
 
 ### Added

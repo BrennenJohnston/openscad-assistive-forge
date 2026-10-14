@@ -10,8 +10,8 @@ cleared site data so the first-visit dialog appears.
 Budget about an hour and a half, and it splits cleanly: sections 1 to 6 are
 the core app, about half an hour; sections 7 to 11 are the picture-to-charm
 path, about another half hour; sections 12 to 17 are the flows a release walk
-repeats, about half an hour. Doing only part is a result too, as long as you
-say which.
+repeats, about half an hour; section 18, the Alt View, takes a few minutes
+once it is found. Doing only part is a result too, as long as you say which.
 
 Two traps to carry in, learned on a sibling project's runs:
 
@@ -322,6 +322,21 @@ box, with the site's address in its title, is never heard.
 | Copy by hand (the browser refused the clipboard) reads its sentence, then the link, selected, in a read-only field | ☐ | |
 | Escape, or Cancel, closes the question and puts focus back on the control that asked (Rename, Copy Link, the Companion Files heading), with no announcement | ☐ | |
 | After the answer, what happened is said once: "Draft restored", `Created folder "docs"`, `Deleted file "helpers.scad"`, "Removed file: walk-note.txt" | ☐ | |
+
+## 18. The Alt View
+
+With the Alt View found (its key appears next to the theme button), open
+the simple box. The status line under the preview is not live, so what it
+shows is never spoken.
+
+| What should happen | Heard it? | What NVDA actually said |
+|---|---|---|
+| When the key appears: "A key appeared next to the theme button." once, about 4 s after the last press when sounds are on (it waits for a short tune), or at once with Preferences > Advanced > Play sounds off | ☐ | |
+| The key reads "Alt View, toggle button, not pressed"; pressing it says "Alt View on. The preview is drawn with characters and the interface follows." then "pressed"; again, "Alt View off." | ☐ | |
+| Beside the preview, "Characters" groups "Smaller characters" and "Larger characters"; a press says "Characters 50%" or the new size, once | ☐ | |
+| "Edges" groups the toggle buttons Soft, Normal and Sharp; a press says "Edges 70%" (or 100%, 160%), once | ☐ | |
+| In focus mode, the minus and equals keys step Characters and say the size, once | ☐ | |
+| The pan D-pad's center reads "Adjust the Alt View with the pan arrows"; on, it says "Pan arrows now adjust the Alt View: up and down for edges, left and right for size, Shift with up and down for glow."; each arrow says one value ("Edges 105%", "Characters 55%", "Glow 20%"); off, "Pan arrows move the view again." | ☐ | |
 
 ## The last run
 

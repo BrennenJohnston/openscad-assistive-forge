@@ -92,6 +92,13 @@ marked `aria-busy`, and one that is not drawn.
   `classic-pane-focus`, `guide-example-focus`, `drawing-editor-close-focus`)
   open and close every dialog, menu and pane by keyboard and check where focus
   lands afterwards, never the page body.
+- `alt-view-consistency.spec.js` turns the Alt View on over the app's
+  surfaces (the Main Page, a project with its panels, dialogs and editors,
+  Classic, the charm, a phone width, high contrast, reduced motion and
+  reduced transparency) and fails on any color, font, rounded corner or
+  shadow outside the look; it also keeps the standard look's counts where
+  they were. Its cases that open a project skip where the browser has no
+  WebGL, since the Alt View draws from the 3D picture.
 - `page-fits-window.spec.js` opens every panel, the Console included, in
   each of the three layouts at two window sizes and expects the page to
   fit the window. A change to the layout runs it first.
