@@ -43,10 +43,10 @@
 //    so it slices as a single print-ready object.
 //
 // =============================================================================
-// HOW TO USE
+// HOW TO USE (in the Forge, the braille translation panel does steps 1 and 2)
 // =============================================================================
-//  1. Translate your text at https://www.branah.com/braille-translator
-//     (Grade 1 or Grade 2, Unicode Braille output — NOT ASCII Braille).
+//  1. Translate your text to Unicode braille, Grade 1 or Grade 2 (e.g. at
+//     https://www.branah.com/braille-translator, Unicode output, not ASCII).
 //  2. Paste pre-translated braille into Line_1..Line_20 in the Customizer.
 //     Lines 1-8 are in the [Text Input] group; lines 9-20 are under
 //     [More Braille Lines (Advanced)].
@@ -112,7 +112,7 @@
 // =============================================================================
 
 /* [Text Input - Pre-Translated Braille] */
-// Paste Unicode braille characters from https://www.branah.com/braille-translator
+// Unicode braille characters (in the Forge, the braille panel fills these)
 // First line of braille text
 Line_1 = "⠓⠑⠇⠇⠕";
 // Second line of braille text

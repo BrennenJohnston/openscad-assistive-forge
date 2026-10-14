@@ -696,7 +696,7 @@ if (_text_w + 2 * _plate_pad > sign_w)
 for (i = [0:_line_count-1])
     if (has_invalid_chars(_braille_lines[i]))
         echo(str("WARNING: braille Line_", i + 1, " contains non-braille characters. Use Unicode braille (U+2800-U+28FF)."));
-echo(str("NOTE: ADA defaults are recommendations only - this tool does not guarantee compliance. Mount the braille plate at least ", BORDER_CLEARANCE_MM, " mm (3/8 in) below the raised text."));
+echo(str("NOTE: These defaults follow ADA 703, but this tool does not guarantee compliance. Mount the braille plate at least ", BORDER_CLEARANCE_MM, " mm (3/8 in) below the raised text."));
 
 // =============================================================================
 // MAIN RENDERING
