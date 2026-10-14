@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The braille sign warns when a character in its text has no shape in the
+  sign's font and would print as a hollow square.
+
+### Changed
+
+- The braille sign's note in OpenSCAD Messages says what its description
+  says about ADA 703.
+
+### Fixed
+
+- The drawing editor says each sentence once; a screen reader heard most of
+  them twice.
+- After an interrupted start, Recovery Mode shows a banner that stays until
+  dismissed, with a button that turns automatic preview back on; the old
+  notice could not be seen and was soon replaced.
+- Where the browser has WebGL switched off, the Alt View key says why it
+  cannot start and stays off, instead of doing nothing.
+- Start New Project's accessible name begins with the words on it, so voice
+  control finds it.
+
 ## [5.5.0] - 2026-10-13
 
 ### Added
