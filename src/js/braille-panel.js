@@ -39,6 +39,7 @@ import {
   BRAILLE_SPACE,
 } from './braille-wrap.js';
 import { signRowWidthMm } from './sign-letter-metrics.js';
+import { charactersTheSignCannotDraw } from './braille-sign-glyphs.js';
 import { adaSignCapitals } from './braille-capitals.js';
 import { asciiToCells } from './braille-ascii.js';
 import { createSixKeyEntry, describeCell } from './braille-six-key.js';
@@ -1506,6 +1507,33 @@ class BraillePanel {
     }
   }
 
+  /**
+   * The sign raises its letters in its font, which prints a character it has
+   * no shape for as a hollow square: name such characters before they are
+   * printed. A long list names the first five.
+   */
+  collectSignGlyphWarning(warnings, text) {
+    const missing = charactersTheSignCannotDraw(text);
+    if (missing.length === 0) return;
+    const quoted = (chars) => chars.map((ch) => `"${ch}"`).join(', ');
+    let message;
+    if (missing.length === 1) {
+      message =
+        `The sign's font has no shape for ${quoted(missing)}. It would ` +
+        `print as a hollow square. Use letters, digits and punctuation.`;
+    } else if (missing.length <= 5) {
+      message =
+        `The sign's font has no shape for ${missing.length} characters: ` +
+        `${quoted(missing)}. They would print as hollow squares.`;
+    } else {
+      message =
+        `The sign's font has no shape for ${missing.length} characters, ` +
+        `the first five: ${quoted(missing.slice(0, 5))}. They would print ` +
+        `as hollow squares.`;
+    }
+    warnings.push({ type: 'sign-glyph-missing', message });
+  }
+
   async runCardLayout() {
     // The braille editor wins whenever it has content: its lines are
     // used exactly as written, with no liblouis pass.
@@ -1983,6 +2011,7 @@ class BraillePanel {
       preserveCaps,
       text,
     });
+    this.collectSignGlyphWarning(warnings, text);
 
     this.cards = [layout.brailleRows];
     this.allLines = layout.brailleRows;
@@ -2041,6 +2070,7 @@ class BraillePanel {
       preserveCaps,
       text,
     });
+    this.collectSignGlyphWarning(warnings, text);
     warnings.push({
       type: 'braille-field-active',
       message:
