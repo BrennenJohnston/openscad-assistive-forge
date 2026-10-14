@@ -205,7 +205,7 @@ record step by step. How to set that up, and what to listen for, is in the
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (254 files, 7,810 tests and 2 skipped, as of 2026-10-12).
+- [ ] `npm run test:run` -- all unit tests pass (259 files, 7,833 tests and 2 skipped, as of 2026-10-13).
 - [ ] `npm run test:e2e` -- E2E tests pass on Chromium.
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.
@@ -213,9 +213,9 @@ After any changes, verify:
 - [ ] `npx playwright test tests/e2e/accessibility.spec.js` -- axe-core passes, with the label-in-name rule on in every scan: a control's visible words must be in its name.
 - [ ] `npm run build && npm run check-bundle` -- budgets met.
 
-Measured 2026-10-11: core app **459 KB** gzipped against a 586 KB budget, main
-CSS 63 KB against 150 KB, all assets **1.13 MB** against 1.19 MB. All assets
-are at 95% of their budget, so a new dependency is a real decision rather than
+Measured 2026-10-13: core app **465 KB** gzipped against a 586 KB budget, main
+CSS 66 KB against 150 KB, all assets **1.14 MB** against 1.19 MB. All assets
+are at 96% of their budget, so a new dependency is a real decision rather than
 a formality.
 
 ---
