@@ -318,6 +318,39 @@
           </div>
         </div>
       </div>
+      <!-- Recovery Mode notice: the last start was interrupted, so this load
+           runs with reduced settings. Shown by main.js until dismissed; its
+           first button turns automatic preview back on. -->
+      <div
+        id="recoveryBanner"
+        class="update-banner hidden"
+        role="region"
+        aria-label="Recovery Mode"
+      >
+        <div class="update-banner-content">
+          <span class="update-banner-text" id="recoveryBannerText"
+            >Recovery Mode: the last start was interrupted, so this page opened
+            with reduced settings. Automatic preview is off and the quality is
+            set to fast.</span
+          >
+          <div class="update-banner-actions">
+            <button
+              type="button"
+              id="recoveryBannerAutoPreview"
+              class="btn btn-primary"
+            >
+              Turn automatic preview back on
+            </button>
+            <button
+              type="button"
+              id="recoveryBannerDismiss"
+              class="btn btn-secondary"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
       <!-- Memory Warning Banner (Milestone 0: graceful degradation) -->
       <div
         id="memoryBanner"
