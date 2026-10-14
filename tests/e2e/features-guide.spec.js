@@ -192,7 +192,11 @@ test.describe('Features Guide Modal', () => {
   
   test('should open from welcome screen "Learn more" button', async ({ page }) => {
     await page.goto('/')
-    
+    // The buttons are wired as start-up finishes, and the guide's opener is
+    // published after them; a press made the moment the loading cover lifts
+    // lands before that on a built site.
+    await page.waitForFunction(() => typeof window.openFeaturesGuide === 'function')
+
     // "Learn More" buttons live on the welcome screen role cards
     const learnMoreBtn = page.locator('.btn-role-learn').first()
     await expect(learnMoreBtn).toBeVisible()

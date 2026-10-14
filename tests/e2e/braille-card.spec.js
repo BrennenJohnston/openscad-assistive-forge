@@ -16,6 +16,11 @@ import { readFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { parseSTL } from '../../scripts/parity/stl-stats.mjs'
+import {
+  recordAnnouncements,
+  announcementMark,
+  announcementsSince,
+} from './helpers/invariants.js'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -1160,6 +1165,47 @@ test.describe('Braille Charm workflow', () => {
 })
 
 test.describe('Braille Sign workflow', () => {
+  test("a character the sign's font has no shape for is named in a warning, said once", async ({ page }) => {
+    test.setTimeout(120_000)
+    await recordAnnouncements(page)
+    await openBrailleExample(page, 'braille-sign')
+    const input = page.locator('#brailleTextInput')
+    const warnings = page.locator('#brailleWarnings')
+    const one =
+      "The sign's font has no shape for \"字\". It would print as a hollow square. " +
+      'Use letters, digits and punctuation.'
+    const two =
+      "The sign's font has no shape for 2 characters: \"字\", \"😀\". " +
+      'They would print as hollow squares.'
+    const writesOf = async (mark, sentence) =>
+      (await announcementsSince(page, mark)).filter(
+        (w) => w.region === '#brailleWarnings' && w.text.includes(sentence)
+      )
+
+    let mark = await announcementMark(page)
+    await input.fill('ROOM 字')
+    await expect(warnings).toContainText(one, { timeout: 20000 })
+    await page.waitForTimeout(1500)
+    expect(await writesOf(mark, one)).toHaveLength(1)
+
+    mark = await announcementMark(page)
+    await input.fill('ROOM 字 😀')
+    await expect(warnings).toContainText(two, { timeout: 20000 })
+    await page.waitForTimeout(1500)
+    expect(await writesOf(mark, two)).toHaveLength(1)
+
+    // A long list names the first five and counts them all.
+    await input.fill('字 😀 ★ ⠁ あ 한')
+    await expect(warnings).toContainText(
+      "The sign's font has no shape for 6 characters, the first five: " +
+        '"字", "😀", "★", "⠁", "あ". They would print as hollow squares.',
+      { timeout: 20000 }
+    )
+
+    await input.fill('ROOM 101')
+    await expect(warnings).not.toContainText('has no shape', { timeout: 20000 })
+  })
+
   test('the letter height setting is the height of the capital I (ADA 703.2.5)', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI')
     test.setTimeout(300_000)

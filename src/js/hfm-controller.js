@@ -66,6 +66,9 @@ const _HFM_TOGGLE_NAME = 'Alt View';
 const _HFM_ON_SENTENCE =
   'Alt View on. The preview is drawn with characters and the interface follows.';
 const _HFM_OFF_SENTENCE = 'Alt View off.';
+// Shown and said when the preview has no 3D picture to draw with characters.
+const _HFM_NO_GRAPHICS_SENTENCE =
+  'Alt View needs 3D graphics, which this browser has turned off.';
 // Pan adjust keeps one name in both states; the values it changes show in
 // the preview's status line, and each change is spoken on its own.
 const _HFM_PAN_ADJUST_NAME = 'Adjust the Alt View with the pan arrows';
@@ -186,6 +189,7 @@ function _updateHfmStatusBar() {
   const altAdjustEl = document.getElementById('previewStatusAltAdjust');
 
   if (!statusBar || !altAdjustEl) return;
+  delete altAdjustEl.dataset.notice;
 
   const controls = document.getElementById('altViewControls');
   if (!isMono || !_hfmEnabled) {
@@ -791,9 +795,35 @@ function _stopAltViewStart() {
   _hfmStatusOverride = null;
 }
 
+/**
+ * Where the preview made no 3D renderer (WebGL switched off or missing) there
+ * is no picture to draw with characters: the page is left as it was, the look
+ * a choice made on the Main Page set included, and the reason is shown under
+ * the preview and said once.
+ */
+function _altViewCannotStart(toggleBtn) {
+  _stopAltViewStart();
+  document.documentElement.removeAttribute('data-ui-variant');
+  _setAssetsForVariant(false);
+  toggleBtn?.setAttribute('aria-pressed', 'false');
+  _hfmPendingEnable = false;
+  const strip = document.getElementById('previewStatusAltAdjust');
+  if (strip) {
+    strip.textContent = _HFM_NO_GRAPHICS_SENTENCE;
+    strip.dataset.notice = '';
+  }
+  document.getElementById('previewStatusBar')?.classList.add('has-alt-adjust');
+  announceImmediate(_HFM_NO_GRAPHICS_SENTENCE);
+}
+
+/** @returns {Promise<boolean|undefined>} false when the Alt View could not start */
 async function _enableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   if (!previewManager) return;
+  if (!previewManager.renderer) {
+    _altViewCannotStart(toggleBtn);
+    return false;
+  }
 
   const root = document.documentElement;
   _setAssetsForVariant(true);
@@ -1104,7 +1134,8 @@ function _injectAltToggle() {
     }
 
     if (!isCurrentlyEnabled) {
-      await _enableAltViewWithPreview(toggleBtn);
+      // It said why it could not start; "on" would be untrue.
+      if ((await _enableAltViewWithPreview(toggleBtn)) === false) return;
     } else {
       _disableAltViewWithPreview(toggleBtn);
     }

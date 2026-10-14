@@ -8,6 +8,7 @@
  * @license GPL-3.0-or-later
  */
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -151,4 +152,26 @@ test('Help is not inside the "Workflow progress" landmark', async ({
     )
   );
   expect(inside).toBe(false);
+});
+
+test("the Main Page's controls are named by their visible words, first", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+  // The rule reads only text on screen: a window tall enough for the whole
+  // Main Page, or the controls below the fold are never checked.
+  await page.setViewportSize({ width: 1280, height: 4000 });
+  await page.goto('/');
+  await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 });
+  const results = await new AxeBuilder({ page })
+    .include('#welcomeScreen')
+    .withRules(['label-content-name-mismatch'])
+    .analyze();
+  const named = results.violations.flatMap((v) =>
+    v.nodes.map((n) => n.target.join(' '))
+  );
+  expect(named, `label-content-name-mismatch: ${named.join(', ')}`).toEqual([]);
 });

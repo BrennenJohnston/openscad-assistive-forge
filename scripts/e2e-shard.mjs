@@ -118,8 +118,9 @@ export const MEASURED_SECONDS = {
   'tutorials.spec.js': 157.1,
   'tour-interaction.spec.js': 269.2,
   'preferences-dialog.spec.js': 90.6,
-  // One case, an example and a failing upload: measured 6 locally.
-  'preview-stats.spec.js': 20.0,
+  // Two cases, an example and a failing upload, and the braille sign's
+  // return to a cached preview: 8.5 s together locally.
+  'preview-stats.spec.js': 30.0,
   // One case on the simple box: measured 5 locally.
   'parameter-filter.spec.js': 15.0,
   // Two cases on the simple box: measured 28 locally.
@@ -138,6 +139,8 @@ export const MEASURED_SECONDS = {
   // Six cases, each loading the box, most waiting out the key's 5 s arrival
   // or the tune: about 55 s locally; booked at 80.
   'alt-view-arrival.spec.js': 80.0,
+  // One case on the box with WebGL switched off: 4.9 s locally; booked at 15.
+  'alt-view-without-webgl.spec.js': 15.0,
   'editor-content-sync.spec.js': 70.4,
   'saved-projects.spec.js': 68.5,
   'classic-stow.spec.js': 66.8,
@@ -359,6 +362,9 @@ export const MEASURED_SECONDS = {
   'saved-projects-dialogs.spec.js': 20.0,
   // Two cases, a few seconds each locally (neither waits for the engine); 20.
   'startup-questions.spec.js': 20.0,
+  // Two cases, each an interrupted start and a file opened: 16.1 s locally;
+  // booked at 30.
+  'recovery-mode.spec.js': 30.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

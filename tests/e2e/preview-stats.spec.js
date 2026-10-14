@@ -46,3 +46,44 @@ test('a failed preview clears the size and triangle count', async ({ page }) => 
   await expect(page.locator('#previewStatusStats')).toHaveText('')
   await expect(page.locator('#stats')).toHaveText('')
 })
+
+test("a return to a preview drawn before brings back that preview's messages", async ({
+  page,
+}) => {
+  test.setTimeout(240_000)
+  await page.goto('/?example=braille-sign')
+  const state = page.locator('.preview-state-indicator')
+  const drawer = page.locator('#echoDrawerLabel')
+  await expect(state).toHaveClass(/state-current/, { timeout: 120_000 })
+  const notNow = page.locator('#saveProjectNotNow')
+  if (await notNow.isVisible().catch(() => false)) await notNow.click()
+  await expect(drawer).toHaveText(/^OpenSCAD Messages \(\d+ echo\)$/)
+  const shown = await drawer.textContent()
+
+  const param = 'rounded_dot_base_diameter'
+  await page.evaluate((name) => {
+    let group = document
+      .querySelector(`.param-control[data-param-name="${name}"]`)
+      ?.closest('details')
+    while (group) {
+      group.open = true
+      group = group.parentElement?.closest('details')
+    }
+  }, param)
+  const box = page
+    .locator(`.param-control[data-param-name="${param}"] input[type="number"]`)
+    .first()
+  const drawn = await box.inputValue()
+
+  // The model's own range check stops the run, and says why.
+  await box.fill('1.4')
+  await box.press('Enter')
+  await expect(state).toHaveClass(/state-error/, { timeout: 120_000 })
+  await expect(drawer).toHaveText('OpenSCAD Messages (1 error)')
+
+  // Back to the value drawn at load: the cached preview, with its own messages.
+  await box.fill(drawn)
+  await box.press('Enter')
+  await expect(state).toHaveText(/Preview \(cached\)/, { timeout: 120_000 })
+  await expect(drawer).toHaveText(shown)
+})

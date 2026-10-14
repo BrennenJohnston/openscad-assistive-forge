@@ -43,6 +43,7 @@ function previewManagerStub() {
     gridEnabled: pm.loadGridPreference(),
     gridHelper: { visible: true },
     mesh: null,
+    renderer: {},
     setPostLoadHook: vi.fn(),
     clearPostLoadHook: vi.fn(),
     setRenderOverride: vi.fn(),
@@ -401,5 +402,96 @@ describe('the Alt View and pan adjust speak plainly', () => {
     adjust.click()
     await vi.advanceTimersByTimeAsync(100)
     expect(written.at(-1)).toBe('Pan arrows move the view again.')
+  })
+})
+
+describe('where the browser has no 3D graphics', () => {
+  const SENTENCE = 'Alt View needs 3D graphics, which this browser has turned off.'
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+      ],
+    })
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    document.body.innerHTML = ''
+    document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  // A controller whose preview manager can arrive later, as a project opens;
+  // that preview made no WebGL renderer, so the character renderer's start
+  // fails reading it, as it does in a browser with WebGL switched off. The
+  // failure is set after the module reset, on the copy the controller imports.
+  async function controllerWithoutRenderer({ projectOpen }) {
+    const pm = previewManagerStub()
+    pm.renderer = null
+    const holder = { manager: projectOpen ? pm : null }
+    vi.resetModules()
+    const { initHfmController } = await import('../../src/js/hfm-controller.js')
+    const controller = initHfmController({
+      getPreviewManager: () => holder.manager,
+      getDisplayOptionsController: () => ({ refreshOverlays: vi.fn() }),
+    })
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    initAltView.mockImplementationOnce(async (manager) => {
+      if (!manager.renderer) {
+        throw new TypeError(
+          "can't access property \"domElement\", renderer is null"
+        )
+      }
+    })
+    return { controller, openProject: () => (holder.manager = pm) }
+  }
+
+  it('the key says why once, stays off, and leaves the look as it was', async () => {
+    const written = pageWithHeaderAndDpad()
+    const { controller } = await controllerWithoutRenderer({ projectOpen: true })
+    controller.injectAltToggle()
+    const key = document.getElementById('_hfmToggle')
+
+    key.click()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(written).toEqual([SENTENCE])
+    expect(document.getElementById('previewStatusAltAdjust').textContent).toBe(
+      SENTENCE
+    )
+    expect(key.getAttribute('aria-pressed')).toBe('false')
+    expect(document.documentElement.hasAttribute('data-ui-variant')).toBe(false)
+    expect(controller.isEnabled()).toBe(false)
+  })
+
+  it('a look turned on before a project opens is undone, and says why', async () => {
+    const written = pageWithHeaderAndDpad()
+    const { controller, openProject } = await controllerWithoutRenderer({
+      projectOpen: false,
+    })
+    controller.injectAltToggle()
+    const key = document.getElementById('_hfmToggle')
+    key.click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(document.documentElement.getAttribute('data-ui-variant')).toBe('mono')
+    written.length = 0
+
+    // A project opens where the browser draws no 3D picture, and the look
+    // that was waiting for it is asked to start (as the file handler does).
+    openProject()
+    await controller.enableAltViewWithPreview(key).catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(written).toEqual([SENTENCE])
+    expect(key.getAttribute('aria-pressed')).toBe('false')
+    expect(document.documentElement.hasAttribute('data-ui-variant')).toBe(false)
+    expect(controller.isPendingEnable()).toBe(false)
   })
 })

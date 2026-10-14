@@ -436,13 +436,18 @@ test.describe('Companion files: a way back', () => {
 
     // helpers.scad defines rounded_cube(), which main.scad's geometry calls.
     // Coarsening its cylinders must change the mesh the renderer produces.
-    // The first preview may still be running when the tree is open, so wait
-    // for its count rather than read the page once.
+    // The first preview may still be running when the tree is open, and a
+    // count can show while it settles: "before" is read once that preview is
+    // current.
     const readTriangles = () =>
       page.evaluate(() =>
         document.body.innerText.match(/([\d,]+)\s+triangles/)?.[1]
       );
-    await expect.poll(readTriangles, { timeout: 90_000 }).toBeTruthy();
+    await expect(page.locator('.preview-state-indicator')).toHaveClass(
+      /state-current/,
+      { timeout: 90_000 }
+    );
+    await expect.poll(readTriangles, { timeout: 30_000 }).toBeTruthy();
     const trianglesBefore = await readTriangles();
 
     await openEditor(page);

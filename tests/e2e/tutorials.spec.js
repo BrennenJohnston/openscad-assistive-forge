@@ -728,7 +728,36 @@ test.describe('The box tour ends by naming the way back', () => {
     });
 
     // The curiosity path: the cutout stays clickable, so press what the step
-    // points at. The tour stands down for the confirm dialog.
+    // points at. The tour stands down for the confirm dialog. The step's card
+    // moves beside the button as the step settles, and a press made while it
+    // moves can land on the card's Minimize: wait until the card holds still
+    // and the button is what a press at its center reaches.
+    let lastPlace = null;
+    await expect
+      .poll(
+        async () => {
+          const place = await page.evaluate(() => {
+            const card = document
+              .querySelector('.tutorial-panel')
+              ?.getBoundingClientRect();
+            const button = document.getElementById('clearFileBtn');
+            const r = button.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              r.x + r.width / 2,
+              r.y + r.height / 2
+            );
+            return JSON.stringify({
+              card: card && [card.x, card.y, card.width, card.height],
+              reached: !!hit && (hit === button || button.contains(hit)),
+            });
+          });
+          const still = place === lastPlace;
+          lastPlace = place;
+          return still && JSON.parse(place).reached;
+        },
+        { timeout: 15_000, intervals: [250] }
+      )
+      .toBe(true);
     await page.locator('#clearFileBtn').click();
     // The question comes only when a change would be lost.
     const question = page.locator('.confirm-modal');

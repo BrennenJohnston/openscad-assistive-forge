@@ -117,7 +117,12 @@ import {
   initStaticModals,
   isAnyModalOpen,
 } from './js/modal-manager.js';
-import { disableKeepingFocus, setBusy, isBusy } from './js/focus-trap.js';
+import {
+  disableKeepingFocus,
+  getFocusableElements,
+  setBusy,
+  isBusy,
+} from './js/focus-trap.js';
 import {
   readAutoPreviewChoice,
   writeAutoPreviewChoice,
@@ -1058,20 +1063,6 @@ async function initApp() {
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete('recovery');
     window.history.replaceState({}, document.title, cleanUrl.toString());
-
-    // Show recovery notice
-    setTimeout(() => {
-      const statusArea = document.getElementById('statusArea');
-      if (statusArea) {
-        statusArea.innerHTML = `
-          <div class="status-notice status-warning" role="alert">
-            <strong>Recovery Mode:</strong> Running with reduced settings.
-            Auto-preview is disabled, quality is set to fast, and the code editor uses a lightweight textarea.
-            <button class="btn btn-sm btn-secondary" onclick="this.parentElement.remove()">Dismiss</button>
-          </div>
-        `;
-      }
-    }, 1000);
   }
 
   // Memory Monitor: Track memory usage and graceful degradation
@@ -6810,6 +6801,51 @@ async function initApp() {
         );
       }
     });
+  }
+
+  // Recovery Mode's notice stays on screen until it is dismissed. It shows
+  // only now that the automatic preview control is wired, so a press of its
+  // button is never lost, and the press goes through that control like
+  // every other way of turning it on.
+  const recoveryBanner = document.getElementById('recoveryBanner');
+  if (isRecoveryMode && recoveryBanner && autoPreviewToggle) {
+    const closeRecoveryBanner = () => {
+      const hadFocus = recoveryBanner.contains(document.activeElement);
+      recoveryBanner.classList.add('hidden');
+      if (!hadFocus) return;
+      // On to the next control rather than the page body.
+      getFocusableElements(document.body)
+        .find(
+          (el) =>
+            recoveryBanner.compareDocumentPosition(el) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        )
+        ?.focus();
+    };
+    document
+      .getElementById('recoveryBannerAutoPreview')
+      ?.addEventListener('click', () => {
+        autoPreviewToggle.checked = true;
+        autoPreviewToggle.dispatchEvent(new Event('change'));
+        announceImmediate('Automatic preview is on.');
+        closeRecoveryBanner();
+      });
+    document
+      .getElementById('recoveryBannerDismiss')
+      ?.addEventListener('click', closeRecoveryBanner);
+    recoveryBanner.classList.remove('hidden');
+    const recoveryText = document.getElementById('recoveryBannerText');
+    if (recoveryText) {
+      // The start-up says its own status in this same moment and would
+      // write over the sentence before a screen reader read it, so the
+      // sentence waits past it (and is not said once the banner is gone).
+      const sentence = recoveryText.textContent.replace(/\s+/g, ' ').trim();
+      setTimeout(() => {
+        if (!recoveryBanner.classList.contains('hidden')) {
+          announceImmediate(sentence);
+        }
+      }, 600);
+    }
   }
 
   if (previewQualitySelect) {

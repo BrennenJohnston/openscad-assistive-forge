@@ -199,10 +199,17 @@ describe('the quick look', () => {
       // path it takes, which depends on whether the picture is transparent - so
       // the same machine would report 0.5 for an icon and 2.4 for a photograph.
       // The calibration is fixed work, so two very different pictures must
-      // agree about how fast the machine is.
-      const iconFactor = quickLook(iconLike(700), { makeImageData }).deviceFactor
-      const photoFactor = quickLook(photoLike(1200, 900), { makeImageData })
-        .deviceFactor
+      // agree about how fast the machine is. Each factor is the fastest of
+      // three looks: a loaded machine (a full unit board) can slow one look
+      // down, and the fastest is the one nothing else interrupted.
+      const factor = (picture) =>
+        Math.min(
+          ...[0, 1, 2].map(
+            () => quickLook(picture, { makeImageData }).deviceFactor
+          )
+        )
+      const iconFactor = factor(iconLike(700))
+      const photoFactor = factor(photoLike(1200, 900))
       const ratio =
         Math.max(iconFactor, photoFactor) / Math.min(iconFactor, photoFactor)
       expect(ratio, `icon ${iconFactor} vs photo ${photoFactor}`).toBeLessThan(3)
