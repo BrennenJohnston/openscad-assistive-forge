@@ -118,8 +118,9 @@ export const MEASURED_SECONDS = {
   'tutorials.spec.js': 157.1,
   'tour-interaction.spec.js': 269.2,
   'preferences-dialog.spec.js': 90.6,
-  // One case, an example and a failing upload: measured 6 locally.
-  'preview-stats.spec.js': 20.0,
+  // Two cases, an example and a failing upload, and the braille sign's
+  // return to a cached preview: 8.5 s together locally.
+  'preview-stats.spec.js': 30.0,
   // One case on the simple box: measured 5 locally.
   'parameter-filter.spec.js': 15.0,
   // Two cases on the simple box: measured 28 locally.
