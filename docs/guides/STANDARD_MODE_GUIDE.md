@@ -108,18 +108,22 @@ Undo history includes the last 50 changes.
 | Action | Mouse | Keyboard |
 |--------|-------|----------|
 | Rotate | Click + drag | Arrow keys |
-| Zoom | Scroll wheel | `+` / `-` |
+| Zoom | Scroll wheel (toward the center of the view) | `+` / `-` |
 | Pan | Shift + drag | `Shift + Arrow` |
 | Reset | Double-click | `Home` |
+
+To zoom toward the mouse pointer instead, turn on **Zoom toward the mouse
+pointer** in Preferences > 3D View.
 
 ### Auto-Rotate
 
 Auto-rotate slowly spins the model for presentation:
 
-1. Click the **Auto-rotate** button (circular arrow icon)
-2. Adjust speed with the **Auto-rotate speed** slider next to it in the
-   Camera panel
-3. Click again to stop
+1. Open **Preview Settings & Info** and turn on the **Auto-rotate** switch,
+   or choose **View > Auto-rotate**
+2. Set the speed with the **Auto-rotate speed** slider under the switch,
+   from 0.6 to 18 degrees per second
+3. Turn the switch off, or choose **View > Auto-rotate** again, to stop
 
 **Note:** Auto-rotate is disabled if you have "Reduce Motion" enabled in your system settings.
 
@@ -470,7 +474,7 @@ Forge's own OpenSCAD engine does the converting, in your browser. On a 40 x
 25 mm drawing, DXF in and DXF out each took about 0.3 seconds.
 
 Open a DXF from the welcome screen's **Edit a drawing or photo** line or
-**Edit Drawing** in the Actions drawer. Forge says it is converting, then
+**Design > Open a drawing in the editor…**. Forge says it is converting, then
 the editor opens with each shape listed. **Save as DXF** sits beside **Save
 edited SVG**.
 
@@ -594,7 +598,7 @@ file of its own:
 
 - the **Edit a drawing or photo** line inside **Explore Features &
   Accessibility** on the welcome screen, and
-- **Edit Drawing** in the Actions drawer, once a design is open.
+- **Design > Open a drawing in the editor…**, once a design is open.
 
 Both accept an SVG or a photo saved as PNG or JPG. A photo is traced first, the
 same way a photo dropped into a file parameter is. The editor then opens on it

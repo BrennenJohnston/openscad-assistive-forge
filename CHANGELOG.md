@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The camera panel's buttons are pictures: each standard view is a cube with
+  that face shaded, and the projection button shows the projection and is
+  drawn pressed in orthographic.
+- The camera panel's keyboard shortcuts open in a pop-out above their button.
+
+### Changed
+
+- Every drawer toggle has one arrow that points the way its drawer moves, and
+  an open drawer's toggle is drawn pressed.
+- A panel's title shares one row with its toggle.
+- Every menu drops down under its own button, drawn pressed, and leaves the
+  page behind it clear.
+- Reset View and View All sit in the centers of the camera panel's Rotate and
+  Pan pads.
+- Auto-rotate is a switch in Preview Settings & Info, and View > Auto-rotate
+  turns it on and off. Its speed shows the real degrees per second, and the
+  preview starts at the speed shown.
+- The mouse wheel zooms toward the center of the view; Preferences > 3D View >
+  Zoom toward the mouse pointer zooms toward the pointer instead. After a
+  change to the design, the view stays centered on the model.
+- The Actions drawer is gone: Copy Link sits with the presets, Publish… is in
+  the File menu, and Design > Open a drawing in the editor… opens the drawing
+  editor.
+
+### Fixed
+
+- The Customizer reopens at the width it was resized to, and its divider's
+  arrow keys and spoken width are right while it opens.
+- Near the bottom of the window, the preset list opens upward instead of off
+  the screen.
+
 ## [5.5.1] - 2026-10-14
 
 ### Added

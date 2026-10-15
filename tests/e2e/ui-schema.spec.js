@@ -49,9 +49,7 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // so the rest of the suite stays green while a rule is being met; once the
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
-const NOT_MET_YET = {
-  S7: "Menus open at the window's corner over a blurred page, with a title bar",
-};
+const NOT_MET_YET = {};
 
 function expectRule(rule) {
   test.fail(Boolean(NOT_MET_YET[rule]), NOT_MET_YET[rule]);
@@ -486,6 +484,10 @@ for (const size of SIZES) {
             /\bhidden\b/
           );
           await page.waitForTimeout(250);
+          // The button's color eases in: read it once the transition ends.
+          await btn.evaluate((el) =>
+            Promise.all(el.getAnimations().map((a) => a.finished))
+          );
           const m = await page.evaluate((n) => {
             const b = document.getElementById(`${n}MenuBtn`);
             const modal = document.getElementById(`${n}MenuModal`);
@@ -683,6 +685,34 @@ for (const look of LOOKS.filter((l) => !l.altView)) {
       expect(new Set(m.views.map((v) => v.left)).size, 'view columns').toBe(2);
       expect(new Set(m.views.map((v) => v.top)).size, 'view rows').toBe(3);
       expect(Math.round(m.width), 'the open panel width').toBe(180);
+    });
+
+    test('open, every button is at least the touch target on each side', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openDesktopCameraProject(page, look, { open: true });
+      const m = await page.evaluate(() => {
+        const target = parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            '--size-touch-target'
+          )
+        );
+        const small = [...document.querySelectorAll('#cameraPanel button')]
+          .filter((b) => b.offsetParent !== null)
+          .map((b) => {
+            const r = b.getBoundingClientRect();
+            return {
+              name: b.getAttribute('aria-label'),
+              width: r.width,
+              height: r.height,
+            };
+          })
+          .filter((b) => b.width + 0.5 < target || b.height + 0.5 < target);
+        return { target, small };
+      });
+      expect(m.target).toBeGreaterThan(0);
+      expect(m.small, `buttons smaller than ${m.target} px`).toEqual([]);
     });
   });
 }

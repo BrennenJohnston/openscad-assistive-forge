@@ -24,7 +24,7 @@ The OpenSCAD Assistive Forge is designed with screen reader users in mind and pr
 - **Arrow Keys**: Rotate 3D preview (when preview has focus)
 - **Shift + Arrow Keys**: Pan 3D preview
 - **+** / **-**: Zoom in/out on 3D preview
-- **Enter/Space**: Toggle auto-rotate (when auto-rotate button has focus)
+- **Space**: Turn the Auto-rotate switch on or off (when it has focus, in Preview Settings & Info)
 - **Ctrl+Z**: Undo last parameter change
 - **Ctrl+Shift+Z**: Redo parameter change
 - **Escape**: Close open modals or tooltips
@@ -36,9 +36,10 @@ The OpenSCAD Assistive Forge is designed with screen reader users in mind and pr
    **Mobile**: Use the "Params" button at the top of the preview panel to open the drawer
 3. **Preview Settings & Info** (top of preview): Status, stats, and settings  
    **Mobile**: Use the "Preview Settings & Info" toggle button
-4. **Camera Controls** (desktop right panel) or **Camera** drawer in the actions bar (mobile)
-   - **Auto-rotate toggle**: Located in the center of the rotation D-pad. Use Enter/Space to toggle.
-   - **Rotation speed**: Configurable in Preview Settings (0.5 to 10 degrees per second)
+   - **Auto-rotate**: a switch under Automatic preview; View > Auto-rotate does the same
+   - **Auto-rotate speed**: the slider under it, from 0.6 to 18 degrees per second
+4. **Camera Controls** (desktop right panel) or **Camera** drawer in the bar at the foot of the screen (mobile)
+   - **Reset View** and **View All**: the centers of the Rotate and Pan D-pads on desktop; Reset and View All beside Zoom on mobile
 5. **Status Updates**: Announced automatically via screen reader
 
 ### Screen Reader Features
@@ -69,8 +70,8 @@ The app provides automatic announcements for:
 The drawing editor is keyboard accessible and built to be listened to. When a
 drawing needs a look, the editor opens with focus on its own name, "Drawing
 editor", and says so; through the standalone door (the **Edit a drawing or
-photo** line on the welcome screen, or **Edit Drawing** in the Actions drawer)
-it is the whole screen.
+photo** line on the welcome screen, or **Open a drawing in the editor…** in the
+Design menu) it is the whole screen.
 
 #### Keyboard Controls
 

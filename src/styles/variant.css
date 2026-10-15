@@ -618,6 +618,12 @@ body[data-ui-mode='classic'] {
   -webkit-backdrop-filter: none;
 }
 
+/* A menu's overlay stays clear in this look too: the page behind a menu is
+   neither tinted nor blurred. */
+:root[data-ui-variant='mono'] .toolbar-menu-modal .modal-overlay {
+  background: transparent;
+}
+
 /* Tooltips — override to accent border/bg for mono terminal aesthetic */
 :root[data-ui-variant='mono'] .param-tooltip {
   background: var(--color-bg-primary);
@@ -886,7 +892,10 @@ body[data-ui-mode='classic'] {
   [data-travel-open][aria-expanded='true']:hover:not(:disabled),
 :root[data-ui-variant='mono'] .camera-shortcuts-btn[aria-expanded='true'],
 :root[data-ui-variant='mono']
-  .camera-shortcuts-btn[aria-expanded='true']:hover:not(:disabled) {
+  .camera-shortcuts-btn[aria-expanded='true']:hover:not(:disabled),
+:root[data-ui-variant='mono'] .toolbar-menu-btn[aria-expanded='true'],
+:root[data-ui-variant='mono']
+  .toolbar-menu-btn[aria-expanded='true']:hover:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);

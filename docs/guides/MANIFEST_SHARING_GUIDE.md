@@ -158,7 +158,7 @@ stays short. Three ways to make one:
 
 1. **Copy the address bar.** It updates about a second after you change a
    value.
-2. **Actions drawer > Copy Link.** Copies the current design plus your
+2. **Copy Link, in Presets.** Copies the current design plus your
    settings in one press.
 3. **The Publish dialog**, ticking **Include my current settings in the link**
    before you fill in the base URL. The link it builds then carries both the
@@ -391,8 +391,8 @@ the full rules.
 
 ## Writing the manifest
 
-**Forge can write it for you.** Load your project, open the Actions drawer, and
-press **Publish**. The dialog shows a finished `forge-manifest.json` for
+**Forge can write it for you.** Load your project in the Standard view and
+choose **File > Publish…**. The dialog shows a finished `forge-manifest.json` for
 whatever is currently loaded, with a **Copy Manifest** button. Fill in
 **Your GitHub raw base URL** further down the same dialog and it builds the
 shareable link for you as well.

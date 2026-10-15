@@ -50,11 +50,6 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-.toolbar-menu-btn[aria-expanded='true'] {
-  background: var(--color-hover-bg);
-  border-color: var(--color-border);
-}
-
 /* ============================================================================
    Menu Modal
    ============================================================================ */
@@ -73,10 +68,14 @@
   display: none;
 }
 
+/* A menu leaves the page alone: no tint and no blur behind it. The shared
+   .modal-overlay blurs, so both are cleared here. */
 .toolbar-menu-modal .modal-overlay {
   position: fixed;
   inset: 0;
   background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   cursor: default;
 }
 
@@ -137,6 +136,37 @@
   padding: var(--space-xs) 0;
   max-height: 80vh;
   overflow-y: auto;
+}
+
+/* On a desktop a menu drops under its own menu-bar button, content-sized,
+   as a desktop menu does, with no title bar: the list's own name carries the
+   menu's name, and Escape, a click outside or the button closes it. The
+   anchor comes from toolbar-menu-controller.js; the fallbacks keep the panel
+   on screen if it ever opens without one. A phone keeps the sheet below. */
+@media (min-width: 768px) {
+  .toolbar-menu-content {
+    position: absolute;
+    left: var(--menu-anchor-x, 0);
+    top: var(--menu-anchor-y, 0);
+    margin-top: 0;
+    max-width: min(
+      var(--toolbar-menu-max-w, 380px),
+      calc(100vw - var(--menu-anchor-x, 0px) - var(--space-sm))
+    );
+    max-height: calc(100vh - var(--menu-anchor-y, 0px) - var(--space-sm));
+    display: flex;
+    flex-direction: column;
+  }
+
+  .toolbar-menu-header {
+    display: none;
+  }
+
+  .toolbar-menu-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 /* ============================================================================
