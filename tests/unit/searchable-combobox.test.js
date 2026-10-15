@@ -276,3 +276,59 @@ describe('initSearchableCombobox', () => {
     expect(container.innerHTML).toBe('');
   });
 });
+
+// Opened downward from an input near the window's bottom, the list would put
+// its options off-screen, out of a pointer's reach; there it opens upward.
+describe('where the list opens', () => {
+  let container;
+  let api;
+
+  beforeEach(() => {
+    vi.stubGlobal('innerHeight', 720);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    api = initSearchableCombobox({
+      container,
+      options: SAMPLE_OPTIONS,
+      inputId: 'test-combobox-placement',
+    });
+  });
+
+  afterEach(() => {
+    api.destroy();
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
+  function placeInput(top, height) {
+    const wrap = container.querySelector('.preset-combobox-input-wrap');
+    wrap.getBoundingClientRect = () => ({
+      top,
+      bottom: top + height,
+      left: 10,
+      right: 210,
+      width: 200,
+      height,
+      x: 10,
+      y: top,
+    });
+  }
+
+  it('opens below an input with room beneath it', () => {
+    placeInput(277, 36);
+    getInput(container).dispatchEvent(new Event('focus'));
+    const list = getList(container);
+    expect(list.style.top).toBe('313px');
+    expect(list.classList.contains('is-above')).toBe(false);
+  });
+
+  it('opens above an input near the bottom of the window', () => {
+    placeInput(661, 38);
+    getInput(container).dispatchEvent(new Event('focus'));
+    const list = getList(container);
+    expect(list.classList.contains('is-above')).toBe(true);
+    expect(list.style.top).toBe('auto');
+    expect(list.style.bottom).toBe(`${720 - 661}px`);
+    expect(parseFloat(list.style.maxHeight)).toBeLessThanOrEqual(661 - 8);
+  });
+});
