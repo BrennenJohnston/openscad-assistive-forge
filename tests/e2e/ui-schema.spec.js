@@ -686,6 +686,34 @@ for (const look of LOOKS.filter((l) => !l.altView)) {
       expect(new Set(m.views.map((v) => v.top)).size, 'view rows').toBe(3);
       expect(Math.round(m.width), 'the open panel width').toBe(180);
     });
+
+    test('open, every button is at least the touch target on each side', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openDesktopCameraProject(page, look, { open: true });
+      const m = await page.evaluate(() => {
+        const target = parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            '--size-touch-target'
+          )
+        );
+        const small = [...document.querySelectorAll('#cameraPanel button')]
+          .filter((b) => b.offsetParent !== null)
+          .map((b) => {
+            const r = b.getBoundingClientRect();
+            return {
+              name: b.getAttribute('aria-label'),
+              width: r.width,
+              height: r.height,
+            };
+          })
+          .filter((b) => b.width + 0.5 < target || b.height + 0.5 < target);
+        return { target, small };
+      });
+      expect(m.target).toBeGreaterThan(0);
+      expect(m.small, `buttons smaller than ${m.target} px`).toEqual([]);
+    });
   });
 }
 
