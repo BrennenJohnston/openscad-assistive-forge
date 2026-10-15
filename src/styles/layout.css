@@ -2219,9 +2219,8 @@ body[data-app-surface='welcome'] #uiModeToggle {
     margin-top: 0;
   }
 
-  #cameraPanel .camera-section-tools .camera-shortcuts-details {
-    flex: 1;
-    min-width: 0;
+  #cameraPanel .camera-section-tools .camera-shortcuts-btn {
+    margin-left: auto;
   }
 
   #cameraPanel .camera-panel-extras {
@@ -2498,44 +2497,38 @@ body[data-app-surface='welcome'] #uiModeToggle {
   gap: var(--space-sm);
 }
 
-/* Keyboard shortcuts help section */
+/* Keyboard shortcuts: a button at the tools row's end, and its pop-out
+   above the row, inside the camera panel. */
 .camera-shortcuts-help {
+  position: relative;
   margin-top: auto;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--color-border);
 }
 
-.camera-shortcuts-details {
+.camera-shortcuts-panel {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  z-index: var(--z-index-dropdown);
+  padding: var(--space-sm);
   font-size: var(--font-size-xs);
-}
-
-.camera-shortcuts-summary {
-  cursor: pointer;
-  padding: var(--space-xs);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-secondary);
-  list-style: none;
-}
-
-.camera-shortcuts-summary::-webkit-details-marker {
-  display: none;
-}
-
-.camera-shortcuts-summary:hover {
-  background: var(--color-bg-tertiary);
   color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--shadow-md);
 }
 
 .camera-shortcuts-list {
-  margin: var(--space-xs) 0 0 0;
-  padding: var(--space-xs);
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius-sm);
+  margin: 0;
 }
 
 .camera-shortcut-item {
   display: flex;
   justify-content: space-between;
+  gap: var(--space-sm);
   padding: var(--space-xs) 0;
   border-bottom: 1px solid var(--color-border);
 }
@@ -2552,109 +2545,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
 .camera-shortcut-item dd {
   margin: 0;
   color: var(--color-text-secondary);
-}
-
-/* Icon span in shortcuts summary */
-.camera-shortcuts-icon {
-  font-size: var(--font-size-base);
-}
-
-/* Label span in shortcuts summary */
-.camera-shortcuts-label {
-  /* Shown by default */
-}
-
-/* ============================================================================
-   Compact Keyboard Shortcuts - Icon-Only Popover
-   ============================================================================
-   On narrow widths or short heights, convert the shortcuts help to a
-   compact icon button with a popover-style dropdown.
-   ============================================================================ */
-@media (max-width: 600px), (max-height: 500px) {
-  .camera-shortcuts-help {
-    position: relative;
-    margin-top: auto;
-    padding-top: var(--space-xs);
-    border-top: 1px solid var(--color-border);
-  }
-
-  .camera-shortcuts-details {
-    position: relative;
-  }
-
-  /* Icon-only button style for summary */
-  .camera-shortcuts-summary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--size-touch-target-sm);
-    height: var(--size-touch-target-sm);
-    padding: 0;
-    border-radius: var(--border-radius-sm);
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
-  }
-
-  .camera-shortcuts-summary:hover,
-  .camera-shortcuts-summary:focus {
-    background: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
-  }
-
-  .camera-shortcuts-summary:focus-visible {
-    outline: 3px solid var(--color-focus);
-    outline-offset: 2px;
-  }
-
-  /* Hide label, show only icon */
-  .camera-shortcuts-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
-  }
-
-  .camera-shortcuts-icon {
-    font-size: var(--font-size-lg);
-  }
-
-  /* Popover-style positioning for the list */
-  .camera-shortcuts-list {
-    position: absolute;
-    bottom: calc(100% + var(--space-xs));
-    right: 0;
-    margin: 0;
-    padding: var(--space-sm);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius-md);
-    box-shadow: var(--shadow-lg);
-    min-width: 180px;
-    max-width: 220px;
-    z-index: var(--z-index-dropdown);
-  }
-
-  /* Popover arrow pointing down to the icon */
-  .camera-shortcuts-list::after {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    right: 12px;
-    width: 14px;
-    height: 14px;
-    background: var(--color-bg-primary);
-    border-right: 1px solid var(--color-border);
-    border-bottom: 1px solid var(--color-border);
-    transform: rotate(45deg);
-    z-index: -1;
-  }
 }
 
 /* Mobile: Hide camera panel (use camera drawer instead) */

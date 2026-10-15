@@ -886,7 +886,10 @@ body[data-ui-mode='classic'] {
    surfaces for the echo bar and its message colors. */
 :root[data-ui-variant='mono'] [data-travel-open][aria-expanded='true'],
 :root[data-ui-variant='mono']
-  [data-travel-open][aria-expanded='true']:hover:not(:disabled) {
+  [data-travel-open][aria-expanded='true']:hover:not(:disabled),
+:root[data-ui-variant='mono'] .camera-shortcuts-btn[aria-expanded='true'],
+:root[data-ui-variant='mono']
+  .camera-shortcuts-btn[aria-expanded='true']:hover:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);

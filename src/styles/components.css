@@ -18217,12 +18217,14 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   }
 }
 
-/* While its drawer is open, a toggle is drawn pressed in the accent, the same
-   state a screen reader announces. :root lifts it above the toggles' own
-   surfaces (the echo bar's message colors among them), and the hover form
-   keeps it pressed under the pointer. */
+/* While its drawer or pop-out is open, a toggle is drawn pressed in the
+   accent, the same state a screen reader announces. :root lifts it above the
+   toggles' own surfaces (the echo bar's message colors among them), and the
+   hover form keeps it pressed under the pointer. */
 :root [data-travel-open][aria-expanded='true'],
-:root [data-travel-open][aria-expanded='true']:hover:not(:disabled) {
+:root [data-travel-open][aria-expanded='true']:hover:not(:disabled),
+:root .camera-shortcuts-btn[aria-expanded='true'],
+:root .camera-shortcuts-btn[aria-expanded='true']:hover:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
@@ -18235,7 +18237,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 @media (forced-colors: active) {
-  :root [data-travel-open][aria-expanded='true'] {
+  :root [data-travel-open][aria-expanded='true'],
+  :root .camera-shortcuts-btn[aria-expanded='true'] {
     background: Highlight;
     color: HighlightText;
     border-color: Highlight;

@@ -34,6 +34,7 @@ export function initCameraPanelController(options = {}) {
   }
 
   let isCollapsed = loadCollapsedState();
+  let shortcutsPopout = null;
 
   /**
    * Load collapsed state from localStorage (defaults to collapsed)
@@ -83,6 +84,7 @@ export function initCameraPanelController(options = {}) {
   function collapse() {
     if (isCollapsed) return;
     isCollapsed = true;
+    shortcutsPopout?.close();
     panel.classList.add('collapsed');
     updateToggleAria(true);
     saveCollapsedState(true);
@@ -476,6 +478,7 @@ export function initCameraPanelController(options = {}) {
 
   // Setup camera control buttons (desktop and mobile)
   setupCameraControlButtons();
+  shortcutsPopout = initCameraShortcutsPopout();
 
   // Initialize mobile camera drawer
   initMobileCameraDrawer();
@@ -493,6 +496,63 @@ export function initCameraPanelController(options = {}) {
       options.previewManager = pm;
     },
   };
+}
+
+/**
+ * The camera panel's keyboard shortcuts pop-out. Its button opens and closes
+ * it; Escape on the button or inside the pop-out closes it and leaves focus on
+ * the button; a press anywhere outside the two closes it.
+ * @returns {{close: Function}|null}
+ */
+function initCameraShortcutsPopout() {
+  const button = document.getElementById('cameraShortcutsBtn');
+  const popout = document.getElementById('cameraShortcutsPanel');
+  if (!button || !popout) return null;
+
+  const isOpen = () => button.getAttribute('aria-expanded') === 'true';
+
+  function onPointerDown(event) {
+    if (button.contains(event.target) || popout.contains(event.target)) {
+      return;
+    }
+    close();
+  }
+
+  function open() {
+    if (isOpen()) return;
+    popout.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', onPointerDown, true);
+  }
+
+  function close({ focusButton = false } = {}) {
+    if (!isOpen()) return;
+    popout.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', onPointerDown, true);
+    if (focusButton) button.focus();
+  }
+
+  button.addEventListener('click', () => {
+    if (isOpen()) {
+      close();
+    } else {
+      open();
+    }
+  });
+
+  for (const el of [button, popout]) {
+    el.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !isOpen()) return;
+      // Spent here, so a page-wide Escape (leaving focus mode) does not fire
+      // on the same press.
+      event.preventDefault();
+      event.stopPropagation();
+      close({ focusButton: true });
+    });
+  }
+
+  return { close };
 }
 
 /**
