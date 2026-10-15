@@ -523,25 +523,6 @@ details.param-group.forge-disclosure[open] > summary::before {
   outline-offset: 2px;
 }
 
-/* ============================================================================
-   Panel Collapse Button - Icon Rotation & States
-   ============================================================================ */
-
-#collapseParamPanelBtn svg {
-  transition: transform var(--motion-slow) ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #collapseParamPanelBtn svg {
-    transition: none;
-  }
-}
-
-/* Rotate icon 180° when collapsed to show "expand" direction */
-.param-panel.collapsed #collapseParamPanelBtn svg {
-  transform: rotate(180deg);
-}
-
 /* Desktop only - hide collapse button on mobile (drawer toggle is used instead) */
 @media (max-width: 767px) {
   .param-panel .btn-collapse-panel {
@@ -717,24 +698,8 @@ body[data-mobile-toolbar='relocated']
   color: var(--color-text-primary);
 }
 
-.preview-drawer-toggle-btn.btn-collapse-panel svg {
-  transition: transform var(--motion-base) ease;
-  /* Base icon points left; rotate to point DOWN when collapsed (expand) */
-  transform: rotate(90deg);
-}
-
-.preview-drawer-toggle-btn.btn-collapse-panel[aria-expanded='true'] svg {
-  /* Rotate to point UP when expanded (collapse) */
-  transform: rotate(-90deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .preview-drawer-toggle-btn.btn-collapse-panel svg {
-    transition: none;
-  }
-}
-
-/* Preview drawer toggle uses shared .btn-collapse-panel styling (see above). */
+/* Preview drawer toggle uses shared .btn-collapse-panel styling (see above);
+   its arrow follows the shared drawer-arrow rules at the end of this file. */
 
 /* ============================================================================
    Actions Drawer Toggle Button (Mobile)
@@ -18192,5 +18157,88 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   .drawing-editor-crop .param-control {
     grid-template-columns: 1fr;
     row-gap: var(--space-xs);
+  }
+}
+
+/* ============================================================================
+   Drawer arrows and the open state
+   ============================================================================
+   The rules in docs/specs/UI_STANDARDS.md ("Drawers, sheets and menus: the
+   schema", S1 and S3). Every drawer toggle draws the same arrow,
+   `.drawer-arrow`, whose drawing points right. The toggle says which way its
+   drawer's leading edge moves when it opens (`data-travel-open`); these
+   rules turn the one arrow that way while the drawer is closed and the other
+   way while it is open. CSS turns clockwise: 90deg points down, -90deg up.
+   Last in this file: at equal weight they must beat the toggles' own rules.
+   ============================================================================ */
+
+.drawer-arrow {
+  flex-shrink: 0;
+  transition: rotate var(--motion-base) ease;
+}
+
+[data-travel-open='right'] .drawer-arrow {
+  rotate: 0deg;
+}
+
+[data-travel-open='down'] .drawer-arrow {
+  rotate: 90deg;
+}
+
+[data-travel-open='left'] .drawer-arrow {
+  rotate: 180deg;
+}
+
+[data-travel-open='up'] .drawer-arrow {
+  rotate: -90deg;
+}
+
+/* Open, the arrow points back the way the drawer closes. Each turn is half a
+   turn clockwise from its closed one, so every arrow swings the same way. */
+[data-travel-open='right'][aria-expanded='true'] .drawer-arrow {
+  rotate: 180deg;
+}
+
+[data-travel-open='down'][aria-expanded='true'] .drawer-arrow {
+  rotate: 270deg;
+}
+
+[data-travel-open='left'][aria-expanded='true'] .drawer-arrow {
+  rotate: 360deg;
+}
+
+[data-travel-open='up'][aria-expanded='true'] .drawer-arrow {
+  rotate: 90deg;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-arrow {
+    transition: none;
+  }
+}
+
+/* While its drawer is open, a toggle is drawn pressed in the accent, the same
+   state a screen reader announces. :root lifts it above the toggles' own
+   surfaces (the echo bar's message colors among them), and the hover form
+   keeps it pressed under the pointer. */
+:root [data-travel-open][aria-expanded='true'],
+:root [data-travel-open][aria-expanded='true']:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+:root
+  [data-travel-open][aria-expanded='true']
+  :is(.drawer-arrow, .echo-drawer-label, .camera-drawer-label) {
+  color: inherit;
+}
+
+@media (forced-colors: active) {
+  :root [data-travel-open][aria-expanded='true'] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+    forced-color-adjust: none;
   }
 }

@@ -346,6 +346,25 @@
   min-width: 0;
 }
 
+/* The panel's toggle turns its arrow half a turn while collapsed, as it
+ * always has. The Forge's drawers turn theirs by their travel attribute,
+ * which this toggle does not carry, so the turn is written here. */
+@media (min-width: 768px) {
+  .city-walk-camera-panel .btn-collapse-panel svg {
+    transition: transform var(--motion-slow) ease;
+  }
+
+  .city-walk-camera-panel.collapsed .btn-collapse-panel svg {
+    transform: rotate(180deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .city-walk-camera-panel .btn-collapse-panel svg {
+    transition: none;
+  }
+}
+
 /* In high contrast everything grows (44px targets, wider gaps, thicker
  * borders), and at 1600x900 the panel body would hold 754px of content in
  * a 576px box, with Reset View off the bottom of the screen behind a

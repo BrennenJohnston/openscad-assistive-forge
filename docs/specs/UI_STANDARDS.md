@@ -12,9 +12,10 @@ This document defines design tokens, component patterns, layout rules, and acces
 4. [Spacing Guidelines](#spacing-guidelines)
 5. [Typography Guidelines](#typography-guidelines)
 6. [Interaction & Behavior Guidelines](#interaction--behavior-guidelines)
-7. [Accessibility Requirements](#accessibility-requirements)
-8. [Contribution & Review Rules](#contribution--review-rules)
-9. [Research & Conventions](#research--conventions)
+7. [Drawers, sheets and menus: the schema](#drawers-sheets-and-menus-the-schema)
+8. [Accessibility Requirements](#accessibility-requirements)
+9. [Contribution & Review Rules](#contribution--review-rules)
+10. [Research & Conventions](#research--conventions)
 
 ---
 
@@ -561,6 +562,30 @@ function loadDrawerSize(drawerName, defaultSize) {
 - Trap focus within modal when open
 - Return focus to trigger element when closed
 - Allow Escape key to close
+
+---
+
+## Drawers, sheets and menus: the schema
+
+A drawer's toggle tells a person two things before they press it: which way the drawer will move, and whether it is open. People learn that without thinking about it, so the toggles have to say it the same way everywhere, or the arrow stops meaning anything. These rules hold for the Forge layouts; Classic keeps the desktop's own docks. They are the reasons behind choices that can look small, so please keep them when you change a panel.
+
+**S1 Direction.** A drawer toggle shows one arrow. While the drawer is closed, the arrow points the way the drawer's leading edge travels when it opens; while it is open, the arrow points the way that edge travels when it closes. The direction lives in one attribute on the toggle, `data-travel-open="left"`, `"right"`, `"up"` or `"down"`, and one stylesheet rule turns the one arrow glyph to match. No drawer draws an arrow of its own.
+
+**S2 One axis.** Between its closed and open states, a toggle moves only along its drawer's travel axis. Its center keeps the other coordinate within 2 px, so the button that closes a drawer is where the eye expects it.
+
+**S3 The open state shows.** While a drawer, sheet, pop-out or menu is open, its toggle is drawn pressed: the accent background and the accent text color, in every theme, look and contrast setting. The style keys on `aria-expanded="true"`, the same state a screen reader announces.
+
+**S4 One header row.** A panel's title sits beside its toggle on one row, with the toggle at the edge the panel opens from. Action buttons keep their own row below it.
+
+**S5 No scrollbars at the design size.** The camera panel shows every button without scrolling in any window of 1280 x 720 px or larger, and it never scrolls sideways. Sliders that only the Alt View adds may sit below the fold.
+
+**S6 Phones: the preview keeps half the screen.** With a project open at phone size, at least half of the screen's height shows the 3D preview while any sheet is open (the Customizer, Preview Settings & Info). The camera drawer is see-through and at most half the screen tall. Full Screen with the camera drawer open splits the screen into halves: the preview above, the drawer below. Nearly everything here is a change you check by looking at the model, so the model stays in view while you make it.
+
+**S7 Menus.** A menu-bar menu opens directly under its own button, and the button stays pressed while the menu is open. The page behind it is neither tinted nor blurred. On a desktop the menu has no title bar and no close button: Escape, a click outside it, or its button closes it. On a phone the menu is a sheet and keeps its close button.
+
+**S8 Tetris.** A new control joins an existing row before it gets a row of its own. A row is added only when the measured width of the existing rows is spent.
+
+`tests/e2e/ui-schema.spec.js` checks S1 to S5 and S7 at 1280 x 720 and 1910 x 935 px, in the dark and light themes, high contrast and the Alt View. A rule the page does not meet yet is listed at the top of that file, and its case is expected to fail until the page meets it; then the entry comes out. The same file holds S6's phone case, marked skipped while today's phone sheets still cover the preview. `tests/e2e/mobile-toolbar.spec.js` keeps S8's row budgets on phones. A change to a rule is a change to this section and to those tests together, in the same pull request.
 
 ---
 

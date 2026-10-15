@@ -1670,13 +1670,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
 
 .echo-drawer-arrow {
   color: var(--color-info-text);
-  transition: transform var(--motion-slow) ease;
-  flex-shrink: 0;
-}
-
-/* Arrow rotates when expanded */
-.echo-drawer-toggle[aria-expanded='true'] .echo-drawer-arrow {
-  transform: rotate(180deg);
 }
 
 /* Content area - hidden when collapsed */
@@ -1764,13 +1757,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
   display: block;
   margin-left: auto;
   width: fit-content;
-}
-
-/* Respect reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .echo-drawer-arrow {
-    transition: none;
-  }
 }
 
 /* High contrast mode */
@@ -2002,8 +1988,9 @@ body[data-app-surface='welcome'] #uiModeToggle {
      The button visually indicates the panel can dock/undock from the edge.
      ============================================================================ */
 
-  /* Collapse button pushed to right edge of action toolbar */
-  .param-header-actions #collapseParamPanelBtn {
+  /* The collapse toggle at the right end of the title row: the panel opens
+     from its left edge, so the toggle sits at the edge that moves. */
+  .panel-header-title-row #collapseParamPanelBtn {
     margin-left: auto;
   }
 
@@ -2029,12 +2016,26 @@ body[data-app-surface='welcome'] #uiModeToggle {
     outline-offset: 2px;
   }
 
-  /* Collapsed state */
+  /* Collapsed state. Nothing scrolls in the strip, so no scrollbar gutter is
+     kept (it took 14 px and pushed the toggle off the window's left edge),
+     and a toggle as wide as the strip may overhang its 1 px border rather
+     than be cut. */
   .param-panel.collapsed {
     width: var(--drawer-collapsed-width) !important;
     min-width: var(--drawer-collapsed-width);
     max-width: var(--drawer-collapsed-width);
     flex: none !important;
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+
+  /* In a strip as wide as its toggle, the focus ring is drawn inside the
+     toggle, where the window's edge cannot cut it. */
+  .param-panel.collapsed #collapseParamPanelBtn:focus,
+  .param-panel.collapsed #collapseParamPanelBtn:focus-visible,
+  #cameraPanel.collapsed #cameraPanelToggle:focus,
+  #cameraPanel.collapsed #cameraPanelToggle:focus-visible {
+    outline-offset: -3px;
   }
 
   /* Hide body content when collapsed */
@@ -2042,29 +2043,31 @@ body[data-app-surface='welcome'] #uiModeToggle {
     display: none;
   }
 
-  /* Hide toolbar actions except collapse button when collapsed */
-  .param-panel.collapsed .param-header-actions > :not(#collapseParamPanelBtn) {
+  /* Collapsed, the action row hides; the toggle stays in the title row. */
+  .param-panel.collapsed .param-header-actions {
     display: none;
   }
 
-  .param-panel.collapsed .param-header-actions {
-    justify-content: center;
-  }
-
-  /* Adjust header layout when collapsed */
+  /* Collapsed, the strip keeps the open header's top padding, so the toggle
+     stays at the same height in both states, and no side padding, so the
+     strip is wide enough for the whole toggle and its focus ring. */
   .param-panel.collapsed .panel-header {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: var(--space-sm);
-    padding-top: var(--space-md);
+    padding: var(--space-sm) 0;
     border-bottom: none;
   }
 
   .param-panel.collapsed .panel-header-title-row {
     flex-direction: column;
     align-items: center;
-    order: 1;
+  }
+
+  /* The toggle above the vertical title. */
+  .param-panel.collapsed .panel-header-title-row #collapseParamPanelBtn {
+    order: -1;
+    margin-left: 0;
   }
 
   .param-panel.collapsed .panel-header h2 {
@@ -2102,9 +2105,13 @@ body[data-app-surface='welcome'] #uiModeToggle {
     transition: width var(--motion-base) ease;
   }
 
-  .camera-panel-header {
+  /* One row: the toggle at the left edge, where the panel opens from, and
+     the title beside it. Scoped by the panel to outweigh the shared
+     .panel-header column further down this file. */
+  .camera-panel .camera-panel-header {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--color-border);
     background-color: var(--color-bg-secondary);
@@ -2112,7 +2119,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
     overflow: visible; /* Prevent clipping */
   }
 
-  /* Row 1: Title row (matches Parameters title row) */
   .camera-header-title-row {
     display: flex;
     align-items: center;
@@ -2128,16 +2134,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
     white-space: nowrap;
   }
 
-  /* Row 2: Actions row with collapse button (mirrors Parameters action toolbar) */
   .camera-header-actions {
     display: flex;
     align-items: center;
     gap: var(--space-xs);
-  }
-
-  /* Collapse button pushed to left edge (mirrors Parameters right edge positioning) */
-  .camera-header-actions #cameraPanelToggle {
-    margin-right: auto;
+    order: -1;
   }
 
   /* Camera collapse button - only camera-specific overrides; base styling from .btn-collapse-panel */
@@ -2146,15 +2147,8 @@ body[data-app-surface='welcome'] #uiModeToggle {
     overflow: visible;
   }
 
-  .camera-panel .btn-collapse-panel svg {
-    transition: transform var(--motion-slow) ease;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .camera-panel {
-      transition: none;
-    }
-    .camera-panel .btn-collapse-panel svg {
       transition: none;
     }
   }
@@ -2180,12 +2174,13 @@ body[data-app-surface='welcome'] #uiModeToggle {
     display: none;
   }
 
+  /* Collapsed: the open header's top padding, so the toggle keeps its
+     height, and no side padding, so the strip holds the whole toggle. */
   .camera-panel.collapsed .camera-panel-header {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: var(--space-sm);
-    padding-top: var(--space-md);
+    padding: var(--space-sm) 0;
     border-bottom: none;
   }
 
@@ -2215,11 +2210,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
     text-align: center;
     margin: var(--space-sm) 0;
     font-size: var(--font-size-base);
-  }
-
-  /* Rotate icon 180° when collapsed to show "expand" direction (matches Parameters) */
-  .camera-panel.collapsed .btn-collapse-panel svg {
-    transform: rotate(180deg);
   }
 }
 
@@ -2667,7 +2657,14 @@ body[data-app-surface='welcome'] #uiModeToggle {
   gap: var(--space-sm);
   min-height: var(--size-touch-target-sm);
   flex-wrap: nowrap;
+}
+
+/* A long title is cut with an ellipsis rather than the row being cut, which
+   would cut the focus ring of the toggle beside it. */
+.panel-header-title-row h2 {
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .panel-header-left {
@@ -2953,18 +2950,6 @@ details summary:focus,
   outline-offset: -3px;
 }
 
-/* Icon rotation - matches preview drawer pattern */
-.actions-drawer-toggle-btn.btn-collapse-panel svg {
-  transition: transform var(--motion-base) ease;
-  /* Base icon points left; rotate to point DOWN when collapsed (expand) */
-  transform: rotate(90deg);
-}
-
-.actions-drawer-toggle-btn.btn-collapse-panel[aria-expanded='true'] svg {
-  /* Rotate to point UP when expanded (collapse) */
-  transform: rotate(-90deg);
-}
-
 @keyframes drawer-fade-in {
   from {
     opacity: 0;
@@ -2977,9 +2962,6 @@ details summary:focus,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .actions-drawer-toggle-btn.btn-collapse-panel svg {
-    transition: none;
-  }
   .actions-drawer:not(.collapsed) .actions-drawer-body {
     animation: none;
   }
@@ -3328,29 +3310,12 @@ details summary:focus,
     opacity: 1; /* Ensure not hidden */
   }
 
-  .camera-drawer-icon .drawer-chevron {
-    stroke: currentColor;
-    stroke-width: 2;
-    transition: transform var(--motion-base) ease;
-    transform: rotate(180deg); /* Collapsed: points up (expand) */
-  }
-
-  .camera-drawer:not(.collapsed) .camera-drawer-icon .drawer-chevron {
-    transform: rotate(0deg); /* Expanded: points down (collapse) */
-  }
-
   /* Verify visibility in each theme */
   :root[data-theme='light'] .camera-drawer-toggle-btn svg,
   :root[data-theme='dark'] .camera-drawer-toggle-btn svg,
   :root[data-theme='high-contrast'] .camera-drawer-toggle-btn svg {
     color: var(--color-text-primary);
     opacity: 1;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .camera-drawer-icon .drawer-chevron {
-      transition: none;
-    }
   }
 
   .camera-drawer-label {
@@ -4184,19 +4149,31 @@ details summary:focus,
     cursor: pointer;
   }
 
-  /* Make the toggle button cover the entire header area (invisible but clickable) */
+  /* The toggle covers the whole header, so the whole half of the bar takes the
+     press; its arrow sits at the left edge, and the title shows through. */
   :root .actions-drawer-toggle-btn {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    opacity: 0;
+    justify-content: flex-start;
+    padding-left: var(--space-md);
+    background: transparent;
+    border: none;
+    border-radius: 0;
     cursor: pointer;
     z-index: var(--z-index-base);
   }
 
+  /* Open, the toggle under the title is drawn pressed in the accent. */
+  :root .actions-drawer:not(.collapsed) .actions-drawer-title {
+    color: var(--color-accent-text);
+  }
+
   /* Style the Actions title to match Camera label exactly */
   :root .actions-drawer-title {
+    position: relative;
+    z-index: calc(var(--z-index-base) + 1);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -4205,20 +4182,6 @@ details summary:focus,
     font-weight: 600;
     color: var(--color-text-primary);
     pointer-events: none;
-  }
-
-  /* Add a chevron icon to Actions title via pseudo-element */
-  .actions-drawer-title::before {
-    content: '▼';
-    font-size: 0.625rem;
-    margin-right: var(--space-xs);
-    transition: transform var(--motion-base) ease;
-    display: inline-block;
-  }
-
-  /* Rotate chevron when expanded (points up) */
-  .actions-drawer:not(.collapsed) .actions-drawer-title::before {
-    transform: rotate(180deg);
   }
 
   /* Camera drawer toggle - match Actions drawer styling exactly */
@@ -4237,25 +4200,13 @@ details summary:focus,
     font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
+    position: relative;
   }
 
-  /* Hide the SVG icon in Camera toggle - we'll use CSS pseudo-element instead */
-  .camera-drawer-toggle-btn .camera-drawer-icon {
-    display: none;
-  }
-
-  /* Add chevron via pseudo-element to match Actions */
-  .camera-drawer-label::before {
-    content: '▼';
-    font-size: 0.625rem;
-    margin-right: var(--space-xs);
-    transition: transform var(--motion-base) ease;
-    display: inline-block;
-  }
-
-  /* Rotate chevron when Camera drawer is expanded */
-  .camera-drawer:not(.collapsed) .camera-drawer-label::before {
-    transform: rotate(180deg);
+  /* The arrow at the left edge, as the Actions half of the bar has it. */
+  :root .camera-drawer-toggle-btn .drawer-arrow {
+    position: absolute;
+    left: var(--space-md);
   }
 
   /* Actions drawer body - fixed overlay above the bar */

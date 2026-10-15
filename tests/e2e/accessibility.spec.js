@@ -3012,19 +3012,23 @@ test.describe('UI Uniformity Regression', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('parameters header has correct 2-row structure', async ({ page }) => {
+  test('parameters header keeps its collapse toggle in the title row', async ({
+    page,
+  }) => {
     const structure = await page.evaluate(() => {
       const header = document.querySelector('.panel-header');
       if (!header) return null;
       const rows = Array.from(header.children).map((el) => el.className);
-      const collapseInActions = !!header.querySelector(
-        '.param-header-actions #collapseParamPanelBtn'
+      const collapseInTitleRow = !!header.querySelector(
+        '.panel-header-title-row #collapseParamPanelBtn'
       );
+      const hasActionRow = !!header.querySelector('.param-header-actions');
       const noSettingsRow = !header.querySelector('.panel-header-settings-row');
-      return { rows, collapseInActions, noSettingsRow };
+      return { rows, collapseInTitleRow, hasActionRow, noSettingsRow };
     });
     expect(structure).not.toBeNull();
-    expect(structure.collapseInActions).toBe(true);
+    expect(structure.collapseInTitleRow).toBe(true);
+    expect(structure.hasActionRow).toBe(true);
     expect(structure.noSettingsRow).toBe(true);
   });
 
