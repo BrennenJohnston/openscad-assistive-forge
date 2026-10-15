@@ -29,7 +29,7 @@ The **768px breakpoint** is the most important. Below it the app switches from a
 
 - The parameters panel becomes a **slide-in off-canvas drawer** triggered by a button tap
 - The preview panel takes the full screen height
-- A **bottom actions bar** provides access to Camera, Preview Settings, and other panels as collapsible drawers
+- A **bar at the foot of the screen** holds the Camera drawer and Generate; Preview Settings & Info drops down over the preview from its toggle at the top
 - Touch targets are kept at the full **44px minimum** (WCAG 2.2 SC 2.5.5)
 - The header collapses to icon-only on very small screens (< 480px portrait)
 
@@ -49,6 +49,10 @@ On devices with a precise pointer (mouse or trackpad), spacing and touch targets
 - Drawer dimensions are reduced for a denser layout
 
 This is applied via `@media (pointer: fine) and (min-width: 768px)` — a technique that distinguishes touch devices from mouse devices regardless of screen size.
+
+#### Drawers, Sheets and Menus
+
+Which way each drawer, sheet and menu opens, how its toggle shows that it is open, and where the camera controls sit on each screen are set down in `docs/specs/UI_STANDARDS.md` ("Drawers, sheets and menus: the schema"). `tests/e2e/ui-schema.spec.js` checks those rules in each theme and at each size.
 
 ---
 
@@ -156,4 +160,4 @@ Unlike Bootstrap or Tailwind, this project:
 | `src/styles/components.css` | Component-level responsive rules |
 | `src/styles/variant.css` | Theme variant overrides (high contrast, etc.) |
 | `src/js/drawer-controller.js` | Mobile drawer open/close logic and focus trap |
-| `docs/specs/UI_STANDARDS.md` | Internal standards for drawer state conventions |
+| `docs/specs/UI_STANDARDS.md` | Layout standards, and the schema for drawers, sheets and menus |

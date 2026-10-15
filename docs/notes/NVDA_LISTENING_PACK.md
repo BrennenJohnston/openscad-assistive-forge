@@ -293,7 +293,7 @@ and let it translate.
 
 ## 16. The words on the controls
 
-Tab along the header, open the Actions drawer, open Keys (the Keyboard
+Tab along the header, open Presets in the Customizer, open Keys (the Keyboard
 Shortcuts dialog), then switch to Classic and Tab to its top right.
 
 | What should happen | Heard it? | What NVDA actually said |
@@ -301,7 +301,7 @@ Shortcuts dialog), then switch to Classic and Tab to its top right.
 | Each header button is named by the word on it, first: "Keys: keyboard shortcuts", "HC: high contrast" (a toggle, pressed or not), "Theme: Auto" (or Light, or Dark), "Full Screen: the preview alone" (a toggle), "Help: features guide and examples" | ☐ | |
 | The interface switch reads "Interface mode: Simplified, Standard, switch", on or off | ☐ | |
 | "Main Page, button" says nothing about unsaved changes until a value has changed; then "Main Page. Unsaved changes will be lost." | ☐ | |
-| The Actions drawer's buttons lead with their words: "Publish", "Copy Link", "Edit Drawing" | ☐ | |
+| Copy Link, in Presets, leads with its words: "Copy Link" | ☐ | |
 | In Keys, a key button reads its key ("F6"), then "Change shortcut for ..." as its description | ☐ | |
 | A saved project's card buttons name the project: "Load {name}", "Edit {name}", "Delete {name}" | ☐ | |
 | In Classic, "A. Forge, button" is described by "Switch to the Assistive Forge interface", with no "pressed"; a pane separator says its real share ("Editor: 26%"), never "0%"; the Font List radios say their style ("Liberation Sans Bold") | ☐ | |

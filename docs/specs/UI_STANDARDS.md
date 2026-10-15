@@ -327,9 +327,9 @@ svg {
 
 **Drawer Direction Rules:**
 - **Side panels** (Parameters, Camera): Collapse **outward** (left panel collapses left, right panel collapses right)
-- **Bottom drawers** (Preview Settings): Always expand **upward** (never sideways)
+- **Preview Settings & Info**: Drops **down** over the preview from its toggle at the top of the preview (never sideways)
 
-**Critical:** Bottom drawers must overlay side panels with proper z-index so they are never hidden when Parameters/Camera are open.
+**Critical:** Preview Settings & Info must overlay the side panels with proper z-index so it is never hidden when Parameters/Camera are open.
 
 ### Mobile Layout (≤767px)
 
@@ -348,9 +348,9 @@ svg {
 |--------|------------------|------------------|---------|
 | Parameters (left) | Collapse left | Expand up from bottom | `--z-index-base` |
 | Camera (right) | Collapse right | Expand up from bottom | `--z-index-base` |
-| Preview Settings | Expand up (overlay) | Expand up (overlay) | `calc(var(--z-index-drawer) + 20)` |
+| Preview Settings | Drop down (overlay) | Drop down (overlay) | `calc(var(--z-index-drawer) + 20)` |
 
-**Rule:** Bottom-expanding drawers (Preview Settings) MUST use `z-index` higher than side panels to remain visible.
+**Rule:** Preview Settings & Info, which drops over the preview, MUST use `z-index` higher than side panels to remain visible.
 
 ### Responsive Breakpoints
 
