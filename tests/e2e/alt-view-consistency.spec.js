@@ -495,17 +495,6 @@ function surfaces(page) {
       },
     },
     {
-      name: 'the Actions drawer open',
-      act: async () => {
-        await page.locator('#actionsDrawerToggle').click();
-        await page.waitForTimeout(600);
-      },
-      after: async () => {
-        await page.locator('#actionsDrawerToggle').click();
-        await page.waitForTimeout(400);
-      },
-    },
-    {
       name: 'Preferences',
       root: DIALOG,
       act: async () => {

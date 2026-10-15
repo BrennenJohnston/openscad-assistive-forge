@@ -4076,6 +4076,22 @@ async function initApp() {
           : 'Open a file first',
         handler: () => void _saveProjectCopy(),
       },
+      // Forge-only, like Export Quality; and a Simplified view hides it
+      // unless the person chose to show it there.
+      ...(document.body.dataset.uiMode !== 'classic' &&
+      getUIModeController().isFeatureShown('publish')
+        ? [
+            {
+              type: 'action',
+              label: 'Publish\u2026',
+              enabled: hasFile,
+              tooltip: hasFile
+                ? 'A manifest to share this project from your own hosting'
+                : 'Open a file first',
+              handler: () => openPublishDialog(),
+            },
+          ]
+        : []),
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
       // The export-quality mode: this list is the setting's one home.
@@ -4456,7 +4472,7 @@ async function initApp() {
               if (spoken[name]) announceImmediate(spoken[name]);
               return stored;
             },
-            getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
+            getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? false,
             onZoomToCursorChange: (enabled) => {
               previewManager?.toggleZoomToCursor(enabled);
               announceImmediate(
@@ -4668,6 +4684,19 @@ async function initApp() {
         shortcutAction: 'flushCaches',
         handler: () => designPanelController.flushCaches(),
       },
+      // Forge-only: Classic's Design menu keeps its upstream shape.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            { type: 'separator' },
+            {
+              type: 'action',
+              label: 'Open a drawing in the editor\u2026',
+              tooltip:
+                'An SVG drawing or a photo, opened in the drawing editor',
+              handler: () => openDrawingPicker(),
+            },
+          ]
+        : []),
     ];
   });
 
@@ -4789,6 +4818,25 @@ async function initApp() {
                 const bar = document.getElementById('previewStatusBar');
                 if (!bar) return;
                 setPreviewStatusBarShown(bar.classList.contains('user-hidden'));
+              },
+            },
+            // Mirrors the Auto-rotate switch in Preview Settings & Info, which
+            // owns the state; the item flips the switch so both stay one.
+            {
+              type: 'toggle',
+              label: 'Auto-rotate',
+              checked: Boolean(
+                document.getElementById('autoRotateSetting')?.checked
+              ),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                const toggle = document.getElementById('autoRotateSetting');
+                if (!toggle) return;
+                toggle.checked = !toggle.checked;
+                toggle.dispatchEvent(new Event('change'));
               },
             },
           ]
@@ -11725,86 +11773,6 @@ if (rounded) {
     // On a phone the bar is fixed over the page; leave it its real height.
     reserveSpaceForActionsBar(document.getElementById('actionsBar'));
 
-    // Initialize actions drawer toggle
-    const initActionsDrawer = () => {
-      const toggleBtn = document.getElementById('actionsDrawerToggle');
-      const drawer = document.getElementById('actionsDrawer');
-      const STORAGE_KEY = 'openscad-drawer-actions-state';
-
-      if (!toggleBtn || !drawer) return;
-
-      // Load saved state (default collapsed)
-      const loadState = () => safeGetItem(STORAGE_KEY) === 'expanded';
-
-      // Save state
-      const saveState = (isExpanded) => {
-        safeSetItem(STORAGE_KEY, isExpanded ? 'expanded' : 'collapsed');
-      };
-
-      // Set initial state
-      const shouldExpand = loadState();
-      if (shouldExpand) {
-        drawer.classList.remove('collapsed');
-        toggleBtn.setAttribute('aria-expanded', 'true');
-        toggleBtn.setAttribute('aria-label', 'Collapse actions menu');
-      } else {
-        drawer.classList.add('collapsed');
-        toggleBtn.setAttribute('aria-expanded', 'false');
-        toggleBtn.setAttribute('aria-label', 'Expand actions menu');
-      }
-
-      // Toggle handler
-      toggleBtn.addEventListener('click', () => {
-        const isExpanded = !drawer.classList.contains('collapsed');
-
-        if (isExpanded) {
-          // Collapse drawer
-          drawer.classList.add('collapsed');
-          toggleBtn.setAttribute('aria-expanded', 'false');
-          toggleBtn.setAttribute('aria-label', 'Expand actions menu');
-          saveState(false);
-        } else {
-          // Mobile portrait: close camera drawer first (mutual exclusion)
-          const cameraDrawer = document.getElementById('cameraDrawer');
-          const cameraToggle = document.getElementById('cameraDrawerToggle');
-          if (cameraDrawer && !cameraDrawer.classList.contains('collapsed')) {
-            cameraDrawer.classList.add('collapsed');
-            if (cameraToggle) {
-              cameraToggle.setAttribute('aria-expanded', 'false');
-              cameraToggle.setAttribute('aria-label', 'Expand camera controls');
-            }
-            // Remove preview panel camera drawer class
-            const previewPanel = document.querySelector('.preview-panel');
-            if (previewPanel) {
-              previewPanel.classList.remove('camera-drawer-open');
-            }
-          }
-
-          // Expand drawer
-          drawer.classList.remove('collapsed');
-          toggleBtn.setAttribute('aria-expanded', 'true');
-          toggleBtn.setAttribute('aria-label', 'Collapse actions menu');
-          saveState(true);
-        }
-
-        // Retain focus on toggle button
-        toggleBtn.focus();
-      });
-
-      // On mobile, collapse drawer automatically
-      window.addEventListener('resize', () => {
-        const isMobile = window.innerWidth < 768;
-        if (isMobile && !drawer.classList.contains('collapsed')) {
-          drawer.classList.add('collapsed');
-          toggleBtn.setAttribute('aria-expanded', 'false');
-          toggleBtn.setAttribute('aria-label', 'Expand actions menu');
-          saveState(false);
-        }
-      });
-    };
-
-    initActionsDrawer();
-
     // Collapse details sections on mobile by default
     const initMobileDetailsCollapse = () => {
       if (window.innerWidth >= 768) return;
@@ -12601,7 +12569,6 @@ if (rounded) {
 
   // ========== Publish project ==========
 
-  const publishProjectBtn = document.getElementById('publishProjectBtn');
   const publishProjectModal = document.getElementById('publishProjectModal');
   const publishModalClose = document.getElementById('publishModalClose');
   const publishModalOverlay = document.getElementById('publishModalOverlay');
@@ -12653,8 +12620,12 @@ if (rounded) {
   const editDrawingSpotlightBtn = document.getElementById(
     'editDrawingSpotlightBtn'
   );
-  const editDrawingActionBtn = document.getElementById('editDrawingActionBtn');
   let svgEditEntry = null;
+
+  /** The drawing editor's file picker: the Main Page's spotlight and Design > Open a drawing in the editor. */
+  function openDrawingPicker() {
+    svgEditFileInput?.click();
+  }
 
   async function getSvgEditEntry() {
     if (svgEditEntry) return svgEditEntry;
@@ -12739,12 +12710,8 @@ if (rounded) {
     // this listener before it is handed to the input.
     document.body.dataset.drawingDoorReady = '1';
 
-    const openPicker = () => svgEditFileInput.click();
     if (editDrawingSpotlightBtn) {
-      editDrawingSpotlightBtn.addEventListener('click', openPicker);
-    }
-    if (editDrawingActionBtn) {
-      editDrawingActionBtn.addEventListener('click', openPicker);
+      editDrawingSpotlightBtn.addEventListener('click', openDrawingPicker);
     }
   }
 
@@ -12852,53 +12819,55 @@ if (rounded) {
     });
   }
 
-  if (publishProjectBtn && publishProjectModal) {
-    publishProjectBtn.addEventListener('click', () => {
-      const state = stateManager.getState();
-      if (!state.uploadedFile) {
-        showErrorToast({
-          title: 'No File Loaded',
-          message: 'Upload a .scad or .zip file first.',
-        });
-        return;
-      }
+  /** File > Publish: the manifest dialog for the loaded project. */
+  function openPublishDialog() {
+    if (!publishProjectModal) return;
+    const state = stateManager.getState();
+    if (!state.uploadedFile) {
+      showErrorToast({
+        title: 'No File Loaded',
+        message: 'Upload a .scad or .zip file first.',
+      });
+      return;
+    }
 
-      const manifest = generateManifestFromProject();
+    const manifest = generateManifestFromProject();
 
-      // Check the emitted manifest against the same validator the loader runs,
-      // so the dialog can never hand out a manifest its own loader refuses.
-      const validation = validateManifest(manifest);
-      if (!validation.valid) {
-        showErrorToast({
-          title: 'Manifest Not Generated',
-          message:
-            `This project produced a manifest the loader would refuse: ` +
-            `${validation.errors.join(' ')} Nothing was copied. Please report ` +
-            `this so it can be fixed.`,
-        });
-        return;
-      }
+    // Check the emitted manifest against the same validator the loader runs,
+    // so the dialog can never hand out a manifest its own loader refuses.
+    const validation = validateManifest(manifest);
+    if (!validation.valid) {
+      showErrorToast({
+        title: 'Manifest Not Generated',
+        message:
+          `This project produced a manifest the loader would refuse: ` +
+          `${validation.errors.join(' ')} Nothing was copied. Please report ` +
+          `this so it can be fixed.`,
+      });
+      return;
+    }
 
-      const manifestJson = JSON.stringify(manifest, null, 2);
+    const manifestJson = JSON.stringify(manifest, null, 2);
 
-      if (publishManifestOutput) {
-        publishManifestOutput.textContent = manifestJson;
-      }
+    if (publishManifestOutput) {
+      publishManifestOutput.textContent = manifestJson;
+    }
 
-      // Reset the shareable link section
-      if (publishShareLinkContainer) {
-        publishShareLinkContainer.classList.add('hidden');
-      }
-      if (publishRepoUrl) {
-        publishRepoUrl.value = '';
-      }
-      if (publishIncludeSettings) {
-        publishIncludeSettings.checked = false;
-      }
+    // Reset the shareable link section
+    if (publishShareLinkContainer) {
+      publishShareLinkContainer.classList.add('hidden');
+    }
+    if (publishRepoUrl) {
+      publishRepoUrl.value = '';
+    }
+    if (publishIncludeSettings) {
+      publishIncludeSettings.checked = false;
+    }
 
-      openModal(publishProjectModal);
-    });
+    openModal(publishProjectModal);
+  }
 
+  if (publishProjectModal) {
     // Close handlers
     if (publishModalClose) {
       publishModalClose.addEventListener('click', () =>

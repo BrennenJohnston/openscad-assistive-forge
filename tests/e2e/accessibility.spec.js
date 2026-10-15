@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { hasWebGL } from './helpers/webgl.js';
 import path from 'path';
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
@@ -1380,7 +1381,7 @@ test.describe('Screen Reader Support', () => {
 
     // Named for the step, not its number: the intro tour gains and loses
     // steps.
-    test('should spotlight Actions drawer toggle on the Actions menu step (mobile)', async ({
+    test('should spotlight where Copy Link lives on the Sharing and drawings step (mobile)', async ({
       page,
     }) => {
       // Skip in CI - requires WASM for example loading
@@ -1484,17 +1485,27 @@ test.describe('Screen Reader Support', () => {
       await expect(nextBtn).not.toBeDisabled({ timeout: 20000 });
 
       await nextTo(page, 'Preview Settings & Info');
-      await nextTo(page, 'Actions menu');
+      await nextTo(page, 'Sharing and drawings');
       await bringTourBack(page);
 
-      const actionsToggle = page.locator('#actionsDrawerToggle');
+      // The step points at the presets, where Copy Link sits, or on a phone
+      // with the Customizer closed at the Customizer's own toggle.
+      // isVisible() counts the closed sheet's off-screen presets as visible,
+      // so the choice reads where they are, as the tour does.
+      const presetsOnScreen = await presets.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.right > 0 && r.left < innerWidth;
+      });
+      const actionsToggle = presetsOnScreen
+        ? presets
+        : page.locator('#mobileDrawerToggle');
       const previewToggle = page.locator('#previewDrawerToggle');
       const cutout = page.locator('.tutorial-spotlight-cutout');
 
       await expect(actionsToggle).toBeVisible();
       await expect(previewToggle).toBeVisible();
 
-      // The cutout should contain the Actions toggle center point, not the Preview toggle center.
+      // The cutout should contain the target's center point, not the Preview toggle center.
       // Note: boundingBox() for an SVG rect inside a mask can be unreliable in Playwright,
       // so we assert using the rect's x/y/width/height attributes (the values our JS sets).
       const [actionsBox, previewBox, cutoutAttrs] = await Promise.all([
@@ -3142,7 +3153,6 @@ test.describe('UI Uniformity Regression', () => {
         'collapseParamPanelBtn',
         'cameraPanelToggle',
         'previewDrawerToggle',
-        'actionsDrawerToggle',
       ];
       return ids.map((id) => {
         const el = document.getElementById(id);
@@ -3362,6 +3372,76 @@ test.describe('Axe-Core Scans for Missing Views', () => {
       .withRules(['label-content-name-mismatch'])
       .analyze();
     expectOnlyAllowedViolations(inFolder);
+  });
+
+  // The camera panel's buttons are pictures with names: a face cube, a
+  // projection box, magnifiers. A picture that reached assistive tech, or a
+  // button left without its name, would leave only an unnamed graphic.
+  test('camera panel icon buttons keep their names in both projections', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      );
+    });
+    await page.goto('/?example=simple-box');
+    await waitForWasmReady(page);
+    await waitForModelLoaded(page, { expandGroups: false });
+
+    const toggle = page.locator('#cameraPanelToggle');
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.focus();
+      await page.keyboard.press('Enter');
+    }
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // Let the panel's width transition end before scanning.
+    await page.waitForTimeout(700);
+
+    const unhidden = await page.evaluate(() =>
+      [...document.querySelectorAll('#cameraPanelBody svg')]
+        .filter((svg) => !svg.closest('[aria-hidden="true"]'))
+        .map((svg) => {
+          const button = svg.closest('button');
+          return button?.id || button?.dataset.view || svg.outerHTML;
+        })
+    );
+    expect(unhidden, 'pictures that reach assistive tech').toEqual([]);
+
+    // Without WebGL there is no camera to switch, so the button keeps its
+    // perspective picture; the scan then covers the one state there is.
+    const projections = (await hasWebGL(page))
+      ? ['perspective', 'orthographic']
+      : ['perspective'];
+    for (const projection of projections) {
+      const button = page.locator('#projectionToggle');
+      if ((await button.getAttribute('data-projection')) !== projection) {
+        await button.click();
+      }
+      await expect(button).toHaveAttribute('data-projection', projection);
+      // withTags() and withRules() each replace the scan's one rule filter,
+      // so a rule the tags leave out is switched on through the options.
+      const results = await new AxeBuilder({ page })
+        .include('#cameraPanel')
+        .options({
+          rules: { 'label-content-name-mismatch': { enabled: true } },
+        })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      // A rule with nothing to check (no control with visible words, say)
+      // still ran: axe lists it as inapplicable.
+      const ran = [
+        ...results.passes,
+        ...results.violations,
+        ...results.incomplete,
+        ...results.inapplicable,
+      ].map((rule) => rule.id);
+      expect(ran).toEqual(
+        expect.arrayContaining(['button-name', 'label-content-name-mismatch'])
+      );
+      expectOnlyAllowedViolations(results);
+    }
   });
 
   test('should run axe scan in error state after invalid .scad', async ({

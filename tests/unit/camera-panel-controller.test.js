@@ -261,4 +261,44 @@ describe('Camera Panel Controller', () => {
 
     rafSpy.mockRestore()
   })
+  // The projection can change from the View menu, the P key or Classic, not
+  // only from this button; the button must say the projection that is showing.
+  it('keeps the projection button truthful whatever changed the projection', () => {
+    setupDom()
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<button id="projectionToggle" data-projection="perspective" aria-pressed="false" title="Switch to Orthographic (P)"></button>'
+    )
+    initCameraPanelController()
+    const btn = document.getElementById('projectionToggle')
+
+    document.dispatchEvent(
+      new CustomEvent('preview-projection-change', { detail: { mode: 'orthographic' } })
+    )
+    expect(btn.dataset.projection).toBe('orthographic')
+    expect(btn.getAttribute('aria-pressed')).toBe('true')
+    expect(btn.title).toBe('Switch to Perspective (P)')
+
+    document.dispatchEvent(
+      new CustomEvent('preview-projection-change', { detail: { mode: 'perspective' } })
+    )
+    expect(btn.dataset.projection).toBe('perspective')
+    expect(btn.getAttribute('aria-pressed')).toBe('false')
+    expect(btn.title).toBe('Switch to Orthographic (P)')
+  })
+
+  it('shows the new projection on the button it was changed with', () => {
+    setupDom()
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<button id="projectionToggle" data-projection="perspective" aria-pressed="false"></button>'
+    )
+    const previewManager = { toggleProjection: vi.fn(() => 'orthographic') }
+    initCameraPanelController({ previewManager })
+    const btn = document.getElementById('projectionToggle')
+    btn.click()
+    expect(previewManager.toggleProjection).toHaveBeenCalled()
+    expect(btn.dataset.projection).toBe('orthographic')
+    expect(btn.getAttribute('aria-pressed')).toBe('true')
+  })
 })

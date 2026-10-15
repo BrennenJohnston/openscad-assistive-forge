@@ -151,27 +151,6 @@ test.describe('Mobile Drawer', () => {
   });
 
   // Keyboard shortcuts popover is part of the desktop Camera panel (not the mobile camera drawer).
-
-  test('actions drawer does not block primary action (mobile)', async ({ page }) => {
-    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
-    await loadSampleFile(page);
-
-    // Expand Actions drawer
-    await page.locator('#actionsDrawerToggle').click();
-    await expect(page.locator('#actionsDrawer')).not.toHaveClass(/collapsed/);
-
-    // The primary action should remain clickable (not covered by the expanded drawer)
-    const primaryIsOnTop = await page.evaluate(() => {
-      const btn = document.getElementById('primaryActionBtn');
-      if (!btn) return false;
-      const r = btn.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      const topEl = document.elementFromPoint(x, y);
-      return !!topEl && (btn === topEl || btn.contains(topEl));
-    });
-    expect(primaryIsOnTop).toBe(true);
-  });
 });
 
 test.describe('Desktop Layout', () => {
@@ -255,9 +234,8 @@ test.describe('Desktop Layout', () => {
     expect(Math.abs(moved - parentWidth * 0.1)).toBeLessThanOrEqual(3);
   });
 
-  test('keyboard shortcuts help shows as icon-only popover on short height', async ({ page }) => {
+  test('keyboard shortcuts pop-out opens above its button on short height', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
-    // Short height triggers compact icon-only mode via CSS (max-height: 500px).
     await page.setViewportSize({ width: 1280, height: 450 });
     await loadSampleFile(page);
 
@@ -265,17 +243,21 @@ test.describe('Desktop Layout', () => {
     await page.locator('#cameraPanelToggle').click();
     await expect(page.locator('#cameraPanel')).not.toHaveClass(/collapsed/);
 
-    const shortcutsHelp = page.locator('.camera-shortcuts-help');
-    const shortcutsLabel = page.locator('.camera-shortcuts-label');
-    const shortcutsList = page.locator('.camera-shortcuts-list');
+    const button = page.locator('#cameraShortcutsBtn');
+    const popout = page.locator('#cameraShortcutsPanel');
+    await button.scrollIntoViewIfNeeded();
+    await expect(popout).toBeHidden();
 
-    await expect(shortcutsHelp).toBeVisible();
-    await expect(shortcutsLabel).toHaveCSS('position', 'absolute');
-    await expect(shortcutsList).not.toBeVisible();
-
-    await shortcutsHelp.locator('summary').scrollIntoViewIfNeeded();
-    await shortcutsHelp.locator('summary').click();
-    await expect(shortcutsList).toBeVisible();
+    await button.click();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(popout).toBeVisible();
+    // Measured, not trusted to toBeVisible(): the whole pop-out sits above
+    // its button and inside the window.
+    const b = await button.boundingBox();
+    const p = await popout.boundingBox();
+    expect(b.y + b.height).toBeLessThanOrEqual(450);
+    expect(p.y + p.height).toBeLessThanOrEqual(b.y + 1);
+    expect(p.y).toBeGreaterThanOrEqual(0);
   });
 
   test('all drawer toggles meet 44px minimum touch target', async ({ page }) => {
@@ -347,26 +329,5 @@ test.describe('Desktop Layout', () => {
       // Drawer should be closed
       await expect(mobileToggle).toHaveAttribute('aria-expanded', 'false');
     }
-  });
-
-  test('actions drawer does not block primary action (desktop)', async ({ page }) => {
-    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
-    await loadSampleFile(page);
-
-    // Expand Actions drawer
-    await page.locator('#actionsDrawerToggle').click();
-    await expect(page.locator('#actionsDrawer')).not.toHaveClass(/collapsed/);
-
-    // The primary action should remain clickable (not covered by the expanded drawer)
-    const primaryIsOnTop = await page.evaluate(() => {
-      const btn = document.getElementById('primaryActionBtn');
-      if (!btn) return false;
-      const r = btn.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      const topEl = document.elementFromPoint(x, y);
-      return !!topEl && (btn === topEl || btn.contains(topEl));
-    });
-    expect(primaryIsOnTop).toBe(true);
   });
 });

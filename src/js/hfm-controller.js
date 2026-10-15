@@ -415,12 +415,10 @@ function _buildHfmSliderControls({
     });
   };
 
-  const panelBody = document.getElementById('cameraPanelBody');
-  const panelInsertBefore =
-    panelBody?.querySelector('.camera-shortcuts-help') ?? null;
+  // The camera panel keeps an area of its own under its controls for these.
   buildSection({
-    container: panelBody,
-    insertBefore: panelInsertBefore,
+    container: document.getElementById('cameraPanelExtras'),
+    insertBefore: null,
     sectionClass: `camera-control-section hfm-slider-section ${idBase}-section`,
     titleClass: 'camera-control-section-title',
     inputId: idBase,
@@ -1043,8 +1041,7 @@ function _injectAltToggle() {
 
   const panToggleBtn = document.createElement('button');
   panToggleBtn.id = '_hfmPanAdjust';
-  panToggleBtn.className =
-    'btn btn-sm btn-icon camera-btn alt-pan-toggle dpad-center';
+  panToggleBtn.className = 'btn btn-sm btn-icon camera-btn alt-pan-toggle';
   panToggleBtn.setAttribute('aria-pressed', 'false');
   panToggleBtn.setAttribute('aria-label', _HFM_PAN_ADJUST_NAME);
   panToggleBtn.setAttribute('title', _HFM_PAN_ADJUST_NAME);
@@ -1058,12 +1055,9 @@ function _injectAltToggle() {
     </svg>
   `;
 
-  const desktopPanDpad = document
-    .getElementById('cameraPanUp')
-    ?.closest('.camera-control-dpad');
-  if (desktopPanDpad) {
-    desktopPanDpad.appendChild(panToggleBtn);
-  }
+  // Beside the projection button in the camera panel's tools row: the Pan
+  // D-pad's center belongs to View All.
+  document.getElementById('projectionToggle')?.after(panToggleBtn);
 
   const mobilePanToggleBtn = panToggleBtn.cloneNode(true);
   mobilePanToggleBtn.id = '_hfmPanAdjustMobile';

@@ -265,10 +265,10 @@ for (const vp of VIEWPORTS) {
         expect(btnBox.x + btnBox.width).toBeLessThanOrEqual(vp.width + 1)
       }
 
-      const actionsToggle = page.locator('#actionsDrawerToggle')
-      if (await actionsToggle.isVisible()) {
-        const aBox = await actionsToggle.boundingBox()
-        expect(aBox.x + aBox.width).toBeLessThanOrEqual(vp.width + 1)
+      const cameraToggle = page.locator('#cameraDrawerToggle')
+      if (await cameraToggle.isVisible()) {
+        const cBox = await cameraToggle.boundingBox()
+        expect(cBox.x + cBox.width).toBeLessThanOrEqual(vp.width + 1)
       }
 
       await checkNoHorizontalOverflow(page)

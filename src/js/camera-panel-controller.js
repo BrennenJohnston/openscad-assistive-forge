@@ -34,6 +34,7 @@ export function initCameraPanelController(options = {}) {
   }
 
   let isCollapsed = loadCollapsedState();
+  let shortcutsPopout = null;
 
   /**
    * Load collapsed state from localStorage (defaults to collapsed)
@@ -83,6 +84,7 @@ export function initCameraPanelController(options = {}) {
   function collapse() {
     if (isCollapsed) return;
     isCollapsed = true;
+    shortcutsPopout?.close();
     panel.classList.add('collapsed');
     updateToggleAria(true);
     saveCollapsedState(true);
@@ -252,76 +254,32 @@ export function initCameraPanelController(options = {}) {
         }
       });
 
-    // Projection toggle button (Perspective/Orthographic)
-    const projToggle = document.getElementById('projectionToggle');
-    projToggle?.addEventListener('click', () => {
-      const pm = getPM();
-      if (pm?.toggleProjection) {
-        const newMode = pm.toggleProjection();
-        const isPerspective = newMode === 'perspective';
-        projToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        projToggle.title = isPerspective
-          ? 'Switch to Orthographic (P)'
-          : 'Switch to Perspective (P)';
-        // Update button label
-        const labelSpan = projToggle.querySelector('span');
-        if (labelSpan) {
-          labelSpan.textContent = isPerspective
-            ? 'Perspective'
-            : 'Orthographic';
-        }
-        // Sync mobile projection toggle
-        syncMobileProjectionToggle(newMode);
-      }
-    });
-
-    // Mobile projection toggle button
-    const mobileProjToggle = document.getElementById('mobileProjectionToggle');
-    mobileProjToggle?.addEventListener('click', () => {
-      const pm = getPM();
-      if (pm?.toggleProjection) {
-        const newMode = pm.toggleProjection();
-        const isPerspective = newMode === 'perspective';
-        mobileProjToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        mobileProjToggle.title = isPerspective
-          ? 'Switch to Orthographic'
-          : 'Switch to Perspective';
-        // Update button label
-        const labelSpan = mobileProjToggle.querySelector('span');
-        if (labelSpan) {
-          labelSpan.textContent = isPerspective
-            ? 'Perspective'
-            : 'Orthographic';
-        }
-        // Sync desktop projection toggle
-        syncDesktopProjectionToggle(newMode);
-      }
-    });
-
     /**
-     * Sync mobile projection toggle button state with desktop
+     * Make both projection buttons say the projection that is showing: the
+     * camera panel's shows its icon (data-projection), and each one's pressed
+     * state and title follow. Called after a press of either button and on
+     * every projection change, whichever control made it (the View menu, the
+     * P key, Classic's buttons).
      * @param {string} mode - 'perspective' or 'orthographic'
      */
-    function syncMobileProjectionToggle(mode) {
-      const mobileProjToggle = document.getElementById(
-        'mobileProjectionToggle'
-      );
-      if (mobileProjToggle) {
-        const isPerspective = mode === 'perspective';
-        mobileProjToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        mobileProjToggle.title = isPerspective
+    function syncProjectionToggles(mode) {
+      if (mode !== 'perspective' && mode !== 'orthographic') return;
+      const isPerspective = mode === 'perspective';
+      const desktop = document.getElementById('projectionToggle');
+      if (desktop) {
+        desktop.dataset.projection = mode;
+        desktop.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        desktop.title = isPerspective
+          ? 'Switch to Orthographic (P)'
+          : 'Switch to Perspective (P)';
+      }
+      const mobile = document.getElementById('mobileProjectionToggle');
+      if (mobile) {
+        mobile.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        mobile.title = isPerspective
           ? 'Switch to Orthographic'
           : 'Switch to Perspective';
-        const labelSpan = mobileProjToggle.querySelector('span');
+        const labelSpan = mobile.querySelector('span');
         if (labelSpan) {
           labelSpan.textContent = isPerspective
             ? 'Perspective'
@@ -330,28 +288,17 @@ export function initCameraPanelController(options = {}) {
       }
     }
 
-    /**
-     * Sync desktop projection toggle button state with mobile
-     * @param {string} mode - 'perspective' or 'orthographic'
-     */
-    function syncDesktopProjectionToggle(mode) {
-      const projToggle = document.getElementById('projectionToggle');
-      if (projToggle) {
-        const isPerspective = mode === 'perspective';
-        projToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        projToggle.title = isPerspective
-          ? 'Switch to Orthographic (P)'
-          : 'Switch to Perspective (P)';
-        const labelSpan = projToggle.querySelector('span');
-        if (labelSpan) {
-          labelSpan.textContent = isPerspective
-            ? 'Perspective'
-            : 'Orthographic';
+    document.addEventListener('preview-projection-change', (event) => {
+      syncProjectionToggles(event.detail?.mode);
+    });
+
+    for (const id of ['projectionToggle', 'mobileProjectionToggle']) {
+      document.getElementById(id)?.addEventListener('click', () => {
+        const pm = getPM();
+        if (pm?.toggleProjection) {
+          syncProjectionToggles(pm.toggleProjection());
         }
-      }
+      });
     }
 
     // Mobile rotation buttons
@@ -531,6 +478,7 @@ export function initCameraPanelController(options = {}) {
 
   // Setup camera control buttons (desktop and mobile)
   setupCameraControlButtons();
+  shortcutsPopout = initCameraShortcutsPopout();
 
   // Initialize mobile camera drawer
   initMobileCameraDrawer();
@@ -548,6 +496,63 @@ export function initCameraPanelController(options = {}) {
       options.previewManager = pm;
     },
   };
+}
+
+/**
+ * The camera panel's keyboard shortcuts pop-out. Its button opens and closes
+ * it; Escape on the button or inside the pop-out closes it and leaves focus on
+ * the button; a press anywhere outside the two closes it.
+ * @returns {{close: Function}|null}
+ */
+function initCameraShortcutsPopout() {
+  const button = document.getElementById('cameraShortcutsBtn');
+  const popout = document.getElementById('cameraShortcutsPanel');
+  if (!button || !popout) return null;
+
+  const isOpen = () => button.getAttribute('aria-expanded') === 'true';
+
+  function onPointerDown(event) {
+    if (button.contains(event.target) || popout.contains(event.target)) {
+      return;
+    }
+    close();
+  }
+
+  function open() {
+    if (isOpen()) return;
+    popout.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', onPointerDown, true);
+  }
+
+  function close({ focusButton = false } = {}) {
+    if (!isOpen()) return;
+    popout.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', onPointerDown, true);
+    if (focusButton) button.focus();
+  }
+
+  button.addEventListener('click', () => {
+    if (isOpen()) {
+      close();
+    } else {
+      open();
+    }
+  });
+
+  for (const el of [button, popout]) {
+    el.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !isOpen()) return;
+      // Spent here, so a page-wide Escape (leaving focus mode) does not fire
+      // on the same press.
+      event.preventDefault();
+      event.stopPropagation();
+      close({ focusButton: true });
+    });
+  }
+
+  return { close };
 }
 
 /**
@@ -607,17 +612,6 @@ function initMobileCameraDrawer() {
    */
   function expandDrawer() {
     if (!isMobileCollapsed) return;
-
-    // Mobile portrait: close actions drawer first (mutual exclusion)
-    const actionsDrawer = document.getElementById('actionsDrawer');
-    const actionsToggle = document.getElementById('actionsDrawerToggle');
-    if (actionsDrawer && !actionsDrawer.classList.contains('collapsed')) {
-      actionsDrawer.classList.add('collapsed');
-      if (actionsToggle) {
-        actionsToggle.setAttribute('aria-expanded', 'false');
-        actionsToggle.setAttribute('aria-label', 'Expand actions menu');
-      }
-    }
 
     isMobileCollapsed = false;
     drawer.classList.remove('collapsed');

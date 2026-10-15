@@ -1158,17 +1158,16 @@ const TUTORIALS = {
         position: 'left',
       },
       {
-        title: 'Actions menu',
+        title: 'Sharing and drawings',
         content: `
-          <p>Open the <strong>Actions</strong> drawer for extra tools:</p>
+          <p><strong>Copy Link</strong> sits with the presets: it copies a link that opens this design with your settings.</p>
           <ul>
-            <li><strong>Copy Link</strong>: a link that opens this design with your settings</li>
-            <li><strong>Edit Drawing</strong>: open an SVG or a photo in the drawing editor</li>
-            <li><strong>Publish</strong> (Standard view): a manifest to share this project from your own hosting</li>
+            <li><strong>Publish</strong> (File menu): a manifest to share this project from your own hosting</li>
+            <li><strong>Open a drawing in the editor</strong> (Design menu): an SVG drawing or a photo, opened in the drawing editor</li>
           </ul>
-          <p class="tutorial-hint">On mobile it expands upward from the bottom bar. On desktop it opens from the Actions section next to the main button.</p>
+          <p class="tutorial-hint">The File and Design menus show in the Standard view. On a phone, the presets are in the Customizer.</p>
         `,
-        highlightSelector: '@actions-drawer-toggle',
+        highlightSelector: '@preset-controls, @mobile-drawer-toggle',
         position: 'auto',
       },
       {
@@ -1994,7 +1993,7 @@ const TUTORIALS = {
             <li>"Click Help"</li>
           </ul>
         `,
-        highlightSelector: '@actions-drawer-toggle, @primary-action',
+        highlightSelector: '@primary-action',
         position: 'top',
       },
       {

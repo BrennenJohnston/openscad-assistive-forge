@@ -56,9 +56,6 @@ test('each header control is named by its visible words, first', async ({
   await openBox(page);
   const mode = page.locator('#uiModeToggle');
   if ((await mode.getAttribute('aria-checked')) !== 'true') await mode.click();
-  await page.evaluate(() =>
-    document.getElementById('actionsDrawer')?.classList.remove('collapsed')
-  );
 
   for (const [selector, word] of [
     ['#clearFileBtn', 'Main Page'],
@@ -66,9 +63,7 @@ test('each header control is named by its visible words, first', async ({
     ['#contrastToggle', 'HC'],
     ['#focusModeBtn', 'Full Screen'],
     ['#featuresGuideBtn', 'Help'],
-    ['#publishProjectBtn', 'Publish'],
     ['#copySettingsLinkBtn', 'Copy Link'],
-    ['#editDrawingActionBtn', 'Edit Drawing'],
   ]) {
     const name = await nameOf(page, selector);
     expect(name, `${selector} is named "${name}"`).toMatch(

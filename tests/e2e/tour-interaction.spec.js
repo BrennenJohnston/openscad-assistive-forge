@@ -1232,7 +1232,7 @@ test.describe('Cards that stay readable', () => {
       // which is what makes the carried-over offset visible. Between two steps
       // where only the first overflows, the browser clamps the offset to 0 on
       // its own and the defect hides.
-      await stepBackTo(page, 'Actions menu');
+      await stepBackTo(page, 'Sharing and drawings');
 
       // Read to the bottom of one step...
       await page.evaluate(() => {

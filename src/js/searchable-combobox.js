@@ -179,16 +179,28 @@ export function initSearchableCombobox({
     return found ? found.label : '';
   }
 
-  // ── Position the fixed-position dropdown beneath the input ──────────────────
+  // ── Position the fixed-position dropdown beneath (or above) the input ───────
 
   function positionList() {
     const rect = inputWrap.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    // Near the window's bottom a list opened downward puts its options
+    // off-screen, out of a pointer's reach, so there it opens upward.
+    const above = spaceBelow < 120 && spaceAbove > spaceBelow;
     list.style.position = 'fixed';
-    list.style.top = `${rect.bottom}px`;
     list.style.left = `${rect.left}px`;
     list.style.width = `${rect.width}px`;
-    const spaceBelow = window.innerHeight - rect.bottom - 8;
-    list.style.maxHeight = `${Math.min(280, Math.max(120, spaceBelow))}px`;
+    if (above) {
+      list.style.top = 'auto';
+      list.style.bottom = `${window.innerHeight - rect.top}px`;
+      list.style.maxHeight = `${Math.min(280, spaceAbove)}px`;
+    } else {
+      list.style.bottom = 'auto';
+      list.style.top = `${rect.bottom}px`;
+      list.style.maxHeight = `${Math.min(280, Math.max(120, spaceBelow))}px`;
+    }
+    list.classList.toggle('is-above', above);
   }
 
   // ── Open / close ─────────────────────────────────────────────────────────────

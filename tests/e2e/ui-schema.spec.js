@@ -32,7 +32,6 @@ const TRAVEL = {
   '#collapseParamPanelBtn': 'right',
   '#cameraPanelToggle': 'left',
   '#previewDrawerToggle': 'down',
-  '#actionsDrawerToggle': 'up',
   '#echoDrawerToggle': 'up',
 };
 
@@ -51,7 +50,6 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
 const NOT_MET_YET = {
-  S5: 'The camera panel scrolls at 180 px wide',
   S7: "Menus open at the window's corner over a blurred page, with a title bar",
 };
 
@@ -415,6 +413,13 @@ for (const size of SIZES) {
         const wasOpen = (await page.evaluate(readToggle, '#cameraPanelToggle'))
           .expanded;
         if (!wasOpen) await press('#cameraPanelToggle');
+        const target = await page.evaluate(() =>
+          parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue(
+              '--size-touch-target'
+            )
+          )
+        );
         const sizes = await page.evaluate(() =>
           ['#cameraPanel', '#cameraPanelBody'].map((sel) => {
             const el = document.querySelector(sel);
@@ -424,7 +429,12 @@ for (const size of SIZES) {
                 const r = b.getBoundingClientRect();
                 return r.width > 0 && r.bottom > box.bottom + 0.5;
               })
-              .map((b) => b.id || b.textContent.trim().slice(0, 20));
+              .map(
+                (b) =>
+                  b.id ||
+                  b.getAttribute('aria-label') ||
+                  b.textContent.trim().slice(0, 20)
+              );
             return {
               sel,
               scrollWidth: el.scrollWidth,
@@ -442,7 +452,13 @@ for (const size of SIZES) {
               `S5: ${s.sel} scrolls sideways (${s.scrollWidth} px of content in ${s.clientWidth})`
             )
             .toBeLessThanOrEqual(s.clientWidth);
-          if (!look.altView) {
+          // The Alt View's sliders may sit below the fold, and so may the
+          // last rows wherever the targets are 44 px (high contrast, a touch
+          // screen, a browser that reports no mouse): the one column is then
+          // taller than a 720 px window holds.
+          const mayScrollDown =
+            look.altView || (target >= 44 && size.height < 935);
+          if (!mayScrollDown) {
             expect
               .soft(
                 s.scrollHeight,
@@ -539,3 +555,213 @@ for (const size of SIZES) {
     });
   }
 }
+
+/**
+ * The simple box open in Standard on a desktop window, in a look, with the
+ * camera panel as it starts (closed) or opened by its toggle.
+ */
+async function openDesktopCameraProject(page, look, { open }) {
+  await page.addInitScript((l) => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', l.theme);
+    if (l.highContrast) {
+      localStorage.setItem('openscad-forge-high-contrast', 'true');
+    }
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    );
+  }, look);
+  await page.goto('/?example=simple-box', { timeout: 60_000 });
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await page
+    .locator('.param-control')
+    .first()
+    .waitFor({ state: 'attached', timeout: 60_000 });
+  const notNow = page.locator('#saveProjectNotNow');
+  if (
+    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+      () => true,
+      () => false
+    )
+  ) {
+    await notNow.click();
+  }
+  const panelToggle = page.locator('#cameraPanelToggle');
+  if (open && (await panelToggle.getAttribute('aria-expanded')) !== 'true') {
+    await panelToggle.focus();
+    await page.keyboard.press('Enter');
+  }
+  await expect(panelToggle).toHaveAttribute(
+    'aria-expanded',
+    open ? 'true' : 'false'
+  );
+  await page.waitForTimeout(500);
+}
+
+// The desktop camera panel: closed, a strip with its toggle and title and
+// nothing else; open, one column: Rotate View above Pan View, then Zoom,
+// then the six standard views two to a row, then the tools row.
+for (const look of LOOKS.filter((l) => !l.altView)) {
+  test.describe(`The desktop camera panel, ${look.name}`, () => {
+    test.use({ viewport: { width: 1280, height: 720 } });
+
+    test('closed, it shows only its toggle and title', async ({ page }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openDesktopCameraProject(page, look, { open: false });
+      const shown = await page.evaluate(() => {
+        const panel = document.getElementById('cameraPanel');
+        return [...panel.querySelectorAll('button, h3, svg, dl')]
+          .filter((el) => !el.closest('.camera-panel-header'))
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          })
+          .map(
+            (el) =>
+              el.id ||
+              el.dataset.view ||
+              el.className.baseVal ||
+              el.className ||
+              el.tagName
+          );
+      });
+      expect(shown, 'controls showing in the closed panel').toEqual([]);
+    });
+
+    test('open, it is one column in the order Rotate, Pan, Zoom, Views, tools', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openDesktopCameraProject(page, look, { open: true });
+      const m = await page.evaluate(() => {
+        const box = (el) => el.getBoundingClientRect();
+        const q = (sel) => document.querySelector(`#cameraPanel ${sel}`);
+        const sections = [
+          '.camera-section-rotate',
+          '.camera-section-pan',
+          '.camera-section-zoom',
+          '.camera-section-views',
+          '.camera-section-tools',
+        ].map((sel) => {
+          const r = box(q(sel));
+          return { sel, top: r.top, bottom: r.bottom, left: r.left };
+        });
+        const views = [
+          ...document.querySelectorAll('#cameraPanel .camera-view-btn'),
+        ].map((b) => ({
+          view: b.dataset.view,
+          left: Math.round(box(b).left),
+          top: Math.round(box(b).top),
+        }));
+        return {
+          width: box(document.getElementById('cameraPanel')).width,
+          sections,
+          views,
+        };
+      });
+      for (let i = 1; i < m.sections.length; i++) {
+        expect
+          .soft(
+            m.sections[i].top,
+            `${m.sections[i].sel} starts below ${m.sections[i - 1].sel}`
+          )
+          .toBeGreaterThanOrEqual(m.sections[i - 1].bottom - 1);
+      }
+      expect(m.views.map((v) => v.view)).toEqual([
+        'top',
+        'front',
+        'right',
+        'left',
+        'back',
+        'bottom',
+      ]);
+      expect(new Set(m.views.map((v) => v.left)).size, 'view columns').toBe(2);
+      expect(new Set(m.views.map((v) => v.top)).size, 'view rows').toBe(3);
+      expect(Math.round(m.width), 'the open panel width').toBe(180);
+    });
+  });
+}
+
+// The camera panel's keyboard shortcuts open as a pop-out above their button,
+// inside the panel, and close the three ways a pop-out closes: its button,
+// Escape, and a press anywhere else.
+test.describe('The camera panel keyboard shortcuts pop-out', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+
+  test('opens above its button and closes on the button, Escape and a press elsewhere', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await openDesktopCameraProject(page, LOOKS[0], { open: true });
+
+    const button = page.locator('#cameraShortcutsBtn');
+    const popout = page.locator('#cameraShortcutsPanel');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(button).toHaveAttribute(
+      'aria-controls',
+      'cameraShortcutsPanel'
+    );
+    await expect(popout).toBeHidden();
+
+    // Opened by the button: above it, inside the camera panel, the button
+    // drawn pressed. Hover paints the same accent, so the pointer moves off
+    // and the color transition ends before the colors are read.
+    await button.click();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(popout).toBeVisible();
+    await page.mouse.move(640, 400);
+    await button.evaluate((el) =>
+      Promise.all(el.getAnimations().map((a) => a.finished))
+    );
+    const boxes = await page.evaluate(() => {
+      const box = (id) => document.getElementById(id).getBoundingClientRect();
+      const b = document.getElementById('cameraShortcutsBtn');
+      const probe = document.createElement('span');
+      probe.style.cssText =
+        'position:absolute;width:1px;height:1px;background:var(--color-accent);color:var(--color-accent-text)';
+      b.parentElement.appendChild(probe);
+      const accent = getComputedStyle(probe).backgroundColor;
+      const accentText = getComputedStyle(probe).color;
+      probe.remove();
+      return {
+        button: box('cameraShortcutsBtn'),
+        popout: box('cameraShortcutsPanel'),
+        panel: box('cameraPanel'),
+        background: getComputedStyle(b).backgroundColor,
+        color: getComputedStyle(b).color,
+        accent,
+        accentText,
+      };
+    });
+    expect(boxes.popout.bottom).toBeLessThanOrEqual(boxes.button.top + 1);
+    expect(boxes.popout.left).toBeGreaterThanOrEqual(boxes.panel.left - 1);
+    expect(boxes.popout.right).toBeLessThanOrEqual(boxes.panel.right + 1);
+    expect(boxes.background).toBe(boxes.accent);
+    expect(boxes.color).toBe(boxes.accentText);
+
+    // Escape closes it and leaves focus on the button.
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(popout).toBeHidden();
+    await expect(button).toBeFocused();
+
+    // The keyboard opens it, and the button closes it.
+    await page.keyboard.press('Enter');
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Enter');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+
+    // A press anywhere else closes it: here the panel's own title, which the
+    // pop-out never covers.
+    await button.click();
+    await expect(popout).toBeVisible();
+    await page.locator('#camera-controls-heading').click();
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(popout).toBeHidden();
+  });
+});

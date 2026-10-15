@@ -314,8 +314,8 @@ export const MEASURED_SECONDS = {
   // Measured at five cases (30.0); a sixth, at 1280 x 600, scales it to 36.
   'menu-reach.spec.js': 36.0,
   'project-switch.spec.js': 52.2,
-  // Four cases, 21.1 s locally; booked at 25 until a CI run measures it.
-  'actions-drawer.spec.js': 25.0,
+  // Four cases, 22.2 s locally; booked at 25 until a CI run measures it.
+  'project-share.spec.js': 25.0,
   // Two cases, 5.8 s locally with a warm engine; booked at 20 for the cold
   // engine load each CI case pays.
   'engine-recovery.spec.js': 20.0,
@@ -366,9 +366,9 @@ export const MEASURED_SECONDS = {
   // booked at 30.
   'recovery-mode.spec.js': 30.0,
   // Eight groups (two window sizes, four looks), each loading the charm once
-  // for its seven cases: 157 s locally (each case that passes opens and
-  // closes every drawer); booked at 160.
-  'ui-schema.spec.js': 160.0,
+  // for its seven cases, then seven camera panel cases that each load the
+  // simple box: 234 s locally; booked at 240.
+  'ui-schema.spec.js': 240.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

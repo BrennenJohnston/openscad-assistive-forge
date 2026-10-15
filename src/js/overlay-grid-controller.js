@@ -26,6 +26,11 @@ const STORAGE_KEY_OVERLAY_WIDTH = getAppPrefKey('overlay-width');
 const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
+// The slider stores three.js OrbitControls' own speed, which turns a full
+// circle in 30 seconds at 2.0: 6 degrees a second for each unit. The slider
+// shows and says degrees a second, the speed the model really turns.
+const DEGREES_PER_SECOND_PER_UNIT = 6;
+const DEFAULT_ROTATE_SPEED = 0.5;
 
 /**
  * Initialize the overlay/grid controller.
@@ -94,10 +99,9 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     'overlayMeasurementsToggle'
   );
 
-  const autoRotateToggle = document.getElementById('autoRotateToggle');
-  const mobileAutoRotateToggle = document.getElementById(
-    'mobileAutoRotateToggle'
-  );
+  // Auto-rotate's switch in Preview Settings & Info owns the state; the View
+  // menu's Auto-rotate item flips it.
+  const autoRotateSetting = document.getElementById('autoRotateSetting');
   const rotationSpeedInput = document.getElementById('rotationSpeedInput');
   const rotationSpeedValue = document.getElementById('rotationSpeedValue');
 
@@ -1322,14 +1326,10 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   // Auto-Rotate Controls
   // ============================================================================
 
-  function syncAutoRotateToggles(enabled) {
-    const toggles = [autoRotateToggle, mobileAutoRotateToggle];
-    toggles.forEach((toggle) => {
-      if (toggle) {
-        toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        toggle.classList.toggle('active', enabled);
-      }
-    });
+  function syncAutoRotateSetting(enabled) {
+    if (autoRotateSetting) {
+      autoRotateSetting.checked = enabled;
+    }
   }
 
   function setAutoRotation(enabled) {
@@ -1338,6 +1338,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       announceImmediate(
         'Auto-rotation is disabled because you prefer reduced motion'
       );
+      syncAutoRotateSetting(false);
       return;
     }
 
@@ -1345,7 +1346,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     if (previewManager) {
       previewManager.setAutoRotate(enabled);
     }
-    syncAutoRotateToggles(enabled);
+    syncAutoRotateSetting(enabled);
     writeScopedPref(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
     announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
     console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
@@ -1354,11 +1355,16 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   const savedRotateSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
   function updateRotationSpeedDisplay(speed) {
+    const degrees = speed * DEGREES_PER_SECOND_PER_UNIT;
     if (rotationSpeedValue) {
-      rotationSpeedValue.textContent = `${speed.toFixed(1)}°/s`;
+      rotationSpeedValue.textContent = `${degrees.toFixed(1)}°/s`;
     }
     if (rotationSpeedInput) {
       rotationSpeedInput.setAttribute('aria-valuenow', speed.toFixed(1));
+      rotationSpeedInput.setAttribute(
+        'aria-valuetext',
+        `${Number(degrees.toFixed(1))} degrees per second`
+      );
     }
   }
 
@@ -1368,27 +1374,15 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       rotationSpeedInput.value = speed;
       updateRotationSpeedDisplay(speed);
     } else {
-      updateRotationSpeedDisplay(0.5);
+      updateRotationSpeedDisplay(DEFAULT_ROTATE_SPEED);
     }
   } else if (rotationSpeedInput) {
-    updateRotationSpeedDisplay(0.5);
+    updateRotationSpeedDisplay(DEFAULT_ROTATE_SPEED);
   }
 
-  // Wire desktop auto-rotate toggle
-  if (autoRotateToggle) {
-    autoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        autoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
-    });
-  }
-
-  // Wire mobile auto-rotate toggle
-  if (mobileAutoRotateToggle) {
-    mobileAutoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        mobileAutoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
+  if (autoRotateSetting) {
+    autoRotateSetting.addEventListener('change', () => {
+      setAutoRotation(autoRotateSetting.checked);
     });
   }
 
@@ -1500,29 +1494,33 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     const savedAutoRotatePref = readScopedPref(STORAGE_KEY_AUTO_ROTATE);
     const savedRotateSpeedPref = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
+    // The preview starts at the speed the slider shows, saved or not;
+    // three.js's own default would turn it four times faster than shown.
+    let startSpeed = DEFAULT_ROTATE_SPEED;
     if (savedRotateSpeedPref) {
       const speed = parseFloat(savedRotateSpeedPref);
       if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
-        pm.setAutoRotateSpeed(speed);
+        startSpeed = speed;
       }
     }
+    pm.setAutoRotateSpeed(startSpeed);
 
     if (savedAutoRotatePref === 'true' && !prefersReducedMotion.matches) {
       pm.setAutoRotate(true);
-      syncAutoRotateToggles(true);
+      syncAutoRotateSetting(true);
     }
   }
 
   /**
    * The live swap: re-read auto-rotate and its speed from the
-   * newly active namespace and re-apply them — rotation state, both
-   * toggle buttons' aria-pressed, and the speed slider readout. Reduced
+   * newly active namespace and re-apply them: rotation state, the
+   * Auto-rotate switch, and the speed slider readout. Reduced
    * motion still wins over any saved "on".
    */
   function reapplyScopedAutoRotate() {
     const pm = getPreviewManager();
 
-    let speed = 0.5;
+    let speed = DEFAULT_ROTATE_SPEED;
     const savedSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
     if (savedSpeed) {
       const parsed = parseFloat(savedSpeed);
@@ -1536,7 +1534,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       readScopedPref(STORAGE_KEY_AUTO_ROTATE) === 'true' &&
       !prefersReducedMotion.matches;
     if (pm) pm.setAutoRotate(enabled);
-    syncAutoRotateToggles(enabled);
+    syncAutoRotateSetting(enabled);
   }
 
   // ---- Public API ----
@@ -1550,7 +1548,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     updateOverlayStatus,
     updateOverlayUIFromConfig,
     getThemeAwareSvgColor,
-    syncAutoRotateToggles,
+    syncAutoRotateSetting,
     setAutoRotation,
     reapplyScopedAutoRotate,
     connectPreviewManager,

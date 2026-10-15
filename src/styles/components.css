@@ -701,70 +701,6 @@ body[data-mobile-toolbar='relocated']
 /* Preview drawer toggle uses shared .btn-collapse-panel styling (see above);
    its arrow follows the shared drawer-arrow rules at the end of this file. */
 
-/* ============================================================================
-   Actions Drawer Toggle Button (Mobile)
-   ============================================================================
-   Toggle button for expanding secondary actions in the actions bar.
-   Arrow indicates expand (up) or collapse (down) state.
-   ============================================================================ */
-
-.actions-drawer-toggle {
-  display: none;
-}
-
-@media (max-width: 767px) {
-  .actions-drawer-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-xs);
-    width: 100%;
-    min-height: var(--size-touch-target-sm);
-    padding: var(--space-xs) var(--space-md);
-    background-color: var(--color-bg-tertiary);
-    border: none;
-    border-bottom: 1px solid var(--color-border);
-    cursor: pointer;
-    transition: background-color var(--motion-base) ease;
-    order: -2; /* Place at top of actions bar */
-  }
-
-  .actions-drawer-toggle:hover {
-    background-color: var(--color-hover-bg);
-  }
-
-  .actions-drawer-toggle:focus-visible {
-    outline: 3px solid var(--color-focus);
-    outline-offset: -3px;
-  }
-
-  .actions-toggle-label {
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    color: var(--color-text-secondary);
-  }
-
-  .actions-toggle-arrow {
-    width: var(--size-icon-sm, 16px);
-    height: var(--size-icon-sm, 16px);
-    color: var(--color-accent-fg);
-    transition: transform var(--motion-slow) ease;
-    flex-shrink: 0;
-  }
-
-  /* Arrow flips when drawer content is visible */
-  .actions-drawer-toggle[aria-expanded='true'] .actions-toggle-arrow {
-    transform: rotate(180deg);
-  }
-
-  /* Respect reduced motion */
-  @media (prefers-reduced-motion: reduce) {
-    .actions-toggle-arrow {
-      transition: none;
-    }
-  }
-}
-
 /* Upload Zone */
 .upload-zone {
   display: block;
@@ -5493,6 +5429,17 @@ select:focus-visible {
 
 :root[data-high-contrast='true'] .preset-combobox-list {
   border-width: 2px;
+}
+
+/* Opened upward near the window's bottom: joined to the input at its foot. */
+.preset-combobox-list.is-above {
+  border-top: 1px solid var(--color-accent);
+  border-bottom: none;
+  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+}
+
+:root[data-high-contrast='true'] .preset-combobox-list.is-above {
+  border-top-width: 2px;
 }
 
 :root[data-high-contrast='true'] .preset-combobox-option[aria-selected='true'] {
@@ -12823,17 +12770,14 @@ body.tutorial-body-locked {
   }
 
   /* Drawer toggle buttons */
-  .preview-drawer-toggle-btn,
-  .actions-drawer-toggle {
+  .preview-drawer-toggle-btn {
     background: ButtonFace;
     color: ButtonText;
     border: 2px solid ButtonText !important;
   }
 
   .preview-drawer-toggle-btn:hover,
-  .preview-drawer-toggle-btn:focus,
-  .actions-drawer-toggle:hover,
-  .actions-drawer-toggle:focus {
+  .preview-drawer-toggle-btn:focus {
     background: Highlight;
     color: HighlightText;
     border-color: Highlight !important;
@@ -12841,14 +12785,6 @@ body.tutorial-body-locked {
 
   .drawer-toggle-handle {
     background: ButtonText !important;
-  }
-
-  .actions-toggle-arrow {
-    color: ButtonText;
-  }
-
-  .actions-drawer-toggle:hover .actions-toggle-arrow {
-    color: HighlightText;
   }
 
   /* Input fields */
@@ -14885,6 +14821,15 @@ body.tutorial-body-locked {
 
 .preset-actions-row > .btn:last-child {
   margin-left: auto;
+}
+
+/* Copy Link: its icon beside its words, in the row's flow after Import /
+   Export rather than pushed to the far edge. */
+.preset-actions-row #copySettingsLinkBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: 0;
 }
 
 .modal-footer-actions {
@@ -18217,12 +18162,14 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   }
 }
 
-/* While its drawer is open, a toggle is drawn pressed in the accent, the same
-   state a screen reader announces. :root lifts it above the toggles' own
-   surfaces (the echo bar's message colors among them), and the hover form
-   keeps it pressed under the pointer. */
+/* While its drawer or pop-out is open, a toggle is drawn pressed in the
+   accent, the same state a screen reader announces. :root lifts it above the
+   toggles' own surfaces (the echo bar's message colors among them), and the
+   hover form keeps it pressed under the pointer. */
 :root [data-travel-open][aria-expanded='true'],
-:root [data-travel-open][aria-expanded='true']:hover:not(:disabled) {
+:root [data-travel-open][aria-expanded='true']:hover:not(:disabled),
+:root .camera-shortcuts-btn[aria-expanded='true'],
+:root .camera-shortcuts-btn[aria-expanded='true']:hover:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
@@ -18235,7 +18182,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 @media (forced-colors: active) {
-  :root [data-travel-open][aria-expanded='true'] {
+  :root [data-travel-open][aria-expanded='true'],
+  :root .camera-shortcuts-btn[aria-expanded='true'] {
     background: Highlight;
     color: HighlightText;
     border-color: Highlight;

@@ -166,10 +166,10 @@ describe('PreviewManager', () => {
   })
 
   describe('Zoom-to-cursor Preference (F17)', () => {
-    it('defaults to true when no preference is stored', () => {
+    it('defaults to false when no preference is stored', () => {
       const manager = new PreviewManager(container)
-      expect(manager.zoomToCursorEnabled).toBe(true)
-      expect(manager.loadZoomToCursorPreference()).toBe(true)
+      expect(manager.zoomToCursorEnabled).toBe(false)
+      expect(manager.loadZoomToCursorPreference()).toBe(false)
     })
 
     it('respects a stored false preference', () => {
@@ -224,10 +224,14 @@ describe('PreviewManager', () => {
       const originalGetItem = localStorage.getItem
       localStorage.getItem = vi.fn(() => { throw new Error('Storage error') })
 
-      // Falls back to the default-on behaviour even when storage is unreadable.
-      expect(manager.loadZoomToCursorPreference()).toBe(true)
-
-      localStorage.getItem = originalGetItem
+      // Falls back to the default, off, even when storage is unreadable.
+      // Restored in finally: a broken getItem left behind fails every later
+      // case in this file.
+      try {
+        expect(manager.loadZoomToCursorPreference()).toBe(false)
+      } finally {
+        localStorage.getItem = originalGetItem
+      }
     })
 
     it('handles localStorage errors gracefully when saving', () => {
@@ -3969,5 +3973,81 @@ describe('the grid in the Alt View', () => {
     manager.applyGridForAltView(true)
     manager.reloadScopedViewPreferences()
     expect(manager.gridEnabled).toBe(false)
+  })
+})
+
+// Zoom to cursor moved the orbit point off the model with every corner zoom,
+// so it starts off; and when a parameter change brings a new model with the
+// camera kept, the view moves with the model's center, so orbiting still
+// turns about the model.
+describe('the orbit point stays on the model', () => {
+  let container
+  let manager
+
+  /** A box 10 x 10 mm and `h` mm tall standing on the plate, as OFF text. */
+  function boxOff(h) {
+    const v = [
+      [-5, -5, 0], [5, -5, 0], [5, 5, 0], [-5, 5, 0],
+      [-5, -5, h], [5, -5, h], [5, 5, h], [-5, 5, h],
+    ]
+    const f = [
+      [0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7],
+      [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5],
+      [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7],
+    ]
+    return ['OFF', `${v.length} ${f.length} 0`, ...v.map((p) => p.join(' ')), ...f.map((t) => `3 ${t.join(' ')}`)].join('\n')
+  }
+
+  beforeEach(async () => {
+    container = document.createElement('div')
+    container.style.width = '800px'
+    container.style.height = '600px'
+    document.body.appendChild(container)
+    localStorage.clear()
+    manager = new PreviewManager(container)
+    await manager.init()
+    // jsdom has no WebGL, so init() builds no camera controls: stub the
+    // camera and the controls' target the live code moves.
+    manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+    manager.projectionMode = 'perspective'
+    manager.controls = { target: new Vector3(), update: vi.fn() }
+  })
+
+  afterEach(() => {
+    document.body.removeChild(container)
+    localStorage.clear()
+  })
+
+  it('moves the view with the model when a new one arrives with the camera kept', async () => {
+    await manager.loadOFF(boxOff(8))
+    const camera = manager.getActiveCamera()
+    const targetBefore = manager.controls.target.clone()
+    const offsetBefore = camera.position.clone().sub(targetBefore)
+    expect(targetBefore.z).toBeCloseTo(4, 5)
+
+    await manager.loadOFF(boxOff(14), { preserveCamera: true })
+
+    const target = manager.controls.target
+    expect(target.z).toBeCloseTo(7, 5)
+    expect(target.x).toBeCloseTo(targetBefore.x, 5)
+    expect(target.y).toBeCloseTo(targetBefore.y, 5)
+    const offset = camera.position.clone().sub(target)
+    expect(offset.distanceTo(offsetBefore)).toBeLessThan(1e-6)
+  })
+
+  it('keeps a pan the person made, relative to the model', async () => {
+    await manager.loadOFF(boxOff(8))
+    const camera = manager.getActiveCamera()
+    const pan = new Vector3(2, -1, 0)
+    manager.controls.target.add(pan)
+    camera.position.add(pan)
+    manager.controls.update()
+
+    await manager.loadOFF(boxOff(14), { preserveCamera: true })
+
+    const target = manager.controls.target
+    expect(target.x).toBeCloseTo(2, 5)
+    expect(target.y).toBeCloseTo(-1, 5)
+    expect(target.z).toBeCloseTo(7, 5)
   })
 })
