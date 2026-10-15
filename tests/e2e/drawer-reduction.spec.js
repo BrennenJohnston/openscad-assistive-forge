@@ -1,10 +1,11 @@
 /**
- * The Preview Settings & Info drawer keeps eleven first-session controls
- * (both densities) and moves everything else to its logical home: View
- * menu (grid/measurements/status-bar toggles, edge detail), Preferences 3D
- * View (grid appearance, auto-bed, zoom-to-cursor), Preferences Advanced
- * (engine, app cache), the Camera panel (auto-rotate speed) and the File
- * menu (export quality). These cases pin the survivor set in both
+ * The Preview Settings & Info drawer keeps thirteen first-session controls
+ * (both densities), auto-rotate and its speed among them, and moves
+ * everything else to its logical home: View menu (grid/measurements/
+ * status-bar toggles, edge detail; Auto-rotate mirrors the drawer's
+ * switch), Preferences 3D View (grid appearance, auto-bed, zoom-to-cursor),
+ * Preferences Advanced (engine, app cache) and the File menu (export
+ * quality). These cases pin the survivor set in both
  * densities and prove a relocated control stays keyboard-operable in its
  * new home.
  */
@@ -17,6 +18,8 @@ const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 /** The Simplified/Standard survivor set. */
 const SURVIVORS = [
   '#autoPreviewToggle',
+  '#autoRotateSetting',
+  '#rotationSpeedInput',
   '#previewQualitySelect',
   '#gridPresetSelect',
   '#modelAppearanceEnabled',
@@ -29,7 +32,7 @@ const SURVIVORS = [
   '#modelColorReset',
 ];
 
-/** Everything that left the drawer for a menu, Preferences or the Camera panel. */
+/** Everything that left the drawer for a menu or Preferences. */
 const RELOCATED = [
   '#measurementsToggle',
   '#gridToggle',
@@ -41,7 +44,6 @@ const RELOCATED = [
   '#zoomToCursorToggle',
   '#statusBarToggle',
   '#manifoldEngineToggle',
-  '#rotationSpeedInput',
   '#exportQualitySelect',
   '#clearCacheBtn',
   // P1: the live regions live outside every collapsible container now.
@@ -126,6 +128,7 @@ test('Standard keeps the same survivor set; the rest lives in menus', async ({
     'Show Grid',
     'Show Measurements',
     'Show Status Bar',
+    'Auto-rotate',
     'Edge Detail Limit',
   ]) {
     await expect(

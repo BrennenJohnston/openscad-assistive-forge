@@ -4828,6 +4828,38 @@
                           changes. Turn off to preview only when you press
                           Preview.</span
                         >
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="autoRotateSetting" />
+                          <span class="toggle-label">Auto-rotate</span>
+                        </label>
+                        <div class="preview-setting rotation-speed-setting">
+                          <label
+                            class="preview-setting-label"
+                            for="rotationSpeedInput"
+                            id="rotationSpeedLabel"
+                            >Auto-rotate speed</label
+                          >
+                          <div class="slider-container">
+                            <input
+                              type="range"
+                              id="rotationSpeedInput"
+                              min="0.1"
+                              max="3"
+                              step="0.1"
+                              value="0.5"
+                              aria-labelledby="rotationSpeedLabel"
+                              aria-describedby="rotationSpeedHelp"
+                            />
+                            <span class="slider-value" id="rotationSpeedValue"
+                              >0.5°/s</span
+                            >
+                          </div>
+                        </div>
+                        <span id="rotationSpeedHelp" class="sr-only"
+                          >Set the speed of automatic model rotation when
+                          auto-rotate is enabled, from 0.1 to 3 degrees per
+                          second</span
+                        >
                         <div
                           class="preview-setting-group"
                           role="group"
@@ -5651,29 +5683,7 @@
                           <polyline points="15 18 9 12 15 6"></polyline>
                         </svg>
                       </button>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-icon camera-drawer-btn auto-rotate-toggle dpad-center"
-                        id="mobileAutoRotateToggle"
-                        aria-pressed="false"
-                        aria-label="Toggle auto rotation"
-                        title="Auto rotate"
-                      >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          aria-hidden="true"
-                        >
-                          <path
-                            d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
-                          ></path>
-                          <polyline points="21 3 21 8 16 8"></polyline>
-                        </svg>
-                      </button>
+                      <span class="camera-drawer-dpad-label">Rotate</span>
                       <button
                         type="button"
                         class="btn btn-sm btn-icon camera-drawer-btn dpad-right"
@@ -6634,60 +6644,6 @@
               <!-- The Alt View's sliders, under the controls, in an area that
                    scrolls on its own so the D-pads never move sideways. -->
               <div class="camera-panel-extras" id="cameraPanelExtras"></div>
-              <!-- Auto-rotate waits here, out of view and still wired by its ids, until
-       it moves to the View menu and Preview Settings & Info. -->
-              <div id="autoRotateHolder" hidden>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-icon camera-btn auto-rotate-toggle"
-                  id="autoRotateToggle"
-                  aria-pressed="false"
-                  aria-label="Toggle auto rotation"
-                  title="Auto rotate"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
-                    ></path>
-                    <polyline points="21 3 21 8 16 8"></polyline>
-                  </svg>
-                </button>
-                <div class="preview-setting rotation-speed-setting">
-                  <label
-                    class="preview-setting-label"
-                    for="rotationSpeedInput"
-                    id="rotationSpeedLabel"
-                    >Auto-rotate speed</label
-                  >
-                  <div class="slider-container">
-                    <input
-                      type="range"
-                      id="rotationSpeedInput"
-                      min="0.1"
-                      max="3"
-                      step="0.1"
-                      value="0.5"
-                      aria-labelledby="rotationSpeedLabel"
-                      aria-describedby="rotationSpeedHelp"
-                    />
-                    <span class="slider-value" id="rotationSpeedValue"
-                      >0.5°/s</span
-                    >
-                  </div>
-                </div>
-                <span id="rotationSpeedHelp" class="sr-only"
-                  >Set the speed of automatic model rotation when auto-rotate is
-                  enabled, from 0.1 to 3 degrees per second</span
-                >
-              </div>
             </div>
           </div>
         </div>

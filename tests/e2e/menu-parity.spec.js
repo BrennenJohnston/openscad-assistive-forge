@@ -672,9 +672,9 @@ const EXPORT_SUBMENU_ORDER = [
 // omitted: this renderer has no display-mode concept. The projection
 // radios render as one role="group" li, which readMenu reports as
 // '(group)'. The per-toolbar Hide items are Classic-only markup and are
-// asserted there. Show Grid / Show Measurements / Show Status Bar and the
-// Edge Detail Limit submenu are Forge-only: Classic's View menu keeps its
-// audited desktop shape.
+// asserted there. Show Grid / Show Measurements / Show Status Bar /
+// Auto-rotate and the Edge Detail Limit submenu are Forge-only: Classic's
+// View menu keeps its audited desktop shape.
 const VIEW_MENU_ORDER = [
   'Show Edges',
   'Show Axes',
@@ -683,6 +683,7 @@ const VIEW_MENU_ORDER = [
   'Show Grid',
   'Show Measurements',
   'Show Status Bar',
+  'Auto-rotate',
   '---',
   'Top',
   'Bottom',

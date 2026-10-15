@@ -124,10 +124,8 @@ function probe(page) {
         document.getElementById('modelAppearanceEnabled')?.checked ?? null,
       rotateSpeed:
         document.getElementById('rotationSpeedInput')?.value ?? null,
-      autoRotatePressed:
-        document
-          .getElementById('autoRotateToggle')
-          ?.getAttribute('aria-pressed') ?? null,
+      autoRotateOn:
+        document.getElementById('autoRotateSetting')?.checked ?? null,
     };
   });
 }
@@ -366,7 +364,7 @@ test.describe('Per-interface preference matrix', () => {
       expect(p.contrast).toBe('110');
       expect(p.appearanceEnabled).toBe(true);
       expect(p.rotateSpeed).toBe('0.5');
-      expect(p.autoRotatePressed).toBe('false');
+      expect(p.autoRotateOn).toBe(false);
     };
 
     let p = await probe(page);
@@ -390,7 +388,7 @@ test.describe('Per-interface preference matrix', () => {
     expect(p.contrast).toBe('85');
     expect(p.appearanceEnabled).toBe(false);
     expect(p.rotateSpeed).toBe('2');
-    expect(p.autoRotatePressed).toBe('false');
+    expect(p.autoRotateOn).toBe(false);
 
     // The remaining rows have no cheap scene probe; the storage half of the
     // walk pins them: values still distinct per side after the flip.

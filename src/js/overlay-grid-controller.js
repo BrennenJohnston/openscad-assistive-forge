@@ -94,10 +94,9 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     'overlayMeasurementsToggle'
   );
 
-  const autoRotateToggle = document.getElementById('autoRotateToggle');
-  const mobileAutoRotateToggle = document.getElementById(
-    'mobileAutoRotateToggle'
-  );
+  // Auto-rotate's switch in Preview Settings & Info owns the state; the View
+  // menu's Auto-rotate item flips it.
+  const autoRotateSetting = document.getElementById('autoRotateSetting');
   const rotationSpeedInput = document.getElementById('rotationSpeedInput');
   const rotationSpeedValue = document.getElementById('rotationSpeedValue');
 
@@ -1322,14 +1321,10 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   // Auto-Rotate Controls
   // ============================================================================
 
-  function syncAutoRotateToggles(enabled) {
-    const toggles = [autoRotateToggle, mobileAutoRotateToggle];
-    toggles.forEach((toggle) => {
-      if (toggle) {
-        toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        toggle.classList.toggle('active', enabled);
-      }
-    });
+  function syncAutoRotateSetting(enabled) {
+    if (autoRotateSetting) {
+      autoRotateSetting.checked = enabled;
+    }
   }
 
   function setAutoRotation(enabled) {
@@ -1338,6 +1333,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       announceImmediate(
         'Auto-rotation is disabled because you prefer reduced motion'
       );
+      syncAutoRotateSetting(false);
       return;
     }
 
@@ -1345,7 +1341,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     if (previewManager) {
       previewManager.setAutoRotate(enabled);
     }
-    syncAutoRotateToggles(enabled);
+    syncAutoRotateSetting(enabled);
     writeScopedPref(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
     announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
     console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
@@ -1374,21 +1370,9 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     updateRotationSpeedDisplay(0.5);
   }
 
-  // Wire desktop auto-rotate toggle
-  if (autoRotateToggle) {
-    autoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        autoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
-    });
-  }
-
-  // Wire mobile auto-rotate toggle
-  if (mobileAutoRotateToggle) {
-    mobileAutoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        mobileAutoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
+  if (autoRotateSetting) {
+    autoRotateSetting.addEventListener('change', () => {
+      setAutoRotation(autoRotateSetting.checked);
     });
   }
 
@@ -1509,14 +1493,14 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
 
     if (savedAutoRotatePref === 'true' && !prefersReducedMotion.matches) {
       pm.setAutoRotate(true);
-      syncAutoRotateToggles(true);
+      syncAutoRotateSetting(true);
     }
   }
 
   /**
    * The live swap: re-read auto-rotate and its speed from the
-   * newly active namespace and re-apply them — rotation state, both
-   * toggle buttons' aria-pressed, and the speed slider readout. Reduced
+   * newly active namespace and re-apply them: rotation state, the
+   * Auto-rotate switch, and the speed slider readout. Reduced
    * motion still wins over any saved "on".
    */
   function reapplyScopedAutoRotate() {
@@ -1536,7 +1520,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       readScopedPref(STORAGE_KEY_AUTO_ROTATE) === 'true' &&
       !prefersReducedMotion.matches;
     if (pm) pm.setAutoRotate(enabled);
-    syncAutoRotateToggles(enabled);
+    syncAutoRotateSetting(enabled);
   }
 
   // ---- Public API ----
@@ -1550,7 +1534,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     updateOverlayStatus,
     updateOverlayUIFromConfig,
     getThemeAwareSvgColor,
-    syncAutoRotateToggles,
+    syncAutoRotateSetting,
     setAutoRotation,
     reapplyScopedAutoRotate,
     connectPreviewManager,

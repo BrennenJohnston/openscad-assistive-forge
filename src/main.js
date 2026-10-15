@@ -4791,6 +4791,25 @@ async function initApp() {
                 setPreviewStatusBarShown(bar.classList.contains('user-hidden'));
               },
             },
+            // Mirrors the Auto-rotate switch in Preview Settings & Info, which
+            // owns the state; the item flips the switch so both stay one.
+            {
+              type: 'toggle',
+              label: 'Auto-rotate',
+              checked: Boolean(
+                document.getElementById('autoRotateSetting')?.checked
+              ),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                const toggle = document.getElementById('autoRotateSetting');
+                if (!toggle) return;
+                toggle.checked = !toggle.checked;
+                toggle.dispatchEvent(new Event('change'));
+              },
+            },
           ]
         : []),
       { type: 'separator' },
