@@ -1693,6 +1693,7 @@ export class PreviewManager {
         if (!preserveCamera) {
           this.fitCameraToModel();
         }
+        this._followModelCenter(preserveCamera);
 
         // Call post-load hook (e.g., for re-applying rotation centering)
         if (this._postLoadHook) {
@@ -1959,6 +1960,7 @@ export class PreviewManager {
       if (!preserveCamera) {
         this.fitCameraToModel();
       }
+      this._followModelCenter(preserveCamera);
       if (this._postLoadHook) {
         this._postLoadHook();
       }
@@ -2353,6 +2355,29 @@ export class PreviewManager {
     if (this.controls) this.controls.update();
 
     return true;
+  }
+
+  /**
+   * Keep the view on the model when a new one arrives with the camera kept
+   * (a parameter change): the camera and the orbit point move by as much as
+   * the model's center moved. A view centered on the model stays centered,
+   * so turning it still turns about the model; a pan the person made keeps
+   * its place on the model; the angle and the distance do not change. A
+   * load that fits the camera only records the center.
+   *
+   * @param {boolean} moveView - true when the camera was kept
+   */
+  _followModelCenter(moveView) {
+    if (!this.mesh) return;
+    const center = new Box3().setFromObject(this.mesh).getCenter(new Vector3());
+    const previous = this._modelCenter;
+    this._modelCenter = center;
+    if (!moveView || !previous || !this.controls) return;
+    const shift = center.clone().sub(previous);
+    if (shift.lengthSq() === 0) return;
+    this.getActiveCamera().position.add(shift);
+    this.controls.target.add(shift);
+    this.controls.update();
   }
 
   /**
@@ -3675,12 +3700,12 @@ export class PreviewManager {
 
   /**
    * Load zoom-to-cursor preference from localStorage.
-   * Defaults to true, so first-time users zoom toward the cursor.
+   * Off unless chosen: each zoom toward a corner moves the orbit point off
+   * the model, so the model then wanders as the view turns.
    * @returns {boolean}
    */
   loadZoomToCursorPreference() {
-    const pref = readScopedPref(STORAGE_KEY_ZOOM_TO_CURSOR);
-    return pref === null ? true : pref === 'true';
+    return readScopedPref(STORAGE_KEY_ZOOM_TO_CURSOR) === 'true';
   }
 
   /**
@@ -4807,6 +4832,7 @@ export class PreviewManager {
     // Reset rotation centering state
     this.rotationCenteringEnabled = false;
     this.autoBedOffset = 0;
+    this._modelCenter = null;
 
     if (this.mesh) {
       this.scene.remove(this.mesh);

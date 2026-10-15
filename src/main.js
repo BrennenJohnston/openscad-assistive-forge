@@ -4456,7 +4456,7 @@ async function initApp() {
               if (spoken[name]) announceImmediate(spoken[name]);
               return stored;
             },
-            getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
+            getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? false,
             onZoomToCursorChange: (enabled) => {
               previewManager?.toggleZoomToCursor(enabled);
               announceImmediate(
