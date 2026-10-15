@@ -255,35 +255,13 @@ body[data-ui-mode='classic'] .toolbar-menu-btn[aria-expanded='true'] {
   }
 }
 
-/* Menus drop under their own menu-bar button, content-sized, like a desktop
-   popup. The anchor comes from toolbar-menu-controller.js; the fallbacks
-   keep the panel on screen if it ever opens without one. */
+/* Menus drop under their own button in every layout (toolbar-menu.css);
+   Classic keeps the desktop's narrower, square, flatter popup. */
 body[data-ui-mode='classic'] .toolbar-menu-content {
-  position: absolute;
-  left: var(--menu-anchor-x, 0);
-  top: var(--menu-anchor-y, 0);
-  margin-top: 0;
   min-width: 200px;
   max-width: min(420px, calc(100vw - var(--menu-anchor-x, 0px) - 8px));
-  max-height: calc(100vh - var(--menu-anchor-y, 0px) - 8px);
-  overflow-y: auto;
   border-radius: 0;
   box-shadow: 0 4px 12px rgb(0 0 0 / 28%);
-}
-
-/* toolbar-menu.css clears the shared .modal-overlay background but not its
-   backdrop-filter, so an open menu blurs the whole app. A desktop menu
-   leaves the window alone. */
-body[data-ui-mode='classic'] .toolbar-menu-modal .modal-overlay {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-/* Desktop menus have no title bar. The list's own aria-label carries the
-   accessible name, and the ✕ was already tabindex="-1" — Escape and a click
-   outside still close, exactly as a native menu does. */
-body[data-ui-mode='classic'] .toolbar-menu-header {
-  display: none;
 }
 
 body[data-ui-mode='classic'] .toolbar-menu-body {

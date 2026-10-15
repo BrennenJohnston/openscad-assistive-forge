@@ -49,9 +49,7 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // so the rest of the suite stays green while a rule is being met; once the
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
-const NOT_MET_YET = {
-  S7: "Menus open at the window's corner over a blurred page, with a title bar",
-};
+const NOT_MET_YET = {};
 
 function expectRule(rule) {
   test.fail(Boolean(NOT_MET_YET[rule]), NOT_MET_YET[rule]);
@@ -486,6 +484,10 @@ for (const size of SIZES) {
             /\bhidden\b/
           );
           await page.waitForTimeout(250);
+          // The button's color eases in: read it once the transition ends.
+          await btn.evaluate((el) =>
+            Promise.all(el.getAnimations().map((a) => a.finished))
+          );
           const m = await page.evaluate((n) => {
             const b = document.getElementById(`${n}MenuBtn`);
             const modal = document.getElementById(`${n}MenuModal`);

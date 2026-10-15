@@ -18169,7 +18169,9 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 :root [data-travel-open][aria-expanded='true'],
 :root [data-travel-open][aria-expanded='true']:hover:not(:disabled),
 :root .camera-shortcuts-btn[aria-expanded='true'],
-:root .camera-shortcuts-btn[aria-expanded='true']:hover:not(:disabled) {
+:root .camera-shortcuts-btn[aria-expanded='true']:hover:not(:disabled),
+:root .toolbar-menu-btn[aria-expanded='true'],
+:root .toolbar-menu-btn[aria-expanded='true']:hover:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
@@ -18183,7 +18185,8 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 
 @media (forced-colors: active) {
   :root [data-travel-open][aria-expanded='true'],
-  :root .camera-shortcuts-btn[aria-expanded='true'] {
+  :root .camera-shortcuts-btn[aria-expanded='true'],
+  :root .toolbar-menu-btn[aria-expanded='true'] {
     background: Highlight;
     color: HighlightText;
     border-color: Highlight;
