@@ -18177,17 +18177,6 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   transition: rotate var(--motion-base) ease;
 }
 
-/* Three drawings of the arrow; the class on the svg picks the one shown. */
-.drawer-arrow > * {
-  display: none;
-}
-
-.drawer-arrow--solid > .drawer-arrow-solid,
-.drawer-arrow--double > .drawer-arrow-double,
-.drawer-arrow--bar > .drawer-arrow-bar {
-  display: inline;
-}
-
 [data-travel-open='right'] .drawer-arrow {
   rotate: 0deg;
 }
