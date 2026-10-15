@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.6.0] - 2026-10-15
+
 ### Added
 
 - The camera panel's buttons are pictures: each standard view is a cube with
