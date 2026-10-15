@@ -975,6 +975,189 @@ for (const height of [915, 810]) {
   }
 }
 
+// A phone held sideways (a touch screen, landscape, a phone's height): the
+// header keeps to one row, the menu bar shares the Preview Settings row,
+// below 768 px the bottom bar keeps to one row, from 768 px the Customizer
+// column starts closed; with nothing open the preview keeps at least 40
+// percent of the screen; the camera controls open over the preview's right
+// edge, stacked as on the desktop, see-through, at most a quarter of the
+// width, every button 44 px.
+const SIDEWAYS_SIZES = [
+  { width: 667, height: 375 },
+  { width: 740, height: 360 },
+  { width: 844, height: 390 },
+  { width: 915, height: 412 },
+];
+const SIDEWAYS_QUERY =
+  '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)';
+
+/** The share of the screen where the 3D preview is the topmost thing. */
+function previewShare() {
+  const isPreview = (el) =>
+    !!el && el.tagName === 'CANVAS' && !!el.closest('#previewContainer');
+  let seen = 0;
+  let total = 0;
+  for (let y = 3; y < innerHeight; y += 6) {
+    for (let x = 3; x < innerWidth; x += 6) {
+      total++;
+      if (isPreview(document.elementFromPoint(x, y))) seen++;
+    }
+  }
+  return seen / total;
+}
+
+/** The sideways rows and the start state, read in the page. */
+function readSidewaysRows() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const tops = [
+    ...document.querySelectorAll(
+      '.app-header button, .app-header a[href], .app-header [role="switch"]'
+    ),
+  ]
+    .filter(shown)
+    .filter((el) => !el.closest('.toolbar-menu-modal'))
+    .map((el) => Math.round(box(el).top));
+  const camera = document.getElementById('cameraDrawerToggle');
+  const generate = document.getElementById('primaryActionBtn');
+  return {
+    headerRows: new Set(tops).size,
+    headerTops: [...new Set(tops)],
+    menusInSettingsRow: !!document
+      .getElementById('toolbarMenuBar')
+      ?.closest('.preview-drawer-header'),
+    bottomBarOneRow:
+      !shown(camera) ||
+      Math.abs(box(camera).top - box(generate).top) <=
+        Math.max(box(camera).height, box(generate).height) / 2,
+    customizerColumnClosed:
+      innerWidth < 768 ||
+      document.getElementById('paramPanel').classList.contains('collapsed'),
+  };
+}
+
+/** The open camera controls held sideways, read in the page. */
+function readSidewaysCamera() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const open = shown(document.getElementById('cameraDrawerToggle'))
+    ? document.getElementById('cameraDrawerBody')
+    : document.getElementById('cameraPanel');
+  const r = box(open);
+  const order = [
+    '.camera-drawer-rotate, .camera-section-rotate',
+    '.camera-drawer-pan, .camera-section-pan',
+    '.camera-drawer-zoom, .camera-section-zoom',
+    '.camera-drawer-views, .camera-section-views',
+  ].map((sel) => Math.round(box(open.querySelector(sel)).top));
+  const bg = getComputedStyle(open).backgroundColor;
+  return {
+    left: r.left,
+    right: r.right,
+    top: r.top,
+    bottom: r.bottom,
+    width: r.width,
+    background: bg,
+    order,
+    small: [...open.querySelectorAll('button')]
+      .filter(shown)
+      .map((b) => ({ n: b.getAttribute('aria-label'), r: box(b) }))
+      .filter((b) => b.r.width + 0.5 < 44 || b.r.height + 0.5 < 44)
+      .map((b) => `${b.n} ${Math.round(b.r.width)}x${Math.round(b.r.height)}`),
+  };
+}
+
+for (const size of SIDEWAYS_SIZES) {
+  test.describe(`A phone held sideways, ${size.width} x ${size.height}`, () => {
+    // No isMobile: Firefox rejects it when the browser context is created.
+    test.use({ viewport: size, hasTouch: true });
+
+    test('one row each, the preview kept, the camera controls over its right edge', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await page.addInitScript(() => {
+        localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+        localStorage.setItem('openscad-forge-theme', 'dark');
+        localStorage.setItem(
+          'openscad-forge-ui-mode',
+          JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+        );
+      });
+      await page.goto('/?example=simple-box', { timeout: 60_000 });
+      test.skip(
+        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+        'this browser does not report a touch screen held sideways'
+      );
+      await page.waitForSelector('body[data-wasm-ready="true"]', {
+        state: 'attached',
+        timeout: WASM_READY_TIMEOUT,
+      });
+      await page.waitForFunction(() => window.previewManager?.mesh, null, {
+        timeout: WASM_READY_TIMEOUT,
+      });
+      const notNow = page.locator('#saveProjectNotNow');
+      if (
+        await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+          () => true,
+          () => false
+        )
+      ) {
+        await notNow.click();
+      }
+      await page.waitForTimeout(1_000);
+
+      const rows = await page.evaluate(readSidewaysRows);
+      expect
+        .soft(rows.headerRows, `the header in one row (${rows.headerTops})`)
+        .toBe(1);
+      expect
+        .soft(rows.menusInSettingsRow, 'the menus in the Preview Settings row')
+        .toBe(true);
+      expect.soft(rows.bottomBarOneRow, 'the bottom bar in one row').toBe(true);
+      expect
+        .soft(
+          rows.customizerColumnClosed,
+          'the Customizer column starts closed'
+        )
+        .toBe(true);
+      const share = await page.evaluate(previewShare);
+      expect
+        .soft(share, 'S6: the preview with nothing open')
+        .toBeGreaterThanOrEqual(0.4);
+
+      const toggle = (await page.locator('#cameraDrawerToggle').isVisible())
+        ? page.locator('#cameraDrawerToggle')
+        : page.locator('#cameraPanelToggle');
+      await toggle.focus();
+      await page.keyboard.press('Enter');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await page.waitForTimeout(500);
+      const c = await page.evaluate(readSidewaysCamera);
+      expect
+        .soft(Math.abs(c.right - size.width), 'S5: at the right edge')
+        .toBeLessThanOrEqual(1);
+      expect
+        .soft(c.top >= 0 && c.bottom <= size.height + 0.5, 'S5: on the screen')
+        .toBe(true);
+      expect
+        .soft(c.width / size.width, 'S5: at most a quarter of the width')
+        .toBeLessThanOrEqual(0.25);
+      expect
+        .soft(alphaOf(c.background), `S6: see-through (${c.background})`)
+        .toBeLessThan(1);
+      expect
+        .soft(
+          c.order.every((top, i) => i === 0 || top > c.order[i - 1]),
+          `S5: stacked Rotate, Pan, Zoom, the views (${c.order})`
+        )
+        .toBe(true);
+      expect.soft(c.small, 'buttons under 44 px').toEqual([]);
+    });
+  });
+}
+
 // On a phone one drawer is open at a time: opening the Customizer, Preview
 // Settings & Info or the camera drawer first closes whichever is open. On a
 // desktop window the panels sit side by side and stay open together.

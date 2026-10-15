@@ -762,8 +762,10 @@ body[data-ui-mode='classic'] {
   display: none;
 }
 
-/* On a phone these live in the camera drawer, off the preview. */
-@media (max-width: 767px) {
+/* On a phone these live in the ASCII drawer, off the preview; held
+   sideways at a desktop width, the camera panel's sliders do their work. */
+@media (max-width: 767px),
+  (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
   :root[data-ui-variant='mono'] .preview-status-bar .alt-view-controls {
     display: none;
   }

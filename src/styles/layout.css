@@ -4263,6 +4263,174 @@ details summary:focus,
 }
 
 /* ============================================================================
+   A phone held sideways (a touch screen, landscape, a phone's height)
+   ============================================================================
+   The screen is short, so the header keeps to one row, and the camera
+   controls open over the preview's right edge as a see-through column,
+   stacked as on the desktop, so the preview keeps its width. The input
+   decides as well as the width: a phone held sideways can be wider than a
+   small desktop window and still needs these rules.
+   ============================================================================ */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* One row: the Customizer button and Main Page at the left, the switch,
+     GitHub and Keys at the right. */
+  .header-content {
+    flex-wrap: nowrap;
+  }
+
+  .header-controls {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+
+  .header-branding {
+    flex: 1 1 auto;
+  }
+
+  /* The menu bar in the settings row (mobile-toolbar.js moves it there),
+     ahead of the row's own toggle, its buttons as tall as the row; the row
+     it left goes. */
+  body[data-menu-bar='settings-row'] .workflow-progress {
+    display: none;
+  }
+
+  body[data-menu-bar='settings-row'] .preview-drawer-header {
+    justify-content: flex-start;
+  }
+
+  body[data-menu-bar='settings-row'] .preview-drawer-header-right {
+    margin-left: auto;
+  }
+
+  .preview-drawer-header > #toolbarMenuBar {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .preview-drawer-header > #toolbarMenuBar .toolbar-menu-btn {
+    min-height: var(--size-touch-target);
+  }
+}
+
+@media (max-width: 767px) and (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* The bottom bar on one row: the drawers' toggles, then Generate. */
+  :root .preview-panel .actions-bar {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  /* No blur on the drawer: a blurred box would hold its fixed body inside
+     itself instead of at the screen's edge. */
+  :root .actions-bar .camera-drawer {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  :root .actions-bar .actions-primary {
+    order: 1;
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  /* The camera and ASCII drawers open as a column at the right edge, from
+     the top of the preview to the bar, scrolling inside. */
+  :root .camera-drawer:not(.collapsed) .camera-drawer-body {
+    position: fixed;
+    top: var(--phone-drawer-top, 0px);
+    right: env(safe-area-inset-right, 0px);
+    bottom: var(--actions-bar-reserved, var(--actions-bar-height));
+    width: calc(
+      var(--size-touch-target) * 3 + var(--space-2xs) * 2 + var(--space-sm) * 2
+    );
+    min-height: 0 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    overflow-y: auto;
+    border-left: 1px solid var(--color-border);
+  }
+
+  /* In the desktop's order: Rotate, Pan, Zoom, the views, the tools. */
+  :root .camera-drawer-rotate {
+    order: 1;
+  }
+
+  :root .camera-drawer-pan {
+    order: 2;
+  }
+
+  :root .camera-drawer-zoom {
+    order: 3;
+  }
+
+  :root .camera-drawer-views {
+    order: 4;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  :root .camera-drawer-zoom-controls {
+    flex-direction: row;
+  }
+
+  /* The views two to a row, as on the desktop. */
+  :root .camera-drawer-views-grid {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: calc(var(--size-touch-target) * 2 + var(--space-xs));
+  }
+
+  :root .ascii-drawer-body .hfm-slider-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  :root .ascii-drawer-body .hfm-slider-section .camera-drawer-section-title {
+    flex: 0 0 auto;
+  }
+}
+
+@media (min-width: 768px) and (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* Open, the camera panel lies over the preview's right edge, see-through,
+     and its closed strip's place is kept, so the preview keeps its width. */
+  .main-interface {
+    position: relative;
+  }
+
+  .main-interface:has(> .camera-panel:not(.collapsed)) {
+    padding-right: var(--drawer-collapsed-width);
+  }
+
+  /* The preview's own header row and the Generate bar end where the open
+     panel begins, so none of their buttons sit under it; the picture runs
+     on beneath the see-through panel. 180px is the panel's own width. */
+  .main-interface:has(> .camera-panel:not(.collapsed)) .preview-info-section,
+  .main-interface:has(> .camera-panel:not(.collapsed))
+    .preview-panel
+    .actions-bar {
+    margin-right: calc(180px - var(--drawer-collapsed-width));
+  }
+
+  /* Above the preview's own header row, which lies over the preview too;
+     scoped by the main area to outweigh each look's solid panel. */
+  :root .main-interface > .camera-panel:not(.collapsed) {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: calc(var(--z-index-sticky) + 20);
+    background: color-mix(in srgb, var(--color-bg-primary) 85%, transparent);
+  }
+}
+
+/* ============================================================================
    Expert Mode: Mobile Bottom-Sheet Layout
    ============================================================================
    On mobile, the param-panel is normally an off-canvas left drawer. When Expert

@@ -212,6 +212,7 @@ import {
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
 } from './js/storage-keys.js';
+import { isSidewaysPhone } from './js/phone-drawers.js';
 import {
   ensureScopedPrefsSeeded,
   readScopedPref,
@@ -9872,8 +9873,13 @@ if (rounded) {
     // (Storage key defined at module level as STORAGE_KEY_PARAM_PANEL_COLLAPSED)
     let isCollapsed = false;
 
+    // A phone held sideways starts with the column closed, so the preview
+    // has the width; a choice made with the button is kept as everywhere.
     const savedState = safeGetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED);
-    if (savedState === 'true' && window.innerWidth >= 768) {
+    if (
+      window.innerWidth >= 768 &&
+      (savedState === 'true' || (savedState === null && isSidewaysPhone()))
+    ) {
       isCollapsed = true;
     }
 

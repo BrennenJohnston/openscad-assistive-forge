@@ -12,6 +12,20 @@
 /** The phone layout: under the width the stylesheets switch at (767px). */
 const DESKTOP_MIN_WIDTH_PX = 768;
 
+/**
+ * A phone held sideways: a touch screen, landscape, a phone's height. It can
+ * be wider than a small desktop window; layout.css uses the same query.
+ */
+export const SIDEWAYS_PHONE_QUERY =
+  '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)';
+
+/**
+ * @returns {boolean} True when the page is on a phone held sideways.
+ */
+export function isSidewaysPhone() {
+  return window.matchMedia(SIDEWAYS_PHONE_QUERY).matches;
+}
+
 /** @type {Map<string, {isOpen: () => boolean, close: (options?: {restoreFocus?: boolean}) => void}>} */
 const drawers = new Map();
 

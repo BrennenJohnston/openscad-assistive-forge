@@ -366,9 +366,12 @@ export const MEASURED_SECONDS = {
   // booked at 30.
   'recovery-mode.spec.js': 30.0,
   // Eight groups (two window sizes, four looks), each loading the charm once
-  // for its seven cases, then the desktop camera panel cases and the phone
-  // drawer cases, each loading the simple box: 243 s locally; booked at 300.
-  'ui-schema.spec.js': 300.0,
+  // for its seven cases, then the desktop camera panel cases, the phone
+  // drawer cases and the sideways phone cases, each loading the simple box.
+  // 906 s for its 68 timed cases on a CI shard log (the Alt View groups slow
+  // there, drawn in software), before the four sideways cases, about 15 s
+  // each; booked at 970.
+  'ui-schema.spec.js': 970.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

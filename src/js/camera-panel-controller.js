@@ -702,8 +702,22 @@ function initMobileCameraDrawer() {
     shown.forEach((d) => d.body.style.setProperty('min-height', `${height}px`));
   };
 
+  // Held sideways, a drawer opens as a column from the preview's top down
+  // (layout.css); the column starts below the preview's own header row.
+  const placeColumnTop = () => {
+    const header = document.querySelector('.preview-drawer-header');
+    const top = header ? header.getBoundingClientRect().bottom : 0;
+    document.documentElement.style.setProperty(
+      '--phone-drawer-top',
+      `${Math.max(0, Math.round(top))}px`
+    );
+  };
+
   const onChange = (opened) => {
-    if (opened) matchHeights();
+    if (opened) {
+      placeColumnTop();
+      matchHeights();
+    }
     syncPreviewPadding();
   };
 
@@ -733,9 +747,9 @@ function initMobileCameraDrawer() {
   let resizeTimeout;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(
-      () => syncPreviewPadding({ checkWidth: true }),
-      150
-    );
+    resizeTimeout = setTimeout(() => {
+      syncPreviewPadding({ checkWidth: true });
+      if (drawers.some((d) => d.isOpen())) placeColumnTop();
+    }, 150);
   });
 }

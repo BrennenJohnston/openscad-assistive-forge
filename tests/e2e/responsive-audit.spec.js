@@ -232,6 +232,20 @@ for (const vp of VIEWPORTS) {
       const panel = page.locator('#paramPanel')
       await expect(panel).toBeVisible()
 
+      // A phone held sideways starts with the column closed, so the preview
+      // has the width; opened, it is the same inline panel.
+      const sideways = await page.evaluate(
+        () =>
+          matchMedia(
+            '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)'
+          ).matches
+      )
+      if (sideways) {
+        await expect(panel).toHaveClass(/\bcollapsed\b/)
+        await page.locator('#collapseParamPanelBtn').click()
+        await expect(panel).not.toHaveClass(/\bcollapsed\b/)
+      }
+
       const gutter = page.locator('.gutter-horizontal')
       await expect(gutter).toBeVisible()
     })
