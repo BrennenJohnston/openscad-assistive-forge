@@ -73,3 +73,45 @@ describe('Auto-rotate switch', () => {
     expect(document.getElementById('autoRotateSetting').checked).toBe(true)
   })
 })
+
+// The speed slider says what the model does: three.js turns 6 degrees a
+// second for each unit the slider stores, and the preview starts at the
+// speed the slider shows.
+describe('Auto-rotate speed', () => {
+  let pm
+
+  beforeEach(() => {
+    localStorage.clear()
+    setReducedMotion(false)
+    document.body.innerHTML = `
+      <input type="checkbox" id="autoRotateSetting" />
+      <input type="range" id="rotationSpeedInput" min="0.1" max="3" step="0.1" value="0.5" />
+      <span id="rotationSpeedValue">0.5°/s</span>
+    `
+    pm = {
+      ...previewManagerStub(),
+      getGridSize: vi.fn(() => ({ widthMm: 220, heightMm: 220 })),
+      setOverlayOpacity: vi.fn(),
+      setOverlaySize: vi.fn(),
+      overlayConfig: {},
+    }
+  })
+
+  it('shows and says the speed in real degrees per second', () => {
+    initOverlayGridController({ getPreviewManager: () => pm, updateStatus: vi.fn() })
+    const slider = document.getElementById('rotationSpeedInput')
+    expect(document.getElementById('rotationSpeedValue').textContent).toBe('3.0°/s')
+    expect(slider.getAttribute('aria-valuetext')).toBe('3 degrees per second')
+
+    slider.value = '1.5'
+    slider.dispatchEvent(new Event('input'))
+    expect(document.getElementById('rotationSpeedValue').textContent).toBe('9.0°/s')
+    expect(slider.getAttribute('aria-valuetext')).toBe('9 degrees per second')
+  })
+
+  it('starts the preview at the speed the slider shows', () => {
+    const ctrl = initOverlayGridController({ getPreviewManager: () => pm, updateStatus: vi.fn() })
+    ctrl.connectPreviewManager(pm)
+    expect(pm.setAutoRotateSpeed).toHaveBeenCalledWith(0.5)
+  })
+})

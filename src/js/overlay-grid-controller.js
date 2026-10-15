@@ -26,6 +26,11 @@ const STORAGE_KEY_OVERLAY_WIDTH = getAppPrefKey('overlay-width');
 const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
+// The slider stores three.js OrbitControls' own speed, which turns a full
+// circle in 30 seconds at 2.0: 6 degrees a second for each unit. The slider
+// shows and says degrees a second, the speed the model really turns.
+const DEGREES_PER_SECOND_PER_UNIT = 6;
+const DEFAULT_ROTATE_SPEED = 0.5;
 
 /**
  * Initialize the overlay/grid controller.
@@ -1350,11 +1355,16 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   const savedRotateSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
   function updateRotationSpeedDisplay(speed) {
+    const degrees = speed * DEGREES_PER_SECOND_PER_UNIT;
     if (rotationSpeedValue) {
-      rotationSpeedValue.textContent = `${speed.toFixed(1)}°/s`;
+      rotationSpeedValue.textContent = `${degrees.toFixed(1)}°/s`;
     }
     if (rotationSpeedInput) {
       rotationSpeedInput.setAttribute('aria-valuenow', speed.toFixed(1));
+      rotationSpeedInput.setAttribute(
+        'aria-valuetext',
+        `${Number(degrees.toFixed(1))} degrees per second`
+      );
     }
   }
 
@@ -1364,10 +1374,10 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       rotationSpeedInput.value = speed;
       updateRotationSpeedDisplay(speed);
     } else {
-      updateRotationSpeedDisplay(0.5);
+      updateRotationSpeedDisplay(DEFAULT_ROTATE_SPEED);
     }
   } else if (rotationSpeedInput) {
-    updateRotationSpeedDisplay(0.5);
+    updateRotationSpeedDisplay(DEFAULT_ROTATE_SPEED);
   }
 
   if (autoRotateSetting) {
@@ -1484,12 +1494,16 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     const savedAutoRotatePref = readScopedPref(STORAGE_KEY_AUTO_ROTATE);
     const savedRotateSpeedPref = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
+    // The preview starts at the speed the slider shows, saved or not;
+    // three.js's own default would turn it four times faster than shown.
+    let startSpeed = DEFAULT_ROTATE_SPEED;
     if (savedRotateSpeedPref) {
       const speed = parseFloat(savedRotateSpeedPref);
       if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
-        pm.setAutoRotateSpeed(speed);
+        startSpeed = speed;
       }
     }
+    pm.setAutoRotateSpeed(startSpeed);
 
     if (savedAutoRotatePref === 'true' && !prefersReducedMotion.matches) {
       pm.setAutoRotate(true);
@@ -1506,7 +1520,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   function reapplyScopedAutoRotate() {
     const pm = getPreviewManager();
 
-    let speed = 0.5;
+    let speed = DEFAULT_ROTATE_SPEED;
     const savedSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
     if (savedSpeed) {
       const parsed = parseFloat(savedSpeed);
