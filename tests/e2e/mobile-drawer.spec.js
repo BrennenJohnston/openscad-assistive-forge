@@ -174,6 +174,66 @@ test.describe('Desktop Layout', () => {
     await expect(gutter).toBeVisible();
   });
 
+  // The Customizer's width animates; read it once the transition has ended.
+  async function settledWidth(panel) {
+    await panel.evaluate((el) =>
+      Promise.all(el.getAnimations().map((a) => a.finished))
+    );
+    return (await panel.boundingBox()).width;
+  }
+
+  // A width chosen with the divider survives closing and opening the
+  // Customizer: it reopens at that width and stays there.
+  test('the Customizer reopens at the width it was dragged to', async ({ page }) => {
+    await loadSampleFile(page);
+    const panel = page.locator('#paramPanel');
+    const gutter = page.locator('.gutter-horizontal');
+    await expect(gutter).toHaveAttribute('role', 'separator');
+
+    const before = await settledWidth(panel);
+    const box = await gutter.boundingBox();
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 120, y, { steps: 8 });
+    await page.mouse.up();
+    const resized = await settledWidth(panel);
+    expect(resized - before).toBeGreaterThan(100);
+
+    const toggle = page.locator('#collapseParamPanelBtn');
+    await toggle.click();
+    await expect(panel).toHaveClass(/collapsed/);
+    await toggle.click();
+    await expect(panel).not.toHaveClass(/collapsed/);
+    await expect(gutter).toBeVisible();
+    // Past the opening transition and anything scheduled after it.
+    await page.waitForTimeout(1000);
+    const reopened = await settledWidth(panel);
+    expect(Math.abs(reopened - resized)).toBeLessThanOrEqual(2);
+  });
+
+  // Each press of an arrow key moves the divider a full step, even when the
+  // presses come faster than the width animates, and the divider says the
+  // new value at once.
+  test('each arrow key press on the divider is a full step, said at once', async ({ page }) => {
+    await loadSampleFile(page);
+    const panel = page.locator('#paramPanel');
+    const gutter = page.locator('.gutter-horizontal');
+    await expect(gutter).toHaveAttribute('role', 'separator');
+
+    const before = await settledWidth(panel);
+    const startValue = Number(await gutter.getAttribute('aria-valuenow'));
+    await gutter.focus();
+    for (let i = 0; i < 5; i++) {
+      await page.keyboard.press('ArrowRight');
+    }
+    await expect(gutter).toHaveAttribute('aria-valuenow', String(startValue + 10));
+
+    const parentWidth = await panel.evaluate((el) => el.parentElement.clientWidth);
+    const moved = (await settledWidth(panel)) - before;
+    expect(Math.abs(moved - parentWidth * 0.1)).toBeLessThanOrEqual(3);
+  });
+
   test('keyboard shortcuts pop-out opens above its button on short height', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await page.setViewportSize({ width: 1280, height: 450 });
