@@ -3414,10 +3414,13 @@ test.describe('Axe-Core Scans for Missing Views', () => {
         })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze();
+      // A rule with nothing to check (no control with visible words, say)
+      // still ran: axe lists it as inapplicable.
       const ran = [
         ...results.passes,
         ...results.violations,
         ...results.incomplete,
+        ...results.inapplicable,
       ].map((rule) => rule.id);
       expect(ran).toEqual(
         expect.arrayContaining(['button-name', 'label-content-name-mismatch'])

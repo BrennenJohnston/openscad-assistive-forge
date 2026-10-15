@@ -577,7 +577,11 @@ A drawer's toggle tells a person two things before they press it: which way the 
 
 **S4 One header row.** A panel's title sits beside its toggle on one row, with the toggle at the edge the panel opens from. Action buttons keep their own row below it.
 
-**S5 No scrollbars at the design size.** The camera panel shows every button without scrolling in any window of 1280 x 720 px or larger, and it never scrolls sideways. Sliders that only the Alt View adds may sit below the fold.
+**S5 The camera controls, by screen.** Each kind of screen has its own camera layout, and where one layout gives way to the next is part of the rule. The input decides as well as the width: a phone turned sideways can be wider than a small desktop window and still needs the touch layout.
+
+- **Desktop windows (a mouse and keyboard, 768 px wide and up):** a panel on the right, one column, 180 px wide, in this order: Rotate View above Pan View, then Zoom, then the six standard views two to a row, then the projection and keyboard shortcuts buttons on one row. Reset View sits in the center of the Rotate pad and View All in the center of the Pan pad. Closed, the panel is a strip holding its toggle and title and nothing else. In a window of 1280 x 720 px or larger it shows every button without scrolling; in high contrast, where every target is 44 px, the last rows may sit below the fold in a window shorter than 935 px. It never scrolls sideways. Sliders that only the Alt View adds may sit below the fold.
+- **Phones held upright:** a drawer at the bottom, with Rotate and Pan side by side, left and right, so the drawer stays short (S6).
+- **Phones turned sideways:** the controls stack in one column as on the desktop, with the touch rules of S6: a see-through background, the preview's share of the screen, and touch-sized targets.
 
 **S6 Phones: the preview keeps half the screen.** With a project open at phone size, at least half of the screen's height shows the 3D preview while any sheet is open (the Customizer, Preview Settings & Info). The camera drawer is see-through and at most half the screen tall. Full Screen with the camera drawer open splits the screen into halves: the preview above, the drawer below. Nearly everything here is a change you check by looking at the model, so the model stays in view while you make it.
 
@@ -585,7 +589,7 @@ A drawer's toggle tells a person two things before they press it: which way the 
 
 **S8 Tetris.** A new control joins an existing row before it gets a row of its own. A row is added only when the measured width of the existing rows is spent.
 
-`tests/e2e/ui-schema.spec.js` checks S1 to S5 and S7 at 1280 x 720 and 1910 x 935 px, in the dark and light themes, high contrast and the Alt View. A rule the page does not meet yet is listed at the top of that file, and its case is expected to fail until the page meets it; then the entry comes out. The same file holds S6's phone case, marked skipped while today's phone sheets still cover the preview. `tests/e2e/mobile-toolbar.spec.js` keeps S8's row budgets on phones. A change to a rule is a change to this section and to those tests together, in the same pull request.
+`tests/e2e/ui-schema.spec.js` checks S1 to S5 and S7 at 1280 x 720 and 1910 x 935 px, in the dark and light themes, high contrast and the Alt View, and the desktop camera panel's order and closed strip on their own. S5's two phone layouts are not checked yet. A rule the page does not meet yet is listed at the top of that file, and its case is expected to fail until the page meets it; then the entry comes out. The same file holds S6's phone case, marked skipped while today's phone sheets still cover the preview. `tests/e2e/mobile-toolbar.spec.js` keeps S8's row budgets on phones. A change to a rule is a change to this section and to those tests together, in the same pull request.
 
 ---
 
