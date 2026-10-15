@@ -10594,6 +10594,9 @@ if (rounded) {
     }
 
     const minSizes = [280, 300];
+    // The last width chosen with the divider, by drag or by keyboard. The
+    // split is rebuilt from it whenever the Customizer opens again.
+    let currentSizes = initialSizes;
 
     // Initialize Split.js (only if not collapsed and not on mobile)
     const initSplit = function () {
@@ -10613,7 +10616,7 @@ if (rounded) {
 
       let splitResizePending = false;
       splitInstance = Split([paramPanel, previewPanel], {
-        sizes: initialSizes,
+        sizes: currentSizes,
         minSize: minSizes,
         gutterSize: 8,
         cursor: 'col-resize',
@@ -10631,7 +10634,7 @@ if (rounded) {
         },
         onDragEnd: (sizes) => {
           document.body.classList.remove('split-dragging');
-          // Persist sizes
+          currentSizes = sizes;
           safeSetItem(STORAGE_KEY_LAYOUT_SIZES, JSON.stringify(sizes));
 
           // Final resize after drag
@@ -10657,8 +10660,14 @@ if (rounded) {
             gutter.setAttribute('aria-controls', controlIds);
           }
 
-          // Get current sizes
+          // The split's own sizes are the width being moved to. The panels'
+          // rendered widths lag behind while their width transition runs, so
+          // a held arrow key read from them would step from a stale width
+          // and the divider would announce it.
           const getCurrentSizes = () => {
+            if (splitInstance) {
+              return splitInstance.getSizes();
+            }
             const paramWidth = paramPanel.offsetWidth;
             const previewWidth = previewPanel.offsetWidth;
             const totalWidth = paramWidth + previewWidth;
@@ -10735,6 +10744,7 @@ if (rounded) {
               // Apply new sizes
               if (splitInstance) {
                 splitInstance.setSizes([newParamSize, newPreviewSize]);
+                currentSizes = [newParamSize, newPreviewSize];
 
                 // Save to localStorage
                 safeSetItem(
@@ -11820,8 +11830,9 @@ if (rounded) {
         originalToggleParamPanel.call(this);
 
         if (wasCollapsed) {
-          // Just expanded - initialize split
-          setTimeout(initSplit, 350); // Wait for transition
+          // Built at once, so the panel opens straight to the width it had
+          // instead of opening wider or narrower and then jumping.
+          initSplit();
         } else {
           // Just collapsed - destroy split
           destroySplit();
