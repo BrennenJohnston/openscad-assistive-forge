@@ -121,6 +121,18 @@ for (const size of SIZES) {
     test.describe(`${size.width} x ${size.height}, ${look.name}`, () => {
       test.describe.configure({ mode: 'default' });
 
+      // The Alt View reads its picture back from the graphics card while a
+      // drawer moves. Where that picture is drawn in software (a CI runner
+      // has no graphics card), one step can hold the page for seconds, so
+      // these groups wait longer; what they measure is unchanged.
+      test.slow(
+        Boolean(look.altView),
+        'The Alt View is drawn in software on a machine without a graphics card'
+      );
+      const limits = look.altView
+        ? { action: 30_000, settle: 20_000, expect: 20_000 }
+        : { action: 10_000, settle: 5_000, expect: 5_000 };
+
       /** @type {import('@playwright/test').BrowserContext} */
       let context;
       /** @type {import('@playwright/test').Page} */
@@ -133,7 +145,7 @@ for (const size of SIZES) {
           viewport: size,
         });
         page = await context.newPage();
-        page.setDefaultTimeout(10_000);
+        page.setDefaultTimeout(limits.action);
         if (look.altView) {
           test.skip(
             !(await hasWebGL(page)),
@@ -221,7 +233,7 @@ for (const size of SIZES) {
                 (a) => a instanceof CSSTransition && a.playState === 'running'
               ),
           null,
-          { timeout: 5_000 }
+          { timeout: limits.settle }
         );
         let last = await page.evaluate(readToggle, sel);
         for (let i = 0; i < 20; i++) {
@@ -248,7 +260,8 @@ for (const size of SIZES) {
         await page.keyboard.press('Enter');
         await expect(page.locator(sel)).toHaveAttribute(
           'aria-expanded',
-          before.expanded ? 'false' : 'true'
+          before.expanded ? 'false' : 'true',
+          { timeout: limits.expect }
         );
         return settle(sel);
       }
@@ -481,7 +494,8 @@ for (const size of SIZES) {
           const btn = page.locator(`#${name}MenuBtn`);
           await btn.click();
           await expect(page.locator(`#${name}MenuModal`)).not.toHaveClass(
-            /\bhidden\b/
+            /\bhidden\b/,
+            { timeout: limits.expect }
           );
           await page.waitForTimeout(250);
           // The button's color eases in: read it once the transition ends.
@@ -550,7 +564,8 @@ for (const size of SIZES) {
             .toBe(m.accentText);
           await page.keyboard.press('Escape');
           await expect(page.locator(`#${name}MenuModal`)).toHaveClass(
-            /\bhidden\b/
+            /\bhidden\b/,
+            { timeout: limits.expect }
           );
         }
       });
