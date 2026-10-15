@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 // A header that earns its rows.
 //
@@ -201,8 +202,12 @@ for (const height of HEIGHTS) {
         const back = document.getElementById('clearFileBtn');
         const r = back.getBoundingClientRect();
         const seen = new Set();
+        // A point on the arrow or the words lands on their span, which
+        // belongs to the button it sits in.
         for (let x = Math.round(r.x) + 2; x < r.right; x += 4) {
-          const el = document.elementFromPoint(x, r.y + r.height / 2);
+          const el = document
+            .elementFromPoint(x, r.y + r.height / 2)
+            ?.closest('button, a');
           seen.add(el ? el.id || el.tagName.toLowerCase() : 'null');
         }
         return [...seen];
@@ -211,6 +216,122 @@ for (const height of HEIGHTS) {
         'clearFileBtn',
       ]);
     });
+  });
+
+  // The header's first row holds the Customizer button, Main Page, the
+  // Simplified/Standard switch, GitHub and Keys, left to right, and the
+  // switch never sits on a row of its own: with the Customizer button up
+  // here, the Customizer row below keeps the Preview Settings toggle and the
+  // four controls. Main Page and the Customizer button show their arrows
+  // alone at this width and keep their names.
+  test.describe(`The first header row (412x${height})`, () => {
+    test.use({ viewport: { width: 412, height } });
+
+    for (const altView of [false, true]) {
+      test(`toolbar-first-row: the Customizer button, Main Page, the switch, GitHub and Keys share one row${altView ? ' in the Alt View' : ''}`, async ({
+        page,
+      }) => {
+        test.setTimeout(240_000);
+        if (altView) {
+          await page.addInitScript(() =>
+            localStorage.setItem('openscad-customizer-hfm-unlock', 'true')
+          );
+        }
+        await loadSampleProject(page);
+        await switchToStandard(page);
+        if (altView) {
+          await skipWithoutWebGL(
+            page,
+            'no WebGL: the Alt View draws its characters from the 3D picture'
+          );
+          await page.locator('#_hfmToggle').click();
+          await expect(page.locator('html')).toHaveAttribute(
+            'data-ui-variant',
+            'mono'
+          );
+          await page.waitForTimeout(500);
+        }
+
+        const row = await page.evaluate(() => {
+          const wanted = {
+            customizer: '#mobileDrawerToggle',
+            mainPage: '#clearFileBtn',
+            mode: '#uiModeToggle',
+            github: '.app-header .github-link',
+            keys: '#shortcutsToggle',
+          };
+          return Object.entries(wanted).map(([key, selector]) => {
+            const el = document.querySelector(selector);
+            const r = el.getBoundingClientRect();
+            return {
+              key,
+              inHeader: !!el.closest('.app-header'),
+              top: Math.round(r.top),
+              left: Math.round(r.left),
+              width: Math.round(r.width),
+              height: Math.round(r.height),
+              name: el.getAttribute('aria-label'),
+            };
+          });
+        });
+        const where = row
+          .map((c) => `${c.key} ${c.left},${c.top} ${c.width}x${c.height}`)
+          .join('; ');
+
+        for (const c of row) {
+          expect(c.inHeader, `${c.key} is in the header (${where})`).toBe(true);
+          expect(c.width, `${c.key} width`).toBeGreaterThanOrEqual(44);
+          expect(c.height, `${c.key} height`).toBeGreaterThanOrEqual(44);
+        }
+        const tops = row.map((c) => c.top);
+        expect(
+          Math.max(...tops) - Math.min(...tops),
+          `one row (${where})`
+        ).toBeLessThanOrEqual(2);
+        expect(
+          [...row].sort((a, b) => a.left - b.left).map((c) => c.key),
+          'left to right'
+        ).toEqual(['customizer', 'mainPage', 'mode', 'github', 'keys']);
+        expect(row.find((c) => c.key === 'customizer').name).toBe(
+          'Customizer panel'
+        );
+        expect(row.find((c) => c.key === 'mainPage').name).toBe('Main Page');
+
+        // Tab order follows the row.
+        const order = await page.evaluate(() => {
+          const focusable = [
+            ...document.querySelectorAll('.app-header button, .app-header a'),
+          ].filter((el) => el.checkVisibility() && el.tabIndex >= 0);
+          return focusable.map(
+            (el) => el.id || String(el.className).split(' ').pop()
+          );
+        });
+        expect(
+          order.filter((id) =>
+            [
+              'mobileDrawerToggle',
+              'clearFileBtn',
+              'uiModeToggle',
+              'github-link',
+              'shortcutsToggle',
+            ].includes(id)
+          ),
+          'the header in tab order'
+        ).toEqual([
+          'mobileDrawerToggle',
+          'clearFileBtn',
+          'uiModeToggle',
+          'github-link',
+          'shortcutsToggle',
+        ]);
+
+        // The header is one row high.
+        const header = await page.evaluate(() =>
+          Math.round(document.querySelector('.app-header').getBoundingClientRect().height)
+        );
+        expect(header, 'the header height').toBeLessThan(60);
+      });
+    }
   });
 
   test.describe(`The four controls in the Customizer row (412x${height})`, () => {

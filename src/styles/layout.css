@@ -53,11 +53,14 @@ body {
 }
 
 /* The Main Page button leads the header in both themes, nearest
-   the browser's own Back button; the branding shifts right. */
+   the browser's own Back button (on a phone the Customizer button comes
+   first); the branding shifts right. Its arrow and its words are two spans,
+   so the gap is the space between them. */
 .header-content > #clearFileBtn {
   min-height: var(--size-touch-target);
   min-width: var(--size-touch-target);
   flex-shrink: 0;
+  gap: var(--space-xs);
 }
 
 /* You are already on the main page while the welcome screen is up. */
@@ -3812,6 +3815,42 @@ details summary:focus,
     gap: var(--space-xs);
     flex-wrap: wrap;
     row-gap: var(--space-2xs);
+  }
+}
+
+/* A phone with a project open: the header's first row also carries the
+   Customizer button (mobile-toolbar.js moves it there), so Main Page and the
+   Customizer button show their arrows alone, keeping their names, and the
+   switch's two options take the small padding. Measured at 412px: Main Page
+   101px and the Customizer button 98px with their words, the switch 194px
+   (206px in the Alt View's font); the 396px row holds the five only this
+   way. The Customizer button takes the header's button look, and its open
+   state keeps the shared pressed color. */
+@media (max-width: 767px) {
+  body[data-mobile-toolbar='relocated'] #clearFileBtn .clear-file-label,
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle
+    .btn-label {
+    display: none;
+  }
+
+  body[data-mobile-toolbar='relocated'] .app-header .ui-mode-option {
+    padding: 0 var(--space-sm);
+  }
+
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle:not([aria-expanded='true']) {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-text-primary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-primary);
+  }
+
+  body[data-mobile-toolbar='relocated'] .app-header #mobileDrawerToggle {
+    justify-content: center;
+    flex-shrink: 0;
   }
 }
 

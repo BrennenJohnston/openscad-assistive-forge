@@ -46,6 +46,9 @@ import { onAppSurfaceChange } from './app-surface.js';
 /** @type {{ parent: HTMLElement, nextSibling: Node|null }|null} */
 let home = null;
 
+/** Where each first-row control lives off a phone, recorded on its first move. */
+const firstRowHomes = new Map();
+
 function shouldRelocate() {
   return (
     !isViewportDesktopShaped() && document.body.dataset.appSurface === 'project'
@@ -68,6 +71,48 @@ function moveWithFocus(actions, parent, before) {
 }
 
 /**
+ * The header's first row on a phone: the Customizer button leads it, then
+ * Main Page, then the Simplified/Standard switch ahead of GitHub and Keys,
+ * so the order on screen is the tab order. Its old place in the Customizer
+ * row is what leaves that row room. layout.css makes the five fit 412px.
+ * @param {boolean} relocate
+ */
+function placeFirstRow(relocate) {
+  const header = document.querySelector('.header-content');
+  const controls = document.querySelector('.header-controls');
+  const moves = [
+    [
+      document.getElementById('mobileDrawerToggle'),
+      header,
+      document.getElementById('clearFileBtn'),
+    ],
+    [
+      document.getElementById('uiModeToggle'),
+      controls,
+      controls?.querySelector(':scope > .github-link'),
+    ],
+  ];
+  for (const [el, parent, before] of moves) {
+    if (!el || !parent || !before) continue;
+    if (!firstRowHomes.has(el)) {
+      firstRowHomes.set(el, {
+        parent: el.parentElement,
+        nextSibling: el.nextSibling,
+      });
+    }
+    const back = firstRowHomes.get(el);
+    if (relocate) {
+      if (el.nextSibling !== before) moveWithFocus(el, parent, before);
+    } else if (
+      el.parentElement !== back.parent ||
+      el.nextSibling !== back.nextSibling
+    ) {
+      moveWithFocus(el, back.parent, back.nextSibling);
+    }
+  }
+}
+
+/**
  * Put the row where the current viewport and surface say it belongs.
  * Safe to call at any time and as often as you like.
  */
@@ -87,6 +132,7 @@ export function applyMobileToolbar() {
   } else if (home.parent && actions.parentElement !== home.parent) {
     moveWithFocus(actions, home.parent, home.nextSibling);
   }
+  placeFirstRow(relocate);
 
   // The visible heading is what pays for the four controls. It stays in the
   // DOM and keeps naming #previewInfoContent through aria-labelledby, so the
