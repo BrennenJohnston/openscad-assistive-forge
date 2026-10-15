@@ -717,6 +717,307 @@ for (const look of LOOKS.filter((l) => !l.altView)) {
   });
 }
 
+/**
+ * The simple box open in Standard at a phone's size, in a look, with the
+ * camera drawer opened by its toggle.
+ */
+async function openPhoneCameraDrawer(page, look) {
+  await page.addInitScript((l) => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', l.theme);
+    if (l.highContrast) {
+      localStorage.setItem('openscad-forge-high-contrast', 'true');
+    }
+    if (l.altView) {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    }
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    );
+  }, look);
+  await page.goto('/?example=simple-box', { timeout: 60_000 });
+  if (look.altView) {
+    test.skip(
+      !(await hasWebGL(page)),
+      'The Alt View draws from the 3D picture; this browser has no WebGL'
+    );
+  }
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await page
+    .locator('.param-control')
+    .first()
+    .waitFor({ state: 'attached', timeout: 60_000 });
+  const notNow = page.locator('#saveProjectNotNow');
+  if (
+    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+      () => true,
+      () => false
+    )
+  ) {
+    await notNow.click();
+  }
+  if (look.altView) {
+    await page.locator('#_hfmToggle').click();
+    await page.waitForFunction(
+      () => document.documentElement.getAttribute('data-ui-variant') === 'mono'
+    );
+  }
+  const toggle = page.locator('#cameraDrawerToggle');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.waitForTimeout(500);
+}
+
+/** A computed background color's alpha: rgb(), rgba() or color(... / a). */
+function alphaOf(color) {
+  const slash = /\/\s*([\d.]+)\s*\)$/.exec(color);
+  if (slash) return Number(slash[1]);
+  const rgba = /rgba\(([^)]+)\)/.exec(color);
+  if (rgba) return Number(rgba[1].split(/[ ,]+/).filter(Boolean)[3]);
+  return 1;
+}
+
+/** The open phone drawer's layout, read in the page. */
+function readPhoneDrawer() {
+  const body = document.getElementById('cameraDrawerBody');
+  const box = (el) => el.getBoundingClientRect();
+  const center = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const name = (el) =>
+    el.getAttribute('aria-label') || el.dataset.level || el.textContent.trim();
+  const padOf = (id) =>
+    document.getElementById(id)?.closest('.camera-drawer-dpad') ?? null;
+  const offCenter = (id, pad) => {
+    const button = document.getElementById(id);
+    if (!pad || !button || !pad.contains(button)) return null;
+    const a = center(box(button));
+    const b = center(box(pad));
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const rotatePad = padOf('mobileCameraRotateUp');
+  const panPad = padOf('mobileCameraPanUp');
+  const buttons = [...body.querySelectorAll('button')]
+    .filter(shown)
+    .map((b) => {
+      const r = box(b);
+      return { name: name(b), y: r.y, w: r.width, h: r.height };
+    });
+  // Alone on its row: no other button shares half of its height band.
+  const lone = buttons
+    .filter(
+      (c) =>
+        !buttons.some(
+          (o) =>
+            o !== c &&
+            Math.min(c.y + c.h, o.y + o.h) - Math.max(c.y, o.y) >= c.h / 2
+        )
+    )
+    .map((c) => c.name);
+  return {
+    viewportHeight: innerHeight,
+    bodyHeight: box(body).height,
+    background: getComputedStyle(body).backgroundColor,
+    sideBySide:
+      !!rotatePad &&
+      !!panPad &&
+      box(rotatePad).right <= box(panPad).left &&
+      Math.abs(box(rotatePad).top - box(panPad).top) <= 2,
+    resetOffCenter: offCenter('mobileCameraResetView', rotatePad),
+    viewAllOffCenter: offCenter('mobileCameraViewAll', panPad),
+    views: [...body.querySelectorAll('.camera-view-btn')]
+      .filter(shown)
+      .map((b) => b.dataset.view),
+    small: buttons
+      .filter((b) => b.w + 0.5 < 44 || b.h + 0.5 < 44)
+      .map((b) => `${b.name} ${Math.round(b.w)}x${Math.round(b.h)}`),
+    lone,
+    strip: shown(document.getElementById('altViewControls')),
+    asciiToggle: shown(document.getElementById('asciiDrawerToggle')),
+  };
+}
+
+/** The open ASCII drawer and the bar it opens from, read in the page. */
+function readAsciiDrawer() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const body = document.getElementById('asciiDrawerBody');
+  const ascii = box(document.getElementById('asciiDrawerToggle'));
+  const camera = box(document.getElementById('cameraDrawerToggle'));
+  return {
+    bodyHeight: box(body).height,
+    leftOfCamera:
+      Math.abs(ascii.top - camera.top) <= 1 && ascii.right <= camera.left + 1,
+    steps:
+      shown(document.getElementById('altViewCharactersSmallerMobile')) &&
+      shown(document.getElementById('altViewCharactersLargerMobile')) &&
+      [
+        ...body.querySelectorAll('#altViewEdgesMobile .alt-view-level-btn'),
+      ].filter(shown).length === 3 &&
+      shown(document.getElementById('_hfmPanAdjustMobile')),
+    small: [...body.querySelectorAll('button')]
+      .filter(shown)
+      .map((b) => {
+        const r = box(b);
+        return {
+          name: b.getAttribute('aria-label') || b.textContent.trim(),
+          w: r.width,
+          h: r.height,
+        };
+      })
+      .filter((b) => b.w + 0.5 < 44 || b.h + 0.5 < 44)
+      .map((b) => `${b.name} ${Math.round(b.w)}x${Math.round(b.h)}`),
+  };
+}
+
+// The phone camera drawer, upright: Rotate and Pan side by side with Zoom
+// between them, Reset View and View All in the pads' centers, the six views
+// and the tools sharing a row; at most half the screen tall, see-through
+// (high contrast keeps its solid surfaces), no button alone on a row, and in
+// the Alt View its own controls in the drawer rather than over the preview.
+for (const height of [915, 810]) {
+  for (const look of LOOKS) {
+    test.describe(`The phone camera drawer, 412 x ${height}, ${look.name}`, () => {
+      // No isMobile: Firefox rejects it when the browser context is created.
+      test.use({ viewport: { width: 412, height }, hasTouch: true });
+
+      test('upright: the pads side by side with their centers, half the screen at most, see-through, nothing alone', async ({
+        page,
+      }) => {
+        test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+        await openPhoneCameraDrawer(page, look);
+        const m = await page.evaluate(readPhoneDrawer);
+        expect
+          .soft(
+            m.bodyHeight,
+            `S6: the drawer is ${Math.round(m.bodyHeight)} px of a ${m.viewportHeight} px screen`
+          )
+          .toBeLessThanOrEqual(m.viewportHeight / 2 + 0.5);
+        if (!look.highContrast) {
+          expect
+            .soft(
+              alphaOf(m.background),
+              `S6: the drawer is see-through (${m.background})`
+            )
+            .toBeLessThan(1);
+        }
+        expect.soft(m.sideBySide, 'S5: Rotate and Pan side by side').toBe(true);
+        expect
+          .soft(m.resetOffCenter, 'S5: Reset View in the Rotate pad center')
+          .not.toBeNull();
+        expect.soft(m.resetOffCenter ?? 99).toBeLessThanOrEqual(2);
+        expect
+          .soft(m.viewAllOffCenter, 'S5: View All in the Pan pad center')
+          .not.toBeNull();
+        expect.soft(m.viewAllOffCenter ?? 99).toBeLessThanOrEqual(2);
+        expect
+          .soft(m.views, 'the six standard views, no Diagonal')
+          .toEqual(['top', 'front', 'right', 'left', 'back', 'bottom']);
+        expect.soft(m.small, 'buttons under 44 px').toEqual([]);
+        expect.soft(m.lone, 'S8: buttons alone on a row').toEqual([]);
+        if (!look.altView) {
+          expect
+            .soft(m.asciiToggle, 'no ASCII drawer outside the Alt View')
+            .toBe(false);
+          return;
+        }
+        // The Alt View's own controls: off the preview, in the ASCII drawer
+        // at the left of the bar, which opens into the camera drawer's space
+        // and closes the camera drawer first.
+        expect
+          .soft(m.strip, "the strip's controls stay off the preview")
+          .toBe(false);
+        const ascii = page.locator('#asciiDrawerToggle');
+        await ascii.focus();
+        await page.keyboard.press('Enter');
+        await expect(ascii).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.locator('#cameraDrawerToggle')).toHaveAttribute(
+          'aria-expanded',
+          'false'
+        );
+        await page.waitForTimeout(300);
+        const a = await page.evaluate(readAsciiDrawer);
+        expect.soft(a.leftOfCamera, 'ASCII at the left of Camera').toBe(true);
+        expect
+          .soft(
+            Math.abs(a.bodyHeight - m.bodyHeight),
+            `the ASCII drawer opens into the camera drawer's space (${Math.round(a.bodyHeight)} and ${Math.round(m.bodyHeight)} px)`
+          )
+          .toBeLessThanOrEqual(1);
+        expect
+          .soft(a.steps, "the Alt View's steps and levels in the ASCII drawer")
+          .toBe(true);
+        expect.soft(a.small, 'ASCII drawer buttons under 44 px').toEqual([]);
+      });
+    });
+  }
+}
+
+// On a phone one drawer is open at a time: opening the Customizer, Preview
+// Settings & Info or the camera drawer first closes whichever is open. On a
+// desktop window the panels sit side by side and stay open together.
+test.describe('One drawer at a time on a phone, 412 x 915', () => {
+  // No isMobile: Firefox rejects it when the browser context is created.
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+  test('opening a drawer closes the one that is open', async ({ page }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await openPhoneCameraDrawer(page, LOOKS[0]);
+    const camera = page.locator('#cameraDrawerToggle');
+    const customizer = page.locator('#mobileDrawerToggle');
+    const settings = page.locator('#previewDrawerToggle');
+
+    // The camera drawer is open; the Customizer button closes it.
+    await customizer.click();
+    await expect(customizer).toHaveAttribute('aria-expanded', 'true');
+    await expect(camera).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Escape');
+    await expect(customizer).toHaveAttribute('aria-expanded', 'false');
+
+    // Preview Settings & Info, then the camera drawer: it closes.
+    await settings.click();
+    await expect(settings).toHaveAttribute('aria-expanded', 'true');
+    await camera.click();
+    await expect(camera).toHaveAttribute('aria-expanded', 'true');
+    await expect(settings).toHaveAttribute('aria-expanded', 'false');
+    await expect(camera).toBeFocused();
+
+    // And the other way: the camera drawer closes for Preview Settings.
+    await settings.click();
+    await expect(settings).toHaveAttribute('aria-expanded', 'true');
+    await expect(camera).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+test.describe('Panels side by side on a desktop window, 1280 x 720', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+
+  test('the camera panel and Preview Settings open together with the Customizer', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await openDesktopCameraProject(page, LOOKS[0], { open: true });
+    const settings = page.locator('#previewDrawerToggle');
+    if ((await settings.getAttribute('aria-expanded')) !== 'true') {
+      await settings.click();
+    }
+    await expect(settings).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#cameraPanelToggle')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect(page.locator('#paramPanel')).toBeVisible();
+    await expect(page.locator('#paramPanel')).not.toHaveClass(/\bcollapsed\b/);
+  });
+});
+
 // The camera panel's keyboard shortcuts open as a pop-out above their button,
 // inside the panel, and close the three ways a pop-out closes: its button,
 // Escape, and a press anywhere else.

@@ -179,7 +179,17 @@ test.describe('the Alt View’s Characters control on a phone', () => {
     await expect(key).toBeVisible();
     await key.click();
     await expect(key).toHaveAttribute('aria-pressed', 'true');
-    await expectAtLeast(page, '.alt-view-stepper-btn', 'a characters button');
-    await expectAtLeast(page, '.alt-view-level-btn', 'an edges button');
+    // On a phone they sit in the ASCII drawer.
+    await page.locator('#asciiDrawerToggle').click();
+    await expectAtLeast(
+      page,
+      '#asciiDrawerBody .alt-view-stepper-btn',
+      'a characters button'
+    );
+    await expectAtLeast(
+      page,
+      '#asciiDrawerBody .alt-view-level-btn',
+      'an edges button'
+    );
   });
 });

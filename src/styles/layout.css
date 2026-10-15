@@ -3108,7 +3108,9 @@ details summary:focus,
     white-space: nowrap;
   }
 
-  /* Camera drawer body - game controller layout with semi-transparent background */
+  /* Camera drawer body: Rotate, Zoom and Pan side by side, then the views
+     and the tools, then the Alt View's own controls, on a see-through
+     surface so the model shows between the buttons. */
   .camera-drawer-body {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -3138,7 +3140,6 @@ details summary:focus,
   }
 
   .camera-drawer-section.hfm-slider-section {
-    grid-column: 1 / -1;
     align-items: stretch;
   }
 
@@ -3181,31 +3182,9 @@ details summary:focus,
   .camera-drawer-dpad .dpad-right {
     grid-area: right;
   }
-  /* Center control (replaces the center label in hidden/alt view mode) */
+  /* Reset View in the Rotate pad's center, View All in the Pan pad's. */
   .camera-drawer-dpad .dpad-center {
     grid-area: center;
-  }
-
-  /* Center label in D-pad */
-  .camera-drawer-dpad-label {
-    grid-area: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    background: color-mix(in srgb, var(--color-bg-secondary) 85%, transparent);
-    border-radius: var(--border-radius-sm);
-  }
-
-  /* Fallback for D-pad label */
-  @supports not (background-color: color-mix(in srgb, red 50%, blue)) {
-    .camera-drawer-dpad-label {
-      background: var(--color-bg-secondary);
-    }
   }
 
   /* Camera drawer buttons - expanded for better touch targets, semi-transparent */
@@ -3249,30 +3228,6 @@ details summary:focus,
     transform: scale(0.95);
   }
 
-  /* Auto-rotate toggle button in mobile drawer D-pad center */
-  .camera-drawer-btn.auto-rotate-toggle {
-    background: var(--color-bg-secondary);
-    border-color: var(--color-border);
-  }
-
-  .camera-drawer-btn.auto-rotate-toggle:hover {
-    background: var(--color-bg-tertiary);
-    border-color: var(--color-text-primary);
-  }
-
-  .camera-drawer-btn.auto-rotate-toggle.active,
-  .camera-drawer-btn.auto-rotate-toggle[aria-pressed='true'] {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-accent-text);
-  }
-
-  .camera-drawer-btn.auto-rotate-toggle.active:hover,
-  .camera-drawer-btn.auto-rotate-toggle[aria-pressed='true']:hover {
-    background: var(--color-accent-hover);
-    border-color: var(--color-accent-hover);
-  }
-
   /* Zoom controls layout (vertical stack) */
   .camera-drawer-zoom-controls {
     display: flex;
@@ -3284,15 +3239,6 @@ details summary:focus,
   .camera-drawer-zoom-controls .camera-drawer-btn {
     width: 44px;
     height: 44px;
-  }
-
-  /* Reset button with text */
-  .camera-drawer-reset-btn {
-    width: auto !important;
-    min-width: auto;
-    padding: var(--space-xs) var(--space-sm);
-    gap: var(--space-xs);
-    font-size: var(--font-size-xs);
   }
 
   /* Position sections: Rotate left, Zoom center, Pan right */
@@ -3313,47 +3259,96 @@ details summary:focus,
     max-width: 140px;
   }
 
-  /* Standard Views section - horizontal scrollable row on mobile */
+  /* The six views and the tools share a row while it has room; past that
+     the tools take the next row together, never one button alone. The
+     shortcuts pop-out opens above this row. */
   .camera-drawer-views {
     grid-column: 1 / -1;
-    align-items: stretch !important;
+    position: relative;
     width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: center;
+    gap: var(--space-sm);
   }
 
-  .camera-drawer-views-grid {
+  .camera-drawer-views-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+
+  .camera-drawer-views-grid,
+  .camera-drawer-tools {
+    display: flex;
+    gap: var(--space-xs);
+  }
+
+  /* The projection button shows the projection that is showing, as the
+     camera panel's does. */
+  #mobileProjectionToggle .projection-icon {
+    display: none;
+  }
+
+  #mobileProjectionToggle[data-projection='perspective']
+    .projection-icon--perspective,
+  #mobileProjectionToggle[data-projection='orthographic']
+    .projection-icon--orthographic {
+    display: inline;
+  }
+
+  /* The Alt View's ASCII drawer, beside the camera drawer and only while
+     the Alt View is on: its sliders, then the Characters steps, then the
+     Edges levels with the pan adjust button at the row's end. Hidden, it
+     stays hidden in Full Screen too. */
+  #asciiDrawer[hidden] {
+    display: none !important;
+  }
+
+  .ascii-drawer-body {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-xs);
+  }
+
+  .ascii-drawer-row {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-xs);
-    justify-content: center;
-  }
-
-  .camera-drawer-views-grid .camera-view-btn {
-    flex: 0 0 auto;
-    min-width: 60px;
-    padding: var(--space-xs) var(--space-sm);
-    font-size: var(--font-size-xs);
-  }
-
-  /* Projection toggle section */
-  .camera-drawer-projection {
-    grid-column: 1 / -1;
-    width: 100%;
-    align-items: center !important;
-  }
-
-  .camera-drawer-projection-btn {
-    display: flex;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-xs);
-    padding: var(--space-xs) var(--space-md);
-    font-size: var(--font-size-xs);
-    width: auto;
-    min-height: 36px;
+    justify-content: space-between;
+    gap: var(--space-sm);
   }
 
-  .camera-drawer-projection-btn svg {
-    flex-shrink: 0;
+  .ascii-drawer-row .alt-pan-toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Each slider on one row, its title, the slider and its value, where a
+     phone's sliders otherwise take a row of their own. */
+  .ascii-drawer-body .hfm-slider-section {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .ascii-drawer-body .hfm-slider-section .camera-drawer-section-title {
+    flex: 0 0 7.5em;
+  }
+
+  .ascii-drawer-body .hfm-slider-section .slider-container {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .ascii-drawer-body .hfm-slider-section input[type='range'] {
+    flex: 1 1 auto;
+    order: 0;
+    min-width: 0;
   }
 
   /* Primary actions on mobile - full width at bottom */
@@ -3485,17 +3480,19 @@ details summary:focus,
     font-weight: 700;
   }
 
-  :root[data-high-contrast='true'] .camera-drawer-dpad-label {
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
-    font-weight: 700;
-  }
-
   :root[data-high-contrast='true'] .camera-drawer-btn:hover,
   :root[data-high-contrast='true'] .camera-drawer-btn:focus {
     background: var(--color-accent);
     color: var(--color-accent-text);
     border-color: var(--color-accent);
+  }
+
+  /* Asked for less transparency: the drawer's body is solid too (the
+     drawer itself is made solid with the other surfaces in components.css). */
+  @media (prefers-reduced-transparency: reduce) {
+    :root .camera-drawer-body {
+      background: var(--color-bg-primary) !important;
+    }
   }
 }
 
@@ -3658,12 +3655,6 @@ details summary:focus,
     background: Highlight !important;
     color: HighlightText !important;
     border-color: Highlight !important;
-  }
-
-  .camera-drawer-dpad-label {
-    background: Canvas !important;
-    color: CanvasText !important;
-    border: 1px solid CanvasText !important;
   }
 
   .camera-drawer-section-title {
@@ -3878,6 +3869,21 @@ details summary:focus,
     flex-direction: unset;
   }
 
+  /* In the Alt View the ASCII toggle shares the row, at the left, the
+     camera's at the right. */
+  :root .preview-panel .actions-bar:has(> #asciiDrawer:not([hidden])) {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'drawer-content drawer-content'
+      'ascii camera'
+      'primary primary';
+  }
+
+  :root #asciiDrawer {
+    grid-area: ascii;
+    border-right: 1px solid var(--color-border);
+  }
+
   /* Camera drawer across the full width */
   :root .camera-drawer {
     grid-area: camera;
@@ -3931,8 +3937,8 @@ details summary:focus,
     bottom: calc(
       (var(--actions-bar-height) * 2) + env(safe-area-inset-bottom, 0px)
     ) !important;
-    /* Limit height and allow scrolling */
-    max-height: 45vh !important;
+    /* At most half the screen; the rest scrolls inside it */
+    max-height: 50vh !important;
     overflow-y: auto !important;
     overflow-x: hidden;
     border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
@@ -3940,7 +3946,7 @@ details summary:focus,
     box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
     /* Ensure proper box model */
     box-sizing: border-box;
-    /* Padding: add extra top room so the absolute "Zoom" label isn't clipped */
+    /* Padding: room at the top for the Rotate, Zoom and Pan titles */
     padding: var(--space-sm) var(--space-xs) !important;
     padding-top: calc(var(--space-sm) + 1.5em) !important;
     /* Grid layout for camera controls */
@@ -3986,15 +3992,6 @@ details summary:focus,
     min-height: var(--camera-btn-size);
   }
 
-  /* Hidden/alt view: pan-adjust toggle must match D-pad sizing */
-  .camera-drawer:not(.collapsed) .camera-drawer-dpad .alt-pan-toggle {
-    width: var(--camera-btn-size);
-    height: var(--camera-btn-size);
-    min-width: var(--camera-btn-size);
-    min-height: var(--camera-btn-size);
-    padding: 0;
-  }
-
   /* D-pad rows - tighter */
   .camera-drawer:not(.collapsed) .camera-drawer-dpad {
     grid-template-columns: repeat(3, var(--camera-btn-size));
@@ -4013,20 +4010,26 @@ details summary:focus,
     align-self: center;
   }
 
-  /* Zoom section - compact vertical stack, centered */
+  /* Zoom section - compact vertical stack, centered; as tall as the pads,
+     so its title sits on the pads' title line */
   .camera-drawer:not(.collapsed) .camera-drawer-zoom {
     justify-self: center;
-    align-self: center;
-    position: relative;
+    align-self: stretch;
+    justify-content: center;
     width: var(--camera-btn-size);
     min-width: var(--camera-btn-size);
     gap: var(--space-2xs);
   }
 
-  /* Keep Zoom title visible but remove it from layout height */
+  /* The three titles sit in the body's top padding, taking no row */
   .camera-drawer:not(.collapsed)
-    .camera-drawer-zoom
-    .camera-drawer-section-title {
+    :is(.camera-drawer-rotate, .camera-drawer-zoom, .camera-drawer-pan) {
+    position: relative;
+  }
+
+  .camera-drawer:not(.collapsed)
+    :is(.camera-drawer-rotate, .camera-drawer-zoom, .camera-drawer-pan)
+    > .camera-drawer-section-title {
     position: absolute;
     top: 0;
     left: 50%;
@@ -4053,28 +4056,24 @@ details summary:focus,
     padding: 0;
   }
 
-  .camera-drawer:not(.collapsed) .camera-drawer-reset-btn {
-    width: var(--camera-btn-size);
-    min-width: var(--camera-btn-size);
-    padding: 0;
-    font-size: var(--font-size-2xs);
-    min-height: var(--camera-btn-size);
+  /* The views row takes the body's width */
+  .camera-drawer:not(.collapsed) .camera-drawer-views {
+    justify-self: stretch;
   }
 
-  /* Reset button: hide text on tight mobile layout */
-  .camera-drawer:not(.collapsed) .camera-drawer-reset-btn span {
-    display: none;
+  /* The ASCII drawer's body is a column, and needs no room for titles at
+     its top. It opens where the camera drawer opens, at the same height
+     (camera-panel-controller.js matches the two). */
+  :root .ascii-drawer:not(.collapsed) .ascii-drawer-body {
+    display: flex !important;
+    align-items: stretch;
+    padding: var(--space-sm) var(--space-md) !important;
   }
 
   /* Section titles - smaller */
   .camera-drawer:not(.collapsed) .camera-drawer-section-title {
     font-size: var(--font-size-2xs);
     margin-bottom: var(--space-2xs);
-  }
-
-  /* D-pad center labels - smaller */
-  .camera-drawer:not(.collapsed) .camera-drawer-dpad-label {
-    font-size: 0.5625rem;
   }
 
   /* ============================================================================

@@ -148,6 +148,18 @@ async function audit(page, rootSelector, contentColors = null) {
         // A sheet from another origin cannot be read; none of ours is.
       }
     }
+    // A translucent color as the same color, opaque: rgba(r, g, b, a) and
+    // color(srgb r g b / a) both read as rgb(r, g, b); anything else, null.
+    const opaque = (value) => {
+      const rgba = /^rgba\((\d+), (\d+), (\d+), [\d.]+\)$/.exec(value);
+      if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`;
+      const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+) \/ [\d.]+\)$/.exec(
+        value
+      );
+      if (!srgb) return null;
+      const [r, g, b] = srgb.slice(1, 4).map((n) => Math.round(Number(n) * 255));
+      return `rgb(${r}, ${g}, ${b})`;
+    };
     const palette = new Set([
       'rgba(0, 0, 0, 0)',
       'rgb(0, 0, 0)',
@@ -288,7 +300,9 @@ async function audit(page, rootSelector, contentColors = null) {
         if (isContent || !applies || !value || value === 'rgba(0, 0, 0, 0)') {
           continue;
         }
-        if (!palette.has(value)) {
+        // A see-through surface is the look's own color, let partly through.
+        const seeThrough = prop === 'background-color' && opaque(value);
+        if (!palette.has(value) && !(seeThrough && palette.has(seeThrough))) {
           offenders.color.push(`${describe(el)} ${prop} ${value}`);
         }
       }

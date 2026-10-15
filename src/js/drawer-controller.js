@@ -10,6 +10,10 @@
  */
 
 import { createDocumentFocusTrap } from './focus-trap.js';
+import {
+  closeOtherPhoneDrawers,
+  registerPhoneDrawer,
+} from './phone-drawers.js';
 
 const MOBILE_BREAKPOINT_PX = 768;
 
@@ -93,6 +97,9 @@ export function initDrawerController() {
     // trap focus in a panel that is already in the normal document flow.
     if (document.body.dataset.uiMode === 'classic') return;
 
+    // On a phone one drawer is open at a time.
+    closeOtherPhoneDrawers('customizer');
+
     triggerEl = trigger || toggleBtn;
     isOpen = true;
 
@@ -129,7 +136,7 @@ export function initDrawerController() {
     // Set up focus trap using shared utility (document-level so it works even if focus escapes)
     // ESC should close even if focus isn't inside the drawer (e.g. on toggle button)
     focusTrap = createDocumentFocusTrap(drawer, {
-      onEscape: close,
+      onEscape: () => close(),
       fallbackFocus: drawer,
       // Re-read on every Tab: a tour can start or finish while the drawer
       // is open, and the card must be reachable exactly while it exists.
@@ -174,8 +181,10 @@ export function initDrawerController() {
 
   /**
    * Close the drawer
+   * @param {{restoreFocus?: boolean}} [options] - restoreFocus false when
+   *   another drawer is opening: focus stays on the control that opened it
    */
-  function close() {
+  function close({ restoreFocus = true } = {}) {
     if (!isOpen) return;
 
     isOpen = false;
@@ -225,7 +234,7 @@ export function initDrawerController() {
 
     // Return focus to trigger
     if (triggerEl) {
-      triggerEl.focus();
+      if (restoreFocus) triggerEl.focus();
       triggerEl = null;
     }
   }
@@ -326,8 +335,10 @@ export function initDrawerController() {
 
   // Wire up close button
   if (closeBtn) {
-    closeBtn.addEventListener('click', close);
+    closeBtn.addEventListener('click', () => close());
   }
+
+  registerPhoneDrawer('customizer', { isOpen: () => isOpen, close });
 
   // Close drawer on resize to desktop breakpoint
   let resizeTimeout;

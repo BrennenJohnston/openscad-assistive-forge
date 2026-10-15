@@ -7,6 +7,10 @@
  */
 
 import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import {
+  closeOtherPhoneDrawers,
+  registerPhoneDrawer,
+} from './phone-drawers.js';
 
 // Storage key using standardized naming convention
 const STORAGE_KEY_DRAWER_COLLAPSED = getDrawerStateKey('preview-settings');
@@ -62,6 +66,8 @@ export function initPreviewSettingsDrawer(options = {}) {
    */
   const expand = () => {
     if (isExpanded) return;
+    // On a phone one drawer is open at a time.
+    closeOtherPhoneDrawers('preview-settings');
     isExpanded = true;
     previewInfoSection.classList.remove('preview-drawer-collapsed');
     previewInfoSection.classList.add('preview-drawer-expanded');
@@ -116,6 +122,10 @@ export function initPreviewSettingsDrawer(options = {}) {
 
   // Attach click handler to toggle button
   toggleBtn.addEventListener('click', toggle);
+  registerPhoneDrawer('preview-settings', {
+    isOpen: () => isExpanded,
+    close: () => collapse(),
+  });
 
   // Set initial state - check saved preference first, then default based on screen size
   const isMobile = window.innerWidth < 768;

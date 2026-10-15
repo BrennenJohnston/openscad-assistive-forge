@@ -301,4 +301,59 @@ describe('Camera Panel Controller', () => {
     expect(btn.dataset.projection).toBe('orthographic')
     expect(btn.getAttribute('aria-pressed')).toBe('true')
   })
+
+  // The phone drawer's projection button is a picture too: it shows the
+  // projection that is showing, as the camera panel's does.
+  it('keeps the phone drawer projection button showing the projection', () => {
+    setupDom({ includeMobile: true })
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<button id="mobileProjectionToggle" data-projection="perspective" aria-pressed="false" title="Switch to Orthographic"></button>'
+    )
+    initCameraPanelController()
+    const btn = document.getElementById('mobileProjectionToggle')
+
+    document.dispatchEvent(
+      new CustomEvent('preview-projection-change', { detail: { mode: 'orthographic' } })
+    )
+    expect(btn.dataset.projection).toBe('orthographic')
+    expect(btn.getAttribute('aria-pressed')).toBe('true')
+    expect(btn.title).toBe('Switch to Perspective')
+
+    document.dispatchEvent(
+      new CustomEvent('preview-projection-change', { detail: { mode: 'perspective' } })
+    )
+    expect(btn.dataset.projection).toBe('perspective')
+    expect(btn.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  // The phone drawer has its own keyboard shortcuts pop-out, with the camera
+  // panel's list in it; closing the drawer closes it.
+  it('gives the phone drawer a shortcuts pop-out with the panel list', () => {
+    setupDom({ includeMobile: true })
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `<div id="cameraShortcutsPanel" hidden><dl class="camera-shortcuts-list"><div class="camera-shortcut-item"><dt>Arrow Keys</dt><dd>Rotate view</dd></div></dl></div>
+       <button id="mobileCameraShortcutsBtn" aria-expanded="false" aria-controls="mobileCameraShortcutsPanel"></button>
+       <div id="mobileCameraShortcutsPanel" hidden></div>`
+    )
+    initCameraPanelController()
+    const btn = document.getElementById('mobileCameraShortcutsBtn')
+    const popout = document.getElementById('mobileCameraShortcutsPanel')
+    expect(popout.textContent).toContain('Arrow Keys')
+    expect(popout.textContent).toContain('Rotate view')
+
+    document.getElementById('cameraDrawerToggle').click()
+    btn.click()
+    expect(btn.getAttribute('aria-expanded')).toBe('true')
+    expect(popout.hidden).toBe(false)
+    btn.click()
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    expect(popout.hidden).toBe(true)
+
+    btn.click()
+    document.getElementById('cameraDrawerToggle').click()
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    expect(popout.hidden).toBe(true)
+  })
 })

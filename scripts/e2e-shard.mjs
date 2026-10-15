@@ -366,9 +366,9 @@ export const MEASURED_SECONDS = {
   // booked at 30.
   'recovery-mode.spec.js': 30.0,
   // Eight groups (two window sizes, four looks), each loading the charm once
-  // for its seven cases, then seven camera panel cases that each load the
-  // simple box: 234 s locally; booked at 240.
-  'ui-schema.spec.js': 240.0,
+  // for its seven cases, then the desktop camera panel cases and the phone
+  // drawer cases, each loading the simple box: 243 s locally; booked at 300.
+  'ui-schema.spec.js': 300.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

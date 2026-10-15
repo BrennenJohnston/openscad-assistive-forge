@@ -1213,6 +1213,75 @@ test.describe('The Edges control beside the status line', () => {
   });
 });
 
+// On a phone the Characters steps and the Edges levels sit in the Alt
+// View's ASCII drawer, off the preview, and change the one size and the one
+// level the strip shows on a desktop window.
+test.describe('The Alt View controls in the phone ASCII drawer', () => {
+  // No isMobile: Firefox rejects it when the browser context is created.
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+  test('step the size and set the level the strip shows, off the preview', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await page.goto('/?example=simple-box');
+    await skipWithoutWebGL(page, NEEDS_WEBGL);
+    await page.waitForFunction(() => window.previewManager?.mesh, null, {
+      timeout: 180_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // No save-project prompt to dismiss.
+    }
+    const key = page.locator('#_hfmToggle');
+    await key.click();
+    await expect(key).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#altViewControls')).toBeHidden();
+
+    await page.locator('#asciiDrawerToggle').click();
+    const section = page.locator('#asciiDrawerBody');
+    await expect(section).toBeVisible();
+    const smaller = section.getByRole('button', { name: 'Smaller characters' });
+    const larger = section.getByRole('button', { name: 'Larger characters' });
+    const value = page.locator('#altViewCharactersValueMobile');
+    const stripValue = page.locator('#altViewCharactersValue');
+    const slider = page.locator('#_hfmFontScaleMobile');
+
+    await slider.evaluate((el) => {
+      el.value = '0.6';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(value).toHaveText('Normal');
+
+    await smaller.click();
+    await expect(value).toHaveText('Fine');
+    await expect(stripValue).toHaveText('Fine');
+    await expect(page.locator('#_hfmFontScale')).toHaveValue('0.5');
+    await larger.click();
+    await expect(value).toHaveText('Normal');
+    await expect(larger).toHaveAttribute('aria-keyshortcuts', '=');
+
+    const sharp = page
+      .locator('#altViewEdgesMobile')
+      .getByRole('button', { name: 'Sharp' });
+    await sharp.click();
+    await expect(sharp).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.locator('#altViewEdges .alt-view-level-btn[data-level="sharp"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#_hfmContrast')).toHaveValue('1.6');
+
+    // The pan arrows' adjust button sits in the same section.
+    await expect(section.locator('#_hfmPanAdjustMobile')).toBeVisible();
+  });
+});
+
 // At character resolution the grid draws as scattered punctuation, so the
 // Alt View starts without it; a grid turned on there is kept for the Alt
 // View, and leaving it brings the ordinary grid back.
