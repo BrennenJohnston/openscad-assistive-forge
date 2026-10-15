@@ -2162,6 +2162,91 @@ body[data-app-surface='welcome'] #uiModeToggle {
     gap: var(--space-md);
   }
 
+  /* The Forge's camera panel, open: as wide as two D-pads side by side with
+     their gap and the body's padding, so every control shows without
+     scrolling at 1280 x 720 or larger. Built from the target-size and spacing
+     tokens, so it fits 36 px targets and the 44 px ones alike. Scoped by its
+     id: the City Walk's panel shares these classes and keeps its own layout. */
+  #cameraPanel:not(.collapsed) {
+    --camera-dpad-width: calc(
+      3 * var(--size-touch-target) + 2 * var(--space-xs)
+    );
+    --camera-panel-open-width: calc(
+      2 * var(--camera-dpad-width) + var(--space-md) + 2 * var(--space-sm) +
+        var(--border-width-thin)
+    );
+    width: var(--camera-panel-open-width);
+    min-width: var(--camera-panel-open-width);
+  }
+
+  /* Rotate beside Pan, Zoom beside the Standard Views, the tools row under
+     them, and last the Alt View's sliders in an area that scrolls on its own
+     (a scrollbar there never narrows the D-pads). */
+  #cameraPanel .camera-panel-body {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'rotate pan'
+      'zoom views'
+      'tools tools'
+      'extras extras';
+    gap: var(--space-md);
+  }
+
+  #cameraPanel .camera-section-rotate {
+    grid-area: rotate;
+  }
+
+  #cameraPanel .camera-section-pan {
+    grid-area: pan;
+  }
+
+  #cameraPanel .camera-section-zoom {
+    grid-area: zoom;
+  }
+
+  #cameraPanel .camera-section-views {
+    grid-area: views;
+  }
+
+  #cameraPanel .camera-section-tools {
+    grid-area: tools;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    margin-top: 0;
+  }
+
+  #cameraPanel .camera-section-tools .camera-shortcuts-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #cameraPanel .camera-panel-extras {
+    grid-area: extras;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  /* The six faces in three columns of two, each opposite pair stacked, in the
+     order Top, Bottom, Front, Back, Left, Right. */
+  #cameraPanel .camera-standard-views {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, auto);
+    grid-auto-flow: column;
+  }
+
+  #cameraPanel .btn.camera-view-btn {
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
   /* Collapsed state for camera panel */
   .camera-panel.collapsed {
     width: var(--drawer-collapsed-width) !important;

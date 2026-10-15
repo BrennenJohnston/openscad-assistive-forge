@@ -69,13 +69,18 @@ async function freshController(previewManager = null) {
 }
 
 // The pieces of the page the controller looks for: the live region, the
-// theme button the key is placed after, and the pan D-pad the adjust
-// button joins. Returns every text written to the live region.
+// theme button the key is placed after, the pan D-pad, and the camera
+// panel's tools row the adjust button joins beside the projection button.
+// Returns every text written to the live region.
 function pageWithHeaderAndDpad() {
   document.body.innerHTML = `
     <div id="srAnnouncer" aria-live="polite"></div>
     <button id="themeToggle"></button>
-    <div class="camera-control-dpad"><button id="cameraPanUp"></button></div>
+    <div id="cameraPanelBody">
+      <div class="camera-control-dpad"><button id="cameraPanUp"></button></div>
+      <div class="camera-shortcuts-help"><button id="projectionToggle"></button></div>
+      <div id="cameraPanelExtras"></div>
+    </div>
     <div id="previewStatusBar"><span id="previewStatusAltAdjust"></span></div>
   `
   const region = document.getElementById('srAnnouncer')
@@ -156,6 +161,9 @@ describe('the glow the Alt View starts with', () => {
   }
 
   it('is a gentle 15% when nothing is saved, and a saved 0 stays 0', async () => {
+    // Fake timers: turning the Alt View on queues a delayed save of the glow,
+    // and a real one would fire into the next case's storage.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     pageWithHeaderAndDpad()
     const controller = await freshController(previewManagerStub())
     const toggle = document.createElement('button')
@@ -336,6 +344,16 @@ describe('the Alt View and pan adjust speak plainly', () => {
     vi.useRealTimers()
     document.body.innerHTML = ''
     document.documentElement.removeAttribute('data-ui-variant')
+  })
+
+  it('puts the adjust button beside the projection button, leaving the Pan D-pad to View All', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController()
+    controller.injectAltToggle()
+    const adjust = document.getElementById('_hfmPanAdjust')
+    expect(adjust.previousElementSibling?.id).toBe('projectionToggle')
+    expect(adjust.closest('.camera-control-dpad')).toBeNull()
+    expect(adjust.classList.contains('dpad-center')).toBe(false)
   })
 
   it('names the key and the adjust button by what they are for', async () => {

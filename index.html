@@ -6055,8 +6055,8 @@
               </div>
             </div>
             <div class="camera-panel-body" id="cameraPanelBody">
-              <!-- Rotation Controls - D-pad layout -->
-              <div class="camera-control-section">
+              <!-- Rotate: the D-pad, Reset View in its center -->
+              <div class="camera-control-section camera-section-rotate">
                 <h3 class="camera-control-section-title">Rotate View</h3>
                 <div
                   class="camera-control-dpad"
@@ -6103,15 +6103,14 @@
                   </button>
                   <button
                     type="button"
-                    class="btn btn-sm btn-icon camera-btn auto-rotate-toggle dpad-center"
-                    id="autoRotateToggle"
-                    aria-pressed="false"
-                    aria-label="Toggle auto rotation"
-                    title="Auto rotate"
+                    class="btn btn-sm btn-icon camera-btn dpad-center"
+                    id="cameraResetView"
+                    aria-label="Reset camera to default view"
+                    title="Reset view (Home)"
                   >
                     <svg
-                      width="18"
-                      height="18"
+                      width="24"
+                      height="24"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -6119,9 +6118,9 @@
                       aria-hidden="true"
                     >
                       <path
-                        d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+                        d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
                       ></path>
-                      <polyline points="21 3 21 8 16 8"></polyline>
+                      <polyline points="9 22 9 12 15 12 15 22"></polyline>
                     </svg>
                   </button>
                   <button
@@ -6163,38 +6162,9 @@
                     </svg>
                   </button>
                 </div>
-                <!-- Beside the Auto rotate button it belongs to;
-                     overlay-grid-controller wires it by its id. -->
-                <div class="preview-setting rotation-speed-setting">
-                  <label
-                    class="preview-setting-label"
-                    for="rotationSpeedInput"
-                    id="rotationSpeedLabel"
-                    >Auto-rotate speed</label
-                  >
-                  <div class="slider-container">
-                    <input
-                      type="range"
-                      id="rotationSpeedInput"
-                      min="0.1"
-                      max="3"
-                      step="0.1"
-                      value="0.5"
-                      aria-labelledby="rotationSpeedLabel"
-                      aria-describedby="rotationSpeedHelp"
-                    />
-                    <span class="slider-value" id="rotationSpeedValue"
-                      >0.5°/s</span
-                    >
-                  </div>
-                </div>
-                <span id="rotationSpeedHelp" class="sr-only"
-                  >Set the speed of automatic model rotation when auto-rotate is
-                  enabled, from 0.1 to 3 degrees per second</span
-                >
               </div>
-              <!-- Pan Controls - D-pad layout -->
-              <div class="camera-control-section">
+              <!-- Pan: the D-pad, View All in its center -->
+              <div class="camera-control-section camera-section-pan">
                 <h3 class="camera-control-section-title">Pan View</h3>
                 <div
                   class="camera-control-dpad"
@@ -6243,6 +6213,28 @@
                   </button>
                   <button
                     type="button"
+                    class="btn btn-sm btn-icon camera-btn dpad-center"
+                    id="cameraViewAll"
+                    aria-label="View All: fit the view to the model"
+                    title="View All (Ctrl+Shift+V)"
+                  >
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <polyline points="9 21 3 21 3 15"></polyline>
+                      <line x1="21" y1="3" x2="14" y2="10"></line>
+                      <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
                     class="btn btn-sm btn-icon camera-btn dpad-right"
                     id="cameraPanRight"
                     aria-label="Pan view right"
@@ -6283,8 +6275,8 @@
                   </button>
                 </div>
               </div>
-              <!-- Zoom Controls -->
-              <div class="camera-control-section">
+              <!-- Zoom: two icon buttons, as tall as the view buttons -->
+              <div class="camera-control-section camera-section-zoom">
                 <h3 class="camera-control-section-title">Zoom</h3>
                 <div class="camera-control-row">
                   <button
@@ -6308,7 +6300,6 @@
                       <line x1="11" y1="8" x2="11" y2="14"></line>
                       <line x1="8" y1="11" x2="14" y2="11"></line>
                     </svg>
-                    <span>Zoom In</span>
                   </button>
                   <button
                     type="button"
@@ -6330,12 +6321,11 @@
                       <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                       <line x1="8" y1="11" x2="14" y2="11"></line>
                     </svg>
-                    <span>Zoom Out</span>
                   </button>
                 </div>
               </div>
-              <!-- Standard Views (consistent camera angles) -->
-              <div class="camera-control-section">
+              <!-- Standard Views: the six faces -->
+              <div class="camera-control-section camera-section-views">
                 <h3 class="camera-control-section-title">Standard Views</h3>
                 <div
                   class="camera-standard-views"
@@ -6354,29 +6344,20 @@
                   <button
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="bottom"
+                    aria-label="Bottom view (Ctrl+5)"
+                    title="Bottom view (Ctrl+5)"
+                  >
+                    Bottom
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
                     data-view="front"
                     aria-label="Front view (Ctrl+8)"
                     title="Front view (Ctrl+8)"
                   >
                     Front
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline camera-view-btn"
-                    data-view="right"
-                    aria-label="Right side view (Ctrl+7)"
-                    title="Right side view (Ctrl+7)"
-                  >
-                    Right
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline camera-view-btn"
-                    data-view="left"
-                    aria-label="Left side view (Ctrl+6)"
-                    title="Left side view (Ctrl+6)"
-                  >
-                    Left
                   </button>
                   <button
                     type="button"
@@ -6390,80 +6371,28 @@
                   <button
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
-                    data-view="bottom"
-                    aria-label="Bottom view (Ctrl+5)"
-                    title="Bottom view (Ctrl+5)"
+                    data-view="left"
+                    aria-label="Left side view (Ctrl+6)"
+                    title="Left side view (Ctrl+6)"
                   >
-                    Bottom
+                    Left
                   </button>
                   <button
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
-                    data-view="diagonal"
-                    aria-label="Diagonal isometric view (Ctrl+0)"
-                    title="Diagonal isometric view (Ctrl+0)"
+                    data-view="right"
+                    aria-label="Right side view (Ctrl+7)"
+                    title="Right side view (Ctrl+7)"
                   >
-                    Diagonal
+                    Right
                   </button>
                 </div>
               </div>
-              <!-- Reset View -->
-              <div class="camera-control-section">
+              <!-- Tools: the projection and the keyboard shortcuts -->
+              <div class="camera-shortcuts-help camera-section-tools">
                 <button
                   type="button"
-                  class="btn btn-sm btn-outline camera-btn-full"
-                  id="cameraResetView"
-                  aria-label="Reset camera to default view"
-                  title="Reset view (Home)"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
-                    ></path>
-                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                  </svg>
-                  <span>Reset View</span>
-                </button>
-              </div>
-              <!-- View All, beside it: frames the model, as View > View All does -->
-              <div class="camera-control-section">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline camera-btn-full"
-                  id="cameraViewAll"
-                  aria-label="View All: fit the view to the model"
-                  title="View All (Ctrl+Shift+V)"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
-                  </svg>
-                  <span>View All</span>
-                </button>
-              </div>
-              <!-- Projection Toggle -->
-              <div class="camera-control-section">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline camera-btn-full"
+                  class="btn btn-sm btn-icon camera-btn"
                   id="projectionToggle"
                   aria-pressed="false"
                   aria-label="Toggle perspective/orthographic projection (P)"
@@ -6489,11 +6418,7 @@
                     <line x1="3" y1="9" x2="21" y2="9"></line>
                     <line x1="9" y1="21" x2="9" y2="9"></line>
                   </svg>
-                  <span>Perspective</span>
                 </button>
-              </div>
-              <!-- Keyboard Shortcuts Help -->
-              <div class="camera-shortcuts-help">
                 <details class="camera-shortcuts-details">
                   <summary
                     class="camera-shortcuts-summary"
@@ -6547,6 +6472,63 @@
                     </div>
                   </dl>
                 </details>
+              </div>
+              <!-- The Alt View's sliders, under the controls, in an area that
+                   scrolls on its own so the D-pads never move sideways. -->
+              <div class="camera-panel-extras" id="cameraPanelExtras"></div>
+              <!-- Auto-rotate waits here, out of view and still wired by its ids, until
+       it moves to the View menu and Preview Settings & Info. -->
+              <div id="autoRotateHolder" hidden>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-icon camera-btn auto-rotate-toggle"
+                  id="autoRotateToggle"
+                  aria-pressed="false"
+                  aria-label="Toggle auto rotation"
+                  title="Auto rotate"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+                    ></path>
+                    <polyline points="21 3 21 8 16 8"></polyline>
+                  </svg>
+                </button>
+                <div class="preview-setting rotation-speed-setting">
+                  <label
+                    class="preview-setting-label"
+                    for="rotationSpeedInput"
+                    id="rotationSpeedLabel"
+                    >Auto-rotate speed</label
+                  >
+                  <div class="slider-container">
+                    <input
+                      type="range"
+                      id="rotationSpeedInput"
+                      min="0.1"
+                      max="3"
+                      step="0.1"
+                      value="0.5"
+                      aria-labelledby="rotationSpeedLabel"
+                      aria-describedby="rotationSpeedHelp"
+                    />
+                    <span class="slider-value" id="rotationSpeedValue"
+                      >0.5°/s</span
+                    >
+                  </div>
+                </div>
+                <span id="rotationSpeedHelp" class="sr-only"
+                  >Set the speed of automatic model rotation when auto-rotate is
+                  enabled, from 0.1 to 3 degrees per second</span
+                >
               </div>
             </div>
           </div>
