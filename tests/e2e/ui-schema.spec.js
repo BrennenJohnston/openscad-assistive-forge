@@ -32,7 +32,6 @@ const TRAVEL = {
   '#collapseParamPanelBtn': 'right',
   '#cameraPanelToggle': 'left',
   '#previewDrawerToggle': 'down',
-  '#actionsDrawerToggle': 'up',
   '#echoDrawerToggle': 'up',
 };
 

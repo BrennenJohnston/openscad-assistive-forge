@@ -1892,10 +1892,9 @@ body[data-ui-mode='classic'] #focusModeBtn,
 body[data-ui-mode='classic'] #featuresGuideBtn,
 /* #clearFileBtn is not hidden here: the Main Page button leads the header
    in both themes. */
-/* Custom actions bar + drawer — toolbar Preview/Render + Design menu;
-   downloads via File > Export */
+/* Custom actions bar: toolbar Preview/Render + Design menu; downloads via
+   File > Export */
 body[data-ui-mode='classic'] #actionsBar,
-body[data-ui-mode='classic'] #actionsDrawer,
 /* Preview settings drawer — stats go to the status bar; quality and
    friends live under View > Preview Quality */
 body[data-ui-mode='classic'] #previewInfoSection,

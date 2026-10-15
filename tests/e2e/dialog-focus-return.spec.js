@@ -195,9 +195,15 @@ test('Publish closes on Escape from its address field and goes back', async ({
   page,
 }) => {
   await openExample(page)
-  const opener = page.locator('#publishProjectBtn')
-  if (!(await opener.isVisible())) await page.locator('#actionsDrawerToggle').click()
-  await press(page, '#publishProjectBtn')
+  // Publish is a File menu item: the menu closes onto its button, and the
+  // dialog goes back there.
+  const opener = page.locator('#fileMenuBtn')
+  await press(page, '#fileMenuBtn')
+  await page
+    .locator('#fileMenuItems > li > button')
+    .filter({ has: page.locator('.menu-item-label', { hasText: 'Publish…' }) })
+    .focus()
+  await page.keyboard.press('Enter')
   const dialog = page.locator('#publishProjectModal')
   await expect(dialog).toBeVisible()
   await page.locator('#publishRepoUrl').focus()

@@ -613,17 +613,6 @@ function initMobileCameraDrawer() {
   function expandDrawer() {
     if (!isMobileCollapsed) return;
 
-    // Mobile portrait: close actions drawer first (mutual exclusion)
-    const actionsDrawer = document.getElementById('actionsDrawer');
-    const actionsToggle = document.getElementById('actionsDrawerToggle');
-    if (actionsDrawer && !actionsDrawer.classList.contains('collapsed')) {
-      actionsDrawer.classList.add('collapsed');
-      if (actionsToggle) {
-        actionsToggle.setAttribute('aria-expanded', 'false');
-        actionsToggle.setAttribute('aria-label', 'Expand actions menu');
-      }
-    }
-
     isMobileCollapsed = false;
     drawer.classList.remove('collapsed');
     updateAria(false);

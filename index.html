@@ -4205,6 +4205,31 @@
                       >
                         📋 Import / Export
                       </button>
+                      <button
+                        type="button"
+                        id="copySettingsLinkBtn"
+                        class="btn btn-sm btn-outline"
+                        aria-label="Copy Link: a link that opens this design with your settings"
+                      >
+                        <svg
+                          class="btn-icon-svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                          ></path>
+                          <path
+                            d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                          ></path>
+                        </svg>
+                        <span class="btn-text">Copy Link</span>
+                      </button>
                     </div>
                   </div>
                 </details>
@@ -5407,122 +5432,6 @@
               role="toolbar"
               aria-label="Model actions"
             >
-              <!-- Actions Drawer (collapsible, left side) -->
-              <div
-                class="actions-drawer collapsed"
-                id="actionsDrawer"
-                role="region"
-                aria-labelledby="actions-drawer-title"
-              >
-                <!-- Drawer header with toggle button and title -->
-                <div
-                  class="actions-drawer-header"
-                  data-tutorial-target="actions-drawer-toggle"
-                >
-                  <button
-                    type="button"
-                    id="actionsDrawerToggle"
-                    data-travel-open="up"
-                    class="btn btn-sm btn-icon btn-collapse-panel actions-drawer-toggle-btn forge-control"
-                    aria-expanded="false"
-                    aria-controls="actionsDrawerBody"
-                    aria-label="Expand actions menu"
-                    title="More Actions"
-                  >
-                    <svg
-                      class="drawer-arrow"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <polygon
-                        points="6,4 18,12 6,20"
-                        fill="currentColor"
-                      ></polygon>
-                    </svg>
-                  </button>
-                  <h2 class="actions-drawer-title" id="actions-drawer-title">
-                    Actions
-                  </h2>
-                </div>
-                <!-- Drawer body (expandable content) -->
-                <div class="actions-drawer-body" id="actionsDrawerBody">
-                  <button
-                    type="button"
-                    id="publishProjectBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Publish: a manifest to share this project from your own hosting"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <circle cx="18" cy="5" r="3"></circle>
-                      <circle cx="6" cy="12" r="3"></circle>
-                      <circle cx="18" cy="19" r="3"></circle>
-                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-                    </svg>
-                    <span class="btn-text">Publish</span>
-                  </button>
-                  <button
-                    type="button"
-                    id="copySettingsLinkBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Copy Link: a link that opens this design with your settings"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
-                      ></path>
-                      <path
-                        d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
-                      ></path>
-                    </svg>
-                    <span class="btn-text">Copy Link</span>
-                  </button>
-                  <button
-                    type="button"
-                    id="editDrawingActionBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Edit Drawing: open an SVG or a photo in the drawing editor"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 20h9"></path>
-                      <path
-                        d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"
-                      ></path>
-                    </svg>
-                    <span class="btn-text">Edit Drawing</span>
-                  </button>
-                </div>
-              </div>
               <!-- Primary actions (always visible, right side) -->
               <div class="actions-primary">
                 <button
@@ -7227,7 +7136,7 @@
             <h4>Sharing Your Configuration</h4>
             <ul class="features-list">
               <li>
-                <strong>Copy Link</strong> (Actions menu): a link that opens
+                <strong>Copy Link</strong> (with the presets): a link that opens
                 this design with your settings
               </li>
               <li>
@@ -7462,22 +7371,19 @@
                 download the last file again)
               </li>
             </ol>
-            <h4>Actions Menu</h4>
-            <p>
-              Open the <strong>Actions</strong> drawer to find power features:
-            </p>
+            <h4>Sharing and Drawings</h4>
             <ul class="features-list">
               <li>
-                <strong>Copy Link</strong>: copy a link that opens this design
-                with your settings
+                <strong>Copy Link</strong> sits with the presets: it copies a
+                link that opens this design with your settings.
               </li>
               <li>
-                <strong>Edit Drawing</strong>: open an SVG or a photo in the
-                drawing editor
+                <strong>Publish</strong> is in the File menu in the Standard
+                view: it writes a manifest you can host yourself.
               </li>
               <li>
-                <strong>Publish</strong> (Standard view): make a manifest to
-                share this project from your own hosting
+                The <strong>Design</strong> menu opens a drawing or a photo in
+                the drawing editor.
               </li>
             </ul>
             <h4>Focus Mode</h4>

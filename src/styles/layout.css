@@ -1130,9 +1130,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
 }
 
 .preview-panel {
-  /* The open Actions drawer's width, shared with the messages drawer that
-     makes room for it (both live in this panel). */
-  --actions-drawer-open-width: 200px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1917,24 +1914,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
   z-index: var(--z-index-sticky);
   background-color: var(--color-bg-primary);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* The open Actions drawer rises out of this bar over the preview. Lift the
-   bar above the open Preview Settings panel so, where the two overlap, the
-   drawer the person just opened is the one a press reaches. Phone widths fix
-   the bar higher still (below). */
-@media (min-width: 768px) {
-  .preview-panel .actions-bar:has(.actions-drawer:not(.collapsed)) {
-    z-index: calc(var(--z-index-sticky) + 15);
-  }
-
-  /* The open drawer's body stands where the OpenSCAD messages drawer shows
-     the first words of each line. The messages make room for it instead. */
-  .preview-panel:has(.actions-drawer:not(.collapsed))
-    .echo-drawer.visible
-    .echo-drawer-content {
-    padding-left: var(--actions-drawer-open-width);
-  }
 }
 
 /* Tablet and up: side-by-side layout */
@@ -2789,10 +2768,7 @@ details summary:focus,
 }
 
 /* ============================================================================
-   Actions Bar - Collapsible Drawer Pattern
-   ============================================================================
-   A collapsible drawer that expands downward from a fixed header row.
-   Matches the Preview Settings drawer pattern for consistency.
+   Actions Bar: Generate and its companions, under the preview
    ============================================================================ */
 
 .actions-bar {
@@ -2804,134 +2780,6 @@ details summary:focus,
   min-height: var(--actions-bar-height);
   z-index: var(--z-index-drawer);
   position: relative;
-}
-
-/* Actions Drawer container - stays in place, only body floats */
-.actions-drawer {
-  display: flex;
-  flex-direction: column;
-  background-color: var(--color-bg-secondary);
-  border-right: 1px solid var(--color-border);
-  position: relative; /* Anchor for absolutely positioned body */
-  width: auto;
-  min-width: 124px;
-}
-
-/* Collapsed state - body is hidden */
-.actions-drawer.collapsed .actions-drawer-body {
-  display: none;
-}
-
-/* Expanded state - body floats above the header */
-.actions-drawer:not(.collapsed) .actions-drawer-body {
-  display: flex;
-  flex-wrap: wrap;
-  position: absolute;
-  bottom: 100%; /* Position above the header */
-  left: 0;
-  min-width: var(--actions-drawer-open-width);
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
-  max-height: calc(100vh - var(--actions-bar-height) - 100px);
-  overflow-y: auto;
-  animation: drawer-fade-in var(--motion-base) ease;
-}
-
-/* Drawer header - always visible in actions bar, contains toggle and title */
-.actions-drawer-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  min-height: var(--size-touch-target);
-  background-color: var(--color-bg-secondary);
-}
-
-/* Drawer title */
-.actions-drawer-title {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-}
-
-/* Drawer toggle button - matches preview drawer style */
-.actions-drawer-toggle-btn.btn-collapse-panel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--size-touch-target);
-  padding: var(--space-xs);
-  min-width: var(--size-touch-target);
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md);
-  color: var(--color-text-primary);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.actions-drawer-toggle-btn.btn-collapse-panel:hover {
-  background-color: var(--color-hover-bg);
-}
-
-.actions-drawer-toggle-btn.btn-collapse-panel:focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: -3px;
-}
-
-@keyframes drawer-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(var(--space-xs));
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .actions-drawer:not(.collapsed) .actions-drawer-body {
-    animation: none;
-  }
-}
-
-/* Drawer body (expandable content) */
-.actions-drawer-body {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs);
-  flex-wrap: nowrap;
-}
-
-/* Buttons inside drawer */
-.actions-drawer-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-  min-height: 36px; /* Desktop: compact height */
-}
-
-.actions-drawer-btn .btn-icon-svg {
-  flex-shrink: 0;
-}
-
-/* Divider between button groups in drawer */
-.actions-drawer-divider {
-  width: 1px;
-  height: 20px;
-  background-color: var(--color-border);
-  flex-shrink: 0;
-  margin: 0 var(--space-xs);
 }
 
 /* Primary actions (right side, always visible) */
@@ -3085,11 +2933,6 @@ details summary:focus,
 .main-interface.focus-mode .preview-canvas-section {
   flex: 1;
   min-height: 0;
-}
-
-/* In focus mode, hide the actions drawer */
-.main-interface.focus-mode .actions-drawer {
-  display: none;
 }
 
 /* Hide utility buttons in focus mode, except the focus mode toggle itself */
@@ -3502,53 +3345,6 @@ details summary:focus,
 
   .camera-drawer-projection-btn svg {
     flex-shrink: 0;
-  }
-
-  /* Actions Drawer on mobile - header stays in place, body expands as overlay */
-  .actions-drawer {
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
-    width: 100%;
-    min-width: auto;
-  }
-
-  /* Header on mobile - full width, centered */
-  .actions-drawer-header {
-    width: 100%;
-    justify-content: center;
-  }
-
-  /* When drawer is expanded on mobile, body becomes fixed overlay above the actions bar */
-  .actions-drawer:not(.collapsed) .actions-drawer-body {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--actions-bar-height) + env(safe-area-inset-bottom, 0px));
-    min-width: auto;
-    border-radius: 0;
-    z-index: calc(var(--z-index-drawer) + 10);
-    border-top: 1px solid var(--color-border);
-    border-left: none;
-    border-right: none;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    max-height: 220px;
-  }
-
-  .actions-drawer-btn {
-    width: 100%;
-    justify-content: flex-start;
-    padding: var(--space-sm) var(--space-md);
-    font-size: var(--font-size-sm);
-    min-height: 44px; /* WCAG 2.5.8: 44px touch target */
-  }
-
-  /* Dividers become horizontal on mobile */
-  .actions-drawer-divider {
-    width: 100%;
-    height: 1px;
-    margin: var(--space-xs) 0;
   }
 
   /* Primary actions on mobile - full width at bottom */
@@ -4023,35 +3819,21 @@ details summary:focus,
 
 @media (max-width: 480px) and (orientation: portrait) {
   /* ============================================================================
-     Mobile Portrait: Side-by-Side Actions & Camera Drawer Toggles
-     ============================================================================
-     Actions toggle on left, Camera toggle on right, sharing the same row.
-     Each drawer body expands to full width when opened.
-     Only one drawer can be open at a time (handled by JavaScript).
+     Mobile Portrait: the Camera toggle across the bar, Generate below it
      ============================================================================ */
 
-  /* Actions bar: use CSS Grid for precise control */
   :root .preview-panel .actions-bar {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
     grid-template-areas:
-      'drawer-content drawer-content'
-      'actions camera'
-      'primary primary';
+      'drawer-content'
+      'camera'
+      'primary';
     flex-direction: unset;
   }
 
-  /* Actions drawer in left column */
-  :root .actions-drawer {
-    grid-area: actions;
-    width: 100%;
-    min-width: unset;
-    border-right: 1px solid var(--color-border);
-    border-bottom: none;
-  }
-
-  /* Camera drawer in right column */
+  /* Camera drawer across the full width */
   :root .camera-drawer {
     grid-area: camera;
     width: 100%;
@@ -4069,56 +3851,7 @@ details summary:focus,
     border-top: 1px solid var(--color-border);
   }
 
-  /* Make Actions drawer header match Camera drawer toggle button styling exactly */
-  :root .actions-drawer-header {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-xs);
-    width: 100%;
-    min-height: var(--size-touch-target);
-    padding: var(--space-xs) var(--space-sm);
-    background: var(--color-bg-tertiary);
-    cursor: pointer;
-  }
-
-  /* The toggle covers the whole header, so the whole half of the bar takes the
-     press; its arrow sits at the left edge, and the title shows through. */
-  :root .actions-drawer-toggle-btn {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    justify-content: flex-start;
-    padding-left: var(--space-md);
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    cursor: pointer;
-    z-index: var(--z-index-base);
-  }
-
-  /* Open, the toggle under the title is drawn pressed in the accent. */
-  :root .actions-drawer:not(.collapsed) .actions-drawer-title {
-    color: var(--color-accent-text);
-  }
-
-  /* Style the Actions title to match Camera label exactly */
-  :root .actions-drawer-title {
-    position: relative;
-    z-index: calc(var(--z-index-base) + 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text-primary);
-    pointer-events: none;
-  }
-
-  /* Camera drawer toggle - match Actions drawer styling exactly */
+  /* Camera drawer toggle */
   :root .camera-drawer-toggle-btn {
     display: flex;
     align-items: center;
@@ -4137,26 +3870,10 @@ details summary:focus,
     position: relative;
   }
 
-  /* The arrow at the left edge, as the Actions half of the bar has it. */
+  /* The arrow at the left edge, where the drawer's toggle starts. */
   :root .camera-drawer-toggle-btn .drawer-arrow {
     position: absolute;
     left: var(--space-md);
-  }
-
-  /* Actions drawer body - fixed overlay above the bar */
-  :root .actions-drawer:not(.collapsed) .actions-drawer-body {
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    /* Position above: toggle row (44px) + primary row (44px) + safe area */
-    bottom: calc(
-      (var(--actions-bar-height) * 2) + env(safe-area-inset-bottom, 0px)
-    ) !important;
-    max-height: 45vh !important;
-    overflow-y: auto !important;
-    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
   }
 
   /* Camera drawer body - fixed overlay, scales with viewport */
@@ -4398,11 +4115,6 @@ details summary:focus,
   /* Show primary actions in camera focus mode */
   .main-interface.focus-mode.camera-focus-mode .actions-primary {
     display: flex !important;
-  }
-
-  /* Hide actions drawer toggle in camera focus mode */
-  .main-interface.focus-mode.camera-focus-mode .actions-drawer {
-    display: none !important;
   }
 
   /* Floating focus mode exit button */

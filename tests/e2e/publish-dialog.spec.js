@@ -38,9 +38,10 @@ async function openPublishDialog(page, exampleKey) {
     await viewToggle.click()
   }
   await expect(viewToggle).toHaveAttribute('aria-checked', 'true')
-  const drawerToggle = page.locator('#actionsDrawerToggle')
-  await drawerToggle.click()
-  const publish = page.locator('#publishProjectBtn')
+  await page.locator('#fileMenuBtn').click()
+  const publish = page
+    .locator('#fileMenuItems > li > button')
+    .filter({ has: page.locator('.menu-item-label', { hasText: 'Publish…' }) })
   await expect(publish).toBeVisible({ timeout: 10000 })
   await publish.click()
   await expect(page.locator('#publishManifestOutput')).toBeVisible({
@@ -152,11 +153,14 @@ test.describe('Copying when the browser refuses the clipboard', () => {
     expectNoNativeDialog(page)
   })
 
-  test('Copy Link in the Actions drawer', async ({ page }) => {
+  test('Copy Link with the presets', async ({ page }) => {
     attachInvariants(page)
     await page.goto('/?example=simple-box')
     await page.locator('.param-control').first().waitFor({ state: 'attached', timeout: 60000 })
-    await page.locator('#actionsDrawerToggle').click()
+    const presets = page.locator('#presetControls')
+    if (!(await presets.evaluate((d) => d.open))) {
+      await presets.locator('summary').click()
+    }
     const copy = page.locator('#copySettingsLinkBtn')
     await expect(copy).toBeVisible({ timeout: 10000 })
     await copy.click()

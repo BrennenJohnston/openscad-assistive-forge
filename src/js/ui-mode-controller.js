@@ -122,11 +122,12 @@ const PANEL_REGISTRY = [
     defaultHiddenInBasic: true,
   },
   // Publish serves people who host a project, not the people a Simplified
-  // view is set up for.
+  // view is set up for. It is a File menu item, built each time the menu
+  // opens, so it has no element to hide: the menu asks isFeatureShown().
   {
     id: 'publish',
     label: 'Publish',
-    selector: '#publishProjectBtn',
+    selector: null,
     defaultHiddenInBasic: true,
   },
   {
@@ -266,6 +267,24 @@ export class UIModeController {
    */
   getMode() {
     return this.currentMode;
+  }
+
+  /**
+   * Whether a registry feature shows in the current view: hidden only in a
+   * Simplified view (or Classic's simplified density) whose list hides it,
+   * and Classic keeps its menu bar. For controls built on demand, such as
+   * menu items, which the mode switch's class cannot reach.
+   * @param {string} id - A PANEL_REGISTRY id
+   * @returns {boolean}
+   */
+  isFeatureShown(id) {
+    const inClassic = this.currentMode === 'classic';
+    const simplifiedActive =
+      this.currentMode === 'simplified' ||
+      (inClassic && this._lastCustomMode === 'simplified');
+    if (!simplifiedActive) return true;
+    if (inClassic && CLASSIC_SIMPLIFIED_KEEP_VISIBLE.has(id)) return true;
+    return !this._getEffectiveHiddenPanels().includes(id);
   }
 
   /**
@@ -726,7 +745,7 @@ export class UIModeController {
    */
   isPanelShowing(panelId) {
     const panel = PANEL_REGISTRY.find((p) => p.id === panelId);
-    if (!panel) return false;
+    if (!panel?.selector) return false;
     const el = document.querySelector(panel.selector.split(',')[0].trim());
     if (!el || el.classList.contains(HIDDEN_CLASS)) return false;
     return el.tagName === 'DETAILS' ? el.open : true;
@@ -740,6 +759,7 @@ export class UIModeController {
    */
   listFocusablePanels() {
     return PANEL_REGISTRY.map((p) => {
+      if (!p.selector) return null;
       const el = document.querySelector(p.selector.split(',')[0].trim());
       return el &&
         el.tagName === 'DETAILS' &&
@@ -892,6 +912,7 @@ export class UIModeController {
    */
   _queryPanelElements(selector) {
     const elements = [];
+    if (!selector) return elements;
     const parts = selector.split(',').map((s) => s.trim());
 
     for (const part of parts) {

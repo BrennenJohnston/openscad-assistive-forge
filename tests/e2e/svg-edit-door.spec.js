@@ -381,7 +381,7 @@ test.describe('The drawing editor door', () => {
     await expect(sourceWrap).toBeHidden()
   })
 
-  test('the Actions drawer opens the same door', async ({ page }) => {
+  test('the Design menu opens the same door', async ({ page }) => {
     test.setTimeout(120000)
     await page.goto('/?example=simple-box')
     await page
@@ -396,8 +396,12 @@ test.describe('The drawing editor door', () => {
       // no save prompt for this example
     }
 
-    await page.locator('#actionsDrawerToggle').click()
-    const action = page.locator('#editDrawingActionBtn')
+    const mode = page.locator('#uiModeToggle')
+    if ((await mode.getAttribute('aria-checked')) !== 'true') await mode.click()
+    await page.locator('#designMenuBtn').click()
+    const action = page
+      .locator('#designMenuItems > li > button')
+      .filter({ has: page.locator('.menu-item-label', { hasText: 'Open a drawing in the editor…' }) })
     await expect(action).toBeVisible()
 
     await armPickerWatch(page)

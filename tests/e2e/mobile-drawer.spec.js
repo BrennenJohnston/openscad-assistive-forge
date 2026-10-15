@@ -151,27 +151,6 @@ test.describe('Mobile Drawer', () => {
   });
 
   // Keyboard shortcuts popover is part of the desktop Camera panel (not the mobile camera drawer).
-
-  test('actions drawer does not block primary action (mobile)', async ({ page }) => {
-    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
-    await loadSampleFile(page);
-
-    // Expand Actions drawer
-    await page.locator('#actionsDrawerToggle').click();
-    await expect(page.locator('#actionsDrawer')).not.toHaveClass(/collapsed/);
-
-    // The primary action should remain clickable (not covered by the expanded drawer)
-    const primaryIsOnTop = await page.evaluate(() => {
-      const btn = document.getElementById('primaryActionBtn');
-      if (!btn) return false;
-      const r = btn.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      const topEl = document.elementFromPoint(x, y);
-      return !!topEl && (btn === topEl || btn.contains(topEl));
-    });
-    expect(primaryIsOnTop).toBe(true);
-  });
 });
 
 test.describe('Desktop Layout', () => {
@@ -290,26 +269,5 @@ test.describe('Desktop Layout', () => {
       // Drawer should be closed
       await expect(mobileToggle).toHaveAttribute('aria-expanded', 'false');
     }
-  });
-
-  test('actions drawer does not block primary action (desktop)', async ({ page }) => {
-    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
-    await loadSampleFile(page);
-
-    // Expand Actions drawer
-    await page.locator('#actionsDrawerToggle').click();
-    await expect(page.locator('#actionsDrawer')).not.toHaveClass(/collapsed/);
-
-    // The primary action should remain clickable (not covered by the expanded drawer)
-    const primaryIsOnTop = await page.evaluate(() => {
-      const btn = document.getElementById('primaryActionBtn');
-      if (!btn) return false;
-      const r = btn.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      const topEl = document.elementFromPoint(x, y);
-      return !!topEl && (btn === topEl || btn.contains(topEl));
-    });
-    expect(primaryIsOnTop).toBe(true);
   });
 });

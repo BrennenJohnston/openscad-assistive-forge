@@ -123,7 +123,6 @@ All visual properties must use tokens from `src/styles/variables.css` (never har
 **Layering Rules:**
 - Parameters panel (left): `z-index: var(--z-index-base)`
 - Camera panel (right): `z-index: var(--z-index-base)`
-- Actions drawer (bottom sheet when expanded): `z-index: calc(var(--z-index-drawer) + 10)` (overlays side panels)
 - Preview Settings drawer: `z-index: calc(var(--z-index-drawer) + 20)` (highest priority)
 
 ### Drawer Dimensions
@@ -324,13 +323,13 @@ svg {
 - **Left panel**: Parameters drawer (collapsible, left-aligned)
 - **Center**: Canvas/preview area
 - **Right panel**: Camera controls drawer (collapsible, right-aligned)
-- **Bottom bar**: Actions drawer (expands upward as bottom sheet)
+- **Bottom bar**: Generate, with Cancel, the last file's download and Save to folder beside it
 
 **Drawer Direction Rules:**
 - **Side panels** (Parameters, Camera): Collapse **outward** (left panel collapses left, right panel collapses right)
-- **Bottom drawers** (Actions, Preview Settings): Always expand **upward** (never sideways)
+- **Bottom drawers** (Preview Settings): Always expand **upward** (never sideways)
 
-**Critical:** Bottom drawers must overlay side panels with proper z-index so Actions drawer is never hidden when Parameters/Camera are open.
+**Critical:** Bottom drawers must overlay side panels with proper z-index so they are never hidden when Parameters/Camera are open.
 
 ### Mobile Layout (≤767px)
 
@@ -342,7 +341,6 @@ svg {
 
 **Landscape Mode:**
 - Similar to desktop but with reduced drawer widths
-- Actions drawer still opens upward (bottom sheet pattern)
 
 ### Drawer Behavior Matrix
 
@@ -350,10 +348,9 @@ svg {
 |--------|------------------|------------------|---------|
 | Parameters (left) | Collapse left | Expand up from bottom | `--z-index-base` |
 | Camera (right) | Collapse right | Expand up from bottom | `--z-index-base` |
-| Actions (bottom) | Expand up | Expand up | `calc(var(--z-index-drawer) + 10)` |
 | Preview Settings | Expand up (overlay) | Expand up (overlay) | `calc(var(--z-index-drawer) + 20)` |
 
-**Rule:** Bottom-expanding drawers (Actions, Preview Settings) MUST use `z-index` higher than side panels to remain visible.
+**Rule:** Bottom-expanding drawers (Preview Settings) MUST use `z-index` higher than side panels to remain visible.
 
 ### Responsive Breakpoints
 
@@ -775,11 +772,10 @@ All collapsible `<details>` sections (Presets, Console Output, Reference Image, 
 | Drawer | State Convention | Open Means | Closed Means |
 |--------|-----------------|------------|--------------|
 | Parameters | Additive open | `drawer-open` class present | `drawer-open` class absent |
-| Actions | Additive close | `collapsed` class absent | `collapsed` class present |
 | Camera | Additive close | `collapsed` class absent | `collapsed` class present |
 | Echo | Additive close | `collapsed` class absent | `collapsed` class present |
 
-Do NOT refactor this convention without updating all three controller files (`drawer-controller.js`, `camera-panel-controller.js`, and the inline actions/echo controllers in `main.js`) plus their corresponding test suites.
+Do NOT refactor this convention without updating all three controller files (`drawer-controller.js`, `camera-panel-controller.js`, and the inline echo controller in `main.js`) plus their corresponding test suites.
 
 ---
 

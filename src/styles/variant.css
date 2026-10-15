@@ -651,9 +651,6 @@ body[data-ui-mode='classic'] {
 /* The drawers that open over the preview lie flat, as the keys and notes
    do; the dark theme's drawer shadow is as specific as the first selector. */
 :root[data-ui-variant='mono'] .preview-info-section.preview-drawer-expanded,
-:root[data-ui-variant='mono']
-  .actions-drawer:not(.collapsed)
-  .actions-drawer-body,
 :root[data-ui-variant='mono'] kbd {
   box-shadow: none;
 }

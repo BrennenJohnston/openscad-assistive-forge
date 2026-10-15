@@ -1380,7 +1380,7 @@ test.describe('Screen Reader Support', () => {
 
     // Named for the step, not its number: the intro tour gains and loses
     // steps.
-    test('should spotlight Actions drawer toggle on the Actions menu step (mobile)', async ({
+    test('should spotlight where Copy Link lives on the Sharing and drawings step (mobile)', async ({
       page,
     }) => {
       // Skip in CI - requires WASM for example loading
@@ -1484,17 +1484,27 @@ test.describe('Screen Reader Support', () => {
       await expect(nextBtn).not.toBeDisabled({ timeout: 20000 });
 
       await nextTo(page, 'Preview Settings & Info');
-      await nextTo(page, 'Actions menu');
+      await nextTo(page, 'Sharing and drawings');
       await bringTourBack(page);
 
-      const actionsToggle = page.locator('#actionsDrawerToggle');
+      // The step points at the presets, where Copy Link sits, or on a phone
+      // with the Customizer closed at the Customizer's own toggle.
+      // isVisible() counts the closed sheet's off-screen presets as visible,
+      // so the choice reads where they are, as the tour does.
+      const presetsOnScreen = await presets.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.right > 0 && r.left < innerWidth;
+      });
+      const actionsToggle = presetsOnScreen
+        ? presets
+        : page.locator('#mobileDrawerToggle');
       const previewToggle = page.locator('#previewDrawerToggle');
       const cutout = page.locator('.tutorial-spotlight-cutout');
 
       await expect(actionsToggle).toBeVisible();
       await expect(previewToggle).toBeVisible();
 
-      // The cutout should contain the Actions toggle center point, not the Preview toggle center.
+      // The cutout should contain the target's center point, not the Preview toggle center.
       // Note: boundingBox() for an SVG rect inside a mask can be unreliable in Playwright,
       // so we assert using the rect's x/y/width/height attributes (the values our JS sets).
       const [actionsBox, previewBox, cutoutAttrs] = await Promise.all([
@@ -3142,7 +3152,6 @@ test.describe('UI Uniformity Regression', () => {
         'collapseParamPanelBtn',
         'cameraPanelToggle',
         'previewDrawerToggle',
-        'actionsDrawerToggle',
       ];
       return ids.map((id) => {
         const el = document.getElementById(id);

@@ -67,8 +67,21 @@ async function setParameter(page, id, value) {
   await spinbox.dispatchEvent('change')
 }
 
-async function openActionsDrawer(page) {
-  await page.locator('#actionsDrawerToggle').click()
+// Copy Link sits with the presets, inside their disclosure.
+async function openPresets(page) {
+  const presets = page.locator('#presetControls')
+  if (!(await presets.evaluate((d) => d.open))) {
+    await presets.locator('summary').click()
+  }
+}
+
+// Publish is a File menu item.
+async function openPublish(page) {
+  await page.locator('#fileMenuBtn').click()
+  await page
+    .locator('#fileMenuItems > li > button')
+    .filter({ has: page.locator('.menu-item-label', { hasText: 'Publish…' }) })
+    .click()
 }
 
 // Publish is offered in Standard view only.
@@ -94,7 +107,7 @@ test.describe('Sharing the values on screen', () => {
     await setParameter(page, 'param-width', 72)
     await setParameter(page, 'param-height', 44)
 
-    await openActionsDrawer(page)
+    await openPresets(page)
     await page.locator('#copySettingsLinkBtn').click()
 
     const copied = await lastCopied(page)
@@ -116,7 +129,7 @@ test.describe('Sharing the values on screen', () => {
     await openExample(page, 'simple-box')
     await setParameter(page, 'param-width', 72)
     await setParameter(page, 'param-height', 44)
-    await openActionsDrawer(page)
+    await openPresets(page)
     await page.locator('#copySettingsLinkBtn').click()
     const copied = await lastCopied(page)
 
@@ -138,8 +151,7 @@ test.describe('Sharing the values on screen', () => {
     await setParameter(page, 'param-width', 72)
 
     await useStandardView(page)
-    await openActionsDrawer(page)
-    await page.locator('#publishProjectBtn').click()
+    await openPublish(page)
     await expect(page.locator('#publishManifestOutput')).toBeVisible({
       timeout: 10000,
     })
@@ -169,12 +181,11 @@ test.describe('Sharing the values on screen', () => {
   }) => {
     await openExample(page, 'simple-box')
     await useStandardView(page)
-    await openActionsDrawer(page)
-    await page.locator('#publishProjectBtn').click()
+    await openPublish(page)
     await page.locator('#publishIncludeSettings').check()
     await page.locator('#publishModalClose').click()
 
-    await page.locator('#publishProjectBtn').click()
+    await openPublish(page)
     await expect(page.locator('#publishIncludeSettings')).not.toBeChecked()
   })
 
@@ -185,8 +196,7 @@ test.describe('Sharing the values on screen', () => {
     await setParameter(page, 'param-width', 66)
 
     await useStandardView(page)
-    await openActionsDrawer(page)
-    await page.locator('#publishProjectBtn').click()
+    await openPublish(page)
     await expect(page.locator('#downloadProjectZipBtn')).toBeVisible({
       timeout: 10000,
     })
@@ -276,7 +286,7 @@ test.describe('Sharing the values on screen', () => {
       { timeout: 120000 }
     )
 
-    await openActionsDrawer(page)
+    await openPresets(page)
     await page.locator('#copySettingsLinkBtn').click()
 
     const copied = await lastCopied(page)

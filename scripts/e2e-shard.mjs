@@ -314,8 +314,8 @@ export const MEASURED_SECONDS = {
   // Measured at five cases (30.0); a sixth, at 1280 x 600, scales it to 36.
   'menu-reach.spec.js': 36.0,
   'project-switch.spec.js': 52.2,
-  // Four cases, 21.1 s locally; booked at 25 until a CI run measures it.
-  'actions-drawer.spec.js': 25.0,
+  // Four cases, 22.2 s locally; booked at 25 until a CI run measures it.
+  'project-share.spec.js': 25.0,
   // Two cases, 5.8 s locally with a warm engine; booked at 20 for the cold
   // engine load each CI case pays.
   'engine-recovery.spec.js': 20.0,
