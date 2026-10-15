@@ -252,76 +252,32 @@ export function initCameraPanelController(options = {}) {
         }
       });
 
-    // Projection toggle button (Perspective/Orthographic)
-    const projToggle = document.getElementById('projectionToggle');
-    projToggle?.addEventListener('click', () => {
-      const pm = getPM();
-      if (pm?.toggleProjection) {
-        const newMode = pm.toggleProjection();
-        const isPerspective = newMode === 'perspective';
-        projToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        projToggle.title = isPerspective
-          ? 'Switch to Orthographic (P)'
-          : 'Switch to Perspective (P)';
-        // Update button label
-        const labelSpan = projToggle.querySelector('span');
-        if (labelSpan) {
-          labelSpan.textContent = isPerspective
-            ? 'Perspective'
-            : 'Orthographic';
-        }
-        // Sync mobile projection toggle
-        syncMobileProjectionToggle(newMode);
-      }
-    });
-
-    // Mobile projection toggle button
-    const mobileProjToggle = document.getElementById('mobileProjectionToggle');
-    mobileProjToggle?.addEventListener('click', () => {
-      const pm = getPM();
-      if (pm?.toggleProjection) {
-        const newMode = pm.toggleProjection();
-        const isPerspective = newMode === 'perspective';
-        mobileProjToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        mobileProjToggle.title = isPerspective
-          ? 'Switch to Orthographic'
-          : 'Switch to Perspective';
-        // Update button label
-        const labelSpan = mobileProjToggle.querySelector('span');
-        if (labelSpan) {
-          labelSpan.textContent = isPerspective
-            ? 'Perspective'
-            : 'Orthographic';
-        }
-        // Sync desktop projection toggle
-        syncDesktopProjectionToggle(newMode);
-      }
-    });
-
     /**
-     * Sync mobile projection toggle button state with desktop
+     * Make both projection buttons say the projection that is showing: the
+     * camera panel's shows its icon (data-projection), and each one's pressed
+     * state and title follow. Called after a press of either button and on
+     * every projection change, whichever control made it (the View menu, the
+     * P key, Classic's buttons).
      * @param {string} mode - 'perspective' or 'orthographic'
      */
-    function syncMobileProjectionToggle(mode) {
-      const mobileProjToggle = document.getElementById(
-        'mobileProjectionToggle'
-      );
-      if (mobileProjToggle) {
-        const isPerspective = mode === 'perspective';
-        mobileProjToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        mobileProjToggle.title = isPerspective
+    function syncProjectionToggles(mode) {
+      if (mode !== 'perspective' && mode !== 'orthographic') return;
+      const isPerspective = mode === 'perspective';
+      const desktop = document.getElementById('projectionToggle');
+      if (desktop) {
+        desktop.dataset.projection = mode;
+        desktop.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        desktop.title = isPerspective
+          ? 'Switch to Orthographic (P)'
+          : 'Switch to Perspective (P)';
+      }
+      const mobile = document.getElementById('mobileProjectionToggle');
+      if (mobile) {
+        mobile.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        mobile.title = isPerspective
           ? 'Switch to Orthographic'
           : 'Switch to Perspective';
-        const labelSpan = mobileProjToggle.querySelector('span');
+        const labelSpan = mobile.querySelector('span');
         if (labelSpan) {
           labelSpan.textContent = isPerspective
             ? 'Perspective'
@@ -330,28 +286,17 @@ export function initCameraPanelController(options = {}) {
       }
     }
 
-    /**
-     * Sync desktop projection toggle button state with mobile
-     * @param {string} mode - 'perspective' or 'orthographic'
-     */
-    function syncDesktopProjectionToggle(mode) {
-      const projToggle = document.getElementById('projectionToggle');
-      if (projToggle) {
-        const isPerspective = mode === 'perspective';
-        projToggle.setAttribute(
-          'aria-pressed',
-          isPerspective ? 'false' : 'true'
-        );
-        projToggle.title = isPerspective
-          ? 'Switch to Orthographic (P)'
-          : 'Switch to Perspective (P)';
-        const labelSpan = projToggle.querySelector('span');
-        if (labelSpan) {
-          labelSpan.textContent = isPerspective
-            ? 'Perspective'
-            : 'Orthographic';
+    document.addEventListener('preview-projection-change', (event) => {
+      syncProjectionToggles(event.detail?.mode);
+    });
+
+    for (const id of ['projectionToggle', 'mobileProjectionToggle']) {
+      document.getElementById(id)?.addEventListener('click', () => {
+        const pm = getPM();
+        if (pm?.toggleProjection) {
+          syncProjectionToggles(pm.toggleProjection());
         }
-      }
+      });
     }
 
     // Mobile rotation buttons

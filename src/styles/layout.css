@@ -2241,10 +2241,23 @@ body[data-app-surface='welcome'] #uiModeToggle {
     grid-auto-flow: column;
   }
 
+  /* Each face shows as a cube with that face shaded; its name and tooltip
+     say which. */
   #cameraPanel .btn.camera-view-btn {
     padding: 0;
-    overflow: hidden;
-    white-space: nowrap;
+  }
+
+  /* The projection button shows the projection that is showing: a box whose
+     edges meet in the distance, or one whose edges stay parallel. */
+  #projectionToggle .projection-icon {
+    display: none;
+  }
+
+  #projectionToggle[data-projection='perspective']
+    .projection-icon--perspective,
+  #projectionToggle[data-projection='orthographic']
+    .projection-icon--orthographic {
+    display: inline;
   }
 
   /* Collapsed state for camera panel */

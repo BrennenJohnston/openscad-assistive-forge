@@ -3364,6 +3364,68 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     expectOnlyAllowedViolations(inFolder);
   });
 
+  // The camera panel's buttons are pictures with names: a face cube, a
+  // projection box, magnifiers. A picture that reached assistive tech, or a
+  // button left without its name, would leave only an unnamed graphic.
+  test('camera panel icon buttons keep their names in both projections', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      );
+    });
+    await page.goto('/?example=simple-box');
+    await waitForWasmReady(page);
+    await waitForModelLoaded(page, { expandGroups: false });
+
+    const toggle = page.locator('#cameraPanelToggle');
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.focus();
+      await page.keyboard.press('Enter');
+    }
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // Let the panel's width transition end before scanning.
+    await page.waitForTimeout(700);
+
+    const unhidden = await page.evaluate(() =>
+      [...document.querySelectorAll('#cameraPanelBody svg')]
+        .filter((svg) => !svg.closest('[aria-hidden="true"]'))
+        .map((svg) => {
+          const button = svg.closest('button');
+          return button?.id || button?.dataset.view || svg.outerHTML;
+        })
+    );
+    expect(unhidden, 'pictures that reach assistive tech').toEqual([]);
+
+    for (const projection of ['perspective', 'orthographic']) {
+      const button = page.locator('#projectionToggle');
+      if ((await button.getAttribute('data-projection')) !== projection) {
+        await button.click();
+      }
+      await expect(button).toHaveAttribute('data-projection', projection);
+      // withTags() and withRules() each replace the scan's one rule filter,
+      // so a rule the tags leave out is switched on through the options.
+      const results = await new AxeBuilder({ page })
+        .include('#cameraPanel')
+        .options({
+          rules: { 'label-content-name-mismatch': { enabled: true } },
+        })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const ran = [
+        ...results.passes,
+        ...results.violations,
+        ...results.incomplete,
+      ].map((rule) => rule.id);
+      expect(ran).toEqual(
+        expect.arrayContaining(['button-name', 'label-content-name-mismatch'])
+      );
+      expectOnlyAllowedViolations(results);
+    }
+  });
+
   test('should run axe scan in error state after invalid .scad', async ({
     page,
   }) => {
