@@ -357,7 +357,8 @@ body[data-ui-mode='classic'] {
     text-shadow: none;
   }
 
-  :root[data-ui-variant='mono'] .panel-header::before {
+  :root[data-ui-variant='mono']
+    :is(.panel-header-title-row, .camera-header-title-row)::before {
     content: none;
   }
 }
@@ -1665,12 +1666,13 @@ body[data-ui-mode='classic'] {
 /* ----------------------------------------
  * 4e. Box-drawing character decorations on panel headers
  *
- * Prepends a terminal-style ╞═ glyph before panel header content.
- * As a flex item (::before in a flex container becomes a flex child),
- * it renders inline before the title text with flex-shrink: 0 so it
- * is never squeezed out.
+ * Prepends a terminal-style ╞═ glyph to a panel's title row. As a flex
+ * item (::before in a flex container becomes a flex child), it renders
+ * inline before the title text with flex-shrink: 0 so it is never
+ * squeezed out, and the title and its toggle keep one row.
  * ---------------------------------------- */
-:root[data-ui-variant='mono'] .panel-header::before {
+:root[data-ui-variant='mono']
+  :is(.panel-header-title-row, .camera-header-title-row)::before {
   content: '╞═ ';
   font-family: var(--font-family-mono);
   color: var(--color-text-tertiary);
@@ -1758,7 +1760,8 @@ body[data-ui-mode='classic'] {
     text-shadow: none;
   }
 
-  :root[data-ui-variant='mono'] .panel-header::before {
+  :root[data-ui-variant='mono']
+    :is(.panel-header-title-row, .camera-header-title-row)::before {
     content: none;
   }
 }

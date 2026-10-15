@@ -51,8 +51,6 @@ const MENUS = ['file', 'edit', 'design', 'view', 'window', 'help'];
 // page meets it, the case reports that it passed unexpectedly and its entry
 // comes out. Entries only ever leave this list.
 const NOT_MET_YET = {
-  S2: "The side panels' toggles drop a row when their panel opens",
-  S4: 'The camera panel and the Customizer put their toggles on a second row',
   S5: 'The camera panel scrolls at 180 px wide',
   S7: "Menus open at the window's corner over a blurred page, with a title bar",
 };

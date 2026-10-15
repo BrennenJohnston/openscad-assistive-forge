@@ -1988,8 +1988,9 @@ body[data-app-surface='welcome'] #uiModeToggle {
      The button visually indicates the panel can dock/undock from the edge.
      ============================================================================ */
 
-  /* Collapse button pushed to right edge of action toolbar */
-  .param-header-actions #collapseParamPanelBtn {
+  /* The collapse toggle at the right end of the title row: the panel opens
+     from its left edge, so the toggle sits at the edge that moves. */
+  .panel-header-title-row #collapseParamPanelBtn {
     margin-left: auto;
   }
 
@@ -2015,12 +2016,26 @@ body[data-app-surface='welcome'] #uiModeToggle {
     outline-offset: 2px;
   }
 
-  /* Collapsed state */
+  /* Collapsed state. Nothing scrolls in the strip, so no scrollbar gutter is
+     kept (it took 14 px and pushed the toggle off the window's left edge),
+     and a toggle as wide as the strip may overhang its 1 px border rather
+     than be cut. */
   .param-panel.collapsed {
     width: var(--drawer-collapsed-width) !important;
     min-width: var(--drawer-collapsed-width);
     max-width: var(--drawer-collapsed-width);
     flex: none !important;
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+
+  /* In a strip as wide as its toggle, the focus ring is drawn inside the
+     toggle, where the window's edge cannot cut it. */
+  .param-panel.collapsed #collapseParamPanelBtn:focus,
+  .param-panel.collapsed #collapseParamPanelBtn:focus-visible,
+  #cameraPanel.collapsed #cameraPanelToggle:focus,
+  #cameraPanel.collapsed #cameraPanelToggle:focus-visible {
+    outline-offset: -3px;
   }
 
   /* Hide body content when collapsed */
@@ -2028,29 +2043,31 @@ body[data-app-surface='welcome'] #uiModeToggle {
     display: none;
   }
 
-  /* Hide toolbar actions except collapse button when collapsed */
-  .param-panel.collapsed .param-header-actions > :not(#collapseParamPanelBtn) {
+  /* Collapsed, the action row hides; the toggle stays in the title row. */
+  .param-panel.collapsed .param-header-actions {
     display: none;
   }
 
-  .param-panel.collapsed .param-header-actions {
-    justify-content: center;
-  }
-
-  /* Adjust header layout when collapsed */
+  /* Collapsed, the strip keeps the open header's top padding, so the toggle
+     stays at the same height in both states, and no side padding, so the
+     strip is wide enough for the whole toggle and its focus ring. */
   .param-panel.collapsed .panel-header {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: var(--space-sm);
-    padding-top: var(--space-md);
+    padding: var(--space-sm) 0;
     border-bottom: none;
   }
 
   .param-panel.collapsed .panel-header-title-row {
     flex-direction: column;
     align-items: center;
-    order: 1;
+  }
+
+  /* The toggle above the vertical title. */
+  .param-panel.collapsed .panel-header-title-row #collapseParamPanelBtn {
+    order: -1;
+    margin-left: 0;
   }
 
   .param-panel.collapsed .panel-header h2 {
@@ -2088,9 +2105,13 @@ body[data-app-surface='welcome'] #uiModeToggle {
     transition: width var(--motion-base) ease;
   }
 
-  .camera-panel-header {
+  /* One row: the toggle at the left edge, where the panel opens from, and
+     the title beside it. Scoped by the panel to outweigh the shared
+     .panel-header column further down this file. */
+  .camera-panel .camera-panel-header {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--color-border);
     background-color: var(--color-bg-secondary);
@@ -2098,7 +2119,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
     overflow: visible; /* Prevent clipping */
   }
 
-  /* Row 1: Title row (matches Parameters title row) */
   .camera-header-title-row {
     display: flex;
     align-items: center;
@@ -2114,16 +2134,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
     white-space: nowrap;
   }
 
-  /* Row 2: Actions row with collapse button (mirrors Parameters action toolbar) */
   .camera-header-actions {
     display: flex;
     align-items: center;
     gap: var(--space-xs);
-  }
-
-  /* Collapse button pushed to left edge (mirrors Parameters right edge positioning) */
-  .camera-header-actions #cameraPanelToggle {
-    margin-right: auto;
+    order: -1;
   }
 
   /* Camera collapse button - only camera-specific overrides; base styling from .btn-collapse-panel */
@@ -2159,12 +2174,13 @@ body[data-app-surface='welcome'] #uiModeToggle {
     display: none;
   }
 
+  /* Collapsed: the open header's top padding, so the toggle keeps its
+     height, and no side padding, so the strip holds the whole toggle. */
   .camera-panel.collapsed .camera-panel-header {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: var(--space-sm);
-    padding-top: var(--space-md);
+    padding: var(--space-sm) 0;
     border-bottom: none;
   }
 
@@ -2641,7 +2657,14 @@ body[data-app-surface='welcome'] #uiModeToggle {
   gap: var(--space-sm);
   min-height: var(--size-touch-target-sm);
   flex-wrap: nowrap;
+}
+
+/* A long title is cut with an ellipsis rather than the row being cut, which
+   would cut the focus ring of the toggle beside it. */
+.panel-header-title-row h2 {
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .panel-header-left {
