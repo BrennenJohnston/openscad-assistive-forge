@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { hasWebGL } from './helpers/webgl.js';
 import path from 'path';
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
@@ -3408,7 +3409,12 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     );
     expect(unhidden, 'pictures that reach assistive tech').toEqual([]);
 
-    for (const projection of ['perspective', 'orthographic']) {
+    // Without WebGL there is no camera to switch, so the button keeps its
+    // perspective picture; the scan then covers the one state there is.
+    const projections = (await hasWebGL(page))
+      ? ['perspective', 'orthographic']
+      : ['perspective'];
+    for (const projection of projections) {
       const button = page.locator('#projectionToggle');
       if ((await button.getAttribute('data-projection')) !== projection) {
         await button.click();

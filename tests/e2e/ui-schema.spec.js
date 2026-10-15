@@ -413,6 +413,13 @@ for (const size of SIZES) {
         const wasOpen = (await page.evaluate(readToggle, '#cameraPanelToggle'))
           .expanded;
         if (!wasOpen) await press('#cameraPanelToggle');
+        const target = await page.evaluate(() =>
+          parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue(
+              '--size-touch-target'
+            )
+          )
+        );
         const sizes = await page.evaluate(() =>
           ['#cameraPanel', '#cameraPanelBody'].map((sel) => {
             const el = document.querySelector(sel);
@@ -446,10 +453,11 @@ for (const size of SIZES) {
             )
             .toBeLessThanOrEqual(s.clientWidth);
           // The Alt View's sliders may sit below the fold, and so may the
-          // last rows in high contrast, whose 44 px targets make the one
-          // column taller than a 720 px window holds.
+          // last rows wherever the targets are 44 px (high contrast, a touch
+          // screen, a browser that reports no mouse): the one column is then
+          // taller than a 720 px window holds.
           const mayScrollDown =
-            look.altView || (look.highContrast && size.height < 935);
+            look.altView || (target >= 44 && size.height < 935);
           if (!mayScrollDown) {
             expect
               .soft(

@@ -56,9 +56,17 @@ function menuItem(page, menuId, label) {
 test.describe('Sharing and drawings', () => {
   test('Copy Link sits with the presets and copies a link that reopens the design', async ({
     page,
-    context,
   }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    // The copied text is caught on its way to the clipboard: reading the
+    // clipboard back needs a permission not every browser offers.
+    await page.addInitScript(() => {
+      window.__copiedText = null;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText = async (text) => {
+          window.__copiedText = text;
+        };
+      }
+    });
     await openBox(page);
     const presets = page.locator('#presetControls');
     if (!(await presets.evaluate((d) => d.open))) {
@@ -69,8 +77,9 @@ test.describe('Sharing and drawings', () => {
     await expect(copyLink).toHaveText(/Copy Link/);
 
     await copyLink.click();
-    const copied = await page.evaluate(() => navigator.clipboard.readText());
-    expect(copied).toContain('?example=simple-box');
+    await expect
+      .poll(() => page.evaluate(() => window.__copiedText))
+      .toContain('?example=simple-box');
   });
 
   test('Publish is in the File menu in Standard and opens its dialog', async ({
@@ -110,8 +119,8 @@ test.describe('Sharing and drawings', () => {
     const chooser = page.waitForEvent('filechooser');
     await menuItem(page, 'design', 'Open a drawing in the editor…').click();
     const picked = await chooser;
-    expect(
-      await picked.element().evaluate((el) => el.id)
-    ).toBe('svgEditFileInput');
+    expect(await picked.element().evaluate((el) => el.id)).toBe(
+      'svgEditFileInput'
+    );
   });
 });
