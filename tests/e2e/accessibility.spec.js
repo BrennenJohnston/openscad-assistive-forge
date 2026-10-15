@@ -34,6 +34,21 @@ async function waitForWasmReady(page) {
  */
 const ALLOWED_AXE_VIOLATIONS = [];
 
+const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+/**
+ * An axe scan of every WCAG 2.2 A and AA rule, and one best practice the tags
+ * leave out: a control whose visible words are not in its name cannot be
+ * worked by saying them. withTags() and withRules() each replace the scan's
+ * one rule filter, so the extra rule is switched on in the options, set
+ * before withTags(); a scan that chains withRules() runs that rule alone.
+ */
+function wcagScan(page) {
+  return new AxeBuilder({ page })
+    .options({ rules: { 'label-content-name-mismatch': { enabled: true } } })
+    .withTags(WCAG_TAGS);
+}
+
 function expectOnlyAllowedViolations(results) {
   const unexpected = results.violations.filter(
     (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
@@ -112,12 +127,7 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     await page.waitForLoadState('networkidle');
 
     // Run accessibility scan
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     // Log violations for debugging
     if (results.violations.length > 0) {
@@ -165,12 +175,7 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     await page.waitForTimeout(500);
 
     // Run accessibility scan on parameter UI
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     expectOnlyAllowedViolations(results);
   });
@@ -1582,12 +1587,7 @@ test.describe('Color System and Theme Accessibility', () => {
     await page.waitForTimeout(100);
 
     // Run accessibility scan
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     expect(results.violations).toEqual([]);
     console.log('Light theme: No accessibility violations');
@@ -1606,12 +1606,7 @@ test.describe('Color System and Theme Accessibility', () => {
     await page.waitForTimeout(100);
 
     // Run accessibility scan
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     expect(results.violations).toEqual([]);
     console.log('Dark theme: No accessibility violations');
@@ -1926,12 +1921,7 @@ test.describe('Mono / Alt View Theme State Accessibility', () => {
     });
     await page.waitForTimeout(100);
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     expect(results.violations).toEqual([]);
     console.log('Mono light mode: No accessibility violations');
@@ -1947,12 +1937,7 @@ test.describe('Mono / Alt View Theme State Accessibility', () => {
     });
     await page.waitForTimeout(100);
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     expect(results.violations).toEqual([]);
     console.log('Mono dark mode: No accessibility violations');
@@ -2114,12 +2099,7 @@ test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
     expect(borderWidthPx).toBeGreaterThanOrEqual(2);
 
     // Run accessibility scan
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     expect(results.violations).toEqual([]);
     console.log('prefers-contrast: more - No violations, borders enhanced');
@@ -2603,12 +2583,7 @@ test.describe('Drawer Accessibility', () => {
     await waitForModelLoaded(page, { expandGroups: false });
     await page.locator('#mobileDrawerToggle').click();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     expectOnlyAllowedViolations(results);
   });
@@ -3209,6 +3184,27 @@ test.describe('UI Uniformity Regression', () => {
 });
 
 test.describe('Axe-Core Scans for Missing Views', () => {
+  // A scan that checks one rule passes everything else unseen: hold the
+  // shared scan to the whole WCAG set and the label rule.
+  test('every scan runs the WCAG rules and the label rule together', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const results = await wcagScan(page).analyze();
+    const ran = new Set(
+      [
+        ...results.passes,
+        ...results.violations,
+        ...results.incomplete,
+        ...results.inapplicable,
+      ].map((rule) => rule.id)
+    );
+    expect(ran.size, 'rules run').toBeGreaterThan(50);
+    expect(ran.has('label-content-name-mismatch')).toBe(true);
+    expect(ran.has('color-contrast')).toBe(true);
+    expect(ran.has('button-name')).toBe(true);
+  });
+
   test('should run axe scan with Expert Mode active', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
@@ -3245,12 +3241,7 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     const expertPanel = page.locator('#expertModePanel');
     await expect(expertPanel).toBeVisible({ timeout: 10_000 });
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     console.log(
       `Expert Mode axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`
@@ -3279,12 +3270,7 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     const modal = page.locator('#featuresGuideModal');
     await expect(modal).toBeVisible({ timeout: 5000 });
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     console.log(
       `Features Guide axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`
@@ -3347,12 +3333,8 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     await expect(page.locator('#projectFilesList')).toBeVisible();
     await page.waitForTimeout(700);
 
-    const atRoot = await new AxeBuilder({ page })
+    const atRoot = await wcagScan(page)
       .include('#projectFilesControls')
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
       .analyze();
     expectOnlyAllowedViolations(atRoot);
 
@@ -3364,12 +3346,8 @@ test.describe('Axe-Core Scans for Missing Views', () => {
     ).toBeVisible();
     await page.waitForTimeout(300);
 
-    const inFolder = await new AxeBuilder({ page })
+    const inFolder = await wcagScan(page)
       .include('#projectFilesControls')
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
       .analyze();
     expectOnlyAllowedViolations(inFolder);
   });
@@ -3477,12 +3455,7 @@ test.describe('Axe-Core Scans for Missing Views', () => {
 
     await page.waitForTimeout(2000);
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      // A best practice the tags leave out: a control whose visible words are
-      // not in its name cannot be worked by saying them.
-      .withRules(['label-content-name-mismatch'])
-      .analyze();
+    const results = await wcagScan(page).analyze();
 
     console.log(
       `Error state axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`
