@@ -102,8 +102,8 @@ export function initDrawerController() {
    * Upright, the sheet begins where the preview's half of the screen ends,
    * and the preview ends there too (layout.css reads both lines). On a
    * phone too short for that, the sheet still keeps its header and one row
-   * of controls, and the preview has the rest. Sideways, the column starts
-   * below the preview's own row.
+   * of controls, no more, and the preview has the rest. Sideways, the
+   * column starts below the preview's own row.
    */
   function placeSheet() {
     placeDrawerColumnTop();
@@ -116,9 +116,7 @@ export function initDrawerController() {
       ) || 0;
     const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
     const floor =
-      (header ? header.offsetHeight : 0) +
-      token('--size-touch-target') +
-      token('--space-md');
+      (header ? header.offsetHeight : 0) + token('--size-touch-target');
     const top = Math.ceil(
       Math.min(
         (section ? section.getBoundingClientRect().top : 0) + previewKeepsPx(),
@@ -202,13 +200,14 @@ export function initDrawerController() {
 
     triggerEl = trigger || toggleBtn;
     isOpen = true;
-    placeSheet();
 
     toggleBtn.setAttribute('aria-expanded', 'true');
     toggleBtn.setAttribute('aria-label', 'Close customizer panel');
     drawer.classList.add('drawer-open');
     previewPanel?.classList.add('customizer-sheet-open');
     closeBtn?.classList.remove('hidden');
+    // Measured open: its Close button makes the header taller.
+    placeSheet();
 
     if (initialFocus) {
       initialFocus.focus();

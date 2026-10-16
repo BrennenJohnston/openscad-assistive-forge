@@ -1174,6 +1174,59 @@ function readBarRow() {
   };
 }
 
+// When the rows above the preview take more room than usual (a wider font
+// wraps the header's first row, as on CI's Firefox in high contrast), the
+// sheet gives way to the preview's half before it reaches its floor: its
+// header and one row of controls.
+test.describe('The phone sheet under a taller header, 412 x 810, high contrast', () => {
+  // No isMobile: Firefox rejects it when the browser context is created.
+  test.use({ viewport: { width: 412, height: 810 }, hasTouch: true });
+
+  test('the preview keeps half, and the sheet its header and one row', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await openPhoneProject(page, LOOKS[2]);
+    // As much taller as the wrapped row measured on CI (57 px).
+    await page.evaluate(() => {
+      document.querySelector('.app-header').style.paddingBottom = '57px';
+    });
+    await page.waitForTimeout(500);
+    const toggle = page.locator('#mobileDrawerToggle');
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await page.waitForTimeout(600);
+    const share = await page.evaluate(previewHeightShare);
+    const sheet = await page.evaluate(() => {
+      const panel = document.getElementById('paramPanel');
+      return {
+        height: panel.getBoundingClientRect().height,
+        header: panel.querySelector('.panel-header').offsetHeight,
+        row: parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            '--size-touch-target'
+          )
+        ),
+      };
+    });
+    const floor = sheet.header + sheet.row;
+    // The preview keeps half, unless the sheet is already down to its floor.
+    expect
+      .soft(
+        share >= 0.5 || sheet.height <= floor + 1,
+        `S6: the preview ${share.toFixed(3)} of the height beside a ${Math.round(sheet.height)} px sheet (floor ${floor})`
+      )
+      .toBe(true);
+    expect
+      .soft(
+        sheet.height + 0.5,
+        `the sheet keeps its header and one row (${Math.round(sheet.height)} px)`
+      )
+      .toBeGreaterThanOrEqual(floor);
+  });
+});
+
 // Phones held upright: the Customizer is a sheet above the bottom bar, which
 // keeps to one row, and Preview Settings & Info drops from its own row; with
 // either open the preview keeps half the screen's height, the model drawn in
