@@ -1019,6 +1019,53 @@ test.describe('A tour that follows the user', () => {
       ).toHaveClass(/tutorial-target-highlight/);
     });
 
+    test('A target half under the bar is scrolled up into the sheet, not away', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+
+      const summary = '.param-group[data-group-id="Dimensions"] summary';
+      // Scrolled by hand until the group's header is half behind the bar.
+      await page.evaluate((selector) => {
+        const sheet = document.getElementById('paramPanel');
+        const box = sheet.getBoundingClientRect();
+        const r = document.querySelector(selector).getBoundingClientRect();
+        sheet.scrollTop -= box.bottom - r.top - r.height / 2;
+      }, summary);
+      // A phone's toolbar sliding away resizes the view, and the card is
+      // placed again.
+      await page.setViewportSize({ width: 412, height: 914 });
+
+      await expect
+        .poll(
+          () =>
+            page.evaluate((selector) => {
+              const sheet = document
+                .getElementById('paramPanel')
+                .getBoundingClientRect();
+              const r = document.querySelector(selector).getBoundingClientRect();
+              return r.top >= sheet.top && r.bottom <= sheet.bottom;
+            }, summary),
+          {
+            message: 'the group header comes up into the sheet',
+            timeout: 5_000,
+          }
+        )
+        .toBe(true);
+      await expect(page.locator(summary)).toHaveClass(
+        /tutorial-target-highlight/
+      );
+      await expect(page.locator('.tutorial-panel')).not.toHaveClass(
+        /tutorial-panel-centered/
+      );
+    });
+
     test('the step still completes and advances once the group is expanded', async ({
       page,
     }) => {
@@ -1361,9 +1408,9 @@ test.describe('Cards that stay readable', () => {
   }
 
   /**
-   * The mobile drawer is a modal dialog and the tour card lives outside it,
-   * so the drawer's `aria-modal` would hide the instructions from a screen
-   * reader, and its focus trap would make the card's buttons unreachable.
+   * The mobile Customizer is a sheet and the tour card lives outside it, a
+   * dialog of its own: the card's `aria-modal` would hide the sheet from a
+   * screen reader, and the keyboard has to reach both.
    */
   test.describe('The card is reachable and announced over the drawer', () => {
     test.use({ viewport: { width: 412, height: 915 } });
@@ -1391,7 +1438,7 @@ test.describe('Cards that stay readable', () => {
       // Neither surface may claim `aria-modal` while both are up: whichever one
       // does, assistive technology hides the other.
       const drawer = page.locator('#paramPanel');
-      await expect(drawer).toHaveAttribute('role', 'dialog');
+      await expect(drawer).toHaveAttribute('role', 'region');
       expect(await drawer.getAttribute('aria-modal')).toBeNull();
       expect(
         await page.locator('.tutorial-panel').getAttribute('aria-modal')

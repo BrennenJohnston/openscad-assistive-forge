@@ -162,10 +162,6 @@
     var(--actions-bar-height) + var(--space-xs)
   );
   --actions-bar-expanded-offset: 220px;
-
-  /* Camera focus mode (mobile portrait) - calculated dynamically by JS */
-  /* Default approximates: drawer body (~45vh max) + toggle row (44px) + primary row (52px) */
-  --camera-focus-bottom-offset: 45vh;
   --actions-bar-expanded-padding: 130px;
 
   /* Breakpoints (Note: CSS variables cannot be used in media queries) */

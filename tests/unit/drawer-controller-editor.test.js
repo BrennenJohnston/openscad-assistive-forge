@@ -1,12 +1,11 @@
 /**
  * The customizer drawer and the drawing editor.
  *
- * At phone width the drawer is a modal dialog with a focus trap. The editor
- * takes the preview area behind it, so the drawer stands aside while the
- * editor is open - or a press on "Open the drawing editor" or "Crop first"
- * inside it would leave the drawer standing over an editor nobody could see
- * or reach - and comes back when it closes, keeping the focus the editor's
- * host has just put inside it.
+ * At phone width the drawer is a sheet over part of the preview. The editor
+ * takes the preview area, so the drawer stands aside while the editor is
+ * open - or a press on "Open the drawing editor" or "Crop first" inside it
+ * would leave the sheet standing over half the editor - and comes back when
+ * it closes, keeping the focus the editor's host has just put inside it.
  *
  * @license GPL-3.0-or-later
  */

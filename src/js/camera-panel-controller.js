@@ -13,6 +13,12 @@
 import { announceImmediate } from './announcer.js';
 import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { CAMERA_ZOOM_STEP } from './preview.js';
+import {
+  closeOtherPhoneDrawers,
+  isPhoneLayout,
+  placeDrawerColumnTop,
+  registerPhoneDrawer,
+} from './phone-drawers.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_COLLAPSED = getDrawerStateKey('camera');
@@ -255,9 +261,9 @@ export function initCameraPanelController(options = {}) {
       });
 
     /**
-     * Make both projection buttons say the projection that is showing: the
-     * camera panel's shows its icon (data-projection), and each one's pressed
-     * state and title follow. Called after a press of either button and on
+     * Make both projection buttons say the projection that is showing: each
+     * shows its icon (data-projection), and each one's pressed state and
+     * title follow. Called after a press of either button and on
      * every projection change, whichever control made it (the View menu, the
      * P key, Classic's buttons).
      * @param {string} mode - 'perspective' or 'orthographic'
@@ -275,16 +281,11 @@ export function initCameraPanelController(options = {}) {
       }
       const mobile = document.getElementById('mobileProjectionToggle');
       if (mobile) {
+        mobile.dataset.projection = mode;
         mobile.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
         mobile.title = isPerspective
           ? 'Switch to Orthographic'
           : 'Switch to Perspective';
-        const labelSpan = mobile.querySelector('span');
-        if (labelSpan) {
-          labelSpan.textContent = isPerspective
-            ? 'Perspective'
-            : 'Orthographic';
-        }
       }
     }
 
@@ -499,14 +500,20 @@ export function initCameraPanelController(options = {}) {
 }
 
 /**
- * The camera panel's keyboard shortcuts pop-out. Its button opens and closes
- * it; Escape on the button or inside the pop-out closes it and leaves focus on
- * the button; a press anywhere outside the two closes it.
+ * A keyboard shortcuts pop-out, the camera panel's or the phone drawer's. Its
+ * button opens and closes it; Escape on the button or inside the pop-out
+ * closes it and leaves focus on the button; a press anywhere outside the two
+ * closes it.
+ * @param {string} [buttonId]
+ * @param {string} [popoutId]
  * @returns {{close: Function}|null}
  */
-function initCameraShortcutsPopout() {
-  const button = document.getElementById('cameraShortcutsBtn');
-  const popout = document.getElementById('cameraShortcutsPanel');
+function initCameraShortcutsPopout(
+  buttonId = 'cameraShortcutsBtn',
+  popoutId = 'cameraShortcutsPanel'
+) {
+  const button = document.getElementById(buttonId);
+  const popout = document.getElementById(popoutId);
   if (!button || !popout) return null;
 
   const isOpen = () => button.getAttribute('aria-expanded') === 'true';
@@ -556,123 +563,186 @@ function initCameraShortcutsPopout() {
 }
 
 /**
- * Initialize the mobile camera drawer toggle functionality
+ * One of the phone's bottom drawers: its toggle, its open state (kept across
+ * visits when it has a storage key), and its place in the one-at-a-time rule
+ * (phone-drawers.js).
+ * @param {Object} cfg
+ * @param {string} cfg.name - Its name in the one-at-a-time rule
+ * @param {string} cfg.drawerId
+ * @param {string} cfg.toggleId
+ * @param {string} cfg.bodyId
+ * @param {string} cfg.label - Its name after "Expand" or "Collapse"
+ * @param {string|null} [cfg.storageKey]
+ * @param {() => void} [cfg.onCollapse]
+ * @param {(opened: boolean) => void} [cfg.onChange]
+ * @returns {{drawer: HTMLElement, body: HTMLElement, isOpen: () => boolean}|null}
  */
-function initMobileCameraDrawer() {
-  const drawer = document.getElementById('cameraDrawer');
-  const toggleBtn = document.getElementById('cameraDrawerToggle');
-  const drawerBody = document.getElementById('cameraDrawerBody');
-  const previewPanel = document.querySelector('.preview-panel');
+function initPhoneDrawer({
+  name,
+  drawerId,
+  toggleId,
+  bodyId,
+  label,
+  storageKey = null,
+  onCollapse = null,
+  onChange = null,
+}) {
+  const drawer = document.getElementById(drawerId);
+  const toggleBtn = document.getElementById(toggleId);
+  const body = document.getElementById(bodyId);
+  if (!drawer || !toggleBtn || !body) return null;
 
-  if (!drawer || !toggleBtn || !drawerBody) {
-    return;
-  }
+  const saved = storageKey ? safeGetItem(storageKey) : null;
+  let collapsed = saved === null ? true : saved === 'true';
 
-  // Load saved state from localStorage (defaults to collapsed)
-  const savedMobileState = safeGetItem(STORAGE_KEY_MOBILE_COLLAPSED);
-  let isMobileCollapsed =
-    savedMobileState === null ? true : savedMobileState === 'true';
-
-  /**
-   * Save collapsed state to localStorage
-   */
-  function saveState(collapsed) {
-    safeSetItem(STORAGE_KEY_MOBILE_COLLAPSED, String(collapsed));
-  }
-
-  /**
-   * Update ARIA attributes on toggle button
-   */
-  function updateAria(collapsed) {
+  // No tooltip: one that repeated the name reached a screen reader as a
+  // description, and each press was said twice. The word and the arrow show.
+  function apply() {
+    drawer.classList.toggle('collapsed', collapsed);
     toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     toggleBtn.setAttribute(
       'aria-label',
-      collapsed ? 'Expand camera controls' : 'Collapse camera controls'
+      `${collapsed ? 'Expand' : 'Collapse'} ${label}`
     );
-    toggleBtn.title = collapsed
-      ? 'Expand camera controls'
-      : 'Collapse camera controls';
   }
 
-  /**
-   * Update preview panel padding to accommodate camera drawer
-   */
-  function updatePreviewPanelPadding(expanded) {
-    if (previewPanel) {
-      if (expanded) {
-        previewPanel.classList.add('camera-drawer-open');
-      } else {
-        previewPanel.classList.remove('camera-drawer-open');
-      }
-    }
+  function expand() {
+    if (!collapsed) return;
+    closeOtherPhoneDrawers(name);
+    collapsed = false;
+    apply();
+    if (storageKey) safeSetItem(storageKey, 'false');
+    onChange?.(true);
   }
 
-  /**
-   * Expand the mobile drawer
-   */
-  function expandDrawer() {
-    if (!isMobileCollapsed) return;
-
-    isMobileCollapsed = false;
-    drawer.classList.remove('collapsed');
-    updateAria(false);
-    updatePreviewPanelPadding(true);
-    saveState(false);
+  function collapse() {
+    if (collapsed) return;
+    collapsed = true;
+    onCollapse?.();
+    apply();
+    if (storageKey) safeSetItem(storageKey, 'true');
+    onChange?.(false);
   }
 
-  /**
-   * Collapse the mobile drawer
-   */
-  function collapseDrawer() {
-    if (isMobileCollapsed) return;
-    isMobileCollapsed = true;
-    drawer.classList.add('collapsed');
-    updateAria(true);
-    updatePreviewPanelPadding(false);
-    saveState(true);
-  }
-
-  /**
-   * Toggle drawer state
-   */
-  function toggleDrawer(event) {
-    if (event) {
-      event.preventDefault();
-    }
-    if (isMobileCollapsed) {
-      expandDrawer();
+  toggleBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (collapsed) {
+      expand();
     } else {
-      collapseDrawer();
+      collapse();
     }
+  });
+  registerPhoneDrawer(name, {
+    isOpen: () => !collapsed,
+    close: () => collapse(),
+  });
+  apply();
+  return { drawer, body, isOpen: () => !collapsed };
+}
+
+/**
+ * A drawer body's height with its content and nothing else, open or not:
+ * a closed drawer is opened and closed again within one task, so nothing
+ * is drawn in between.
+ * @param {{drawer: HTMLElement, body: HTMLElement}} d
+ * @returns {number}
+ */
+function naturalHeight({ drawer, body }) {
+  const wasCollapsed = drawer.classList.contains('collapsed');
+  body.style.removeProperty('min-height');
+  if (wasCollapsed) drawer.classList.remove('collapsed');
+  const height = body.getBoundingClientRect().height;
+  if (wasCollapsed) drawer.classList.add('collapsed');
+  return height;
+}
+
+/**
+ * The phone's bottom drawers: the camera drawer, and in the Alt View the
+ * ASCII drawer beside it, both opening from the bottom bar into the same
+ * space, one at a time.
+ */
+function initMobileCameraDrawer() {
+  const previewPanel = document.querySelector('.preview-panel');
+
+  // The drawer's shortcuts list is the camera panel's, so the two never
+  // say different things.
+  const shortcutsList = document.querySelector(
+    '#cameraShortcutsPanel .camera-shortcuts-list'
+  );
+  const mobileShortcuts = document.getElementById('mobileCameraShortcutsPanel');
+  if (shortcutsList && mobileShortcuts && !mobileShortcuts.firstElementChild) {
+    mobileShortcuts.appendChild(shortcutsList.cloneNode(true));
   }
+  const shortcutsPopout = initCameraShortcutsPopout(
+    'mobileCameraShortcutsBtn',
+    'mobileCameraShortcutsPanel'
+  );
 
-  // Apply initial state
-  if (isMobileCollapsed) {
-    drawer.classList.add('collapsed');
-    updatePreviewPanelPadding(false);
-  } else {
-    drawer.classList.remove('collapsed');
-    updatePreviewPanelPadding(true);
+  /** @type {Array<{drawer: HTMLElement, body: HTMLElement, isOpen: () => boolean}>} */
+  const drawers = [];
+
+  // The preview keeps room above the bar while a drawer is open; a resize
+  // to a desktop width drops it (the drawers do not show there).
+  const syncPreviewPadding = ({ checkWidth = false } = {}) => {
+    previewPanel?.classList.toggle(
+      'camera-drawer-open',
+      (!checkWidth || isPhoneLayout()) && drawers.some((d) => d.isOpen())
+    );
+  };
+
+  // In the Alt View the two drawers open into the same space, at the taller
+  // one's height (never past half the screen), so the preview keeps one
+  // size whichever is open.
+  const matchHeights = () => {
+    const shown = drawers.filter((d) => !d.drawer.hidden);
+    if (shown.length < 2) {
+      drawers.forEach((d) => d.body.style.removeProperty('min-height'));
+      return;
+    }
+    const height = Math.min(
+      Math.max(...shown.map(naturalHeight)),
+      window.innerHeight / 2
+    );
+    shown.forEach((d) => d.body.style.setProperty('min-height', `${height}px`));
+  };
+
+  const onChange = (opened) => {
+    if (opened) {
+      placeDrawerColumnTop();
+      matchHeights();
+    }
+    syncPreviewPadding();
+  };
+
+  for (const cfg of [
+    {
+      name: 'camera',
+      drawerId: 'cameraDrawer',
+      toggleId: 'cameraDrawerToggle',
+      bodyId: 'cameraDrawerBody',
+      label: 'camera controls',
+      storageKey: STORAGE_KEY_MOBILE_COLLAPSED,
+      onCollapse: () => shortcutsPopout?.close(),
+    },
+    {
+      name: 'ascii',
+      drawerId: 'asciiDrawer',
+      toggleId: 'asciiDrawerToggle',
+      bodyId: 'asciiDrawerBody',
+      label: 'ASCII controls',
+    },
+  ]) {
+    const d = initPhoneDrawer({ ...cfg, onChange });
+    if (d) drawers.push(d);
   }
-  updateAria(isMobileCollapsed);
+  syncPreviewPadding();
 
-  // Attach event listener
-  toggleBtn.addEventListener('click', toggleDrawer);
-
-  // Handle window resize - remove padding class on desktop
   let resizeTimeout;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      if (window.innerWidth >= 768) {
-        // On desktop, ensure the class is removed
-        if (previewPanel) {
-          previewPanel.classList.remove('camera-drawer-open');
-        }
-      } else if (!isMobileCollapsed && previewPanel) {
-        // On mobile with drawer open, ensure class is present
-        previewPanel.classList.add('camera-drawer-open');
-      }
+      syncPreviewPadding({ checkWidth: true });
+      if (drawers.some((d) => d.isOpen())) placeDrawerColumnTop();
     }, 150);
   });
 }

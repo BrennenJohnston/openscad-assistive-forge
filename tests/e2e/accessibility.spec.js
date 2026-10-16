@@ -915,12 +915,11 @@ test.describe('Screen Reader Support', () => {
     // summary is the direct child.
     const SPOTLIGHTS_SUMMARY = '#accessibilitySpotlights > summary';
 
-    // While any app dialog is up the tour shrinks to its bar. On a phone
-    // viewport the parameter drawer is a dialog (#paramPanel carries
-    // role="dialog" when open), so the tour minimizes itself as soon as a
-    // drawer step opens it, and the Next button goes with it. Pressing
-    // Restore is how a person gets it back, and this walk also guards that
-    // Restore works while the drawer is open.
+    // While any app dialog is up the tour shrinks to its bar, and on a phone
+    // it does the same when it finds no room to dock its card clear of the
+    // step's target, taking the Next button with it. Pressing Restore is how a
+    // person gets it back, and this walk also guards that Restore works while
+    // the Customizer is open.
     async function bringTourBack(page) {
       const bar = page.locator(
         '.tutorial-minimized:not(.hidden) .tutorial-restore'
@@ -1494,12 +1493,17 @@ test.describe('Screen Reader Support', () => {
       await bringTourBack(page);
 
       // The step points at the presets, where Copy Link sits, or on a phone
-      // with the Customizer closed at the Customizer's own toggle.
-      // isVisible() counts the closed sheet's off-screen presets as visible,
-      // so the choice reads where they are, as the tour does.
+      // with the Customizer closed at the Customizer's own toggle. The closed
+      // sheet sits out of sight under the bar and is hidden, so the choice
+      // reads whether the presets show and where they are, as the tour does.
       const presetsOnScreen = await presets.evaluate((el) => {
         const r = el.getBoundingClientRect();
-        return r.width > 0 && r.right > 0 && r.left < innerWidth;
+        return (
+          el.checkVisibility({ visibilityProperty: true }) &&
+          r.width > 0 &&
+          r.right > 0 &&
+          r.left < innerWidth
+        );
       });
       const actionsToggle = presetsOnScreen
         ? presets
@@ -2560,9 +2564,16 @@ test.describe('Drawer Accessibility', () => {
 
     await page.locator('#mobileDrawerToggle').click();
 
+    // A sheet over part of the screen, not a dialog: a named region, and
+    // the preview beside it stays in reach.
     const drawer = page.locator('#paramPanel');
-    await expect(drawer).toHaveAttribute('role', 'dialog');
-    await expect(drawer).toHaveAttribute('aria-modal', 'true');
+    await expect(drawer).toHaveClass(/drawer-open/);
+    await expect(drawer).toHaveAttribute('role', 'region');
+    await expect(drawer).toHaveAttribute(
+      'aria-labelledby',
+      'parameters-heading'
+    );
+    expect(await drawer.getAttribute('aria-modal')).toBeNull();
   });
 
   test('drawer passes axe accessibility scan', async ({ page }) => {

@@ -148,6 +148,18 @@ async function audit(page, rootSelector, contentColors = null) {
         // A sheet from another origin cannot be read; none of ours is.
       }
     }
+    // A translucent color as the same color, opaque: rgba(r, g, b, a) and
+    // color(srgb r g b / a) both read as rgb(r, g, b); anything else, null.
+    const opaque = (value) => {
+      const rgba = /^rgba\((\d+), (\d+), (\d+), [\d.]+\)$/.exec(value);
+      if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`;
+      const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+) \/ [\d.]+\)$/.exec(
+        value
+      );
+      if (!srgb) return null;
+      const [r, g, b] = srgb.slice(1, 4).map((n) => Math.round(Number(n) * 255));
+      return `rgb(${r}, ${g}, ${b})`;
+    };
     const palette = new Set([
       'rgba(0, 0, 0, 0)',
       'rgb(0, 0, 0)',
@@ -288,7 +300,9 @@ async function audit(page, rootSelector, contentColors = null) {
         if (isContent || !applies || !value || value === 'rgba(0, 0, 0, 0)') {
           continue;
         }
-        if (!palette.has(value)) {
+        // A see-through surface is the look's own color, let partly through.
+        const seeThrough = prop === 'background-color' && opaque(value);
+        if (!palette.has(value) && !(seeThrough && palette.has(seeThrough))) {
           offenders.color.push(`${describe(el)} ${prop} ${value}`);
         }
       }
@@ -708,6 +722,174 @@ test.describe('The Alt View at a phone width', () => {
     await page.locator('#cameraDrawerToggle').click();
     await page.waitForTimeout(800);
     expectInTheLook(await audit(page, null), 'the camera drawer at a phone width');
+  });
+});
+
+/** The range inputs on the screen, and those shorter than the touch target. */
+function shortSliders() {
+  const target = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      '--size-touch-target'
+    )
+  );
+  const shown = [...document.querySelectorAll("input[type='range']")].filter(
+    (el) =>
+      el.checkVisibility({ visibilityProperty: true }) &&
+      el.getBoundingClientRect().width > 0
+  );
+  return {
+    target,
+    count: shown.length,
+    short: shown
+      .map((el) => ({
+        name: el.id || el.name,
+        height: el.getBoundingClientRect().height,
+      }))
+      .filter((s) => s.height + 0.5 < target)
+      .map((s) => `${s.name} ${Math.round(s.height)} px`),
+  };
+}
+
+// The Alt View draws a thin track, but the slider a finger or a pointer
+// aims at keeps the touch target's height, as it does in the standard look.
+test.describe("The Alt View's sliders keep the touch target", () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('on a desktop window: the Customizer and the camera panel', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openProject(page);
+    await altViewOn(page);
+    const toggle = page.locator('#cameraPanelToggle');
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.click();
+    }
+    await page.waitForTimeout(600);
+    const m = await page.evaluate(shortSliders);
+    expect(m.count, 'sliders on the screen').toBeGreaterThanOrEqual(3);
+    expect(m.short, `sliders under the ${m.target} px target`).toEqual([]);
+  });
+
+  test.describe('on a phone', () => {
+    // No isMobile: Firefox rejects it when the browser context is created.
+    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+    test('the ASCII drawer and the Customizer', async ({ page }) => {
+      test.setTimeout(300_000);
+      await openProject(page);
+      await altViewOn(page);
+      await page.locator('#asciiDrawerToggle').click();
+      await page.waitForTimeout(600);
+      const ascii = await page.evaluate(shortSliders);
+      expect(ascii.count, 'sliders in the ASCII drawer').toBeGreaterThanOrEqual(
+        3
+      );
+      expect(
+        ascii.short,
+        `ASCII drawer sliders under the ${ascii.target} px target`
+      ).toEqual([]);
+
+      await page.locator('#mobileDrawerToggle').click();
+      await page.waitForTimeout(600);
+      const sheet = await page.evaluate(shortSliders);
+      expect(
+        sheet.short,
+        `Customizer sliders under the ${sheet.target} px target`
+      ).toEqual([]);
+    });
+  });
+});
+
+// The page is the window's size in the Alt View as in the standard look:
+// nothing in it can be scrolled a pixel.
+test.describe('The Alt View page fits the window', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  for (const size of [
+    { width: 1280, height: 720 },
+    { width: 412, height: 915 },
+  ]) {
+    test(`at ${size.width} x ${size.height}`, async ({ page }) => {
+      test.setTimeout(300_000);
+      await page.setViewportSize(size);
+      await openProject(page);
+      await altViewOn(page);
+      await settle(page);
+      const [scrollHeight, height] = await page.evaluate(() => [
+        document.documentElement.scrollHeight,
+        innerHeight,
+      ]);
+      expect(scrollHeight, `the page's height in a ${height} px window`).toBe(
+        height
+      );
+    });
+  }
+});
+
+/** The echo drawer and the status line above it, read in the page. */
+function echoAndStatus() {
+  const toggle = document.getElementById('echoDrawerToggle');
+  const t = toggle.getBoundingClientRect();
+  const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
+  const drawer = document.getElementById('echoDrawer').getBoundingClientRect();
+  const bar = document.getElementById('previewStatusBar').getBoundingClientRect();
+  return {
+    shown: toggle.checkVisibility(),
+    toggleReachable: !!hit && toggle.contains(hit),
+    atCenter: hit ? `${hit.tagName.toLowerCase()}${hit.id ? '#' + hit.id : ''}` : null,
+    overlap: Math.max(0, Math.round(bar.bottom - drawer.top)),
+  };
+}
+
+// The status line with the Alt View's Characters and Edges controls rests on
+// the echo drawer: the drawer's toggle and its messages stay in reach.
+test.describe('The echo drawer stays clear of the status line', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('in the Alt View, closed and open', async ({ page }) => {
+    test.setTimeout(300_000);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openProject(page, 'q-charm');
+    await altViewOn(page);
+    await settle(page);
+    // The line moves when the drawer's new height reaches it, a frame after
+    // the drawer's own layout: wait for it rather than read between the two.
+    const overlap = () =>
+      page.evaluate(echoAndStatus).then((m) => m.overlap);
+    await expect
+      .poll(overlap, {
+        message: 'closed, the status line over the drawer',
+        timeout: 5_000,
+      })
+      .toBe(0);
+    const closed = await page.evaluate(echoAndStatus);
+    expect(closed.shown, 'the charm prints echo lines').toBe(true);
+    expect
+      .soft(closed.toggleReachable, `closed, its center is ${closed.atCenter}`)
+      .toBe(true);
+
+    await page.locator('#echoDrawerToggle').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#echoDrawerToggle')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect
+      .poll(overlap, {
+        message: 'open, the status line over the messages',
+        timeout: 5_000,
+      })
+      .toBe(0);
+    const open = await page.evaluate(echoAndStatus);
+    expect.soft(open.toggleReachable, 'open, the toggle in reach').toBe(true);
   });
 });
 

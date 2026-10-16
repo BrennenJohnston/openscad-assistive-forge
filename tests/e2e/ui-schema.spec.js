@@ -121,6 +121,18 @@ for (const size of SIZES) {
     test.describe(`${size.width} x ${size.height}, ${look.name}`, () => {
       test.describe.configure({ mode: 'default' });
 
+      // The Alt View reads its picture back from the graphics card while a
+      // drawer moves. Where that picture is drawn in software (a CI runner
+      // has no graphics card), one step can hold the page for seconds, so
+      // these groups wait longer; what they measure is unchanged.
+      test.slow(
+        Boolean(look.altView),
+        'The Alt View is drawn in software on a machine without a graphics card'
+      );
+      const limits = look.altView
+        ? { action: 30_000, settle: 20_000, expect: 20_000 }
+        : { action: 10_000, settle: 5_000, expect: 5_000 };
+
       /** @type {import('@playwright/test').BrowserContext} */
       let context;
       /** @type {import('@playwright/test').Page} */
@@ -133,7 +145,7 @@ for (const size of SIZES) {
           viewport: size,
         });
         page = await context.newPage();
-        page.setDefaultTimeout(10_000);
+        page.setDefaultTimeout(limits.action);
         if (look.altView) {
           test.skip(
             !(await hasWebGL(page)),
@@ -221,7 +233,7 @@ for (const size of SIZES) {
                 (a) => a instanceof CSSTransition && a.playState === 'running'
               ),
           null,
-          { timeout: 5_000 }
+          { timeout: limits.settle }
         );
         let last = await page.evaluate(readToggle, sel);
         for (let i = 0; i < 20; i++) {
@@ -248,7 +260,8 @@ for (const size of SIZES) {
         await page.keyboard.press('Enter');
         await expect(page.locator(sel)).toHaveAttribute(
           'aria-expanded',
-          before.expanded ? 'false' : 'true'
+          before.expanded ? 'false' : 'true',
+          { timeout: limits.expect }
         );
         return settle(sel);
       }
@@ -468,20 +481,14 @@ for (const size of SIZES) {
         if (!wasOpen) await press('#cameraPanelToggle');
       });
 
-      test('S6: on a phone the preview keeps half the screen', () => {
-        test.skip(
-          true,
-          'The phone case: today the Customizer and Preview Settings sheets cover the whole preview on a phone'
-        );
-      });
-
       test('S7: a menu drops under its pressed button with nothing over the page', async () => {
         expectRule('S7');
         for (const name of MENUS) {
           const btn = page.locator(`#${name}MenuBtn`);
           await btn.click();
           await expect(page.locator(`#${name}MenuModal`)).not.toHaveClass(
-            /\bhidden\b/
+            /\bhidden\b/,
+            { timeout: limits.expect }
           );
           await page.waitForTimeout(250);
           // The button's color eases in: read it once the transition ends.
@@ -550,7 +557,8 @@ for (const size of SIZES) {
             .toBe(m.accentText);
           await page.keyboard.press('Escape');
           await expect(page.locator(`#${name}MenuModal`)).toHaveClass(
-            /\bhidden\b/
+            /\bhidden\b/,
+            { timeout: limits.expect }
           );
         }
       });
@@ -716,6 +724,974 @@ for (const look of LOOKS.filter((l) => !l.altView)) {
     });
   });
 }
+
+/** The simple box open in Standard at a phone's size, in a look. */
+async function openPhoneProject(page, look) {
+  await page.addInitScript((l) => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    localStorage.setItem('openscad-forge-theme', l.theme);
+    if (l.highContrast) {
+      localStorage.setItem('openscad-forge-high-contrast', 'true');
+    }
+    if (l.altView) {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    }
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    );
+  }, look);
+  await page.goto('/?example=simple-box', { timeout: 60_000 });
+  if (look.altView) {
+    test.skip(
+      !(await hasWebGL(page)),
+      'The Alt View draws from the 3D picture; this browser has no WebGL'
+    );
+  }
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  });
+  await page
+    .locator('.param-control')
+    .first()
+    .waitFor({ state: 'attached', timeout: 60_000 });
+  const notNow = page.locator('#saveProjectNotNow');
+  if (
+    await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+      () => true,
+      () => false
+    )
+  ) {
+    await notNow.click();
+  }
+  if (look.altView) {
+    await page.locator('#_hfmToggle').click();
+    await page.waitForFunction(
+      () => document.documentElement.getAttribute('data-ui-variant') === 'mono'
+    );
+  }
+}
+
+/**
+ * The simple box open in Standard at a phone's size, in a look, with the
+ * camera drawer opened by its toggle.
+ */
+async function openPhoneCameraDrawer(page, look) {
+  await openPhoneProject(page, look);
+  const toggle = page.locator('#cameraDrawerToggle');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.waitForTimeout(500);
+}
+
+/** A computed background color's alpha: rgb(), rgba() or color(... / a). */
+function alphaOf(color) {
+  const slash = /\/\s*([\d.]+)\s*\)$/.exec(color);
+  if (slash) return Number(slash[1]);
+  const rgba = /rgba\(([^)]+)\)/.exec(color);
+  if (rgba) return Number(rgba[1].split(/[ ,]+/).filter(Boolean)[3]);
+  return 1;
+}
+
+/** The open phone drawer's layout, read in the page. */
+function readPhoneDrawer() {
+  const body = document.getElementById('cameraDrawerBody');
+  const box = (el) => el.getBoundingClientRect();
+  const center = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const name = (el) =>
+    el.getAttribute('aria-label') || el.dataset.level || el.textContent.trim();
+  const padOf = (id) =>
+    document.getElementById(id)?.closest('.camera-drawer-dpad') ?? null;
+  const offCenter = (id, pad) => {
+    const button = document.getElementById(id);
+    if (!pad || !button || !pad.contains(button)) return null;
+    const a = center(box(button));
+    const b = center(box(pad));
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const rotatePad = padOf('mobileCameraRotateUp');
+  const panPad = padOf('mobileCameraPanUp');
+  const buttons = [...body.querySelectorAll('button')]
+    .filter(shown)
+    .map((b) => {
+      const r = box(b);
+      return { name: name(b), y: r.y, w: r.width, h: r.height };
+    });
+  // Alone on its row: no other button shares half of its height band.
+  const lone = buttons
+    .filter(
+      (c) =>
+        !buttons.some(
+          (o) =>
+            o !== c &&
+            Math.min(c.y + c.h, o.y + o.h) - Math.max(c.y, o.y) >= c.h / 2
+        )
+    )
+    .map((c) => c.name);
+  return {
+    viewportHeight: innerHeight,
+    bodyHeight: box(body).height,
+    background: getComputedStyle(body).backgroundColor,
+    sideBySide:
+      !!rotatePad &&
+      !!panPad &&
+      box(rotatePad).right <= box(panPad).left &&
+      Math.abs(box(rotatePad).top - box(panPad).top) <= 2,
+    resetOffCenter: offCenter('mobileCameraResetView', rotatePad),
+    viewAllOffCenter: offCenter('mobileCameraViewAll', panPad),
+    views: [...body.querySelectorAll('.camera-view-btn')]
+      .filter(shown)
+      .map((b) => b.dataset.view),
+    small: buttons
+      .filter((b) => b.w + 0.5 < 44 || b.h + 0.5 < 44)
+      .map((b) => `${b.name} ${Math.round(b.w)}x${Math.round(b.h)}`),
+    lone,
+    strip: shown(document.getElementById('altViewControls')),
+    asciiToggle: shown(document.getElementById('asciiDrawerToggle')),
+  };
+}
+
+/** The open ASCII drawer and the bar it opens from, read in the page. */
+function readAsciiDrawer() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const body = document.getElementById('asciiDrawerBody');
+  const ascii = box(document.getElementById('asciiDrawerToggle'));
+  const camera = box(document.getElementById('cameraDrawerToggle'));
+  return {
+    bodyHeight: box(body).height,
+    leftOfCamera:
+      Math.abs(ascii.top - camera.top) <= 1 && ascii.right <= camera.left + 1,
+    steps:
+      shown(document.getElementById('altViewCharactersSmallerMobile')) &&
+      shown(document.getElementById('altViewCharactersLargerMobile')) &&
+      [
+        ...body.querySelectorAll('#altViewEdgesMobile .alt-view-level-btn'),
+      ].filter(shown).length === 3 &&
+      shown(document.getElementById('_hfmPanAdjustMobile')),
+    small: [...body.querySelectorAll('button')]
+      .filter(shown)
+      .map((b) => {
+        const r = box(b);
+        return {
+          name: b.getAttribute('aria-label') || b.textContent.trim(),
+          w: r.width,
+          h: r.height,
+        };
+      })
+      .filter((b) => b.w + 0.5 < 44 || b.h + 0.5 < 44)
+      .map((b) => `${b.name} ${Math.round(b.w)}x${Math.round(b.h)}`),
+  };
+}
+
+// The phone camera drawer, upright: Rotate and Pan side by side with Zoom
+// between them, Reset View and View All in the pads' centers, the six views
+// and the tools sharing a row; at most half the screen tall, see-through
+// (high contrast keeps its solid surfaces), no button alone on a row, and in
+// the Alt View its own controls in the drawer rather than over the preview.
+for (const height of [915, 810]) {
+  for (const look of LOOKS) {
+    test.describe(`The phone camera drawer, 412 x ${height}, ${look.name}`, () => {
+      // No isMobile: Firefox rejects it when the browser context is created.
+      test.use({ viewport: { width: 412, height }, hasTouch: true });
+
+      test('upright: the pads side by side with their centers, half the screen at most, see-through, nothing alone', async ({
+        page,
+      }) => {
+        test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+        await openPhoneCameraDrawer(page, look);
+        const m = await page.evaluate(readPhoneDrawer);
+        expect
+          .soft(
+            m.bodyHeight,
+            `S6: the drawer is ${Math.round(m.bodyHeight)} px of a ${m.viewportHeight} px screen`
+          )
+          .toBeLessThanOrEqual(m.viewportHeight / 2 + 0.5);
+        if (!look.highContrast) {
+          expect
+            .soft(
+              alphaOf(m.background),
+              `S6: the drawer is see-through (${m.background})`
+            )
+            .toBeLessThan(1);
+        }
+        expect.soft(m.sideBySide, 'S5: Rotate and Pan side by side').toBe(true);
+        expect
+          .soft(m.resetOffCenter, 'S5: Reset View in the Rotate pad center')
+          .not.toBeNull();
+        expect.soft(m.resetOffCenter ?? 99).toBeLessThanOrEqual(2);
+        expect
+          .soft(m.viewAllOffCenter, 'S5: View All in the Pan pad center')
+          .not.toBeNull();
+        expect.soft(m.viewAllOffCenter ?? 99).toBeLessThanOrEqual(2);
+        expect
+          .soft(m.views, 'the six standard views, no Diagonal')
+          .toEqual(['top', 'front', 'right', 'left', 'back', 'bottom']);
+        expect.soft(m.small, 'buttons under 44 px').toEqual([]);
+        expect.soft(m.lone, 'S8: buttons alone on a row').toEqual([]);
+        if (!look.altView) {
+          expect
+            .soft(m.asciiToggle, 'no ASCII drawer outside the Alt View')
+            .toBe(false);
+          return;
+        }
+        // The Alt View's own controls: off the preview, in the ASCII drawer
+        // at the left of the bar, which opens into the camera drawer's space
+        // and closes the camera drawer first.
+        expect
+          .soft(m.strip, "the strip's controls stay off the preview")
+          .toBe(false);
+        const ascii = page.locator('#asciiDrawerToggle');
+        await ascii.focus();
+        await page.keyboard.press('Enter');
+        await expect(ascii).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.locator('#cameraDrawerToggle')).toHaveAttribute(
+          'aria-expanded',
+          'false'
+        );
+        await page.waitForTimeout(300);
+        const a = await page.evaluate(readAsciiDrawer);
+        expect.soft(a.leftOfCamera, 'ASCII at the left of Camera').toBe(true);
+        expect
+          .soft(
+            Math.abs(a.bodyHeight - m.bodyHeight),
+            `the ASCII drawer opens into the camera drawer's space (${Math.round(a.bodyHeight)} and ${Math.round(m.bodyHeight)} px)`
+          )
+          .toBeLessThanOrEqual(1);
+        expect
+          .soft(a.steps, "the Alt View's steps and levels in the ASCII drawer")
+          .toBe(true);
+        expect.soft(a.small, 'ASCII drawer buttons under 44 px').toEqual([]);
+      });
+
+      test('S6: Full Screen with the drawer open, the preview the top half and the drawer the bottom half', async ({
+        page,
+      }) => {
+        test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+        await openPhoneCameraDrawer(page, look);
+        await page.locator('#focusModeBtn').focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator('#mainInterface')).toHaveClass(
+          /camera-focus-mode/
+        );
+        await page.waitForTimeout(500);
+
+        const drawers = [['camera', 'cameraDrawerBody']];
+        if (look.altView) drawers.push(['ASCII', 'asciiDrawerBody']);
+        for (const [name, bodyId] of drawers) {
+          if (name === 'ASCII') {
+            await page.locator('#asciiDrawerToggle').focus();
+            await page.keyboard.press('Enter');
+            await expect(page.locator('#mainInterface')).toHaveClass(
+              /camera-focus-mode/
+            );
+            await page.waitForTimeout(500);
+          }
+          const m = await page.evaluate(readFullScreenSplit, bodyId);
+          const half = m.viewportHeight / 2;
+          // The line the sheets keep: half the screen and a small sliver.
+          const near = SPLIT_TOLERANCE_PX;
+          expect
+            .soft(
+              Math.abs(m.previewPx - half),
+              `S6: the preview is ${Math.round(m.previewPx)} px of ${m.viewportHeight} with the ${name} drawer in Full Screen`
+            )
+            .toBeLessThanOrEqual(near);
+          expect
+            .soft(
+              Math.abs(m.bodyTop - half),
+              `S6: the ${name} drawer begins at y ${Math.round(m.bodyTop)} of ${m.viewportHeight}`
+            )
+            .toBeLessThanOrEqual(near);
+          expect
+            .soft(m.bodyBottom, `the ${name} drawer ends above the bar`)
+            .toBeLessThanOrEqual(m.barTop + 1);
+          expect
+            .soft(m.generateReachable, 'Generate stays in reach')
+            .toBe(true);
+          expect
+            .soft(m.generateHeight, 'Generate keeps the touch target')
+            .toBeGreaterThanOrEqual(43.5);
+        }
+      });
+    });
+  }
+}
+
+/**
+ * How far from half the screen each part of the Full Screen split may sit:
+ * the sliver the sheets add to the preview's half, and a few pixels for the
+ * preview's own inset and rounding.
+ */
+const SPLIT_TOLERANCE_PX = 14;
+
+/** Full Screen with a phone drawer open: where the preview and the drawer meet. */
+function readFullScreenSplit(bodyId) {
+  const box = (el) => el.getBoundingClientRect();
+  const body = box(document.getElementById(bodyId));
+  const bar = box(document.getElementById('actionsBar'));
+  const generate = document.getElementById('primaryActionBtn');
+  const g = box(generate);
+  const hit = document.elementFromPoint(g.x + g.width / 2, g.y + g.height / 2);
+  const x = innerWidth / 2;
+  let seen = 0;
+  for (let y = 0; y < innerHeight; y++) {
+    if (document.elementFromPoint(x, y + 0.5)?.closest('#previewContainer')) {
+      seen++;
+    }
+  }
+  return {
+    viewportHeight: innerHeight,
+    previewPx: seen,
+    bodyTop: body.top,
+    bodyBottom: body.bottom,
+    barTop: bar.top,
+    generateHeight: g.height,
+    generateReachable: !!hit && generate.contains(hit),
+  };
+}
+
+/** The first control on the screen that leaves Full Screen, by its id. */
+function wayOutOfFullScreen() {
+  for (const id of ['focusModeBtn', 'cameraFocusExitBtn']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const b = el.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) continue;
+    const hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+    if (hit && el.contains(hit)) return id;
+  }
+  return null;
+}
+
+// On a phone, Full Screen with no drawer open, or held sideways, keeps a
+// control on the screen that leaves it: a phone has no Escape key.
+for (const size of [
+  { width: 412, height: 915 },
+  { width: 740, height: 360 },
+  { width: 915, height: 412 },
+]) {
+  test.describe(`Leaving Full Screen on a phone, ${size.width} x ${size.height}`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test('a control that leaves Full Screen stays on the screen', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openPhoneProject(page, LOOKS[0]);
+      await page.locator('#focusModeBtn').focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#mainInterface')).toHaveClass(/focus-mode/);
+      await page.waitForTimeout(500);
+
+      const way = await page.evaluate(wayOutOfFullScreen);
+      expect(way, 'a way out of Full Screen on the screen').not.toBeNull();
+      await page.locator(`#${way}`).tap();
+      await expect(page.locator('#mainInterface')).not.toHaveClass(
+        /focus-mode/
+      );
+    });
+  });
+}
+
+/** The share of the screen's height, down its middle, where the preview shows. */
+function previewHeightShare() {
+  const x = innerWidth / 2;
+  let seen = 0;
+  let total = 0;
+  for (let y = 1; y < innerHeight; y += 2) {
+    total++;
+    if (document.elementFromPoint(x, y)?.closest('#previewContainer')) seen++;
+  }
+  return seen / total;
+}
+
+/** The open Customizer sheet and what is around it, read in the page. */
+function readCustomizerSheet() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const sheet = document.getElementById('paramPanel');
+  const s = box(sheet);
+  const bar = box(document.getElementById('actionsBar'));
+  const camera = document.getElementById('cameraDrawerToggle');
+  const c = box(camera);
+  const hit = document.elementFromPoint(c.x + c.width / 2, c.y + c.height / 2);
+  const header = sheet.querySelector('.panel-header');
+  const scrollTop =
+    header && getComputedStyle(header).position === 'sticky'
+      ? box(header).bottom
+      : s.top;
+  const underHeader = document.elementFromPoint(
+    s.left + s.width / 2,
+    scrollTop + 4
+  );
+  const focused = document.activeElement
+    ? box(document.activeElement)
+    : null;
+  return {
+    top: s.top,
+    bottom: s.bottom,
+    barTop: bar.top,
+    cameraReachable: !!hit && camera.contains(hit),
+    backdrop: shown(document.getElementById('drawerBackdrop')),
+    modal: sheet.getAttribute('aria-modal'),
+    role: sheet.getAttribute('role'),
+    // The parameters at the top of what scrolls: right under the sheet's
+    // own header is their search block or a group, not the sections above.
+    atParameters: !!underHeader?.closest(
+      '#paramSearchSection, #parametersContainer'
+    ),
+    focusInParameters: !!document.activeElement?.closest(
+      '#paramSearchSection, #parametersContainer'
+    ),
+    focusInView:
+      !!focused &&
+      focused.top >= scrollTop - 1 &&
+      focused.bottom <= s.bottom + 1,
+    height: s.height,
+    // The least a sheet keeps: its header, one row of controls, its borders.
+    floor:
+      (header ? header.offsetHeight : 0) +
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      ) +
+      (sheet.offsetHeight - sheet.clientHeight),
+  };
+}
+
+/** Whether the bottom bar's toggles and Generate share one row. */
+function readBarRow() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const ids = ['asciiDrawerToggle', 'cameraDrawerToggle', 'primaryActionBtn'];
+  const boxes = ids
+    .map((id) => document.getElementById(id))
+    .filter(shown)
+    .map(box);
+  const centers = boxes.map((b) => Math.round(b.top + b.height / 2));
+  const shortest = Math.min(...boxes.map((b) => b.height));
+  return {
+    centers,
+    oneRow: Math.max(...centers) - Math.min(...centers) <= shortest / 2,
+  };
+}
+
+// When the rows above the preview take more room than usual (a wider font
+// wraps the header's first row, as on CI's Firefox in high contrast), the
+// sheet gives way to the preview's half before it reaches its floor: its
+// header and one row of controls.
+test.describe('The phone sheet under a taller header, 412 x 810, high contrast', () => {
+  // No isMobile: Firefox rejects it when the browser context is created.
+  test.use({ viewport: { width: 412, height: 810 }, hasTouch: true });
+
+  test('the preview keeps half, and the sheet its header and one row', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await openPhoneProject(page, LOOKS[2]);
+    // As much taller as the wrapped row measured on CI (57 px).
+    await page.evaluate(() => {
+      document.querySelector('.app-header').style.paddingBottom = '57px';
+    });
+    await page.waitForTimeout(500);
+    const toggle = page.locator('#mobileDrawerToggle');
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await page.waitForTimeout(600);
+    const share = await page.evaluate(previewHeightShare);
+    const sheet = await page.evaluate(() => {
+      const panel = document.getElementById('paramPanel');
+      return {
+        height: panel.getBoundingClientRect().height,
+        header: panel.querySelector('.panel-header').offsetHeight,
+        row: parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            '--size-touch-target'
+          )
+        ),
+        borders: panel.offsetHeight - panel.clientHeight,
+      };
+    });
+    const floor = sheet.header + sheet.row + sheet.borders;
+    // The preview keeps half, unless the sheet is already down to its floor.
+    expect
+      .soft(
+        share >= 0.5 || sheet.height <= floor + 1,
+        `S6: the preview ${share.toFixed(3)} of the height beside a ${Math.round(sheet.height)} px sheet (floor ${floor})`
+      )
+      .toBe(true);
+    expect
+      .soft(
+        sheet.height + 0.5,
+        `the sheet keeps its header and one row (${Math.round(sheet.height)} px)`
+      )
+      .toBeGreaterThanOrEqual(floor);
+    // That one row is a real row: the control the sheet opens on is in view.
+    const c = await page.evaluate(readCustomizerSheet);
+    expect
+      .soft(c.focusInView, 'the focused control in view in the sheet')
+      .toBe(true);
+  });
+});
+
+// Phones held upright: the Customizer is a sheet above the bottom bar, which
+// keeps to one row, and Preview Settings & Info drops from its own row; with
+// either open the preview keeps half the screen's height, the model drawn in
+// that half. The sheet is not a dialog: no backdrop, the preview and the bar
+// stay usable, it opens at the parameters, Escape closes it, and closed it is
+// out of the way of Tab and of a screen reader.
+for (const height of [915, 810]) {
+  for (const look of LOOKS) {
+    test.describe(`The phone sheets, 412 x ${height}, ${look.name}`, () => {
+      // No isMobile: Firefox rejects it when the browser context is created.
+      test.use({ viewport: { width: 412, height }, hasTouch: true });
+
+      test('S6: the preview keeps half the screen under the Customizer and Preview Settings', async ({
+        page,
+      }) => {
+        test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+        await openPhoneProject(page, look);
+        await page.waitForTimeout(500);
+        const bar = await page.evaluate(readBarRow);
+        expect
+          .soft(bar.oneRow, `S8: the bottom bar on one row (${bar.centers})`)
+          .toBe(true);
+
+        const toggle = page.locator('#mobileDrawerToggle');
+        const closed = await page.evaluate(readToggle, '#mobileDrawerToggle');
+        expect.soft(closed.travel, 'S1: the Customizer rises').toBe('up');
+        expect
+          .soft(
+            angleDiff(closed.arrow ?? 999, ANGLE.up),
+            `S1: the closed Customizer's arrow points at ${Math.round(closed.arrow)} degrees`
+          )
+          .toBeLessThanOrEqual(1);
+
+        await toggle.focus();
+        await page.keyboard.press('Enter');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await page.waitForTimeout(600);
+        const c = await page.evaluate(readCustomizerSheet);
+        // Half the screen, unless the sheet is already down to its floor
+        // (where a wider font wraps the rows above the preview).
+        const share = await page.evaluate(previewHeightShare);
+        expect
+          .soft(
+            share >= 0.5 || c.height <= c.floor + 1,
+            `S6: the preview ${share.toFixed(3)} of the height with the Customizer open (a ${Math.round(c.height)} px sheet, floor ${Math.round(c.floor)})`
+          )
+          .toBe(true);
+        expect
+          .soft(
+            Math.abs(c.bottom - c.barTop),
+            `the sheet ends at the bar (${Math.round(c.bottom)} and ${Math.round(c.barTop)})`
+          )
+          .toBeLessThanOrEqual(1);
+        expect.soft(c.cameraReachable, 'Camera stays in reach').toBe(true);
+        expect.soft(c.backdrop, 'no backdrop over the preview').toBe(false);
+        expect.soft(c.modal, 'the sheet is not modal').toBeNull();
+        expect.soft(c.role, 'the sheet is a region').toBe('region');
+        expect.soft(c.atParameters, 'it opens at the parameters').toBe(true);
+        expect
+          .soft(c.focusInParameters, 'focus starts at the parameters')
+          .toBe(true);
+        expect
+          .soft(c.focusInView, 'the focused control in view in the sheet')
+          .toBe(true);
+
+        await page.keyboard.press('Escape');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await expect(toggle).toBeFocused();
+        const name = await page.evaluate(() =>
+          document.getElementById('paramPanel').getAttribute('aria-labelledby')
+        );
+        expect
+          .soft(name, 'the region keeps its name once closed')
+          .toBe('parameters-heading');
+        // Closed means once it has slid away.
+        await page
+          .locator('#paramPanel')
+          .evaluate((el) =>
+            Promise.all(el.getAnimations().map((a) => a.finished))
+          );
+        let reachedClosed = 0;
+        for (let i = 0; i < 40; i++) {
+          await page.keyboard.press('Tab');
+          if (
+            await page.evaluate(
+              () => !!document.activeElement?.closest('#paramPanel')
+            )
+          ) {
+            reachedClosed++;
+          }
+        }
+        expect
+          .soft(reachedClosed, 'Tab presses that land in the closed Customizer')
+          .toBe(0);
+
+        const settings = page.locator('#previewDrawerToggle');
+        await settings.focus();
+        await page.keyboard.press('Enter');
+        await expect(settings).toHaveAttribute('aria-expanded', 'true');
+        await page.waitForTimeout(600);
+        const p = await page.evaluate(() => {
+          const box = (el) => el.getBoundingClientRect();
+          return {
+            sectionBottom: box(document.getElementById('previewInfoSection'))
+              .bottom,
+            canvasTop: box(document.getElementById('previewCanvasSection'))
+              .top,
+          };
+        });
+        expect
+          .soft(
+            await page.evaluate(previewHeightShare),
+            'S6: the preview with Preview Settings open'
+          )
+          .toBeGreaterThanOrEqual(0.5);
+        expect
+          .soft(
+            p.canvasTop,
+            'Preview Settings drops from its row, the preview below it'
+          )
+          .toBeGreaterThanOrEqual(p.sectionBottom - 1);
+      });
+    });
+  }
+}
+
+// A phone held sideways (a touch screen, landscape, a phone's height): the
+// header keeps to one row, the menu bar shares the Preview Settings row,
+// below 768 px the bottom bar keeps to one row, from 768 px the Customizer
+// column starts closed; with nothing open the preview keeps at least 40
+// percent of the screen; the camera controls open over the preview's right
+// edge, stacked as on the desktop, see-through, at most a quarter of the
+// width, every button 44 px.
+const SIDEWAYS_SIZES = [
+  { width: 667, height: 375 },
+  { width: 740, height: 360 },
+  { width: 844, height: 390 },
+  { width: 915, height: 412 },
+];
+const SIDEWAYS_QUERY =
+  '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)';
+
+/** The share of the screen where the 3D preview is the topmost thing. */
+function previewShare() {
+  const isPreview = (el) =>
+    !!el && el.tagName === 'CANVAS' && !!el.closest('#previewContainer');
+  let seen = 0;
+  let total = 0;
+  for (let y = 3; y < innerHeight; y += 6) {
+    for (let x = 3; x < innerWidth; x += 6) {
+      total++;
+      if (isPreview(document.elementFromPoint(x, y))) seen++;
+    }
+  }
+  return seen / total;
+}
+
+/** The sideways rows and the start state, read in the page. */
+function readSidewaysRows() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const tops = [
+    ...document.querySelectorAll(
+      '.app-header button, .app-header a[href], .app-header [role="switch"]'
+    ),
+  ]
+    .filter(shown)
+    .filter((el) => !el.closest('.toolbar-menu-modal'))
+    .map((el) => Math.round(box(el).top));
+  const camera = document.getElementById('cameraDrawerToggle');
+  const generate = document.getElementById('primaryActionBtn');
+  return {
+    headerRows: new Set(tops).size,
+    headerTops: [...new Set(tops)],
+    menusInSettingsRow: !!document
+      .getElementById('toolbarMenuBar')
+      ?.closest('.preview-drawer-header'),
+    bottomBarOneRow:
+      !shown(camera) ||
+      Math.abs(box(camera).top - box(generate).top) <=
+        Math.max(box(camera).height, box(generate).height) / 2,
+    customizerColumnClosed:
+      innerWidth < 768 ||
+      document.getElementById('paramPanel').classList.contains('collapsed'),
+  };
+}
+
+/** The open camera controls held sideways, read in the page. */
+function readSidewaysCamera() {
+  const box = (el) => el.getBoundingClientRect();
+  const shown = (el) => !!el && el.checkVisibility() && box(el).width > 0;
+  const open = shown(document.getElementById('cameraDrawerToggle'))
+    ? document.getElementById('cameraDrawerBody')
+    : document.getElementById('cameraPanel');
+  const r = box(open);
+  const order = [
+    '.camera-drawer-rotate, .camera-section-rotate',
+    '.camera-drawer-pan, .camera-section-pan',
+    '.camera-drawer-zoom, .camera-section-zoom',
+    '.camera-drawer-views, .camera-section-views',
+  ].map((sel) => Math.round(box(open.querySelector(sel)).top));
+  const bg = getComputedStyle(open).backgroundColor;
+  return {
+    left: r.left,
+    right: r.right,
+    top: r.top,
+    bottom: r.bottom,
+    width: r.width,
+    background: bg,
+    order,
+    small: [...open.querySelectorAll('button')]
+      .filter(shown)
+      .map((b) => ({ n: b.getAttribute('aria-label'), r: box(b) }))
+      .filter((b) => b.r.width + 0.5 < 44 || b.r.height + 0.5 < 44)
+      .map((b) => `${b.n} ${Math.round(b.r.width)}x${Math.round(b.r.height)}`),
+  };
+}
+
+for (const size of SIDEWAYS_SIZES) {
+  test.describe(`A phone held sideways, ${size.width} x ${size.height}`, () => {
+    // No isMobile: Firefox rejects it when the browser context is created.
+    test.use({ viewport: size, hasTouch: true });
+
+    test('one row each, the preview kept, the camera controls over its right edge', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await page.addInitScript(() => {
+        localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+        localStorage.setItem('openscad-forge-theme', 'dark');
+        localStorage.setItem(
+          'openscad-forge-ui-mode',
+          JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+        );
+      });
+      await page.goto('/?example=simple-box', { timeout: 60_000 });
+      test.skip(
+        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+        'this browser does not report a touch screen held sideways'
+      );
+      await page.waitForSelector('body[data-wasm-ready="true"]', {
+        state: 'attached',
+        timeout: WASM_READY_TIMEOUT,
+      });
+      await page.waitForFunction(() => window.previewManager?.mesh, null, {
+        timeout: WASM_READY_TIMEOUT,
+      });
+      const notNow = page.locator('#saveProjectNotNow');
+      if (
+        await notNow.waitFor({ state: 'visible', timeout: 3_000 }).then(
+          () => true,
+          () => false
+        )
+      ) {
+        await notNow.click();
+      }
+      await page.waitForTimeout(1_000);
+
+      const rows = await page.evaluate(readSidewaysRows);
+      expect
+        .soft(rows.headerRows, `the header in one row (${rows.headerTops})`)
+        .toBe(1);
+      expect
+        .soft(rows.menusInSettingsRow, 'the menus in the Preview Settings row')
+        .toBe(true);
+      expect.soft(rows.bottomBarOneRow, 'the bottom bar in one row').toBe(true);
+      expect
+        .soft(
+          rows.customizerColumnClosed,
+          'the Customizer column starts closed'
+        )
+        .toBe(true);
+      const share = await page.evaluate(previewShare);
+      expect
+        .soft(share, 'S6: the preview with nothing open')
+        .toBeGreaterThanOrEqual(0.4);
+
+      const toggle = (await page.locator('#cameraDrawerToggle').isVisible())
+        ? page.locator('#cameraDrawerToggle')
+        : page.locator('#cameraPanelToggle');
+      await toggle.focus();
+      await page.keyboard.press('Enter');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await page.waitForTimeout(500);
+      const c = await page.evaluate(readSidewaysCamera);
+      // The column covers its own strip of the preview and nothing more.
+      const shareOpen = await page.evaluate(previewShare);
+      expect
+        .soft(
+          shareOpen,
+          `S6: the preview with the camera controls open (${shareOpen.toFixed(3)}, ${share.toFixed(3)} closed)`
+        )
+        .toBeGreaterThanOrEqual(share * (1 - c.width / size.width) - 0.03);
+      expect
+        .soft(Math.abs(c.right - size.width), 'S5: at the right edge')
+        .toBeLessThanOrEqual(1);
+      expect
+        .soft(c.top >= 0 && c.bottom <= size.height + 0.5, 'S5: on the screen')
+        .toBe(true);
+      expect
+        .soft(c.width / size.width, 'S5: at most a quarter of the width')
+        .toBeLessThanOrEqual(0.25);
+      expect
+        .soft(alphaOf(c.background), `S6: see-through (${c.background})`)
+        .toBeLessThan(1);
+      expect
+        .soft(
+          c.order.every((top, i) => i === 0 || top > c.order[i - 1]),
+          `S5: stacked Rotate, Pan, Zoom, the views (${c.order})`
+        )
+        .toBe(true);
+      expect.soft(c.small, 'buttons under 44 px').toEqual([]);
+    });
+  });
+}
+
+// Held sideways under 768 px wide, the Customizer is a side sheet at most
+// half the width, from the left edge, below the Preview Settings row; the
+// preview beside it is neither dimmed nor covered and draws the model in the
+// space that is left.
+for (const size of SIDEWAYS_SIZES.filter((s) => s.width < 768)) {
+  test.describe(`The Customizer held sideways, ${size.width} x ${size.height}`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test('a side sheet at most half the width, the preview live beside it', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openPhoneProject(page, LOOKS[0]);
+      test.skip(
+        !(await page.evaluate((q) => matchMedia(q).matches, SIDEWAYS_QUERY)),
+        'this browser does not report a touch screen held sideways'
+      );
+      await page.waitForTimeout(500);
+      const toggle = page.locator('#mobileDrawerToggle');
+      expect
+        .soft(
+          await toggle.getAttribute('data-travel-open'),
+          'S1: held sideways the Customizer opens to the right'
+        )
+        .toBe('right');
+      await toggle.focus();
+      await page.keyboard.press('Enter');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await page.waitForTimeout(600);
+      const m = await page.evaluate(() => {
+        const box = (el) => el.getBoundingClientRect();
+        const sheet = box(document.getElementById('paramPanel'));
+        const row = box(document.querySelector('.preview-drawer-header'));
+        const canvas = box(document.getElementById('previewCanvasSection'));
+        const x = (sheet.right + innerWidth) / 2;
+        const y = canvas.top + canvas.height / 2;
+        return {
+          left: sheet.left,
+          right: sheet.right,
+          top: sheet.top,
+          width: sheet.width,
+          rowBottom: row.bottom,
+          canvasLeft: canvas.left,
+          canvasBottom: canvas.bottom,
+          barTop: box(document.getElementById('actionsBar')).top,
+          besideIsPreview: !!document
+            .elementFromPoint(x, y)
+            ?.closest('#previewContainer'),
+          backdrop: document.getElementById('drawerBackdrop').checkVisibility(),
+        };
+      });
+      expect.soft(m.left, 'from the left edge').toBeLessThanOrEqual(0.5);
+      expect
+        .soft(m.width / size.width, 'at most half the width')
+        .toBeLessThanOrEqual(0.5);
+      expect
+        .soft(m.top, 'below the Preview Settings row')
+        .toBeGreaterThanOrEqual(m.rowBottom - 1);
+      expect
+        .soft(m.besideIsPreview, 'the preview beside it, not dimmed')
+        .toBe(true);
+      expect.soft(m.backdrop, 'no backdrop').toBe(false);
+      expect
+        .soft(m.canvasLeft, 'the model drawn in the space beside the sheet')
+        .toBeGreaterThanOrEqual(m.right - 1);
+      expect
+        .soft(
+          m.canvasBottom,
+          `the preview ends at the bar (${Math.round(m.canvasBottom)} and ${Math.round(m.barTop)})`
+        )
+        .toBeLessThanOrEqual(m.barTop + 1);
+    });
+  });
+}
+
+// On a phone one drawer is open at a time: opening the Customizer, Preview
+// Settings & Info or the camera drawer first closes whichever is open. On a
+// desktop window the panels sit side by side and stay open together.
+test.describe('One drawer at a time on a phone, 412 x 915', () => {
+  // No isMobile: Firefox rejects it when the browser context is created.
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+  test('opening a drawer closes the one that is open', async ({ page }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await openPhoneCameraDrawer(page, LOOKS[0]);
+    const camera = page.locator('#cameraDrawerToggle');
+    const customizer = page.locator('#mobileDrawerToggle');
+    const settings = page.locator('#previewDrawerToggle');
+
+    // The camera drawer is open; the Customizer button closes it.
+    await customizer.click();
+    await expect(customizer).toHaveAttribute('aria-expanded', 'true');
+    await expect(camera).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Escape');
+    await expect(customizer).toHaveAttribute('aria-expanded', 'false');
+
+    // Preview Settings & Info, then the camera drawer: it closes.
+    await settings.click();
+    await expect(settings).toHaveAttribute('aria-expanded', 'true');
+    await camera.click();
+    await expect(camera).toHaveAttribute('aria-expanded', 'true');
+    await expect(settings).toHaveAttribute('aria-expanded', 'false');
+    await expect(camera).toBeFocused();
+
+    // And the other way: the camera drawer closes for Preview Settings.
+    await settings.click();
+    await expect(settings).toHaveAttribute('aria-expanded', 'true');
+    await expect(camera).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+test.describe('Panels side by side on a desktop window, 1280 x 720', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+
+  test('the camera panel and Preview Settings open together with the Customizer', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await openDesktopCameraProject(page, LOOKS[0], { open: true });
+    const settings = page.locator('#previewDrawerToggle');
+    if ((await settings.getAttribute('aria-expanded')) !== 'true') {
+      await settings.click();
+    }
+    await expect(settings).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#cameraPanelToggle')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect(page.locator('#paramPanel')).toBeVisible();
+    await expect(page.locator('#paramPanel')).not.toHaveClass(/\bcollapsed\b/);
+  });
+});
 
 // The camera panel's keyboard shortcuts open as a pop-out above their button,
 // inside the panel, and close the three ways a pop-out closes: its button,

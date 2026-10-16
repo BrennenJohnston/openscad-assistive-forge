@@ -212,6 +212,7 @@ import {
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
 } from './js/storage-keys.js';
+import { isSidewaysPhone } from './js/phone-drawers.js';
 import {
   ensureScopedPrefsSeeded,
   readScopedPref,
@@ -9872,8 +9873,13 @@ if (rounded) {
     // (Storage key defined at module level as STORAGE_KEY_PARAM_PANEL_COLLAPSED)
     let isCollapsed = false;
 
+    // A phone held sideways starts with the column closed, so the preview
+    // has the width; a choice made with the button is kept as everywhere.
     const savedState = safeGetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED);
-    if (savedState === 'true' && window.innerWidth >= 768) {
+    if (
+      window.innerWidth >= 768 &&
+      (savedState === 'true' || (savedState === null && isSidewaysPhone()))
+    ) {
       isCollapsed = true;
     }
 
@@ -11834,7 +11840,11 @@ if (rounded) {
 
   // Focus Mode - Maximize 3D preview
   const focusModeBtn = document.getElementById('focusModeBtn');
-  const cameraDrawer = document.getElementById('cameraDrawer');
+  // The phone's bottom drawers: Camera, and the Alt View's ASCII drawer,
+  // which opens into the same space.
+  const phoneDrawers = ['cameraDrawer', 'asciiDrawer']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
 
   if (focusModeBtn && mainInterface) {
     let isFocusMode = false;
@@ -11853,44 +11863,12 @@ if (rounded) {
     };
 
     /**
-     * Check if camera drawer is expanded
+     * Whether a bottom drawer is open (layout.css splits the screen for it)
      */
-    const isCameraDrawerExpanded = () => {
-      return cameraDrawer && !cameraDrawer.classList.contains('collapsed');
-    };
-
-    /**
-     * Calculate the bottom offset for camera focus mode
-     * based on camera drawer height + primary action bar
-     */
-    const calculateCameraFocusBottomOffset = () => {
-      const actionsBar = document.getElementById('actionsBar');
-      const cameraDrawerBody = document.getElementById('cameraDrawerBody');
-
-      if (actionsBar) {
-        let totalHeight = 0;
-
-        // When camera drawer is expanded, calculate distance from viewport bottom
-        // to the top of the camera drawer body
-        if (isCameraDrawerExpanded() && cameraDrawerBody) {
-          // Get the bounding rect of the camera drawer body
-          const bodyRect = cameraDrawerBody.getBoundingClientRect();
-          // The offset should be from viewport bottom to the top of the drawer body
-          totalHeight = window.innerHeight - bodyRect.top;
-
-          // Add a small buffer for visual separation
-          totalHeight += 2;
-        } else {
-          // Fallback to actions bar height when drawer is collapsed
-          totalHeight = actionsBar.offsetHeight;
-        }
-
-        document.documentElement.style.setProperty(
-          '--camera-focus-bottom-offset',
-          `${totalHeight}px`
-        );
-      }
-    };
+    const isCameraDrawerExpanded = () =>
+      phoneDrawers.some(
+        (drawer) => !drawer.hidden && !drawer.classList.contains('collapsed')
+      );
 
     /**
      * Create floating exit button for camera focus mode
@@ -11924,15 +11902,6 @@ if (rounded) {
     const enterCameraFocusMode = () => {
       mainInterface.classList.add('camera-focus-mode');
       createCameraFocusExitBtn();
-
-      // Calculate offset after a short delay to ensure layout has settled
-      requestAnimationFrame(() => {
-        calculateCameraFocusBottomOffset();
-        // Recalculate again after animations complete
-        setTimeout(() => {
-          calculateCameraFocusBottomOffset();
-        }, 100);
-      });
     };
 
     /**
@@ -11985,29 +11954,19 @@ if (rounded) {
     // Add click listener
     focusModeBtn.addEventListener('click', toggleFocusMode);
 
-    // Watch for camera drawer state changes to update camera focus mode
-    if (cameraDrawer) {
-      const cameraDrawerObserver = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === 'class') {
-            updateCameraFocusMode();
-            // Trigger resize when camera drawer state changes in focus mode
-            if (isFocusMode) {
-              // Delay calculation to allow layout to settle after drawer toggle
-              requestAnimationFrame(() => {
-                calculateCameraFocusBottomOffset();
-                setTimeout(() => {
-                  calculateCameraFocusBottomOffset();
-                  if (previewManager) {
-                    previewManager.handleResize();
-                  }
-                }, 150);
-              });
-            }
-          }
-        });
+    // A drawer opening or closing in Full Screen changes the split
+    if (phoneDrawers.length) {
+      const drawerObserver = new MutationObserver((mutations) => {
+        if (!mutations.some((m) => m.attributeName === 'class')) return;
+        updateCameraFocusMode();
+        if (isFocusMode) {
+          // The canvas follows its box once the layout has settled
+          setTimeout(() => previewManager?.handleResize(), 150);
+        }
       });
-      cameraDrawerObserver.observe(cameraDrawer, { attributes: true });
+      phoneDrawers.forEach((drawer) =>
+        drawerObserver.observe(drawer, { attributes: true })
+      );
     }
 
     // Watch for window resize/orientation changes
@@ -12017,7 +11976,6 @@ if (rounded) {
       resizeTimeout = setTimeout(() => {
         if (isFocusMode) {
           updateCameraFocusMode();
-          calculateCameraFocusBottomOffset();
         }
       }, 150);
     });
@@ -15398,6 +15356,20 @@ if (rounded) {
       if (messages) messages.scrollTop = messages.scrollHeight;
     }
   });
+
+  // The status line over the preview rests on the echo drawer, whatever its
+  // height: closed, open, or gone (layout.css reads the property). Sitting
+  // on it, the line hid the drawer's label and messages, and in the Alt View
+  // its Characters and Edges row caught the presses meant for the toggle.
+  const previewCanvasSection = document.getElementById('previewCanvasSection');
+  if (echoDrawerEl && previewCanvasSection && 'ResizeObserver' in window) {
+    new ResizeObserver(() => {
+      previewCanvasSection.style.setProperty(
+        '--echo-drawer-height',
+        `${echoDrawerEl.offsetHeight}px`
+      );
+    }).observe(echoDrawerEl);
+  }
 
   // Echo drawer "View Full Console" button
   const echoViewConsoleBtn = document.getElementById('echoViewConsoleBtn');

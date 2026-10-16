@@ -654,7 +654,8 @@ test.describe('Classic on mobile (375px, touch)', () => {
       { timeout: 3000 }
     );
     await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
-    await expect(page.locator('#drawerBackdrop')).toBeVisible();
+    await expect(page.locator('#paramPanel')).toBeVisible();
+    await expect(drawerToggle).toHaveAttribute('aria-expanded', 'true');
   });
 });
 

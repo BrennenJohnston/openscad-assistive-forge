@@ -114,9 +114,12 @@ export const MEASURED_SECONDS = {
   // Every pose is now read once the camera holds still: one local pass went
   // from 90 s to 114 s, so 165.5 is scaled by the same ratio.
   'camera-face-view-orbit.spec.js': 210.0,
-  // Measured 142.1; four cases on what a tour says (about 9 s locally) add 15.
-  'tutorials.spec.js': 157.1,
-  'tour-interaction.spec.js': 269.2,
+  // Measured 142.1; four cases on what a tour says (about 9 s locally) add
+  // 15, and one on a step scrolled out of the Customizer (about 7 s) adds 15.
+  'tutorials.spec.js': 172.1,
+  // Measured 269.2; a case on a target half behind a phone's bar (about 7 s
+  // locally) adds 10.
+  'tour-interaction.spec.js': 279.2,
   'preferences-dialog.spec.js': 90.6,
   // Two cases, an example and a failing upload, and the braille sign's
   // return to a cached preview: 8.5 s together locally.
@@ -132,8 +135,10 @@ export const MEASURED_SECONDS = {
   'responsive-audit.spec.js': 91.9,
   'theme-switching.spec.js': 71.4,
   // Nine cases, the surfaces read element by element, then a phone width and
-  // the system settings: about 84 s locally, booked with room.
-  'alt-view-consistency.spec.js': 120.0,
+  // the system settings: about 84 s locally, booked with room; two slider
+  // cases (about 17 s locally) add 30, and the page's height and the echo
+  // drawer's three (about 21 s) add 35.
+  'alt-view-consistency.spec.js': 185.0,
   // Two cases, each loading the box: 17.6 s locally; booked at 30.
   'alt-view-reveal.spec.js': 30.0,
   // Six cases, each loading the box, most waiting out the key's 5 s arrival
@@ -366,9 +371,12 @@ export const MEASURED_SECONDS = {
   // booked at 30.
   'recovery-mode.spec.js': 30.0,
   // Eight groups (two window sizes, four looks), each loading the charm once
-  // for its seven cases, then seven camera panel cases that each load the
-  // simple box: 234 s locally; booked at 240.
-  'ui-schema.spec.js': 240.0,
+  // for its seven cases, then the desktop camera panel cases, the phone
+  // drawer, sheet and sideways cases, each loading the simple box.
+  // 906 s for its 68 timed cases on a CI shard log (the Alt View groups slow
+  // there, drawn in software), before twenty-six phone cases were added,
+  // about 15 s each; booked at 1300.
+  'ui-schema.spec.js': 1300.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

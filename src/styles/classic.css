@@ -1028,16 +1028,18 @@ body[data-ui-mode='classic'] .classic-console-slot #console-output {
   }
 
   /* The Customizer joins the stack as a normal pane. Below 768px the custom
-     modes turn .param-panel into an off-canvas drawer (layout.css) whose
-     open button lives in the classic-hidden #actionsBar — without these
-     resets the Customizer is position:fixed off screen with no way to open
-     it, i.e. unreachable on phones. drawer-controller.js additionally
-     refuses to engage while Classic is active. */
+     modes turn .param-panel into a sheet (layout.css), hidden until opened
+     by a button Classic does not show — without these resets the
+     Customizer is hidden, or pushed half a screen down, with no way to open
+     it. drawer-controller.js additionally refuses to engage while Classic
+     is active. */
   body[data-ui-mode='classic'] .param-panel {
     /* relative, not static: the pane's absolutely-positioned sr-only
        labels must keep resolving against the pane — against <html> they
        poke past the viewport and hand the page a phantom scrollbar */
     position: relative;
+    inset: auto;
+    visibility: visible;
     transform: none;
     width: auto;
     /* flex-shrink would compress the pane to its borders inside the

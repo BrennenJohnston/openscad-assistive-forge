@@ -53,11 +53,14 @@ body {
 }
 
 /* The Main Page button leads the header in both themes, nearest
-   the browser's own Back button; the branding shifts right. */
+   the browser's own Back button (on a phone the Customizer button comes
+   first); the branding shifts right. Its arrow and its words are two spans,
+   so the gap is the space between them. */
 .header-content > #clearFileBtn {
   min-height: var(--size-touch-target);
   min-width: var(--size-touch-target);
   flex-shrink: 0;
+  gap: var(--space-xs);
 }
 
 /* You are already on the main page while the welcome screen is up. */
@@ -1245,20 +1248,27 @@ body[data-app-surface='welcome'] #uiModeToggle {
     flex-direction: column;
   }
 
-  /* Parameters panel becomes off-canvas drawer */
+  /* The Customizer is a sheet above the bottom bar. drawer-controller.js
+     sets --phone-sheet-top where the preview's half of the screen ends.
+     Closed, it slides under the bar and is hidden from Tab and from a
+     screen reader. */
   .param-panel {
     position: fixed;
-    top: 0;
+    top: var(--phone-sheet-top, 50vh);
+    bottom: var(--actions-bar-reserved, var(--actions-bar-collapsed-offset));
     left: 0;
-    bottom: 0;
-    width: min(90vw, 360px);
-    max-height: 100vh;
-    max-height: 100dvh; /* Dynamic viewport height */
-    transform: translateX(-100%);
-    transition: transform var(--motion-slow) ease-out;
-    /* Keep below app modals */
+    right: 0;
+    width: auto;
+    min-height: 0;
+    max-height: none;
+    transform: translateY(100%);
+    visibility: hidden;
+    transition:
+      transform var(--motion-slow) ease-out,
+      visibility 0s linear var(--motion-slow);
+    /* Under the bar, so it slides away beneath it */
     z-index: var(--z-index-modal-backdrop);
-    border-right: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
     box-shadow: var(--shadow-lg);
     /* Ensure opaque background */
     background-color: var(--color-bg-primary);
@@ -1269,27 +1279,34 @@ body[data-app-surface='welcome'] #uiModeToggle {
     padding-right: env(safe-area-inset-right, 0px);
   }
 
-  .param-panel .panel-header {
-    padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
-  }
-
   .param-panel.drawer-open {
-    transform: translateX(0);
-    /* Elevate above backdrop (965) and actions bar (960) when open */
-    z-index: calc(var(--z-index-modal-backdrop) + 20);
+    transform: none;
+    visibility: visible;
+    transition:
+      transform var(--motion-slow) ease-out,
+      visibility 0s;
   }
 
-  /* Add bottom padding to drawer body to allow scrolling past fixed actions bar */
-  /* The actions bar is ~120px tall when expanded (drawer toggle + primary button rows) */
-  .param-panel .param-panel-body {
-    padding-bottom: calc(
-      var(--actions-bar-expanded-padding) + env(safe-area-inset-bottom, 0px)
-    );
+  /* The preview ends where the sheet begins, so the model is drawn in the
+     half of the screen that stays in view. */
+  .preview-panel.customizer-sheet-open {
+    padding-bottom: var(--phone-sheet-reserve);
+  }
+
+  /* Preview Settings & Info drops from its row in the page's flow, as tall
+     as leaves the preview below it half the screen
+     (preview-settings-drawer.js sets the height). :root outweighs the
+     overlay rule further down. */
+  :root .preview-info-section.preview-drawer-expanded {
+    position: relative;
+    height: var(--phone-settings-height, auto);
+    max-height: var(--phone-settings-height, none);
   }
 
   /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce) {
-    .param-panel {
+    .param-panel,
+    .param-panel.drawer-open {
       transition: none;
     }
   }
@@ -1334,11 +1351,6 @@ body[data-app-surface='welcome'] #uiModeToggle {
   /* Hide horizontal gutter on mobile */
   .gutter.gutter-horizontal {
     display: none;
-  }
-
-  /* Body scroll lock when drawer is open */
-  body.drawer-open {
-    overflow: hidden;
   }
 }
 
@@ -1441,7 +1453,8 @@ body[data-app-surface='welcome'] #uiModeToggle {
 
 .preview-status-bar {
   position: absolute;
-  bottom: var(--space-xs);
+  /* Above the echo drawer when it shows (main.js keeps its height) */
+  bottom: calc(var(--echo-drawer-height, 0px) + var(--space-xs));
   left: var(--space-xs);
   background-color: color-mix(
     in srgb,
@@ -2936,6 +2949,27 @@ details summary:focus,
   display: none;
 }
 
+/* On a phone the Full Screen button lives in the Preview Settings row
+   (mobile-toolbar.js moves the header's tools there), and a phone has no
+   Escape key: the row stays in Full Screen with the button that leaves it,
+   and only the settings under it go, with the toggle that would open them. */
+body[data-mobile-toolbar='relocated']
+  .main-interface.focus-mode:not(.camera-focus-mode)
+  .preview-info-section {
+  display: flex;
+  height: auto;
+  max-height: none;
+}
+
+body[data-mobile-toolbar='relocated']
+  .main-interface.focus-mode
+  .preview-info-content,
+body[data-mobile-toolbar='relocated']
+  .main-interface.focus-mode
+  #previewDrawerToggle {
+  display: none;
+}
+
 .main-interface.focus-mode .preview-canvas-section {
   flex: 1;
   min-height: 0;
@@ -3105,7 +3139,9 @@ details summary:focus,
     white-space: nowrap;
   }
 
-  /* Camera drawer body - game controller layout with semi-transparent background */
+  /* Camera drawer body: Rotate, Zoom and Pan side by side, then the views
+     and the tools, then the Alt View's own controls, on a see-through
+     surface so the model shows between the buttons. */
   .camera-drawer-body {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -3135,7 +3171,6 @@ details summary:focus,
   }
 
   .camera-drawer-section.hfm-slider-section {
-    grid-column: 1 / -1;
     align-items: stretch;
   }
 
@@ -3178,31 +3213,9 @@ details summary:focus,
   .camera-drawer-dpad .dpad-right {
     grid-area: right;
   }
-  /* Center control (replaces the center label in hidden/alt view mode) */
+  /* Reset View in the Rotate pad's center, View All in the Pan pad's. */
   .camera-drawer-dpad .dpad-center {
     grid-area: center;
-  }
-
-  /* Center label in D-pad */
-  .camera-drawer-dpad-label {
-    grid-area: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    background: color-mix(in srgb, var(--color-bg-secondary) 85%, transparent);
-    border-radius: var(--border-radius-sm);
-  }
-
-  /* Fallback for D-pad label */
-  @supports not (background-color: color-mix(in srgb, red 50%, blue)) {
-    .camera-drawer-dpad-label {
-      background: var(--color-bg-secondary);
-    }
   }
 
   /* Camera drawer buttons - expanded for better touch targets, semi-transparent */
@@ -3246,30 +3259,6 @@ details summary:focus,
     transform: scale(0.95);
   }
 
-  /* Auto-rotate toggle button in mobile drawer D-pad center */
-  .camera-drawer-btn.auto-rotate-toggle {
-    background: var(--color-bg-secondary);
-    border-color: var(--color-border);
-  }
-
-  .camera-drawer-btn.auto-rotate-toggle:hover {
-    background: var(--color-bg-tertiary);
-    border-color: var(--color-text-primary);
-  }
-
-  .camera-drawer-btn.auto-rotate-toggle.active,
-  .camera-drawer-btn.auto-rotate-toggle[aria-pressed='true'] {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-accent-text);
-  }
-
-  .camera-drawer-btn.auto-rotate-toggle.active:hover,
-  .camera-drawer-btn.auto-rotate-toggle[aria-pressed='true']:hover {
-    background: var(--color-accent-hover);
-    border-color: var(--color-accent-hover);
-  }
-
   /* Zoom controls layout (vertical stack) */
   .camera-drawer-zoom-controls {
     display: flex;
@@ -3281,15 +3270,6 @@ details summary:focus,
   .camera-drawer-zoom-controls .camera-drawer-btn {
     width: 44px;
     height: 44px;
-  }
-
-  /* Reset button with text */
-  .camera-drawer-reset-btn {
-    width: auto !important;
-    min-width: auto;
-    padding: var(--space-xs) var(--space-sm);
-    gap: var(--space-xs);
-    font-size: var(--font-size-xs);
   }
 
   /* Position sections: Rotate left, Zoom center, Pan right */
@@ -3310,47 +3290,96 @@ details summary:focus,
     max-width: 140px;
   }
 
-  /* Standard Views section - horizontal scrollable row on mobile */
+  /* The six views and the tools share a row while it has room; past that
+     the tools take the next row together, never one button alone. The
+     shortcuts pop-out opens above this row. */
   .camera-drawer-views {
     grid-column: 1 / -1;
-    align-items: stretch !important;
+    position: relative;
     width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: center;
+    gap: var(--space-sm);
   }
 
-  .camera-drawer-views-grid {
+  .camera-drawer-views-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+
+  .camera-drawer-views-grid,
+  .camera-drawer-tools {
+    display: flex;
+    gap: var(--space-xs);
+  }
+
+  /* The projection button shows the projection that is showing, as the
+     camera panel's does. */
+  #mobileProjectionToggle .projection-icon {
+    display: none;
+  }
+
+  #mobileProjectionToggle[data-projection='perspective']
+    .projection-icon--perspective,
+  #mobileProjectionToggle[data-projection='orthographic']
+    .projection-icon--orthographic {
+    display: inline;
+  }
+
+  /* The Alt View's ASCII drawer, beside the camera drawer and only while
+     the Alt View is on: its sliders, then the Characters steps, then the
+     Edges levels with the pan adjust button at the row's end. Hidden, it
+     stays hidden in Full Screen too. */
+  #asciiDrawer[hidden] {
+    display: none !important;
+  }
+
+  .ascii-drawer-body {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-xs);
+  }
+
+  .ascii-drawer-row {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-xs);
-    justify-content: center;
-  }
-
-  .camera-drawer-views-grid .camera-view-btn {
-    flex: 0 0 auto;
-    min-width: 60px;
-    padding: var(--space-xs) var(--space-sm);
-    font-size: var(--font-size-xs);
-  }
-
-  /* Projection toggle section */
-  .camera-drawer-projection {
-    grid-column: 1 / -1;
-    width: 100%;
-    align-items: center !important;
-  }
-
-  .camera-drawer-projection-btn {
-    display: flex;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-xs);
-    padding: var(--space-xs) var(--space-md);
-    font-size: var(--font-size-xs);
-    width: auto;
-    min-height: 36px;
+    justify-content: space-between;
+    gap: var(--space-sm);
   }
 
-  .camera-drawer-projection-btn svg {
-    flex-shrink: 0;
+  .ascii-drawer-row .alt-pan-toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Each slider on one row, its title, the slider and its value, where a
+     phone's sliders otherwise take a row of their own. */
+  .ascii-drawer-body .hfm-slider-section {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .ascii-drawer-body .hfm-slider-section .camera-drawer-section-title {
+    flex: 0 0 7.5em;
+  }
+
+  .ascii-drawer-body .hfm-slider-section .slider-container {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .ascii-drawer-body .hfm-slider-section input[type='range'] {
+    flex: 1 1 auto;
+    order: 0;
+    min-width: 0;
   }
 
   /* Primary actions on mobile - full width at bottom */
@@ -3482,17 +3511,19 @@ details summary:focus,
     font-weight: 700;
   }
 
-  :root[data-high-contrast='true'] .camera-drawer-dpad-label {
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
-    font-weight: 700;
-  }
-
   :root[data-high-contrast='true'] .camera-drawer-btn:hover,
   :root[data-high-contrast='true'] .camera-drawer-btn:focus {
     background: var(--color-accent);
     color: var(--color-accent-text);
     border-color: var(--color-accent);
+  }
+
+  /* Asked for less transparency: the drawer's body is solid too (the
+     drawer itself is made solid with the other surfaces in components.css). */
+  @media (prefers-reduced-transparency: reduce) {
+    :root .camera-drawer-body {
+      background: var(--color-bg-primary) !important;
+    }
   }
 }
 
@@ -3657,12 +3688,6 @@ details summary:focus,
     border-color: Highlight !important;
   }
 
-  .camera-drawer-dpad-label {
-    background: Canvas !important;
-    color: CanvasText !important;
-    border: 1px solid CanvasText !important;
-  }
-
   .camera-drawer-section-title {
     color: CanvasText !important;
   }
@@ -3815,6 +3840,42 @@ details summary:focus,
   }
 }
 
+/* A phone with a project open: the header's first row also carries the
+   Customizer button (mobile-toolbar.js moves it there), so Main Page and the
+   Customizer button show their arrows alone, keeping their names, and the
+   switch's two options take the small padding. Measured at 412px: Main Page
+   101px and the Customizer button 98px with their words, the switch 194px
+   (206px in the Alt View's font); the 396px row holds the five only this
+   way. The Customizer button takes the header's button look, and its open
+   state keeps the shared pressed color. */
+@media (max-width: 767px) {
+  body[data-mobile-toolbar='relocated'] #clearFileBtn .clear-file-label,
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle
+    .btn-label {
+    display: none;
+  }
+
+  body[data-mobile-toolbar='relocated'] .app-header .ui-mode-option {
+    padding: 0 var(--space-sm);
+  }
+
+  body[data-mobile-toolbar='relocated']
+    .app-header
+    #mobileDrawerToggle:not([aria-expanded='true']) {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-text-primary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-primary);
+  }
+
+  body[data-mobile-toolbar='relocated'] .app-header #mobileDrawerToggle {
+    justify-content: center;
+    flex-shrink: 0;
+  }
+}
+
 /* Ultra-narrow portrait (< 360 px): icon-only header.
    There isn't enough horizontal space for even the abbreviated title. */
 @media (max-width: 359px) and (orientation: portrait) {
@@ -3825,18 +3886,30 @@ details summary:focus,
 
 @media (max-width: 480px) and (orientation: portrait) {
   /* ============================================================================
-     Mobile Portrait: the Camera toggle across the bar, Generate below it
+     Mobile Portrait: the Camera toggle and Generate on one row
      ============================================================================ */
 
   :root .preview-panel .actions-bar {
     display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
     grid-template-areas:
-      'drawer-content'
-      'camera'
-      'primary';
+      'drawer-content drawer-content'
+      'camera primary';
     flex-direction: unset;
+  }
+
+  /* In the Alt View the ASCII toggle joins the row, at the left. */
+  :root .preview-panel .actions-bar:has(> #asciiDrawer:not([hidden])) {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas:
+      'drawer-content drawer-content drawer-content'
+      'ascii camera primary';
+  }
+
+  :root #asciiDrawer {
+    grid-area: ascii;
+    border-right: 1px solid var(--color-border);
   }
 
   /* Camera drawer across the full width */
@@ -3851,10 +3924,10 @@ details summary:focus,
     -webkit-backdrop-filter: none;
   }
 
-  /* Primary actions span full width at bottom */
+  /* Generate at the row's right end */
   :root .actions-primary {
     grid-area: primary;
-    border-top: 1px solid var(--color-border);
+    border-left: 1px solid var(--color-border);
   }
 
   /* Camera drawer toggle */
@@ -3888,12 +3961,13 @@ details summary:focus,
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
-    /* Position above: toggle row (44px) + primary row (44px) + safe area */
-    bottom: calc(
-      (var(--actions-bar-height) * 2) + env(safe-area-inset-bottom, 0px)
+    /* Just above the bar (actions-bar-reserve.js keeps its real height) */
+    bottom: var(
+      --actions-bar-reserved,
+      calc(var(--actions-bar-height) + env(safe-area-inset-bottom, 0px))
     ) !important;
-    /* Limit height and allow scrolling */
-    max-height: 45vh !important;
+    /* At most half the screen; the rest scrolls inside it */
+    max-height: 50vh !important;
     overflow-y: auto !important;
     overflow-x: hidden;
     border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
@@ -3901,7 +3975,7 @@ details summary:focus,
     box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
     /* Ensure proper box model */
     box-sizing: border-box;
-    /* Padding: add extra top room so the absolute "Zoom" label isn't clipped */
+    /* Padding: room at the top for the Rotate, Zoom and Pan titles */
     padding: var(--space-sm) var(--space-xs) !important;
     padding-top: calc(var(--space-sm) + 1.5em) !important;
     /* Grid layout for camera controls */
@@ -3947,15 +4021,6 @@ details summary:focus,
     min-height: var(--camera-btn-size);
   }
 
-  /* Hidden/alt view: pan-adjust toggle must match D-pad sizing */
-  .camera-drawer:not(.collapsed) .camera-drawer-dpad .alt-pan-toggle {
-    width: var(--camera-btn-size);
-    height: var(--camera-btn-size);
-    min-width: var(--camera-btn-size);
-    min-height: var(--camera-btn-size);
-    padding: 0;
-  }
-
   /* D-pad rows - tighter */
   .camera-drawer:not(.collapsed) .camera-drawer-dpad {
     grid-template-columns: repeat(3, var(--camera-btn-size));
@@ -3974,20 +4039,26 @@ details summary:focus,
     align-self: center;
   }
 
-  /* Zoom section - compact vertical stack, centered */
+  /* Zoom section - compact vertical stack, centered; as tall as the pads,
+     so its title sits on the pads' title line */
   .camera-drawer:not(.collapsed) .camera-drawer-zoom {
     justify-self: center;
-    align-self: center;
-    position: relative;
+    align-self: stretch;
+    justify-content: center;
     width: var(--camera-btn-size);
     min-width: var(--camera-btn-size);
     gap: var(--space-2xs);
   }
 
-  /* Keep Zoom title visible but remove it from layout height */
+  /* The three titles sit in the body's top padding, taking no row */
   .camera-drawer:not(.collapsed)
-    .camera-drawer-zoom
-    .camera-drawer-section-title {
+    :is(.camera-drawer-rotate, .camera-drawer-zoom, .camera-drawer-pan) {
+    position: relative;
+  }
+
+  .camera-drawer:not(.collapsed)
+    :is(.camera-drawer-rotate, .camera-drawer-zoom, .camera-drawer-pan)
+    > .camera-drawer-section-title {
     position: absolute;
     top: 0;
     left: 50%;
@@ -4014,17 +4085,18 @@ details summary:focus,
     padding: 0;
   }
 
-  .camera-drawer:not(.collapsed) .camera-drawer-reset-btn {
-    width: var(--camera-btn-size);
-    min-width: var(--camera-btn-size);
-    padding: 0;
-    font-size: var(--font-size-2xs);
-    min-height: var(--camera-btn-size);
+  /* The views row takes the body's width */
+  .camera-drawer:not(.collapsed) .camera-drawer-views {
+    justify-self: stretch;
   }
 
-  /* Reset button: hide text on tight mobile layout */
-  .camera-drawer:not(.collapsed) .camera-drawer-reset-btn span {
-    display: none;
+  /* The ASCII drawer's body is a column, and needs no room for titles at
+     its top. It opens where the camera drawer opens, at the same height
+     (camera-panel-controller.js matches the two). */
+  :root .ascii-drawer:not(.collapsed) .ascii-drawer-body {
+    display: flex !important;
+    align-items: stretch;
+    padding: var(--space-sm) var(--space-md) !important;
   }
 
   /* Section titles - smaller */
@@ -4033,18 +4105,16 @@ details summary:focus,
     margin-bottom: var(--space-2xs);
   }
 
-  /* D-pad center labels - smaller */
-  .camera-drawer:not(.collapsed) .camera-drawer-dpad-label {
-    font-size: 0.5625rem;
-  }
-
   /* ============================================================================
      Mobile Portrait Camera Focus Mode
      ============================================================================
-     When focus mode is active and camera drawer is expanded on mobile portrait:
-     - Preview fills the space above the camera controls
+     Full Screen with a bottom drawer open (Camera, or the Alt View's ASCII
+     drawer) on a phone held upright splits the screen in two: the preview in
+     the top half and the drawer in the bottom half, the bar at its foot. The
+     line is the one the sheets keep, half the screen and a small sliver, so
+     the preview never measures under half.
      - Header, workflow progress, and other UI are hidden/overlaid
-     - Only the focus mode button remains visible (floating top-right)
+     - A floating Exit button leaves Full Screen
      ============================================================================ */
 
   /* Focus mode with the camera drawer expanded: full-screen preview overlay */
@@ -4062,11 +4132,7 @@ details summary:focus,
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    /* Leave space for camera drawer + primary action + safe area */
-    bottom: calc(
-      var(--camera-focus-bottom-offset, 180px) +
-        env(safe-area-inset-bottom, 0px)
-    ) !important;
+    bottom: calc(50% - var(--space-sm)) !important;
     display: flex !important;
     flex-direction: column !important;
     border: none !important;
@@ -4116,6 +4182,21 @@ details summary:focus,
   /* Keep camera drawer visible in camera focus mode */
   .main-interface.focus-mode.camera-focus-mode .camera-drawer {
     display: flex !important;
+  }
+
+  /* The open drawer takes the bottom half, down to the bar; its controls
+     keep their place at its top. Beats the shared height the two drawers
+     are given when both exist. */
+  .main-interface.focus-mode.camera-focus-mode
+    .camera-drawer:not(.collapsed)
+    .camera-drawer-body,
+  .main-interface.focus-mode.camera-focus-mode
+    .ascii-drawer:not(.collapsed)
+    .ascii-drawer-body {
+    top: calc(50% + var(--space-sm)) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    align-content: start;
   }
 
   /* Show primary actions in camera focus mode */
@@ -4225,15 +4306,232 @@ details summary:focus,
 }
 
 /* ============================================================================
+   A phone held sideways (a touch screen, landscape, a phone's height)
+   ============================================================================
+   The screen is short, so the header keeps to one row, and the camera
+   controls open over the preview's right edge as a see-through column,
+   stacked as on the desktop, so the preview keeps its width. The input
+   decides as well as the width: a phone held sideways can be wider than a
+   small desktop window and still needs these rules.
+   ============================================================================ */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* One row: the Customizer button and Main Page at the left, the switch,
+     GitHub and Keys at the right. */
+  .header-content {
+    flex-wrap: nowrap;
+  }
+
+  .header-controls {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+
+  .header-branding {
+    flex: 1 1 auto;
+  }
+
+  /* The menu bar in the settings row (mobile-toolbar.js moves it there),
+     ahead of the row's own toggle, its buttons as tall as the row; the row
+     it left goes. */
+  body[data-menu-bar='settings-row'] .workflow-progress {
+    display: none;
+  }
+
+  body[data-menu-bar='settings-row'] .preview-drawer-header {
+    justify-content: flex-start;
+  }
+
+  body[data-menu-bar='settings-row'] .preview-drawer-header-right {
+    margin-left: auto;
+  }
+
+  .preview-drawer-header > #toolbarMenuBar {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .preview-drawer-header > #toolbarMenuBar .toolbar-menu-btn {
+    min-height: var(--size-touch-target);
+  }
+}
+
+@media (max-width: 767px) and (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* The bottom bar on one row: the drawers' toggles, then Generate. */
+  :root .preview-panel .actions-bar {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  /* No blur on the drawer: a blurred box would hold its fixed body inside
+     itself instead of at the screen's edge. */
+  :root .actions-bar .camera-drawer {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  :root .actions-bar .actions-primary {
+    order: 1;
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  /* The camera and ASCII drawers open as a column at the right edge, from
+     the top of the preview to the bar, scrolling inside. */
+  :root .camera-drawer:not(.collapsed) .camera-drawer-body {
+    position: fixed;
+    top: var(--phone-drawer-top, 0px);
+    right: env(safe-area-inset-right, 0px);
+    bottom: var(--actions-bar-reserved, var(--actions-bar-height));
+    width: calc(
+      var(--size-touch-target) * 3 + var(--space-2xs) * 2 + var(--space-sm) * 2
+    );
+    min-height: 0 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    overflow-y: auto;
+    border-left: 1px solid var(--color-border);
+  }
+
+  /* In the desktop's order: Rotate, Pan, Zoom, the views, the tools. */
+  :root .camera-drawer-rotate {
+    order: 1;
+  }
+
+  :root .camera-drawer-pan {
+    order: 2;
+  }
+
+  :root .camera-drawer-zoom {
+    order: 3;
+  }
+
+  :root .camera-drawer-views {
+    order: 4;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  :root .camera-drawer-zoom-controls {
+    flex-direction: row;
+  }
+
+  /* The views two to a row, as on the desktop. */
+  :root .camera-drawer-views-grid {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: calc(var(--size-touch-target) * 2 + var(--space-xs));
+  }
+
+  :root .ascii-drawer-body .hfm-slider-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  :root .ascii-drawer-body .hfm-slider-section .camera-drawer-section-title {
+    flex: 0 0 auto;
+  }
+
+  /* The Customizer is a column at the left, at most half the width, from
+     below the preview's row to the bar; the preview beside it draws the
+     model in the space that is left. */
+  .param-panel {
+    top: var(--phone-drawer-top, 0px);
+    right: auto;
+    width: min(50vw, 360px);
+    transform: translateX(-100%);
+    border-top: none;
+    border-right: 1px solid var(--color-border);
+  }
+
+  .preview-panel.customizer-sheet-open {
+    padding-bottom: var(
+      --actions-bar-reserved,
+      var(--actions-bar-collapsed-offset)
+    );
+  }
+
+  .preview-panel.customizer-sheet-open .preview-canvas-section {
+    margin-left: min(50vw, 360px);
+  }
+
+  /* The camera and ASCII columns lie over the preview's right edge; the
+     preview keeps only the bar's room below it, not the room held upright
+     for a drawer across the bottom. */
+  .preview-panel.camera-drawer-open {
+    padding-bottom: var(
+      --actions-bar-reserved,
+      var(--actions-bar-collapsed-offset)
+    );
+  }
+
+  /* The phones' floors (400px for the panel, 200px for the picture) are
+     taller than this screen leaves: the preview would run on under the bar,
+     its model drawn below the middle of what shows. */
+  .preview-panel,
+  .preview-canvas-section {
+    min-height: 0;
+  }
+
+  /* Preview Settings & Info lies over the preview here: the screen is too
+     short to share. */
+  :root .preview-info-section.preview-drawer-expanded {
+    position: absolute;
+    height: auto;
+    max-height: calc(100% - var(--space-sm));
+  }
+}
+
+@media (min-width: 768px) and (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* Open, the camera panel lies over the preview's right edge, see-through,
+     and its closed strip's place is kept, so the preview keeps its width. */
+  .main-interface {
+    position: relative;
+  }
+
+  .main-interface:has(> .camera-panel:not(.collapsed)) {
+    padding-right: var(--drawer-collapsed-width);
+  }
+
+  /* The preview's own header row and the Generate bar end where the open
+     panel begins, so none of their buttons sit under it; the picture runs
+     on beneath the see-through panel. 180px is the panel's own width. */
+  .main-interface:has(> .camera-panel:not(.collapsed)) .preview-info-section,
+  .main-interface:has(> .camera-panel:not(.collapsed))
+    .preview-panel
+    .actions-bar {
+    margin-right: calc(180px - var(--drawer-collapsed-width));
+  }
+
+  /* Above the preview's own header row, which lies over the preview too;
+     scoped by the main area to outweigh each look's solid panel. */
+  :root .main-interface > .camera-panel:not(.collapsed) {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: calc(var(--z-index-sticky) + 20);
+    background: color-mix(in srgb, var(--color-bg-primary) 85%, transparent);
+  }
+}
+
+/* ============================================================================
    Expert Mode: Mobile Bottom-Sheet Layout
    ============================================================================
-   On mobile, the param-panel is normally an off-canvas left drawer. When Expert
-   Mode is active, the panel converts to a bottom sheet so the code editor sits
-   below the 3D preview at full viewport width — far more usable than the narrow
-   off-canvas drawer for editing code.
+   On mobile, the param-panel is normally the Customizer sheet, shown while
+   it is open. When Expert Mode is active, the panel is a bottom sheet of its
+   own, shown open or closed, so the code editor sits below the 3D preview at
+   full viewport width.
    ============================================================================ */
 @media (max-width: 767px) {
-  /* Convert param-panel from off-canvas drawer to bottom sheet */
+  /* The code editor's sheet, over the bottom bar */
   .param-panel:has(.expert-mode-panel.active) {
     top: auto;
     left: 0;
@@ -4243,6 +4541,7 @@ details summary:focus,
     max-height: 40vh;
     max-height: 40dvh;
     transform: none;
+    visibility: visible;
     border-right: none;
     border-top: 2px solid var(--color-border);
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
@@ -4283,11 +4582,6 @@ details summary:focus,
 
   .expert-mode-panel.expert-mode-collapsed .expert-mode-body {
     display: none;
-  }
-
-  /* Rotate chevron when collapsed */
-  .expert-mode-panel.expert-mode-collapsed #expertModeCollapseBtn svg {
-    transform: rotate(180deg);
   }
 
   /* Preview panel needs bottom spacing so content isn't hidden behind the sheet */

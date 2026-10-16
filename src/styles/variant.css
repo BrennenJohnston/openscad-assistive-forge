@@ -399,6 +399,14 @@ body[data-ui-mode='classic'] {
   box-shadow: none;
 }
 
+/* A visually hidden field stays the one pixel reset.css makes it: the
+   border above grew it to two, and the file input at the end of the page
+   made the page a pixel taller than the window. */
+:root[data-ui-variant='mono'] :is(input, select, textarea).sr-only,
+:root[data-ui-variant='mono'] :is(input, select, textarea).visually-hidden {
+  border-width: 0;
+}
+
 :root[data-ui-variant='mono'] input:focus,
 :root[data-ui-variant='mono'] select:focus,
 :root[data-ui-variant='mono'] textarea:focus {
@@ -529,11 +537,13 @@ body[data-ui-mode='classic'] {
   cursor: not-allowed;
 }
 
-/* Range sliders (parametric controls) */
+/* Range sliders (parametric controls): the box keeps the touch target's
+   height for a finger or a pointer to aim at; the 8px track and the thumb,
+   drawn below, are the look. */
 :root[data-ui-variant='mono'] .slider-container input[type='range'] {
   appearance: none;
   -webkit-appearance: none;
-  height: 8px;
+  height: var(--size-touch-target);
   background: transparent;
   border: none;
 }
@@ -679,10 +689,15 @@ body[data-ui-mode='classic'] {
   border-radius: 0;
 }
 
-/* Mobile camera drawer (mono variant): remove translucency/blur, keep flat style */
+/* Mobile camera drawer (mono variant): flat, no blur, and see-through like
+   the other looks, so the characters show between the buttons. */
 @media (max-width: 767px) {
   :root[data-ui-variant='mono'] .camera-drawer {
-    background: var(--color-bg-primary) !important;
+    background: color-mix(
+      in srgb,
+      var(--color-bg-primary) 88%,
+      transparent
+    ) !important;
     border-color: var(--color-border) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -703,7 +718,11 @@ body[data-ui-mode='classic'] {
   }
 
   :root[data-ui-variant='mono'] .camera-drawer-body {
-    background: var(--color-bg-primary) !important;
+    background: color-mix(
+      in srgb,
+      var(--color-bg-primary) 85%,
+      transparent
+    ) !important;
     border-top: 1px solid var(--color-border) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -715,10 +734,11 @@ body[data-ui-mode='classic'] {
     border-radius: 0 !important;
   }
 
-  :root[data-ui-variant='mono'] .camera-drawer-dpad-label {
-    background: var(--color-bg-secondary) !important;
-    border: 1px solid var(--color-border) !important;
-    border-radius: 0 !important;
+  @media (prefers-reduced-transparency: reduce) {
+    :root[data-ui-variant='mono'] .camera-drawer,
+    :root[data-ui-variant='mono'] .camera-drawer-body {
+      background: var(--color-bg-primary) !important;
+    }
   }
 }
 
@@ -750,6 +770,15 @@ body[data-ui-mode='classic'] {
 
 :root[data-ui-variant='mono'] .preview-status-bar .alt-view-controls[hidden] {
   display: none;
+}
+
+/* On a phone these live in the ASCII drawer, off the preview; held
+   sideways at a desktop width, the camera panel's sliders do their work. */
+@media (max-width: 767px),
+  (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  :root[data-ui-variant='mono'] .preview-status-bar .alt-view-controls {
+    display: none;
+  }
 }
 
 :root[data-ui-variant='mono'] .alt-view-stepper {

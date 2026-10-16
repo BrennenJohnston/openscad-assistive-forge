@@ -1,7 +1,12 @@
 /**
- * Mobile Drawer Controller
- * Implements off-canvas drawer pattern for the Customizer panel on mobile devices
- * Based on Bootstrap Offcanvas and WAI-ARIA Dialog practices
+ * The Customizer on a phone: a sheet.
+ *
+ * Held upright it sits above the bottom bar, and the preview keeps half the
+ * screen above it, drawn in that half, so a value changed in the sheet is
+ * seen changing in the model. Held sideways it is a column at the left, at
+ * most half the width, with the preview beside it. It is not a dialog: the
+ * preview and the bar stay usable while it is open, and closed it is out of
+ * the way of Tab and of a screen reader (layout.css hides it).
  *
  * STATE CONVENTION: Additive open — `drawer-open` class = open.
  * This is the opposite of Actions/Camera/Echo drawers which use
@@ -9,146 +14,220 @@
  * @license GPL-3.0-or-later
  */
 
-import { createDocumentFocusTrap } from './focus-trap.js';
+import { createDocumentFocusTrap, getFocusableElements } from './focus-trap.js';
+import {
+  closeOtherPhoneDrawers,
+  isPhoneLayout,
+  isSidewaysPhone,
+  placeDrawerColumnTop,
+  previewKeepsPx,
+  registerPhoneDrawer,
+  SIDEWAYS_PHONE_QUERY,
+} from './phone-drawers.js';
 
-const MOBILE_BREAKPOINT_PX = 768;
+/** Input types a phone answers with its on-screen keyboard. */
+const TYPED_INPUTS = new Set([
+  'text',
+  'search',
+  'number',
+  'email',
+  'url',
+  'tel',
+  'password',
+]);
 
 /**
  * Initialize the mobile drawer controller
- * Manages drawer state, focus trap, and accessibility attributes
+ * Manages the sheet's state, its place on the screen and where focus goes
  */
 export function initDrawerController() {
   const drawer = document.getElementById('paramPanel');
-  const backdrop = document.getElementById('drawerBackdrop');
   const toggleBtn = document.getElementById('mobileDrawerToggle');
   const closeBtn = document.getElementById('drawerCloseBtn');
+  const previewPanel = document.querySelector('.preview-panel');
 
-  if (!drawer || !backdrop || !toggleBtn) {
+  if (!drawer || !toggleBtn) {
     return;
   }
 
-  // Preserve original semantics (desktop sidebar is a region, not a dialog)
-  const originalAttrs = {
-    role: drawer.getAttribute('role'),
-    ariaLabel: drawer.getAttribute('aria-label'),
-    ariaLabelledBy: drawer.getAttribute('aria-labelledby'),
-    tabIndex: drawer.getAttribute('tabindex'),
-  };
-
   let isOpen = false;
   let triggerEl = null;
-  let scrollY = 0;
-  let focusTrap = null;
+  let tourTrap = null;
 
   /**
-   * The drawer is a modal dialog, and the tour card stays on screen over it.
-   * Left modal, the drawer's focus trap would keep Tab inside `#paramPanel`,
-   * so the card's Next / Back / minimize / Close would be unreachable, and
-   * `aria-modal="true"` would tell assistive technology to ignore everything
-   * outside the drawer, so a screen-reader user would get no instructions on
-   * the drawer steps, which are most of the tour.
+   * The tour card stays on screen over the sheet, and it is itself
+   * `role="dialog" aria-modal="true"`: left that way, assistive technology
+   * would ignore the sheet, and a screen-reader user would get instructions
+   * about controls they could not reach on the sheet's steps, which are most
+   * of the tour. While the sheet is open the card stands its modality down;
+   * its claim is restored the moment the sheet closes.
    *
-   * The drawer stays modal for every ordinary use. It only stands its
-   * modality down for the one surface that is deliberately outside it.
-   *
-   * Both surfaces stand down together. The tour card is itself
-   * `role="dialog" aria-modal="true"`, so dropping the drawer's claim alone
-   * would only swap which surface assistive technology hides, leaving the
-   * reader with instructions they cannot act on. While the two are on screen
-   * together, neither claims to be the only thing there; the card's own
-   * claim is restored the moment the drawer closes.
+   * During a tour the card and the sheet are the task together, and the
+   * tour's veil covers the rest: Tab moves between the two of them only, and
+   * Escape anywhere closes the sheet first and the tour second. Without a
+   * tour the sheet holds nothing.
    */
   const tourOverlay = () => document.querySelector('.tutorial-overlay');
 
-  /** Claim modality only when nothing legitimate is sharing the screen. */
-  function syncModality() {
-    const overlay = tourOverlay();
-    const card = overlay?.querySelector('.tutorial-panel');
-
-    if (!isOpen) {
-      // The drawer is gone; the card is alone again and may speak for itself.
-      card?.setAttribute('aria-modal', 'true');
-      return;
-    }
-
-    if (overlay) {
-      drawer.removeAttribute('aria-modal');
+  function syncTour() {
+    const card = tourOverlay()?.querySelector('.tutorial-panel');
+    if (isOpen) {
       card?.removeAttribute('aria-modal');
     } else {
-      drawer.setAttribute('aria-modal', 'true');
+      card?.setAttribute('aria-modal', 'true');
+    }
+
+    const touring = isOpen && !!tourOverlay();
+    if (touring && !tourTrap) {
+      tourTrap = createDocumentFocusTrap(drawer, {
+        onEscape: () => close(),
+        alsoTrap: tourOverlay,
+      });
+      const active = document.activeElement;
+      tourTrap.activate(
+        active && active !== document.body ? { initialFocus: active } : {}
+      );
+    } else if (!touring && tourTrap) {
+      tourTrap.deactivate();
+      tourTrap = null;
+    }
+  }
+
+  /** Upright the sheet rises from the bar; sideways it comes in from the left. */
+  function syncTravel() {
+    toggleBtn.dataset.travelOpen = isSidewaysPhone() ? 'right' : 'up';
+  }
+
+  /**
+   * Upright, the sheet begins where the preview's half of the screen ends,
+   * and the preview ends there too (layout.css reads both lines). On a
+   * phone too short for that, the sheet still keeps its header and one row
+   * of controls, no more, and the preview has the rest. Sideways, the
+   * column starts below the preview's own row.
+   */
+  function placeSheet() {
+    placeDrawerColumnTop();
+    const section = document.getElementById('previewCanvasSection');
+    const bar = document.getElementById('actionsBar');
+    const header = drawer.querySelector('.panel-header');
+    const token = (name) =>
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(name)
+      ) || 0;
+    const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+    // The header, one row, and the sheet's own borders around them.
+    const floor =
+      (header ? header.offsetHeight : 0) +
+      token('--size-touch-target') +
+      (drawer.offsetHeight - drawer.clientHeight);
+    const top = Math.ceil(
+      Math.min(
+        (section ? section.getBoundingClientRect().top : 0) + previewKeepsPx(),
+        barTop - floor
+      )
+    );
+    const root = document.documentElement.style;
+    root.setProperty('--phone-sheet-top', `${top}px`);
+    root.setProperty(
+      '--phone-sheet-reserve',
+      `${Math.max(0, window.innerHeight - top)}px`
+    );
+  }
+
+  /**
+   * The sheet opens at the parameters: their search block at the top of
+   * what scrolls, and focus on its first control that does not raise a
+   * phone's keyboard over half the screen (the group picker, ahead of the
+   * groups). Everything above them stays in place, a scroll or Shift+Tab
+   * away.
+   */
+  function showParameters() {
+    const search = document.getElementById('paramSearchSection');
+    const container = document.getElementById('parametersContainer');
+    const header = drawer.querySelector('.panel-header');
+    const stuck =
+      header && getComputedStyle(header).position === 'sticky'
+        ? header.offsetHeight
+        : 0;
+    // A control focused anywhere in the sheet stays clear of its header.
+    drawer.style.scrollPaddingTop = `${stuck}px`;
+    if (search && drawer.contains(search)) {
+      drawer.scrollTop +=
+        search.getBoundingClientRect().top -
+        drawer.getBoundingClientRect().top -
+        stuck;
+    }
+    const first = [search, container]
+      .filter(Boolean)
+      .flatMap((part) => getFocusableElements(part))
+      .find(
+        (el) =>
+          !(el instanceof HTMLInputElement && TYPED_INPUTS.has(el.type)) &&
+          !(el instanceof HTMLTextAreaElement) &&
+          !el.isContentEditable
+      );
+    if (!first) {
+      (closeBtn || toggleBtn).focus();
+      return;
+    }
+    // The sheet is still sliding in, so the browser's own scroll to a
+    // focused control would measure a moving box; distances inside the
+    // sheet do not move with it.
+    first.focus({ preventScroll: true });
+    const box = drawer.getBoundingClientRect();
+    const top = box.top + drawer.clientTop + stuck;
+    const bottom = box.top + drawer.clientTop + drawer.clientHeight;
+    const target = first.getBoundingClientRect();
+    if (target.bottom > bottom) {
+      drawer.scrollTop += target.bottom - bottom;
+    } else if (target.top < top) {
+      drawer.scrollTop -= top - target.top;
     }
   }
 
   /**
-   * Open the drawer
+   * Open the sheet
    *
    * @param {HTMLElement} [trigger] - Where focus returns when it closes
    * @param {{initialFocus?: HTMLElement}} [options] - Where focus lands on
-   *   opening; by default the trap picks the first thing inside
+   *   opening; by default the first parameter control
    */
   function open(trigger, { initialFocus } = {}) {
-    if (isOpen || window.innerWidth >= MOBILE_BREAKPOINT_PX) return;
+    if (isOpen || !isPhoneLayout()) return;
     // Classic lays the Customizer into its own stacked pane (classic.css
-    // resets the off-canvas positioning); engaging the drawer there would
-    // trap focus in a panel that is already in the normal document flow.
+    // resets the sheet's positioning); there is no sheet to open.
     if (document.body.dataset.uiMode === 'classic') return;
+
+    // On a phone one drawer is open at a time.
+    closeOtherPhoneDrawers('customizer');
 
     triggerEl = trigger || toggleBtn;
     isOpen = true;
 
-    // Save scroll position
-    scrollY = window.scrollY;
-
-    // Transform drawer to dialog on mobile
-    drawer.setAttribute('role', 'dialog');
-    syncModality();
-    drawer.setAttribute('aria-labelledby', 'parameters-heading');
-    drawer.removeAttribute('aria-label');
-    // Ensure the dialog container itself can receive focus (needed for reliable focus trapping)
-    drawer.setAttribute('tabindex', '-1');
-
-    // Update toggle button state
     toggleBtn.setAttribute('aria-expanded', 'true');
     toggleBtn.setAttribute('aria-label', 'Close customizer panel');
-
-    // Show backdrop
-    backdrop.classList.add('visible');
-
-    // Open drawer
     drawer.classList.add('drawer-open');
+    previewPanel?.classList.add('customizer-sheet-open');
+    closeBtn?.classList.remove('hidden');
+    // Measured open: its Close button makes the header taller.
+    placeSheet();
 
-    // Show close button on mobile
-    if (closeBtn) {
-      closeBtn.classList.remove('hidden');
+    if (initialFocus) {
+      initialFocus.focus();
+    } else {
+      showParameters();
     }
-
-    // Lock body scroll
-    document.body.classList.add('drawer-open');
-    document.body.style.top = `-${scrollY}px`;
-
-    // Set up focus trap using shared utility (document-level so it works even if focus escapes)
-    // ESC should close even if focus isn't inside the drawer (e.g. on toggle button)
-    focusTrap = createDocumentFocusTrap(drawer, {
-      onEscape: close,
-      fallbackFocus: drawer,
-      // Re-read on every Tab: a tour can start or finish while the drawer
-      // is open, and the card must be reachable exactly while it exists.
-      alsoTrap: tourOverlay,
-    });
-    focusTrap.activate({
-      ...(initialFocus ? { initialFocus } : {}),
-      initialFocusDelay: 250, // --motion-slow (240ms) + 10ms buffer
-    });
+    syncTour();
   }
 
   /**
    * The drawing editor takes the preview area, and at phone width this
-   * drawer would stand over it, modal, its focus trap holding Tab: a person
-   * who pressed "Open the drawing editor" or "Crop first" in the drawer
-   * would get an editor they could neither see nor reach. The drawer stands
-   * aside while the editor is open and comes back when it closes, keeping
-   * whatever focus the editor's host has just set inside it (the button
-   * the person pressed), so the place they were at is the place they land.
+   * sheet would stand over part of it: a person who pressed "Open the
+   * drawing editor" or "Crop first" in the sheet would get an editor half
+   * hidden behind it. The sheet stands aside while the editor is open and
+   * comes back when it closes, keeping whatever focus the editor's host has
+   * just set inside it (the button the person pressed), so the place they
+   * were at is the place they land.
    */
   let closedForEditor = false;
   let editorTrigger = null;
@@ -174,58 +253,23 @@ export function initDrawerController() {
 
   /**
    * Close the drawer
+   * @param {{restoreFocus?: boolean}} [options] - restoreFocus false when
+   *   another drawer is opening: focus stays on the control that opened it
    */
-  function close() {
+  function close({ restoreFocus = true } = {}) {
     if (!isOpen) return;
 
     isOpen = false;
+    syncTour(); // hands the card back its own modality
 
-    // Restore original ARIA attributes
-    if (originalAttrs.role) {
-      drawer.setAttribute('role', originalAttrs.role);
-    }
-    drawer.removeAttribute('aria-modal');
-    syncModality(); // hands the card back its own modality
-    drawer.removeAttribute('aria-labelledby');
-    if (originalAttrs.ariaLabel) {
-      drawer.setAttribute('aria-label', originalAttrs.ariaLabel);
-    }
-    // Restore original tabindex (or remove if none)
-    if (originalAttrs.tabIndex !== null) {
-      drawer.setAttribute('tabindex', originalAttrs.tabIndex);
-    } else {
-      drawer.removeAttribute('tabindex');
-    }
-
-    // Update toggle button state
     toggleBtn.setAttribute('aria-expanded', 'false');
     toggleBtn.setAttribute('aria-label', 'Open customizer panel');
-
-    // Hide backdrop
-    backdrop.classList.remove('visible');
-
-    // Close drawer
     drawer.classList.remove('drawer-open');
+    previewPanel?.classList.remove('customizer-sheet-open');
+    closeBtn?.classList.add('hidden');
 
-    // Hide close button
-    if (closeBtn) {
-      closeBtn.classList.add('hidden');
-    }
-
-    // Unlock body scroll
-    document.body.classList.remove('drawer-open');
-    document.body.style.removeProperty('top');
-    window.scrollTo(0, scrollY);
-
-    // Deactivate focus trap
-    if (focusTrap) {
-      focusTrap.deactivate();
-      focusTrap = null;
-    }
-
-    // Return focus to trigger
     if (triggerEl) {
-      triggerEl.focus();
+      if (restoreFocus) triggerEl.focus();
       triggerEl = null;
     }
   }
@@ -242,121 +286,69 @@ export function initDrawerController() {
     }
   }
 
-  // Guard backdrop closes during parameter interaction
-  let backdropPointerStarted = false;
-  let ignoreBackdropClose = false;
-  let activeIgnorePointerId = null;
-
   /**
-   * Track pointerdown on backdrop - only allow close if pointer started here
+   * Escape in the sheet, or on its own button, closes it and returns focus
+   * to the button. A search box with text in it clears itself first.
    */
-  backdrop.addEventListener('pointerdown', (event) => {
-    // Only track if the event target is the backdrop itself
-    if (event.target === backdrop && !ignoreBackdropClose) {
-      backdropPointerStarted = true;
-    }
-  });
-
-  /**
-   * Close drawer only if pointer started and ended on backdrop
-   */
-  backdrop.addEventListener('pointerup', (event) => {
+  function closeOnEscape(event) {
+    if (event.key !== 'Escape' || !isOpen) return;
+    const target = event.target;
     if (
-      event.target === backdrop &&
-      backdropPointerStarted &&
-      !ignoreBackdropClose
+      target instanceof HTMLInputElement &&
+      target.type === 'search' &&
+      target.value
     ) {
-      close();
+      return;
     }
-    backdropPointerStarted = false;
-  });
-
-  /**
-   * Reset pointer tracking if pointer leaves backdrop
-   */
-  backdrop.addEventListener('pointerleave', () => {
-    backdropPointerStarted = false;
-  });
-
-  /**
-   * Track pointerdown inside drawer - set ignore flag to prevent
-   * accidental backdrop closes when user drags from inside drawer
-   */
-  drawer.addEventListener('pointerdown', (event) => {
-    // While a pointer is down that started inside the drawer, never allow a backdrop-close.
-    // This prevents "drag a slider then lift finger on backdrop" from closing the drawer.
-    ignoreBackdropClose = true;
-    activeIgnorePointerId = event.pointerId ?? null;
-    backdropPointerStarted = false;
-
-    const clearIgnore = (e) => {
-      if (
-        activeIgnorePointerId !== null &&
-        e?.pointerId !== undefined &&
-        e.pointerId !== activeIgnorePointerId
-      ) {
-        return;
-      }
-      ignoreBackdropClose = false;
-      activeIgnorePointerId = null;
-      window.removeEventListener('pointerup', clearIgnore, true);
-      window.removeEventListener('pointercancel', clearIgnore, true);
-    };
-
-    window.addEventListener('pointerup', clearIgnore, true);
-    window.addEventListener('pointercancel', clearIgnore, true);
-  });
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+  }
 
   // Event listeners
   toggleBtn.addEventListener('click', toggle);
+  toggleBtn.addEventListener('keydown', closeOnEscape);
+  drawer.addEventListener('keydown', closeOnEscape);
 
-  // Entering Classic while the drawer is open would leave its focus trap
-  // and scroll lock active on a panel Classic has re-parented into the
-  // normal flow — close cleanly instead. Document event, not a controller
-  // import: see the dispatch note in ui-mode-controller.applyMode().
+  // Entering Classic while the sheet is open would leave it placed over a
+  // panel Classic has re-parented into the normal flow, so it closes
+  // cleanly instead. Document event, not a controller import: see the
+  // dispatch note in ui-mode-controller.applyMode().
   document.addEventListener('ui-mode-changed', (event) => {
     if (event.detail?.mode === 'classic' && isOpen) {
       close();
     }
   });
 
-  // A tour can start or end while the drawer is already open, so modality is
+  // A tour can start or end while the sheet is already open, so modality is
   // re-decided rather than fixed at open time.
-  document.addEventListener('forge:tutorial-run-change', syncModality);
+  document.addEventListener('forge:tutorial-run-change', syncTour);
 
   // Wire up close button
   if (closeBtn) {
-    closeBtn.addEventListener('click', close);
+    closeBtn.addEventListener('click', () => close());
   }
 
-  // Close drawer on resize to desktop breakpoint
+  registerPhoneDrawer('customizer', { isOpen: () => isOpen, close });
+  syncTravel();
+
+  // A turned phone or a resized window moves the sheet's lines, or, at a
+  // desktop width, ends the sheet: the Customizer is a column there.
   let resizeTimeout;
-  window.addEventListener('resize', () => {
+  const onViewportChange = () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      if (window.innerWidth >= MOBILE_BREAKPOINT_PX && isOpen) {
-        // Ensure drawer is not in modal mode on desktop
-        if (originalAttrs.role) {
-          drawer.setAttribute('role', originalAttrs.role);
-        }
-        drawer.removeAttribute('aria-modal');
-        drawer.removeAttribute('aria-labelledby');
-        if (originalAttrs.ariaLabel) {
-          drawer.setAttribute('aria-label', originalAttrs.ariaLabel);
-        }
-        drawer.classList.remove('drawer-open');
-        backdrop.classList.remove('visible');
-        document.body.classList.remove('drawer-open');
-        document.body.style.removeProperty('top');
-        isOpen = false;
-        syncModality(); // as in close()
-
-        // Deactivate focus trap
-        if (focusTrap) {
-          focusTrap.deactivate();
-          focusTrap = null;
-        }
+      syncTravel();
+      if (!isOpen) return;
+      if (isPhoneLayout()) {
+        placeSheet();
+      } else {
+        close({ restoreFocus: false });
       }
     }, 150);
-  });
+  };
+  window.addEventListener('resize', onViewportChange);
+  window
+    .matchMedia(SIDEWAYS_PHONE_QUERY)
+    .addEventListener('change', onViewportChange);
 }

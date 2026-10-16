@@ -42,9 +42,16 @@ import {
   subscribeViewportShape,
 } from './classic-availability.js';
 import { onAppSurfaceChange } from './app-surface.js';
+import { SIDEWAYS_PHONE_QUERY } from './phone-drawers.js';
 
 /** @type {{ parent: HTMLElement, nextSibling: Node|null }|null} */
 let home = null;
+
+/** Where each first-row control lives off a phone, recorded on its first move. */
+const firstRowHomes = new Map();
+
+/** Where the menu bar lives when it is not in the settings row. */
+let menuBarHome = null;
 
 function shouldRelocate() {
   return (
@@ -68,6 +75,74 @@ function moveWithFocus(actions, parent, before) {
 }
 
 /**
+ * The header's first row on a phone: the Customizer button leads it, then
+ * Main Page, then the Simplified/Standard switch ahead of GitHub and Keys,
+ * so the order on screen is the tab order. Its old place in the Customizer
+ * row is what leaves that row room. layout.css makes the five fit 412px.
+ * @param {boolean} relocate
+ */
+function placeFirstRow(relocate) {
+  const header = document.querySelector('.header-content');
+  const controls = document.querySelector('.header-controls');
+  const moves = [
+    [
+      document.getElementById('mobileDrawerToggle'),
+      header,
+      document.getElementById('clearFileBtn'),
+    ],
+    [
+      document.getElementById('uiModeToggle'),
+      controls,
+      controls?.querySelector(':scope > .github-link'),
+    ],
+  ];
+  for (const [el, parent, before] of moves) {
+    if (!el || !parent || !before) continue;
+    if (!firstRowHomes.has(el)) {
+      firstRowHomes.set(el, {
+        parent: el.parentElement,
+        nextSibling: el.nextSibling,
+      });
+    }
+    const back = firstRowHomes.get(el);
+    if (relocate) {
+      if (el.nextSibling !== before) moveWithFocus(el, parent, before);
+    } else if (
+      el.parentElement !== back.parent ||
+      el.nextSibling !== back.nextSibling
+    ) {
+      moveWithFocus(el, back.parent, back.nextSibling);
+    }
+  }
+}
+
+/**
+ * A phone held sideways is short: the menu bar joins the Preview Settings
+ * row, at its left ahead of the row's own toggle, so the order on screen is
+ * the tab order it always had and the preview gains the menu bar's row.
+ * layout.css lays the row out.
+ * @param {boolean} relocate
+ * @returns {boolean} Whether the menu bar is in the settings row
+ */
+function placeMenuBar(relocate) {
+  const bar = document.getElementById('toolbarMenuBar');
+  const row = document.querySelector('.preview-drawer-header');
+  if (!bar || !row) return false;
+  if (!menuBarHome) {
+    menuBarHome = { parent: bar.parentElement, nextSibling: bar.nextSibling };
+  }
+  const merge = relocate && window.matchMedia(SIDEWAYS_PHONE_QUERY).matches;
+  if (merge) {
+    if (bar.parentElement !== row) {
+      moveWithFocus(bar, row, row.firstElementChild);
+    }
+  } else if (bar.parentElement !== menuBarHome.parent) {
+    moveWithFocus(bar, menuBarHome.parent, menuBarHome.nextSibling);
+  }
+  return merge;
+}
+
+/**
  * Put the row where the current viewport and surface say it belongs.
  * Safe to call at any time and as often as you like.
  */
@@ -87,6 +162,10 @@ export function applyMobileToolbar() {
   } else if (home.parent && actions.parentElement !== home.parent) {
     moveWithFocus(actions, home.parent, home.nextSibling);
   }
+  placeFirstRow(relocate);
+  document.body.dataset.menuBar = placeMenuBar(relocate)
+    ? 'settings-row'
+    : 'home';
 
   // The visible heading is what pays for the four controls. It stays in the
   // DOM and keeps naming #previewInfoContent through aria-labelledby, so the
@@ -108,4 +187,9 @@ export function initMobileToolbar() {
   applyMobileToolbar();
   subscribeViewportShape(applyMobileToolbar);
   onAppSurfaceChange(applyMobileToolbar);
+  // Turning a phone changes the answer without changing the viewport's
+  // desktop shape.
+  window
+    .matchMedia(SIDEWAYS_PHONE_QUERY)
+    .addEventListener('change', applyMobileToolbar);
 }
