@@ -160,6 +160,57 @@ test.describe('The key arrives', () => {
   });
 });
 
+// The same sequence on the keyboard: Up, Up, Down, Down, Left, Right, Left,
+// Right, B, A, typed anywhere outside a text field.
+const KEYS = [
+  'ArrowUp',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowLeft',
+  'ArrowRight',
+  'KeyB',
+  'KeyA',
+];
+
+async function typeSequence(page) {
+  for (const code of KEYS) await page.keyboard.press(code);
+}
+
+test.describe('The key arrives from the keyboard', () => {
+  test('in Classic, with no camera buttons on the page, the ten keys bring it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await recordAnnouncements(page);
+    await openBox(page);
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await watch(page);
+    await typeSequence(page);
+
+    const key = page.locator('#_hfmToggle');
+    await expect(key).toBeVisible({ timeout: 10_000 });
+    await expect(key).not.toHaveAttribute('data-arrival', /.+/, { timeout: 12_000 });
+    const seen = await page.evaluate(() => window.__arrival);
+    expect(seen.states.length, 'the arrival played').toBeGreaterThan(0);
+    await expect.poll(async () => (await sentences(page)).length, { timeout: 10_000 }).toBe(1);
+  });
+
+  test('in Standard, typed with the preview focused, while the arrows also turn the view', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openBox(page);
+    const box = await page.locator('#previewContainer').boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await typeSequence(page);
+    await expect(page.locator('#_hfmToggle')).toBeVisible({ timeout: 10_000 });
+  });
+});
+
 // A short tune plays as the key drops, unless sounds are turned off in
 // Preferences; the screen reader's sentence waits until it has finished.
 test.describe('The tune', () => {

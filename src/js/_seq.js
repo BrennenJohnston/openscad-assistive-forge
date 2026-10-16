@@ -16,6 +16,18 @@ const PATTERN = [
 ];
 const TIMEOUT_MS = 4000;
 
+// The same sequence on the keyboard, by physical key.
+const KEY_MAP = {
+  ArrowUp: 'UP',
+  ArrowDown: 'DOWN',
+  ArrowLeft: 'LEFT',
+  ArrowRight: 'RIGHT',
+  KeyB: 'B',
+  KeyA: 'A',
+};
+// Where typing means typing: the keys are left to the field or the editor.
+const TYPING_TARGET = 'input, textarea, select, [contenteditable], .cm-editor';
+
 function getButtonTarget(event) {
   if (!event) return null;
   const path =
@@ -74,7 +86,25 @@ export function initSequenceDetector(onMatch) {
 
     const token = INPUT_MAP[btn.id];
     if (!token) return;
+    feed(token);
+  }
 
+  function handleKeydown(event) {
+    const token = KEY_MAP[event.code];
+    if (!token) return;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+    const target = event.target;
+    if (
+      target &&
+      typeof target.closest === 'function' &&
+      target.closest(TYPING_TARGET)
+    ) {
+      return;
+    }
+    feed(token);
+  }
+
+  function feed(token) {
     const now = Date.now();
     if (now - lastInputTime > TIMEOUT_MS) {
       buffer = []; // Reset on timeout
@@ -98,12 +128,14 @@ export function initSequenceDetector(onMatch) {
     }
   }
 
-  // One listener; capture helps if anything stops propagation later.
+  // Capture helps if anything stops propagation later.
   // Use boolean `true` so removeEventListener works reliably.
   document.addEventListener('click', handleDocClick, true);
+  document.addEventListener('keydown', handleKeydown, true);
 
   // Return cleanup to remove listeners if needed
   return () => {
     document.removeEventListener('click', handleDocClick, true);
+    document.removeEventListener('keydown', handleKeydown, true);
   };
 }
