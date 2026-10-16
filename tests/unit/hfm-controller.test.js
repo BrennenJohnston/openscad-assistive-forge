@@ -281,6 +281,21 @@ describe('the Alt View draws in every time', () => {
     expect(root.hasAttribute('data-alt-view-reveal'), 'not while off').toBe(false)
   })
 
+  it('after the draw-in the picture powers on: the class on the character canvas, waiting for the reveal', async () => {
+    pageWithHeaderAndDpad()
+    const canvas = document.createElement('canvas')
+    canvas.className = 'hfm-overlay-canvas'
+    document.body.appendChild(canvas)
+    const controller = await freshController(previewManagerStub())
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    await soundStarted()
+    expect(canvas.classList.contains('alt-view-power-on'), 'the power-on class').toBe(true)
+    expect(canvas.classList.contains('alt-view-power-on--after-reveal'), 'after the draw-in').toBe(true)
+    controller.disableAltViewWithPreview(toggle)
+    expect(canvas.classList.contains('alt-view-power-on'), 'ended on switch-off').toBe(false)
+  })
+
   it('the sound first, then the screen: the draw-in waits for the sound to start', async () => {
     pageWithHeaderAndDpad()
     const controller = await freshController(previewManagerStub())

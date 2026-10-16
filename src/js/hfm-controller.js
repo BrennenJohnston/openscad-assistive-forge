@@ -136,10 +136,10 @@ const _HFM_REVEAL_FALLBACK_MS = 3000;
 let _hfmRevealTimer = null;
 let _hfmGreetingTimer = null;
 let _hfmStatusOverride = null;
-// The picture rasters in after the draw-in when that plays; the stylesheet
+// The picture powers on after the draw-in when that plays; the stylesheet
 // times both. This clears it if it never ends.
-const _HFM_RASTER_FALLBACK_MS = 4000;
-let _hfmRasterTimer = null;
+const _HFM_POWER_ON_FALLBACK_MS = 4000;
+let _hfmPowerOnTimer = null;
 
 // Found by the camera sequence, the key drops into its place wearing the Alt
 // View's colors, rests a moment, then redraws itself as the ordinary key. The
@@ -810,29 +810,31 @@ function _playAltViewReveal() {
   return true;
 }
 
-function _onRasterInEnd(event) {
-  if (event.animationName === 'alt-view-raster-in') _endRasterIn();
+function _onPowerOnEnd(event) {
+  if (event.animationName.startsWith('alt-view-power-on')) _endPowerOn();
 }
 
-function _endRasterIn() {
-  clearTimeout(_hfmRasterTimer);
-  _hfmRasterTimer = null;
+function _endPowerOn() {
+  clearTimeout(_hfmPowerOnTimer);
+  _hfmPowerOnTimer = null;
   const canvas = document.querySelector('.hfm-overlay-canvas');
   if (!canvas) return;
-  canvas.removeEventListener('animationend', _onRasterInEnd);
+  canvas.removeEventListener('animationend', _onPowerOnEnd);
   canvas.classList.remove(
-    'alt-view-raster-in',
-    'alt-view-raster-in--after-reveal'
+    'alt-view-power-on',
+    'alt-view-power-on--after-reveal'
   );
 }
 
-function _rasterInPicture(afterReveal) {
+// The picture powers on like a monitor (the look's own way, in the styles);
+// when the screen is drawing in, it waits for that to finish.
+function _powerOnPicture(afterReveal) {
   const canvas = document.querySelector('.hfm-overlay-canvas');
   if (!canvas || _prefersReducedMotion()) return;
-  canvas.addEventListener('animationend', _onRasterInEnd);
-  _hfmRasterTimer = setTimeout(_endRasterIn, _HFM_RASTER_FALLBACK_MS);
-  canvas.classList.add('alt-view-raster-in');
-  if (afterReveal) canvas.classList.add('alt-view-raster-in--after-reveal');
+  canvas.addEventListener('animationend', _onPowerOnEnd);
+  _hfmPowerOnTimer = setTimeout(_endPowerOn, _HFM_POWER_ON_FALLBACK_MS);
+  canvas.classList.add('alt-view-power-on');
+  if (afterReveal) canvas.classList.add('alt-view-power-on--after-reveal');
 }
 
 function _typeAltViewGreeting() {
@@ -856,7 +858,7 @@ function _typeAltViewGreeting() {
 
 function _stopAltViewStart() {
   _endAltViewReveal();
-  _endRasterIn();
+  _endPowerOn();
   clearTimeout(_hfmGreetingTimer);
   _hfmGreetingTimer = null;
   _hfmStatusOverride = null;
@@ -952,7 +954,7 @@ function _playCrtSound(name) {
 }
 
 /**
- * The Alt View's moment: the screen draws in, the picture rasters in and,
+ * The Alt View's moment: the screen draws in, the picture powers on and,
  * when asked, the greeting is typed. It plays every time the look comes on
  * or changes (a theme switch, Classic entered or left), not once per page:
  * each switch is a screen coming on. A moment still running is ended first,
@@ -972,7 +974,7 @@ function _playAltViewMoment({ greeting, sound }) {
     _hfmMomentTimer = null;
     void document.body?.offsetWidth;
     const revealing = _playAltViewReveal();
-    _rasterInPicture(revealing);
+    _powerOnPicture(revealing);
     if (greeting) _typeAltViewGreeting();
   };
   _hfmMomentBegin = begin;

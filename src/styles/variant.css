@@ -142,7 +142,8 @@ body[data-ui-mode='classic'] {
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
   --crt-reveal-duration: 1s;
-  --crt-raster-duration: 600ms;
+  --crt-power-on-duration: 1.8s;
+  --crt-power-on-dos-duration: 1.5s;
 
   /* A black drawing turned into the accent with its white details black,
    * for pictures no color property reaches; the grays of its edges stay on
@@ -1677,26 +1678,127 @@ body[data-ui-mode='classic'] {
   visibility: hidden;
 }
 
-/* The first picture in a page rasters in from the top, line by line, in
-   place of the power-on flourish; when the screen is drawing in, it waits
-   for that to finish, so the screen comes first and then the picture. The
-   controller adds the classes once and removes them at the end. */
-@keyframes alt-view-raster-in {
-  from {
-    clip-path: inset(0 0 100% 0);
+/* The picture powers on like a tube once the screen has drawn in: the
+   controller adds the classes at each switch-on and look change and removes
+   them at the end; with the screen drawing in, the picture waits for it.
+   A tube's picture takes its size from the high voltage, so it comes up
+   smaller than full and squashed, swells outward from the center as the
+   brightness blooms, overshoots and breathes back in decaying cycles while
+   the geometry wobbles, and settles. The phosphor looks do this softly,
+   a tube warming; Classic, the DOS look, with a wider, flatter start, a
+   sharper flash and snap and a sideways judder, the monitor of the next
+   decade. */
+@keyframes alt-view-power-on {
+  0% {
+    opacity: 0.1;
+    transform: scale(0.55, 0.42);
+    filter: brightness(0.3) blur(1.5px);
   }
-  to {
-    clip-path: inset(0 0 0 0);
+  12% {
+    opacity: 0.4;
+    transform: scale(0.7, 0.55) skew(3deg, 0.8deg);
+    filter: brightness(0.6) blur(1.2px);
+  }
+  24% {
+    opacity: 0.65;
+    transform: scale(0.86, 0.78) skew(-2.4deg, 1.2deg);
+    filter: brightness(1.4) blur(0.8px);
+  }
+  36% {
+    opacity: 0.9;
+    transform: scale(1.08, 1.06) skew(1.6deg, -0.6deg);
+    filter: brightness(1.6) blur(0.3px);
+  }
+  48% {
+    opacity: 1;
+    transform: scale(0.94, 0.9) skew(-1deg, -0.8deg);
+    filter: brightness(1) blur(0);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04, 1.03) skew(0.6deg, 0.4deg);
+    filter: brightness(1.25) blur(0);
+  }
+  72% {
+    opacity: 1;
+    transform: scale(0.98, 0.97) skew(-0.4deg, 0.2deg);
+    filter: brightness(1.05) blur(0);
+  }
+  84% {
+    opacity: 1;
+    transform: scale(1.01, 1.008) skew(0.1deg, 0);
+    filter: brightness(1.1) blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1, 1) skew(0, 0);
+    filter: brightness(1) blur(0);
+  }
+}
+
+@keyframes alt-view-power-on-dos {
+  0% {
+    opacity: 0.2;
+    transform: scale(0.7, 0.3) translateX(0);
+    filter: brightness(2.2) contrast(0.7);
+  }
+  10% {
+    opacity: 0.6;
+    transform: scale(0.82, 0.5) translateX(-8px);
+    filter: brightness(2) contrast(0.8);
+  }
+  20% {
+    opacity: 0.85;
+    transform: scale(0.95, 0.82) translateX(6px) skew(0deg, 1.6deg);
+    filter: brightness(1.7) contrast(0.9);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.1, 1.12) translateX(-4px) skew(0deg, -1.2deg);
+    filter: brightness(1.5) contrast(1);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(0.92, 0.88) translateX(4px) skew(0deg, 0.6deg);
+    filter: brightness(1.1) contrast(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05, 1.06) translateX(-2px);
+    filter: brightness(1.3) contrast(1);
+  }
+  62% {
+    opacity: 0.92;
+    transform: scale(0.98, 0.96) translateX(2px);
+    filter: brightness(1) contrast(1);
+  }
+  75% {
+    opacity: 1;
+    transform: scale(1.016, 1.02) translateX(0);
+    filter: brightness(1.12) contrast(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1, 1) translateX(0) skew(0, 0);
+    filter: brightness(1) contrast(1);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :root[data-ui-variant='mono'] .hfm-overlay-canvas.alt-view-raster-in {
-    animation: alt-view-raster-in var(--crt-raster-duration) steps(24, end) both;
+  :root[data-ui-variant='mono'] .hfm-overlay-canvas.alt-view-power-on {
+    animation: alt-view-power-on var(--crt-power-on-duration) linear both;
+    transform-origin: center center;
   }
 
   :root[data-ui-variant='mono']
-    .hfm-overlay-canvas.alt-view-raster-in--after-reveal {
+    body[data-ui-mode='classic']
+    .hfm-overlay-canvas.alt-view-power-on {
+    animation-name: alt-view-power-on-dos;
+    animation-duration: var(--crt-power-on-dos-duration);
+  }
+
+  :root[data-ui-variant='mono']
+    .hfm-overlay-canvas.alt-view-power-on--after-reveal {
     animation-delay: var(--crt-reveal-duration);
   }
 }

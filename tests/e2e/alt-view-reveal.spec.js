@@ -46,20 +46,21 @@ async function openBox(page) {
 }
 
 // Everything the reveal attribute, the status line and the picture's
-// raster-in do, from now on.
+// power-on do, from now on.
 async function watch(page) {
   await page.evaluate(() => {
     window.__altViewStart = { revealed: false, revealedAt: null, lines: [], rasters: [] };
     let rastering = false;
     new MutationObserver(() => {
       const canvas = document.querySelector('.hfm-overlay-canvas');
-      const on = Boolean(canvas?.classList.contains('alt-view-raster-in'));
+      const on = Boolean(canvas?.classList.contains('alt-view-power-on'));
       if (on && !rastering) {
         const raster = canvas
           .getAnimations()
-          .find((a) => a.animationName === 'alt-view-raster-in');
+          .find((a) => a.animationName.startsWith('alt-view-power-on'));
         window.__altViewStart.rasters.push({
           delay: raster ? raster.effect.getTiming().delay : null,
+          name: raster ? raster.animationName : null,
         });
       }
       rastering = on;
@@ -111,8 +112,8 @@ async function expectTheMoment(page, when) {
   });
   const { lines, rasters } = await seen(page);
   expect(lines, `${when}: the greeting typed`).toContain(GREETING);
-  expect(rasters, `${when}: the picture rasters in after the draw-in`).toEqual([
-    { delay: 1000 },
+  expect(rasters, `${when}: the picture powers on after the draw-in`).toEqual([
+    { delay: 1000, name: 'alt-view-power-on' },
   ]);
 }
 
@@ -174,9 +175,26 @@ test.describe('The Alt View draws in every time', () => {
     // Typed: its first letters shown on their own before it.
     expect(lines.slice(0, greeting)).toContain('ALT');
     expect(lines.slice(0, greeting).every((l) => GREETING.startsWith(l))).toBe(true);
-    // The picture rasters in once, waiting the draw-in's second first.
-    expect((await seen(page)).rasters).toEqual([{ delay: 1000 }]);
-    await expect(page.locator('.hfm-overlay-canvas')).not.toHaveClass(/alt-view-raster-in/, {
+    // The picture powers on once, a CRT warming up, waiting the draw-in's
+    // second first, and the class goes when it has.
+    expect((await seen(page)).rasters).toEqual([{ delay: 1000, name: 'alt-view-power-on' }]);
+    await expect(page.locator('.hfm-overlay-canvas')).not.toHaveClass(/alt-view-power-on/, {
+      timeout: 5_000,
+    });
+  });
+
+  test('in Classic the picture powers on in the DOS way', async ({ page }) => {
+    test.setTimeout(240_000);
+    await openBox(page);
+    const uiToggle = page.locator('#uiModeToggle');
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') await uiToggle.click();
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+    await watch(page);
+    await turnOn(page);
+    await expect.poll(async () => (await seen(page)).rasters.length, { timeout: 6_000 }).toBe(1);
+    expect((await seen(page)).rasters).toEqual([{ delay: 1000, name: 'alt-view-power-on-dos' }]);
+    await expect(page.locator('.hfm-overlay-canvas')).not.toHaveClass(/alt-view-power-on/, {
       timeout: 5_000,
     });
   });
