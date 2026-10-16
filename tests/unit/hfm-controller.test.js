@@ -193,6 +193,54 @@ describe('the glow the Alt View starts with', () => {
   })
 })
 
+describe('the Alt View draws in every time', () => {
+  let matchMedia
+
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.documentElement.removeAttribute('data-alt-view-reveal')
+    matchMedia = window.matchMedia
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  })
+
+  afterEach(() => {
+    window.matchMedia = matchMedia
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.documentElement.removeAttribute('data-alt-view-reveal')
+  })
+
+  it('draws in on each switch-on and on a theme change while on, not once per page', async () => {
+    pageWithHeaderAndDpad()
+    const pm = previewManagerStub()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+    const root = document.documentElement
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(root.hasAttribute('data-alt-view-reveal'), 'the first time').toBe(true)
+
+    controller.disableAltViewWithPreview(toggle)
+    expect(root.hasAttribute('data-alt-view-reveal'), 'ended on switch-off').toBe(false)
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(root.hasAttribute('data-alt-view-reveal'), 'the second time').toBe(true)
+
+    root.removeAttribute('data-alt-view-reveal')
+    controller.onThemeChanged()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'after a theme change').toBe(true)
+
+    controller.disableAltViewWithPreview(toggle)
+    controller.onThemeChanged()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'not while off').toBe(false)
+  })
+})
+
 describe('the grid when the Alt View turns on and off', () => {
   beforeEach(() => {
     localStorage.clear()

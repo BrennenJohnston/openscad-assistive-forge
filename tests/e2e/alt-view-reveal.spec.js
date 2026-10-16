@@ -1,7 +1,7 @@
 /**
- * The Alt View's first moments in a page: the screen draws in from the top,
- * the status line types its greeting before the ordinary line, and the
- * first picture rasters in once the screen has drawn, once.
+ * The Alt View's moments: the screen draws in from the top, the status line
+ * types its greeting before the ordinary line, and the picture rasters in
+ * once the screen has drawn; every time the look comes on or changes.
  * With reduced motion nothing moves and the greeting shows whole.
  *
  * @license GPL-3.0-or-later
@@ -92,7 +92,50 @@ async function turnOff(page) {
   await expect(key).toHaveAttribute('aria-pressed', 'false');
 }
 
-test.describe('The Alt View draws in once', () => {
+// The three together, as the moment plays them, from a fresh watch.
+async function expectTheMoment(page, when) {
+  await expect
+    .poll(async () => (await seen(page)).revealed, { timeout: 5_000 })
+    .toBe(true);
+  await expect(page.locator('html')).not.toHaveAttribute('data-alt-view-reveal', {
+    timeout: 5_000,
+  });
+  await expect(page.locator('#previewStatusAltAdjust')).toHaveText(/^\[ALT VIEW\] EDGE/, {
+    timeout: 6_000,
+  });
+  const { lines, rasters } = await seen(page);
+  expect(lines, `${when}: the greeting typed`).toContain(GREETING);
+  expect(rasters, `${when}: the picture rasters in after the draw-in`).toEqual([
+    { delay: 1000 },
+  ]);
+}
+
+const watchAgain = (page) =>
+  page.evaluate(() => {
+    window.__altViewStart = { revealed: false, lines: [], rasters: [] };
+  });
+
+test.describe('The Alt View draws in every time', () => {
+  test('off and on again, and a theme change while on, each draw in with the greeting', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openBox(page);
+    await watch(page);
+    await turnOn(page);
+    await expectTheMoment(page, 'the first time');
+
+    await turnOff(page);
+    await watchAgain(page);
+    await turnOn(page);
+    await expectTheMoment(page, 'the second time');
+
+    await watchAgain(page);
+    await page.locator('#themeToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expectTheMoment(page, 'after a theme change');
+  });
+
   test('the first time: the screen draws in, the greeting is typed, the picture rasters in', async ({
     page,
   }) => {
@@ -121,19 +164,6 @@ test.describe('The Alt View draws in once', () => {
     await expect(page.locator('.hfm-overlay-canvas')).not.toHaveClass(/alt-view-raster-in/, {
       timeout: 5_000,
     });
-
-    // The second time in the same page: neither.
-    await turnOff(page);
-    await page.evaluate(() => {
-      window.__altViewStart = { revealed: false, lines: [], rasters: [] };
-    });
-    await turnOn(page);
-    await page.waitForTimeout(2_500);
-    const again = await seen(page);
-    expect(again.revealed, 'no second draw-in').toBe(false);
-    expect(again.lines, 'no second greeting').not.toContain(GREETING);
-    expect(again.rasters, 'no second raster-in').toEqual([]);
-    await expect(page.locator('#previewStatusAltAdjust')).toHaveText(/^\[ALT VIEW\] EDGE/);
   });
 
   test('with reduced motion: nothing moves, the greeting shows whole', async ({

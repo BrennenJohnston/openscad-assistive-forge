@@ -107,15 +107,12 @@ const _HFM_GREETING_HOLD_MS = 700;
 // under 4x CPU throttling). This clears it if the animation never runs, as
 // with forced colors.
 const _HFM_REVEAL_FALLBACK_MS = 3000;
-let _hfmRevealPlayed = false;
 let _hfmRevealTimer = null;
-let _hfmGreetingPlayed = false;
 let _hfmGreetingTimer = null;
 let _hfmStatusOverride = null;
-// The first picture rasters in once per page, after the draw-in when that
-// plays; the stylesheet times both. This clears it if it never ends.
+// The picture rasters in after the draw-in when that plays; the stylesheet
+// times both. This clears it if it never ends.
 const _HFM_RASTER_FALLBACK_MS = 4000;
-let _hfmRasterPlayed = false;
 let _hfmRasterTimer = null;
 
 // Found by the camera sequence, the key drops into its place wearing the Alt
@@ -778,8 +775,6 @@ function _endAltViewReveal() {
 
 /** @returns {boolean} Whether the draw-in is playing now. */
 function _playAltViewReveal() {
-  if (_hfmRevealPlayed) return false;
-  _hfmRevealPlayed = true;
   if (_prefersReducedMotion()) return false;
   document.body?.addEventListener('animationend', _onAltViewRevealEnd);
   _hfmRevealTimer = setTimeout(_endAltViewReveal, _HFM_REVEAL_FALLBACK_MS);
@@ -803,9 +798,7 @@ function _endRasterIn() {
   );
 }
 
-function _rasterInFirstPicture(afterReveal) {
-  if (_hfmRasterPlayed) return;
-  _hfmRasterPlayed = true;
+function _rasterInPicture(afterReveal) {
   const canvas = document.querySelector('.hfm-overlay-canvas');
   if (!canvas || _prefersReducedMotion()) return;
   canvas.addEventListener('animationend', _onRasterInEnd);
@@ -815,8 +808,6 @@ function _rasterInFirstPicture(afterReveal) {
 }
 
 function _typeAltViewGreeting() {
-  if (_hfmGreetingPlayed) return;
-  _hfmGreetingPlayed = true;
   let shown = _prefersReducedMotion() ? _HFM_GREETING.length : 1;
   const step = () => {
     _hfmStatusOverride = _HFM_GREETING.slice(0, shown);
@@ -841,6 +832,24 @@ function _stopAltViewStart() {
   clearTimeout(_hfmGreetingTimer);
   _hfmGreetingTimer = null;
   _hfmStatusOverride = null;
+}
+
+/**
+ * The Alt View's moment: the screen draws in, the picture rasters in and,
+ * when asked, the greeting is typed. It plays every time the look comes on
+ * or changes (a theme switch, Classic entered or left), not once per page:
+ * each switch is a screen coming on. A moment still running is ended first,
+ * and the page is laid out in between so the same animation starts again.
+ * With reduced motion nothing moves and the greeting shows whole.
+ *
+ * @param {{greeting: boolean}} options
+ */
+function _playAltViewMoment({ greeting }) {
+  _stopAltViewStart();
+  void document.body?.offsetWidth;
+  const revealing = _playAltViewReveal();
+  _rasterInPicture(revealing);
+  if (greeting) _typeAltViewGreeting();
 }
 
 /**
@@ -912,9 +921,16 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   // Classic's look carries an accent of its own, so the glyph atlas follows
   // the layout mode as it follows the theme.
-  _hfmModeListener = () => {
+  // Classic is a look of its own (the DOS blue), so entering or leaving it
+  // is a screen coming on; a switch between Simplified and Standard is not.
+  let lastMode = document.body?.dataset.uiMode;
+  _hfmModeListener = (event) => {
     _hfmAltView?.rebuildGlyphs?.();
     _hfmAltView?.invalidate?.();
+    const mode = event?.detail?.mode;
+    const classicCrossed = mode === 'classic' || lastMode === 'classic';
+    lastMode = mode;
+    if (_hfmEnabled && classicCrossed) _playAltViewMoment({ greeting: true });
   };
   document.addEventListener('ui-mode-changed', _hfmModeListener);
 
@@ -945,9 +961,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   });
   previewManager.applyGridForAltView?.(true);
 
-  const revealing = _playAltViewReveal();
   root.setAttribute('data-ui-variant', 'mono');
-  _rasterInFirstPicture(revealing);
 
   const newTheme = previewManager.detectTheme();
   previewManager.updateTheme(
@@ -962,7 +976,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   toggleBtn?.setAttribute('aria-pressed', 'true');
   _hfmEnabled = true;
   _hfmPendingEnable = false;
-  _typeAltViewGreeting();
+  _playAltViewMoment({ greeting: true });
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -1160,7 +1174,8 @@ function _injectAltToggle() {
     if (!previewManager) {
       if (!isCurrentlyEnabled) {
         _setAssetsForVariant(true);
-        _playAltViewReveal();
+        // No picture and no status line yet: the draw-in alone.
+        _playAltViewMoment({ greeting: false });
         root.setAttribute('data-ui-variant', 'mono');
         toggleBtn.setAttribute('aria-pressed', 'true');
         _hfmPendingEnable = true;
@@ -1293,6 +1308,8 @@ export function initHfmController({
       if (_hfmEnabled && _hfmAltView) {
         _hfmAltView.rebuildGlyphs?.();
         _hfmAltView.invalidate?.();
+        // A new look comes on: the screen draws in again.
+        _playAltViewMoment({ greeting: true });
       }
     },
 
