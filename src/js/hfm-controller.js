@@ -33,8 +33,11 @@ let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
 let _hfmContrastControls = null;
 
 // The default is finer than the renderer's own 1: at full size the first
-// frame drew the model as a blob with no faces. A saved size wins.
-const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 0.6 };
+// frame drew the model as a blob with no faces. A saved size wins. The
+// floor is where a phone's cell meets the renderer's 3 px font floor (at
+// 30% a 3 x 5 px cell, 16,000 of them on a 398 x 622 preview); below it
+// nothing shrinks.
+const _HFM_FONT_SCALE_RANGE = { min: 0.3, max: 2.5, step: 0.05, default: 0.6 };
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
 
