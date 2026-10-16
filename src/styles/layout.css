@@ -4440,6 +4440,16 @@ details summary:focus,
     margin-left: min(50vw, 360px);
   }
 
+  /* The camera and ASCII columns lie over the preview's right edge; the
+     preview keeps only the bar's room below it, not the room held upright
+     for a drawer across the bottom. */
+  .preview-panel.camera-drawer-open {
+    padding-bottom: var(
+      --actions-bar-reserved,
+      var(--actions-bar-collapsed-offset)
+    );
+  }
+
   /* The phones' floors (400px for the panel, 200px for the picture) are
      taller than this screen leaves: the preview would run on under the bar,
      its model drawn below the middle of what shows. */

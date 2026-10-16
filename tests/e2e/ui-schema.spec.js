@@ -1414,6 +1414,14 @@ for (const size of SIDEWAYS_SIZES) {
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await page.waitForTimeout(500);
       const c = await page.evaluate(readSidewaysCamera);
+      // The column covers its own strip of the preview and nothing more.
+      const shareOpen = await page.evaluate(previewShare);
+      expect
+        .soft(
+          shareOpen,
+          `S6: the preview with the camera controls open (${shareOpen.toFixed(3)}, ${share.toFixed(3)} closed)`
+        )
+        .toBeGreaterThanOrEqual(share * (1 - c.width / size.width) - 0.03);
       expect
         .soft(Math.abs(c.right - size.width), 'S5: at the right edge')
         .toBeLessThanOrEqual(1);
