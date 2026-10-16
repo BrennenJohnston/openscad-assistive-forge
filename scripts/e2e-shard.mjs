@@ -134,8 +134,9 @@ export const MEASURED_SECONDS = {
   'responsive-audit.spec.js': 91.9,
   'theme-switching.spec.js': 71.4,
   // Nine cases, the surfaces read element by element, then a phone width and
-  // the system settings: about 84 s locally, booked with room.
-  'alt-view-consistency.spec.js': 120.0,
+  // the system settings: about 84 s locally, booked with room; two slider
+  // cases (about 17 s locally) add 30.
+  'alt-view-consistency.spec.js': 150.0,
   // Two cases, each loading the box: 17.6 s locally; booked at 30.
   'alt-view-reveal.spec.js': 30.0,
   // Six cases, each loading the box, most waiting out the key's 5 s arrival

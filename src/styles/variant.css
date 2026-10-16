@@ -529,11 +529,13 @@ body[data-ui-mode='classic'] {
   cursor: not-allowed;
 }
 
-/* Range sliders (parametric controls) */
+/* Range sliders (parametric controls): the box keeps the touch target's
+   height for a finger or a pointer to aim at; the 8px track and the thumb,
+   drawn below, are the look. */
 :root[data-ui-variant='mono'] .slider-container input[type='range'] {
   appearance: none;
   -webkit-appearance: none;
-  height: 8px;
+  height: var(--size-touch-target);
   background: transparent;
   border: none;
 }

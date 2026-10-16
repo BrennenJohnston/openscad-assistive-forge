@@ -725,6 +725,85 @@ test.describe('The Alt View at a phone width', () => {
   });
 });
 
+/** The range inputs on the screen, and those shorter than the touch target. */
+function shortSliders() {
+  const target = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      '--size-touch-target'
+    )
+  );
+  const shown = [...document.querySelectorAll("input[type='range']")].filter(
+    (el) =>
+      el.checkVisibility({ visibilityProperty: true }) &&
+      el.getBoundingClientRect().width > 0
+  );
+  return {
+    target,
+    count: shown.length,
+    short: shown
+      .map((el) => ({
+        name: el.id || el.name,
+        height: el.getBoundingClientRect().height,
+      }))
+      .filter((s) => s.height + 0.5 < target)
+      .map((s) => `${s.name} ${Math.round(s.height)} px`),
+  };
+}
+
+// The Alt View draws a thin track, but the slider a finger or a pointer
+// aims at keeps the touch target's height, as it does in the standard look.
+test.describe("The Alt View's sliders keep the touch target", () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('on a desktop window: the Customizer and the camera panel', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openProject(page);
+    await altViewOn(page);
+    const toggle = page.locator('#cameraPanelToggle');
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.click();
+    }
+    await page.waitForTimeout(600);
+    const m = await page.evaluate(shortSliders);
+    expect(m.count, 'sliders on the screen').toBeGreaterThanOrEqual(3);
+    expect(m.short, `sliders under the ${m.target} px target`).toEqual([]);
+  });
+
+  test.describe('on a phone', () => {
+    // No isMobile: Firefox rejects it when the browser context is created.
+    test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+    test('the ASCII drawer and the Customizer', async ({ page }) => {
+      test.setTimeout(300_000);
+      await openProject(page);
+      await altViewOn(page);
+      await page.locator('#asciiDrawerToggle').click();
+      await page.waitForTimeout(600);
+      const ascii = await page.evaluate(shortSliders);
+      expect(ascii.count, 'sliders in the ASCII drawer').toBeGreaterThanOrEqual(
+        3
+      );
+      expect(
+        ascii.short,
+        `ASCII drawer sliders under the ${ascii.target} px target`
+      ).toEqual([]);
+
+      await page.locator('#mobileDrawerToggle').click();
+      await page.waitForTimeout(600);
+      const sheet = await page.evaluate(shortSliders);
+      expect(
+        sheet.short,
+        `Customizer sliders under the ${sheet.target} px target`
+      ).toEqual([]);
+    });
+  });
+});
+
 test.describe('The Alt View with reduced motion', () => {
   test.beforeEach(async ({ page }) => {
     await seed(page, { unlock: true, theme: 'dark' });
