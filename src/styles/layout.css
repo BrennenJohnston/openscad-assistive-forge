@@ -1453,7 +1453,8 @@ body[data-app-surface='welcome'] #uiModeToggle {
 
 .preview-status-bar {
   position: absolute;
-  bottom: var(--space-xs);
+  /* Above the echo drawer when it shows (main.js keeps its height) */
+  bottom: calc(var(--echo-drawer-height, 0px) + var(--space-xs));
   left: var(--space-xs);
   background-color: color-mix(
     in srgb,

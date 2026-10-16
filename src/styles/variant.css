@@ -399,6 +399,14 @@ body[data-ui-mode='classic'] {
   box-shadow: none;
 }
 
+/* A visually hidden field stays the one pixel reset.css makes it: the
+   border above grew it to two, and the file input at the end of the page
+   made the page a pixel taller than the window. */
+:root[data-ui-variant='mono'] :is(input, select, textarea).sr-only,
+:root[data-ui-variant='mono'] :is(input, select, textarea).visually-hidden {
+  border-width: 0;
+}
+
 :root[data-ui-variant='mono'] input:focus,
 :root[data-ui-variant='mono'] select:focus,
 :root[data-ui-variant='mono'] textarea:focus {

@@ -15357,6 +15357,20 @@ if (rounded) {
     }
   });
 
+  // The status line over the preview rests on the echo drawer, whatever its
+  // height: closed, open, or gone (layout.css reads the property). Sitting
+  // on it, the line hid the drawer's label and messages, and in the Alt View
+  // its Characters and Edges row caught the presses meant for the toggle.
+  const previewCanvasSection = document.getElementById('previewCanvasSection');
+  if (echoDrawerEl && previewCanvasSection && 'ResizeObserver' in window) {
+    new ResizeObserver(() => {
+      previewCanvasSection.style.setProperty(
+        '--echo-drawer-height',
+        `${echoDrawerEl.offsetHeight}px`
+      );
+    }).observe(echoDrawerEl);
+  }
+
   // Echo drawer "View Full Console" button
   const echoViewConsoleBtn = document.getElementById('echoViewConsoleBtn');
   echoViewConsoleBtn?.addEventListener('click', openConsoleModal);

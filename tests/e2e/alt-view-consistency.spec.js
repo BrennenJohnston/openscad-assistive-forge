@@ -804,6 +804,95 @@ test.describe("The Alt View's sliders keep the touch target", () => {
   });
 });
 
+// The page is the window's size in the Alt View as in the standard look:
+// nothing in it can be scrolled a pixel.
+test.describe('The Alt View page fits the window', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  for (const size of [
+    { width: 1280, height: 720 },
+    { width: 412, height: 915 },
+  ]) {
+    test(`at ${size.width} x ${size.height}`, async ({ page }) => {
+      test.setTimeout(300_000);
+      await page.setViewportSize(size);
+      await openProject(page);
+      await altViewOn(page);
+      await settle(page);
+      const [scrollHeight, height] = await page.evaluate(() => [
+        document.documentElement.scrollHeight,
+        innerHeight,
+      ]);
+      expect(scrollHeight, `the page's height in a ${height} px window`).toBe(
+        height
+      );
+    });
+  }
+});
+
+/** The echo drawer and the status line above it, read in the page. */
+function echoAndStatus() {
+  const toggle = document.getElementById('echoDrawerToggle');
+  const t = toggle.getBoundingClientRect();
+  const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
+  const drawer = document.getElementById('echoDrawer').getBoundingClientRect();
+  const bar = document.getElementById('previewStatusBar').getBoundingClientRect();
+  return {
+    shown: toggle.checkVisibility(),
+    toggleReachable: !!hit && toggle.contains(hit),
+    atCenter: hit ? `${hit.tagName.toLowerCase()}${hit.id ? '#' + hit.id : ''}` : null,
+    overlap: Math.max(0, Math.round(bar.bottom - drawer.top)),
+  };
+}
+
+// The status line with the Alt View's Characters and Edges controls rests on
+// the echo drawer: the drawer's toggle and its messages stay in reach.
+test.describe('The echo drawer stays clear of the status line', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, { unlock: true, theme: 'dark' });
+  });
+
+  test('in the Alt View, closed and open', async ({ page }) => {
+    test.setTimeout(300_000);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openProject(page, 'q-charm');
+    await altViewOn(page);
+    await settle(page);
+    // The line moves when the drawer's new height reaches it, a frame after
+    // the drawer's own layout: wait for it rather than read between the two.
+    const overlap = () =>
+      page.evaluate(echoAndStatus).then((m) => m.overlap);
+    await expect
+      .poll(overlap, {
+        message: 'closed, the status line over the drawer',
+        timeout: 5_000,
+      })
+      .toBe(0);
+    const closed = await page.evaluate(echoAndStatus);
+    expect(closed.shown, 'the charm prints echo lines').toBe(true);
+    expect
+      .soft(closed.toggleReachable, `closed, its center is ${closed.atCenter}`)
+      .toBe(true);
+
+    await page.locator('#echoDrawerToggle').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#echoDrawerToggle')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect
+      .poll(overlap, {
+        message: 'open, the status line over the messages',
+        timeout: 5_000,
+      })
+      .toBe(0);
+    const open = await page.evaluate(echoAndStatus);
+    expect.soft(open.toggleReachable, 'open, the toggle in reach').toBe(true);
+  });
+});
+
 test.describe('The Alt View with reduced motion', () => {
   test.beforeEach(async ({ page }) => {
     await seed(page, { unlock: true, theme: 'dark' });
