@@ -29,6 +29,21 @@ Forge interface, and it says so rather than silently ignoring the choice. Your
 saved preference is not overwritten, so Classic comes back when you next open
 the app on a desktop.
 
+## The layout on a phone
+
+Held upright, the header's first row holds the Customizer and Main Page
+buttons (as arrows), the Simplified/Standard switch, GitHub and Keys. The
+Customizer opens as a sheet above a one-row bottom bar, and Preview Settings &
+Info drops from its row, so the preview keeps the top half of the screen while
+you change a value. The camera controls open in a see-through drawer within
+half the screen, with a picture on each view button; one drawer is open at a
+time. Full Screen with a drawer open splits the screen in half, and keeps the
+button that leaves it.
+
+Held sideways, the header and the menu bar each keep to one row, the camera
+controls open as a see-through column at the right edge, and the Customizer is
+a column beside the preview; from 768 px wide it starts closed.
+
 ## Viewport and keyboard
 
 The layout adjusts when the virtual keyboard appears. Uses CSS `dvh` units with
