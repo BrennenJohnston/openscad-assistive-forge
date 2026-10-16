@@ -915,6 +915,56 @@ test.describe('Getting Started, action by action', () => {
     // Reached the steps after the last action, so no action ended the tour.
     expect(visited).toContain('Simplified or Standard');
   });
+
+  // A step whose target sits scrolled out of the Customizer's view is
+  // brought into it, not skipped: a Tab after typing a value can scroll the
+  // Presets section away before its step comes.
+  test('a step whose target is scrolled out of the Customizer is shown, not skipped', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await setBaseline(page);
+    await page.goto('/');
+    await page.locator('[data-example="simple-box"]').click();
+    await expect(page.locator('#mainInterface')).toBeVisible({
+      timeout: 60_000,
+    });
+    await waitForTutorialOverlay(page);
+
+    const title = page.locator('#tutorial-step-title');
+    const next = page.locator('#tutorialNextBtn');
+    for (let i = 0; i < 20; i += 1) {
+      const name = (await title.textContent()).trim();
+      if (name === 'See the preview update') break;
+      if (!(await next.isEnabled())) {
+        await ACTIONS[name](page);
+        await expect(next).toBeEnabled({ timeout: 30_000 });
+      }
+      await next.click();
+      await expect
+        .poll(async () => (await title.textContent()).trim())
+        .not.toBe(name);
+    }
+    await expect(title).toHaveText('See the preview update');
+
+    await page.evaluate(() => {
+      const panel = document.getElementById('paramPanel');
+      panel.scrollTop = panel.scrollHeight;
+    });
+    await next.click();
+    await expect(title).toHaveText('Save a preset', { timeout: 15_000 });
+    await expect(next).toBeDisabled();
+    const inView = await page.evaluate(() => {
+      const panel = document
+        .getElementById('paramPanel')
+        .getBoundingClientRect();
+      const r = document
+        .querySelector('#presetControls summary')
+        .getBoundingClientRect();
+      return r.top >= panel.top && r.bottom <= panel.bottom;
+    });
+    expect(inView, 'the Presets section brought into view').toBe(true);
+  });
 });
 
 test.describe('A tour, as a screen reader meets it', () => {

@@ -114,8 +114,9 @@ export const MEASURED_SECONDS = {
   // Every pose is now read once the camera holds still: one local pass went
   // from 90 s to 114 s, so 165.5 is scaled by the same ratio.
   'camera-face-view-orbit.spec.js': 210.0,
-  // Measured 142.1; four cases on what a tour says (about 9 s locally) add 15.
-  'tutorials.spec.js': 157.1,
+  // Measured 142.1; four cases on what a tour says (about 9 s locally) add
+  // 15, and one on a step scrolled out of the Customizer (about 7 s) adds 15.
+  'tutorials.spec.js': 172.1,
   // Measured 269.2; a case on a target half behind a phone's bar (about 7 s
   // locally) adds 10.
   'tour-interaction.spec.js': 279.2,
@@ -373,9 +374,9 @@ export const MEASURED_SECONDS = {
   // for its seven cases, then the desktop camera panel cases, the phone
   // drawer, sheet and sideways cases, each loading the simple box.
   // 906 s for its 68 timed cases on a CI shard log (the Alt View groups slow
-  // there, drawn in software), before twenty-five phone cases were added,
-  // about 15 s each; booked at 1285.
-  'ui-schema.spec.js': 1285.0,
+  // there, drawn in software), before twenty-six phone cases were added,
+  // about 15 s each; booked at 1300.
+  'ui-schema.spec.js': 1300.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

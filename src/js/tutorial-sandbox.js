@@ -501,28 +501,29 @@ function isMobileDrawerOpen() {
 }
 
 /**
- * On a phone the Customizer is a sheet a few rows tall, and a step can
- * arrive with its target scrolled out of those rows (the sheet opens at the
- * parameter search). Scrolled there smoothly after the card is placed, the
- * target moved while the card stayed where the last step left it, over the
- * sheet and its Close button. Brought in at once, before placing, the card
- * docks clear of the sheet as the step appears.
+ * A step's target inside the open Customizer but scrolled out of what it
+ * shows is brought into view at once, before the step is placed. The
+ * resolver looks only for targets on the screen, so one scrolled away (a
+ * Tab after typing a value can carry the Presets section off the top) was
+ * given up on and its step skipped. On a phone the sheet shows only a few
+ * rows, and a target scrolled to smoothly after the card was placed left
+ * the card over the sheet and its Close button.
  *
  * @param {HTMLElement|null} el - The step's target
  */
-function bringIntoPhoneSheet(el) {
-  if (!el || !isMobileViewport() || !isMobileDrawerOpen()) return;
-  const sheet = document.getElementById('paramPanel');
-  if (!sheet.contains(el)) return;
+function bringIntoCustomizer(el) {
+  if (!el || !isParamPanelOpen()) return;
+  const panel = document.getElementById('paramPanel');
+  if (!panel.contains(el)) return;
 
-  const box = sheet.getBoundingClientRect();
-  const top = box.top + sheet.clientTop;
+  const box = panel.getBoundingClientRect();
+  const top = box.top + panel.clientTop;
   const r = el.getBoundingClientRect();
-  if (r.top >= top && r.bottom <= top + sheet.clientHeight) return;
+  if (r.top >= top && r.bottom <= top + panel.clientHeight) return;
 
-  // The sheet's scroll padding is the strip its sticky header covers.
+  // The panel's scroll padding is the strip its sticky header covers.
   scrollTargetIntoContainerView(el, {
-    topInset: parseFloat(getComputedStyle(sheet).scrollPaddingTop) || 0,
+    topInset: parseFloat(getComputedStyle(panel).scrollPaddingTop) || 0,
   });
 }
 
@@ -849,7 +850,7 @@ function handleDrawerStateChange(isNowOpen) {
       if (newTarget !== currentTarget) {
         // Update to the new visible target and reposition spotlight
         currentTarget = newTarget;
-        bringIntoPhoneSheet(newTarget);
+        bringIntoCustomizer(newTarget);
         updateSpotlightAndPosition();
       }
       resetStepRequirement(step);
@@ -3946,15 +3947,15 @@ async function showStep(stepIndex) {
     // the resolver demands viewport intersection, and the engine's own
     // scroll runs only after resolution — so an off-screen target could
     // never resolve. Bring the candidate on screen first (instant, so the
-    // rect is correct immediately). The project tours do the same inside a
-    // phone's Customizer sheet, and nowhere else.
+    // rect is correct immediately). The project tours do the same inside the
+    // Customizer, and nowhere else.
     if (activeTutorial.surface === 'welcome') {
       const candidate = resolveStepTarget(step, { requireVisible: false });
       if (candidate && !isElementVisible(candidate)) {
         scrollTargetIntoContainerView(candidate);
       }
     } else {
-      bringIntoPhoneSheet(
+      bringIntoCustomizer(
         resolveStepTarget(step) ||
           resolveStepTarget(step, { requireVisible: false })
       );
