@@ -115,8 +115,11 @@ export function initDrawerController() {
         getComputedStyle(document.documentElement).getPropertyValue(name)
       ) || 0;
     const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+    // The header, one row, and the sheet's own borders around them.
     const floor =
-      (header ? header.offsetHeight : 0) + token('--size-touch-target');
+      (header ? header.offsetHeight : 0) +
+      token('--size-touch-target') +
+      (drawer.offsetHeight - drawer.clientHeight);
     const top = Math.ceil(
       Math.min(
         (section ? section.getBoundingClientRect().top : 0) + previewKeepsPx(),

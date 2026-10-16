@@ -1155,14 +1155,15 @@ function readCustomizerSheet() {
       focused.top >= scrollTop - 1 &&
       focused.bottom <= s.bottom + 1,
     height: s.height,
-    // The least a sheet keeps: its header and one row of controls.
+    // The least a sheet keeps: its header, one row of controls, its borders.
     floor:
       (header ? header.offsetHeight : 0) +
       parseFloat(
         getComputedStyle(document.documentElement).getPropertyValue(
           '--size-touch-target'
         )
-      ),
+      ) +
+      (sheet.offsetHeight - sheet.clientHeight),
   };
 }
 
@@ -1217,9 +1218,10 @@ test.describe('The phone sheet under a taller header, 412 x 810, high contrast',
             '--size-touch-target'
           )
         ),
+        borders: panel.offsetHeight - panel.clientHeight,
       };
     });
-    const floor = sheet.header + sheet.row;
+    const floor = sheet.header + sheet.row + sheet.borders;
     // The preview keeps half, unless the sheet is already down to its floor.
     expect
       .soft(
@@ -1233,6 +1235,11 @@ test.describe('The phone sheet under a taller header, 412 x 810, high contrast',
         `the sheet keeps its header and one row (${Math.round(sheet.height)} px)`
       )
       .toBeGreaterThanOrEqual(floor);
+    // That one row is a real row: the control the sheet opens on is in view.
+    const c = await page.evaluate(readCustomizerSheet);
+    expect
+      .soft(c.focusInView, 'the focused control in view in the sheet')
+      .toBe(true);
   });
 });
 
