@@ -26,6 +26,8 @@ vi.mock('../../src/js/crt-sounds.js', () => ({
   playCrtSound: vi.fn(async () => 1),
   stopCrtSound: vi.fn(),
   preloadCrtSounds: vi.fn(),
+  playKeySound: vi.fn(async () => 0.16),
+  preloadKeySounds: vi.fn(),
 }))
 
 // The screen waits for its sound to start, which the mock settles on a tick.
@@ -407,6 +409,69 @@ describe('the Alt View is heard', () => {
     controller.onThemeChanged()
     controller.disableAltViewWithPreview(toggle)
     expect(await soundsAsked(), 'nothing with sounds off').toHaveLength(5)
+  })
+
+  // A button of the given size on the page, with the box the press reads.
+  function sizedButton(id, width, height) {
+    const button = document.createElement('button')
+    button.id = id
+    button.getBoundingClientRect = () => ({ width, height, left: 0, top: 0, right: width, bottom: height, x: 0, y: 0 })
+    document.body.appendChild(button)
+    return button
+  }
+  const press = (el, type, init = {}) =>
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ...init }))
+  const keysAsked = async () => {
+    const { playKeySound } = await import('../../src/js/crt-sounds.js')
+    return playKeySound.mock.calls.map((c) => c.join(' '))
+  }
+
+  it('while on, every button press is a key by its size: a press down, then up; not the look\'s own key', async () => {
+    pageWithHeaderAndDpad()
+    const icon = sizedButton('iconBtn', 36, 36)
+    const menuItem = sizedButton('menuBtn', 240, 31)
+    const key = sizedButton('_hfmToggle', 44, 44)
+    const controller = await freshController(previewManagerStub())
+    const { preloadKeySounds } = await import('../../src/js/crt-sounds.js')
+    const toggle = document.createElement('button')
+
+    press(icon, 'pointerdown')
+    expect(await keysAsked(), 'nothing while the look is off').toEqual([])
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(preloadKeySounds, 'the phosphor keys fetched at switch-on').toHaveBeenCalledWith('p')
+    press(icon, 'pointerdown')
+    press(icon, 'pointerup')
+    press(menuItem, 'pointerdown')
+    press(menuItem, 'pointerup')
+    press(key, 'pointerdown')
+    press(key, 'pointerup')
+    expect(await keysAsked()).toEqual(['p 2 down', 'p 2 up', 'p 6 down', 'p 6 up'])
+
+    // The keyboard: Enter or Space on a focused button, no repeats.
+    icon.focus()
+    icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true }))
+    icon.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
+    icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    expect((await keysAsked()).slice(4)).toEqual(['p 2 down', 'p 2 up'])
+
+    // Classic is the DOS look.
+    document.body.dataset.uiMode = 'classic'
+    press(icon, 'pointerdown')
+    press(icon, 'pointerup')
+    expect((await keysAsked()).slice(6)).toEqual(['d 2 down', 'd 2 up'])
+    delete document.body.dataset.uiMode
+
+    controller.disableAltViewWithPreview(toggle)
+    press(icon, 'pointerdown')
+    expect(await keysAsked(), 'nothing once off').toHaveLength(8)
+
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    press(icon, 'pointerdown')
+    expect(await keysAsked(), 'nothing with sounds off').toHaveLength(8)
+    controller.disableAltViewWithPreview(toggle)
   })
 
   it('plays with reduced motion too: sound is not motion', async () => {

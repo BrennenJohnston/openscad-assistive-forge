@@ -369,6 +369,39 @@ given with thanks.
 
 ---
 
+## Key Sounds (GPL-2.0-or-later, CC0-1.0)
+
+While the Alt View is on, every button press sounds a key of the button's
+size. Two sets of recordings, under `public/sounds/keys/`:
+
+### bucklespring (GPL-2.0-or-later)
+
+The green and amber looks use the keys of an IBM Model M keyboard as sampled,
+key by key, by Ico Doornekamp for bucklespring, a program that plays that
+keyboard's sound while you type: https://github.com/zevv/bucklespring. The
+files `p1a` to `p7a` (`-down` the press, `-up` the release) are the keys K, L,
+C, S, D, B, Tab, Left Alt, Left Ctrl, Caps Lock, Backspace, Enter, Right Shift
+and Space, each cut to 160 ms with a short fade and resampled to 32 kHz mono.
+
+- **Author**: Ico Doornekamp
+- **Source**: https://github.com/zevv/bucklespring (the `wav/` files)
+- **License**: GNU General Public License version 2 or later, as the Debian
+  package records it. The files are distributed here under version 3 of the
+  license, this project's own (see `LICENSE`), as the "or later" term allows.
+
+### Retro Terminal keys (CC0-1.0)
+
+The blue DOS look uses two recordings by G.M_Isaac on Freesound, each
+released under Creative Commons 0: "Retro Keyboard Keystroke"
+(https://freesound.org/s/860241/, the small key, `d1.wav`) and "Retro Enter
+Key" (https://freesound.org/s/860239/, the wide key, `d2.wav`), their leading
+silence cut and the pair resampled to 32 kHz mono.
+
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: CC0 asks for no credit; it is given with thanks.
+
+---
+
 ## Iosevka Term (OFL-1.1)
 
 The mono UI variant self-hosts the Iosevka Term Regular WOFF2 font.

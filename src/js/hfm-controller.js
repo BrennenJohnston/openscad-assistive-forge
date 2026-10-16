@@ -14,7 +14,13 @@ import {
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
-import { playCrtSound, preloadCrtSounds, stopCrtSound } from './crt-sounds.js';
+import {
+  playCrtSound,
+  playKeySound,
+  preloadCrtSounds,
+  preloadKeySounds,
+  stopCrtSound,
+} from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
 
 // ---------------------------------------------------------------------------
@@ -74,6 +80,13 @@ const _HFM_AFTER_TUNE_MS = 300;
 const _HFM_SOUND_LEAD_MS = 250;
 let _hfmMomentBegin = null;
 let _hfmMomentTimer = null;
+// Every button pressed while the look is on sounds a key of its size: the
+// band edges in CSS px squared, from a letter key to the space bar.
+const _HFM_KEY_BANDS_PX2 = [1000, 1600, 2500, 4000, 7000, 12000];
+const _HFM_KEY_TARGET =
+  'button, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"]';
+let _hfmKeyListeners = null;
+let _hfmKeyDown = null;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -855,6 +868,81 @@ function _stopAltViewStart() {
 
 // The switch sounds follow Preferences > Play sounds, as the unlock tune
 // does; reduced motion leaves them alone, since sound is not motion.
+// Classic is the blue DOS look and has its own keys.
+function _hfmKeySet() {
+  return document.body?.dataset.uiMode === 'classic' ? 'd' : 'p';
+}
+
+function _hfmKeyBand(el) {
+  const box = el.getBoundingClientRect();
+  const area = box.width * box.height;
+  let band = 1;
+  for (const edge of _HFM_KEY_BANDS_PX2) if (area >= edge) band++;
+  return band;
+}
+
+// The button a press lands on; the look's own key keeps its switch sounds.
+function _hfmKeyTarget(event) {
+  const el = event.target?.closest?.(_HFM_KEY_TARGET);
+  if (!el || el.id === '_hfmToggle' || el.disabled) return null;
+  return el;
+}
+
+function _playKeySound(el, phase) {
+  if (!_soundsOn()) return;
+  playKeySound(_hfmKeySet(), _hfmKeyBand(el), phase).catch((error) => {
+    console.warn(`[Alt View] A key sound did not play:`, error);
+  });
+}
+
+function _installKeySounds() {
+  if (_hfmKeyListeners) return;
+  if (_soundsOn()) preloadKeySounds(_hfmKeySet());
+  const down = (event) => {
+    const el = _hfmKeyTarget(event);
+    if (!el) return;
+    _hfmKeyDown = el;
+    _playKeySound(el, 'down');
+  };
+  const up = () => {
+    if (!_hfmKeyDown) return;
+    const el = _hfmKeyDown;
+    _hfmKeyDown = null;
+    _playKeySound(el, 'up');
+  };
+  // Enter or Space on a focused button is a press too, once per press.
+  const keydown = (event) => {
+    if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+    const el = _hfmKeyTarget(event);
+    if (!el || el !== event.target) return;
+    _hfmKeyDown = el;
+    _playKeySound(el, 'down');
+  };
+  const keyup = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    up();
+  };
+  _hfmKeyListeners = [
+    ['pointerdown', down],
+    ['pointerup', up],
+    ['pointercancel', up],
+    ['keydown', keydown],
+    ['keyup', keyup],
+  ];
+  for (const [type, fn] of _hfmKeyListeners) {
+    document.addEventListener(type, fn, true);
+  }
+}
+
+function _removeKeySounds() {
+  if (!_hfmKeyListeners) return;
+  for (const [type, fn] of _hfmKeyListeners) {
+    document.removeEventListener(type, fn, true);
+  }
+  _hfmKeyListeners = null;
+  _hfmKeyDown = null;
+}
+
 /** @returns {Promise<void>|null} Settles once the sound has started or failed; null when none plays */
 function _playCrtSound(name) {
   if (!name || !_soundsOn()) return null;
@@ -983,6 +1071,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
     lastMode = mode;
     if (_hfmEnabled && classicCrossed) {
       _playAltViewMoment({ greeting: true, sound: 'look' });
+      if (_soundsOn()) preloadKeySounds(_hfmKeySet());
     }
   };
   document.addEventListener('ui-mode-changed', _hfmModeListener);
@@ -1030,6 +1119,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _hfmEnabled = true;
   _hfmPendingEnable = false;
   _playAltViewMoment({ greeting: true, sound: 'on' });
+  _installKeySounds();
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -1044,6 +1134,7 @@ function _disableAltViewWithPreview(toggleBtn) {
 
   _stopAltViewStart();
   _playCrtSound('off');
+  _removeKeySounds();
 
   if (_hfmMotionListener) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1233,12 +1324,14 @@ function _injectAltToggle() {
         _setAssetsForVariant(true);
         // No picture and no status line yet: the draw-in alone.
         _playAltViewMoment({ greeting: false, sound: 'on' });
+        _installKeySounds();
         root.setAttribute('data-ui-variant', 'mono');
         toggleBtn.setAttribute('aria-pressed', 'true');
         _hfmPendingEnable = true;
       } else {
         _stopAltViewStart();
         _playCrtSound('off');
+        _removeKeySounds();
         root.removeAttribute('data-ui-variant');
         _setAssetsForVariant(false);
         toggleBtn.setAttribute('aria-pressed', 'false');

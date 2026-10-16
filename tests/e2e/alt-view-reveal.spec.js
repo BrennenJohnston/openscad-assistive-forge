@@ -223,14 +223,29 @@ test.describe('The Alt View is heard', () => {
       !(await canSound(page)),
       'this browser cannot start a sound here (no sound device)'
     );
+    // The long sounds in order, and the key presses (each about 0.16 s)
+    // counted apart, since a press's take varies.
     const heard = () =>
-      page.evaluate(() => window.__sounds.map((s) => Number(s.seconds.toFixed(2))));
+      page.evaluate(() => {
+        const all = window.__sounds.map((s) => Number(s.seconds.toFixed(2)));
+        return {
+          long: all.filter((s) => s > 0.5),
+          keys: all.filter((s) => s >= 0.13 && s <= 0.2).length,
+        };
+      });
 
-    await expect.poll(heard, { timeout: 5_000 }).toEqual([ON_SECONDS]);
+    await expect.poll(async () => (await heard()).long, { timeout: 5_000 }).toEqual([ON_SECONDS]);
     await expect.poll(async () => (await seen(page)).revealed, { timeout: 5_000 }).toBe(true);
     const onLead = await screenAfterSoundMs(page);
     expect(onLead, 'switch-on: the sound first').toBeGreaterThanOrEqual(0);
     expect(onLead, 'switch-on: the screen right after it').toBeLessThan(SOUND_LEAD_MAX_MS);
+    expect((await heard()).keys, 'the look\'s own key makes no key sound').toBe(0);
+
+    // A button in the look: a key goes down, then up.
+    await page.locator('#cameraPanelToggle').click();
+    await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(2);
+    await page.locator('#cameraPanelToggle').click();
+    await expect.poll(async () => (await heard()).keys, { timeout: 5_000 }).toBe(4);
 
     await expect(page.locator('html')).not.toHaveAttribute('data-alt-view-reveal', {
       timeout: 5_000,
@@ -238,20 +253,21 @@ test.describe('The Alt View is heard', () => {
     await watchAgain(page);
     await page.locator('#themeToggle').click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await expect.poll(heard, { timeout: 5_000 }).toEqual([ON_SECONDS, LOOK_SECONDS]);
+    await expect
+      .poll(async () => (await heard()).long, { timeout: 5_000 })
+      .toEqual([ON_SECONDS, LOOK_SECONDS]);
+    expect((await heard()).keys, 'the theme button is a key too').toBe(6);
     await expect.poll(async () => (await seen(page)).revealed, { timeout: 5_000 }).toBe(true);
     const lookLead = await screenAfterSoundMs(page);
     expect(lookLead, 'a look change: the sound first').toBeGreaterThanOrEqual(0);
     expect(lookLead, 'a look change: the screen right after it').toBeLessThan(SOUND_LEAD_MAX_MS);
 
     await turnOff(page);
-    await expect.poll(heard, { timeout: 5_000 }).toEqual([
-      ON_SECONDS,
-      LOOK_SECONDS,
-      OFF_SECONDS,
-    ]);
-    // Nothing else follows: the moment is over.
+    await expect
+      .poll(async () => (await heard()).long, { timeout: 5_000 })
+      .toEqual([ON_SECONDS, LOOK_SECONDS, OFF_SECONDS]);
+    // Nothing else follows: the moment is over, and the key made no key sound.
     await page.waitForTimeout(1_500);
-    expect(await heard()).toHaveLength(3);
+    expect(await heard()).toEqual({ long: [ON_SECONDS, LOOK_SECONDS, OFF_SECONDS], keys: 6 });
   });
 });

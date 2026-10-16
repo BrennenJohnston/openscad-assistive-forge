@@ -52,6 +52,39 @@ describe('the switch sound files', () => {
   });
 });
 
+// The key sounds: the phosphor look's Model M keys by band (a press and a
+// release each, up to three takes), the DOS look's two keys.
+const KEYS_DIR = join(SOUNDS_DIR, 'keys');
+const PHOSPHOR_FILES = [
+  'p1a', 'p1b', 'p1c', 'p2a', 'p2b', 'p2c', 'p3a', 'p3b', 'p3c', 'p4a', 'p5a', 'p6a', 'p6b', 'p7a',
+].flatMap((k) => [`${k}-down.wav`, `${k}-up.wav`]);
+const DOS_FILES = ['d1.wav', 'd2.wav'];
+
+describe('the key sound files', () => {
+  it.each([...PHOSPHOR_FILES, ...DOS_FILES])(
+    '%s is a 32 kHz mono 16-bit WAV under 0.4 s with its peak at or under -1 dBFS',
+    (file) => {
+      const bytes = readFileSync(join(KEYS_DIR, file));
+      const header = wavHeader(bytes);
+      expect(header.riff).toBe('RIFF');
+      expect(header.channels).toBe(1);
+      expect(header.rate).toBe(32000);
+      expect(header.bits).toBe(16);
+      expect(header.dataBytes / 2 / 32000).toBeLessThan(0.4);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let peak = 0;
+      for (let at = 44; at + 1 < bytes.length; at += 2) peak = Math.max(peak, Math.abs(view.getInt16(at, true)));
+      expect(peak / 32768).toBeLessThanOrEqual(10 ** (-1 / 20));
+    }
+  );
+
+  it('the thirty files weigh under 340 KB together', () => {
+    const total = [...PHOSPHOR_FILES, ...DOS_FILES].reduce((n, f) => n + statSync(join(KEYS_DIR, f)).size, 0);
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThan(340_000);
+  });
+});
+
 describe('playing a switch sound', () => {
   let context;
   let sources;
@@ -69,7 +102,8 @@ describe('playing a switch sound', () => {
       resume: vi.fn(() => Promise.resolve()),
       decodeAudioData: vi.fn(async ({ url }) => {
         if (decodeGate[url]) await decodeGate[url];
-        return { duration: DURATIONS[url] };
+        // The key files all run about 0.16 s.
+        return { duration: DURATIONS[url] ?? 0.16 };
       }),
       createBufferSource: vi.fn(() => {
         const source = {
@@ -209,6 +243,48 @@ describe('playing a switch sound', () => {
     expect(globalThis.fetch, 'nothing fetched again').toHaveBeenCalledTimes(3);
     expect(window.AudioContext).toHaveBeenCalledTimes(1);
     expect(sources).toHaveLength(1);
+  });
+
+  it('plays a key by its band: the phosphor look a press then its release, the DOS look one stroke, takes in turn', async () => {
+    const { playKeySound } = await load();
+    const urls = () => globalThis.fetch.mock.calls.map(([url]) => url);
+    await expect(playKeySound('p', 2, 'down')).resolves.toBeGreaterThan(0);
+    await expect(playKeySound('p', 2, 'up')).resolves.toBeGreaterThan(0);
+    expect(urls()).toEqual(['/sounds/keys/p2a-down.wav', '/sounds/keys/p2a-up.wav']);
+    expect(sources, 'both play; a key does not cut a key').toHaveLength(2);
+    expect(sources.every((s) => !s.stopped)).toBe(true);
+
+    await playKeySound('p', 2, 'down');
+    await playKeySound('p', 2, 'down');
+    await playKeySound('p', 2, 'down');
+    expect(urls().slice(2), 'the next takes, then round again').toEqual([
+      '/sounds/keys/p2b-down.wav',
+      '/sounds/keys/p2c-down.wav',
+    ]);
+    expect(sources).toHaveLength(5);
+
+    await playKeySound('p', 7, 'down');
+    expect(urls().at(-1)).toBe('/sounds/keys/p7a-down.wav');
+    await expect(playKeySound('d', 3, 'down')).resolves.toBeGreaterThan(0);
+    expect(urls().at(-1)).toBe('/sounds/keys/d1.wav');
+    await expect(playKeySound('d', 6, 'down'), 'the big key from band 5 up').resolves.toBeGreaterThan(0);
+    expect(urls().at(-1)).toBe('/sounds/keys/d2.wav');
+    await expect(playKeySound('d', 6, 'up'), 'the DOS look has no release sound').resolves.toBe(0);
+    expect(urls().at(-1)).toBe('/sounds/keys/d2.wav');
+    await expect(playKeySound('x', 1, 'down')).rejects.toThrow('No such key set: x');
+  });
+
+  it('fetches a look\'s key files ahead, once', async () => {
+    const { preloadKeySounds } = await load();
+    preloadKeySounds('p');
+    preloadKeySounds('p');
+    const urls = globalThis.fetch.mock.calls.map(([url]) => url);
+    expect(urls.length).toBe(28);
+    expect(new Set(urls).size).toBe(28);
+    expect(urls).toContain('/sounds/keys/p1a-down.wav');
+    expect(urls).toContain('/sounds/keys/p7a-up.wav');
+    preloadKeySounds('d');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(30);
   });
 
   it('gives up after a second when the browser will not start sound', async () => {

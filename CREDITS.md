@@ -70,6 +70,13 @@ Three short sounds play when the Alt View switches on, changes its look or switc
 - **License**: CC0 1.0 Universal (public domain dedication)
 - **Details**: each recording is named with its link in `THIRD_PARTY_NOTICES.md`
 
+### Key Sounds
+
+While the Alt View is on, every button press sounds a key of the button's size. The green and amber looks use an IBM Model M sampled key by key by Ico Doornekamp for his bucklespring project (GPL-2.0-or-later); the blue DOS look uses two Retro Terminal keys recorded by G.M_Isaac (Creative Commons 0).
+
+- **Files**: `public/sounds/keys/`
+- **Details**: the keys, sources and licenses are in `THIRD_PARTY_NOTICES.md`
+
 ---
 
 ## Design Inspirations
