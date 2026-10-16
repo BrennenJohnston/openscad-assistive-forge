@@ -446,6 +446,51 @@ describe('initAltView — API surface', () => {
     api.dispose()
   })
 
+  it('measures its characters again once the web font has arrived', async () => {
+    // The variant's style asks for Iosevka Term a moment before the first
+    // measure, so that measure can see the fallback font's wider cell.
+    let advance = 6
+    const mocked = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (...args) {
+      const ctx = mocked.apply(this, args)
+      ctx.measureText = vi.fn(() => ({
+        width: advance,
+        actualBoundingBoxAscent: 8,
+        actualBoundingBoxDescent: 2,
+      }))
+      return ctx
+    }
+    let arrived
+    const fonts = document.fonts
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              arrived = resolve
+            })
+        ),
+      },
+    })
+    try {
+      vi.resetModules()
+      const { initAltView } = await import('../../src/js/_hfm.js')
+      const api = await initAltView(createMockPreviewManager())
+      expect(api.getCellPx().w, 'the fallback font first').toBe(6)
+      expect(document.fonts.load).toHaveBeenCalledWith(expect.stringContaining('Iosevka Term'))
+
+      advance = 5
+      arrived([])
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(api.getCellPx().w, 'the real font once it is there').toBe(5)
+      api.dispose()
+    } finally {
+      HTMLCanvasElement.prototype.getContext = mocked
+      Object.defineProperty(document, 'fonts', { configurable: true, value: fonts })
+    }
+  })
+
   it('leaves the preview Alt View slider range at 0.3-2.5', () => {
     // The instance font-scale floor is 0.05, for the game. The
     // preview's own control must keep refusing anything below 0.3, or the

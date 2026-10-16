@@ -1705,6 +1705,24 @@ export async function initAltView(previewManager, options = {}) {
   }
 
   _recomputeFontForSize(container.clientWidth, container.clientHeight);
+  // The look's style asks for its web font a moment before this measure, so
+  // the measure can see the fallback font and its wider cell, which would
+  // stay until a resize. Once the font has arrived, measure again.
+  const fontArrived = document.fonts?.load?.(`${fontSizePx}px ${fontFamily}`);
+  if (fontArrived) {
+    fontArrived.then(
+      () => {
+        _recomputeFontForSize(container.clientWidth, container.clientHeight);
+        st.dirty = true;
+      },
+      (error) => {
+        console.warn(
+          '[Alt View] The font did not load; its stand-in stays:',
+          error
+        );
+      }
+    );
+  }
 
   st.reducedMotion = _checkReducedMotion();
 
