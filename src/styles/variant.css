@@ -142,8 +142,8 @@ body[data-ui-mode='classic'] {
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
   --crt-reveal-duration: 1s;
-  --crt-power-on-duration: 1.8s;
-  --crt-power-on-dos-duration: 1.5s;
+  --crt-power-on-duration: 0.9s;
+  --crt-power-on-dos-duration: 0.75s;
 
   /* A black drawing turned into the accent with its white details black,
    * for pictures no color property reaches; the grays of its edges stay on
@@ -1681,112 +1681,97 @@ body[data-ui-mode='classic'] {
 /* The picture powers on like a tube once the screen has drawn in: the
    controller adds the classes at each switch-on and look change and removes
    them at the end; with the screen drawing in, the picture waits for it.
-   A tube's picture takes its size from the high voltage, so it comes up
-   smaller than full and squashed, swells outward from the center as the
-   brightness blooms, overshoots and breathes back in decaying cycles while
-   the geometry wobbles, and settles. The phosphor looks do this softly,
-   a tube warming; Classic, the DOS look, with a wider, flatter start, a
-   sharper flash and snap and a sideways judder, the monitor of the next
-   decade. */
+   The shape follows the common CRT turn-on of the web and of games: the
+   picture comes up a little small and very bright, swells past full size
+   and settles in a few decaying bounces as the brightness falls to normal,
+   with a flutter of a fraction of a degree. The phosphor looks do it in
+   0.9 s with a soft blur at the start; Classic, the DOS look, in 0.75 s
+   with a vertical-hold bounce instead of the flutter, the monitor of the
+   next decade finding its sync. */
 @keyframes alt-view-power-on {
   0% {
-    opacity: 0.1;
-    transform: scale(0.55, 0.42);
-    filter: brightness(0.3) blur(1.5px);
+    opacity: 0;
+    transform: scale(0.8, 0.8) skew(0deg, 0deg);
+    filter: brightness(4) blur(0.6px);
   }
-  12% {
-    opacity: 0.4;
-    transform: scale(0.7, 0.55) skew(3deg, 0.8deg);
-    filter: brightness(0.6) blur(1.2px);
-  }
-  24% {
-    opacity: 0.65;
-    transform: scale(0.86, 0.78) skew(-2.4deg, 1.2deg);
-    filter: brightness(1.4) blur(0.8px);
-  }
-  36% {
-    opacity: 0.9;
-    transform: scale(1.08, 1.06) skew(1.6deg, -0.6deg);
-    filter: brightness(1.6) blur(0.3px);
-  }
-  48% {
+  10% {
     opacity: 1;
-    transform: scale(0.94, 0.9) skew(-1deg, -0.8deg);
-    filter: brightness(1) blur(0);
+    transform: scale(1.05, 1.06) skew(0deg, 0deg);
+    filter: brightness(2.6) blur(0.3px);
   }
-  60% {
+  20% {
     opacity: 1;
-    transform: scale(1.04, 1.03) skew(0.6deg, 0.4deg);
+    transform: scale(0.95, 0.94) skew(0.35deg, 0deg);
+    filter: brightness(1.8) blur(0);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.02, 1.03) skew(-0.3deg, 0deg);
+    filter: brightness(1.5) blur(0);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(0.985, 0.98) skew(0.15deg, 0deg);
     filter: brightness(1.25) blur(0);
   }
-  72% {
+  50% {
     opacity: 1;
-    transform: scale(0.98, 0.97) skew(-0.4deg, 0.2deg);
-    filter: brightness(1.05) blur(0);
+    transform: scale(1.006, 1.008) skew(0deg, 0deg);
+    filter: brightness(1.12) blur(0);
   }
-  84% {
+  65% {
     opacity: 1;
-    transform: scale(1.01, 1.008) skew(0.1deg, 0);
-    filter: brightness(1.1) blur(0);
+    transform: scale(0.998, 0.997) skew(0deg, 0deg);
+    filter: brightness(1.04) blur(0);
   }
   100% {
     opacity: 1;
-    transform: scale(1, 1) skew(0, 0);
+    transform: scale(1, 1) skew(0deg, 0deg);
     filter: brightness(1) blur(0);
   }
 }
 
 @keyframes alt-view-power-on-dos {
   0% {
-    opacity: 0.2;
-    transform: scale(0.7, 0.3) translateX(0);
-    filter: brightness(2.2) contrast(0.7);
+    opacity: 0;
+    transform: scale(0.9, 0.7) translateY(-6%);
+    filter: brightness(6) contrast(0.8);
   }
-  10% {
-    opacity: 0.6;
-    transform: scale(0.82, 0.5) translateX(-8px);
-    filter: brightness(2) contrast(0.8);
-  }
-  20% {
-    opacity: 0.85;
-    transform: scale(0.95, 0.82) translateX(6px) skew(0deg, 1.6deg);
-    filter: brightness(1.7) contrast(0.9);
-  }
-  30% {
+  12% {
     opacity: 1;
-    transform: scale(1.1, 1.12) translateX(-4px) skew(0deg, -1.2deg);
-    filter: brightness(1.5) contrast(1);
+    transform: scale(1.03, 1.08) translateY(4%);
+    filter: brightness(3) contrast(0.9);
   }
-  40% {
+  24% {
     opacity: 1;
-    transform: scale(0.92, 0.88) translateX(4px) skew(0deg, 0.6deg);
-    filter: brightness(1.1) contrast(1);
+    transform: scale(0.985, 0.95) translateY(-2.5%);
+    filter: brightness(1.9) contrast(1);
   }
-  50% {
+  36% {
     opacity: 1;
-    transform: scale(1.05, 1.06) translateX(-2px);
-    filter: brightness(1.3) contrast(1);
+    transform: scale(1.01, 1.02) translateY(1.2%);
+    filter: brightness(1.4) contrast(1);
   }
-  62% {
-    opacity: 0.92;
-    transform: scale(0.98, 0.96) translateX(2px);
-    filter: brightness(1) contrast(1);
-  }
-  75% {
+  48% {
     opacity: 1;
-    transform: scale(1.016, 1.02) translateX(0);
-    filter: brightness(1.12) contrast(1);
+    transform: scale(0.996, 0.99) translateY(-0.5%);
+    filter: brightness(1.15) contrast(1);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.002, 1.004) translateY(0);
+    filter: brightness(1.06) contrast(1);
   }
   100% {
     opacity: 1;
-    transform: scale(1, 1) translateX(0) skew(0, 0);
+    transform: scale(1, 1) translateY(0);
     filter: brightness(1) contrast(1);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   :root[data-ui-variant='mono'] .hfm-overlay-canvas.alt-view-power-on {
-    animation: alt-view-power-on var(--crt-power-on-duration) linear both;
+    animation: alt-view-power-on var(--crt-power-on-duration) ease-out both;
     transform-origin: center center;
   }
 
