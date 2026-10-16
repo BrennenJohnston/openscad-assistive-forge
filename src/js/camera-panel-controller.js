@@ -595,12 +595,15 @@ function initPhoneDrawer({
   const saved = storageKey ? safeGetItem(storageKey) : null;
   let collapsed = saved === null ? true : saved === 'true';
 
+  // No tooltip: one that repeated the name reached a screen reader as a
+  // description, and each press was said twice. The word and the arrow show.
   function apply() {
     drawer.classList.toggle('collapsed', collapsed);
     toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    const toggleName = `${collapsed ? 'Expand' : 'Collapse'} ${label}`;
-    toggleBtn.setAttribute('aria-label', toggleName);
-    toggleBtn.title = toggleName;
+    toggleBtn.setAttribute(
+      'aria-label',
+      `${collapsed ? 'Expand' : 'Collapse'} ${label}`
+    );
   }
 
   function expand() {

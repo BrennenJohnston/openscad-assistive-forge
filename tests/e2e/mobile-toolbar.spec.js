@@ -716,3 +716,53 @@ test.describe('The welcome surface is left alone', () => {
     );
   });
 });
+
+// A drawer toggle on the bottom bar says its new name once per press. A
+// tooltip repeating the name reached a screen reader as a description, and
+// NVDA spoke the new name twice.
+test.describe('The bottom bar toggles say their name once', () => {
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true });
+
+  async function nameOnly(page, id, label) {
+    const toggle = page.locator(`#${id}`);
+    await expect(toggle).toHaveAccessibleName(`Expand ${label}`);
+    await expect(toggle).toHaveAccessibleDescription('');
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAccessibleName(`Collapse ${label}`);
+    await expect(toggle).toHaveAccessibleDescription('');
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  }
+
+  test('Camera: a name and no description, before and after a press', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await loadSampleProject(page);
+    await nameOnly(page, 'cameraDrawerToggle', 'camera controls');
+  });
+
+  test('ASCII, in the Alt View: a name and no description, before and after a press', async ({
+    page,
+  }) => {
+    test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-customizer-hfm-unlock', 'true');
+    });
+    await loadSampleProject(page);
+    await skipWithoutWebGL(
+      page,
+      'The Alt View draws from the 3D picture; this browser has no WebGL'
+    );
+    await page.locator('#_hfmToggle').click();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.getAttribute('data-ui-variant')
+        )
+      )
+      .toBe('mono');
+    await nameOnly(page, 'asciiDrawerToggle', 'ASCII controls');
+  });
+});
