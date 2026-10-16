@@ -14,6 +14,7 @@ import {
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
+import { playCrtSound, stopCrtSound } from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
 
 // ---------------------------------------------------------------------------
@@ -832,6 +833,16 @@ function _stopAltViewStart() {
   clearTimeout(_hfmGreetingTimer);
   _hfmGreetingTimer = null;
   _hfmStatusOverride = null;
+  stopCrtSound();
+}
+
+// The switch sounds follow Preferences > Play sounds, as the unlock tune
+// does; reduced motion leaves them alone, since sound is not motion.
+function _playCrtSound(name) {
+  if (!_soundsOn()) return;
+  playCrtSound(name).catch((error) => {
+    console.warn(`[Alt View] The ${name} sound did not play:`, error);
+  });
 }
 
 /**
@@ -840,12 +851,14 @@ function _stopAltViewStart() {
  * or changes (a theme switch, Classic entered or left), not once per page:
  * each switch is a screen coming on. A moment still running is ended first,
  * and the page is laid out in between so the same animation starts again.
- * With reduced motion nothing moves and the greeting shows whole.
+ * With reduced motion nothing moves and the greeting shows whole; the
+ * sound plays either way.
  *
- * @param {{greeting: boolean}} options
+ * @param {{greeting: boolean, sound: 'on'|'look'}} options
  */
-function _playAltViewMoment({ greeting }) {
+function _playAltViewMoment({ greeting, sound }) {
   _stopAltViewStart();
+  _playCrtSound(sound);
   void document.body?.offsetWidth;
   const revealing = _playAltViewReveal();
   _rasterInPicture(revealing);
@@ -930,7 +943,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
     const mode = event?.detail?.mode;
     const classicCrossed = mode === 'classic' || lastMode === 'classic';
     lastMode = mode;
-    if (_hfmEnabled && classicCrossed) _playAltViewMoment({ greeting: true });
+    if (_hfmEnabled && classicCrossed) {
+      _playAltViewMoment({ greeting: true, sound: 'look' });
+    }
   };
   document.addEventListener('ui-mode-changed', _hfmModeListener);
 
@@ -976,7 +991,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   toggleBtn?.setAttribute('aria-pressed', 'true');
   _hfmEnabled = true;
   _hfmPendingEnable = false;
-  _playAltViewMoment({ greeting: true });
+  _playAltViewMoment({ greeting: true, sound: 'on' });
 
   if (_hfmPanToggleButtons?.desktop)
     _hfmPanToggleButtons.desktop.style.display = 'flex';
@@ -990,6 +1005,7 @@ function _disableAltViewWithPreview(toggleBtn) {
   const root = document.documentElement;
 
   _stopAltViewStart();
+  _playCrtSound('off');
 
   if (_hfmMotionListener) {
     const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1175,12 +1191,13 @@ function _injectAltToggle() {
       if (!isCurrentlyEnabled) {
         _setAssetsForVariant(true);
         // No picture and no status line yet: the draw-in alone.
-        _playAltViewMoment({ greeting: false });
+        _playAltViewMoment({ greeting: false, sound: 'on' });
         root.setAttribute('data-ui-variant', 'mono');
         toggleBtn.setAttribute('aria-pressed', 'true');
         _hfmPendingEnable = true;
       } else {
         _stopAltViewStart();
+        _playCrtSound('off');
         root.removeAttribute('data-ui-variant');
         _setAssetsForVariant(false);
         toggleBtn.setAttribute('aria-pressed', 'false');
@@ -1309,7 +1326,7 @@ export function initHfmController({
         _hfmAltView.rebuildGlyphs?.();
         _hfmAltView.invalidate?.();
         // A new look comes on: the screen draws in again.
-        _playAltViewMoment({ greeting: true });
+        _playAltViewMoment({ greeting: true, sound: 'look' });
       }
     },
 

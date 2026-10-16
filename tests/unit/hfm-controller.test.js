@@ -20,6 +20,12 @@ import {
 } from 'three'
 import { PreviewManager } from '../../src/js/preview.js'
 import { announce } from '../../src/js/announcer.js'
+import { STORAGE_KEY_SOUNDS } from '../../src/js/storage-keys.js'
+
+vi.mock('../../src/js/crt-sounds.js', () => ({
+  playCrtSound: vi.fn(async () => 1),
+  stopCrtSound: vi.fn(),
+}))
 
 vi.mock('../../src/js/_hfm.js', () => ({
   initAltView: vi.fn(async () => ({
@@ -126,6 +132,8 @@ describe('the character size the Alt View starts with', () => {
     const controller2 = await freshController(pm2)
     await controller2.enableAltViewWithPreview(toggle)
     expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(1.2)
+    // Off again: a look left on keeps listening to the page in later cases.
+    controller2.disableAltViewWithPreview(toggle)
   })
 })
 
@@ -175,6 +183,7 @@ describe('the glow the Alt View starts with', () => {
     const controller2 = await freshController(previewManagerStub())
     await controller2.enableAltViewWithPreview(toggle)
     expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
+    controller2.disableAltViewWithPreview(toggle)
   })
 
   it('with reduced motion is held at 0, says so, and leaves the saved choice alone', async () => {
@@ -190,6 +199,7 @@ describe('the glow the Alt View starts with', () => {
     expect((await lastAltView()).setPersistFade).toHaveBeenLastCalledWith(0)
     expect(document.getElementById('previewStatusAltAdjust').textContent).toContain('GLOW 0%')
     expect(localStorage.getItem(GLOW_KEY)).toBe('0.4')
+    controller.disableAltViewWithPreview(toggle)
   })
 })
 
@@ -238,6 +248,82 @@ describe('the Alt View draws in every time', () => {
     controller.disableAltViewWithPreview(toggle)
     controller.onThemeChanged()
     expect(root.hasAttribute('data-alt-view-reveal'), 'not while off').toBe(false)
+  })
+})
+
+describe('the Alt View is heard', () => {
+  let matchMedia
+  let reducedMotion
+
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    reducedMotion = false
+    matchMedia = window.matchMedia
+    window.matchMedia = vi.fn(() => ({
+      matches: reducedMotion,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  })
+
+  afterEach(() => {
+    window.matchMedia = matchMedia
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-ui-variant')
+    document.documentElement.removeAttribute('data-alt-view-reveal')
+  })
+
+  // The sound module this controller got: the registry is reset per controller.
+  const soundsAsked = async () => {
+    const { playCrtSound } = await import('../../src/js/crt-sounds.js')
+    return playCrtSound.mock.calls.map(([name]) => name)
+  }
+
+  it('switch-on is on, a look change is look, switch-off is off; nothing with sounds off', async () => {
+    pageWithHeaderAndDpad()
+    const pm = previewManagerStub()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+
+    await controller.enableAltViewWithPreview(toggle)
+    expect(await soundsAsked()).toEqual(['on'])
+
+    controller.onThemeChanged()
+    expect(await soundsAsked()).toEqual(['on', 'look'])
+
+    document.dispatchEvent(
+      new CustomEvent('ui-mode-changed', { detail: { mode: 'classic' } })
+    )
+    expect(await soundsAsked(), 'Classic entered').toEqual(['on', 'look', 'look'])
+    document.dispatchEvent(
+      new CustomEvent('ui-mode-changed', { detail: { mode: 'simplified' } })
+    )
+    expect(await soundsAsked(), 'Classic left').toEqual(['on', 'look', 'look', 'look'])
+
+    controller.disableAltViewWithPreview(toggle)
+    expect(await soundsAsked()).toEqual(['on', 'look', 'look', 'look', 'off'])
+    controller.onThemeChanged()
+    expect(await soundsAsked(), 'nothing while off').toHaveLength(5)
+
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    controller.onThemeChanged()
+    controller.disableAltViewWithPreview(toggle)
+    expect(await soundsAsked(), 'nothing with sounds off').toHaveLength(5)
+  })
+
+  it('plays with reduced motion too: sound is not motion', async () => {
+    reducedMotion = true
+    pageWithHeaderAndDpad()
+    const pm = previewManagerStub()
+    const controller = await freshController(pm)
+    const toggle = document.createElement('button')
+    await controller.enableAltViewWithPreview(toggle)
+    expect(document.documentElement.hasAttribute('data-alt-view-reveal'), 'no draw-in').toBe(
+      false
+    )
+    expect(await soundsAsked()).toEqual(['on'])
   })
 })
 

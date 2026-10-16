@@ -9,6 +9,7 @@
 
 import { test, expect } from '@playwright/test';
 import { announcementsSince, recordAnnouncements } from './helpers/invariants.js';
+import { canSound, listenForSound, probeSound } from './helpers/sound.js';
 
 const SENTENCE = 'A key appeared next to the theme button.';
 
@@ -97,44 +98,8 @@ async function playSequence(page) {
   return before;
 }
 
-// Every sound the page starts: when, and how long it lasts.
-async function listenForSound(page) {
-  await page.addInitScript(() => {
-    window.__sounds = [];
-    const start = AudioBufferSourceNode.prototype.start;
-    AudioBufferSourceNode.prototype.start = function (...args) {
-      window.__sounds.push({ at: performance.now(), seconds: this.buffer?.duration ?? null });
-      return start.apply(this, args);
-    };
-  });
-}
-
 const sentences = async (page) =>
   (await announcementsSince(page, 0)).filter((a) => a.text === SENTENCE);
-
-// Whether this browser can start a sound at all: some test machines have no
-// sound device, and an audio context there never starts. The next press on
-// the page tries one of its own; read the answer after it.
-async function probeSound(page) {
-  await page.evaluate(() => {
-    window.__canSound = new Promise((resolve) => {
-      document.addEventListener(
-        'click',
-        () => {
-          const Context = window.AudioContext || window.webkitAudioContext;
-          if (!Context) return resolve(false);
-          const context = new Context();
-          const timer = setTimeout(() => resolve(false), 1_000);
-          context.resume().then(() => {
-            clearTimeout(timer);
-            resolve(context.state === 'running');
-          });
-        },
-        { capture: true, once: true }
-      );
-    });
-  });
-}
 
 test.describe('The key arrives', () => {
   test('it drops into its place, the buttons make room, and it becomes the ordinary key', async ({
@@ -208,7 +173,7 @@ test.describe('The tune', () => {
     await probeSound(page);
     const pressed = await playSequence(page);
     test.skip(
-      !(await page.evaluate(() => window.__canSound)),
+      !(await canSound(page)),
       'this browser cannot start a sound here (no sound device)'
     );
 

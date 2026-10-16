@@ -9,8 +9,13 @@
 
 import { test, expect } from '@playwright/test';
 import { skipWithoutWebGL } from './helpers/webgl.js';
+import { canSound, listenForSound, probeSound } from './helpers/sound.js';
 
 const GREETING = 'ALT VIEW ONLINE';
+// The three switch sounds, in seconds, as public/sounds/ holds them.
+const ON_SECONDS = 2.21;
+const LOOK_SECONDS = 0.8;
+const OFF_SECONDS = 2.17;
 
 async function openBox(page) {
   await page.addInitScript(() => {
@@ -191,5 +196,39 @@ test.describe('The Alt View draws in every time', () => {
     expect(lines.slice(0, greeting).filter((l) => l && GREETING.startsWith(l))).toEqual(
       []
     );
+  });
+});
+
+test.describe('The Alt View is heard', () => {
+  test('switch-on, a look change and switch-off each play their sound once', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await listenForSound(page);
+    await openBox(page);
+    await probeSound(page);
+    await turnOn(page);
+    test.skip(
+      !(await canSound(page)),
+      'this browser cannot start a sound here (no sound device)'
+    );
+    const heard = () =>
+      page.evaluate(() => window.__sounds.map((s) => Number(s.seconds.toFixed(2))));
+
+    await expect.poll(heard, { timeout: 5_000 }).toEqual([ON_SECONDS]);
+
+    await page.locator('#themeToggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect.poll(heard, { timeout: 5_000 }).toEqual([ON_SECONDS, LOOK_SECONDS]);
+
+    await turnOff(page);
+    await expect.poll(heard, { timeout: 5_000 }).toEqual([
+      ON_SECONDS,
+      LOOK_SECONDS,
+      OFF_SECONDS,
+    ]);
+    // Nothing else follows: the moment is over.
+    await page.waitForTimeout(1_500);
+    expect(await heard()).toHaveLength(3);
   });
 });

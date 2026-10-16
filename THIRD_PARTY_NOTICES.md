@@ -347,6 +347,28 @@ This project uses modules from the Three.js examples collection (e.g., controls 
 
 ---
 
+## Switch Sounds (CC0-1.0)
+
+Three short sounds play when the Alt View switches on, changes its look or
+switches off: `public/sounds/crt-on.wav`, `crt-look.wav` and `crt-off.wav`.
+Each is cut and mixed from recordings on Freesound, every one released under
+Creative Commons 0 by its author:
+
+- "CRT TV Hum" by X3SB: https://freesound.org/s/818513/
+- "monitor computer CRT on, off" by kyles: https://freesound.org/s/454090/
+- "rotary switch on and off" by ProdMultimediasHQI: https://freesound.org/s/512502/
+- "CRT computer monitor startup" by corkob: https://freesound.org/s/415594/
+- "Apple iMac G3 Screen Turn Off" by loganzsound: https://freesound.org/s/873733/
+- "CRT monitor power on with 15.6kHz Hf Noise" by dav0r: https://freesound.org/s/382312/
+
+**License**: CC0 1.0 Universal (public domain dedication)  
+**Dedication**: https://creativecommons.org/publicdomain/zero/1.0/  
+**Note**: Trimmed, joined with short crossfades, one part filtered and
+pitched, and resampled to 32 kHz mono. CC0 asks for no credit; these are
+given with thanks.
+
+---
+
 ## Iosevka Term (OFL-1.1)
 
 The mono UI variant self-hosts the Iosevka Term Regular WOFF2 font.

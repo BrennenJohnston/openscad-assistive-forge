@@ -60,6 +60,18 @@ The mono UI variant uses Iosevka Term as its primary display font, self-hosted a
 
 ---
 
+## Sounds
+
+### Switch Sounds
+
+Three short sounds play when the Alt View switches on, changes its look or switches off. They are cut and mixed from six recordings on Freesound, each released under Creative Commons 0 by its author: X3SB, kyles, ProdMultimediasHQI, corkob, loganzsound and dav0r.
+
+- **Files**: `public/sounds/crt-on.wav`, `crt-look.wav`, `crt-off.wav`
+- **License**: CC0 1.0 Universal (public domain dedication)
+- **Details**: each recording is named with its link in `THIRD_PARTY_NOTICES.md`
+
+---
+
 ## Design Inspirations
 
 ### Retrosmart X11 Cursors
