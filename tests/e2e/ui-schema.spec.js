@@ -1154,6 +1154,15 @@ function readCustomizerSheet() {
       !!focused &&
       focused.top >= scrollTop - 1 &&
       focused.bottom <= s.bottom + 1,
+    height: s.height,
+    // The least a sheet keeps: its header and one row of controls.
+    floor:
+      (header ? header.offsetHeight : 0) +
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      ),
   };
 }
 
@@ -1265,12 +1274,15 @@ for (const height of [915, 810]) {
         await expect(toggle).toHaveAttribute('aria-expanded', 'true');
         await page.waitForTimeout(600);
         const c = await page.evaluate(readCustomizerSheet);
+        // Half the screen, unless the sheet is already down to its floor
+        // (where a wider font wraps the rows above the preview).
+        const share = await page.evaluate(previewHeightShare);
         expect
           .soft(
-            await page.evaluate(previewHeightShare),
-            'S6: the preview with the Customizer open'
+            share >= 0.5 || c.height <= c.floor + 1,
+            `S6: the preview ${share.toFixed(3)} of the height with the Customizer open (a ${Math.round(c.height)} px sheet, floor ${Math.round(c.floor)})`
           )
-          .toBeGreaterThanOrEqual(0.5);
+          .toBe(true);
         expect
           .soft(
             Math.abs(c.bottom - c.barTop),
