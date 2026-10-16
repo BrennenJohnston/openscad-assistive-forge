@@ -38,6 +38,10 @@ let _hfmContrastControls = null;
 // 30% a 3 x 5 px cell, 16,000 of them on a 398 x 622 preview); below it
 // nothing shrinks.
 const _HFM_FONT_SCALE_RANGE = { min: 0.3, max: 2.5, step: 0.05, default: 0.6 };
+// A phone starts finer: 40% is the finest size whose glyphs still read on a
+// phone's screen. A saved size wins on every device.
+const _HFM_FONT_SCALE_PHONE_DEFAULT = 0.4;
+const _HFM_PHONE_MAX_WIDTH_PX = 768;
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
 
@@ -761,6 +765,8 @@ function _loadSavedHfmSettings() {
     parsedFont <= _HFM_FONT_SCALE_RANGE.max
   ) {
     _hfmFontScale = parsedFont;
+  } else if (window.innerWidth < _HFM_PHONE_MAX_WIDTH_PX) {
+    _hfmFontScale = _HFM_FONT_SCALE_PHONE_DEFAULT;
   }
   if (
     Number.isFinite(parsedPersistFade) &&

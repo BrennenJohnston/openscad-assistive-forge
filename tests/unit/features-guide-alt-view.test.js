@@ -29,6 +29,14 @@ describe("the Features Guide's Alt View tab", () => {
     expect(said.slice(1).map(Number)).toEqual(RANGES.map((name) => rangeField(name, 'default')));
   });
 
+  it("says a phone's starting characters, as the controller does", () => {
+    const said = /\(on a phone, Characters (\d+)%\)/.exec(html);
+    expect(said, "the phone's starting size").not.toBeNull();
+    const m = /const _HFM_FONT_SCALE_PHONE_DEFAULT = ([0-9.]+)/.exec(controller);
+    expect(m, 'the phone default in the controller').not.toBeNull();
+    expect(Number(said[1])).toBe(Math.round(Number(m[1]) * 100));
+  });
+
   it('says how far each goes, as the controller does', () => {
     const said =
       /Edges go from (\d+)% to (\d+)%, Characters from (\d+)% to (\d+)%, and Glow from (\d+)% to (\d+)%/.exec(

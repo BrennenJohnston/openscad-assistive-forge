@@ -139,6 +139,27 @@ describe('the character size the Alt View starts with', () => {
     // Off again: a look left on keeps listening to the page in later cases.
     controller2.disableAltViewWithPreview(toggle)
   })
+
+  it('on a phone starts at 40% when nothing is saved, and a saved size still wins', async () => {
+    const width = Object.getOwnPropertyDescriptor(window, 'innerWidth')
+    Object.defineProperty(window, 'innerWidth', { value: 412, configurable: true })
+    try {
+      const toggle = document.createElement('button')
+      const controller = await freshController(previewManagerStub())
+      await controller.enableAltViewWithPreview(toggle)
+      expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(0.4)
+      controller.disableAltViewWithPreview(toggle)
+
+      localStorage.setItem('openscad-forge-hfm-font-scale', '1.2')
+      const controller2 = await freshController(previewManagerStub())
+      await controller2.enableAltViewWithPreview(toggle)
+      expect((await lastAltView()).setFontScale).toHaveBeenLastCalledWith(1.2)
+      controller2.disableAltViewWithPreview(toggle)
+    } finally {
+      if (width) Object.defineProperty(window, 'innerWidth', width)
+      else delete window.innerWidth
+    }
+  })
 })
 
 describe('the glow the Alt View starts with', () => {

@@ -133,7 +133,8 @@ export const MEASURED_SECONDS = {
   // Six cases, each an upload and a preview: measured 26 locally, booked with room.
   'page-fits-window.spec.js': 40.0,
   'responsive-audit.spec.js': 91.9,
-  'theme-switching.spec.js': 71.4,
+  // One more case (the phone's starting size, about 15 s) on top of the measured 71.4.
+  'theme-switching.spec.js': 90.0,
   // Nine cases, the surfaces read element by element, then a phone width and
   // the system settings: about 84 s locally, booked with room; two slider
   // cases (about 17 s locally) add 30, and the page's height and the echo
