@@ -14,7 +14,7 @@ import {
 } from './storage-keys.js';
 import { announce, announceImmediate } from './announcer.js';
 import { playUnlockJingle } from './unlock-jingle.js';
-import { playCrtSound, stopCrtSound } from './crt-sounds.js';
+import { playCrtSound, preloadCrtSounds, stopCrtSound } from './crt-sounds.js';
 import { closePhoneDrawer } from './phone-drawers.js';
 
 // ---------------------------------------------------------------------------
@@ -65,6 +65,11 @@ const _HFM_UNLOCK_SENTENCE = 'A key appeared next to the theme button.';
 const _HFM_UNLOCK_ANNOUNCE_DELAY_MS = 600;
 // With the tune playing, the sentence waits for its end and this pause.
 const _HFM_AFTER_TUNE_MS = 300;
+// The screen draws in once its sound has started, after a quarter second at
+// the most: a sound that cannot start does not hold the picture back.
+const _HFM_SOUND_LEAD_MS = 250;
+let _hfmMomentBegin = null;
+let _hfmMomentTimer = null;
 
 // The key's name says what it is; what it does is said once it is pressed.
 const _HFM_TOGGLE_NAME = 'Alt View';
@@ -836,14 +841,18 @@ function _stopAltViewStart() {
   clearTimeout(_hfmGreetingTimer);
   _hfmGreetingTimer = null;
   _hfmStatusOverride = null;
+  clearTimeout(_hfmMomentTimer);
+  _hfmMomentTimer = null;
+  _hfmMomentBegin = null;
   stopCrtSound();
 }
 
 // The switch sounds follow Preferences > Play sounds, as the unlock tune
 // does; reduced motion leaves them alone, since sound is not motion.
+/** @returns {Promise<void>|null} Settles once the sound has started or failed; null when none plays */
 function _playCrtSound(name) {
-  if (!_soundsOn()) return;
-  playCrtSound(name).catch((error) => {
+  if (!name || !_soundsOn()) return null;
+  return playCrtSound(name).catch((error) => {
     console.warn(`[Alt View] The ${name} sound did not play:`, error);
   });
 }
@@ -854,18 +863,38 @@ function _playCrtSound(name) {
  * or changes (a theme switch, Classic entered or left), not once per page:
  * each switch is a screen coming on. A moment still running is ended first,
  * and the page is laid out in between so the same animation starts again.
- * With reduced motion nothing moves and the greeting shows whole; the
- * sound plays either way.
+ * The sound first, then the screen: the draw-in waits for the sound to
+ * start (a quarter second at the most). With reduced motion nothing moves
+ * and the greeting shows whole; the sound plays either way.
  *
  * @param {{greeting: boolean, sound: 'on'|'look'}} options
  */
 function _playAltViewMoment({ greeting, sound }) {
   _stopAltViewStart();
-  _playCrtSound(sound);
-  void document.body?.offsetWidth;
-  const revealing = _playAltViewReveal();
-  _rasterInPicture(revealing);
-  if (greeting) _typeAltViewGreeting();
+  const begin = () => {
+    if (_hfmMomentBegin !== begin) return;
+    _hfmMomentBegin = null;
+    clearTimeout(_hfmMomentTimer);
+    _hfmMomentTimer = null;
+    void document.body?.offsetWidth;
+    const revealing = _playAltViewReveal();
+    _rasterInPicture(revealing);
+    if (greeting) _typeAltViewGreeting();
+  };
+  _hfmMomentBegin = begin;
+  const started = _playCrtSound(sound);
+  if (!started) {
+    begin();
+    return;
+  }
+  // While the screen waits, the status line holds blank for the greeting
+  // rather than showing the ordinary line first.
+  if (greeting) {
+    _hfmStatusOverride = '';
+    _updateHfmStatusBar();
+  }
+  _hfmMomentTimer = setTimeout(begin, _HFM_SOUND_LEAD_MS);
+  started.then(begin);
 }
 
 /**
@@ -1121,6 +1150,9 @@ function _injectAltToggle() {
   `;
 
   themeToggle.parentElement.insertBefore(toggleBtn, themeToggle.nextSibling);
+  // The key is there: its sounds are fetched now, so the first press is not
+  // waiting on a download.
+  if (_soundsOn()) preloadCrtSounds();
 
   const panToggleBtn = document.createElement('button');
   panToggleBtn.id = '_hfmPanAdjust';

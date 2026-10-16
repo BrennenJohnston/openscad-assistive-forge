@@ -102,7 +102,8 @@ describe('playing a switch sound', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'audio/wav' }),
-      arrayBuffer: async () => ({ url }),
+      // Stands in for the bytes; decoding is given a copy, so it reads them.
+      arrayBuffer: async () => ({ url, slice: () => ({ url }) }),
     }));
   });
 
@@ -183,6 +184,31 @@ describe('playing a switch sound', () => {
     delete window.AudioContext;
     await expect(playCrtSound('on')).rejects.toThrow('Web Audio is not available');
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches the three files ahead, makes the context at the first press, and then plays at once', async () => {
+    const { preloadCrtSounds, playCrtSound } = await load();
+    preloadCrtSounds();
+    expect(globalThis.fetch.mock.calls.map(([url]) => url).sort()).toEqual([
+      '/sounds/crt-look.wav',
+      '/sounds/crt-off.wav',
+      '/sounds/crt-on.wav',
+    ]);
+    expect(window.AudioContext, 'no context before a press').not.toHaveBeenCalled();
+    preloadCrtSounds();
+    expect(globalThis.fetch, 'asked once').toHaveBeenCalledTimes(3);
+
+    document.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(window.AudioContext).toHaveBeenCalledTimes(1);
+    expect(context.resume).toHaveBeenCalledTimes(1);
+    document.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    expect(window.AudioContext, 'one context').toHaveBeenCalledTimes(1);
+
+    await expect(playCrtSound('look')).resolves.toBeCloseTo(0.8, 6);
+    expect(globalThis.fetch, 'nothing fetched again').toHaveBeenCalledTimes(3);
+    expect(window.AudioContext).toHaveBeenCalledTimes(1);
+    expect(sources).toHaveLength(1);
   });
 
   it('gives up after a second when the browser will not start sound', async () => {

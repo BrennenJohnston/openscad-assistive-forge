@@ -25,7 +25,11 @@ import { STORAGE_KEY_SOUNDS } from '../../src/js/storage-keys.js'
 vi.mock('../../src/js/crt-sounds.js', () => ({
   playCrtSound: vi.fn(async () => 1),
   stopCrtSound: vi.fn(),
+  preloadCrtSounds: vi.fn(),
 }))
+
+// The screen waits for its sound to start, which the mock settles on a tick.
+const soundStarted = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 vi.mock('../../src/js/_hfm.js', () => ({
   initAltView: vi.fn(async () => ({
@@ -233,21 +237,92 @@ describe('the Alt View draws in every time', () => {
     const root = document.documentElement
 
     await controller.enableAltViewWithPreview(toggle)
+    await soundStarted()
     expect(root.hasAttribute('data-alt-view-reveal'), 'the first time').toBe(true)
 
     controller.disableAltViewWithPreview(toggle)
     expect(root.hasAttribute('data-alt-view-reveal'), 'ended on switch-off').toBe(false)
 
     await controller.enableAltViewWithPreview(toggle)
+    await soundStarted()
     expect(root.hasAttribute('data-alt-view-reveal'), 'the second time').toBe(true)
 
     root.removeAttribute('data-alt-view-reveal')
     controller.onThemeChanged()
+    await soundStarted()
     expect(root.hasAttribute('data-alt-view-reveal'), 'after a theme change').toBe(true)
 
     controller.disableAltViewWithPreview(toggle)
     controller.onThemeChanged()
+    await soundStarted()
     expect(root.hasAttribute('data-alt-view-reveal'), 'not while off').toBe(false)
+  })
+
+  it('the sound first, then the screen: the draw-in waits for the sound to start', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const { playCrtSound } = await import('../../src/js/crt-sounds.js')
+    const root = document.documentElement
+    const toggle = document.createElement('button')
+
+    let started
+    playCrtSound.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          started = resolve
+        })
+    )
+    await controller.enableAltViewWithPreview(toggle)
+    expect(playCrtSound).toHaveBeenCalledWith('on')
+    expect(root.hasAttribute('data-alt-view-reveal'), 'not before the sound').toBe(false)
+    expect(
+      document.getElementById('previewStatusAltAdjust').textContent,
+      'the status line holds blank for the greeting'
+    ).toBe('')
+    started(2.21)
+    await soundStarted()
+    expect(root.hasAttribute('data-alt-view-reveal'), 'once the sound started').toBe(true)
+
+    // Sounds off: nothing to wait for.
+    controller.disableAltViewWithPreview(toggle)
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    await controller.enableAltViewWithPreview(toggle)
+    expect(root.hasAttribute('data-alt-view-reveal'), 'at once with sounds off').toBe(true)
+    controller.disableAltViewWithPreview(toggle)
+  })
+
+  it('waits a quarter second at most: a sound that cannot start does not hold the screen', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      pageWithHeaderAndDpad()
+      const controller = await freshController(previewManagerStub())
+      const { playCrtSound } = await import('../../src/js/crt-sounds.js')
+      const root = document.documentElement
+      playCrtSound.mockImplementationOnce(() => new Promise(() => {}))
+      const toggle = document.createElement('button')
+      await controller.enableAltViewWithPreview(toggle)
+      await vi.advanceTimersByTimeAsync(200)
+      expect(root.hasAttribute('data-alt-view-reveal'), 'still waiting at 200 ms').toBe(false)
+      await vi.advanceTimersByTimeAsync(60)
+      expect(root.hasAttribute('data-alt-view-reveal'), 'begun by 260 ms').toBe(true)
+      controller.disableAltViewWithPreview(toggle)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fetches the sounds as soon as the key is there, with sounds on', async () => {
+    pageWithHeaderAndDpad()
+    const controller = await freshController(previewManagerStub())
+    const { preloadCrtSounds } = await import('../../src/js/crt-sounds.js')
+    controller.injectAltToggle()
+    expect(document.getElementById('_hfmToggle'), 'the key').not.toBeNull()
+    expect(preloadCrtSounds).toHaveBeenCalledTimes(1)
+
+    document.getElementById('_hfmToggle').remove()
+    localStorage.setItem(STORAGE_KEY_SOUNDS, 'false')
+    controller.injectAltToggle()
+    expect(preloadCrtSounds, 'not with sounds off').toHaveBeenCalledTimes(1)
   })
 })
 

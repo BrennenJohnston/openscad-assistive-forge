@@ -49,7 +49,7 @@ async function openBox(page) {
 // raster-in do, from now on.
 async function watch(page) {
   await page.evaluate(() => {
-    window.__altViewStart = { revealed: false, lines: [], rasters: [] };
+    window.__altViewStart = { revealed: false, revealedAt: null, lines: [], rasters: [] };
     let rastering = false;
     new MutationObserver(() => {
       const canvas = document.querySelector('.hfm-overlay-canvas');
@@ -71,6 +71,7 @@ async function watch(page) {
     new MutationObserver(() => {
       if (document.documentElement.hasAttribute('data-alt-view-reveal')) {
         window.__altViewStart.revealed = true;
+        window.__altViewStart.revealedAt ??= performance.now();
       }
     }).observe(document.documentElement, {
       attributes: true,
@@ -117,8 +118,17 @@ async function expectTheMoment(page, when) {
 
 const watchAgain = (page) =>
   page.evaluate(() => {
-    window.__altViewStart = { revealed: false, lines: [], rasters: [] };
+    window.__altViewStart = { revealed: false, revealedAt: null, lines: [], rasters: [] };
   });
+
+// The sound first, then the screen: how long after the last sound started
+// the draw-in began (negative: the screen came first).
+const screenAfterSoundMs = (page) =>
+  page.evaluate(() => {
+    const sound = window.__sounds.at(-1);
+    return sound ? window.__altViewStart.revealedAt - sound.at : null;
+  });
+const SOUND_LEAD_MAX_MS = 250;
 
 test.describe('The Alt View draws in every time', () => {
   test('off and on again, and a theme change while on, each draw in with the greeting', async ({
@@ -206,6 +216,7 @@ test.describe('The Alt View is heard', () => {
     test.setTimeout(240_000);
     await listenForSound(page);
     await openBox(page);
+    await watch(page);
     await probeSound(page);
     await turnOn(page);
     test.skip(
@@ -216,10 +227,22 @@ test.describe('The Alt View is heard', () => {
       page.evaluate(() => window.__sounds.map((s) => Number(s.seconds.toFixed(2))));
 
     await expect.poll(heard, { timeout: 5_000 }).toEqual([ON_SECONDS]);
+    await expect.poll(async () => (await seen(page)).revealed, { timeout: 5_000 }).toBe(true);
+    const onLead = await screenAfterSoundMs(page);
+    expect(onLead, 'switch-on: the sound first').toBeGreaterThanOrEqual(0);
+    expect(onLead, 'switch-on: the screen right after it').toBeLessThan(SOUND_LEAD_MAX_MS);
 
+    await expect(page.locator('html')).not.toHaveAttribute('data-alt-view-reveal', {
+      timeout: 5_000,
+    });
+    await watchAgain(page);
     await page.locator('#themeToggle').click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect.poll(heard, { timeout: 5_000 }).toEqual([ON_SECONDS, LOOK_SECONDS]);
+    await expect.poll(async () => (await seen(page)).revealed, { timeout: 5_000 }).toBe(true);
+    const lookLead = await screenAfterSoundMs(page);
+    expect(lookLead, 'a look change: the sound first').toBeGreaterThanOrEqual(0);
+    expect(lookLead, 'a look change: the screen right after it').toBeLessThan(SOUND_LEAD_MAX_MS);
 
     await turnOff(page);
     await expect.poll(heard, { timeout: 5_000 }).toEqual([
