@@ -1057,6 +1057,49 @@ function readFullScreenSplit(bodyId) {
   };
 }
 
+/** The first control on the screen that leaves Full Screen, by its id. */
+function wayOutOfFullScreen() {
+  for (const id of ['focusModeBtn', 'cameraFocusExitBtn']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const b = el.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) continue;
+    const hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+    if (hit && el.contains(hit)) return id;
+  }
+  return null;
+}
+
+// On a phone, Full Screen with no drawer open, or held sideways, keeps a
+// control on the screen that leaves it: a phone has no Escape key.
+for (const size of [
+  { width: 412, height: 915 },
+  { width: 740, height: 360 },
+  { width: 915, height: 412 },
+]) {
+  test.describe(`Leaving Full Screen on a phone, ${size.width} x ${size.height}`, () => {
+    test.use({ viewport: size, hasTouch: true });
+
+    test('a control that leaves Full Screen stays on the screen', async ({
+      page,
+    }) => {
+      test.setTimeout(WASM_READY_TIMEOUT + 60_000);
+      await openPhoneProject(page, LOOKS[0]);
+      await page.locator('#focusModeBtn').focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#mainInterface')).toHaveClass(/focus-mode/);
+      await page.waitForTimeout(500);
+
+      const way = await page.evaluate(wayOutOfFullScreen);
+      expect(way, 'a way out of Full Screen on the screen').not.toBeNull();
+      await page.locator(`#${way}`).tap();
+      await expect(page.locator('#mainInterface')).not.toHaveClass(
+        /focus-mode/
+      );
+    });
+  });
+}
+
 /** The share of the screen's height, down its middle, where the preview shows. */
 function previewHeightShare() {
   const x = innerWidth / 2;

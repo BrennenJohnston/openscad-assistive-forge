@@ -2948,6 +2948,27 @@ details summary:focus,
   display: none;
 }
 
+/* On a phone the Full Screen button lives in the Preview Settings row
+   (mobile-toolbar.js moves the header's tools there), and a phone has no
+   Escape key: the row stays in Full Screen with the button that leaves it,
+   and only the settings under it go, with the toggle that would open them. */
+body[data-mobile-toolbar='relocated']
+  .main-interface.focus-mode:not(.camera-focus-mode)
+  .preview-info-section {
+  display: flex;
+  height: auto;
+  max-height: none;
+}
+
+body[data-mobile-toolbar='relocated']
+  .main-interface.focus-mode
+  .preview-info-content,
+body[data-mobile-toolbar='relocated']
+  .main-interface.focus-mode
+  #previewDrawerToggle {
+  display: none;
+}
+
 .main-interface.focus-mode .preview-canvas-section {
   flex: 1;
   min-height: 0;
